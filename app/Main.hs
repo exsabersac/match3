@@ -1284,7 +1284,7 @@ drawGemAt ren x y cell flashing = case cell of
       when (ice > 1) $ do
         drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
         drawLine ren (P (V2 (x + 10) (y + cellPx `div` 2))) (P (V2 (x + cellPx - 10) (y + cellPx `div` 2 + 4)))
-    -- Grass / vine overlays (开心消消乐草·藤蔓)
+    -- Grass / vine / chocolate overlays (开心消消乐草·藤蔓·巧克力)
     case ov of
       Just Grass -> do
         rendererDrawColor ren $= V4 40 140 50 200
@@ -1297,6 +1297,17 @@ drawGemAt ren x y cell flashing = case cell of
         drawLine ren (P (V2 (x + 8) (y + 8))) (P (V2 (x + cellPx - 10) (y + cellPx - 12)))
         drawLine ren (P (V2 (x + cellPx - 12) (y + 10))) (P (V2 (x + 12) (y + cellPx - 10)))
         fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + 6))) (V2 8 8)))
+      Just Choco -> do
+        -- Brown chocolate slab with bite notches (不改六色宝石本体)
+        rendererDrawColor ren $= V4 110 60 30 220
+        fillRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
+        rendererDrawColor ren $= V4 80 40 20 255
+        fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + 8))) (V2 (cellPx - 16) 4)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + cellPx `div` 2 - 2))) (V2 (cellPx - 16) 4)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + cellPx - 16))) (V2 (cellPx - 16) 4)))
+        rendererDrawColor ren $= V4 150 90 50 200
+        fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 14))) (V2 6 6)))
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx - 20) (y + cellPx - 22))) (V2 6 6)))
       Nothing -> pure ()
     case cellKind cell of
       Normal -> pure ()
@@ -1373,8 +1384,9 @@ drawStatic ren app board yOff = do
     [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
   -- Conveyor belt path markers (teal chevrons)
   mapM_ (drawBelt ren yOff) (gsBelts (appGame app))
-  -- Vine spread preview: pulse on bare gems next to vines
+  -- Vine / chocolate spread preview pulses
   drawVineSpreadHints ren yOff pulse (gsBoard (appGame app))
+  drawChocoSpreadHints ren yOff pulse (gsBoard (appGame app))
   -- UFO overlays
   mapM_ (drawUfo ren yOff pulse) (gsUfos (appGame app))
 
@@ -1410,6 +1422,37 @@ drawVineSpreadHints ren yOff pulse board = do
     targets
 
 -- | Draw flying saucer overlay at its cell (飞碟).
+drawChocoSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
+drawChocoSpreadHints ren yOff pulse board = do
+  let sources =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , hasChoco (getCell board (r, c))
+        ]
+      neigh (r, c) =
+        filter
+          (\(rr, cc) -> rr >= 0 && rr < boardSize && cc >= 0 && cc < boardSize)
+          [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+      targets =
+        [ q
+        | p <- sources
+        , q <- neigh p
+        , case getCell board q of
+            Gem _ _ _ Nothing -> True
+            _ -> False
+        ]
+      alpha = fromIntegral (100 + (pulse `mod` 30) * 4) :: Word8
+  rendererDrawColor ren $= V4 160 90 40 alpha
+  mapM_
+    ( \pos -> do
+        let (x0, y0) = cellOrigin pos
+            y = y0 + yOff
+        drawRect ren (Just (Rectangle (P (V2 (x0 + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
+    )
+    targets
+
+
 drawUfo :: Renderer -> CInt -> Int -> Ufo -> IO ()
 drawUfo ren yOff pulse (Ufo cell col) = do
   let (x0, y0) = cellOrigin cell

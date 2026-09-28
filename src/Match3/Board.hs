@@ -35,7 +35,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent)
 import Match3.Obstacles (chipAdjacentStones)
 import Match3.Countdown
   ( countdownsAtZero
@@ -198,15 +198,17 @@ clearMatchesDetailed prefer b =
   let runs = findMatchRuns b
       base = nub (concatMap runPos runs)
       expanded = expandSpecials b base
-      -- Match/special hits strip Grass/Vine overlays (vine then cannot spread)
+      -- Match/special hits strip Grass/Vine/Choco on-cell (cleared cannot spread)
       bStripped = clearOverlaysOn b expanded
       -- Ice chips first: iced gems stay, ice-free positions may clear
       (bIced, iceFree) = chipIceOnClear bStripped expanded
       -- Chip adjacent stone layers against the ice-free clear set
       (bChipped, deadStones) = chipAdjacentStones bIced iceFree
+      -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
+      bNoChoco = clearChocoAdjacent bChipped expanded
       allPos = nub (iceFree ++ deadStones)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bChipped) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
       spawns = spawnSpecials prefer runs
       mb1 =
         foldl'
@@ -360,9 +362,10 @@ clearFromSeedsDetailed prefer b seeds0 =
       bStripped = clearOverlaysOn b expanded
       (bIced, iceFree) = chipIceOnClear bStripped expanded
       (bChipped, deadStones) = chipAdjacentStones bIced iceFree
+      bNoChoco = clearChocoAdjacent bChipped expanded
       allPos = nub (iceFree ++ deadStones)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bChipped) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
       spawns = spawnSpecials prefer runs
       mb1 =
         foldl'

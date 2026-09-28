@@ -66,6 +66,9 @@ tests =
     , testCase "grass_cleared_by_match_above" grass_cleared_by_match_above
     , testCase "vine_spreads_after_move" vine_spreads_after_move
     , testCase "vine_blocked_by_clear" vine_blocked_by_clear
+    , testCase "choco_spreads_after_move" choco_spreads_after_move
+    , testCase "choco_cleared_by_adjacent" choco_cleared_by_adjacent
+    , testCase "choco_blocked_by_clear" choco_blocked_by_clear
     , testCase "ufo_collects_target_color" ufo_collects_target_color
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
@@ -1512,6 +1515,126 @@ vine_blocked_by_clear = do
     "safe vine spreads"
     (any (\p -> hasVine (getCell afterClear p)) safeNeighbors)
 
+
+
+--------------------------------------------------------------------------------
+-- Chocolate overlays (开心消消乐巧克力)
+--------------------------------------------------------------------------------
+
+-- | Surviving chocolate spreads onto adjacent bare gems after a successful move.
+choco_spreads_after_move :: Assertion
+choco_spreads_after_move = do
+  -- Choco at (5,5); bare neighbors. Match on row 0 so chocolate survives.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (0, 0) (mkGem C1))
+                   (0, 1)
+                   (mkGem C1))
+                (0, 2)
+                (mkGem C2))
+             (0, 3)
+             (mkGem C1))
+          (5, 5)
+          (mkChocoGem C4)
+  assertBool "choco placed" (hasChoco (getCell board0 (5, 5)))
+  assertBool "neighbor bare" (cellOverlay (getCell board0 (5, 4)) == Nothing)
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+      gs0 =
+        (newGameAtLevel 0 cfg 12)
+          { gsBoard = board0
+          , gsBelts = []
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let b1 = gsBoard gs1
+      neighbors = [(5, 4), (5, 6), (4, 5), (6, 5)]
+  assertBool
+    ("choco spread to a neighbor: " ++ show [(p, cellOverlay (getCell b1 p)) | p <- (5, 5) : neighbors])
+    (any (\p -> hasChoco (getCell b1 p)) neighbors
+       || (hasChoco (getCell b1 (5, 5)) && any (\p -> hasChoco (getCell b1 p)) neighbors))
+  -- Pure spreadChoco unit check
+  let pureB = spreadChoco board0
+  assertBool "pure spread" (any (\p -> hasChoco (getCell pureB p)) neighbors)
+
+-- | Chocolate adjacent to a match is cleared; the gem underneath stays.
+choco_cleared_by_adjacent :: Assertion
+choco_cleared_by_adjacent = do
+  -- Match at (3,0)(3,1)(3,2); chocolate on (2,1) and (4,1) adjacent, not in match.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (2, 1)
+             (mkChocoGem C3))
+          (4, 1)
+          (mkChocoGem C4)
+  assertBool "choco above" (hasChoco (getCell board0 (2, 1)))
+  assertBool "choco below" (hasChoco (getCell board0 (4, 1)))
+  let ms = findMatches board0
+  assertBool "match on row" (all (`elem` ms) [(3, 0), (3, 1), (3, 2)])
+  assertBool "choco not in match" ((2, 1) `notElem` ms && (4, 1) `notElem` ms)
+  -- Unit: clearChocoAdjacent strips neighbors
+  let cleared = clearChocoAdjacent board0 ms
+  assertBool "adj choco above cleared" (not (hasChoco (getCell cleared (2, 1))))
+  assertBool "adj choco below cleared" (not (hasChoco (getCell cleared (4, 1))))
+  assertEqual "gem color kept above" C3 (cellColor (getCell cleared (2, 1)))
+  assertEqual "gem color kept below" C4 (cellColor (getCell cleared (4, 1)))
+  -- Far choco untouched
+  let withFar = setCell board0 (6, 6) (mkChocoGem C5)
+      cleared2 = clearChocoAdjacent withFar ms
+  assertBool "far choco kept" (hasChoco (getCell cleared2 (6, 6)))
+
+-- | Chocolate cleared by the move does not spread; uncleared chocolate still may.
+choco_blocked_by_clear :: Assertion
+choco_blocked_by_clear = do
+  -- Choco adjacent to match at (2,1): cleared by adjacent → must not spread.
+  -- Isolated choco at (6,6): should still spread.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (2, 1)
+             (mkChocoGem C2))
+          (6, 6)
+          (mkChocoGem C5)
+  assertBool "adj choco" (hasChoco (getCell board0 (2, 1)))
+  assertBool "safe choco" (hasChoco (getCell board0 (6, 6)))
+  let ms = findMatches board0
+  assertBool "match present" ((3, 1) `elem` ms)
+  let stripped = clearChocoAdjacent (clearOverlaysOn board0 ms) ms
+  assertBool "adj choco stripped" (not (hasChoco (getCell stripped (2, 1))))
+  assertBool "safe choco kept" (hasChoco (getCell stripped (6, 6)))
+  let after = spreadChoco stripped
+  -- Neighbors of cleared (2,1) must NOT gain choco from that cell
+  assertBool "no spread onto (2,0)" (not (hasChoco (getCell after (2, 0))))
+  assertBool "no spread onto (2,2)" (not (hasChoco (getCell after (2, 2))))
+  assertBool "no spread onto (1,1)" (not (hasChoco (getCell after (1, 1))))
+  -- Safe choco still spreads
+  let safeNeighbors = [(6, 5), (6, 7), (5, 6), (7, 6)]
+  assertBool
+    "safe choco spreads"
+    (any (\p -> hasChoco (getCell after p)) safeNeighbors)
 
 -- UFO / 飞碟 (absorb same-color neighbors; move each cascade wave)
 

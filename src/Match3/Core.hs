@@ -10,12 +10,17 @@ module Match3.Core
   , CellOverlay(..)
   , mkGrassGem
   , mkVineGem
+  , mkChocoGem
   , hasGrass
   , hasVine
+  , hasChoco
   , cellOverlay
   , clearOverlaysOn
+  , clearChocoAdjacent
   , vinePositions
+  , chocoPositions
   , spreadVines
+  , spreadChoco
   , Ufo(..)
   , mkUfo
   , ufoAbsorbTargets
@@ -126,8 +131,11 @@ import Match3.Board
 import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn
+  , clearChocoAdjacent
   , vinePositions
+  , chocoPositions
   , spreadVines
+  , spreadChoco
   )
 import Match3.Ufo
   ( Ufo(..)

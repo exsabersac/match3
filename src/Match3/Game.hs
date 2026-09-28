@@ -37,7 +37,7 @@ import Match3.Board
 import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Obstacles (swapBlockedByStone)
 import Match3.Conveyor (Belt, shiftBelts)
-import Match3.Grass (spreadVines)
+import Match3.Grass (spreadVines, spreadChoco)
 import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
@@ -102,6 +102,7 @@ levelBelts _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
 decorateLevel :: Int -> Board -> Board
+decorateLevel 4 b = overlayAt b Choco [(2, 3), (3, 2), (3, 5), (5, 4)]
 decorateLevel 5 b =
   -- Ice seals on a few gems (开心消消乐冰层入门)
   foldl
@@ -129,7 +130,9 @@ decorateLevel 11 b =
     )
     b
     [(2, 2), (2, 5), (5, 3), (6, 6)]
-decorateLevel 14 b = overlayAt b Grass [(2, 2), (3, 5), (5, 3)]
+decorateLevel 14 b =
+  let b1 = overlayAt b Grass [(2, 2), (3, 5), (5, 3)]
+  in overlayAt b1 Choco [(1, 1), (1, 6), (6, 2)]
 decorateLevel 15 b =
   let b1 =
         foldl (\board p -> setCell board p mkStone)
@@ -137,13 +140,14 @@ decorateLevel 15 b =
               [(4, 0), (4, 7), (5, 1), (5, 6)]
       b2 = overlayAt b1 Grass [(2, 1), (2, 6)]
       b3 = overlayAt b2 Vine [(6, 3)]
+      b3' = overlayAt b3 Choco [(1, 3), (7, 4)]
   in foldl
        (\board p ->
            case getCell board p of
              Gem col _ _ _ -> spawnCountdown board p col 4
              _ -> board
        )
-       b3
+       b3'
        [(3, 3)]
 decorateLevel _ b = b
 
@@ -154,7 +158,7 @@ levelUfos 13 = [mkUfo (1, 2) C1, mkUfo (1, 5) C3]
 levelUfos 15 = [mkUfo (0, 4) C2]
 levelUfos _ = []
 
--- | Stamp Grass/Vine onto existing gems (keep color/kind/ice).
+-- | Stamp Grass/Vine/Choco onto existing gems (keep color/kind/ice).
 overlayAt :: Board -> CellOverlay -> [Pos] -> Board
 overlayAt b ov = foldl step b
   where
@@ -315,8 +319,8 @@ trySwap p1 p2 gs
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, ufos1, g1')
                      else runCascadeScoredWithUfos Nothing ufos1 g1' boardBelt
-                 -- Vine spread at end of move (cleared vines already stripped during cascade)
-                 board1 = spreadVines boardBeltCas
+                 -- Vine / chocolate spread at end of move (cleared overlays already stripped)
+                 board1 = spreadChoco (spreadVines boardBeltCas)
                  gained = gained0 + gained1 + gained2
                  combo =
                    let c1 = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
@@ -405,7 +409,7 @@ useHammer p gs
       let seeds = [p]
           (boardH, _n, gained, combo, tallies, stonesHit, uAbs, ufos', g') =
             runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsGen gs) (gsBoard gs)
-          board1 = spreadVines boardH
+          board1 = spreadChoco (spreadVines boardH)
           score' = gsScore gs + gained
           hist = take 20 (snapshot gs : gsHistory gs)
           ufoCollected' = gsUfoCollected gs + uAbs
@@ -471,7 +475,7 @@ useFreeSwap p1 p2 gs
                      else if specialCombo
                        then runCascadeScoredFromSeedsWithUfos (Just p2) (comboClearSeeds swapped p1 p2) (gsUfos gs) (gsGen gs) swapped
                        else runCascadeScoredWithUfos (Just p2) (gsUfos gs) (gsGen gs) swapped
-                 board1 = spreadVines boardF
+                 board1 = spreadChoco (spreadVines boardF)
                  score' = gsScore gs + gained
                  hist = take 20 (snapshot gs : gsHistory gs)
                  ufoCollected' = gsUfoCollected gs + uAbs

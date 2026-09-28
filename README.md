@@ -25,7 +25,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
-- **Grass / Vine** (`CellOverlay`): Grass clears when the cell is matched; Vine spreads to adjacent bare gems at end of move; cleared vines do not spread
+- **Grass / Vine / Chocolate** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads (cleared choco does not)
 - **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
 - **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
@@ -43,7 +43,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 2 | 采红 | 30 | Collect 20× RED | — |
 | 3 | 热身 | 26 | Score 500 | — |
 | 4 | 采蓝 | 26 | Collect 22× BLUE | — |
-| 5 | 进阶 | 22 | Score 700 | — |
+| 5 | 进阶 | 22 | Score 700 | choco |
 | 6 | 冰绿 | 24 | Collect 26× GREEN | ice |
 | 7 | 双采 | 28 | Collect RED 12 + BLUE 12 | — |
 | 8 | 碎石 | 26 | Destroy 8 stones | stones + belt |
@@ -53,8 +53,8 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 12 | 轰炸 | 18 | Score 750 | countdown bombs |
 | 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
-| 15 | 压力 | 17 | Multi RED/GRN/BLU | grass |
-| 16 | 大师 | 16 | Score 1200 | stone+grass+vine+bomb+belts+UFO |
+| 15 | 压力 | 17 | Multi RED/GRN/BLU | grass + choco |
+| 16 | 大师 | 16 | Score 1200 | stone+grass+vine+choco+bomb+belts+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -75,7 +75,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
 
 ## 对标开心消消乐 / Feature map
 
@@ -86,6 +86,7 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
 | 冰层 | ✅ gem 上 ice；裂纹绘制 |
 | 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
+| 巧克力 | ✅ `CellOverlay` Choco（邻消清除 + 步末蔓延，清则不蔓） |
 | 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
 | 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
 | 飞碟吸色 | ✅ `Ufo{cell,color}` + `stepUfo` 波末吸同色邻格并移格；`GoalUfo` |

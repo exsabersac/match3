@@ -9,10 +9,12 @@ module Match3.Types
   , mkIceGem
   , mkGrassGem
   , mkVineGem
+  , mkChocoGem
   , iceLayers
   , cellOverlay
   , hasGrass
   , hasVine
+  , hasChoco
   , clearOverlay
   , setOverlay
   , mkStone
@@ -57,16 +59,17 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Overlay on a gem (开心消消乐草 / 藤蔓). Grass clears on match; Vine spreads after move.
-data CellOverlay = Grass | Vine
+-- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力).
+-- Grass: clears on match. Vine: spreads after move. Choco: adjacent-clear + spreads.
+data CellOverlay = Grass | Vine | Choco
   deriving (Eq, Ord, Show, Generic)
 
 -- | Board cell: gem (optional ice + overlay), layered stone crate, or countdown bomb.
 -- Stone n = hit points; adjacent clears chip; removed at 0.
 -- Countdown c n = colored timer bomb; matches as color c.
--- Gem overlay: Grass cleared when cell is in a match; Vine spreads at end of move unless cleared.
+-- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
-  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine)
+  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine|Choco)
   | Stone Int
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
@@ -88,6 +91,10 @@ mkGrassGem c = Gem c Normal 0 (Just Grass)
 mkVineGem :: Color -> Cell
 mkVineGem c = Gem c Normal 0 (Just Vine)
 
+-- | Gem covered by chocolate (巧克力): cleared by adjacent match; spreads after move.
+mkChocoGem :: Color -> Cell
+mkChocoGem c = Gem c Normal 0 (Just Choco)
+
 iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n _) = n
 iceLayers (Stone _) = 0
@@ -102,6 +109,9 @@ hasGrass c = cellOverlay c == Just Grass
 
 hasVine :: Cell -> Bool
 hasVine c = cellOverlay c == Just Vine
+
+hasChoco :: Cell -> Bool
+hasChoco c = cellOverlay c == Just Choco
 
 -- | Strip overlay, keep gem/ice.
 clearOverlay :: Cell -> Cell

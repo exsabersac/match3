@@ -73,6 +73,10 @@ tests =
     , testCase "chest_cleared_by_adjacent" chest_cleared_by_adjacent
     , testCase "chest_layer_decrement" chest_layer_decrement
     , testCase "goal_chest_counts" goal_chest_counts
+    , testCase "honey_blocks_swap" honey_blocks_swap
+    , testCase "honey_cleared_by_adjacent" honey_cleared_by_adjacent
+    , testCase "honey_layer_decrement" honey_layer_decrement
+    , testCase "goal_honey_counts" goal_honey_counts
     , testCase "ufo_collects_target_color" ufo_collects_target_color
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
@@ -398,7 +402,7 @@ combo_wave_scoring = do
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
       b = take 3 b0 ++ [row3] ++ drop 4 b0
-      (_, cells, scored, combo, tallies, _, _, _) = runCascadeScored Nothing (mkStdGen 3) b
+      (_, cells, scored, combo, tallies, _, _, _, _) = runCascadeScored Nothing (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
   assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)
@@ -867,25 +871,25 @@ goal_collect_multi_color = do
   case out of
     LevelClear _ _ ->
       assertBool "if cleared, both quotas met" $
-        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1) (gsChestsCleared gs1)
+        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1) (gsChestsCleared gs1) (gsHoneyCleared gs1)
     MoveApplied _ ->
       assertBool "multi goal not met with only C1" $
-        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0 0)
+        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0 0 0)
           || lookupCount (gsColorBag gs1) C2 >= 1
     _ -> pure ()
   -- Direct unit: goalMetEx logic
   assertBool "both met"
-    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0 0 0)
+    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0 0 0 0)
   assertBool "missing color"
-    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0 0 0))
+    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0 0 0 0))
 
 -- | GoalClearStone counts fully destroyed stones toward the goal.
 goal_clear_stone_counts :: Assertion
 goal_clear_stone_counts = do
   assertBool "0 stones unmet"
-    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0 0 0))
+    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0 0 0 0))
   assertBool "2 stones met"
-    (goalMetEx (GoalClearStone 2) 0 0 [] 2 0 0)
+    (goalMetEx (GoalClearStone 2) 0 0 [] 2 0 0 0)
   assertEqual "goal target" (8 :: Int) (goalTarget (GoalClearStone 8))
   let cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
       boardN =
@@ -1062,7 +1066,7 @@ countdown_bomb_ticks_after_move :: Assertion
 countdown_bomb_ticks_after_move = do
   let bPure = spawnCountdown stableBoard (2, 2) C3 5
   assertEqual "pure tick 5->4" (4 :: Int) (countdownTurns (getCell (tickCountdowns bPure) (2, 2)))
-  let (bRes, nClear, _, _, _, _, _, _) = resolveCountdowns (mkStdGen 0) bPure
+  let (bRes, nClear, _, _, _, _, _, _, _) = resolveCountdowns (mkStdGen 0) bPure
   assertEqual "resolve ticks" (4 :: Int) (countdownTurns (getCell bRes (2, 2)))
   assertEqual "no explode when >0" (0 :: Int) nClear
   -- trySwap path: use a tiny score goal so outcome is terminal (skips ensurePlayable shuffle)
@@ -1396,6 +1400,7 @@ lose_hint_by_goal = do
   assertBool "multi hint" (not (null (loseHint (GoalCollectMulti [(C1, 1)]))))
   assertBool "stone hint" (not (null (loseHint (GoalClearStone 8))))
   assertBool "chest hint" (not (null (loseHint (GoalChest 6))))
+  assertBool "honey hint" (not (null (loseHint (GoalHoney 6))))
   assertBool "ufo hint" (not (null (loseHint (GoalUfo 10))))
 
 --------------------------------------------------------------------------------
@@ -1671,7 +1676,7 @@ chest_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isChest (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      (board1, _n, _sc, _c, _t, _st, chests, _) =
+      (board1, _n, _sc, _c, _t, _st, chests, _h, _) =
         runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
   assertBool "chest opened" (chests >= 1)
   assertBool "chest gone" (not (isChest (getCell board1 (2, 1))))
@@ -1698,9 +1703,9 @@ chest_layer_decrement = do
 
 goal_chest_counts :: Assertion
 goal_chest_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalChest 2) 0 0 [] 0 0 0))
-  assertBool "met" (goalMetEx (GoalChest 2) 0 0 [] 0 0 2)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalChest 5) 0 0 [] 0 0 2)
+  assertBool "unmet" (not (goalMetEx (GoalChest 2) 0 0 [] 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalChest 2) 0 0 [] 0 0 2 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalChest 5) 0 0 [] 0 0 2 0)
   assertEqual "target" (6 :: Int) (goalTarget (GoalChest 6))
   assertBool
     "campaign has GoalChest"
@@ -1772,9 +1777,9 @@ ufo_moves_each_cascade = do
 -- | GoalUfo progress increments with UFO absorbs.
 ufo_goal_counts :: Assertion
 ufo_goal_counts = do
-  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0 0))
-  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2 0)
+  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0 0 0))
+  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2 0 0)
   assertEqual "target" (5 :: Int) (goalTarget (GoalUfo 5))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       b1 = setCell b0 (3, 3) (mkGem C5)
@@ -1809,11 +1814,87 @@ ufo_goal_counts = do
        (gsColorBag gsSim)
        (gsStonesCleared gsSim)
        (gsUfoCollected gsSim)
-       (gsChestsCleared gsSim))
+       (gsChestsCleared gsSim)
+       (gsHoneyCleared gsSim))
   -- Level table includes GoalUfo stages
   assertBool
     "campaign has GoalUfo"
     (any (\g -> case g of GoalUfo _ -> True; _ -> False) (map lvlGoal allLevels))
+
+
+
+
+-- Treasure honey jars / 蜂蜜罐
+--------------------------------------------------------------------------------
+
+honey_blocks_swap :: Assertion
+honey_blocks_swap = do
+  let board = setCell stableBoard (3, 3) mkHoney
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "is honey" (isHoney (getCell board (3, 3)))
+
+honey_cleared_by_adjacent :: Assertion
+honey_cleared_by_adjacent = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          mkHoney
+  assertBool "honey present" (isHoney (getCell board0 (2, 1)))
+  let ms = findMatches board0
+      (b1, dead) = chipAdjacentHoney board0 ms
+  assertEqual "last layer dead" [(2, 1)] dead
+  assertBool "still on board until remove" (isHoney (getCell b1 (2, 1)))
+  let seeds = findMatches board0
+      (board1, _n, _sc, _c, _t, _st, _ch, honey, _) =
+        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+  assertBool "honey smashed" (honey >= 1)
+  assertBool "honey gone" (not (isHoney (getCell board1 (2, 1))))
+
+honey_layer_decrement :: Assertion
+honey_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkHoneyLayers 2)
+  let ms = findMatches board0
+      (b1, dead) = chipAdjacentHoney board0 ms
+  assertEqual "no full clear yet" ([] :: [Pos]) dead
+  assertEqual "layers 2->1" (1 :: Int) (honeyLayers (getCell b1 (4, 1)))
+  let (b2, dead2) = chipAdjacentHoney b1 ms
+  assertEqual "now dead" [(4, 1)] dead2
+
+goal_honey_counts :: Assertion
+goal_honey_counts = do
+  assertBool "unmet" (not (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 2)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalHoney 5) 0 0 [] 0 0 0 2)
+  assertEqual "target" (6 :: Int) (goalTarget (GoalHoney 6))
+  assertBool
+    "campaign has GoalHoney"
+    (any (\g -> case g of GoalHoney _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = newGameAtLevel 18 (levelConfig (allLevels !! 18)) 42
+      nHoney =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isHoney (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor honey >= 6, got " ++ show nHoney) (nHoney >= 6)
 
 
 -- | Reshuffle keeps stones / ice / overlays; UFO list unchanged.

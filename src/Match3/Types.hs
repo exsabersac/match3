@@ -25,6 +25,10 @@ module Match3.Types
   , mkChestLayers
   , chestLayers
   , isChest
+  , mkHoney
+  , mkHoneyLayers
+  , honeyLayers
+  , isHoney
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -68,14 +72,15 @@ data GemKind = Normal | LineH | LineV | Bomb | Rainbow
 data CellOverlay = Grass | Vine | Choco
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: gem (optional ice + overlay), stone, treasure chest, or countdown bomb.
--- Stone/Chest n = hit points; adjacent clears chip; removed at 0.
+-- | Board cell: gem (optional ice + overlay), stone, chest, honey jar, or countdown bomb.
+-- Stone/Chest/Honey n = hit points; adjacent clears chip; removed at 0.
 -- Countdown c n = colored timer bomb; matches as color c.
 -- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
   = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine|Choco)
   | Stone Int
   | Chest Int   -- treasure chest (宝箱) layers; adjacent clears chip
+  | Honey Int   -- honey jar (蜂蜜罐) layers; adjacent clears chip
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -104,6 +109,7 @@ iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n _) = n
 iceLayers (Stone _) = 0
 iceLayers (Chest _) = 0
+iceLayers (Honey _) = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -160,6 +166,22 @@ isChest :: Cell -> Bool
 isChest (Chest _) = True
 isChest _ = False
 
+-- | Single-layer honey jar (蜂蜜罐).
+mkHoney :: Cell
+mkHoney = Honey 1
+
+-- | Multi-layer honey jar.
+mkHoneyLayers :: Int -> Cell
+mkHoneyLayers n = Honey (max 1 n)
+
+honeyLayers :: Cell -> Int
+honeyLayers (Honey n) = n
+honeyLayers _ = 0
+
+isHoney :: Cell -> Bool
+isHoney (Honey _) = True
+isHoney _ = False
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -178,6 +200,7 @@ isGem (Gem _ _ _ _) = True
 isGem (Countdown _ _) = True
 isGem (Stone _) = False
 isGem (Chest _) = False
+isGem (Honey _) = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -185,6 +208,7 @@ cellColor (Gem c _ _ _) = c
 cellColor (Countdown c _) = c
 cellColor (Stone _) = error "cellColor: Stone has no color"
 cellColor (Chest _) = error "cellColor: Chest has no color"
+cellColor (Honey _) = error "cellColor: Honey has no color"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -192,6 +216,7 @@ cellKind (Gem _ k _ _) = k
 cellKind (Countdown _ _) = Normal
 cellKind (Stone _) = error "cellKind: Stone has no kind"
 cellKind (Chest _) = error "cellKind: Chest has no kind"
+cellKind (Honey _) = error "cellKind: Honey has no kind"
 
 numColors :: Int
 numColors = 5
@@ -225,6 +250,7 @@ data LevelGoal
   | GoalCollectMulti [(Color, Int)]  -- all color quotas must be met
   | GoalClearStone Int                 -- fully destroy N stone blockers
   | GoalChest Int                      -- open N treasure chests (宝箱)
+  | GoalHoney Int                      -- smash N honey jars (蜂蜜罐)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   deriving (Eq, Show, Generic)
 
@@ -236,17 +262,19 @@ goalMet (GoalCollect _ n) _ collected = collected >= n
 goalMet (GoalCollectMulti _) _ _ = False  -- use goalMetEx
 goalMet (GoalClearStone _) _ _ = False
 goalMet (GoalChest _) _ _ = False
+goalMet (GoalHoney _) _ _ = False
 goalMet (GoalUfo _) _ _ = False
 
--- | Full goal check with color bag + stones-cleared + UFO absorb counters.
-goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Bool
-goalMetEx (GoalScore t) score _ _ _ _ _ = score >= t
-goalMetEx (GoalCollect _ n) _ collected _ _ _ _ = collected >= n
-goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ =
+-- | Full goal check with color bag + stones/UFO/chests/honey counters.
+goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Bool
+goalMetEx (GoalScore t) score _ _ _ _ _ _ = score >= t
+goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ = collected >= n
+goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ =
   all (\(col, n) -> lookupCount bag col >= n) reqs
-goalMetEx (GoalClearStone n) _ _ _ stones _ _ = stones >= n
-goalMetEx (GoalUfo n) _ _ _ _ ufos _ = ufos >= n
-goalMetEx (GoalChest n) _ _ _ _ _ chests = chests >= n
+goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ = stones >= n
+goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ = ufos >= n
+goalMetEx (GoalChest n) _ _ _ _ _ chests _ = chests >= n
+goalMetEx (GoalHoney n) _ _ _ _ _ _ honey = honey >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -258,16 +286,18 @@ goalProgress (GoalCollect _ _) _ collected = collected
 goalProgress (GoalCollectMulti _) _ collected = collected
 goalProgress (GoalClearStone _) _ collected = collected
 goalProgress (GoalChest _) _ collected = collected
+goalProgress (GoalHoney _) _ collected = collected
 goalProgress (GoalUfo _) _ collected = collected
 
-goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int
-goalProgressEx (GoalScore _) score _ _ _ _ _ = score
-goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ = collected
-goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ =
+goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int
+goalProgressEx (GoalScore _) score _ _ _ _ _ _ = score
+goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ = collected
+goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ =
   sum [min n (lookupCount bag c) | (c, n) <- reqs]
-goalProgressEx (GoalClearStone _) _ _ _ stones _ _ = stones
-goalProgressEx (GoalUfo _) _ _ _ _ ufos _ = ufos
-goalProgressEx (GoalChest _) _ _ _ _ _ chests = chests
+goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ = stones
+goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ = ufos
+goalProgressEx (GoalChest _) _ _ _ _ _ chests _ = chests
+goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey = honey
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -276,6 +306,7 @@ goalTarget (GoalCollect _ n) = n
 goalTarget (GoalCollectMulti reqs) = sum [n | (_, n) <- reqs]
 goalTarget (GoalClearStone n) = n
 goalTarget (GoalChest n) = n
+goalTarget (GoalHoney n) = n
 goalTarget (GoalUfo n) = n
 
 data GameConfig = GameConfig
@@ -293,7 +324,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / UFO / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / UFO / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -314,7 +345,9 @@ allLevels =
   , Level 15 "大师"   18 (GoalScore 1100)
   , Level 16 "宝箱"   24 (GoalChest 6)
   , Level 17 "巧箱"   22 (GoalChest 5)
-  , Level 18 "终章"   15 (GoalScore 1400)
+  , Level 18 "蜂蜜"   24 (GoalHoney 6)
+  , Level 19 "蜜压"   20 (GoalHoney 5)
+  , Level 20 "终章"   16 (GoalScore 1300)
   ]
 
 levelConfig :: Level -> GameConfig

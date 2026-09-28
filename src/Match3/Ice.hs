@@ -26,6 +26,8 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
           (board, p : clearable)
         Chest _ ->
           (board, p : clearable)
+        Honey _ ->
+          (board, p : clearable)
         Countdown _ _ ->
           (board, p : clearable)
     get board (r, c) = (board !! r) !! c

@@ -1,12 +1,15 @@
--- | Stone / chest blockers: layered crates & treasure chests. Never match, block swaps;
--- adjacent gem clears chip one layer; removed at 0 (开心消消乐箱子 / 宝箱).
+-- | Stone / chest / honey blockers: layered crates, treasure chests, honey jars.
+-- Never match, block swaps; adjacent gem clears chip one layer; removed at 0
+-- (开心消消乐箱子 / 宝箱 / 蜂蜜罐).
 module Match3.Obstacles
   ( swapBlockedByStone
   , orthoNeighbors
   , stonesAdjacentTo
   , chestsAdjacentTo
+  , honeysAdjacentTo
   , chipAdjacentStones
   , chipAdjacentChests
+  , chipAdjacentHoney
   , withAdjacentStones
   ) where
 
@@ -18,10 +21,13 @@ import Match3.Types
   , boardSize
   , isStone
   , isChest
+  , isHoney
   , mkStoneLayers
   , mkChestLayers
+  , mkHoneyLayers
   , stoneLayers
   , chestLayers
+  , honeyLayers
   )
 
 at :: Board -> Pos -> Cell
@@ -33,10 +39,10 @@ setAt b (r, c) v =
   where
     row = b !! r
 
--- | True if either swap endpoint is a stone or chest (cannot swap blockers).
+-- | True if either swap endpoint is a stone, chest, or honey jar.
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
-  let block c = isStone c || isChest c
+  let block c = isStone c || isChest c || isHoney c
   in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).
@@ -97,6 +103,31 @@ chipAdjacentChests b clearedGems =
           in if n <= 1
                then (board, nub (p : dead))
                else (setAt board p (mkChestLayers (n - 1)), dead)
+        _ -> (board, dead)
+
+-- | Honey jar positions orthogonally adjacent to cleared positions.
+honeysAdjacentTo :: Board -> [Pos] -> [Pos]
+honeysAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isHoney (at b p)
+    ]
+
+-- | Chip one layer off each adjacent honey jar (蜂蜜罐).
+chipAdjacentHoney :: Board -> [Pos] -> (Board, [Pos])
+chipAdjacentHoney b clearedGems =
+  foldl hitOne (b, []) (honeysAdjacentTo b clearedGems)
+  where
+    hitOne (board, dead) p =
+      case at board p of
+        cell | isHoney cell ->
+          let n = honeyLayers cell
+          in if n <= 1
+               then (board, nub (p : dead))
+               else (setAt board p (mkHoneyLayers (n - 1)), dead)
         _ -> (board, dead)
 
 -- | Legacy helper: positions that should be removed (last-layer stones only).

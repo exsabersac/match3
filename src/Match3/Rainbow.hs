@@ -62,4 +62,5 @@ colorPositions b col =
       Countdown col' _ -> col' == col
       Stone _ -> False
       Chest _ -> False
+      Honey _ -> False
   ]

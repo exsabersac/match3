@@ -191,6 +191,7 @@ spawnBurst board positions =
               (cr, cg, cb) = case getCell board pos of
                     Stone _ -> (120, 120, 130)
                     Chest _ -> (220, 170, 60)
+                    Honey _ -> (240, 180, 40)
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -241,6 +242,8 @@ updateTitle window app = do
           "stones=" ++ show (gsStonesCleared gs) ++ "/" ++ show n
         GoalChest n ->
           "chest=" ++ show (gsChestsCleared gs) ++ "/" ++ show n
+        GoalHoney n ->
+          "honey=" ++ show (gsHoneyCleared gs) ++ "/" ++ show n
         GoalUfo n ->
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
       title =
@@ -790,6 +793,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalHoney n ->
+                                    " [honey "
+                                      <> T.pack (show (gsHoneyCleared gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   GoalUfo n ->
                                     " [ufo "
                                       <> T.pack (show (gsUfoCollected gs'))
@@ -1100,6 +1109,7 @@ drawHud ren app = do
         GoalCollectMulti _ -> V4 220 180 100 255
         GoalClearStone _ -> V4 160 160 170 255
         GoalChest _ -> V4 220 170 60 255
+        GoalHoney _ -> V4 240 180 40 255
         GoalUfo _ -> V4 180 120 255 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
@@ -1118,6 +1128,11 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
       rendererDrawColor ren $= V4 180 120 40 255
       fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 12 6)))
+    GoalHoney _ -> do
+      rendererDrawColor ren $= V4 240 180 40 255
+      fillRect ren (Just (Rectangle (P (V2 202 40)) (V2 16 18)))
+      rendererDrawColor ren $= V4 200 140 20 255
+      fillRect ren (Just (Rectangle (P (V2 206 36)) (V2 8 6)))
     GoalUfo _ -> do
       rendererDrawColor ren $= V4 180 120 255 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
@@ -1269,6 +1284,7 @@ drawLevelMap ren app
               GoalCollectMulti _ -> V4 220 180 100 255
               GoalClearStone _ -> V4 160 160 170 255
               GoalChest _ -> V4 220 170 60 255
+              GoalHoney _ -> V4 240 180 40 255
               GoalUfo _ -> V4 180 120 255 255
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
@@ -1410,6 +1426,35 @@ drawGemAt ren x y cell flashing = case cell of
     rendererDrawColor ren $= V4 80 160 220 255
     fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 5) (y + cellPx `div` 2 - 2))) (V2 10 10)))
     rendererDrawColor ren $= V4 255 240 180 255
+    forM_ [0 .. min 3 layers - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+              (V2 7 5)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Honey layers -> do
+    -- Amber honey jar (蜂蜜罐): round body + lid + drip, distinct from chest
+    let gap = 4 :: CInt
+        (cr, cg, cb) = if flashing then (255, 230, 120) else (230, 170, 35)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap + 4) (y + gap + 10)))
+            (V2 (cellPx - 2 * gap - 8) (cellPx - 2 * gap - 12))))
+    -- Lid
+    rendererDrawColor ren $= V4 180 120 30 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 8) (y + gap + 2))) (V2 (cellPx - 2 * gap - 16) 10)))
+    -- Highlight drip
+    rendererDrawColor ren $= V4 255 220 100 220
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + cellPx `div` 2))) (V2 8 14)))
+    -- Layer pips
+    rendererDrawColor ren $= V4 255 240 160 255
     forM_ [0 .. min 3 layers - 1] $ \i ->
       fillRect
         ren

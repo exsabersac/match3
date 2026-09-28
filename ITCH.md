@@ -15,13 +15,13 @@ Runtime needs `libsdl2-2.0-0`. Headless: `xvfb-run -a stack exec match3-sdl`.
 
 - [ ] Ship `match3-sdl` binary + note SDL2 system dependency
 - [ ] Include `README.md` and `LICENSE` (BSD-3-Clause)
-- [ ] Short GIF / screenshots: swap, cascade combo, chocolate, chest, UFO, map (`M`)
+- [ ] Short GIF / screenshots: swap, cascade combo, chocolate, chest, honey jar, UFO, map (`M`)
 - [ ] Cover image 630×500 (itch) with gem board + title
 - [ ] Description: 8×8 / 5-color Match-3 inspired by 开心消消乐; Haskell + SDL2
 
 ## Page copy (short)
 
-**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, grass / vine / chocolate, conveyor belts, countdown bombs, treasure chests, UFO absorb, daily challenge, boosters (hammer / free-swap), campaign map.
+**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, grass / vine / chocolate, conveyor belts, countdown bombs, treasure chests, honey jars (蜂蜜罐), UFO absorb, daily challenge, boosters (hammer / free-swap), campaign map (21 levels).
 
 Controls: click/drag swap · `1` hammer · `2` free-swap · `H` hint · `M` map · `D` daily · `P` pause
 

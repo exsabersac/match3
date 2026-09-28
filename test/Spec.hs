@@ -206,6 +206,7 @@ tests =
     , testCase "belt_delivers_cookie_bottom_drains" belt_delivers_cookie_bottom_drains
     , testCase "portal_teleports_flip" portal_teleports_flip
     , testCase "portal_endpoints_not_immortal_blocked" portal_endpoints_not_immortal_blocked
+    , testCase "belt_cells_not_stuck_immortal" belt_cells_not_stuck_immortal
     , testCase "snail_reverses_at_portal_endpoint" snail_reverses_at_portal_endpoint
     , testCase "ufo_absorb_no_special_expand" ufo_absorb_no_special_expand
     , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
@@ -6530,7 +6531,7 @@ portal_endpoints_not_immortal_blocked = do
           endpoints
         -- Finale: portal A must be able to teleport a gem into an empty B
         when (li == 27) $ do
-          assertBool "finale bottle relocated off portal" (isBottle (getCell (gsBoard gs) (1, 7)))
+          assertBool "finale bottle relocated off portal+belt" (isBottle (getCell (gsBoard gs) (2, 7)))
           assertBool "finale portal A not bottle" (not (isBottle (getCell (gsBoard gs) (0, 3))))
           assertBool "finale snail off portal row" (isSnail (getCell (gsBoard gs) (2, 0)))
           assertBool "finale portal A not snail" (not (isSnail (getCell (gsBoard gs) (0, 3))))
@@ -6556,6 +6557,47 @@ portal_endpoints_not_immortal_blocked = do
 -- | Snail must reverse at portal endpoints (immortal + not transferable).
 -- Finale regression: snail at (0,4) facing right hit Cookie at (0,5), reversed,
 -- then crawled onto portal A (0,3) and permanently killed the pair.
+-- | Campaign belt cells must not host stuck immortals (Bottle / Maker / MagicHat /
+-- Snail). Those never clear, so one belt slot stays permanently occupied (终章
+-- regression: Bottle was seeded on belt cell (1,7) after being moved off portal A).
+belt_cells_not_stuck_immortal :: Assertion
+belt_cells_not_stuck_immortal = do
+  let beltLevels =
+        [ (li, gs)
+        | li <- [0 .. length allLevels - 1]
+        , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) 42
+        , not (null (gsBelts gs))
+        ]
+  assertBool "campaign has belt levels" (not (null beltLevels))
+  mapM_
+    ( \(li, gs) -> do
+        let cells = nub (concat (gsBelts gs))
+            stuck c =
+              isBottle c || isMaker c || isMagicHat c || isSnail c
+        mapM_
+          ( \p -> do
+              let cell = getCell (gsBoard gs) p
+              assertBool
+                ( "L"
+                    ++ show li
+                    ++ " belt "
+                    ++ show p
+                    ++ " stuck immortal: "
+                    ++ show cell
+                )
+                (not (stuck cell))
+          )
+          cells
+        when (li == 27) $ do
+          assertBool "finale bottle off belt" (isBottle (getCell (gsBoard gs) (2, 7)))
+          assertBool "finale belt end not bottle" $
+            not (isBottle (getCell (gsBoard gs) (1, 7)))
+          assertBool "(2,7) not on finale belt" $
+            (2, 7) `notElem` nub (concat (gsBelts gs))
+    )
+    beltLevels
+
+
 snail_reverses_at_portal_endpoint :: Assertion
 snail_reverses_at_portal_endpoint = do
   let portals = [((3, 3), (6, 6))]

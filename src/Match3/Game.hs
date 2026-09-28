@@ -301,9 +301,10 @@ decorateLevel 27 b =
               [(6, 4)]
       b3p = setCell b3s (7, 3) (mkFlip C1 C3)
       b3q = setCell b3p (5, 0) mkSurprise
-      -- Bottle off portal entrance (0,3): Bottle never clears and is not
-      -- portal-transferable, so sitting on a portal endpoint permanently kills the pair.
-      b3r = setCell b3q (1, 7) (mkBottle C1)
+      -- Bottle off portal entrance (0,3) *and* off row-1 belt: Bottle never clears
+      -- and is not portal-transferable; on a belt cell it permanently occupies one
+      -- slot of the cycle (same immortal-blocker class as portal endpoints).
+      b3r = setCell b3q (2, 7) (mkBottle C1)
       b4 = overlayAt b3r Vine [(6, 3)]
       -- Snail off portal row 0: Cookie at (0,5) would reverse it onto portal A (0,3).
       -- Engine also walls portal endpoints; décor keeps crawl path clear of the pair.

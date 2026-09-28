@@ -1,10 +1,13 @@
 -- | Snails (开心消消乐蜗牛): mobile blockers that crawl one step after each
--- successful player move. Push gems ahead; reverse at edges / solid blockers.
+-- successful player move. Push gems ahead; reverse at edges / solid blockers /
+-- portal endpoints (immortal on a portal permanently kills the pair).
 -- trySwap runs a follow-up cascade if the crawl assembles a match (no re-crawl).
 module Match3.Snail
   ( stepSnailAt
+  , stepSnailAtBlocked
   , stepSnails
   , stepSnailsAvoiding
+  , stepSnailsAvoidingBlocked
   , snailPositions
   , mkSnail
   , isSnail
@@ -61,10 +64,16 @@ snailPositions b =
 
 -- | Crawl one snail at @pos@: push gem ahead, or reverse at wall/blocker.
 stepSnailAt :: Board -> Pos -> Board
-stepSnailAt b pos = case at b pos of
+stepSnailAt = stepSnailAtBlocked []
+
+-- | Like 'stepSnailAt' but treat @walls@ as impassable (e.g. portal endpoints).
+-- Snails are immortal and not portal-transferable; occupying a portal forever
+-- kills the pair (same class of bug as Bottle/Maker/Hat seeded on a portal).
+stepSnailAtBlocked :: [Pos] -> Board -> Pos -> Board
+stepSnailAtBlocked walls b pos = case at b pos of
   Snail dr dc ->
     let next = (fst pos + dr, snd pos + dc)
-    in if not (inBoard next) || blocksSnail (at b next)
+    in if not (inBoard next) || next `elem` walls || blocksSnail (at b next)
          then setAt b pos (Snail (-dr) (-dc))
          else if pushable (at b next)
            then
@@ -84,9 +93,14 @@ stepSnails = stepSnailsAvoiding []
 -- Used after conveyor shift so a snail on a belt is not also crawled
 -- (belt already moved it once this turn — avoids double-step on belt/same-col).
 stepSnailsAvoiding :: [Pos] -> Board -> Board
-stepSnailsAvoiding avoid b0 =
+stepSnailsAvoiding avoid = stepSnailsAvoidingBlocked avoid []
+
+-- | Skip snails on @avoid@ (belt double-step) and reverse at @walls@
+-- (portal endpoints — immortal must not occupy a portal).
+stepSnailsAvoidingBlocked :: [Pos] -> [Pos] -> Board -> Board
+stepSnailsAvoidingBlocked avoid walls b0 =
   foldl stepOne b0 [p | p <- snailPositions b0, p `notElem` avoid]
   where
     stepOne board pos =
       -- Only step if a snail is still at the snapshot position
-      if isSnail (at board pos) then stepSnailAt board pos else board
+      if isSnail (at board pos) then stepSnailAtBlocked walls board pos else board

@@ -68,7 +68,9 @@ module Match3.Core
   , levelCarpets
   , stepSnails
   , stepSnailsAvoiding
+  , stepSnailsAvoidingBlocked
   , stepSnailAt
+  , stepSnailAtBlocked
   , snailPositions
   , Ufo(..)
   , mkUfo
@@ -252,7 +254,9 @@ import Match3.Carpet (coverCarpets, levelCarpets)
 import Match3.Snail
   ( stepSnails
   , stepSnailsAvoiding
+  , stepSnailsAvoidingBlocked
   , stepSnailAt
+  , stepSnailAtBlocked
   , snailPositions
   )
 import Match3.Ufo

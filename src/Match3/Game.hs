@@ -44,7 +44,7 @@ import Match3.Conveyor (Belt, shiftBelts)
 import Match3.Grass (spreadVines, spreadChoco, spreadSteam)
 import Match3.Carpet (coverCarpets, levelCarpets)
 import Data.List (nub)
-import Match3.Snail (stepSnailsAvoiding)
+import Match3.Snail (stepSnailsAvoidingBlocked)
 import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
@@ -305,10 +305,12 @@ decorateLevel 27 b =
       -- portal-transferable, so sitting on a portal endpoint permanently kills the pair.
       b3r = setCell b3q (1, 7) (mkBottle C1)
       b4 = overlayAt b3r Vine [(6, 3)]
+      -- Snail off portal row 0: Cookie at (0,5) would reverse it onto portal A (0,3).
+      -- Engine also walls portal endpoints; décor keeps crawl path clear of the pair.
       b5 =
         foldl (\board (p, dr, dc) -> setCell board p (mkSnail dr dc))
               b4
-              [((0, 4), 0, 1)]
+              [((2, 0), 0, 1)]
   in foldl
        (\board p ->
            case getCell board p of
@@ -692,9 +694,14 @@ trySwap p1 p2 gs
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufosCd, [], g1')
                      else runPostBeltCascade ufosCd (gsPortals gs) g1' boardBelt
-                 -- Vine / chocolate / steam, then snails crawl (skip belt cells — no double-step)
+                 -- Vine / chocolate / steam, then snails crawl (skip belt; reverse at portals)
                  beltCells = nub (concat (gsBelts gs))
-                 boardSnail = stepSnailsAvoiding beltCells (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
+                 portalEnds = nub (concatMap (\(a, b) -> [a, b]) (gsPortals gs))
+                 boardSnail =
+                   stepSnailsAvoidingBlocked
+                     beltCells
+                     portalEnds
+                     (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
                  -- Snail push can assemble a match after cascades finished; resolve it
                  -- (no second belt/snail/countdown — once-per-move end effects stay once).
                  (board1, cleared3, gained3, combo3, tallies3, stones3, chests3, honey3, balloons3, cookies3, cakes3, uAbs3, ufos3, pos3, gFinal) =

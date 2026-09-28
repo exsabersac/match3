@@ -206,6 +206,7 @@ tests =
     , testCase "belt_delivers_cookie_bottom_drains" belt_delivers_cookie_bottom_drains
     , testCase "portal_teleports_flip" portal_teleports_flip
     , testCase "portal_endpoints_not_immortal_blocked" portal_endpoints_not_immortal_blocked
+    , testCase "snail_reverses_at_portal_endpoint" snail_reverses_at_portal_endpoint
     , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
     , testCase "carpet_covers_on_cookie_vacate" carpet_covers_on_cookie_vacate
     , testCase "carpet_covers_on_safe_open" carpet_covers_on_safe_open
@@ -6527,6 +6528,8 @@ portal_endpoints_not_immortal_blocked = do
         when (li == 27) $ do
           assertBool "finale bottle relocated off portal" (isBottle (getCell (gsBoard gs) (1, 7)))
           assertBool "finale portal A not bottle" (not (isBottle (getCell (gsBoard gs) (0, 3))))
+          assertBool "finale snail off portal row" (isSnail (getCell (gsBoard gs) (2, 0)))
+          assertBool "finale portal A not snail" (not (isSnail (getCell (gsBoard gs) (0, 3))))
           let portals = gsPortals gs
               setMBoard b (r, c) v =
                 take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
@@ -6545,6 +6548,112 @@ portal_endpoints_not_immortal_blocked = do
             Nothing -> assertFailure "finale expected gem at portal B"
     )
     portalLevels
+
+-- | Snail must reverse at portal endpoints (immortal + not transferable).
+-- Finale regression: snail at (0,4) facing right hit Cookie at (0,5), reversed,
+-- then crawled onto portal A (0,3) and permanently killed the pair.
+snail_reverses_at_portal_endpoint :: Assertion
+snail_reverses_at_portal_endpoint = do
+  let portals = [((3, 3), (6, 6))]
+      walls = nub (concatMap (\(a, b) -> [a, b]) portals)
+      -- Snail left of portal A, facing right toward it; gem on portal
+      board0 =
+        setCell
+          (setCell stableBoard (3, 2) (mkSnail 0 1))
+          (3, 3)
+          (mkGem C2)
+  assertBool "pre: snail left of portal" (isSnail (getCell board0 (3, 2)))
+  assertBool "pre: portal has gem" (isGem (getCell board0 (3, 3)))
+  -- Raw crawl (no walls) would push onto the portal
+  let raw = stepSnails board0
+  assertBool "raw crawl occupies portal" (isSnail (getCell raw (3, 3)))
+  -- Gated crawl reverses at portal wall
+  let gated = stepSnailsAvoidingBlocked [] walls board0
+  assertBool "gated: still left of portal" (isSnail (getCell gated (3, 2)))
+  assertBool "gated: portal not snail" (not (isSnail (getCell gated (3, 3))))
+  assertEqual "gated: reversed dir" (0, -1) (snailDir (getCell gated (3, 2)))
+  assertEqual "gated: portal gem kept" C2 (cellColor (getCell gated (3, 3)))
+  -- Full move with portals: snail must not land on endpoint after crawl
+  let boardTrap =
+        -- Cookie right of snail forces reverse toward portal (old finale pattern)
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell stableBoard (0, 3) (mkGem C4))
+                      (0, 4)
+                      (mkSnail 0 1))
+                   (0, 5)
+                   mkCookie)
+                (1, 0)
+                (mkGem C1))
+             (1, 1)
+             (mkGem C1))
+          (1, 2)
+          (mkGem C2)
+      -- Make a match away from snail so trySwap succeeds and end-of-move crawls
+      boardMove =
+        setCell boardTrap (1, 3) (mkGem C1)
+      gs0 =
+        (newGame (GameConfig 20 (GoalScore 99999)) 11)
+          { gsBoard = boardMove
+          , gsBelts = []
+          , gsPortals = [((0, 3), (7, 4))]
+          , gsUfos = []
+          , gsOver = Nothing
+          , gsMoves = 20
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsLastCleared = []
+          }
+      -- Two crawls: first reverses at Cookie, second would enter portal without walls
+      b1 = stepSnails (gsBoard gs0)
+      b2 = stepSnails b1
+  assertBool "unit: 2 raw crawls park on portal" (isSnail (getCell b2 (0, 3)))
+  let (gs1, out1) = trySwap (1, 2) (1, 3) gs0
+  case out1 of
+    NoMatch -> assertFailure "expected match for crawl turn 1"
+    InvalidSwap -> assertFailure "expected valid swap turn 1"
+    _ -> pure ()
+  assertBool "after move1 snail not on portal A" (not (isSnail (getCell (gsBoard gs1) (0, 3))))
+  assertBool "after move1 snail not on portal B" (not (isSnail (getCell (gsBoard gs1) (7, 4))))
+  -- Second move: still must not occupy portal
+  let board2 = gsBoard gs1
+      -- Ensure a legal match remains for a second crawl tick
+      board2' =
+        setCell
+          (setCell
+             (setCell
+                (setCell board2 (2, 0) (mkGem C3))
+                (2, 1)
+                (mkGem C3))
+             (2, 2)
+             (mkGem C4))
+          (2, 3)
+          (mkGem C3)
+      gs2 = gs1 { gsBoard = board2', gsOver = Nothing, gsHint = Nothing }
+      (gs3, out2) = trySwap (2, 2) (2, 3) gs2
+  case out2 of
+    NoMatch -> assertFailure "expected match for crawl turn 2"
+    InvalidSwap -> assertFailure "expected valid swap turn 2"
+    _ -> pure ()
+  assertBool "after move2 snail not on portal A" (not (isSnail (getCell (gsBoard gs3) (0, 3))))
+  assertBool "after move2 snail not on portal B" (not (isSnail (getCell (gsBoard gs3) (7, 4))))
+  -- Portal still transferable after two crawls
+  let setMBoard b (r, c) v =
+        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+        where
+          row = b !! r
+      fill = Just (mkGem C5)
+      mb0 = replicate boardSize (replicate boardSize fill)
+      mb1 = setMBoard mb0 (0, 3) (Just (mkGem C1))
+      mb2 = setMBoard mb1 (7, 4) Nothing
+      mb3 = applyPortalTeleports (gsPortals gs3) mb2
+  assertEqual "portal A still empties" Nothing ((mb3 !! 0) !! 3)
+  case (mb3 !! 7) !! 4 of
+    Just cell -> assertEqual "portal B still receives" C1 (cellColor cell)
+    Nothing -> assertFailure "expected gem at portal B after crawls"
 
 
 -- | Bare GoalCarpet (no levelCarpets) still gets open floor tiles (UFO décor parity).

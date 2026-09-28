@@ -2,7 +2,7 @@
 module Main (main) where
 
 import Data.List (sort)
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Match3.Board (applyGravity, clearMatches, refill)
 import Match3.Core
 import System.Random (mkStdGen)
@@ -69,6 +69,7 @@ tests =
     , testCase "ufo_collects_target_color" ufo_collects_target_color
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
+    , testCase "shuffle_preserves_decor" shuffle_preserves_decor
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -499,13 +500,16 @@ level_table_mixes_collect = do
   let names = map lvlName allLevels
   assertBool "has 采红" ("采红" `elem` names)
   assertBool "has 采蓝" ("采蓝" `elem` names)
-  assertBool "has 采绿" ("采绿" `elem` names)
+  assertBool "has 冰绿" ("冰绿" `elem` names)
   assertBool "has 双采" ("双采" `elem` names)
   assertBool "has 碎石" ("碎石" `elem` names)
   assertBool "has multi goal"
     (any (\g -> case g of GoalCollectMulti _ -> True; _ -> False) goals)
   assertBool "has clear-stone goal"
     (any (\g -> case g of GoalClearStone _ -> True; _ -> False) goals)
+  assertBool "has 飞碟" ("飞碟" `elem` names)
+  assertBool "has ufo goal"
+    (any (\g -> case g of GoalUfo _ -> True; _ -> False) goals)
 
 -- | Score-goal levels do not increment gsCollected (stays 0).
 score_goal_ignores_collect :: Assertion
@@ -1604,3 +1608,32 @@ ufo_goal_counts = do
   assertBool
     "campaign has GoalUfo"
     (any (\g -> case g of GoalUfo _ -> True; _ -> False) (map lvlGoal allLevels))
+
+
+-- | Reshuffle keeps stones / ice / overlays; UFO list unchanged.
+shuffle_preserves_decor :: Assertion
+shuffle_preserves_decor = do
+  let cfg = GameConfig 20 (GoalScore 999)
+      gs0 = newGameAtLevel 7 cfg 33  -- stones + belt level
+      stonesBefore =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , isStone (getCell (gsBoard gs0) p)
+        ]
+      gs1 = shuffleGame gs0
+      stonesAfter =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , isStone (getCell (gsBoard gs1) p)
+        ]
+  assertEqual "stones survive shuffle" (sort stonesBefore) (sort stonesAfter)
+  assertBool "still playable or terminal-ok" (hasValidMove (gsBoard gs1) || isJust (gsOver gs1))
+  -- UFO entities persist across shuffle
+  let gsU = (newGameAtLevel 12 cfg 44)
+      gsU' = shuffleGame gsU
+  assertEqual "UFO count kept" (length (gsUfos gsU)) (length (gsUfos gsU'))
+  assertEqual "UFO cells kept" (map ufoCell (gsUfos gsU)) (map ufoCell (gsUfos gsU'))

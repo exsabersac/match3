@@ -102,6 +102,16 @@ levelBelts _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
 decorateLevel :: Int -> Board -> Board
+decorateLevel 5 b =
+  -- Ice seals on a few gems (开心消消乐冰层入门)
+  foldl
+    (\board p ->
+        case getCell board p of
+          Gem col kind _ ov -> setCell board p (Gem col kind 1 ov)
+          _ -> board
+    )
+    b
+    [(2, 2), (2, 5), (5, 3), (6, 6)]
 decorateLevel 7 b =
   foldl (\board p -> setCell board p mkStone)
         b
@@ -221,19 +231,47 @@ mergeTallies :: [(Color, Int)] -> [(Color, Int)] -> [(Color, Int)]
 mergeTallies a b =
   [(col, lookupColor a col + lookupColor b col) | col <- allColors]
 
+
+-- | Snapshot blockers/overlays so reshuffle does not erase level décor.
+data CellDecor = CellDecor
+  { cdPos :: Pos
+  , cdCell :: Cell
+  } deriving (Eq, Show)
+
+extractDecor :: Board -> [CellDecor]
+extractDecor b =
+  [ CellDecor (r, c) cell
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , let cell = getCell b (r, c)
+  , keep cell
+  ]
+  where
+    keep (Stone _) = True
+    keep (Countdown _ _) = True
+    keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
+    -- Normal bare gems are shuffled away
+
+restoreDecor :: Board -> [CellDecor] -> Board
+restoreDecor b = foldl (\board (CellDecor p cell) -> setCell board p cell) b
+
 -- | If board has no valid move (and game not over), reshuffle to a playable board.
 ensurePlayable :: GameState -> GameState
 ensurePlayable gs
   | Just _ <- gsOver gs = gs { gsShuffled = False }
   | hasValidMove (gsBoard gs) = gs { gsShuffled = False }
   | otherwise =
-      let (board, g') = shufflePlayable (gsGen gs)
+      let decor = extractDecor (gsBoard gs)
+          (board0, g') = shufflePlayable (gsGen gs)
+          board = restoreDecor board0 decor
       in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
 
--- | Force reshuffle (e.g. player key S).
+-- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays / bombs; keeps UFOs.
 shuffleGame :: GameState -> GameState
 shuffleGame gs =
-  let (board, g') = shufflePlayable (gsGen gs)
+  let decor = extractDecor (gsBoard gs)
+      (board0, g') = shufflePlayable (gsGen gs)
+      board = restoreDecor board0 decor
   in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True, gsOver = Nothing }
 
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)

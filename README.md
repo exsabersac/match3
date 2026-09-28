@@ -44,7 +44,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 3 | 热身 | 26 | Score 500 | — |
 | 4 | 采蓝 | 26 | Collect 22× BLUE | — |
 | 5 | 进阶 | 22 | Score 700 | — |
-| 6 | 采绿 | 24 | Collect 26× GREEN | — |
+| 6 | 冰绿 | 24 | Collect 26× GREEN | ice |
 | 7 | 双采 | 28 | Collect RED 12 + BLUE 12 | — |
 | 8 | 碎石 | 26 | Destroy 8 stones | stones + belt |
 | 9 | 草场 | 24 | Score 600 | grass |
@@ -104,7 +104,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (52+ named cases)
+test/Spec.hs tasty (53+ named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

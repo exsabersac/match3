@@ -260,7 +260,7 @@ allLevels =
   , Level 2  "热身"   26 (GoalScore 500)
   , Level 3  "采蓝"   26 (GoalCollect C3 22)
   , Level 4  "进阶"   22 (GoalScore 700)
-  , Level 5  "采绿"   24 (GoalCollect C2 26)
+  , Level 5  "冰绿"   24 (GoalCollect C2 26)
   , Level 6  "双采"   28 (GoalCollectMulti [(C1, 12), (C3, 12)])
   , Level 7  "碎石"   26 (GoalClearStone 8)
   , Level 8  "草场"   24 (GoalScore 600)

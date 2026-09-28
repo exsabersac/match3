@@ -15,6 +15,9 @@ module Match3.Types
   , hasGrass
   , hasVine
   , hasChoco
+  , hasFog
+  , fogLayers
+  , mkFogGem
   , clearOverlay
   , setOverlay
   , mkStone
@@ -72,9 +75,10 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力).
+-- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力 / 迷雾).
 -- Grass: clears on match. Vine: spreads after move. Choco: adjacent-clear + spreads.
-data CellOverlay = Grass | Vine | Choco
+-- Fog n: layers; adjacent clears peel one layer; fogged gems do not match until clear.
+data CellOverlay = Grass | Vine | Choco | Fog Int
   deriving (Eq, Ord, Show, Generic)
 
 -- | Board cell: gem (optional ice + overlay), stone, chest, honey jar, balloon, cookie, or countdown bomb.
@@ -113,6 +117,10 @@ mkVineGem c = Gem c Normal 0 (Just Vine)
 mkChocoGem :: Color -> Cell
 mkChocoGem c = Gem c Normal 0 (Just Choco)
 
+-- | Gem covered by fog / cloud (迷雾): adjacent clears peel one layer.
+mkFogGem :: Color -> Int -> Cell
+mkFogGem c n = Gem c Normal 0 (Just (Fog (max 1 n)))
+
 iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n _) = n
 iceLayers (Stone _) = 0
@@ -134,6 +142,16 @@ hasVine c = cellOverlay c == Just Vine
 
 hasChoco :: Cell -> Bool
 hasChoco c = cellOverlay c == Just Choco
+
+hasFog :: Cell -> Bool
+hasFog c = case cellOverlay c of
+  Just (Fog _) -> True
+  _ -> False
+
+fogLayers :: Cell -> Int
+fogLayers c = case cellOverlay c of
+  Just (Fog n) -> n
+  _ -> 0
 
 -- | Strip overlay, keep gem/ice.
 clearOverlay :: Cell -> Cell

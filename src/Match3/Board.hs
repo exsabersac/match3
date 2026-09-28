@@ -35,7 +35,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog)
 import Match3.Obstacles (chipAdjacentStones, chipAdjacentChests, chipAdjacentHoney, chipAdjacentBalloons)
 import Match3.Countdown
   ( countdownsAtZero
@@ -102,11 +102,13 @@ groupGemRuns b (p : ps) = case getCell b p of
   Honey _ -> groupGemRuns b ps
   Balloon _ -> groupGemRuns b ps
   Cookie -> groupGemRuns b ps
+  Gem _ _ _ (Just (Fog _)) -> groupGemRuns b ps  -- fog hides gem from matches
   Gem col _ _ _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
     go run col (q : qs) = case getCell b q of
+      Gem _ _ _ (Just (Fog _)) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem col' _ _ _ | col' == col -> go (q : run) col qs
       Countdown col' _ | col' == col -> go (q : run) col qs
       _ -> (col, reverse run) : groupGemRuns b (q : qs)
@@ -223,8 +225,10 @@ clearMatchesDetailed prefer b =
       (bChest, deadChests) = chipAdjacentChests bChipped iceFree
       (bHoney, deadHoney) = chipAdjacentHoney bChest iceFree
       (bBal, deadBalloons) = chipAdjacentBalloons bHoney iceFree
+      -- Fog: peel adjacent fog layers (gem stays)
+      (bFog, _fogCleared) = chipAdjacentFog bBal iceFree
       -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
-      bNoChoco = clearChocoAdjacent bBal expanded
+      bNoChoco = clearChocoAdjacent bFog expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadBalloons)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
@@ -426,7 +430,8 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bChest, deadChests) = chipAdjacentChests bChipped iceFree
       (bHoney, deadHoney) = chipAdjacentHoney bChest iceFree
       (bBal, deadBalloons) = chipAdjacentBalloons bHoney iceFree
-      bNoChoco = clearChocoAdjacent bBal expanded
+      (bFog, _) = chipAdjacentFog bBal iceFree
+      bNoChoco = clearChocoAdjacent bFog expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadBalloons)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos

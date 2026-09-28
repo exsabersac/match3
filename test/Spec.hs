@@ -85,6 +85,9 @@ tests =
     , testCase "cookie_falls_with_gravity" cookie_falls_with_gravity
     , testCase "cookie_collected_at_bottom" cookie_collected_at_bottom
     , testCase "goal_cookie_counts" goal_cookie_counts
+    , testCase "fog_blocks_match" fog_blocks_match
+    , testCase "fog_cleared_by_adjacent" fog_cleared_by_adjacent
+    , testCase "fog_layer_decrement" fog_layer_decrement
     , testCase "ufo_collects_target_color" ufo_collects_target_color
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
@@ -2096,3 +2099,77 @@ goal_cookie_counts = do
           , isCookie (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor cookies >= 6, got " ++ show nCookie) (nCookie >= 6)
+
+
+--------------------------------------------------------------------------------
+-- Fog / 迷雾 (adjacent peel layers; fogged gems do not match)
+--------------------------------------------------------------------------------
+
+fog_blocks_match :: Assertion
+fog_blocks_match = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkFogGem C1 1))
+          (3, 2)
+          (mkGem C1)
+  assertBool "fog present" (hasFog (getCell board0 (3, 1)))
+  assertBool "fogged gem breaks run" (null (findMatches board0))
+  assertEqual "fog layers" (1 :: Int) (fogLayers (getCell board0 (3, 1)))
+
+fog_cleared_by_adjacent :: Assertion
+fog_cleared_by_adjacent = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkFogGem C2 1)
+  assertBool "fog above match" (hasFog (getCell board0 (2, 1)))
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentFog board0 ms
+  assertEqual "one fog fully peeled" (1 :: Int) cleared
+  assertBool "fog gone" (not (hasFog (getCell b1 (2, 1))))
+  assertBool "gem remains" (isGem (getCell b1 (2, 1)))
+  -- Via cascade clear path
+  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _) =
+        runCascadeScoredFromSeeds Nothing ms (mkStdGen 1) board0
+  assertBool "fog cleared in cascade" (not (hasFog (getCell board1 (2, 1))))
+
+fog_layer_decrement :: Assertion
+fog_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkFogGem C3 2)
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentFog board0 ms
+  assertEqual "no full clear yet" (0 :: Int) cleared
+  assertEqual "layers 2->1" (1 :: Int) (fogLayers (getCell b1 (4, 1)))
+  let (b2, cleared2) = chipAdjacentFog b1 ms
+  assertEqual "now fully peeled" (1 :: Int) cleared2
+  assertBool "fog gone" (not (hasFog (getCell b2 (4, 1))))
+  -- Campaign décor includes fog on 巧饼 / 终章
+  let gs = newGameAtLevel 22 (levelConfig (allLevels !! 22)) 42
+      nFog =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , hasFog (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor fog >= 4, got " ++ show nFog) (nFog >= 4)

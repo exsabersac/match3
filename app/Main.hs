@@ -1617,6 +1617,22 @@ drawGemAt ren x y cell flashing = case cell of
         rendererDrawColor ren $= V4 150 90 50 200
         fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 14))) (V2 6 6)))
         fillRect ren (Just (Rectangle (P (V2 (x + cellPx - 20) (y + cellPx - 22))) (V2 6 6)))
+      Just (Fog layers) -> do
+        -- Soft white/gray cloud veil (迷雾); layer pips
+        rendererDrawColor ren $= V4 200 210 230 200
+        fillRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
+        rendererDrawColor ren $= V4 240 245 255 180
+        fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + 10))) (V2 14 10)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 22) (y + 18))) (V2 16 12)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 26))) (V2 18 10)))
+        rendererDrawColor ren $= V4 120 140 180 255
+        forM_ [0 .. min 3 layers - 1] $ \i ->
+          fillRect
+            ren
+            (Just
+               (Rectangle
+                  (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+                  (V2 7 5)))
       Nothing -> pure ()
     case cellKind cell of
       Normal -> pure ()

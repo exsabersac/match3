@@ -14,9 +14,13 @@ module Match3.Core
   , hasGrass
   , hasVine
   , hasChoco
+  , hasFog
+  , fogLayers
+  , mkFogGem
   , cellOverlay
   , clearOverlaysOn
   , clearChocoAdjacent
+  , chipAdjacentFog
   , vinePositions
   , chocoPositions
   , spreadVines
@@ -151,6 +155,7 @@ import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
+  , chipAdjacentFog
   , vinePositions
   , chocoPositions
   , spreadVines

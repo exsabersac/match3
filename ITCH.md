@@ -21,7 +21,7 @@ Runtime needs `libsdl2-2.0-0`. Headless: `xvfb-run -a stack exec match3-sdl`.
 
 ## Page copy (short)
 
-**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, grass / vine / chocolate, conveyor belts, countdown bombs, treasure chests, honey jars (蜂蜜罐), balloons (气球), cookies (饼干 drop-collect), UFO absorb, daily challenge, boosters (hammer / free-swap), campaign map (24 levels).
+**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, grass / vine / chocolate, conveyor belts, countdown bombs, treasure chests, honey jars (蜂蜜罐), balloons (气球), cookies (饼干 drop-collect), fog/clouds (迷雾), UFO absorb, daily challenge, boosters (hammer / free-swap), campaign map (24 levels).
 
 Controls: click/drag swap · `1` hammer · `2` free-swap · `H` hint · `M` map · `D` daily · `P` pause
 

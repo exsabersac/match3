@@ -1,6 +1,6 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力、宝箱、蜂蜜罐、气球、饼干掉落收集、传送带、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾、宝箱、蜂蜜罐、气球、饼干掉落收集、传送带、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
 Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
 
@@ -29,7 +29,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Balloons** (`Balloon c` / 气球): colored; adjacent **same-color** clear pops; `GoalBalloon`
 - **Cookies** (`Cookie` / 饼干): fall with gravity; collected on the **bottom row**; `GoalCookie`
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
-- **Grass / Vine / Chocolate** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads (cleared choco does not)
+- **Grass / Vine / Chocolate / Fog** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads; **Fog n** peels by adjacent clear (fogged gems do not match until clear)
 - **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
 - **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
@@ -65,8 +65,8 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 20 | 蜜压 | 22 | Smash 5 honey jars | honey + choco |
 | 21 | 气球 | 24 | Pop 6 balloons | colored balloons |
 | 22 | 饼干 | 24 | Collect 6 cookies | cookies high on board |
-| 23 | 巧饼 | 22 | Collect 5 cookies | cookies + choco |
-| 24 | 终章 | 16 | Score 1400 | stone+chest+honey+balloon+cookie+choco+vine+bomb+belt+UFO |
+| 23 | 巧饼 | 22 | Collect 5 cookies | cookies + choco + fog |
+| 24 | 终章 | 16 | Score 1400 | stone+chest+honey+balloon+cookie+choco+fog+vine+bomb+belt+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -88,7 +88,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; colored balloon = 气球; tan biscuit + chips = 饼干; cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
 
 ## 对标开心消消乐 / Feature map
 
@@ -99,6 +99,7 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
 | 宝箱 | ✅ `Chest n` + `GoalChest`（邻消削层打开） |
 | 饼干 / 掉落收集 | ✅ `Cookie` + `GoalCookie`（重力掉落，底行收集） |
+| 云朵 / 迷雾 | ✅ `Fog n` overlay（邻消揭层；雾下宝石不可匹配） |
 | 冰层 | ✅ gem 上 ice；裂纹绘制 |
 | 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
 | 巧克力 | ✅ `CellOverlay` Choco（邻消清除 + 步末蔓延，清则不蔓） |

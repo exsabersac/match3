@@ -195,7 +195,8 @@ decorateLevel 22 b =
         foldl (\board p -> setCell board p mkCookie)
               b
               [(0, 2), (0, 5), (1, 1), (1, 4), (1, 6), (2, 3)]
-  in overlayAt b1 Choco [(3, 1), (3, 6), (5, 2), (5, 5)]
+      b2 = overlayAt b1 Choco [(3, 1), (3, 6)]
+  in overlayAt b2 (Fog 1) [(4, 2), (4, 3), (4, 4), (5, 3), (6, 2), (6, 5)]
 decorateLevel 23 b =
   let b1 =
         foldl (\board p -> setCell board p mkStone)
@@ -217,8 +218,9 @@ decorateLevel 23 b =
         foldl (\board p -> setCell board p mkCookie)
               b2''
               [(0, 2), (0, 5)]
-      b3 = overlayAt b2c Choco [(2, 2), (2, 5), (5, 2), (5, 5)]
-      b4 = overlayAt b3 Vine [(6, 3)]
+      b3 = overlayAt b2c Choco [(2, 2), (2, 5)]
+      b3f = overlayAt b3 (Fog 2) [(5, 2), (5, 5), (6, 1), (6, 6)]
+      b4 = overlayAt b3f Vine [(6, 3)]
   in foldl
        (\board p ->
            case getCell board p of

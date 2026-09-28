@@ -1,6 +1,6 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓、传送带、倒计时炸弹、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
 Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
 
@@ -13,7 +13,7 @@ stack build && stack exec match3-sdl
 ```
 
 1. **左键**点两格相邻交换，或**拖拽**到相邻格；无三连会回滚  
-2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）  
+2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）  
 3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续  
 
 Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec match3-sdl`.
@@ -25,35 +25,43 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
-- **Boosters**: hammer (clear one cell) / free-swap (any two); limited charges; `1`+select hammers
+- **Grass / Vine** (`CellOverlay`): Grass clears when the cell is matched; Vine spreads to adjacent bare gems at end of move; cleared vines do not spread
+- **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
 - **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
 - **Goals**: score / single collect / multi-color collect / clear stones
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 9 campaign levels
-- HUD meters, particles, swap/fall tweens, pause help, CLEAR/WIN/LOSE overlays
+- Combo scoring, hint, undo, auto-shuffle, 13 campaign levels
+- HUD meters, booster charges, particles, swap/fall tweens, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
 
-| # | Name | Moves | Goal |
-|---|------|-------|------|
-| 1 | 入门 | 30 | Score 300 |
-| 2 | 采红 | 30 | Collect 20× RED |
-| 3 | 热身 | 26 | Score 500 |
-| 4 | 采蓝 | 26 | Collect 22× BLUE |
-| 5 | 进阶 | 22 | Score 700 |
-| 6 | 采绿 | 24 | Collect 26× GREEN |
-| 7 | 双采 | 28 | Collect RED 12 + BLUE 12 |
-| 8 | 碎石 | 26 | Destroy 8 stones |
-| 9 | 大师 | 18 | Score 1100 |
+| # | Name | Moves | Goal | Décor |
+|---|------|-------|------|-------|
+| 1 | 入门 | 30 | Score 300 | — |
+| 2 | 采红 | 30 | Collect 20× RED | — |
+| 3 | 热身 | 26 | Score 500 | — |
+| 4 | 采蓝 | 26 | Collect 22× BLUE | — |
+| 5 | 进阶 | 22 | Score 700 | — |
+| 6 | 采绿 | 24 | Collect 26× GREEN | — |
+| 7 | 双采 | 28 | Collect RED 12 + BLUE 12 | — |
+| 8 | 碎石 | 26 | Destroy 8 stones | stones + belt |
+| 9 | 草场 | 24 | Score 600 | grass |
+| 10 | 藤袭 | 22 | Collect 18× RED | vines |
+| 11 | 传送 | 24 | Score 800 | grass + belt |
+| 12 | 轰炸 | 20 | Score 700 | countdown bombs |
+| 13 | 大师 | 18 | Score 1100 | stone+grass+vine+bomb+belts |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
 ## Controls / 操作
 
-| Key | Action |
-|-----|--------|
+| Key / Input | Action |
+|-------------|--------|
 | Left click / drag | Adjacent swap |
+| `1` then click | Hammer mode (clear one cell); `1` again cancels |
+| `2` then two clicks | Free-swap any two cells; `2` again cancels |
+| Select cell then `1` | Hammer that cell (legacy shortcut) |
 | `H` | Hint |
 | `U` | Undo |
 | `S` | Shuffle |
@@ -63,7 +71,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; dark fuse + turn pips = countdown bomb.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine; dark fuse + turn pips = countdown bomb.
 
 ## 对标开心消消乐 / Feature map
 
@@ -73,11 +81,12 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 炸弹与特殊合成 | ✅ Bomb；Line×Bomb / Rainbow×Line / Bomb×Bomb / Line×Line |
 | 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
 | 冰层 | ✅ gem 上 ice；裂纹绘制 |
+| 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
 | 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
 | 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
 | 每日挑战 / 三星 | ✅ Daily + starRating |
 | 传送带 | ✅ `Belt` 步末循环移位，可触发新消 |
-| 道具（锤子等） | ✅ 锤子砸格 / 任意交换（有限次数） |
+| 道具（锤子等） | ✅ 锤子 / 任意交换：按键进模式 + 点选完整流 |
 
 ## Build & test
 
@@ -88,9 +97,9 @@ stack build && stack test && stack exec match3-sdl
 ## Layout
 
 ```
-src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters
+src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (46 named cases)
+test/Spec.hs tasty (49+ named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

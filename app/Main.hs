@@ -56,6 +56,13 @@ data Particle = Particle
   , pSize  :: CInt
   }
 
+-- | Booster click-flow modes (开心消消乐道具点选).
+data ToolMode
+  = ToolNone
+  | ToolHammer          -- next cell click hammers
+  | ToolFreeSwap (Maybe Pos)  -- first click stores, second free-swaps
+  deriving (Eq, Show)
+
 data App = App
   { appGame      :: GameState
   , appSel       :: Maybe Pos
@@ -70,6 +77,7 @@ data App = App
   , appPaused    :: Bool -- pause + full key help overlay
   , appStartMoves :: MovesLeft
   , appDragFrom  :: Maybe Pos
+  , appTool      :: ToolMode
   }
 
 colorRGB :: Color -> (Word8, Word8, Word8)
@@ -80,7 +88,7 @@ colorRGB C4 = (240, 200, 60)
 colorRGB C5 = (180, 80, 200)
 
 helpKeysMsg :: Text
-helpKeysMsg = "H hint | 1 hammer | U undo | S shuffle | D daily | R restart | N next | P pause | Esc"
+helpKeysMsg = "H hint | 1 hammer | 2 free-swap | U undo | S shuffle | D daily | R restart | N next | P pause | Esc"
 
 main :: IO ()
 main = do
@@ -110,6 +118,7 @@ main = do
         , appPaused = False
         , appStartMoves = lvlMoves lvl
         , appDragFrom = Nothing
+        , appTool = ToolNone
         }
   updateTitle window =<< readIORef ref
   let loop = do
@@ -178,7 +187,7 @@ spawnBurst board positions =
               (cr, cg, cb) = case getCell board pos of
                     Stone _ -> (120, 120, 130)
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
-                    Gem _ _ _ -> colorRGB (cellColor (getCell board pos))
+                    Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
             ( \_ -> do
                 ang <- randomRIO (0, 2 * pi :: Float)
@@ -280,7 +289,105 @@ freshLevelUi gs app =
        , appStartMoves = gsMoves gs
        , appHelpFrames = 300
        , appPaused = False
+       , appTool = ToolNone
+       , appDragFrom = Nothing
        }
+
+
+-- | Apply hammer booster at pos with flash / particles / msg.
+applyHammer :: IORef App -> Window -> App -> Pos -> IO App
+applyHammer ref window app pos = do
+  let before = gsBoard (appGame app)
+      (gs', out) = useHammer pos (appGame app)
+      after = gsBoard gs'
+      changed =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , getCell before p /= getCell after p
+        ]
+      flash = case out of
+        NoMatch -> []
+        InvalidSwap -> []
+        _ -> [(p, 18) | p <- changed]
+      msg = case out of
+        InvalidSwap -> "No hammers left"
+        NoMatch -> "Hammer failed"
+        MoveApplied g -> "Hammer +" <> T.pack (show g)
+        LevelClear _ _ -> "Hammer cleared level!"
+        Won _ -> "Hammer won!"
+        Lost _ -> T.pack (loseHint (gsGoal gs'))
+  parts <-
+    if null flash
+      then pure (appParticles app)
+      else do
+        burst <- spawnBurst before changed
+        pure (burst ++ appParticles app)
+  let app' =
+        app
+          { appGame = gs'
+          , appSel = Nothing
+          , appTool = ToolNone
+          , appDragFrom = Nothing
+          , appMsg = msg
+          , appFlash = flash
+          , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
+          , appComboShow = if gsCombo gs' > 1 then 90 else 0
+          , appParticles = parts
+          }
+  writeIORef ref app'
+  updateTitle window app'
+  pure app'
+
+applyFreeSwap :: IORef App -> Window -> App -> Pos -> Pos -> IO ()
+applyFreeSwap ref window app p1 p2 = do
+  let before = gsBoard (appGame app)
+      (gs', out) = useFreeSwap p1 p2 (appGame app)
+      after = gsBoard gs'
+      changed =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , getCell before p /= getCell after p
+        ]
+      flash = case out of
+        NoMatch -> []
+        InvalidSwap -> []
+        _ -> [(p, 18) | p <- changed]
+      msg = case out of
+        InvalidSwap -> "Free-swap invalid / empty"
+        NoMatch -> "Free-swap: no match; not spent"
+        MoveApplied g -> "Free-swap +" <> T.pack (show g)
+        LevelClear _ _ -> "Free-swap cleared level!"
+        Won _ -> "Free-swap won!"
+        Lost _ -> T.pack (loseHint (gsGoal gs'))
+      -- Only clear tool if charge spent or terminal
+      tool' = case out of
+        NoMatch -> ToolFreeSwap Nothing
+        InvalidSwap -> ToolNone
+        _ -> ToolNone
+  parts <-
+    if null flash
+      then pure (appParticles app)
+      else do
+        burst <- spawnBurst before changed
+        pure (burst ++ appParticles app)
+  let app' =
+        app
+          { appGame = gs'
+          , appSel = Nothing
+          , appTool = tool'
+          , appDragFrom = Nothing
+          , appMsg = msg
+          , appFlash = flash
+          , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
+          , appComboShow = if gsCombo gs' > 1 then 90 else 0
+          , appParticles = parts
+          }
+  writeIORef ref app'
+  updateTitle window app'
 
 -- | Ignore input while a tween is playing (rules already committed).
 animBusy :: App -> Bool
@@ -372,28 +479,56 @@ handleEvent ref window ev = case eventPayload ev of
                   pure False
                 Keycode1 -> do
                   app <- readIORef ref
-                  case appSel app of
-                    Nothing -> do
-                      writeIORef ref app { appMsg = "Hammer: select a cell first, then press 1" }
-                      updateTitle window app { appMsg = "Hammer: select a cell first, then press 1" }
-                    Just pos -> do
-                      let (gs', out) = useHammer pos (appGame app)
-                          msg = case out of
-                            InvalidSwap -> "No hammers left"
-                            NoMatch -> "Hammer failed"
-                            MoveApplied g -> "Hammer +" <> T.pack (show g)
-                            LevelClear _ _ -> "Hammer cleared level!"
-                            Won _ -> "Hammer won!"
-                            Lost _ -> T.pack (loseHint (gsGoal gs'))
-                          app' =
-                            app
-                              { appGame = gs'
-                              , appSel = Nothing
-                              , appMsg = msg
-                              , appStartMoves = appStartMoves app
-                              }
-                      writeIORef ref app'
-                      updateTitle window app'
+                  unless (animBusy app || isJust (gsOver (appGame app))) $ do
+                    case appTool app of
+                      ToolHammer -> do
+                        let app' = app { appTool = ToolNone, appMsg = "Hammer cancelled" }
+                        writeIORef ref app'
+                        updateTitle window app'
+                      _ ->
+                        case appSel app of
+                          Just pos | gsHammers (appGame app) > 0 -> do
+                            _ <- applyHammer ref window app pos
+                            pure ()
+                          _ -> do
+                            let app' =
+                                  app
+                                    { appTool = ToolHammer
+                                    , appSel = Nothing
+                                    , appDragFrom = Nothing
+                                    , appMsg =
+                                        if gsHammers (appGame app) <= 0
+                                          then "No hammers left"
+                                          else "Hammer: click a cell (1 again cancels)"
+                                    }
+                            writeIORef ref app'
+                            updateTitle window app'
+                  pure False
+                Keycode2 -> do
+                  app <- readIORef ref
+                  unless (animBusy app || isJust (gsOver (appGame app))) $ do
+                    case appTool app of
+                      ToolFreeSwap _ -> do
+                        let app' = app { appTool = ToolNone, appSel = Nothing, appMsg = "Free-swap cancelled" }
+                        writeIORef ref app'
+                        updateTitle window app'
+                      _ -> do
+                        let app' =
+                              app
+                                { appTool = ToolFreeSwap Nothing
+                                , appSel = Nothing
+                                , appDragFrom = Nothing
+                                , appMsg =
+                                    if gsFreeSwaps (appGame app) <= 0
+                                      then "No free-swaps left"
+                                      else "Free-swap: click two cells (2 cancels)"
+                                }
+                        writeIORef ref
+                          ( if gsFreeSwaps (appGame app) <= 0
+                              then app { appMsg = "No free-swaps left", appTool = ToolNone }
+                              else app'
+                          )
+                        updateTitle window =<< readIORef ref
                   pure False
                 KeycodeH -> do
                   app <- readIORef ref
@@ -510,19 +645,55 @@ handleEvent ref window ev = case eventPayload ev of
                   Nothing -> pure False
                   Just pos -> do
                     app <- readIORef ref
-                    case appSel app of
-                      Nothing -> do
-                        let app' = app { appSel = Just pos, appDragFrom = Just pos, appMsg = "Selected; click/drag adjacent" }
+                    case appTool app of
+                      ToolHammer -> do
+                        if gsHammers (appGame app) <= 0
+                          then do
+                            let app' = app { appTool = ToolNone, appMsg = "No hammers left" }
+                            writeIORef ref app'
+                            updateTitle window app'
+                          else do
+                            _ <- applyHammer ref window app pos
+                            pure ()
+                        pure False
+                      ToolFreeSwap Nothing -> do
+                        let app' =
+                              app
+                                { appTool = ToolFreeSwap (Just pos)
+                                , appSel = Just pos
+                                , appMsg = "Free-swap: click second cell"
+                                }
                         writeIORef ref app'
                         updateTitle window app'
                         pure False
-                      Just p1
+                      ToolFreeSwap (Just p1)
                         | p1 == pos -> do
-                            let app' = app { appSel = Nothing, appMsg = "Deselected" }
+                            let app' =
+                                  app
+                                    { appTool = ToolFreeSwap Nothing
+                                    , appSel = Nothing
+                                    , appMsg = "Free-swap: pick first cell again"
+                                    }
                             writeIORef ref app'
                             updateTitle window app'
                             pure False
                         | otherwise -> do
+                            applyFreeSwap ref window app p1 pos
+                            pure False
+                      ToolNone ->
+                        case appSel app of
+                          Nothing -> do
+                            let app' = app { appSel = Just pos, appDragFrom = Just pos, appMsg = "Selected; click/drag adjacent" }
+                            writeIORef ref app'
+                            updateTitle window app'
+                            pure False
+                          Just p1
+                            | p1 == pos -> do
+                                let app' = app { appSel = Nothing, appMsg = "Deselected" }
+                                writeIORef ref app'
+                                updateTitle window app'
+                                pure False
+                            | otherwise -> do
                             let before = gsBoard (appGame app)
                                 (gs', out) = trySwap p1 pos (appGame app)
                                 after = gsBoard gs'
@@ -746,6 +917,8 @@ drawGlyph ren x y px col ch = do
     'F' -> [[1,1,1],[1,0,0],[1,1,0],[1,0,0],[1,0,0]]
     'Q' -> [[1,1,1],[1,0,1],[1,0,1],[1,1,1],[0,0,1]]
     '!' -> [[0,1,0],[0,1,0],[0,1,0],[0,0,0],[0,1,0]]
+    '1' -> [[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]]
+    '2' -> [[1,1,1],[0,0,1],[1,1,1],[1,0,0],[1,1,1]]
     ' ' -> [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
     _   -> [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]]
 
@@ -771,6 +944,8 @@ drawHelpStrip ren app
       let y = hudH - 22
           keys =
             [ ('H', V4 255 220 100 255)
+            , ('1', V4 255 160 100 255)
+            , ('2', V4 160 220 255 255)
             , ('U', V4 180 200 255 255)
             , ('S', V4 200 160 255 255)
             , ('R', V4 255 160 140 255)
@@ -808,7 +983,7 @@ drawPauseHelp ren app
       rendererDrawColor ren $= V4 8 8 16 200
       fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW winH)))
       let panelY = hudH + 40
-          panelH = 280 :: CInt
+          panelH = 340 :: CInt
       rendererDrawColor ren $= V4 32 32 48 245
       fillRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
       rendererDrawColor ren $= V4 255 200 80 255
@@ -817,11 +992,13 @@ drawPauseHelp ren app
       let rows :: [(Int, Char, String)]
           rows =
             [ (0, 'H', "HINT")
-            , (1, 'U', "UNDO")
-            , (2, 'S', "SHUFFLE")
-            , (3, 'R', "RETRY")
-            , (4, 'N', "NEXT")
-            , (5, 'P', "PLAY")
+            , (1, '1', "HAMMER")
+            , (2, '2', "SWAP")
+            , (3, 'U', "UNDO")
+            , (4, 'S', "SHUFFLE")
+            , (5, 'R', "RETRY")
+            , (6, 'N', "NEXT")
+            , (7, 'P', "PLAY")
             ]
       forM_ rows $ \(i, ch, label) -> do
         let yy = panelY + 70 + fromIntegral i * 32
@@ -879,6 +1056,24 @@ drawHud ren app = do
   let moveCap = max (gsMoves gs) (lvlMoves lvl)
   drawMeter ren 10 68 (gsMoves gs) (max 1 moveCap) (V4 100 160 240 255)
   drawNumber ren 10 72 2 white (gsMoves gs)
+
+
+  -- Booster charges + tool mode
+  do
+    let hx = winW - 200
+    rendererDrawColor ren $= V4 255 140 80 255
+    fillRect ren (Just (Rectangle (P (V2 hx 8)) (V2 14 14)))
+    drawNumber ren (hx + 18) 8 2 white (gsHammers gs)
+    rendererDrawColor ren $= V4 100 180 255 255
+    fillRect ren (Just (Rectangle (P (V2 (hx + 50) 8)) (V2 14 14)))
+    drawNumber ren (hx + 68) 8 2 white (gsFreeSwaps gs)
+    case appTool app of
+      ToolHammer -> do
+        rendererDrawColor ren $= V4 255 180 80 255
+        drawBannerWord ren (hx) 72 2 (V4 255 200 100 255) "HAMMER"
+      ToolFreeSwap _ -> do
+        drawBannerWord ren (hx) 72 2 (V4 140 200 255 255) "SWAP"
+      ToolNone -> pure ()
 
   -- Combo badge
   when (gsCombo gs > 1 && appComboShow app > 0) $ do
@@ -1050,7 +1245,7 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
-  Gem _ _ ice -> do
+  Gem _ _ ice ov -> do
     let (cr0, cg0, cb0) = colorRGB (cellColor cell)
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
         gap = 3 :: CInt
@@ -1075,6 +1270,20 @@ drawGemAt ren x y cell flashing = case cell of
       when (ice > 1) $ do
         drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
         drawLine ren (P (V2 (x + 10) (y + cellPx `div` 2))) (P (V2 (x + cellPx - 10) (y + cellPx `div` 2 + 4)))
+    -- Grass / vine overlays (开心消消乐草·藤蔓)
+    case ov of
+      Just Grass -> do
+        rendererDrawColor ren $= V4 40 140 50 200
+        fillRect ren (Just (Rectangle (P (V2 (x + 6) (y + cellPx - 14))) (V2 (cellPx - 12) 8)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx - 20))) (V2 8 8)))
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx - 18) (y + cellPx - 18))) (V2 8 6)))
+      Just Vine -> do
+        rendererDrawColor ren $= V4 20 100 40 230
+        drawRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
+        drawLine ren (P (V2 (x + 8) (y + 8))) (P (V2 (x + cellPx - 10) (y + cellPx - 12)))
+        drawLine ren (P (V2 (x + cellPx - 12) (y + 10))) (P (V2 (x + 12) (y + cellPx - 10)))
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + 6))) (V2 8 8)))
+      Nothing -> pure ()
     case cellKind cell of
       Normal -> pure ()
       LineH -> do
@@ -1133,7 +1342,11 @@ drawStatic ren app board yOff = do
         drawGemAt ren x0 y cell flashing
         when (sel == Just pos) $ do
           let bright = fromIntegral (180 + (pulse `mod` 40) * 2) :: Word8
-          rendererDrawColor ren $= V4 255 bright bright 255
+              (sr, sg, sb) = case appTool app of
+                ToolHammer -> (255, 160, 80)
+                ToolFreeSwap _ -> (100, 180, 255)
+                ToolNone -> (255, bright, bright)
+          rendererDrawColor ren $= V4 sr sg sb 255
           drawRect ren (Just (Rectangle (P (V2 (x0 + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
           drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
         case hint of

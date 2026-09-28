@@ -61,4 +61,5 @@ colorPositions b col =
       Gem col' _ _ _ -> col' == col
       Countdown col' _ -> col' == col
       Stone _ -> False
+      Chest _ -> False
   ]

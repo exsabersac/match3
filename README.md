@@ -24,15 +24,16 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Specials**: 4-match → Line; 5-match → Rainbow (clear all of a color); Bomb exists for combos
 - **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
+- **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent clears chip; `GoalChest`
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
 - **Grass / Vine / Chocolate** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads (cleared choco does not)
 - **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
 - **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
-- **Goals**: score / single collect / multi-color collect / clear stones / UFO absorb
+- **Goals**: score / single collect / multi-color collect / clear stones / open chests / UFO absorb
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 16 campaign levels
+- Combo scoring, hint, undo, auto-shuffle, 17 campaign levels
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
@@ -55,6 +56,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
 | 15 | 压力 | 17 | Multi RED/GRN/BLU | grass + choco |
 | 16 | 大师 | 16 | Score 1200 | stone+grass+vine+choco+bomb+belts+UFO |
+| 17 | 宝箱 | 24 | Open 6 chests | chests |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -75,7 +77,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
 
 ## 对标开心消消乐 / Feature map
 
@@ -84,6 +86,7 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 三消 / 四消横竖线 / 五消彩色精灵 | ✅ Normal / LineH·V / Rainbow |
 | 炸弹与特殊合成 | ✅ Bomb；Line×Bomb / Rainbow×Line / Bomb×Bomb / Line×Line |
 | 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
+| 宝箱 | ✅ `Chest n` + `GoalChest`（邻消削层打开） |
 | 冰层 | ✅ gem 上 ice；裂纹绘制 |
 | 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
 | 巧克力 | ✅ `CellOverlay` Choco（邻消清除 + 步末蔓延，清则不蔓） |

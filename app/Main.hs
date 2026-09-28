@@ -186,6 +186,7 @@ spawnBurst board positions =
               cy = fromIntegral oy + fromIntegral cellPx / 2
               (cr, cg, cb) = case getCell board pos of
                     Stone _ -> (120, 120, 130)
+                    Chest _ -> (220, 170, 60)
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -234,6 +235,8 @@ updateTitle window app = do
           "multi " ++ show (gsCollected gs) ++ "/" ++ show (sum [n | (_, n) <- reqs])
         GoalClearStone n ->
           "stones=" ++ show (gsStonesCleared gs) ++ "/" ++ show n
+        GoalChest n ->
+          "chest=" ++ show (gsChestsCleared gs) ++ "/" ++ show n
         GoalUfo n ->
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
       title =
@@ -738,6 +741,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalChest n ->
+                                    " [chest "
+                                      <> T.pack (show (gsChestsCleared gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   GoalUfo n ->
                                     " [ufo "
                                       <> T.pack (show (gsUfoCollected gs'))
@@ -1040,6 +1049,7 @@ drawHud ren app = do
         GoalScore _ -> V4 100 220 140 255
         GoalCollectMulti _ -> V4 220 180 100 255
         GoalClearStone _ -> V4 160 160 170 255
+        GoalChest _ -> V4 220 170 60 255
         GoalUfo _ -> V4 180 120 255 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
@@ -1053,6 +1063,11 @@ drawHud ren app = do
   case gsGoal gs of
     GoalCollectMulti _ -> pure ()
     GoalClearStone _ -> pure ()
+    GoalChest _ -> do
+      rendererDrawColor ren $= V4 220 170 60 255
+      fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
+      rendererDrawColor ren $= V4 180 120 40 255
+      fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 12 6)))
     GoalUfo _ -> do
       rendererDrawColor ren $= V4 180 120 255 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
@@ -1221,6 +1236,31 @@ drawGemAt ren x y cell flashing = case cell of
     fillRect ren (Just (Rectangle (P (V2 (x + 28) (y + 30))) (V2 10 7)))
     -- Layer pips (开心消消乐箱子层数感)
     rendererDrawColor ren $= V4 220 200 120 255
+    forM_ [0 .. min 3 layers - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+              (V2 7 5)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Chest layers -> do
+    let gap = 3 :: CInt
+        (cr, cg, cb) = if flashing then (255, 230, 140) else (200, 150, 50)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap + 6)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap - 6))))
+    rendererDrawColor ren $= V4 230 180 70 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) 14)))
+    rendererDrawColor ren $= V4 80 160 220 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 5) (y + cellPx `div` 2 - 2))) (V2 10 10)))
+    rendererDrawColor ren $= V4 255 240 180 255
     forM_ [0 .. min 3 layers - 1] $ \i ->
       fillRect
         ren

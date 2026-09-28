@@ -31,6 +31,10 @@ module Match3.Core
   , mkStoneLayers
   , stoneLayers
   , isStone
+  , mkChest
+  , mkChestLayers
+  , chestLayers
+  , isChest
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -111,6 +115,8 @@ module Match3.Core
   , stonesAdjacentTo
   , withAdjacentStones
   , chipAdjacentStones
+  , chipAdjacentChests
+  , chestsAdjacentTo
   , isRainbow
   , isRainbowSwap
   , rainbowClearSeeds
@@ -152,6 +158,8 @@ import Match3.Obstacles
   , stonesAdjacentTo
   , withAdjacentStones
   , chipAdjacentStones
+  , chipAdjacentChests
+  , chestsAdjacentTo
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)

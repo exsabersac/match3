@@ -37,10 +37,10 @@ Controls: click/drag swap · `1` hammer · `2` free-swap · `3` cross · `H` hin
 
 ## Status (repo)
 
-Stability cruise: interaction boundaries locked (Flip/Surprise/Maker/Chain+Freeze/Honey+Balloon/Safe→Cookie); 38 levels / 137 tests green.
+Stability cruise: interaction boundaries locked (Flip/Surprise/Maker/Chain+Freeze/Honey+Balloon/Safe→Cookie/Cookie×Portal/Countdown×UFO); 38 levels / 139 tests green.
 
-- 38 campaign levels + daily challenge; `stack test` **137** green on lts-21.25 / GHC 9.4.8
+- 38 campaign levels + daily challenge; `stack test` **139** green on lts-21.25 / GHC 9.4.8
 - Finale (终章) 24 moves / Score 1400; Master (大师) 22 moves / Score 1000; Steam 22 / Carpet weave 24; map shows CH1–CH7 for all 38 nodes
 - Controls match in-game help strip and pause overlay (H / 1 / 2 / 3 / U / S / D / M / R / N / P)
-- Fragile locks: Carpet↔Ice cover; TimeSpirit last-move rescue (−1+2); Portal after Belt match teleport; Steam→Snail / Belt→Steam; Flip 4-match spawn; Surprise blast expands Bomb; Maker→Bomb same-wave sit; Chain+Freeze co-peel; Honey+Balloon same clear; Safe bottom→Cookie collect
+- Fragile locks: Carpet↔Ice cover; TimeSpirit last-move rescue (−1+2); Portal after Belt match teleport; Steam→Snail / Belt→Steam; Flip 4-match spawn; Surprise blast expands Bomb; Maker→Bomb same-wave sit; Chain+Freeze co-peel; Honey+Balloon same clear; Safe bottom→Cookie collect; Cookie bottom before Portal teleport; Countdown explode keeps UFO+portals
 

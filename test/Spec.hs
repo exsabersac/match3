@@ -154,6 +154,8 @@ tests =
     , testCase "chain_freeze_both_peel" chain_freeze_both_peel
     , testCase "honey_balloon_same_clear" honey_balloon_same_clear
     , testCase "safe_bottom_cookie_collected" safe_bottom_cookie_collected
+    , testCase "cookie_bottom_portal_collects" cookie_bottom_portal_collects
+    , testCase "countdown_explode_keeps_ufo_portals" countdown_explode_keeps_ufo_portals
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -1138,7 +1140,7 @@ countdown_bomb_ticks_after_move :: Assertion
 countdown_bomb_ticks_after_move = do
   let bPure = spawnCountdown stableBoard (2, 2) C3 5
   assertEqual "pure tick 5->4" (4 :: Int) (countdownTurns (getCell (tickCountdowns bPure) (2, 2)))
-  let (bRes, nClear, _, _, _, _, _, _, _, _, _, _, _) = resolveCountdowns (mkStdGen 0) bPure
+  let (bRes, nClear, _, _, _, _, _, _, _, _, _, _, _, _, _) = resolveCountdowns [] [] (mkStdGen 0) bPure
   assertEqual "resolve ticks" (4 :: Int) (countdownTurns (getCell bRes (2, 2)))
   assertEqual "no explode when >0" (0 :: Int) nClear
   -- trySwap path: use a tiny score goal so outcome is terminal (skips ensurePlayable shuffle)
@@ -4125,6 +4127,122 @@ safe_bottom_cookie_collected = do
     _ -> pure ()
   assertBool "safe opened" (gsSafesOpened gs1 >= 1)
   assertBool "cookie collected" (gsCookiesCollected gs1 >= 1)
+
+-- | Cookie on a bottom-row portal entrance collects; portal must not snatch it first.
+-- Locks Cookie触底 × Portal: drainBottomCookies before applyPortalTeleports.
+cookie_bottom_portal_collects :: Assertion
+cookie_bottom_portal_collects = do
+  let bottom = boardSize - 1
+      fill = Just (mkGem C5)
+      mb0 = replicate boardSize (replicate boardSize fill)
+      setMB b (r, c) v =
+        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+        where
+          row = b !! r
+      -- Cookie already on bottom portal A; exit B empty (buggy order teleports up)
+      mb = setMB (setMB mb0 (bottom, 1) (Just Cookie)) (0, 6) Nothing
+      portals = [((0, 6), (bottom, 1))]
+      (settled, fallen) = settleBoardPortals portals mb
+      cookieLeft =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , case (settled !! r) !! c of
+            Just Cookie -> True
+            _ -> False
+        ]
+  assertEqual "cookie collected at bottom portal" (1 :: Int) fallen
+  assertEqual "no cookie left on board" ([] :: [(Int, Int)]) cookieLeft
+  assertBool "exit not holding snatch" $
+    case (settled !! 0) !! 6 of
+      Just Cookie -> False
+      _ -> True
+  -- trySwap path with portals: cookie on bottom portal drains into GoalCookie
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (bottom, 1) mkCookie)
+                (3, 0)
+                (mkGem C1))
+             (3, 1)
+             (mkGem C1))
+          (3, 2)
+          (mkGem C1)
+      gs0 =
+        (newGame defaultConfig 23)
+          { gsBoard = board0
+          , gsMoves = 15
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsPortals = portals
+          , gsCookiesCollected = 0
+          , gsGoal = GoalCookie 1
+          }
+      (gs1, out) = trySwap (3, 1) (3, 2) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool ("trySwap collected cookie, got " ++ show (gsCookiesCollected gs1))
+    (gsCookiesCollected gs1 >= 1)
+  assertBool "trySwap cookie gone from bottom" (not (isCookie (getCell (gsBoard gs1) (bottom, 1))))
+  assertBool "trySwap cookie not at portal exit" (not (isCookie (getCell (gsBoard gs1) (0, 6))))
+
+-- | Countdown explode cascade still threads UFOs + portals (not dropped as []).
+-- Locks 倒计时到期 × UFO/Portal: resolveCountdowns keeps overlays during blast settle.
+countdown_explode_keeps_ufo_portals :: Assertion
+countdown_explode_keeps_ufo_portals = do
+  let bottom = boardSize - 1
+      portals = [((0, 1), (bottom, 6))]
+      -- Cookie on bottom portal; countdown far away ticks to 0 and explodes
+      board0 =
+        spawnCountdown (setCell stableBoard (bottom, 6) mkCookie) (4, 4) C5 1
+      u0 = mkUfo (2, 2) C1
+      (bRes, _n, _sc, _mw, _t, _st, _ch, _h, _bal, cookies, _cak, _uAbs, ufos', _pos, _) =
+        resolveCountdowns [u0] portals (mkStdGen 5) board0
+  assertBool ("explode settle collected bottom cookie, got " ++ show cookies) (cookies >= 1)
+  assertBool "cookie not left on bottom portal" (not (isCookie (getCell bRes (bottom, 6))))
+  assertEqual "UFO list preserved through resolve" (1 :: Int) (length ufos')
+  -- trySwap path: countdown expires; UFO + portals remain on game state
+  let boardT =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (0, 0) (mkGem C2))
+                (0, 1)
+                (mkGem C2))
+             (0, 2)
+             (mkGem C3))
+          (0, 3)
+          (mkGem C2)
+      boardT' = spawnCountdown boardT (5, 5) C4 1
+      gs0 =
+        (newGame defaultConfig 19)
+          { gsBoard = boardT'
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          , gsUfos = [u0]
+          , gsPortals = portals
+          , gsBelts = []
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertEqual "UFO still on game after countdown explode" (1 :: Int) (length (gsUfos gs1))
+  assertEqual "portals kept on state" portals (gsPortals gs1)
+  assertBool "countdown gone after expire" $
+    null
+      [ ()
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , isCountdown (getCell (gsBoard gs1) (r, c))
+      ]
 
 --------------------------------------------------------------------------------
 -- Release quality gates (研讨锁定具名测)

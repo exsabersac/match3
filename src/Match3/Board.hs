@@ -367,7 +367,8 @@ drainBottomCookies mb =
          in (mb2, n + n2)
 
 -- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
--- moves A -> B (and reverse). Used after gravity so clears can open exits.
+-- moves A -> B (and reverse). Used after gravity + bottom-cookie drain so clears can
+-- open exits without snatching cookies that already touched the bottom row.
 applyPortalTeleports :: [(Pos, Pos)] -> MBoard -> MBoard
 applyPortalTeleports portals mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
@@ -387,16 +388,17 @@ applyPortalTeleports portals mb =
           | transferable cb -> setM (setM m b Nothing) a cb
         _ -> m
 
--- | Gravity, portal teleports (optional), then drain bottom cookies.
-settleBoard :: MBoard -> (MBoard, Int)
-settleBoard = settleBoardPortals []
-
+-- | Gravity, drain bottom cookies, portal teleports (optional), gravity, drain again.
+-- Cookies that reach the bottom must collect before a portal can snatch them
+-- (触底优先于传送门); cookies that teleport onto a bottom exit still drain after.
 settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int)
 settleBoardPortals portals mb =
   let fallen = applyGravity mb
-      ported = applyPortalTeleports portals fallen
-      fallen2 = if ported == fallen then ported else applyGravity ported
-  in drainBottomCookies fallen2
+      (drained1, n1) = drainBottomCookies fallen
+      ported = applyPortalTeleports portals drained1
+      fallen2 = if ported == drained1 then ported else applyGravity ported
+      (drained2, n2) = drainBottomCookies fallen2
+  in (drained2, n1 + n2)
 
 randomColor :: RandomGen g => g -> (Color, g)
 randomColor g =
@@ -685,22 +687,25 @@ shufflePlayable = randomPlayableBoard
 
 
 -- | After a successful cascade: tick countdown bombs; any at 0 explode (3×3) + cascade.
--- Returns same extras as runCascadeScoredFromSeeds plus cleared positions.
+-- Threads UFOs + portals so explode settle still teleports / absorbs (到期爆炸不丢飞碟与门).
+-- Returns (... stones, chests, honey, balloons, cookies, cakes, ufoAbsorbed, ufos', clearedPos, gen).
 resolveCountdowns
   :: RandomGen g
-  => g
+  => [Ufo]
+  -> [(Pos, Pos)]
+  -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, [Pos], g)
-resolveCountdowns g b =
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
+resolveCountdowns ufos0 portals g b =
   let bTick = tickCountdowns b
       zeros = countdownsAtZero bTick
   in if null zeros
-       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, [], g)
+       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos0, [], g)
        else
          let seeds = explodeSeedsFor bTick
-             (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _u, _ufos, cleared, g') =
-               runCascadeScoredFromSeedsWithUfos Nothing seeds [] [] g bTick
-         in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, cleared, g')
+             (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos', cleared, g') =
+               runCascadeScoredFromSeedsWithUfos Nothing seeds ufos0 portals g bTick
+         in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos', cleared, g')
 
 -- | First adjacent swap that would create a match or activate a rainbow (for hint).
 findHint :: Board -> Maybe (Pos, Pos)

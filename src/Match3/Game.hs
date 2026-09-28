@@ -602,15 +602,15 @@ trySwap p1 p2 gs
                          let seeds = comboClearSeeds swapped p1 p2
                          in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsPortals gs) (gsGen gs) swapped
                        else runCascadeScoredWithUfos (Just p2) ufos0 (gsPortals gs) (gsGen gs) swapped
-                 -- Countdown bombs: tick after move; zeros explode 3×3
-                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, cookies1, cakes1, pos1, g1') =
-                   resolveCountdowns g0' board0'
+                 -- Countdown bombs: tick after move; zeros explode 3×3 (keep UFOs + portals)
+                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, cookies1, cakes1, uAbs1, ufosCd, pos1, g1') =
+                   resolveCountdowns ufos1 (gsPortals gs) g0' board0'
                  -- Conveyor belts: shift then cascade if new matches
                  boardBelt = shiftBelts boardCd (gsBelts gs)
                  (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos2, pos2, g') =
                    if null (gsBelts gs)
-                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos1, [], g1')
-                     else runCascadeScoredWithUfos Nothing ufos1 (gsPortals gs) g1' boardBelt
+                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufosCd, [], g1')
+                     else runCascadeScoredWithUfos Nothing ufosCd (gsPortals gs) g1' boardBelt
                  -- Vine / chocolate spread, then snails crawl one step (推宝石 / 碰壁掉头)
                  board1 = stepSnails (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
                  gained = gained0 + gained1 + gained2
@@ -627,7 +627,7 @@ trySwap p1 p2 gs
                  safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
                  (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) (pos0 ++ pos1 ++ pos2)
-                 uAbs = uAbs0 + uAbs2
+                 uAbs = uAbs0 + uAbs1 + uAbs2
                  ufoCollected' = gsUfoCollected gs + uAbs
                  cookies' = gsCookiesCollected gs + cookieHit
                  cakes' = gsCakesCleared gs + cakeHit

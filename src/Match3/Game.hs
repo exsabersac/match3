@@ -775,13 +775,21 @@ nextLevel gs seed =
       gs' = newGameAtLevel idx (levelConfig lvl) seed
   in gs' { gsMoves = gsMoves gs' + bonus }
 
+
+-- | Cells that chipIceOnClear leaves untouched (no peel / no clear).
+hammerImmune :: Cell -> Bool
+hammerImmune c = isMaker c || isSnail c || isBottle c
+
 -- | Hammer: spend one charge to clear a single in-bounds cell, then cascade.
 -- Does not consume a move.
+-- Maker / Snail / Bottle are immune to direct seeds — reject without spending.
 useHammer :: Pos -> GameState -> (GameState, Outcome)
 useHammer p gs
   | Just o <- gsOver gs = (gs, o)
   | gsHammers gs <= 0 = (gs, InvalidSwap)
   | not (inBounds p) = (gs, InvalidSwap)
+  | hammerImmune (getCell (gsBoard gs) p) =
+      (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
   | otherwise =
       let seeds = [p]
           (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =

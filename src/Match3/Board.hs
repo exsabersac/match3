@@ -531,7 +531,7 @@ runCascadeScoredWithUfosFromWave startW prefer ufos0 portals g b =
                        [ (col, cnt + countColor b'' pos2 col)
                        | (col, cnt) <- tallies'
                        ]
-                     uAbs' = uAbs + length absorbed
+                     uAbs' = uAbs + length [p | p <- absorbed, p `elem` pos2]
                  in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) (cookies + cok + cok2 + cokFall) (cakes + cak + cak2) uAbs' ufos' (clearedAcc ++ pos ++ pos2)
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
@@ -625,7 +625,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
                     (settled2, cokFall2) = settleBoardPortals portals mb2
                     (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColor b1 pos2 col) | col <- allColors]
-                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length absorbed, ufos1, pos2)
+                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length [p | p <- absorbed, p `elem` pos2], ufos1, pos2)
           wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
           (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos3, cleared2, g2) =
             -- Continue wave multipliers after seed (+ optional UFO) clear.

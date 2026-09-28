@@ -180,6 +180,8 @@ tests =
     , testCase "last_cleared_skips_belt_snail" last_cleared_skips_belt_snail
     , testCase "unlock_after_clear_bumps_map" unlock_after_clear_bumps_map
     , testCase "map_click_same_level_resumes" map_click_same_level_resumes
+    , testCase "ufo_skips_peel_locks" ufo_skips_peel_locks
+    , testCase "hammer_immune_no_spend" hammer_immune_no_spend
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -4992,3 +4994,56 @@ map_click_same_level_resumes = do
   assertEqual "locked -> ignore" Nothing (mapClickJump 3 7 9)
   assertEqual "other unlocked -> jump" (Just 5) (mapClickJump 3 7 5)
   assertEqual "earlier unlocked -> jump" (Just 1) (mapClickJump 3 7 1)
+
+-- | UFO must not target peel-locks / multi-ice / Flip (no GoalUfo phantom counts).
+ufo_skips_peel_locks :: Assertion
+ufo_skips_peel_locks = do
+  let row = replicate boardSize (mkGem C5)
+      base = replicate boardSize row
+      u = mkUfo (7, 3) C1
+      near lock =
+        setCell (setCell base (7, 3) (mkGem C5)) (7, 4) lock
+  assertEqual "skips chain" [] (ufoAbsorbTargets (near (mkChainGem C1 2)) u)
+  assertEqual "skips curtain" [] (ufoAbsorbTargets (near (mkCurtainGem C1 1)) u)
+  assertEqual "skips fog" [] (ufoAbsorbTargets (near (mkFogGem C1 1)) u)
+  assertEqual "skips steam" [] (ufoAbsorbTargets (near (mkSteamGem C1)) u)
+  assertEqual "skips ice>1" [] (ufoAbsorbTargets (near (mkIceGem C1 2)) u)
+  assertEqual "skips flip" [] (ufoAbsorbTargets (near (mkFlip C1 C4)) u)
+  assertEqual "takes bare" [(7, 4)] (ufoAbsorbTargets (near (mkGem C1)) u)
+  assertEqual "takes freeze" [(7, 4)] (ufoAbsorbTargets (near (mkFreezeGem C1 1)) u)
+  assertEqual "takes last-ice" [(7, 4)] (ufoAbsorbTargets (near (mkIceGem C1 1)) u)
+  -- Defense-in-depth: if a peel-lock somehow entered absorbed, clear ∩ count is 0.
+  -- Seed-clear a chain cell via fromSeeds path is N/A (UFO skips targeting);
+  -- verify wrong-color bare still ignored.
+  assertEqual "ignores wrong color" [] (ufoAbsorbTargets (near (mkGem C2)) u)
+
+-- | Hammer on Maker/Snail/Bottle is a no-op: reject without spending a charge.
+hammer_immune_no_spend :: Assertion
+hammer_immune_no_spend = do
+  let mkGs cell =
+        (newGame defaultConfig 11)
+          { gsBoard = setCell stableBoard (3, 3) cell
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+      check tag cell = do
+        let gs0 = mkGs cell
+            (gs1, out) = useHammer (3, 3) gs0
+        out @?= NoMatch
+        assertEqual (tag ++ " hammers kept") (2 :: Int) (gsHammers gs1)
+        assertEqual (tag ++ " board unchanged") (gsBoard gs0) (gsBoard gs1)
+  check "maker" (mkMakerCharges C1 2)
+  check "snail" (mkSnail 0 1)
+  check "bottle" (mkBottle C2)
+  -- Control: bare gem still spends
+  let gsG0 = mkGs (mkGem C1)
+      (gsG1, outG) = useHammer (3, 3) gsG0
+  case outG of
+    NoMatch -> assertFailure "bare gem hammer should apply"
+    InvalidSwap -> assertFailure "bare gem hammer should apply"
+    _ -> pure ()
+  assertEqual "bare spends hammer" (1 :: Int) (gsHammers gsG1)

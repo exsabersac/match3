@@ -1,5 +1,7 @@
 -- | Flying saucers (开心消消乐飞碟感): overlay entities that absorb adjacent
 -- same-color gems and relocate after each cascade wave.
+-- Skips peel-locks (Chain/Curtain/Fog/Steam), multi-ice, and Flip so GoalUfo
+-- only counts true clears (no phantom progress).
 module Match3.Ufo
   ( Ufo(..)
   , mkUfo
@@ -32,24 +34,20 @@ ortho (r, c) =
 at :: Board -> Pos -> Cell
 at b (r, c) = (b !! r) !! c
 
+-- | True if UFO can absorb this cell as a *full clear* of target color.
+-- Skip peel-locks (Chain/Curtain/Fog/Steam), multi-ice (chip-only), and Flip
+-- (direct hit only flips face) so GoalUfo cannot phantom-count soft hits.
 matchesTarget :: Board -> Color -> Pos -> Bool
-matchesTarget b col p = case at b p of
-  Gem c _ _ _ -> c == col
-  Countdown c _ -> c == col
-  Stone _ -> False
-  Chest _ -> False
-  Honey _ -> False
-  Balloon _ -> False
-  Cookie -> False
-  Cake _ -> False
-  MagicHat -> False
-  Maker _ _ -> False
-  Snail _ _ -> False
-  Safe _ -> False
-  Flip c _ -> c == col
-  Surprise -> False
-  Bottle _ -> False
-  TimeSpirit -> False
+matchesTarget b col p =
+  let cell = at b p
+  in case cell of
+    Gem c _ ice _
+      | ice > 1 -> False
+      | hasChain cell || hasCurtain cell || hasFog cell || hasSteam cell -> False
+      | otherwise -> c == col
+    Countdown c _ -> c == col
+    Flip _ _ -> False
+    _ -> False
 
 -- | Orthogonally adjacent gems / countdowns matching the UFO target color.
 ufoAbsorbTargets :: Board -> Ufo -> [Pos]

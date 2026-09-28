@@ -25,6 +25,7 @@ import Match3.Types
   , isChest
   , isHoney
   , isBalloon
+  , isCookie
   , balloonColor
   , mkStoneLayers
   , mkChestLayers
@@ -45,10 +46,10 @@ setAt b (r, c) v =
   where
     row = b !! r
 
--- | True if either swap endpoint is a stone, chest, or honey jar.
+-- | True if either swap endpoint is a stone, chest, honey, balloon, or cookie.
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
-  let block c = isStone c || isChest c || isHoney c || isBalloon c
+  let block c = isStone c || isChest c || isHoney c || isBalloon c || isCookie c
   in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).

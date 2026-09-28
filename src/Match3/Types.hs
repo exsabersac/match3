@@ -32,6 +32,8 @@ module Match3.Types
   , mkBalloon
   , isBalloon
   , balloonColor
+  , mkCookie
+  , isCookie
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -75,8 +77,9 @@ data GemKind = Normal | LineH | LineV | Bomb | Rainbow
 data CellOverlay = Grass | Vine | Choco
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: gem (optional ice + overlay), stone, chest, honey jar, or countdown bomb.
+-- | Board cell: gem (optional ice + overlay), stone, chest, honey jar, balloon, cookie, or countdown bomb.
 -- Stone/Chest/Honey n = hit points; adjacent clears chip; removed at 0.
+-- Cookie: falls with gravity; collected when it reaches the bottom row (开心消消乐饼干).
 -- Countdown c n = colored timer bomb; matches as color c.
 -- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
@@ -85,6 +88,7 @@ data CellContents
   | Chest Int   -- treasure chest (宝箱) layers; adjacent clears chip
   | Honey Int   -- honey jar (蜂蜜罐) layers; adjacent clears chip
   | Balloon Color  -- balloon (气球): popped by adjacent same-color clear
+  | Cookie        -- biscuit (饼干): falls with gravity; collected on bottom row
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -115,6 +119,7 @@ iceLayers (Stone _) = 0
 iceLayers (Chest _) = 0
 iceLayers (Honey _) = 0
 iceLayers (Balloon _) = 0
+iceLayers Cookie = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -199,6 +204,14 @@ balloonColor :: Cell -> Color
 balloonColor (Balloon c) = c
 balloonColor _ = error "balloonColor: not a balloon"
 
+-- | Biscuit / cookie (饼干): falls; collected on the bottom row.
+mkCookie :: Cell
+mkCookie = Cookie
+
+isCookie :: Cell -> Bool
+isCookie Cookie = True
+isCookie _ = False
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -219,6 +232,7 @@ isGem (Stone _) = False
 isGem (Chest _) = False
 isGem (Honey _) = False
 isGem (Balloon _) = False
+isGem Cookie = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -228,6 +242,7 @@ cellColor (Stone _) = error "cellColor: Stone has no color"
 cellColor (Chest _) = error "cellColor: Chest has no color"
 cellColor (Honey _) = error "cellColor: Honey has no color"
 cellColor (Balloon _) = error "cellColor: Balloon has no color (use balloonColor)"
+cellColor Cookie = error "cellColor: Cookie has no color"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -237,6 +252,7 @@ cellKind (Stone _) = error "cellKind: Stone has no kind"
 cellKind (Chest _) = error "cellKind: Chest has no kind"
 cellKind (Honey _) = error "cellKind: Honey has no kind"
 cellKind (Balloon _) = error "cellKind: Balloon has no kind"
+cellKind Cookie = error "cellKind: Cookie has no kind"
 
 numColors :: Int
 numColors = 5
@@ -272,6 +288,7 @@ data LevelGoal
   | GoalChest Int                      -- open N treasure chests (宝箱)
   | GoalHoney Int                      -- smash N honey jars (蜂蜜罐)
   | GoalBalloon Int                    -- pop N balloons (气球)
+  | GoalCookie Int                     -- collect N biscuits at bottom (饼干)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   deriving (Eq, Show, Generic)
 
@@ -285,19 +302,21 @@ goalMet (GoalClearStone _) _ _ = False
 goalMet (GoalChest _) _ _ = False
 goalMet (GoalHoney _) _ _ = False
 goalMet (GoalBalloon _) _ _ = False
+goalMet (GoalCookie _) _ _ = False
 goalMet (GoalUfo _) _ _ = False
 
--- | Full goal check with color bag + stones/UFO/chests/honey/balloon counters.
-goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Bool
-goalMetEx (GoalScore t) score _ _ _ _ _ _ _ = score >= t
-goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ = collected >= n
-goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ =
+-- | Full goal check with color bag + stones/UFO/chests/honey/balloon/cookie counters.
+goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
+goalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ = score >= t
+goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ = collected >= n
+goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ =
   all (\(col, n) -> lookupCount bag col >= n) reqs
-goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ = stones >= n
-goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ = ufos >= n
-goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ = chests >= n
-goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ = honey >= n
-goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons = balloons >= n
+goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ = stones >= n
+goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ = ufos >= n
+goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ = chests >= n
+goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ = honey >= n
+goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ = balloons >= n
+goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies = cookies >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -311,18 +330,20 @@ goalProgress (GoalClearStone _) _ collected = collected
 goalProgress (GoalChest _) _ collected = collected
 goalProgress (GoalHoney _) _ collected = collected
 goalProgress (GoalBalloon _) _ collected = collected
+goalProgress (GoalCookie _) _ collected = collected
 goalProgress (GoalUfo _) _ collected = collected
 
-goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int
-goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ = score
-goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ = collected
-goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ =
+goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int
+goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ = score
+goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ = collected
+goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ =
   sum [min n (lookupCount bag c) | (c, n) <- reqs]
-goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ = stones
-goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ = ufos
-goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ = chests
-goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ = honey
-goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons = balloons
+goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ = stones
+goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ = ufos
+goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ = chests
+goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ = honey
+goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ = balloons
+goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies = cookies
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -333,6 +354,7 @@ goalTarget (GoalClearStone n) = n
 goalTarget (GoalChest n) = n
 goalTarget (GoalHoney n) = n
 goalTarget (GoalBalloon n) = n
+goalTarget (GoalCookie n) = n
 goalTarget (GoalUfo n) = n
 
 data GameConfig = GameConfig
@@ -350,7 +372,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / UFO / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / UFO / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -374,7 +396,9 @@ allLevels =
   , Level 18 "蜂蜜"   24 (GoalHoney 6)
   , Level 19 "蜜压"   22 (GoalHoney 5)
   , Level 20 "气球"   24 (GoalBalloon 6)
-  , Level 21 "终章"   16 (GoalScore 1300)
+  , Level 21 "饼干"   24 (GoalCookie 6)
+  , Level 22 "巧饼"   22 (GoalCookie 5)
+  , Level 23 "终章"   16 (GoalScore 1400)
   ]
 
 levelConfig :: Level -> GameConfig

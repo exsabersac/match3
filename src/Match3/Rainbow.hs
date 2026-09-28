@@ -64,4 +64,5 @@ colorPositions b col =
       Chest _ -> False
       Honey _ -> False
       Balloon _ -> False
+      Cookie -> False
   ]

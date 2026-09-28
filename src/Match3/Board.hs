@@ -101,6 +101,7 @@ groupGemRuns b (p : ps) = case getCell b p of
   Chest _ -> groupGemRuns b ps
   Honey _ -> groupGemRuns b ps
   Balloon _ -> groupGemRuns b ps
+  Cookie -> groupGemRuns b ps
   Gem col _ _ _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
   where
@@ -153,12 +154,14 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
                   Chest _ -> False
                   Honey _ -> False
                   Balloon _ -> False
+                  Cookie -> False
               ]
             Gem _ Normal _ _ -> []
             Stone _ -> []
             Chest _ -> []
             Honey _ -> []
             Balloon _ -> []
+            Cookie -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
@@ -193,6 +196,7 @@ countColor b ps col =
         Chest _ -> False
         Honey _ -> False
         Balloon _ -> False
+        Cookie -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -248,6 +252,37 @@ transposeM rows = map head rows : transposeM (map tail rows)
 applyGravity :: MBoard -> MBoard
 applyGravity mb = transposeM (map colGravity (transposeM mb))
 
+-- | Collect cookies that sit on the bottom row after gravity (开心消消乐饼干掉落收集).
+-- Removes them, re-applies gravity, repeats until no bottom-row cookies remain.
+drainBottomCookies :: MBoard -> (MBoard, Int)
+drainBottomCookies mb =
+  let bottom = boardSize - 1
+      cols =
+        [ c
+        | c <- [0 .. boardSize - 1]
+        , case (mb !! bottom) !! c of
+            Just Cookie -> True
+            _ -> False
+        ]
+      n = length cols
+  in if n == 0
+       then (mb, 0)
+       else
+         let mb1 =
+               foldl
+                 (\m c -> setM m (bottom, c) Nothing)
+                 mb
+                 cols
+             fallen = applyGravity mb1
+             (mb2, n2) = drainBottomCookies fallen
+         in (mb2, n + n2)
+
+-- | Gravity then drain any cookies that reached the bottom.
+settleBoard :: MBoard -> (MBoard, Int)
+settleBoard mb =
+  let fallen = applyGravity mb
+  in drainBottomCookies fallen
+
 randomColor :: RandomGen g => g -> (Color, g)
 randomColor g =
   let (i, g') = randomR (0, numColors - 1) g
@@ -285,16 +320,16 @@ stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
 stepCascadeAt prefer g b =
   case stepCascadeDetailed prefer g b of
     Nothing -> Nothing
-    Just (b', n, _, _, _, _, _, g') -> Just (b', n, g')
+    Just (b', n, _, _, _, _, _, _, g') -> Just (b', n, g')
 
 -- | Cascade step returning cleared positions for color tallying.
--- Extra ints: stones, chests, honey, balloons fully cleared.
+-- Extra ints: stones, chests, honey, balloons fully cleared, cookies collected (bottom + clear-hit).
 stepCascadeDetailed
   :: RandomGen g
   => Maybe Pos
   -> g
   -> Board
-  -> Maybe (Board, Int, [Pos], Int, Int, Int, Int, g)
+  -> Maybe (Board, Int, [Pos], Int, Int, Int, Int, Int, g)
 stepCascadeDetailed prefer g b
   | not (hasAnyMatch b) = Nothing
   | otherwise =
@@ -307,9 +342,11 @@ stepCascadeDetailed prefer g b
             length [p | p <- pos, isHoney (getCell b p)]
           balloonHit =
             length [p | p <- pos, isBalloon (getCell b p)]
-          fallen = applyGravity mb
-          (b', g') = refill g fallen
-      in Just (b', n, pos, stonesHit, chestsHit, honeyHit, balloonHit, g')
+          cookiesCleared =
+            length [p | p <- pos, isCookie (getCell b p)]
+          (settled, cookiesFallen) = settleBoard mb
+          (b', g') = refill g settled
+      in Just (b', n, pos, stonesHit, chestsHit, honeyHit, balloonHit, cookiesCleared + cookiesFallen, g')
 
 runCascade :: RandomGen g => g -> Board -> (Board, Int, g)
 runCascade = runCascadeAt Nothing
@@ -323,34 +360,34 @@ runCascadeAt prefer g b = case stepCascadeAt prefer g b of
     in (b'', n + n', g'')
 
 -- | Cascade with per-wave combo scoring + color tallies from cleared cells.
--- Returns (board, cells, score, maxW, tallies, stones, chests, honey, balloons, gen).
+-- Returns (board, cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, gen).
 runCascadeScored
   :: RandomGen g
   => Maybe Pos
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, g)
 runCascadeScored prefer g b =
-  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, _uAbs, _ufos, g') =
+  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, _uAbs, _ufos, g') =
         runCascadeScoredWithUfos prefer [] g b
-  in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, g')
+  in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, g')
 
 -- | Like runCascadeScored but steps UFOs after each cascade wave (吸同色 + 移格).
--- Returns (... stones, chests, honey, balloons, ufoAbsorbed, ufos', gen).
+-- Returns (... stones, chests, honey, balloons, cookies, ufoAbsorbed, ufos', gen).
 runCascadeScoredWithUfos
   :: RandomGen g
   => Maybe Pos
   -> [Ufo]
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, [Ufo], g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, [Ufo], g)
 runCascadeScoredWithUfos prefer ufos0 g b =
-  go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 0 0 0 ufos0
+  go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 0 0 0 0 ufos0
   where
-    go pref g' b' cells score maxW tallies stones chests honey balloons uAbs ufos =
+    go pref g' b' cells score maxW tallies stones chests honey balloons cookies uAbs ufos =
       case stepCascadeDetailed pref g' b' of
-        Nothing -> (b', cells, score, maxW, tallies, stones, chests, honey, balloons, uAbs, ufos, g')
-        Just (b'', n, pos, stn, cht, hny, bal, g'') ->
+        Nothing -> (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, uAbs, ufos, g')
+        Just (b'', n, pos, stn, cht, hny, bal, cok, g'') ->
           let wave = maxW + 1
               score' = score + scoreForWave wave n
               tallies' =
@@ -359,22 +396,23 @@ runCascadeScoredWithUfos prefer ufos0 g b =
                 ]
               (absorbed, ufos') = stepUfos b'' ufos
           in if null absorbed
-               then go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn) (chests + cht) (honey + hny) (balloons + bal) uAbs ufos'
+               then go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn) (chests + cht) (honey + hny) (balloons + bal) (cookies + cok) uAbs ufos'
                else
                  let (mb, n2, pos2) = clearFromSeedsDetailed Nothing b'' absorbed
                      stn2 = length [p | p <- pos2, isStone (getCell b'' p)]
                      cht2 = length [p | p <- pos2, isChest (getCell b'' p)]
                      hny2 = length [p | p <- pos2, isHoney (getCell b'' p)]
                      bal2 = length [p | p <- pos2, isBalloon (getCell b'' p)]
-                     fallen = applyGravity mb
-                     (b3, g3) = refill g'' fallen
+                     cok2 = length [p | p <- pos2, isCookie (getCell b'' p)]
+                     (settled, cokFall) = settleBoard mb
+                     (b3, g3) = refill g'' settled
                      score2 = score' + scoreForWave (wave + 1) n2
                      tallies2 =
                        [ (col, cnt + countColor b'' pos2 col)
                        | (col, cnt) <- tallies'
                        ]
                      uAbs' = uAbs + length absorbed
-                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) uAbs' ufos'
+                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) (cookies + cok + cok2 + cokFall) uAbs' ufos'
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
 clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
@@ -409,11 +447,11 @@ runCascadeScoredFromSeeds
   -> [Pos]
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, g)
 runCascadeScoredFromSeeds prefer seeds g b =
-  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, _u, _ufos, g') =
+  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, _u, _ufos, g') =
         runCascadeScoredFromSeedsWithUfos prefer seeds [] g b
-  in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, g')
+  in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, g')
 
 runCascadeScoredFromSeedsWithUfos
   :: RandomGen g
@@ -422,7 +460,7 @@ runCascadeScoredFromSeedsWithUfos
   -> [Ufo]
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, [Ufo], g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, [Ufo], g)
 runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
   | null seeds = runCascadeScoredWithUfos prefer ufos0 g b
   | otherwise =
@@ -431,25 +469,27 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
           chests0 = length [p | p <- pos, isChest (getCell b p)]
           honey0 = length [p | p <- pos, isHoney (getCell b p)]
           balloons0 = length [p | p <- pos, isBalloon (getCell b p)]
-          fallen = applyGravity mb
-          (b1, g1) = refill g fallen
+          cookies0 = length [p | p <- pos, isCookie (getCell b p)]
+          (settled0, cookiesFall0) = settleBoard mb
+          (b1, g1) = refill g settled0
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColor b pos col) | col <- allColors]
           (absorbed, ufos1) = stepUfos b1 ufos0
-          (b1', g1', nU, stonesU, chestsU, honeyU, balloonsU, talliesU, uAbs0, ufos2) =
+          (b1', g1', nU, stonesU, chestsU, honeyU, balloonsU, cookiesU, talliesU, uAbs0, ufos2) =
             if null absorbed
-              then (b1, g1, 0, 0, 0, 0, 0, zip allColors (repeat 0), 0, ufos1)
+              then (b1, g1, 0, 0, 0, 0, 0, 0, zip allColors (repeat 0), 0, ufos1)
               else
                 let (mb2, n2, pos2) = clearFromSeedsDetailed Nothing b1 absorbed
                     stn2 = length [p | p <- pos2, isStone (getCell b1 p)]
                     cht2 = length [p | p <- pos2, isChest (getCell b1 p)]
                     hny2 = length [p | p <- pos2, isHoney (getCell b1 p)]
                     bal2 = length [p | p <- pos2, isBalloon (getCell b1 p)]
-                    fallen2 = applyGravity mb2
-                    (b2u, g2u) = refill g1 fallen2
+                    cok2 = length [p | p <- pos2, isCookie (getCell b1 p)]
+                    (settled2, cokFall2) = settleBoard mb2
+                    (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColor b1 pos2 col) | col <- allColors]
-                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, t2, length absorbed, ufos1)
-          (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, uAbs2, ufos3, g2) =
+                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, t2, length absorbed, ufos1)
+          (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, uAbs2, ufos3, g2) =
             runCascadeScoredWithUfos Nothing ufos2 g1' b1'
           mergeT a b' =
             [ (col, lc a col + lc b' col) | col <- allColors ]
@@ -467,6 +507,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
          , chests0 + chestsU + chests2
          , honey0 + honeyU + honey2
          , balloons0 + balloonsU + balloons2
+         , cookies0 + cookiesFall0 + cookiesU + cookies2
          , uAbs0 + uAbs2
          , ufos3
          , g2
@@ -509,12 +550,12 @@ resolveCountdowns
   :: RandomGen g
   => g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, g)
 resolveCountdowns g b =
   let bTick = tickCountdowns b
       zeros = countdownsAtZero bTick
   in if null zeros
-       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, g)
+       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, g)
        else
          let seeds = explodeSeedsFor bTick
          in runCascadeScoredFromSeeds Nothing seeds g bTick

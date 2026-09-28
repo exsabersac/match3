@@ -42,6 +42,8 @@ module Match3.Core
   , mkBalloon
   , isBalloon
   , balloonColor
+  , mkCookie
+  , isCookie
   , mkCountdown
   , isCountdown
   , countdownTurns

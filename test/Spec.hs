@@ -142,6 +142,8 @@ tests =
     , testCase "inv_move_end_order_steam_before_snail" inv_move_end_order_steam_before_snail
     , testCase "inv_move_end_order_belt_before_steam" inv_move_end_order_belt_before_steam
     , testCase "finale_and_pressure_moves_reasonable" finale_and_pressure_moves_reasonable
+    , testCase "cascade_terminates_bounded" cascade_terminates_bounded
+    , testCase "release_core_invariants_green" release_core_invariants_green
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -2038,6 +2040,7 @@ goal_balloon_counts = do
 
 
 -- | Reshuffle keeps stones / ice / overlays; UFO list unchanged.
+-- Also preserves Curtain / Freeze overlay positions and Carpet open-cell set.
 shuffle_preserves_decor :: Assertion
 shuffle_preserves_decor = do
   let cfg = GameConfig 20 (GoalScore 999)
@@ -2064,6 +2067,51 @@ shuffle_preserves_decor = do
       gsU' = shuffleGame gsU
   assertEqual "UFO count kept" (length (gsUfos gsU)) (length (gsUfos gsU'))
   assertEqual "UFO cells kept" (map ufoCell (gsUfos gsU)) (map ufoCell (gsUfos gsU'))
+  -- Curtain overlays keep positions
+  let gsCu = newGameAtLevel 30 cfg 55
+      curtainsBefore =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , hasCurtain (getCell (gsBoard gsCu) p)
+        ]
+      gsCu' = shuffleGame gsCu
+      curtainsAfter =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , hasCurtain (getCell (gsBoard gsCu') p)
+        ]
+  assertBool "curtains present before shuffle" (not (null curtainsBefore))
+  assertEqual "curtains survive shuffle" (sort curtainsBefore) (sort curtainsAfter)
+  -- Freeze overlays keep positions
+  let gsFr = newGameAtLevel 29 cfg 66
+      freezeBefore =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , hasFreeze (getCell (gsBoard gsFr) p)
+        ]
+      gsFr' = shuffleGame gsFr
+      freezeAfter =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , hasFreeze (getCell (gsBoard gsFr') p)
+        ]
+  assertBool "freeze present before shuffle" (not (null freezeBefore))
+  assertEqual "freeze survive shuffle" (sort freezeBefore) (sort freezeAfter)
+  -- Carpet open cells are unchanged by shuffle (count + positions)
+  let gsCa = newGameAtLevel 36 (levelConfig (allLevels !! 36)) 77
+      openBefore = sort (gsCarpetOpen gsCa)
+      gsCa' = shuffleGame gsCa
+  assertBool "carpet open cells present" (not (null openBefore))
+  assertEqual "carpet open cells kept" openBefore (sort (gsCarpetOpen gsCa'))
+  assertEqual "carpet open count kept" (length openBefore) (length (gsCarpetOpen gsCa'))
 
 
 -- | Daily (or any) GoalUfo config without level décor still gets a default UFO.
@@ -3586,3 +3634,80 @@ finale_and_pressure_moves_reasonable = do
         assertBool (lvlName lvl ++ " goal>0") (goalTarget (lvlGoal lvl) > 0)
     )
     allLevels
+
+
+--------------------------------------------------------------------------------
+-- Release quality gates (研讨锁定具名测)
+--------------------------------------------------------------------------------
+
+-- | After a legal Move, cascade wave count is bounded and the board reaches Stable.
+-- Strengthens inv_move_to_stable / cascade_until_stable with an explicit step bound.
+cascade_terminates_bounded :: Assertion
+cascade_terminates_bounded = do
+  let bound = boardSize * boardSize * 4  -- clear finite upper bound on cascade waves
+      gs0 = newGame defaultConfig 99
+  case findMatchPair (gsBoard gs0) of
+    Nothing -> assertFailure "need a matching swap"
+    Just (p1, p2) -> do
+      let swapped = swapCells (gsBoard gs0) p1 p2
+          (bCas, cells, _scored, maxW, _, _, _, _, _, _, _, gCas) =
+            runCascadeScored (Just p2) (gsGen gs0) swapped
+      assertBool "cascade waves within bound" (maxW <= bound)
+      assertBool "cascade reached stable" (not (hasAnyMatch bCas))
+      assertBool "stepCascade exhausted" (isNothing (stepCascade gCas bCas))
+      assertBool "cleared something on match move" (cells > 0 || not (hasAnyMatch swapped))
+      -- Full trySwap path also ends Stable (same contract as inv_move_to_stable)
+      let (gs1, out) = trySwap p1 p2 gs0
+      assertBool "applied or terminal" $
+        case out of
+          MoveApplied _ -> True
+          Won _ -> True
+          Lost _ -> True
+          LevelClear _ _ -> True
+          _ -> False
+      assertBool "trySwap board stable" (not (hasAnyMatch (gsBoard gs1)))
+  -- Extra seeds: bounded + stable via runCascade on random boards
+  mapM_
+    ( \seed -> do
+        let g = mkStdGen seed
+            (b0, g1) = randomBoard g
+            (b1, maxW, g2) =
+              let (b', _cells, _sc, waves, _, _, _, _, _, _, _, g') =
+                    runCascadeScored Nothing g1 b0
+              in (b', waves, g')
+        assertBool ("waves bounded seed " ++ show seed) (maxW <= bound)
+        assertBool ("stable seed " ++ show seed) (not (hasAnyMatch b1))
+        assertBool ("stepCascade done seed " ++ show seed) (isNothing (stepCascade g2 b1))
+    )
+    [1, 7, 42, 99, 2026 :: Int]
+
+-- | Release gate: re-check the original six core invariants + trySwap (GameState, Outcome) convention.
+release_core_invariants_green :: Assertion
+release_core_invariants_green = do
+  inv_no_match_rollback
+  inv_move_to_stable
+  match_line_ge3
+  gravity_then_refill
+  cascade_until_stable
+  outcome_moves_or_score
+  -- Confirm trySwap returns (GameState, Outcome) via runtime pattern match
+  let gs0 = newGame defaultConfig 7
+  case findMatchPair (gsBoard gs0) of
+    Nothing ->
+      case findNoMatchPair (gsBoard gs0) of
+        Nothing -> assertFailure "need any adjacent pair for trySwap convention"
+        Just (p1, p2) -> checkTrySwapPair p1 p2 gs0
+    Just (p1, p2) -> checkTrySwapPair p1 p2 gs0
+  where
+    checkTrySwapPair p1 p2 gs =
+      case trySwap p1 p2 gs of
+        (gs1, out) -> do
+          assertEqual "board rows" boardSize (length (gsBoard gs1))
+          assertBool "Outcome is a real constructor" $
+            case out of
+              InvalidSwap -> True
+              NoMatch -> True
+              MoveApplied _ -> True
+              Won _ -> True
+              Lost _ -> True
+              LevelClear _ _ -> True

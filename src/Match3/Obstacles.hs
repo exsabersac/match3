@@ -26,6 +26,7 @@ module Match3.Obstacles
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
+  , triggerAdjacentHatsExcept
   , makersAdjacentSameColor
   , chargeAdjacentMakers
   , surprisesAdjacentTo
@@ -33,6 +34,7 @@ module Match3.Obstacles
   , openSurprises
   , bottlesAdjacentTo
   , triggerAdjacentBottles
+  , triggerAdjacentBottlesExcept
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits
   , chipAdjacentTimeSpiritsExcept
@@ -308,15 +310,22 @@ cycleColor c =
 -- (deterministic: sorted positions). If only one gem neighbor, cycle its color.
 -- Hat itself stays. Neighbors in the cleared set are skipped.
 triggerAdjacentHats :: Board -> [Pos] -> Board
-triggerAdjacentHats b cleared =
+triggerAdjacentHats b cleared = triggerAdjacentHatsExcept b cleared []
+
+-- | Like triggerAdjacentHats, but also skip recoloring `protected` cells.
+-- Surprise-opened specials (saved same wave) must sit unchanged — Hat must not
+-- swap/cycle their color before the next move (parity with maker_bomb_survives_wave).
+triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
+triggerAdjacentHatsExcept b cleared protected =
   foldl triggerOne b (hatsAdjacentTo b cleared)
   where
+    skip = nub (cleared ++ protected)
     triggerOne board hatPos =
       let nbrs =
             [ p
             | p <- orthoNeighbors hatPos
             , inBoard p
-            , p `notElem` cleared
+            , p `notElem` skip
             , let cell = at board p
             , isGem cell
             ]
@@ -442,9 +451,16 @@ bottlesAdjacentTo b cleared =
 -- | Trigger dye bottles: recolor every ortho gem neighbor to the bottle color.
 -- Bottle itself stays. Neighbors in the cleared set are skipped.
 triggerAdjacentBottles :: Board -> [Pos] -> Board
-triggerAdjacentBottles b cleared =
+triggerAdjacentBottles b cleared = triggerAdjacentBottlesExcept b cleared []
+
+-- | Like triggerAdjacentBottles, but also skip dyeing `protected` cells.
+-- Surprise-opened specials sit same-wave; Bottle must not recolor them
+-- (parity with maker_bomb_survives_wave / nested Surprise special sit).
+triggerAdjacentBottlesExcept :: Board -> [Pos] -> [Pos] -> Board
+triggerAdjacentBottlesExcept b cleared protected =
   foldl dyeOne b (bottlesAdjacentTo b cleared)
   where
+    skip = nub (cleared ++ protected)
     dyeOne board bottlePos =
       case at board bottlePos of
         Bottle col ->
@@ -452,7 +468,7 @@ triggerAdjacentBottles b cleared =
                 [ p
                 | p <- orthoNeighbors bottlePos
                 , inBoard p
-                , p `notElem` cleared
+                , p `notElem` skip
                 , let cell = at board p
                 , isGem cell
                 ]

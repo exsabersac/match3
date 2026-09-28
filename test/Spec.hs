@@ -198,6 +198,7 @@ tests =
     , testCase "soft_hit_preserves_oncell_fog_steam" soft_hit_preserves_oncell_fog_steam
     , testCase "surprise_blast_opens_nested" surprise_blast_opens_nested
     , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
+    , testCase "surprise_special_sits_hat_bottle" surprise_special_sits_hat_bottle
     , testCase "soft_lock_blocks_rainbow_swap" soft_lock_blocks_rainbow_swap
     , testCase "soft_lock_blocks_special_combo" soft_lock_blocks_special_combo
     , testCase "soft_lock_blocks_freeswap_activation" soft_lock_blocks_freeswap_activation
@@ -6043,6 +6044,80 @@ surprise_nested_special_no_fire = do
         ]
   assertBool "pre-existing Bomb fires (1,1)" ((1, 1) `elem` holesP)
   assertBool "pre-existing Bomb consumed" (((mbP !! 2) !! 2) == Nothing)
+
+--------------------------------------------------------------------------------
+-- Surprise-opened special must sit through same-wave Hat / Bottle
+--------------------------------------------------------------------------------
+
+-- | Surprise opens to a special *before* Hat/Bottle side-effects. That special
+-- must not be recolored/swapped same wave (sit until next move — same discipline
+-- as maker_bomb_survives_wave / surprise_nested_special_no_fire).
+-- Regression: Hat/Bottle skipped only trueClears, so a special ortho to both the
+-- clear and a Hat/Bottle was mutated in-place (e.g. C4 Bomb → C3 Bomb by Bottle).
+surprise_special_sits_hat_bottle :: Assertion
+surprise_special_sits_hat_bottle = do
+  -- (2,2) outcome 2 → Bomb C4; match row (3,1..3) triggers Surprise + Bottle/Hat
+  assertEqual "special outcome" (2 :: Int) (((2 * 8 + 2) `mod` 4))
+  let matchRow =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 1) (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (3, 3)
+          (mkGem C1)
+      expectedSpecial = Gem C4 Bomb 0 Nothing
+  -- Unit: Bottle would dye (2,2) without protection
+  let boardBot =
+        setCell (setCell matchRow (2, 2) mkSurprise) (2, 3) (mkBottle C3)
+      clears = [(3, 1), (3, 2), (3, 3)]
+      (bOpen, _, saved) = openSurprises boardBot clears
+  assertEqual "saved special pos" [(2, 2)] saved
+  assertEqual "opened Bomb C4" expectedSpecial (getCell bOpen (2, 2))
+  let dyedBare = triggerAdjacentBottles bOpen clears
+  assertEqual "unprotected Bottle dyes special" C3 (cellColor (getCell dyedBare (2, 2)))
+  let dyedProt = triggerAdjacentBottlesExcept bOpen clears saved
+  assertEqual "protected Bottle skips special" expectedSpecial (getCell dyedProt (2, 2))
+  -- Unit: Hat would swap special color without protection
+  let boardHat =
+        setCell
+          (setCell
+             (setCell matchRow (2, 2) mkSurprise)
+             (2, 3)
+             mkMagicHat)
+          (1, 3)
+          (mkGem C1)
+      (hOpen, _, hSaved) = openSurprises boardHat clears
+      hattedBare = triggerAdjacentHats hOpen clears
+      hattedProt = triggerAdjacentHatsExcept hOpen clears hSaved
+  assertEqual "unprotected Hat recolors special" C1 (cellColor (getCell hattedBare (2, 2)))
+  assertEqual "protected Hat skips special" expectedSpecial (getCell hattedProt (2, 2))
+  -- Integration: clearMatches keeps opened special through Hat+Bottle.
+  -- Hat (2,1) with stones so only neighbor is Surprise special → would cycleColor;
+  -- Bottle (2,3) would dye special to C3. Both must leave C4 Bomb intact.
+  let boardBoth =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell matchRow (2, 2) mkSurprise)
+                      (2, 3)
+                      (mkBottle C3))
+                   (2, 1)
+                   mkMagicHat)
+                (2, 0)
+                mkStone)
+             (1, 1)
+             mkStone)
+          (1, 2)
+          (mkGem C5)
+      (mb, _) = clearMatches boardBoth
+  case (mb !! 2) !! 2 of
+    Just c -> do
+      assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
+      assertEqual "cascade keeps special color (not Bottle/Hat)" C4 (cellColor c)
+    Nothing -> assertFailure "Surprise special must sit, not hole"
 
 --------------------------------------------------------------------------------
 -- Soft-locked Rainbow / special combo must not fire (parity with expandSpecials)

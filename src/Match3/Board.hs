@@ -48,10 +48,10 @@ import Match3.Obstacles
   , chipAdjacentSafesExcept
   , chipAdjacentBalloonsExcept
   , chipAdjacentTimeSpiritsExcept
-  , triggerAdjacentHats
+  , triggerAdjacentHatsExcept
   , chargeAdjacentMakers
   , openSurprises
-  , triggerAdjacentBottles
+  , triggerAdjacentBottlesExcept
   )
 import Match3.Countdown
   ( countdownsAtZero
@@ -314,7 +314,7 @@ clearMatchesDetailed prefer b =
       -- Surprise opens against match/special clears *before* adjacent peels, so a
       -- 3×3 explode contributes to trueClears (Bomb-parity for stone/fog/chain/…).
       -- Nested Surprises inside an explode footprint also open (Bomb parity).
-      (bSurp2, trueClears, surpDirect, _surpSaved) = surpriseClearPass bIced iceFree
+      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPass bIced iceFree
       -- Strip Grass/Vine/Choco only on true clear holes (cannot spread from ghosts)
       bClearedOv = clearOverlaysOn bSurp2 trueClears
       -- Cells that already took a direct-hit peel/chip (expand → chipIce) must not
@@ -327,7 +327,8 @@ clearMatchesDetailed prefer b =
       (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
       (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
       (bBal, deadBalloons) = chipAdjacentBalloonsExcept bCake trueClears directHits
-      bHat = triggerAdjacentHats bBal trueClears
+      -- Protect Surprise-opened specials from same-wave Hat/Bottle mutate
+      bHat = triggerAdjacentHatsExcept bBal trueClears surpSaved
       (bFog, _fogCleared) = chipAdjacentFogExcept bHat trueClears directHits
       (bChain, _chainCleared) = chipAdjacentChainExcept bFog trueClears directHits
       (bFreeze, _freezeCleared) = chipAdjacentFreezeExcept bChain trueClears directHits
@@ -335,7 +336,7 @@ clearMatchesDetailed prefer b =
       (bSafe, _openedSafes) = chipAdjacentSafesExcept bCurtain trueClears directHits
       (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
       bMaker = chargeAdjacentMakers bSpirit trueClears
-      bBottle = triggerAdjacentBottles bMaker trueClears
+      bBottle = triggerAdjacentBottlesExcept bMaker trueClears surpSaved
       -- Chocolate / steam: only true clears extinguish (not soft hits)
       bNoChoco = clearChocoAdjacent bBottle trueClears
       bNoSteam = clearSteamAdjacent bNoChoco trueClears
@@ -612,7 +613,7 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bIced, iceFree) = chipIceOnClear b expanded
       -- Surprise before adjacent peels (same as clearMatchesDetailed / Bomb parity),
       -- including nested Surprises inside explode footprints.
-      (bSurp2, trueClears, surpDirect, _surpSaved) = surpriseClearPass bIced iceFree
+      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPass bIced iceFree
       bClearedOv = clearOverlaysOn bSurp2 trueClears
       -- Exclude direct-hit cells from adjacent peels (same as clearMatchesDetailed).
       directHits = nub (expanded ++ surpDirect)
@@ -621,7 +622,7 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
       (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
       (bBal, deadBalloons) = chipAdjacentBalloonsExcept bCake trueClears directHits
-      bHat = triggerAdjacentHats bBal trueClears
+      bHat = triggerAdjacentHatsExcept bBal trueClears surpSaved
       (bFog, _) = chipAdjacentFogExcept bHat trueClears directHits
       (bChain, _) = chipAdjacentChainExcept bFog trueClears directHits
       (bFreeze, _) = chipAdjacentFreezeExcept bChain trueClears directHits
@@ -629,7 +630,7 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bSafe, _) = chipAdjacentSafesExcept bCurtain trueClears directHits
       (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
       bMaker = chargeAdjacentMakers bSpirit trueClears
-      bBottle = triggerAdjacentBottles bMaker trueClears
+      bBottle = triggerAdjacentBottlesExcept bMaker trueClears surpSaved
       bNoChoco = clearChocoAdjacent bBottle trueClears
       bNoSteam = clearSteamAdjacent bNoChoco trueClears
       allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)

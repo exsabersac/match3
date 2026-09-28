@@ -202,6 +202,7 @@ module Match3.Core
   , openSurprises
   , surprisesAdjacentTo
   , triggerAdjacentBottles
+  , triggerAdjacentBottlesExcept
   , bottlesAdjacentTo
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits
@@ -209,6 +210,7 @@ module Match3.Core
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
+  , triggerAdjacentHatsExcept
   , makersAdjacentSameColor
   , chargeAdjacentMakers
   , applyPortalTeleports
@@ -286,12 +288,14 @@ import Match3.Obstacles
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
+  , triggerAdjacentHatsExcept
   , makersAdjacentSameColor
   , chargeAdjacentMakers
   , openAdjacentSurprises
   , openSurprises
   , surprisesAdjacentTo
   , triggerAdjacentBottles
+  , triggerAdjacentBottlesExcept
   , bottlesAdjacentTo
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits

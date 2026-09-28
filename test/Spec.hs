@@ -50,6 +50,8 @@ tests =
     , testCase "daily_seed_stable" daily_seed_stable
     , testCase "star_rating_tiers" star_rating_tiers
     , testCase "special_combo_rainbow_line" special_combo_rainbow_line
+    , testCase "special_combo_bomb_bomb" special_combo_bomb_bomb
+    , testCase "special_combo_line_line" special_combo_line_line
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -1002,4 +1004,36 @@ special_combo_rainbow_line = do
     MoveApplied g -> assertBool ("scored " ++ show g) (g >= 40)
     _ -> pure ()
   assertEqual "moves" (gsMoves gs0 - 1) (gsMoves gs1)
+
+special_combo_bomb_bomb :: Assertion
+special_combo_bomb_bomb = do
+  let board =
+        setCell
+          (setCell stableBoard (3, 3) (Gem C1 Bomb 0))
+          (3, 4)
+          (Gem C2 Bomb 0)
+  assertBool "bomb×bomb" (isBombBombCombo board (3, 3) (3, 4))
+  let seeds = comboClearSeeds (swapCells board (3, 3) (3, 4)) (3, 3) (3, 4)
+  assertBool ("5x5-ish seeds " ++ show (length seeds)) (length seeds >= 25)
+  let (gs1, out) = trySwap (3, 3) (3, 4) (newGame defaultConfig 1) { gsBoard = board, gsOver = Nothing, gsMoves = 5 }
+  case out of
+    NoMatch -> assertFailure "must apply"
+    MoveApplied g -> assertBool "big" (g >= 200)
+    _ -> pure ()
+  assertBool "stable" (not (hasAnyMatch (gsBoard gs1)))
+
+special_combo_line_line :: Assertion
+special_combo_line_line = do
+  let board =
+        setCell
+          (setCell stableBoard (2, 2) (Gem C3 LineH 0))
+          (2, 3)
+          (Gem C4 LineV 0)
+  assertBool "line×line" (isLineLineCombo board (2, 2) (2, 3))
+  let (gs1, out) = trySwap (2, 2) (2, 3) (newGame defaultConfig 1) { gsBoard = board, gsOver = Nothing, gsMoves = 5 }
+  case out of
+    NoMatch -> assertFailure "must apply"
+    MoveApplied g -> assertBool ("row+col score " ++ show g) (g >= 150)
+    _ -> pure ()
+  assertEqual "moves" (4 :: Int) (gsMoves gs1)
 

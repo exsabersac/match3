@@ -22,7 +22,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 
 - Adjacent swaps (click or drag); horizontal/vertical ≥3 clear
 - **Specials**: 4-match → Line; 5-match → Rainbow (clear all of a color); Bomb exists for combos
-- **Line × Bomb combo**: 3 full rows + 3 full columns (开心消消乐条纹+炸弹感)
+- **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
 - **Ice**: layers on gems; match chips ice; last layer clears the gem
 - **Goals**: score / single collect / multi-color collect / clear stones

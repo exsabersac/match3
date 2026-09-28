@@ -81,6 +81,8 @@ module Match3.Core
   , runCascadeScoredFromSeeds
   , isLineBombCombo
   , isRainbowLineCombo
+  , isBombBombCombo
+  , isLineLineCombo
   , isSpecialCombo
   , comboClearSeeds
   , dailySeed
@@ -103,6 +105,8 @@ import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Combos
   ( isLineBombCombo
   , isRainbowLineCombo
+  , isBombBombCombo
+  , isLineLineCombo
   , isSpecialCombo
   , comboClearSeeds
   )

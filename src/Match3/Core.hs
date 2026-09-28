@@ -4,6 +4,9 @@ module Match3.Core
   , CellContents(..)
   , Cell
   , mkGem
+  , mkIceGem
+  , iceLayers
+  , chipIceOnClear
   , mkStone
   , mkStoneLayers
   , stoneLayers
@@ -82,6 +85,7 @@ module Match3.Core
   ) where
 
 import Match3.Board
+import Match3.Ice (chipIceOnClear)
 import Match3.Game
 import Match3.Obstacles
   ( swapBlockedByStone

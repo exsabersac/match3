@@ -25,7 +25,7 @@ isBomb _ = False
 isLineBombCombo :: Board -> Pos -> Pos -> Bool
 isLineBombCombo b p1 p2 =
   case (at b p1, at b p2) of
-    (Gem _ k1, Gem _ k2) ->
+    (Gem _ k1 _, Gem _ k2 _) ->
       (isLine k1 && isBomb k2) || (isBomb k1 && isLine k2)
     _ -> False
 
@@ -38,8 +38,8 @@ isSpecialCombo = isLineBombCombo
 comboClearSeeds :: Board -> Pos -> Pos -> [Pos]
 comboClearSeeds b p1 p2 =
   case (at b p1, at b p2) of
-    (Gem _ Bomb, _) -> lineBombCross b p1
-    (_, Gem _ Bomb) -> lineBombCross b p2
+    (Gem _ Bomb _, _) -> lineBombCross b p1
+    (_, Gem _ Bomb _) -> lineBombCross b p2
     _ -> nub (lineBombCross b p1 ++ lineBombCross b p2)
 
 -- | Three full rows and three full columns centered at (r,c).

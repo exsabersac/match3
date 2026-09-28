@@ -173,7 +173,7 @@ spawnBurst board positions =
               cy = fromIntegral oy + fromIntegral cellPx / 2
               (cr, cg, cb) = case getCell board pos of
                     Stone _ -> (120, 120, 130)
-                    Gem _ _ -> colorRGB (cellColor (getCell board pos))
+                    Gem _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
             ( \_ -> do
                 ang <- randomRIO (0, 2 * pi :: Float)
@@ -912,7 +912,7 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
-  Gem _ _ -> do
+  Gem _ _ ice -> do
     let (cr0, cg0, cb0) = colorRGB (cellColor cell)
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
         gap = 3 :: CInt
@@ -926,6 +926,12 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+    -- Ice overlay (cyan frames = layers)
+    when (ice > 0) $ do
+      rendererDrawColor ren $= V4 140 220 255 220
+      drawRect ren (Just (Rectangle (P (V2 (x + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
+      when (ice > 1) $
+        drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
     case cellKind cell of
       Normal -> pure ()
       LineH -> do

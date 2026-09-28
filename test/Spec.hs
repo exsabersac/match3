@@ -45,6 +45,8 @@ tests =
     , testCase "special_combo_line_bomb" special_combo_line_bomb
     , testCase "goal_collect_multi_color" goal_collect_multi_color
     , testCase "goal_clear_stone_counts" goal_clear_stone_counts
+    , testCase "ice_layer_blocks_clear" ice_layer_blocks_clear
+    , testCase "ice_layer_chips_then_clears" ice_layer_chips_then_clears
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -619,7 +621,7 @@ stone_not_in_match = do
 rainbow_clears_color :: Assertion
 rainbow_clears_color = do
   let board0 =
-        setCell stableBoard (4, 4) (Gem C1 Rainbow)
+        setCell stableBoard (4, 4) (Gem C1 Rainbow 0)
       -- Ensure neighbor (4,5) is C2 (stableBoard already has variety)
       board = setCell board0 (4, 5) (mkGem C2)
       -- Count C2 before
@@ -629,7 +631,7 @@ rainbow_clears_color = do
           | r <- [0 .. boardSize - 1]
           , c <- [0 .. boardSize - 1]
           , case getCell board (r, c) of
-              Gem C2 _ -> True
+              Gem C2 _ _ -> True
               _ -> False
           ]
   assertBool "have some C2" (c2before >= 1)
@@ -654,7 +656,7 @@ rainbow_clears_color = do
           | r <- [0 .. boardSize - 1]
           , c <- [0 .. boardSize - 1]
           , case getCell (gsBoard gs1) (r, c) of
-              Gem C2 _ -> True
+              Gem C2 _ _ -> True
               _ -> False
           ]
   -- After cascade refill, leftover C2 may appear from refill; the rainbow itself must be gone
@@ -672,7 +674,7 @@ rainbow_swap_without_match :: Assertion
 rainbow_swap_without_match = do
   let board =
         setCell
-          (setCell stableBoard (0, 0) (Gem C3 Rainbow))
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0))
           (0, 1)
           (mkGem C4)
   assertBool "no classic match after swap alone"
@@ -770,9 +772,9 @@ special_combo_line_bomb :: Assertion
 special_combo_line_bomb = do
   let board =
         setCell
-          (setCell stableBoard (4, 3) (Gem C1 LineH))
+          (setCell stableBoard (4, 3) (Gem C1 LineH 0))
           (4, 4)
-          (Gem C2 Bomb)
+          (Gem C2 Bomb 0)
   assertBool "is line+bomb combo" (isLineBombCombo board (4, 3) (4, 4))
   assertBool "special combo" (isSpecialCombo board (4, 3) (4, 4))
   -- Seeds on post-swap board: bomb moves to (4,3)
@@ -914,4 +916,39 @@ goal_clear_stone_counts = do
     _ -> pure ()
   assertBool "out defined" (out == out || gs1 == gs1)
   assertBool "out2 defined" (out2 == out2 || gs2 == gs2)
+
+--------------------------------------------------------------------------------
+-- Ice layers (开心消消乐冰层)
+--------------------------------------------------------------------------------
+
+-- | ice>=2: match chips one layer and gem stays; ice-free neighbors clear.
+ice_layer_blocks_clear :: Assertion
+ice_layer_blocks_clear = do
+  let board =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkIceGem C1 2))
+          (3, 2)
+          (mkGem C1)
+  assertBool "has match" (hasAnyMatch board)
+  let (b1, free) = chipIceOnClear board [(3, 0), (3, 1), (3, 2)]
+  assertBool "iced pos not free" ((3, 1) `notElem` free)
+  assertBool "plain gems free" ((3, 0) `elem` free && (3, 2) `elem` free)
+  assertEqual "ice 2 -> 1" (1 :: Int) (iceLayers (getCell b1 (3, 1)))
+  assertBool "gem still there" (isGem (getCell b1 (3, 1)))
+
+-- | ice-2 chips to ice-1 (stays); next chip (last layer) clears the gem.
+ice_layer_chips_then_clears :: Assertion
+ice_layer_chips_then_clears = do
+  let board = setCell stableBoard (1, 1) (mkIceGem C4 2)
+      (b1, free1) = chipIceOnClear board [(1, 1)]
+  assertBool "still blocked" ((1, 1) `notElem` free1)
+  assertEqual "2 -> 1" (1 :: Int) (iceLayers (getCell b1 (1, 1)))
+  let (_b2, free2) = chipIceOnClear b1 [(1, 1)]
+  assertBool "last ice clears gem" ((1, 1) `elem` free2)
+  -- ice-1 alone also clears in one chip
+  let (_b3, free3) = chipIceOnClear (setCell stableBoard (2, 2) (mkIceGem C3 1)) [(2, 2)]
+  assertBool "ice-1 clears immediately" ((2, 2) `elem` free3)
 

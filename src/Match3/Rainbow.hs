@@ -9,16 +9,16 @@ import Data.List (nub)
 import Match3.Types
 
 isRainbow :: Cell -> Bool
-isRainbow (Gem _ Rainbow) = True
+isRainbow (Gem _ Rainbow _) = True
 isRainbow _ = False
 
 -- | Adjacent swap where exactly one endpoint is a Rainbow and the other is a colored gem.
 isRainbowSwap :: Board -> Pos -> Pos -> Bool
 isRainbowSwap b p1 p2 =
   case (at b p1, at b p2) of
-    (Gem _ Rainbow, Gem _ k) | k /= Rainbow -> True
-    (Gem _ k, Gem _ Rainbow) | k /= Rainbow -> True
-    (Gem _ Rainbow, Gem _ Rainbow) -> True -- double rainbow: clear all gems
+    (Gem _ Rainbow _, Gem _ k _) | k /= Rainbow -> True
+    (Gem _ k _, Gem _ Rainbow _) | k /= Rainbow -> True
+    (Gem _ Rainbow _, Gem _ Rainbow _) -> True -- double rainbow: clear all gems
     _ -> False
   where
     at board (r, c) = (board !! r) !! c
@@ -38,14 +38,14 @@ rainbowClearSeeds b p1 p2 =
       , isRainbow (at b p)
       ]
     targets = case (c1, c2) of
-      (Gem _ Rainbow, Gem _ Rainbow) ->
+      (Gem _ Rainbow _, Gem _ Rainbow _) ->
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , isGem (at b (r, c))
         ]
-      (Gem _ Rainbow, Gem col _) -> colorPositions b col
-      (Gem col _, Gem _ Rainbow) -> colorPositions b col
+      (Gem _ Rainbow _, Gem col _ _) -> colorPositions b col
+      (Gem col _ _, Gem _ Rainbow _) -> colorPositions b col
       _ -> []
 
 colorPositions :: Board -> Color -> [Pos]
@@ -54,6 +54,6 @@ colorPositions b col =
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
   , case (b !! r) !! c of
-      Gem col' _ -> col' == col
+      Gem col' _ _ -> col' == col
       Stone _ -> False
   ]

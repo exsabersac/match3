@@ -201,6 +201,7 @@ tests =
     , testCase "soft_lock_blocks_freeswap_activation" soft_lock_blocks_freeswap_activation
     , testCase "soft_lock_blocks_double_rainbow" soft_lock_blocks_double_rainbow
     , testCase "cookie_immune_to_direct_clear" cookie_immune_to_direct_clear
+    , testCase "belt_delivers_cookie_bottom_drains" belt_delivers_cookie_bottom_drains
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -6394,3 +6395,54 @@ cookie_immune_to_direct_clear = do
       (_bBot, _nBot, _scBot, _cBot, _tBot, _stBot, _chBot, _hBot, _bBot2, cookiesBot, _cakBot, _) =
         runCascadeScoredFromSeeds Nothing seedsBot (mkStdGen 3) boardBot
   assertBool ("bottom cookie still drains, got " ++ show cookiesBot) (cookiesBot >= 1)
+
+-- | Belt delivers Cookie onto bottom with no follow-up match → must still drain.
+-- Regression: runCascadeScoredWithUfos no-ops without settle, stranding GoalCookie.
+belt_delivers_cookie_bottom_drains :: Assertion
+belt_delivers_cookie_bottom_drains = do
+  let belt = [(5, 2), (6, 2), (7, 2), (7, 3)]
+      -- Cookie one step before bottom entrance; one belt tick parks it on (7,2)
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (6, 2) mkCookie)
+                   (0, 0)
+                   (mkGem C1))
+                (0, 1)
+                (mkGem C1))
+             (0, 2)
+             (mkGem C2))
+          (0, 3)
+          (mkGem C1)
+      afterBelt = shiftBelts board0 [belt]
+  assertBool "belt parks cookie on bottom" (isCookie (getCell afterBelt (7, 2)))
+  assertBool "belt alone forms no match" (not (hasAnyMatch afterBelt))
+  let gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = board0
+          , gsBelts = [belt]
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsUfos = []
+          , gsPortals = []
+          , gsCookiesCollected = 0
+          , gsGoal = GoalCookie 1
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "row0 match should apply"
+    InvalidSwap -> assertFailure "row0 swap valid"
+    _ -> pure ()
+  let left =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isCookie (getCell (gsBoard gs1) (r, c))
+        ]
+  assertBool ("cookie must drain after belt, left=" ++ show left) (null left)
+  assertBool
+    ("GoalCookie must count belt-delivered cookie, got " ++ show (gsCookiesCollected gs1))
+    (gsCookiesCollected gs1 >= 1)

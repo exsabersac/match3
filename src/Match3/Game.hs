@@ -31,6 +31,7 @@ import Match3.Board
   , randomPlayableBoard
   , runCascadeScoredWithUfos
   , runCascadeScoredFromSeedsWithUfos
+  , runPostBeltCascade
   , resolveCountdowns
   , shufflePlayable
   , swapCells
@@ -651,12 +652,12 @@ trySwap p1 p2 gs
                  -- Countdown bombs: tick after move; zeros explode 3×3 (keep UFOs + portals)
                  (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, cookies1, cakes1, uAbs1, ufosCd, pos1, g1') =
                    resolveCountdowns ufos1 (gsPortals gs) g0' board0'
-                 -- Conveyor belts: shift then cascade if new matches
+                 -- Conveyor belts: shift then cascade / settle (drain belt-delivered cookies)
                  boardBelt = shiftBelts boardCd (gsBelts gs)
                  (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos2, pos2, g') =
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufosCd, [], g1')
-                     else runCascadeScoredWithUfos Nothing ufosCd (gsPortals gs) g1' boardBelt
+                     else runPostBeltCascade ufosCd (gsPortals gs) g1' boardBelt
                  -- Vine / chocolate / steam, then snails crawl (skip belt cells — no double-step)
                  beltCells = nub (concat (gsBelts gs))
                  board1 = stepSnailsAvoiding beltCells (spreadSteam (spreadChoco (spreadVines boardBeltCas)))

@@ -20,6 +20,7 @@ module Match3.Board
   , runCascadeScoredWithUfos
   , runCascadeScoredFromSeeds
   , runCascadeScoredFromSeedsWithUfos
+  , runPostBeltCascade
   , randomBoard
   , randomStableBoard
   , randomPlayableBoard
@@ -725,6 +726,33 @@ randomPlayableBoard g =
 shufflePlayable :: RandomGen g => g -> (Board, g)
 shufflePlayable = randomPlayableBoard
 
+
+
+-- | After conveyor shift: cascade when the shift formed a match (settle inside
+-- as usual). When it did *not*, still settle (gravity→drain→portal→gravity→drain)
+-- so cookies belt-delivered onto the bottom row collect toward GoalCookie —
+-- previously a no-match belt left bottom cookies stranded until a later clear.
+-- If that settle creates a match (e.g. portal), cascade it and add drained cookies.
+runPostBeltCascade
+  :: RandomGen g
+  => [Ufo]
+  -> [(Pos, Pos)]
+  -> g
+  -> Board
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
+runPostBeltCascade ufos portals g boardBelt
+  | hasAnyMatch boardBelt =
+      runCascadeScoredWithUfos Nothing ufos portals g boardBelt
+  | otherwise =
+      let (settled, nCook) = settleBoardPortals portals (toM boardBelt)
+          (b1, g1) = refill g settled
+      in if hasAnyMatch b1
+           then
+             let (b2, cells, score, maxW, tallies, st, ch, h, bal, cok, cak, uAbs, ufos', cleared, g2) =
+                   runCascadeScoredWithUfos Nothing ufos portals g1 b1
+             in (b2, cells, score, maxW, tallies, st, ch, h, bal, cok + nCook, cak, uAbs, ufos', cleared, g2)
+           else
+             (b1, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, nCook, 0, 0, ufos, [], g1)
 
 -- | After a successful cascade: tick countdown bombs; any at 0 explode (3×3) + cascade.
 -- Threads UFOs + portals so explode settle still teleports / absorbs (到期爆炸不丢飞碟与门).

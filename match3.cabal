@@ -35,6 +35,7 @@ library
       Match3.Daily
       Match3.Countdown
       Match3.Conveyor
+      Match3.Boosters
   other-modules:
       Paths_match3
   autogen-modules:

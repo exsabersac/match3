@@ -60,6 +60,9 @@ tests =
     , testCase "conveyor_cycle_preserves_cells" conveyor_cycle_preserves_cells
     , testCase "conveyor_shifts_after_move" conveyor_shifts_after_move
     , testCase "conveyor_can_create_match" conveyor_can_create_match
+    , testCase "booster_hammer_clears_cell" booster_hammer_clears_cell
+    , testCase "booster_free_swap_any_cells" booster_free_swap_any_cells
+    , testCase "lose_hint_by_goal" lose_hint_by_goal
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -951,8 +954,10 @@ daily_seed_stable = do
 
 star_rating_tiers :: Assertion
 star_rating_tiers = do
-  assertEqual "3 star" (3 :: Int) (starRating 30 20)
+  assertEqual "3 star plenty" (3 :: Int) (starRating 30 20)
+  assertEqual "3 star boundary 40%" (3 :: Int) (starRating 30 12)
   assertEqual "2 star" (2 :: Int) (starRating 30 8)
+  assertEqual "2 star boundary ~15%" (2 :: Int) (starRating 30 5)
   assertEqual "1 star" (1 :: Int) (starRating 30 2)
   assertEqual "zero left" (1 :: Int) (starRating 30 0)
 
@@ -1299,3 +1304,76 @@ conveyor_can_create_match = do
     MoveApplied g -> assertBool ("belt cascade scored extra, got " ++ show g) (g >= 60)
     _ -> pure ()
   assertBool "stable after" (not (hasAnyMatch (gsBoard gs1)))
+
+--------------------------------------------------------------------------------
+-- Boosters + lose hint
+--------------------------------------------------------------------------------
+
+booster_hammer_clears_cell :: Assertion
+booster_hammer_clears_cell = do
+  let board = setCell stableBoard (2, 2) (mkGem C1)
+      gs0 =
+        (newGame defaultConfig 1)
+          { gsBoard = board
+          , gsHammers = 2
+          , gsMoves = 10
+          , gsScore = 0
+          , gsOver = Nothing
+          }
+      (gs1, out) = useHammer (2, 2) gs0
+  case out of
+    NoMatch -> assertFailure "hammer should apply"
+    InvalidSwap -> assertFailure "hammer should be valid"
+    MoveApplied g -> assertBool "scored" (g >= 10)
+    _ -> pure ()
+  assertEqual "hammer spent" (1 :: Int) (gsHammers gs1)
+  assertEqual "moves untouched" (10 :: Int) (gsMoves gs1)
+  -- No charges left after spending both
+  let (gs2, _) = useHammer (0, 0) gs1
+      (gs3, out3) = useHammer (1, 1) gs2
+  assertEqual "empty" (0 :: Int) (gsHammers gs2)
+  out3 @?= InvalidSwap
+  assertEqual "unchanged hammers" (0 :: Int) (gsHammers gs3)
+
+booster_free_swap_any_cells :: Assertion
+booster_free_swap_any_cells = do
+  -- Non-adjacent swap that forms C1 C1 C1 on row 3
+  let board =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (5, 5)
+          (mkGem C1)
+      gs0 =
+        (newGame defaultConfig 2)
+          { gsBoard = board
+          , gsFreeSwaps = 1
+          , gsMoves = 10
+          , gsScore = 0
+          , gsOver = Nothing
+          }
+  -- Adjacent would be trySwap; here (3,2) and (5,5) are NOT adjacent
+  assertBool "not adjacent" (not (adjacent (3, 2) (5, 5)))
+  let (gs1, out) = useFreeSwap (3, 2) (5, 5) gs0
+  case out of
+    NoMatch -> assertFailure "free swap must apply"
+    InvalidSwap -> assertFailure "free swap must be valid"
+    MoveApplied g -> assertBool "scored" (g >= 30)
+    _ -> pure ()
+  assertEqual "charge spent" (0 :: Int) (gsFreeSwaps gs1)
+  assertEqual "moves free" (10 :: Int) (gsMoves gs1)
+  -- No charge: reject
+  let (_, out2) = useFreeSwap (0, 0) (0, 1) gs1
+  out2 @?= InvalidSwap
+
+lose_hint_by_goal :: Assertion
+lose_hint_by_goal = do
+  assertBool "score hint" (not (null (loseHint (GoalScore 500))))
+  assertBool "collect hint" (not (null (loseHint (GoalCollect C1 20))))
+  assertBool "multi hint" (not (null (loseHint (GoalCollectMulti [(C1, 1)]))))
+  assertBool "stone hint" (not (null (loseHint (GoalClearStone 8))))

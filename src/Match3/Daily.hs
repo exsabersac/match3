@@ -36,9 +36,11 @@ dailyLevel year month day =
 
 -- | Stars from moves left vs starting moves (3 = plenty left, 1 = clutch).
 -- Optional 开心消消乐-style clear rating; pure, no API shape change.
+-- | Stars from moves left vs starting moves.
+-- Tuned: 3★ need ≥40% moves left; 2★ ≥15%; else 1★ (开心消消乐步数三星感).
 starRating :: MovesLeft -> MovesLeft -> Int
 starRating startMoves left
   | startMoves <= 0 = 1
-  | left * 3 >= startMoves = 3
-  | left * 6 >= startMoves = 2
+  | left * 5 >= startMoves * 2 = 3  -- left/start >= 0.4
+  | left * 20 >= startMoves * 3 = 2  -- left/start >= 0.15
   | otherwise = 1

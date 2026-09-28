@@ -80,7 +80,7 @@ colorRGB C4 = (240, 200, 60)
 colorRGB C5 = (180, 80, 200)
 
 helpKeysMsg :: Text
-helpKeysMsg = "H hint | U undo | S shuffle | D daily | R restart | N next | P pause | Esc"
+helpKeysMsg = "H hint | 1 hammer | U undo | S shuffle | D daily | R restart | N next | P pause | Esc"
 
 main :: IO ()
 main = do
@@ -236,6 +236,10 @@ updateTitle window app = do
             ++ "  moves="
             ++ show (gsMoves gs)
             ++ comboBits
+            ++ "  Hm="
+            ++ show (gsHammers gs)
+            ++ " Sw="
+            ++ show (gsFreeSwaps gs)
             ++ status
             ++ "  |  "
             ++ T.unpack (appMsg app)
@@ -366,6 +370,31 @@ handleEvent ref window ev = case eventPayload ev of
                         writeIORef ref app'
                         updateTitle window app'
                   pure False
+                Keycode1 -> do
+                  app <- readIORef ref
+                  case appSel app of
+                    Nothing -> do
+                      writeIORef ref app { appMsg = "Hammer: select a cell first, then press 1" }
+                      updateTitle window app { appMsg = "Hammer: select a cell first, then press 1" }
+                    Just pos -> do
+                      let (gs', out) = useHammer pos (appGame app)
+                          msg = case out of
+                            InvalidSwap -> "No hammers left"
+                            NoMatch -> "Hammer failed"
+                            MoveApplied g -> "Hammer +" <> T.pack (show g)
+                            LevelClear _ _ -> "Hammer cleared level!"
+                            Won _ -> "Hammer won!"
+                            Lost _ -> T.pack (loseHint (gsGoal gs'))
+                          app' =
+                            app
+                              { appGame = gs'
+                              , appSel = Nothing
+                              , appMsg = msg
+                              , appStartMoves = appStartMoves app
+                              }
+                      writeIORef ref app'
+                      updateTitle window app'
+                  pure False
                 KeycodeH -> do
                   app <- readIORef ref
                   let (gs, h) = applyHint (appGame app)
@@ -434,7 +463,7 @@ handleEvent ref window ev = case eventPayload ev of
                         MoveApplied s -> "Drag +" <> T.pack (show s)
                         Won s -> "YOU WIN score=" <> T.pack (show s)
                         LevelClear _ n -> "Level clear -> L" <> T.pack (show (n + 1))
-                        Lost s -> "Out of moves score=" <> T.pack (show s)
+                        Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal (appGame app)))
                       app' =
                         app
                           { appGame = gs'
@@ -554,7 +583,7 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> " -> L"
                                       <> T.pack (show (n + 1))
                                       <> " (N/Space/click)"
-                                  Lost s -> "Out of moves score=" <> T.pack (show s) <> " — R/click"
+                                  Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal (appGame app))) <> " — R/click"
                                 anim = case out of
                                   MoveApplied _ ->
                                     AnimSwap p1 pos before after 0

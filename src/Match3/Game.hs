@@ -13,6 +13,9 @@ module Match3.Game
   , nextLevel
   , ensurePlayable
   , shuffleGame
+  , useHammer
+  , useFreeSwap
+  , loseHint
   ) where
 
 import Data.Maybe (fromMaybe)
@@ -52,6 +55,8 @@ data GameState = GameState
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
   , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
   , gsBelts         :: [Belt] -- conveyor paths (开心消消乐传送带)
+  , gsHammers       :: Int    -- hammer booster charges
+  , gsFreeSwaps     :: Int    -- free-swap booster charges (any two cells)
   } deriving (Show)
 
 instance Eq GameState where
@@ -66,6 +71,8 @@ instance Eq GameState where
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
       && gsBelts a == gsBelts b
+      && gsHammers a == gsHammers b
+      && gsFreeSwaps a == gsFreeSwaps b
 
 snapshot :: GameState -> GameState
 snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
@@ -98,6 +105,8 @@ newGameAtLevel li cfg seed =
        , gsCombo = 0
        , gsShuffled = False
        , gsBelts = levelBelts li
+       , gsHammers = 2
+       , gsFreeSwaps = 1
        }
 
 restart :: GameConfig -> Int -> GameState
@@ -259,3 +268,119 @@ nextLevel gs seed =
         _ -> min (gsLevel gs + 1) (length allLevels - 1)
       lvl = allLevels !! idx
   in newGameAtLevel idx (levelConfig lvl) seed
+
+-- | Hammer: spend one charge to clear a single in-bounds cell, then cascade.
+-- Does not consume a move.
+useHammer :: Pos -> GameState -> (GameState, Outcome)
+useHammer p gs
+  | Just o <- gsOver gs = (gs, o)
+  | gsHammers gs <= 0 = (gs, InvalidSwap)
+  | not (inBounds p) = (gs, InvalidSwap)
+  | otherwise =
+      let seeds = [p]
+          (board1, _n, gained, combo, tallies, stonesHit, g') =
+            runCascadeScoredFromSeeds Nothing seeds (gsGen gs) (gsBoard gs)
+          score' = gsScore gs + gained
+          hist = take 20 (snapshot gs : gsHistory gs)
+          collectDelta = case gsGoal gs of
+            GoalCollect col _ -> lookupColor tallies col
+            _ -> 0
+          collected' = case gsGoal gs of
+            GoalCollect _ _ -> gsCollected gs + collectDelta
+            GoalCollectMulti reqs ->
+              let bag' = mergeTallies (gsColorBag gs) tallies
+              in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
+            GoalClearStone _ -> gsStonesCleared gs + stonesHit
+            GoalScore _ -> gsCollected gs
+          gs' =
+            gs
+              { gsBoard = board1
+              , gsScore = score'
+              , gsCollected = collected'
+              , gsColorBag = mergeTallies (gsColorBag gs) tallies
+              , gsStonesCleared = gsStonesCleared gs + stonesHit
+              , gsGen = g'
+              , gsHistory = hist
+              , gsHint = Nothing
+              , gsCombo = combo
+              , gsShuffled = False
+              , gsHammers = gsHammers gs - 1
+              }
+          outcome = decideOutcome gs' gained
+          gs'' = case outcome of
+            Won s -> gs' { gsOver = Just (Won s) }
+            Lost s -> gs' { gsOver = Just (Lost s) }
+            LevelClear s n -> gs' { gsOver = Just (LevelClear s n) }
+            _ -> gs'
+          gs''' = case outcome of
+            MoveApplied _ -> ensurePlayable gs''
+            _ -> gs''
+      in (gs''', outcome)
+
+-- | Free-swap: spend one charge to swap any two in-bounds cells (need not be adjacent).
+useFreeSwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
+useFreeSwap p1 p2 gs
+  | Just o <- gsOver gs = (gs, o)
+  | gsFreeSwaps gs <= 0 = (gs, InvalidSwap)
+  | not (inBounds p1 && inBounds p2) = (gs, InvalidSwap)
+  | p1 == p2 = (gs, InvalidSwap)
+  | swapBlockedByStone (gsBoard gs) p1 p2 =
+      (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
+  | otherwise =
+      let board0 = gsBoard gs
+          swapped = swapCells board0 p1 p2
+          rainbow = isRainbowSwap board0 p1 p2
+          specialCombo = isSpecialCombo board0 p1 p2
+      in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
+           then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
+           else
+             let (board1, _c, gained, combo, tallies, stonesHit, g') =
+                   if rainbow
+                     then runCascadeScoredFromSeeds (Just p2) (rainbowClearSeeds swapped p1 p2) (gsGen gs) swapped
+                     else if specialCombo
+                       then runCascadeScoredFromSeeds (Just p2) (comboClearSeeds swapped p1 p2) (gsGen gs) swapped
+                       else runCascadeScored (Just p2) (gsGen gs) swapped
+                 score' = gsScore gs + gained
+                 hist = take 20 (snapshot gs : gsHistory gs)
+                 collectDelta = case gsGoal gs of
+                   GoalCollect col _ -> lookupColor tallies col
+                   _ -> 0
+                 collected' = case gsGoal gs of
+                   GoalCollect _ _ -> gsCollected gs + collectDelta
+                   GoalCollectMulti reqs ->
+                     let bag' = mergeTallies (gsColorBag gs) tallies
+                     in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
+                   GoalClearStone _ -> gsStonesCleared gs + stonesHit
+                   GoalScore _ -> gsCollected gs
+                 gs' =
+                   gs
+                     { gsBoard = board1
+                     , gsScore = score'
+                     , gsCollected = collected'
+                     , gsColorBag = mergeTallies (gsColorBag gs) tallies
+                     , gsStonesCleared = gsStonesCleared gs + stonesHit
+                     , gsGen = g'
+                     , gsHistory = hist
+                     , gsHint = Nothing
+                     , gsCombo = combo
+                     , gsShuffled = False
+                     , gsFreeSwaps = gsFreeSwaps gs - 1
+                     }
+                 outcome = decideOutcome gs' gained
+                 gs'' = case outcome of
+                   Won s -> gs' { gsOver = Just (Won s) }
+                   Lost s -> gs' { gsOver = Just (Lost s) }
+                   LevelClear s n -> gs' { gsOver = Just (LevelClear s n) }
+                   _ -> gs'
+                 gs''' = case outcome of
+                   MoveApplied _ -> ensurePlayable gs''
+                   _ -> gs''
+             in (gs''', outcome)
+
+-- | Short tip shown after a Lost outcome (失败提示).
+loseHint :: LevelGoal -> String
+loseHint (GoalScore t) = "再冲冲分数吧，目标 " ++ show t
+loseHint (GoalCollect _ n) = "优先收集该色宝石，目标 " ++ show n ++ " 个"
+loseHint (GoalCollectMulti reqs) =
+  "兼顾多色收集：" ++ show (length reqs) ++ " 种配额"
+loseHint (GoalClearStone n) = "用邻消或特效砸箱子，目标 " ++ show n ++ " 个"

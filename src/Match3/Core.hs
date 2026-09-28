@@ -82,6 +82,10 @@ module Match3.Core
   , nextLevel
   , ensurePlayable
   , shuffleGame
+  , useHammer
+  , useFreeSwap
+  , loseHint
+  , hammerClearSeeds
   , swapBlockedByStone
   , orthoNeighbors
   , stonesAdjacentTo
@@ -115,6 +119,7 @@ import Match3.Obstacles
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)
+import Match3.Boosters (hammerClearSeeds)
 import Match3.Countdown
   ( spawnCountdown
   , tickCountdowns

@@ -192,6 +192,8 @@ tests =
     , testCase "blast_chips_layered_obstacles_once" blast_chips_layered_obstacles_once
     , testCase "hat_immune_to_direct_clear" hat_immune_to_direct_clear
     , testCase "soft_hit_preserves_oncell_overlays" soft_hit_preserves_oncell_overlays
+    , testCase "soft_hit_no_adj_side_effects" soft_hit_no_adj_side_effects
+    , testCase "soft_hit_preserves_oncell_fog_steam" soft_hit_preserves_oncell_fog_steam
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5742,3 +5744,125 @@ soft_hit_preserves_oncell_overlays = do
       (gsLast, _) = useHammer (4, 4) (mkGs boardLast)
   assertBool "last-ice choco gone" (not (hasChoco (getCell (gsBoard gsLast) (4, 4))))
   assertBool "last-ice layer gone" (iceLayers (getCell (gsBoard gsLast) (4, 4)) == 0)
+
+--------------------------------------------------------------------------------
+-- Soft-hit must not fire adjacent side-effects (Fog/locks/Maker/Bottle/Hat/Balloon)
+--------------------------------------------------------------------------------
+
+-- | ice>1 chip and Flip face-flip are not true clear holes. They must NOT peel
+-- adjacent Fog/Chain/Freeze/Curtain, charge Maker, trigger Bottle/Hat, or pop
+-- Balloon — same trueClears discipline as soft_hit_preserves_choco_steam.
+soft_hit_no_adj_side_effects :: Assertion
+soft_hit_no_adj_side_effects = do
+  -- Soft ice match: adjacent peel-locks / Maker stay untouched.
+  let boardIce lock =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkIceGem C1 2))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          lock
+  assertBool "ice match" (not (null (findMatches (boardIce (mkGem C2)))))
+  let msIce = findMatches (boardIce (mkFogGem C2 2))
+      expandedIce = expandSpecials (boardIce (mkFogGem C2 2)) msIce
+      (_, iceFree) = chipIceOnClear (boardIce (mkFogGem C2 2)) expandedIce
+      (bFogU, nFog) = chipAdjacentFog (boardIce (mkFogGem C2 2)) iceFree
+  assertBool "soft ice not a hole" ((3, 1) `notElem` iceFree)
+  assertEqual "soft ice peels no Fog" (0 :: Int) nFog
+  assertEqual "Fog2 unchanged" (Just (Fog 2)) (cellOverlay (getCell bFogU (2, 1)))
+  let (bChU, nCh) = chipAdjacentChain (boardIce (mkChainGem C2 2)) iceFree
+  assertEqual "soft ice peels no Chain" (0 :: Int) nCh
+  assertEqual "Chain2 unchanged" (2 :: Int) (chainLayers (getCell bChU (2, 1)))
+  let (bFrU, nFr) = chipAdjacentFreeze (boardIce (mkFreezeGem C2 2)) iceFree
+  assertEqual "soft ice peels no Freeze" (0 :: Int) nFr
+  assertEqual "Freeze2 unchanged" (2 :: Int) (freezeLayers (getCell bFrU (2, 1)))
+  let (bCuU, nCu) = chipAdjacentCurtain (boardIce (mkCurtainGem C2 2)) iceFree
+  assertEqual "soft ice peels no Curtain" (0 :: Int) nCu
+  assertEqual "Curtain2 unchanged" (2 :: Int) (curtainLayers (getCell bCuU (2, 1)))
+  -- Live cascade: Maker of match color must not charge on soft ice wave.
+  let (bMk, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 72) (boardIce (mkMakerCharges C1 3))
+  assertBool "Maker still maker" (isMaker (getCell bMk (2, 1)))
+  assertEqual "Maker uncharged" (3 :: Int) (makerCharges (getCell bMk (2, 1)))
+  -- Soft Flip match: Balloon same front-color must not pop; Bottle must not dye.
+  let boardFlip =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (4, 0) (mkGem C2))
+                   (4, 1)
+                   (mkFlip C2 C5))
+                (4, 2)
+                (mkGem C2))
+             (5, 1)
+             (mkBalloon C2))
+          (5, 2)
+          (mkGem C3)
+  assertBool "flip match" (not (null (findMatches boardFlip)))
+  let boardFlipBot = setCell boardFlip (3, 1) (mkBottle C4)
+      (bFlip, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 73) boardFlipBot
+  assertBool "Balloon survives soft Flip" (isBalloon (getCell bFlip (5, 1)))
+  assertEqual "Bottle did not dye neighbor" C3 (cellColor (getCell bFlip (5, 2)))
+  -- Control: true clear mid gem *does* peel Fog / charge Maker.
+  let boardHard' =
+        setCell (boardIce (mkFogGem C2 2)) (3, 1) (mkGem C1)  -- bare mid
+      msH = findMatches boardHard'
+      (_, iceH) = chipIceOnClear boardHard' (expandSpecials boardHard' msH)
+      (bFogH, _) = chipAdjacentFog boardHard' iceH
+  assertBool "true clear is a hole" ((3, 1) `elem` iceH)
+  assertEqual "true clear peels Fog 2→1" (Just (Fog 1)) (cellOverlay (getCell bFogH (2, 1)))
+  -- Unit: trueClears charge Maker (avoid gravity moving the maker off-cell).
+  let boardMkH = setCell (boardIce (mkMakerCharges C1 3)) (3, 1) (mkGem C1)
+      msMk = findMatches boardMkH
+      (_, iceMk) = chipIceOnClear boardMkH (expandSpecials boardMkH msMk)
+      bMkH = chargeAdjacentMakers boardMkH iceMk
+  assertEqual "true clear charges Maker 3→2" (2 :: Int) (makerCharges (getCell bMkH (2, 1)))
+
+--------------------------------------------------------------------------------
+-- Soft-hit must keep on-cell Fog / Steam (ice>1 hammer)
+--------------------------------------------------------------------------------
+
+-- | ice>1 soft chip must not strip on-cell Fog or Steam (peel-locks / match
+-- blockers ride with the gem until a true clear). Extends
+-- soft_hit_preserves_oncell_overlays beyond Grass/Vine/Choco.
+soft_hit_preserves_oncell_fog_steam :: Assertion
+soft_hit_preserves_oncell_fog_steam = do
+  let mkGs board =
+        (newGame defaultConfig 13)
+          { gsBoard = board
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsMoves = 20
+          , gsScore = 0
+          }
+  -- Hammer ice=2 + Fog2: chip ice, Fog stays.
+  let boardFog = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just (Fog 2)))
+      (gsFog, outFog) = useHammer (4, 4) (mkGs boardFog)
+  case outFog of
+    InvalidSwap -> assertFailure "hammer charges present"
+    _ -> pure ()
+  let cFog = getCell (gsBoard gsFog) (4, 4)
+  assertEqual "fog ice 2→1" (1 :: Int) (iceLayers cFog)
+  assertEqual "on-cell Fog2 survives soft hammer" (Just (Fog 2)) (cellOverlay cFog)
+  assertEqual "hammer spent" (1 :: Int) (gsHammers gsFog)
+  -- Hammer ice=2 + Steam: same soft-hit keep.
+  let boardSteam = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just Steam))
+      (gsSt, _) = useHammer (4, 4) (mkGs boardSteam)
+      cSt = getCell (gsBoard gsSt) (4, 4)
+  assertEqual "steam ice 2→1" (1 :: Int) (iceLayers cSt)
+  assertBool "on-cell Steam survives soft hammer" (hasSteam cSt)
+  -- Control: bare Fog (ice 0) hammer clears through Fog (direct-hit ≠ peel).
+  let boardBare = setCell stableBoard (4, 4) (mkFogGem C2 2)
+      (gsBare, _) = useHammer (4, 4) (mkGs boardBare)
+  assertBool "bare Fog direct-cleared" (not (hasFog (getCell (gsBoard gsBare) (4, 4))))
+  assertEqual "bare Fog hammer spent" (1 :: Int) (gsHammers gsBare)

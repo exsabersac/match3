@@ -173,7 +173,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (175 named cases)
+test/Spec.hs tasty (177 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.
@@ -181,7 +181,7 @@ Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame`
 ## Release status / 发布状态
 
 - Campaign: **38** levels (CH1–CH7 on map), batch-tested constructible / playable / décor-vs-goal
-- Tests: `stack test` **175** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles; shuffle preserves Line/Bomb/Rainbow; soft-lock blocks Line/Bomb expand; Line blast no double-peel Chain/Curtain/Stone/Safe; Line/Bomb/Hammer single-chip Chest/Honey/Cake; MagicHat immune to Line/Bomb/Hammer direct clear; soft-hit preserves on-cell Grass/Vine/Choco
+- Tests: `stack test` **177** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles; shuffle preserves Line/Bomb/Rainbow; soft-lock blocks Line/Bomb expand; Line blast no double-peel Chain/Curtain/Stone/Safe; Line/Bomb/Hammer single-chip Chest/Honey/Cake; MagicHat immune to Line/Bomb/Hammer direct clear; soft-hit preserves on-cell Grass/Vine/Choco; soft-hit no adj Fog/Chain/Freeze/Curtain/Maker/Bottle/Balloon; soft-hit keeps on-cell Fog/Steam
 - Stackage: **lts-21.25** / GHC **9.4.8**; binary: `stack build && stack exec match3-sdl`
 - itch checklist: see `ITCH.md`
 

@@ -17,7 +17,9 @@ module Match3.Board
   , runCascade
   , runCascadeAt
   , runCascadeScored
+  , runCascadeScoredWithUfos
   , runCascadeScoredFromSeeds
+  , runCascadeScoredFromSeedsWithUfos
   , randomBoard
   , randomStableBoard
   , randomPlayableBoard
@@ -43,6 +45,7 @@ import Match3.Countdown
 import Match3.Combos (isSpecialCombo)
 import Match3.Rainbow (isRainbow, isRainbowSwap)
 import Match3.Types
+import Match3.Ufo (Ufo, stepUfos)
 import System.Random (RandomGen, randomR)
 
 inBounds :: Pos -> Bool
@@ -296,18 +299,33 @@ runCascadeAt prefer g b = case stepCascadeAt prefer g b of
     in (b'', n + n', g'')
 
 -- | Cascade with per-wave combo scoring + color tallies from cleared cells.
--- Returns (board, cellsCleared, scoreGained, maxComboWave, colorCounts, gen).
+-- Returns (board, cellsCleared, scoreGained, maxComboWave, colorCounts, stones, gen).
 runCascadeScored
   :: RandomGen g
   => Maybe Pos
   -> g
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, g)
-runCascadeScored prefer g b = go prefer g b 0 0 0 (zip allColors (repeat 0)) 0
+runCascadeScored prefer g b =
+  let (b', cells, score, maxW, tallies, stones, _uAbs, _ufos, g') =
+        runCascadeScoredWithUfos prefer [] g b
+  in (b', cells, score, maxW, tallies, stones, g')
+
+-- | Like runCascadeScored but steps UFOs after each cascade wave (吸同色 + 移格).
+-- Returns (... stones, ufoAbsorbed, ufos', gen).
+runCascadeScoredWithUfos
+  :: RandomGen g
+  => Maybe Pos
+  -> [Ufo]
+  -> g
+  -> Board
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, [Ufo], g)
+runCascadeScoredWithUfos prefer ufos0 g b =
+  go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 ufos0
   where
-    go pref g' b' cells score maxW tallies stones =
+    go pref g' b' cells score maxW tallies stones uAbs ufos =
       case stepCascadeDetailed pref g' b' of
-        Nothing -> (b', cells, score, maxW, tallies, stones, g')
+        Nothing -> (b', cells, score, maxW, tallies, stones, uAbs, ufos, g')
         Just (b'', n, pos, stn, g'') ->
           let wave = maxW + 1
               score' = score + scoreForWave wave n
@@ -315,7 +333,23 @@ runCascadeScored prefer g b = go prefer g b 0 0 0 (zip allColors (repeat 0)) 0
                 [ (col, cnt + countColor b' pos col)
                 | (col, cnt) <- tallies
                 ]
-          in go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn)
+              -- UFO step at end of this cascade wave
+              (absorbed, ufos') = stepUfos b'' ufos
+          in if null absorbed
+               then go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn) uAbs ufos'
+               else
+                 let (mb, n2, pos2) = clearFromSeedsDetailed Nothing b'' absorbed
+                     stn2 = length [p | p <- pos2, isStone (getCell b'' p)]
+                     fallen = applyGravity mb
+                     (b3, g3) = refill g'' fallen
+                     score2 = score' + scoreForWave (wave + 1) n2
+                     tallies2 =
+                       [ (col, cnt + countColor b'' pos2 col)
+                       | (col, cnt) <- tallies'
+                       ]
+                     uAbs' = uAbs + length absorbed
+                     -- After UFO clear wave, continue; UFOs already moved this wave
+                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) uAbs' ufos'
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
 clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
@@ -347,8 +381,21 @@ runCascadeScoredFromSeeds
   -> g
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, g)
-runCascadeScoredFromSeeds prefer seeds g b
-  | null seeds = runCascadeScored prefer g b
+runCascadeScoredFromSeeds prefer seeds g b =
+  let (b', cells, score, maxW, tallies, stones, _u, _ufos, g') =
+        runCascadeScoredFromSeedsWithUfos prefer seeds [] g b
+  in (b', cells, score, maxW, tallies, stones, g')
+
+runCascadeScoredFromSeedsWithUfos
+  :: RandomGen g
+  => Maybe Pos
+  -> [Pos]
+  -> [Ufo]
+  -> g
+  -> Board
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, [Ufo], g)
+runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
+  | null seeds = runCascadeScoredWithUfos prefer ufos0 g b
   | otherwise =
       let (mb, n, pos) = clearFromSeedsDetailed prefer b seeds
           stones0 = length [p | p <- pos, isStone (getCell b p)]
@@ -356,13 +403,37 @@ runCascadeScoredFromSeeds prefer seeds g b
           (b1, g1) = refill g fallen
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColor b pos col) | col <- allColors]
-          (b2, cells2, score2, maxW2, tallies2, stones2, g2) =
-            runCascadeScored Nothing g1 b1
+          -- UFO step after the seed wave
+          (absorbed, ufos1) = stepUfos b1 ufos0
+          (b1', g1', nU, stonesU, talliesU, uAbs0, ufos2) =
+            if null absorbed
+              then (b1, g1, 0, 0, zip allColors (repeat 0), 0, ufos1)
+              else
+                let (mb2, n2, pos2) = clearFromSeedsDetailed Nothing b1 absorbed
+                    stn2 = length [p | p <- pos2, isStone (getCell b1 p)]
+                    fallen2 = applyGravity mb2
+                    (b2u, g2u) = refill g1 fallen2
+                    t2 = [(col, countColor b1 pos2 col) | col <- allColors]
+                in (b2u, g2u, n2, stn2, t2, length absorbed, ufos1)
+          (b2, cells2, score2, maxW2, tallies2, stones2, uAbs2, ufos3, g2) =
+            runCascadeScoredWithUfos Nothing ufos2 g1' b1'
           mergeT a b' =
             [ (col, lc a col + lc b' col) | col <- allColors ]
           lc xs col = maybe 0 id (lookup col xs)
-          maxW = if n > 0 && cells2 > 0 then maxW2 + 1 else (if n > 0 then 1 else maxW2)
-      in (b2, n + cells2, score0 + score2, maxW, mergeT tallies0 tallies2, stones0 + stones2, g2)
+          maxW =
+            let base = if n > 0 then 1 else 0
+                extra = (if nU > 0 then 1 else 0) + (if cells2 > 0 then maxW2 else 0)
+            in if base + extra == 0 then maxW2 else base + extra
+      in ( b2
+         , n + nU + cells2
+         , score0 + scoreForWave 2 nU + score2
+         , maxW
+         , mergeT (mergeT tallies0 talliesU) tallies2
+         , stones0 + stonesU + stones2
+         , uAbs0 + uAbs2
+         , ufos3
+         , g2
+         )
 
 randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard g0 =

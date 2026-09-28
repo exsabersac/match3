@@ -29,10 +29,11 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
 - **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
-- **Goals**: score / single collect / multi-color collect / clear stones
+- **Goals**: score / single collect / multi-color collect / clear stones / UFO absorb
+- **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 13 campaign levels
-- HUD meters, booster charges, particles, swap/fall tweens, pause help, CLEAR/WIN/LOSE overlays
+- Combo scoring, hint, undo, auto-shuffle, 16 campaign levels
+- HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
 
@@ -50,7 +51,10 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 10 | 藤袭 | 22 | Collect 18× RED | vines |
 | 11 | 传送 | 24 | Score 800 | grass + belt |
 | 12 | 轰炸 | 20 | Score 700 | countdown bombs |
-| 13 | 大师 | 18 | Score 1100 | stone+grass+vine+bomb+belts |
+| 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
+| 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
+| 15 | 压力 | 18 | Multi RED/GRN/BLU | grass |
+| 16 | 大师 | 16 | Score 1200 | stone+grass+vine+bomb+belts+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -71,7 +75,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine; dark fuse + turn pips = countdown bomb.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
 
 ## 对标开心消消乐 / Feature map
 
@@ -84,6 +88,7 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
 | 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
 | 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
+| 飞碟吸色 | ✅ `Ufo{cell,color}` + `stepUfo` 波末吸同色邻格并移格；`GoalUfo` |
 | 每日挑战 / 三星 | ✅ Daily + starRating |
 | 传送带 | ✅ `Belt` 步末循环移位，可触发新消 |
 | 道具（锤子等） | ✅ 锤子 / 任意交换：按键进模式 + 点选完整流 |
@@ -97,9 +102,9 @@ stack build && stack test && stack exec match3-sdl
 ## Layout
 
 ```
-src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass
+src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (49+ named cases)
+test/Spec.hs tasty (52+ named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

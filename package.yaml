@@ -43,6 +43,7 @@ library:
   - Match3.Conveyor
   - Match3.Boosters
   - Match3.Grass
+  - Match3.Ufo
 
 executables:
   match3-sdl:

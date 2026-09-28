@@ -37,6 +37,7 @@ library
       Match3.Conveyor
       Match3.Boosters
       Match3.Grass
+      Match3.Ufo
   other-modules:
       Paths_match3
   autogen-modules:

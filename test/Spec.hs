@@ -66,6 +66,9 @@ tests =
     , testCase "grass_cleared_by_match_above" grass_cleared_by_match_above
     , testCase "vine_spreads_after_move" vine_spreads_after_move
     , testCase "vine_blocked_by_clear" vine_blocked_by_clear
+    , testCase "ufo_collects_target_color" ufo_collects_target_color
+    , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
+    , testCase "ufo_goal_counts" ufo_goal_counts
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -852,25 +855,25 @@ goal_collect_multi_color = do
   case out of
     LevelClear _ _ ->
       assertBool "if cleared, both quotas met" $
-        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1)
+        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1)
     MoveApplied _ ->
       assertBool "multi goal not met with only C1" $
-        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0)
+        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0)
           || lookupCount (gsColorBag gs1) C2 >= 1
     _ -> pure ()
   -- Direct unit: goalMetEx logic
   assertBool "both met"
-    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0)
+    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0 0)
   assertBool "missing color"
-    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0))
+    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0 0))
 
 -- | GoalClearStone counts fully destroyed stones toward the goal.
 goal_clear_stone_counts :: Assertion
 goal_clear_stone_counts = do
   assertBool "0 stones unmet"
-    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0))
+    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0 0))
   assertBool "2 stones met"
-    (goalMetEx (GoalClearStone 2) 0 0 [] 2)
+    (goalMetEx (GoalClearStone 2) 0 0 [] 2 0)
   assertEqual "goal target" (8 :: Int) (goalTarget (GoalClearStone 8))
   let cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
       boardN =
@@ -1380,6 +1383,7 @@ lose_hint_by_goal = do
   assertBool "collect hint" (not (null (loseHint (GoalCollect C1 20))))
   assertBool "multi hint" (not (null (loseHint (GoalCollectMulti [(C1, 1)]))))
   assertBool "stone hint" (not (null (loseHint (GoalClearStone 8))))
+  assertBool "ufo hint" (not (null (loseHint (GoalUfo 10))))
 
 --------------------------------------------------------------------------------
 -- Grass / Vine overlays (开心消消乐草·藤蔓)
@@ -1502,3 +1506,101 @@ vine_blocked_by_clear = do
   assertBool
     "safe vine spreads"
     (any (\p -> hasVine (getCell afterClear p)) safeNeighbors)
+
+
+-- UFO / 飞碟 (absorb same-color neighbors; move each cascade wave)
+
+-- | UFO absorbs only orthogonally adjacent gems of its target color.
+ufo_collects_target_color :: Assertion
+ufo_collects_target_color = do
+  let b0 = fst (randomStableBoard (mkStdGen 77))
+      b1 = setCell b0 (3, 3) (mkGem C5)
+      b2 = setCell b1 (3, 4) (mkGem C1)
+      b3 = setCell b2 (3, 2) (mkGem C1)
+      b4 = setCell b3 (2, 3) (mkGem C2)
+      b5 = setCell b4 (4, 3) (mkGem C1)
+      ufo = mkUfo (3, 3) C1
+      targets = ufoAbsorbTargets b5 ufo
+      (absorbed, ufo') = stepUfo b5 ufo
+  assertBool "absorbs left" ((3, 2) `elem` targets)
+  assertBool "absorbs right" ((3, 4) `elem` targets)
+  assertBool "absorbs down" ((4, 3) `elem` targets)
+  assertBool "ignores wrong color up" ((2, 3) `notElem` targets)
+  assertEqual "step absorbs same set" (sort targets) (sort absorbed)
+  assertEqual "3 targets" (3 :: Int) (length targets)
+  assertEqual "moved onto first absorbed" (head (sort absorbed)) (ufoCell ufo')
+  assertEqual "color preserved" C1 (ufoColor ufo')
+
+-- | Each cascade wave relocates the UFO.
+ufo_moves_each_cascade :: Assertion
+ufo_moves_each_cascade = do
+  let b0 = fst (randomPlayableBoard (mkStdGen 88))
+      u0 = mkUfo (0, 0) C1
+      paint b ps col = foldl (\bd p -> setCell bd p (mkGem col)) b ps
+      b1 = paint b0 [(0, 0), (0, 1), (1, 0)] C2
+      (abs1, u1) = stepUfo b1 u0
+      (_, u2) = stepUfo b1 u1
+  assertEqual "no absorb when no C1 neighbor" ([] :: [Pos]) abs1
+  assertBool "first step moves" (ufoCell u1 /= ufoCell u0)
+  assertBool "second step moves again" (ufoCell u2 /= ufoCell u1)
+  let cfg = GameConfig 20 (GoalUfo 99)
+      gs0 = (newGameAtLevel 12 cfg 91) { gsBoard = b1, gsUfos = [u0], gsUfoCollected = 0 }
+  case findHint (gsBoard gs0) of
+    Nothing -> assertFailure "board should be playable"
+    Just (p1, p2) -> do
+      let (gs1, out) = trySwap p1 p2 gs0
+      assertBool "move applied or terminal" $ case out of
+        MoveApplied _ -> True
+        LevelClear _ _ -> True
+        Won _ -> True
+        Lost _ -> True
+        _ -> False
+      assertBool "UFO relocated after cascade" $
+        case gsUfos gs1 of
+          (u : _) -> ufoCell u /= ufoCell u0
+          [] -> False
+
+-- | GoalUfo progress increments with UFO absorbs.
+ufo_goal_counts :: Assertion
+ufo_goal_counts = do
+  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0))
+  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2)
+  assertEqual "target" (5 :: Int) (goalTarget (GoalUfo 5))
+  let b0 = fst (randomStableBoard (mkStdGen 101))
+      b1 = setCell b0 (3, 3) (mkGem C5)
+      b2 = setCell b1 (3, 2) (mkGem C1)
+      b3 = setCell b2 (3, 4) (mkGem C1)
+      b4 = setCell b3 (4, 3) (mkGem C1)
+      ufo = mkUfo (3, 3) C1
+      targets = ufoAbsorbTargets b4 ufo
+      n = length targets
+  assertBool "has absorb targets" (n >= 2)
+  let cfg = GameConfig 15 (GoalUfo n)
+      gs0 =
+        (newGameAtLevel 12 cfg 55)
+          { gsBoard = b4
+          , gsUfos = [ufo]
+          , gsUfoCollected = 0
+          , gsCollected = 0
+          }
+      (_, ufo') = stepUfo b4 ufo
+      gsSim =
+        gs0
+          { gsUfoCollected = n
+          , gsCollected = n
+          , gsUfos = [ufo']
+          }
+  assertBool
+    "simulated goal met"
+    (goalMetEx
+       (gsGoal gsSim)
+       (gsScore gsSim)
+       (gsCollected gsSim)
+       (gsColorBag gsSim)
+       (gsStonesCleared gsSim)
+       (gsUfoCollected gsSim))
+  -- Level table includes GoalUfo stages
+  assertBool
+    "campaign has GoalUfo"
+    (any (\g -> case g of GoalUfo _ -> True; _ -> False) (map lvlGoal allLevels))

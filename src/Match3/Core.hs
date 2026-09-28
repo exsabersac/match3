@@ -16,6 +16,12 @@ module Match3.Core
   , clearOverlaysOn
   , vinePositions
   , spreadVines
+  , Ufo(..)
+  , mkUfo
+  , ufoAbsorbTargets
+  , moveUfo
+  , stepUfo
+  , stepUfos
   , mkStone
   , mkStoneLayers
   , stoneLayers
@@ -122,6 +128,14 @@ import Match3.Grass
   ( clearOverlaysOn
   , vinePositions
   , spreadVines
+  )
+import Match3.Ufo
+  ( Ufo(..)
+  , mkUfo
+  , ufoAbsorbTargets
+  , moveUfo
+  , stepUfo
+  , stepUfos
   )
 import Match3.Game
 import Match3.Obstacles

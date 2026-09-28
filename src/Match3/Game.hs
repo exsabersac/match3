@@ -26,14 +26,15 @@ import Match3.Board
   , inBounds
   , adjacent
   , randomPlayableBoard
-  , runCascadeScored
-  , runCascadeScoredFromSeeds
+  , runCascadeScoredWithUfos
+  , runCascadeScoredFromSeedsWithUfos
   , resolveCountdowns
   , shufflePlayable
   , swapCells
   , setCell
   , getCell
   )
+import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Obstacles (swapBlockedByStone)
 import Match3.Conveyor (Belt, shiftBelts)
 import Match3.Grass (spreadVines)
@@ -61,6 +62,8 @@ data GameState = GameState
   , gsBelts         :: [Belt] -- conveyor paths (开心消消乐传送带)
   , gsHammers       :: Int    -- hammer booster charges
   , gsFreeSwaps     :: Int    -- free-swap booster charges (any two cells)
+  , gsUfos          :: [Ufo]  -- flying saucers (飞碟)
+  , gsUfoCollected  :: Int    -- gems absorbed by UFOs
   } deriving (Show)
 
 instance Eq GameState where
@@ -77,6 +80,8 @@ instance Eq GameState where
       && gsBelts a == gsBelts b
       && gsHammers a == gsHammers b
       && gsFreeSwaps a == gsFreeSwaps b
+      && gsUfos a == gsUfos b
+      && gsUfoCollected a == gsUfoCollected b
 
 snapshot :: GameState -> GameState
 snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
@@ -88,10 +93,11 @@ newGame = newGameAtLevel 0
 levelBelts :: Int -> [Belt]
 levelBelts 7 = [[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (2, 5), (2, 4), (2, 3), (2, 2), (2, 1)]]
 levelBelts 10 = [[(3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (3, 7)]]
-levelBelts 12 =
+levelBelts 15 =
   [ [(0, 2), (0, 3), (0, 4), (0, 5), (1, 5), (1, 4), (1, 3), (1, 2)]
   , [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)]
   ]
+levelBelts 13 = [[(4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7)]]
 levelBelts _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
@@ -113,7 +119,8 @@ decorateLevel 11 b =
     )
     b
     [(2, 2), (2, 5), (5, 3), (6, 6)]
-decorateLevel 12 b =
+decorateLevel 14 b = overlayAt b Grass [(2, 2), (3, 5), (5, 3)]
+decorateLevel 15 b =
   let b1 =
         foldl (\board p -> setCell board p mkStone)
               b
@@ -129,6 +136,13 @@ decorateLevel 12 b =
        b3
        [(3, 3)]
 decorateLevel _ b = b
+
+-- | UFO placements for campaign levels.
+levelUfos :: Int -> [Ufo]
+levelUfos 12 = [mkUfo (2, 3) C1]
+levelUfos 13 = [mkUfo (1, 2) C1, mkUfo (1, 5) C3]
+levelUfos 15 = [mkUfo (0, 4) C2]
+levelUfos _ = []
 
 -- | Stamp Grass/Vine onto existing gems (keep color/kind/ice).
 overlayAt :: Board -> CellOverlay -> [Pos] -> Board
@@ -162,6 +176,8 @@ newGameAtLevel li cfg seed =
        , gsBelts = levelBelts li
        , gsHammers = 2
        , gsFreeSwaps = 1
+       , gsUfos = levelUfos li
+       , gsUfoCollected = 0
        }
 
 restart :: GameConfig -> Int -> GameState
@@ -186,6 +202,7 @@ goalSatisfied gs =
     (gsCollected gs)
     (gsColorBag gs)
     (gsStonesCleared gs)
+    (gsUfoCollected gs)
 
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
@@ -234,25 +251,26 @@ trySwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (board0', cleared0, gained0, combo0, tallies0, stones0, g0') =
+             let ufos0 = gsUfos gs
+                 (board0', cleared0, gained0, combo0, tallies0, stones0, uAbs0, ufos1, g0') =
                    if rainbow
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
-                       in runCascadeScoredFromSeeds (Just p2) seeds (gsGen gs) swapped
+                       in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsGen gs) swapped
                      else if specialCombo
                        then
                          let seeds = comboClearSeeds swapped p1 p2
-                         in runCascadeScoredFromSeeds (Just p2) seeds (gsGen gs) swapped
-                       else runCascadeScored (Just p2) (gsGen gs) swapped
+                         in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsGen gs) swapped
+                       else runCascadeScoredWithUfos (Just p2) ufos0 (gsGen gs) swapped
                  -- Countdown bombs: tick after move; zeros explode 3×3
                  (boardCd, cleared1, gained1, combo1, tallies1, stones1, g1') =
                    resolveCountdowns g0' board0'
                  -- Conveyor belts: shift then cascade if new matches
                  boardBelt = shiftBelts boardCd (gsBelts gs)
-                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, g') =
+                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, uAbs2, ufos2, g') =
                    if null (gsBelts gs)
-                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, g1')
-                     else runCascadeScored Nothing g1' boardBelt
+                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, ufos1, g1')
+                     else runCascadeScoredWithUfos Nothing ufos1 g1' boardBelt
                  -- Vine spread at end of move (cleared vines already stripped during cascade)
                  board1 = spreadVines boardBeltCas
                  gained = gained0 + gained1 + gained2
@@ -261,12 +279,15 @@ trySwap p1 p2 gs
                    in max c1 (if cleared2 > 0 then c1 + combo2 else c1)
                  tallies = mergeTallies (mergeTallies tallies0 tallies1) tallies2
                  stonesHit = stones0 + stones1 + stones2
+                 uAbs = uAbs0 + uAbs2
+                 ufoCollected' = gsUfoCollected gs + uAbs
                  _cleared = cleared0 + cleared1 + cleared2
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalCollectMulti _ -> 0
                    GoalClearStone _ -> 0
                    GoalScore _ -> 0
+                   GoalUfo _ -> uAbs
                  -- For multi-collect, primary meter = sum of progress toward reqs
                  collected' = case gsGoal gs of
                    GoalCollect _ _ -> gsCollected gs + collectDelta
@@ -275,6 +296,7 @@ trySwap p1 p2 gs
                      in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
                    GoalClearStone _ -> gsStonesCleared gs + stonesHit
                    GoalScore _ -> gsCollected gs
+                   GoalUfo _ -> ufoCollected'
                  score' = gsScore gs + gained
                  moves' = gsMoves gs - 1
                  hist = take 20 (snapshot gs : gsHistory gs)
@@ -291,6 +313,8 @@ trySwap p1 p2 gs
                      , gsHint = Nothing
                      , gsCombo = combo
                      , gsShuffled = False
+                     , gsUfos = ufos2
+                     , gsUfoCollected = ufoCollected'
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -335,13 +359,15 @@ useHammer p gs
   | not (inBounds p) = (gs, InvalidSwap)
   | otherwise =
       let seeds = [p]
-          (boardH, _n, gained, combo, tallies, stonesHit, g') =
-            runCascadeScoredFromSeeds Nothing seeds (gsGen gs) (gsBoard gs)
+          (boardH, _n, gained, combo, tallies, stonesHit, uAbs, ufos', g') =
+            runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsGen gs) (gsBoard gs)
           board1 = spreadVines boardH
           score' = gsScore gs + gained
           hist = take 20 (snapshot gs : gsHistory gs)
+          ufoCollected' = gsUfoCollected gs + uAbs
           collectDelta = case gsGoal gs of
             GoalCollect col _ -> lookupColor tallies col
+            GoalUfo _ -> uAbs
             _ -> 0
           collected' = case gsGoal gs of
             GoalCollect _ _ -> gsCollected gs + collectDelta
@@ -350,6 +376,7 @@ useHammer p gs
               in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
             GoalClearStone _ -> gsStonesCleared gs + stonesHit
             GoalScore _ -> gsCollected gs
+            GoalUfo _ -> ufoCollected'
           gs' =
             gs
               { gsBoard = board1
@@ -363,6 +390,8 @@ useHammer p gs
               , gsCombo = combo
               , gsShuffled = False
               , gsHammers = gsHammers gs - 1
+              , gsUfos = ufos'
+              , gsUfoCollected = ufoCollected'
               }
           outcome = decideOutcome gs' gained
           gs'' = case outcome of
@@ -392,17 +421,19 @@ useFreeSwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (boardF, _c, gained, combo, tallies, stonesHit, g') =
+             let (boardF, _c, gained, combo, tallies, stonesHit, uAbs, ufos', g') =
                    if rainbow
-                     then runCascadeScoredFromSeeds (Just p2) (rainbowClearSeeds swapped p1 p2) (gsGen gs) swapped
+                     then runCascadeScoredFromSeedsWithUfos (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) (gsGen gs) swapped
                      else if specialCombo
-                       then runCascadeScoredFromSeeds (Just p2) (comboClearSeeds swapped p1 p2) (gsGen gs) swapped
-                       else runCascadeScored (Just p2) (gsGen gs) swapped
+                       then runCascadeScoredFromSeedsWithUfos (Just p2) (comboClearSeeds swapped p1 p2) (gsUfos gs) (gsGen gs) swapped
+                       else runCascadeScoredWithUfos (Just p2) (gsUfos gs) (gsGen gs) swapped
                  board1 = spreadVines boardF
                  score' = gsScore gs + gained
                  hist = take 20 (snapshot gs : gsHistory gs)
+                 ufoCollected' = gsUfoCollected gs + uAbs
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
+                   GoalUfo _ -> uAbs
                    _ -> 0
                  collected' = case gsGoal gs of
                    GoalCollect _ _ -> gsCollected gs + collectDelta
@@ -411,6 +442,7 @@ useFreeSwap p1 p2 gs
                      in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
                    GoalClearStone _ -> gsStonesCleared gs + stonesHit
                    GoalScore _ -> gsCollected gs
+                   GoalUfo _ -> ufoCollected'
                  gs' =
                    gs
                      { gsBoard = board1
@@ -424,6 +456,8 @@ useFreeSwap p1 p2 gs
                      , gsCombo = combo
                      , gsShuffled = False
                      , gsFreeSwaps = gsFreeSwaps gs - 1
+                     , gsUfos = ufos'
+                     , gsUfoCollected = ufoCollected'
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -443,3 +477,4 @@ loseHint (GoalCollect _ n) = "优先收集该色宝石，目标 " ++ show n ++ "
 loseHint (GoalCollectMulti reqs) =
   "兼顾多色收集：" ++ show (length reqs) ++ " 种配额"
 loseHint (GoalClearStone n) = "用邻消或特效砸箱子，目标 " ++ show n ++ " 个"
+loseHint (GoalUfo n) = "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"

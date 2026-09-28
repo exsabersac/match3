@@ -234,6 +234,8 @@ updateTitle window app = do
           "multi " ++ show (gsCollected gs) ++ "/" ++ show (sum [n | (_, n) <- reqs])
         GoalClearStone n ->
           "stones=" ++ show (gsStonesCleared gs) ++ "/" ++ show n
+        GoalUfo n ->
+          "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
       title =
         T.pack $
           "L"
@@ -736,6 +738,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalUfo n ->
+                                    " [ufo "
+                                      <> T.pack (show (gsUfoCollected gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   _ -> ""
                                 msg = case out of
                                   InvalidSwap -> "Need 4-neighbor adjacent"
@@ -1032,6 +1040,7 @@ drawHud ren app = do
         GoalScore _ -> V4 100 220 140 255
         GoalCollectMulti _ -> V4 220 180 100 255
         GoalClearStone _ -> V4 160 160 170 255
+        GoalUfo _ -> V4 180 120 255 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
   drawMeter ren 10 36 prog targ meterCol
@@ -1044,6 +1053,11 @@ drawHud ren app = do
   case gsGoal gs of
     GoalCollectMulti _ -> pure ()
     GoalClearStone _ -> pure ()
+    GoalUfo _ -> do
+      rendererDrawColor ren $= V4 180 120 255 255
+      fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
+      rendererDrawColor ren $= V4 220 200 255 255
+      fillRect ren (Just (Rectangle (P (V2 204 40)) (V2 12 6)))
     GoalCollect col _ -> do
       let (r, g, b) = colorRGB col
       rendererDrawColor ren $= V4 r g b 255
@@ -1359,6 +1373,60 @@ drawStatic ren app board yOff = do
     [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
   -- Conveyor belt path markers (teal chevrons)
   mapM_ (drawBelt ren yOff) (gsBelts (appGame app))
+  -- Vine spread preview: pulse on bare gems next to vines
+  drawVineSpreadHints ren yOff pulse (gsBoard (appGame app))
+  -- UFO overlays
+  mapM_ (drawUfo ren yOff pulse) (gsUfos (appGame app))
+
+-- | Pulse outline on cells a vine would spread onto next move.
+drawVineSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
+drawVineSpreadHints ren yOff pulse board = do
+  let sources =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , hasVine (getCell board (r, c))
+        ]
+      neigh (r, c) =
+        filter
+          (\(rr, cc) -> rr >= 0 && rr < boardSize && cc >= 0 && cc < boardSize)
+          [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+      targets =
+        [ q
+        | p <- sources
+        , q <- neigh p
+        , case getCell board q of
+            Gem _ _ _ Nothing -> True
+            _ -> False
+        ]
+      alpha = fromIntegral (100 + (pulse `mod` 30) * 4) :: Word8
+  rendererDrawColor ren $= V4 40 200 80 alpha
+  mapM_
+    ( \pos -> do
+        let (x0, y0) = cellOrigin pos
+            y = y0 + yOff
+        drawRect ren (Just (Rectangle (P (V2 (x0 + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
+    )
+    targets
+
+-- | Draw flying saucer overlay at its cell (飞碟).
+drawUfo :: Renderer -> CInt -> Int -> Ufo -> IO ()
+drawUfo ren yOff pulse (Ufo cell col) = do
+  let (x0, y0) = cellOrigin cell
+      y = y0 + yOff
+      (cr, cg, cb) = colorRGB col
+      bob = fromIntegral ((pulse `mod` 20) - 10) :: CInt
+  -- dome
+  rendererDrawColor ren $= V4 220 220 240 230
+  fillRect ren (Just (Rectangle (P (V2 (x0 + 14) (y + 10 + bob))) (V2 (cellPx - 28) 12)))
+  -- saucer body tinted by target color
+  rendererDrawColor ren $= V4 cr cg cb 240
+  fillRect ren (Just (Rectangle (P (V2 (x0 + 8) (y + 20 + bob))) (V2 (cellPx - 16) 10)))
+  rendererDrawColor ren $= V4 255 255 255 200
+  fillRect ren (Just (Rectangle (P (V2 (x0 + 18) (y + 22 + bob))) (V2 (cellPx - 36) 4)))
+  -- beam hint downward
+  rendererDrawColor ren $= V4 cr cg cb 100
+  drawLine ren (P (V2 (x0 + cellPx `div` 2) (y + 30 + bob))) (P (V2 (x0 + cellPx `div` 2) (y + cellPx - 6)))
 
 drawBelt :: Renderer -> CInt -> [Pos] -> IO ()
 drawBelt _ _ [] = pure ()

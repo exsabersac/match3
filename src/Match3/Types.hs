@@ -189,6 +189,7 @@ data LevelGoal
   | GoalCollect Color Int
   | GoalCollectMulti [(Color, Int)]  -- all color quotas must be met
   | GoalClearStone Int                 -- fully destroy N stone blockers
+  | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   deriving (Eq, Show, Generic)
 
 -- | Whether the goal is satisfied given current score / primary collected count.
@@ -198,14 +199,16 @@ goalMet (GoalScore t) score _ = score >= t
 goalMet (GoalCollect _ n) _ collected = collected >= n
 goalMet (GoalCollectMulti _) _ _ = False  -- use goalMetEx
 goalMet (GoalClearStone _) _ _ = False
+goalMet (GoalUfo _) _ _ = False
 
--- | Full goal check with color bag + stones-cleared counters.
-goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Bool
-goalMetEx (GoalScore t) score _ _ _ = score >= t
-goalMetEx (GoalCollect _ n) _ collected _ _ = collected >= n
-goalMetEx (GoalCollectMulti reqs) _ _ bag _ =
+-- | Full goal check with color bag + stones-cleared + UFO absorb counters.
+goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Bool
+goalMetEx (GoalScore t) score _ _ _ _ = score >= t
+goalMetEx (GoalCollect _ n) _ collected _ _ _ = collected >= n
+goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ =
   all (\(col, n) -> lookupCount bag col >= n) reqs
-goalMetEx (GoalClearStone n) _ _ _ stones = stones >= n
+goalMetEx (GoalClearStone n) _ _ _ stones _ = stones >= n
+goalMetEx (GoalUfo n) _ _ _ _ ufos = ufos >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -216,13 +219,15 @@ goalProgress (GoalScore _) score _ = score
 goalProgress (GoalCollect _ _) _ collected = collected
 goalProgress (GoalCollectMulti _) _ collected = collected
 goalProgress (GoalClearStone _) _ collected = collected
+goalProgress (GoalUfo _) _ collected = collected
 
-goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int
-goalProgressEx (GoalScore _) score _ _ _ = score
-goalProgressEx (GoalCollect _ _) _ collected _ _ = collected
-goalProgressEx (GoalCollectMulti reqs) _ _ bag _ =
+goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int
+goalProgressEx (GoalScore _) score _ _ _ _ = score
+goalProgressEx (GoalCollect _ _) _ collected _ _ _ = collected
+goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ =
   sum [min n (lookupCount bag c) | (c, n) <- reqs]
-goalProgressEx (GoalClearStone _) _ _ _ stones = stones
+goalProgressEx (GoalClearStone _) _ _ _ stones _ = stones
+goalProgressEx (GoalUfo _) _ _ _ _ ufos = ufos
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -230,6 +235,7 @@ goalTarget (GoalScore t) = t
 goalTarget (GoalCollect _ n) = n
 goalTarget (GoalCollectMulti reqs) = sum [n | (_, n) <- reqs]
 goalTarget (GoalClearStone n) = n
+goalTarget (GoalUfo n) = n
 
 data GameConfig = GameConfig
   { cfgMoves :: MovesLeft
@@ -246,22 +252,25 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / later levels mix hazards in board décor.
+-- | Mixed campaign: score / collect / stone / UFO / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
-  [ Level 0 "入门"   30 (GoalScore 300)
-  , Level 1 "采红"   30 (GoalCollect C1 20)
-  , Level 2 "热身"   26 (GoalScore 500)
-  , Level 3 "采蓝"   26 (GoalCollect C3 22)
-  , Level 4 "进阶"   22 (GoalScore 700)
-  , Level 5 "采绿"   24 (GoalCollect C2 26)
-  , Level 6 "双采"   28 (GoalCollectMulti [(C1, 12), (C3, 12)])
-  , Level 7 "碎石"   26 (GoalClearStone 8)
-  , Level 8 "草场"   24 (GoalScore 600)
-  , Level 9 "藤袭"   22 (GoalCollect C1 18)
-  , Level 10 "传送"  24 (GoalScore 800)
-  , Level 11 "轰炸"  20 (GoalScore 700)
-  , Level 12 "大师"  18 (GoalScore 1100)
+  [ Level 0  "入门"   30 (GoalScore 300)
+  , Level 1  "采红"   30 (GoalCollect C1 20)
+  , Level 2  "热身"   26 (GoalScore 500)
+  , Level 3  "采蓝"   26 (GoalCollect C3 22)
+  , Level 4  "进阶"   22 (GoalScore 700)
+  , Level 5  "采绿"   24 (GoalCollect C2 26)
+  , Level 6  "双采"   28 (GoalCollectMulti [(C1, 12), (C3, 12)])
+  , Level 7  "碎石"   26 (GoalClearStone 8)
+  , Level 8  "草场"   24 (GoalScore 600)
+  , Level 9  "藤袭"   22 (GoalCollect C1 18)
+  , Level 10 "传送"   24 (GoalScore 800)
+  , Level 11 "轰炸"   20 (GoalScore 700)
+  , Level 12 "飞碟"   24 (GoalUfo 10)
+  , Level 13 "碟猎"   20 (GoalUfo 14)
+  , Level 14 "压力"   18 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
+  , Level 15 "大师"   16 (GoalScore 1200)
   ]
 
 levelConfig :: Level -> GameConfig

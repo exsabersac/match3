@@ -17,12 +17,13 @@ dailySeed year month day =
 dailyConfig :: Int -> Int -> Int -> GameConfig
 dailyConfig year month day =
   let s = dailySeed year month day
-      flavor = s `mod` 4
+      flavor = s `mod` 5
   in case flavor of
        0 -> GameConfig 28 (GoalScore 600)
        1 -> GameConfig 28 (GoalCollect C1 18)
        2 -> GameConfig 28 (GoalCollectMulti [(C2, 10), (C4, 10)])
-       _ -> GameConfig 26 (GoalClearStone 6)
+       3 -> GameConfig 26 (GoalClearStone 6)
+       _ -> GameConfig 26 (GoalUfo 8)
 
 dailyLevel :: Int -> Int -> Int -> Level
 dailyLevel year month day =

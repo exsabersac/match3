@@ -206,6 +206,7 @@ module Match3.Core
   , chargeAdjacentMakers
   , applyPortalTeleports
   , settleBoardPortals
+  , expandSpecials
   , isRainbow
   , isRainbowSwap
   , rainbowClearSeeds

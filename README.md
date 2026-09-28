@@ -9,7 +9,7 @@ Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
 sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
-stack test                            # 147 green — optional but recommended
+stack test                            # 155 green — optional but recommended
 stack build && stack exec match3-sdl
 ```
 
@@ -22,8 +22,8 @@ Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stac
 ## Features / 功能
 
 - Adjacent swaps (click or drag); horizontal/vertical ≥3 clear
-- **Specials**: 4-match → Line; 5-match → Rainbow (clear all of a color); Bomb exists for combos
-- **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
+- **Specials**: 4-match → Line; 5-match → Rainbow (swap clears partner color only; own-color expand is a no-op); Bomb exists for combos
+- **Line×Bomb (3×3 cross), Rainbow×Line / Rainbow×Bomb (partner color + Line/Bomb expand), Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
 - **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent clears chip; `GoalChest`
 - **Honey jars** (`Honey n` / 蜂蜜罐): amber jars; adjacent clears chip; `GoalHoney`
@@ -52,7 +52,7 @@ Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stac
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
 - **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / pop balloons / collect cookies / clear cakes / open safes / UFO absorb / cover carpet
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
-- **Daily challenge** (`D`): date-seeded board + **10 rotating goals** (score/collect/multi/stone/honey/UFO/chest/cake/safe/balloon); obstacle goals auto-seed décor when level index has none; **star rating** on clear (3★ ≥40% moves left)
+- **Daily challenge** (`D`): date-seeded board + **10 rotating goals** (score/collect/multi/stone/honey/UFO/chest/cake/safe/balloon); obstacle goals auto-seed décor when level index has none; **star rating** on clear (3★ ≥40% of **printed** level moves left; carry does not inflate the denominator)
 - Combo scoring, hint, undo, auto-shuffle, **38 campaign levels** with map **chapter separators** (CH1–CH7)
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 

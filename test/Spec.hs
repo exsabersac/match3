@@ -3,7 +3,7 @@ module Main (main) where
 
 import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
-import Match3.Board (applyGravity, clearMatches, refill)
+import Match3.Board (applyGravity, clearMatches, expandSpecials, refill)
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -164,6 +164,14 @@ tests =
     , testCase "daily_obstacle_goal_spawns_decor" daily_obstacle_goal_spawns_decor
     , testCase "undo_restores_carry_moves" undo_restores_carry_moves
     , testCase "shuffle_preserves_goal_progress" shuffle_preserves_goal_progress
+    , testCase "rainbow_expand_noop" rainbow_expand_noop
+    , testCase "rainbow_swap_partner_not_own_color" rainbow_swap_partner_not_own_color
+    , testCase "rainbow_x_bomb_blast_expands" rainbow_x_bomb_blast_expands
+    , testCase "map_select_no_carry_moves" map_select_no_carry_moves
+    , testCase "star_rating_vs_carry_base" star_rating_vs_carry_base
+    , testCase "curtain_allows_swap_blocks_match" curtain_allows_swap_blocks_match
+    , testCase "hammer_clears_grass_vine" hammer_clears_grass_vine
+    , testCase "freeze_blocks_freeswap_and_swap" freeze_blocks_freeswap_and_swap
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -1060,10 +1068,14 @@ star_rating_tiers :: Assertion
 star_rating_tiers = do
   assertEqual "3 star plenty" (3 :: Int) (starRating 30 20)
   assertEqual "3 star boundary 40%" (3 :: Int) (starRating 30 12)
+  assertEqual "2 star just below 40%" (2 :: Int) (starRating 30 11)  -- 11/30 < 0.4
   assertEqual "2 star" (2 :: Int) (starRating 30 8)
   assertEqual "2 star boundary ~15%" (2 :: Int) (starRating 30 5)
+  assertEqual "1 star just below 15%" (1 :: Int) (starRating 30 4)  -- 4/30 < 0.15
   assertEqual "1 star" (1 :: Int) (starRating 30 2)
   assertEqual "zero left" (1 :: Int) (starRating 30 0)
+  assertEqual "zero start" (1 :: Int) (starRating 0 0)
+  assertEqual "single move clutch 3★" (3 :: Int) (starRating 1 1)
 
 -- | Rainbow × Line clears all gems of the line's color.
 special_combo_rainbow_line :: Assertion
@@ -4498,3 +4510,217 @@ shuffle_preserves_goal_progress = do
   assertEqual "collected kept" (3 :: Int) (gsCollected gs1)
   assertEqual "score kept" (120 :: Int) (gsScore gs1)
   assertEqual "goal kept" (GoalClearStone 8) (gsGoal gs1)
+
+
+--------------------------------------------------------------------------------
+-- Stability cruise: Rainbow×special / carry·stars / curtain / grass·vine / Freeze
+--------------------------------------------------------------------------------
+
+-- | Rainbow must not expandSpecials into its own spawn color (activation = rainbowClearSeeds).
+rainbow_expand_noop :: Assertion
+rainbow_expand_noop = do
+  let board = setCell stableBoard (3, 3) (Gem C1 Rainbow 0 Nothing)
+      -- Sprinkle other C1 so a buggy expand would pick them up
+      board' =
+        foldl
+          (\b p -> setCell b p (mkGem C1))
+          board
+          [(0, 0), (0, 2), (2, 0), (7, 7)]
+      expanded = expandSpecials board' [(3, 3)]
+  assertEqual "rainbow expand is identity" [(3, 3)] expanded
+
+-- | Rainbow×Normal: seeds + expandSpecials stay on partner color (+ rainbow cell), not own color.
+rainbow_swap_partner_not_own_color :: Assertion
+rainbow_swap_partner_not_own_color = do
+  let board0 =
+        foldl
+          (\b p -> setCell b p (mkGem C1))
+          stableBoard
+          [(0, 0), (0, 2), (2, 0), (7, 6)]
+      board =
+        setCell
+          (setCell board0 (4, 4) (Gem C1 Rainbow 0 Nothing))
+          (4, 5)
+          (mkGem C2)
+      swapped = swapCells board (4, 4) (4, 5)
+      seeds = rainbowClearSeeds swapped (4, 4) (4, 5)
+      expanded = expandSpecials swapped seeds
+      ownExtras =
+        [ p
+        | p <- expanded
+        , p `notElem` seeds
+        , case getCell swapped p of
+            Gem C1 _ _ _ -> True
+            _ -> False
+        ]
+  assertBool "seeds include rainbow" $
+    any (\p -> isRainbow (getCell swapped p)) seeds
+  assertEqual "no own-color extras from expand" ([] :: [Pos]) ownExtras
+  assertEqual "expand == seeds (no rainbow self-blast)" (length seeds) (length expanded)
+  -- Live swap still applies and consumes rainbow
+  let gs0 =
+        (newGame defaultConfig 3)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 8
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, out) = trySwap (4, 4) (4, 5) gs0
+  case out of
+    NoMatch -> assertFailure "rainbow swap must apply"
+    InvalidSwap -> assertFailure "rainbow swap must be valid"
+    _ -> pure ()
+  assertBool "rainbow gone" $
+    not (isRainbow (getCell (gsBoard gs1) (4, 4)))
+      && not (isRainbow (getCell (gsBoard gs1) (4, 5)))
+
+-- | Rainbow×Bomb: partner-color clear seeds expand the Bomb into a 3×3 blast.
+rainbow_x_bomb_blast_expands :: Assertion
+rainbow_x_bomb_blast_expands = do
+  let board =
+        setCell
+          (setCell stableBoard (3, 3) (Gem C5 Rainbow 0 Nothing))
+          (3, 4)
+          (Gem C2 Bomb 0 Nothing)
+  assertBool "rainbow swap" (isRainbowSwap board (3, 3) (3, 4))
+  assertBool "not a listed specialCombo (goes rainbow path)" $
+    not (isSpecialCombo board (3, 3) (3, 4))
+  let swapped = swapCells board (3, 3) (3, 4)
+      seeds = rainbowClearSeeds swapped (3, 3) (3, 4)
+      expanded = expandSpecials swapped seeds
+      -- After swap Bomb sits at (3,3); its 3×3 should appear in expanded
+      bomb3x3 =
+        [ (r, c)
+        | r <- [2 .. 4]
+        , c <- [2 .. 4]
+        ]
+  assertBool "bomb in seeds" ((3, 3) `elem` seeds)
+  assertBool ("3x3 subset of expanded, got " ++ show (length expanded)) $
+    all (`elem` expanded) bomb3x3
+  assertBool "expanded beyond color seeds" (length expanded > length seeds)
+  let gs0 =
+        (newGame defaultConfig 4)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 6
+          , gsBelts = []
+          , gsUfos = []
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  case out of
+    NoMatch -> assertFailure "must apply"
+    InvalidSwap -> assertFailure "must be valid"
+    MoveApplied g -> assertBool ("scored " ++ show g) (g >= 40)
+    _ -> pure ()
+  assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
+
+-- | Map / restart jump uses printed moves only (no leftover carry bank).
+map_select_no_carry_moves :: Assertion
+map_select_no_carry_moves = do
+  let gsPrev =
+        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 1)
+          { gsOver = Just (LevelClear 100 1)
+          , gsMoves = 9
+          }
+      carried = nextLevel gsPrev 2
+      base1 = lvlMoves (allLevels !! 1)
+  assertEqual "carry path adds bonus" (base1 + 3) (gsMoves carried)
+  -- Map-like jump / restart: fresh allotment
+  let gsMap = newGameAtLevel 1 (levelConfig (allLevels !! 1)) 3
+      gsRestart = restartLevel gsPrev { gsLevel = 1, gsOver = Nothing } 4
+  assertEqual "map select no carry" base1 (gsMoves gsMap)
+  assertEqual "restart no carry" base1 (gsMoves gsRestart)
+
+-- | Star tiers use printed base moves; carry must not tighten the denominator.
+star_rating_vs_carry_base :: Assertion
+star_rating_vs_carry_base = do
+  let base = 20 :: Int
+      carry = 3 :: Int
+      left = 8 :: Int
+  assertEqual "3★ at 40% of base" (3 :: Int) (starRating base left)
+  assertEqual "inflated start would wrongly drop to 2★" (2 :: Int) (starRating (base + carry) left)
+  -- After nextLevel, gsMoves is printed+carry; UI must rate vs printed (Main advanceOrMsg).
+  let gsPrev =
+        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 1)
+          { gsOver = Just (LevelClear 50 1)
+          , gsMoves = 5
+          }
+      gsNext = nextLevel gsPrev 9
+      printed = lvlMoves (allLevels !! gsLevel gsNext)
+  assertEqual "carry cap on gsMoves" (printed + 3) (gsMoves gsNext)
+  assertEqual "skill tier vs printed still 3★ at 40%" (3 :: Int) (starRating printed (printed * 2 `div` 5))
+  assertEqual "skill tier vs inflated would be 2★" (2 :: Int) (starRating (gsMoves gsNext) (printed * 2 `div` 5))
+
+-- | Curtain: may swap (≠ Chain/Freeze) but curtained gem breaks match runs.
+curtain_allows_swap_blocks_match :: Assertion
+curtain_allows_swap_blocks_match = do
+  let board =
+        setCell
+          (setCell (setCell stableBoard (5, 2) (mkGem C2)) (5, 3) (mkCurtainGem C2 1))
+          (5, 4)
+          (mkGem C2)
+  assertBool "curtain does not block swap" $
+    not (swapBlockedByStone board (5, 3) (5, 2))
+  assertBool "no H match through curtain" $
+    not ((5, 2) `elem` findMatches board)
+      && not ((5, 3) `elem` findMatches board)
+      && not ((5, 4) `elem` findMatches board)
+  -- Open curtain then the same triple can match
+  let open = setCell board (5, 3) (mkGem C2)
+  assertBool "open triple matches" $
+    all (`elem` findMatches open) [(5, 2), (5, 3), (5, 4)]
+
+-- | Hammer on Grass/Vine clears the gem (overlays strip; ≠ Chain/Curtain peel-lock).
+hammer_clears_grass_vine :: Assertion
+hammer_clears_grass_vine = do
+  let bg = setCell stableBoard (2, 2) (Gem C3 Normal 0 (Just Grass))
+      gsG0 =
+        (newGame defaultConfig 2)
+          { gsBoard = bg
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gsG1, _) = useHammer (2, 2) gsG0
+  assertBool "grass cell cleared or refilled (not peel-locked)" $
+    not (hasGrass (getCell (gsBoard gsG1) (2, 2)))
+  let bv = setCell stableBoard (4, 4) (Gem C4 Normal 0 (Just Vine))
+      gsV0 =
+        (newGame defaultConfig 3)
+          { gsBoard = bv
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gsV1, _) = useHammer (4, 4) gsV0
+  assertBool "vine cell cleared or refilled" $
+    not (hasVine (getCell (gsBoard gsV1) (4, 4)))
+
+-- | Freeze blocks both adjacent trySwap (click/drag) and free-swap booster.
+freeze_blocks_freeswap_and_swap :: Assertion
+freeze_blocks_freeswap_and_swap = do
+  let board =
+        setCell
+          (setCell stableBoard (2, 2) (mkFreezeGem C1 1))
+          (2, 3)
+          (mkGem C2)
+      gs0 =
+        (newGame defaultConfig 5)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsFreeSwaps = 2
+          , gsBelts = []
+          , gsUfos = []
+          }
+  assertBool "swapBlocked" (swapBlockedByStone board (2, 2) (2, 3))
+  let (gs1, out1) = trySwap (2, 2) (2, 3) gs0
+  assertEqual "trySwap NoMatch" NoMatch out1
+  assertEqual "moves kept" (gsMoves gs0) (gsMoves gs1)
+  let (gs2, out2) = useFreeSwap (2, 2) (5, 5) gs0
+  assertEqual "free-swap NoMatch" NoMatch out2
+  assertEqual "free-swap charge kept" (gsFreeSwaps gs0) (gsFreeSwaps gs2)

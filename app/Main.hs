@@ -1004,10 +1004,13 @@ advanceOrMsg ref window = do
   case gsOver (appGame app) of
     Just (LevelClear _ n) -> do
       let gs = nextLevel (appGame app) seed
+          -- Stars rate vs printed level moves; carry must not inflate the denominator.
+          baseMoves = lvlMoves (allLevels !! gsLevel gs)
           app' =
             (freshLevelUi gs app)
               { appMsg = "Next level!"
               , appMaxReached = max (appMaxReached app) n
+              , appStartMoves = baseMoves
               }
       writeIORef ref app'
       updateTitle window app'

@@ -33,6 +33,7 @@ module Match3.Board
   , resolveCountdowns
   , applyPortalTeleports
   , settleBoardPortals
+  , expandSpecials
   ) where
 
 import Data.List (foldl', nub)
@@ -161,7 +162,8 @@ setM b (r, c) v =
   where
     row = b !! r
 
--- | Expand clears: LineH/LineV/Bomb effects when those gem cells are in the match set.
+-- | Expand clears: LineH/LineV/Bomb effects when those gem cells are in the seed set.
+-- Rainbow is a no-op here (partner color comes from rainbowClearSeeds only).
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials b seeds = go (nub seeds) (nub seeds)
   where
@@ -176,28 +178,9 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
               , c <- [snd p - 1 .. snd p + 1]
               , inBounds (r, c)
               ]
-            Gem col Rainbow _ _ ->
-              [ (r, c)
-              | r <- [0 .. boardSize - 1]
-              , c <- [0 .. boardSize - 1]
-              , case getCell b (r, c) of
-                  Gem col' _ _ _ -> col' == col
-                  Flip col' _ -> col' == col
-                  Countdown col' _ -> col' == col
-                  Stone _ -> False
-                  Chest _ -> False
-                  Honey _ -> False
-                  Balloon _ -> False
-                  Cookie -> False
-                  Cake _ -> False
-                  MagicHat -> False
-                  Maker _ _ -> False
-                  Snail _ _ -> False
-                  Safe _ -> False
-                  Surprise -> False
-                  Bottle _ -> False
-                  TimeSpirit -> False
-              ]
+            -- Rainbow activation is only via rainbowClearSeeds (swap partner color).
+            -- Expanding own color here double-cleared partner+own on every Rainbow×gem swap.
+            Gem _ Rainbow _ _ -> []
             Gem _ Normal _ _ -> []
             Stone _ -> []
             Chest _ -> []

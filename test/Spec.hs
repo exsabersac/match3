@@ -202,6 +202,8 @@ tests =
     , testCase "soft_lock_blocks_double_rainbow" soft_lock_blocks_double_rainbow
     , testCase "cookie_immune_to_direct_clear" cookie_immune_to_direct_clear
     , testCase "belt_delivers_cookie_bottom_drains" belt_delivers_cookie_bottom_drains
+    , testCase "portal_teleports_flip" portal_teleports_flip
+    , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -4503,6 +4505,7 @@ daily_obstacle_goal_spawns_decor = do
   check isCake (GoalCake 5) "cake"
   check isSafe (GoalSafe 4) "safe"
   check isBalloon (GoalBalloon 6) "balloon"
+  check isCookie (GoalCookie 6) "cookie"
 
 -- | Undo after a move restores leftover moves (carry bank is only on nextLevel).
 undo_restores_carry_moves :: Assertion
@@ -6446,3 +6449,63 @@ belt_delivers_cookie_bottom_drains = do
   assertBool
     ("GoalCookie must count belt-delivered cookie, got " ++ show (gsCookiesCollected gs1))
     (gsCookiesCollected gs1 >= 1)
+
+--------------------------------------------------------------------------------
+-- Stability cruise: GoalCookie/Carpet décor seed + portal Flip
+--------------------------------------------------------------------------------
+
+-- | Portal teleports Flip (dual-face) the same as gems/countdowns/cookies.
+portal_teleports_flip :: Assertion
+portal_teleports_flip = do
+  let setMBoard b (r, c) v =
+        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+        where
+          row = b !! r
+      fill = Just (mkGem C5)
+      mb0 = replicate boardSize (replicate boardSize fill)
+      mb1 = setMBoard mb0 (0, 0) (Just (mkFlip C1 C2))
+      mb2 = setMBoard mb1 (7, 7) Nothing
+      portals = [((0, 0), (7, 7))]
+      mb3 = applyPortalTeleports portals mb2
+  assertEqual "Flip left entrance" Nothing ((mb3 !! 0) !! 0)
+  case (mb3 !! 7) !! 7 of
+    Just cell -> do
+      assertBool "exit is Flip" (isFlip cell)
+      assertEqual "front color" C1 (flipFront cell)
+      assertEqual "back color" C2 (flipBack cell)
+    Nothing -> assertFailure "expected Flip at portal exit"
+  -- Countdown still teleports (sibling transferable)
+  let mbC =
+        setMBoard
+          (setMBoard mb0 (1, 1) (Just (Countdown C3 2)))
+          (6, 6)
+          Nothing
+      mbC' = applyPortalTeleports [((1, 1), (6, 6))] mbC
+  assertEqual "CD entrance empty" Nothing ((mbC' !! 1) !! 1)
+  case (mbC' !! 6) !! 6 of
+    Just (Countdown C3 2) -> pure ()
+    other -> assertFailure ("expected Countdown at exit, got " ++ show other)
+
+-- | Bare GoalCarpet (no levelCarpets) still gets open floor tiles (UFO décor parity).
+goal_carpet_seeds_open_tiles :: Assertion
+goal_carpet_seeds_open_tiles = do
+  let gs = newGame (GameConfig 26 (GoalCarpet 8)) 20260929
+  assertEqual "goal" (GoalCarpet 8) (gsGoal gs)
+  assertBool
+    ("open carpets >= 8, got " ++ show (length (gsCarpetOpen gs)))
+    (length (gsCarpetOpen gs) >= 8)
+  assertEqual "covered start" (0 :: Int) (gsCarpetsCovered gs)
+  -- GoalCookie bare newGame must seed high biscuits (ensureGoalDecor)
+  let gsCk = newGame (GameConfig 26 (GoalCookie 6)) 20260929
+      nCk =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isCookie (getCell (gsBoard gsCk) (r, c))
+          ]
+  assertBool ("cookies >= 6, got " ++ show nCk) (nCk >= 6)
+  assertBool "cookies not only on bottom" $
+    any
+      (\(r, c) -> r < boardSize - 1 && isCookie (getCell (gsBoard gsCk) (r, c)))
+      [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]

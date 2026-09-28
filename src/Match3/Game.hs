@@ -427,6 +427,10 @@ ensureGoalDecor goal b =
         (take (max n 6)
            [ ((2, 2), C1), ((2, 5), C3), ((4, 1), C2), ((4, 3), C1)
            , ((4, 5), C4), ((6, 2), C3), ((6, 5), C5) ])
+    -- Cookies high on board so clearing below can drop them to the exit row
+    GoalCookie n | countKind isCookie b < n ->
+      place n mkCookie
+        [(0, 1), (0, 3), (0, 5), (1, 2), (1, 4), (1, 6), (2, 1), (2, 3), (2, 5)]
     _ -> b
   where
     countKind keep board =
@@ -479,7 +483,18 @@ newGameAtLevel li cfg seed =
                           _ -> []
                    else placed
           , gsUfoCollected = 0
-          , gsCarpetOpen = levelCarpets li
+          , gsCarpetOpen =
+              let placed = levelCarpets li
+              in if null placed
+                   then case cfgGoal cfg of
+                          GoalCarpet n ->
+                            take (max n 1)
+                              [ (3, 2), (3, 3), (3, 4), (3, 5)
+                              , (4, 2), (4, 3), (4, 4), (4, 5)
+                              , (2, 2), (2, 5), (5, 2), (5, 5)
+                              ]
+                          _ -> []
+                   else placed
           , gsCarpetsCovered = 0
           , gsLastCleared = []
           }

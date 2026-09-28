@@ -65,4 +65,6 @@ colorPositions b col =
       Honey _ -> False
       Balloon _ -> False
       Cookie -> False
+      Cake _ -> False
+      MagicHat -> False
   ]

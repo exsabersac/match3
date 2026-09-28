@@ -48,6 +48,12 @@ module Match3.Core
   , balloonColor
   , mkCookie
   , isCookie
+  , mkCake
+  , mkCakeLayers
+  , cakeLayers
+  , isCake
+  , mkMagicHat
+  , isMagicHat
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -132,8 +138,12 @@ module Match3.Core
   , chestsAdjacentTo
   , chipAdjacentHoney
   , honeysAdjacentTo
+  , chipAdjacentCakes
+  , cakesAdjacentTo
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
+  , hatsAdjacentTo
+  , triggerAdjacentHats
   , isRainbow
   , isRainbowSwap
   , rainbowClearSeeds
@@ -180,8 +190,12 @@ import Match3.Obstacles
   , chestsAdjacentTo
   , chipAdjacentHoney
   , honeysAdjacentTo
+  , chipAdjacentCakes
+  , cakesAdjacentTo
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
+  , hatsAdjacentTo
+  , triggerAdjacentHats
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)

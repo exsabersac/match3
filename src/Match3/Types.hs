@@ -37,6 +37,12 @@ module Match3.Types
   , balloonColor
   , mkCookie
   , isCookie
+  , mkCake
+  , mkCakeLayers
+  , cakeLayers
+  , isCake
+  , mkMagicHat
+  , isMagicHat
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -81,9 +87,11 @@ data GemKind = Normal | LineH | LineV | Bomb | Rainbow
 data CellOverlay = Grass | Vine | Choco | Fog Int
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: gem (optional ice + overlay), stone, chest, honey jar, balloon, cookie, or countdown bomb.
--- Stone/Chest/Honey n = hit points; adjacent clears chip; removed at 0.
+-- | Board cell: gem (optional ice + overlay), stone, chest, honey, cake, balloon, cookie, magic hat, or countdown.
+-- Stone/Chest/Honey/Cake n = hit points; adjacent clears chip; removed at 0.
 -- Cookie: falls with gravity; collected when it reaches the bottom row (开心消消乐饼干).
+-- Cake: layered obstacle (蛋糕, distinct from Cookie); adjacent clears chip layers.
+-- MagicHat: adjacent clear triggers color swap/recolor of neighboring gems (魔法帽).
 -- Countdown c n = colored timer bomb; matches as color c.
 -- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
@@ -93,6 +101,8 @@ data CellContents
   | Honey Int   -- honey jar (蜂蜜罐) layers; adjacent clears chip
   | Balloon Color  -- balloon (气球): popped by adjacent same-color clear
   | Cookie        -- biscuit (饼干): falls with gravity; collected on bottom row
+  | Cake Int      -- cake layers (蛋糕): adjacent clears chip; not a collectible cookie
+  | MagicHat      -- magic hat (魔法帽): adjacent clear swaps/recolors neighbor gem colors
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -128,6 +138,8 @@ iceLayers (Chest _) = 0
 iceLayers (Honey _) = 0
 iceLayers (Balloon _) = 0
 iceLayers Cookie = 0
+iceLayers (Cake _) = 0
+iceLayers MagicHat = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -230,6 +242,30 @@ isCookie :: Cell -> Bool
 isCookie Cookie = True
 isCookie _ = False
 
+-- | Single-layer cake (蛋糕) — layered obstacle, NOT the collectible cookie.
+mkCake :: Cell
+mkCake = Cake 1
+
+-- | Multi-layer cake (蛋糕).
+mkCakeLayers :: Int -> Cell
+mkCakeLayers n = Cake (max 1 n)
+
+cakeLayers :: Cell -> Int
+cakeLayers (Cake n) = n
+cakeLayers _ = 0
+
+isCake :: Cell -> Bool
+isCake (Cake _) = True
+isCake _ = False
+
+-- | Magic hat (魔法帽): blocks swaps; adjacent clear swaps/recolors neighbor colors.
+mkMagicHat :: Cell
+mkMagicHat = MagicHat
+
+isMagicHat :: Cell -> Bool
+isMagicHat MagicHat = True
+isMagicHat _ = False
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -251,6 +287,8 @@ isGem (Chest _) = False
 isGem (Honey _) = False
 isGem (Balloon _) = False
 isGem Cookie = False
+isGem (Cake _) = False
+isGem MagicHat = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -261,6 +299,8 @@ cellColor (Chest _) = error "cellColor: Chest has no color"
 cellColor (Honey _) = error "cellColor: Honey has no color"
 cellColor (Balloon _) = error "cellColor: Balloon has no color (use balloonColor)"
 cellColor Cookie = error "cellColor: Cookie has no color"
+cellColor (Cake _) = error "cellColor: Cake has no color"
+cellColor MagicHat = error "cellColor: MagicHat has no color"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -271,6 +311,8 @@ cellKind (Chest _) = error "cellKind: Chest has no kind"
 cellKind (Honey _) = error "cellKind: Honey has no kind"
 cellKind (Balloon _) = error "cellKind: Balloon has no kind"
 cellKind Cookie = error "cellKind: Cookie has no kind"
+cellKind (Cake _) = error "cellKind: Cake has no kind"
+cellKind MagicHat = error "cellKind: MagicHat has no kind"
 
 numColors :: Int
 numColors = 5
@@ -307,6 +349,7 @@ data LevelGoal
   | GoalHoney Int                      -- smash N honey jars (蜂蜜罐)
   | GoalBalloon Int                    -- pop N balloons (气球)
   | GoalCookie Int                     -- collect N biscuits at bottom (饼干)
+  | GoalCake Int                       -- clear N cake layers fully (蛋糕)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   deriving (Eq, Show, Generic)
 
@@ -321,20 +364,22 @@ goalMet (GoalChest _) _ _ = False
 goalMet (GoalHoney _) _ _ = False
 goalMet (GoalBalloon _) _ _ = False
 goalMet (GoalCookie _) _ _ = False
+goalMet (GoalCake _) _ _ = False
 goalMet (GoalUfo _) _ _ = False
 
--- | Full goal check with color bag + stones/UFO/chests/honey/balloon/cookie counters.
-goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
-goalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ = score >= t
-goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ = collected >= n
-goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ =
+-- | Full goal check with color bag + stones/UFO/chests/honey/balloon/cookie/cake counters.
+goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
+goalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ _ = score >= t
+goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ _ = collected >= n
+goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ =
   all (\(col, n) -> lookupCount bag col >= n) reqs
-goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ = stones >= n
-goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ = ufos >= n
-goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ = chests >= n
-goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ = honey >= n
-goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ = balloons >= n
-goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies = cookies >= n
+goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ _ = stones >= n
+goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ _ = ufos >= n
+goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ _ = chests >= n
+goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ _ = honey >= n
+goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ _ = balloons >= n
+goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ = cookies >= n
+goalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes = cakes >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -349,19 +394,21 @@ goalProgress (GoalChest _) _ collected = collected
 goalProgress (GoalHoney _) _ collected = collected
 goalProgress (GoalBalloon _) _ collected = collected
 goalProgress (GoalCookie _) _ collected = collected
+goalProgress (GoalCake _) _ collected = collected
 goalProgress (GoalUfo _) _ collected = collected
 
-goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int
-goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ = score
-goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ = collected
-goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ =
+goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
+goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ = score
+goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ _ = collected
+goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ =
   sum [min n (lookupCount bag c) | (c, n) <- reqs]
-goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ = stones
-goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ = ufos
-goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ = chests
-goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ = honey
-goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ = balloons
-goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies = cookies
+goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ _ = stones
+goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ _ = ufos
+goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ _ = chests
+goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ _ = honey
+goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ _ = balloons
+goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ = cookies
+goalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes = cakes
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -373,6 +420,7 @@ goalTarget (GoalChest n) = n
 goalTarget (GoalHoney n) = n
 goalTarget (GoalBalloon n) = n
 goalTarget (GoalCookie n) = n
+goalTarget (GoalCake n) = n
 goalTarget (GoalUfo n) = n
 
 data GameConfig = GameConfig
@@ -390,7 +438,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / UFO / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / UFO / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -416,7 +464,9 @@ allLevels =
   , Level 20 "气球"   24 (GoalBalloon 6)
   , Level 21 "饼干"   24 (GoalCookie 6)
   , Level 22 "巧饼"   22 (GoalCookie 5)
-  , Level 23 "终章"   16 (GoalScore 1400)
+  , Level 23 "蛋糕"   24 (GoalCake 6)
+  , Level 24 "帽宴"   22 (GoalCake 5)
+  , Level 25 "终章"   16 (GoalScore 1500)
   ]
 
 levelConfig :: Level -> GameConfig

@@ -194,6 +194,8 @@ spawnBurst board positions =
                     Honey _ -> (240, 180, 40)
                     Balloon col -> colorRGB col
                     Cookie -> (210, 160, 90)
+                    Cake _ -> (255, 140, 180)
+                    MagicHat -> (140, 90, 200)
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -250,6 +252,8 @@ updateTitle window app = do
           "balloon=" ++ show (gsBalloonsPopped gs) ++ "/" ++ show n
         GoalCookie n ->
           "cookie=" ++ show (gsCookiesCollected gs) ++ "/" ++ show n
+        GoalCake n ->
+          "cake=" ++ show (gsCakesCleared gs) ++ "/" ++ show n
         GoalUfo n ->
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
       title =
@@ -817,6 +821,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalCake n ->
+                                    " [cake "
+                                      <> T.pack (show (gsCakesCleared gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   GoalUfo n ->
                                     " [ufo "
                                       <> T.pack (show (gsUfoCollected gs'))
@@ -1130,6 +1140,7 @@ drawHud ren app = do
         GoalHoney _ -> V4 240 180 40 255
         GoalBalloon _ -> V4 255 120 160 255
         GoalCookie _ -> V4 210 160 90 255
+        GoalCake _ -> V4 255 140 180 255
         GoalUfo _ -> V4 180 120 255 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
@@ -1164,6 +1175,14 @@ drawHud ren app = do
       rendererDrawColor ren $= V4 90 50 30 255
       fillRect ren (Just (Rectangle (P (V2 206 44)) (V2 3 3)))
       fillRect ren (Just (Rectangle (P (V2 212 48)) (V2 3 3)))
+    GoalCake _ -> do
+      -- Pink frosted cake swatch (distinct from tan cookie)
+      rendererDrawColor ren $= V4 255 140 180 255
+      fillRect ren (Just (Rectangle (P (V2 202 44)) (V2 16 14)))
+      rendererDrawColor ren $= V4 255 220 230 255
+      fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 12 8)))
+      rendererDrawColor ren $= V4 255 80 120 255
+      fillRect ren (Just (Rectangle (P (V2 208 36)) (V2 4 4)))
     GoalUfo _ -> do
       rendererDrawColor ren $= V4 180 120 255 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
@@ -1318,6 +1337,7 @@ drawLevelMap ren app
               GoalHoney _ -> V4 240 180 40 255
               GoalBalloon _ -> V4 255 120 160 255
               GoalCookie _ -> V4 210 160 90 255
+              GoalCake _ -> V4 255 140 180 255
               GoalUfo _ -> V4 180 120 255 255
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
@@ -1537,6 +1557,59 @@ drawGemAt ren x y cell flashing = case cell of
     fillRect ren (Just (Rectangle (P (V2 (x + 32) (y + 12))) (V2 4 4)))
     rendererDrawColor ren $= V4 180 120 60 255
     drawRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Cake layers -> do
+    -- Pink layered cake (蛋糕) — frosted tiers, distinct from tan Cookie
+    let gap = 4 :: CInt
+        (cr, cg, cb) = if flashing then (255, 200, 220) else (255, 140, 180)
+    -- Bottom tier
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap + 18)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap - 18))))
+    -- Mid frosting
+    rendererDrawColor ren $= V4 255 220 230 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 4) (y + gap + 10))) (V2 (cellPx - 2 * gap - 8) 10)))
+    -- Top cherry
+    rendererDrawColor ren $= V4 220 40 80 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + gap + 2))) (V2 8 8)))
+    -- Layer pips
+    rendererDrawColor ren $= V4 255 240 250 255
+    forM_ [0 .. min 3 layers - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+              (V2 7 5)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  MagicHat -> do
+    -- Purple magic hat (魔法帽): brim + cone
+    let gap = 5 :: CInt
+        (cr, cg, cb) = if flashing then (200, 160, 255) else (120, 60, 180)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    -- Brim
+    fillRect ren (Just (Rectangle (P (V2 (x + gap) (y + cellPx - 18))) (V2 (cellPx - 2 * gap) 10)))
+    -- Cone
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap + 8) (y + gap + 4)))
+            (V2 (cellPx - 2 * gap - 16) (cellPx - 2 * gap - 14))))
+    -- Band
+    rendererDrawColor ren $= V4 255 220 80 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 6) (y + cellPx - 24))) (V2 (cellPx - 2 * gap - 12) 5)))
+    -- Star tip
+    rendererDrawColor ren $= V4 255 255 200 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + gap))) (V2 6 6)))
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))

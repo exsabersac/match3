@@ -1,24 +1,29 @@
--- | Stone / chest / honey blockers: layered crates, treasure chests, honey jars.
+-- | Stone / chest / honey / cake blockers + magic hat trigger.
 -- Never match, block swaps; adjacent gem clears chip one layer; removed at 0
--- (开心消消乐箱子 / 宝箱 / 蜂蜜罐).
+-- (开心消消乐箱子 / 宝箱 / 蜂蜜罐 / 蛋糕). MagicHat: adjacent clear swaps neighbor colors.
 module Match3.Obstacles
   ( swapBlockedByStone
   , orthoNeighbors
   , stonesAdjacentTo
   , chestsAdjacentTo
   , honeysAdjacentTo
+  , cakesAdjacentTo
   , chipAdjacentStones
   , chipAdjacentChests
   , chipAdjacentHoney
+  , chipAdjacentCakes
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
+  , hatsAdjacentTo
+  , triggerAdjacentHats
   , withAdjacentStones
   ) where
 
-import Data.List (nub)
+import Data.List (nub, sort)
 import Match3.Types
   ( Board
   , Cell
+  , Color(..)
   , Pos
   , boardSize
   , isStone
@@ -26,13 +31,18 @@ import Match3.Types
   , isHoney
   , isBalloon
   , isCookie
+  , isCake
+  , isMagicHat
   , balloonColor
   , mkStoneLayers
   , mkChestLayers
   , mkHoneyLayers
+  , mkCakeLayers
   , stoneLayers
   , chestLayers
   , honeyLayers
+  , cakeLayers
+  , CellContents(..)
   , cellColor
   , isGem
   )
@@ -46,10 +56,12 @@ setAt b (r, c) v =
   where
     row = b !! r
 
--- | True if either swap endpoint is a stone, chest, honey, balloon, or cookie.
+-- | True if either swap endpoint is a blocker (stone/chest/honey/balloon/cookie/cake/hat).
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
-  let block c = isStone c || isChest c || isHoney c || isBalloon c || isCookie c
+  let block c =
+        isStone c || isChest c || isHoney c || isBalloon c || isCookie c
+          || isCake c || isMagicHat c
   in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).
@@ -157,6 +169,80 @@ chipAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
 chipAdjacentBalloons b clearedGems =
   let dead = balloonsAdjacentSameColor b clearedGems
   in (b, dead)  -- board unchanged until clear pipeline removes them
+
+-- | Cake positions orthogonally adjacent to cleared positions.
+cakesAdjacentTo :: Board -> [Pos] -> [Pos]
+cakesAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isCake (at b p)
+    ]
+
+-- | Chip one layer off each adjacent cake (蛋糕). Cleared at 0.
+chipAdjacentCakes :: Board -> [Pos] -> (Board, [Pos])
+chipAdjacentCakes b clearedGems =
+  foldl hitOne (b, []) (cakesAdjacentTo b clearedGems)
+  where
+    hitOne (board, dead) p =
+      case at board p of
+        cell | isCake cell ->
+          let n = cakeLayers cell
+          in if n <= 1
+               then (board, nub (p : dead))
+               else (setAt board p (mkCakeLayers (n - 1)), dead)
+        _ -> (board, dead)
+
+-- | Magic hat positions orthogonally adjacent to cleared gems.
+hatsAdjacentTo :: Board -> [Pos] -> [Pos]
+hatsAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isMagicHat (at b p)
+    ]
+
+recolorCell :: Cell -> Color -> Cell
+recolorCell (Gem _ kind ice ov) col = Gem col kind ice ov
+recolorCell (Countdown _ n) col = Countdown col n
+recolorCell x _ = x
+
+cycleColor :: Color -> Color
+cycleColor c =
+  let i = fromEnum c
+  in toEnum ((i + 1) `mod` 5)
+
+-- | Trigger magic hats adjacent to clears: swap colors of two ortho gem neighbors
+-- (deterministic: sorted positions). If only one gem neighbor, cycle its color.
+-- Hat itself stays. Neighbors in the cleared set are skipped.
+triggerAdjacentHats :: Board -> [Pos] -> Board
+triggerAdjacentHats b cleared =
+  foldl triggerOne b (hatsAdjacentTo b cleared)
+  where
+    triggerOne board hatPos =
+      let nbrs =
+            [ p
+            | p <- orthoNeighbors hatPos
+            , inBoard p
+            , p `notElem` cleared
+            , let cell = at board p
+            , isGem cell
+            ]
+          sorted = nub (sort nbrs)
+      in case sorted of
+           (p1 : p2 : _) ->
+             let c1 = cellColor (at board p1)
+                 c2 = cellColor (at board p2)
+                 b1 = setAt board p1 (recolorCell (at board p1) c2)
+             in setAt b1 p2 (recolorCell (at board p2) c1)
+           [p1] ->
+             let c = cellColor (at board p1)
+             in setAt board p1 (recolorCell (at board p1) (cycleColor c))
+           [] -> board
 
 -- | Legacy helper: positions that should be removed (last-layer stones only).
 -- Prefer chipAdjacentStones in clear pipeline.

@@ -32,6 +32,10 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
           (board, p : clearable)
         Cookie ->
           (board, p : clearable)
+        Cake _ ->
+          (board, p : clearable)
+        MagicHat ->
+          (board, p : clearable)
         Countdown _ _ ->
           (board, p : clearable)
     get board (r, c) = (board !! r) !! c

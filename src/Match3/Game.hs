@@ -780,11 +780,11 @@ nextLevel gs seed =
 
 -- | Cells that chipIceOnClear leaves untouched (no peel / no clear).
 hammerImmune :: Cell -> Bool
-hammerImmune c = isMaker c || isSnail c || isBottle c || isMagicHat c
+hammerImmune c = isMaker c || isSnail c || isBottle c || isMagicHat c || isCookie c
 
 -- | Hammer: spend one charge to clear a single in-bounds cell, then cascade.
 -- Does not consume a move.
--- Maker / Snail / Bottle / MagicHat are immune to direct seeds — reject without spending.
+-- Maker / Snail / Bottle / MagicHat / Cookie are immune to direct seeds — reject without spending.
 useHammer :: Pos -> GameState -> (GameState, Outcome)
 useHammer p gs
   | Just o <- gsOver gs = (gs, o)

@@ -28,7 +28,7 @@ Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stac
 - **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent / Line·Bomb·Hammer chip one layer; `GoalChest`
 - **Honey jars** (`Honey n` / 蜂蜜罐): amber jars; adjacent / Line·Bomb·Hammer chip one layer; `GoalHoney`
 - **Balloons** (`Balloon c` / 气球): colored; adjacent **same-color** clear pops; `GoalBalloon`
-- **Cookies** (`Cookie` / 饼干): fall with gravity; collected on the **bottom row**; `GoalCookie`
+- **Cookies** (`Cookie` / 饼干): fall with gravity; collected on the **bottom row** only (immune to Line/Bomb/Hammer mid-board wipe); `GoalCookie`
 - **Cakes** (`Cake n` / 蛋糕): layered obstacles (≠ Cookie); adjacent / Line·Bomb·Hammer chip one layer; `GoalCake`
 - **Magic hats** (`MagicHat` / 魔法帽): adjacent clear swaps/recolors neighbor gem colors
 - **Chains** (`Chain n` / 锁链): lock gems; adjacent clears peel; chained gems cannot swap or match

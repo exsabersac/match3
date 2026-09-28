@@ -14,7 +14,8 @@ import Match3.Types
 -- ice==0 + Chain/Curtain: peel one lock layer (gem stays) — hammer/cross/line.
 -- ice==0 bare/Freeze/Fog: gem clears. Layered blockers (Stone/Chest/Honey/Cake/Safe)
 -- chip one layer per direct hit (hammer/cross/line/bomb); last layer clears
--- (Safe opens to Cookie). MagicHat/Maker/Snail/Bottle are immune (persist).
+-- (Safe opens to Cookie). MagicHat/Maker/Snail/Bottle/Cookie are immune (persist);
+-- cookies only collect via bottom-row drain, never mid-board blast wipe.
 chipIceOnClear :: Board -> [Pos] -> (Board, [Pos])
 chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
   where
@@ -54,7 +55,8 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
         Balloon _ ->
           (board, p : clearable)
         Cookie ->
-          (board, p : clearable)
+          -- Cookies only fall+drain at bottom (GoalCookie); immune to direct seeds
+          (board, clearable)
         Cake n ->
           if n <= 1
             then (board, p : clearable)

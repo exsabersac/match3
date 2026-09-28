@@ -200,6 +200,7 @@ tests =
     , testCase "soft_lock_blocks_special_combo" soft_lock_blocks_special_combo
     , testCase "soft_lock_blocks_freeswap_activation" soft_lock_blocks_freeswap_activation
     , testCase "soft_lock_blocks_double_rainbow" soft_lock_blocks_double_rainbow
+    , testCase "cookie_immune_to_direct_clear" cookie_immune_to_direct_clear
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5035,7 +5036,7 @@ ufo_skips_peel_locks = do
   -- verify wrong-color bare still ignored.
   assertEqual "ignores wrong color" [] (ufoAbsorbTargets (near (mkGem C2)) u)
 
--- | Hammer on Maker/Snail/Bottle is a no-op: reject without spending a charge.
+-- | Hammer on Maker/Snail/Bottle/Hat/Cookie is a no-op: reject without spending a charge.
 hammer_immune_no_spend :: Assertion
 hammer_immune_no_spend = do
   let mkGs cell =
@@ -5058,6 +5059,7 @@ hammer_immune_no_spend = do
   check "snail" (mkSnail 0 1)
   check "bottle" (mkBottle C2)
   check "hat" mkMagicHat
+  check "cookie" mkCookie
   -- Control: bare gem still spends
   let gsG0 = mkGs (mkGem C1)
       (gsG1, outG) = useHammer (3, 3) gsG0
@@ -6311,3 +6313,84 @@ soft_lock_blocks_double_rainbow = do
   assertBool "endpoint no longer Rainbow" $
     not (isRainbow (getCell (gsBoard gsOk) (0, 0)))
       && not (isRainbow (getCell (gsBoard gsOk) (0, 1)))
+
+-- | Cookie mid-board is immune to Line/Bomb/Hammer direct seeds: must not wipe
+-- or count toward GoalCookie. Cookies only collect via bottom-row drain.
+-- Regression: chipIceOnClear listed Cookie clearable → blast "collected" mid-air.
+cookie_immune_to_direct_clear :: Assertion
+cookie_immune_to_direct_clear = do
+  -- Unit: chipIceOnClear leaves Cookie, not clearable
+  let boardC = setCell stableBoard (3, 3) mkCookie
+      (bIce, free) = chipIceOnClear boardC [(3, 3)]
+  assertEqual "cookie not clearable" ([] :: [Pos]) free
+  assertBool "cookie persists after chipIce" (isCookie (getCell bIce (3, 3)))
+  -- Bomb footprint covers Cookie: cookie survives; GoalCookie count stays 0
+  let boardBomb =
+        setCell
+          (setCell stableBoard (3, 3) mkCookie)
+          (3, 4)
+          (Gem C1 Bomb 0 Nothing)
+      seeds = [(3, 4)]
+      (b1, _n, _sc, _mw, _t, _st, _ch, _h, _bal, cookies, _cak, _) =
+        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) boardBomb
+      cookieLeft =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isCookie (getCell b1 (r, c))
+        ]
+  assertEqual "bomb must not count mid-board cookie" (0 :: Int) cookies
+  assertBool ("cookie still on board after bomb, left=" ++ show cookieLeft) (not (null cookieLeft))
+  -- LineH through cookie: same immunity
+  let boardLine =
+        setCell
+          (setCell stableBoard (4, 2) mkCookie)
+          (4, 4)
+          (Gem C2 LineH 0 Nothing)
+      (bL, _nL, _scL, _mwL, _tL, _stL, _chL, _hL, _balL, cookiesL, _cakL, _) =
+        runCascadeScoredFromSeeds Nothing [(4, 4)] (mkStdGen 2) boardLine
+  assertEqual "line must not count mid-board cookie" (0 :: Int) cookiesL
+  assertBool "cookie survives line" $
+    any (\(r, c) -> isCookie (getCell bL (r, c)))
+      [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
+  -- trySwap bomb path: GoalCookie meter unchanged when cookie not at bottom
+  let gs0 =
+        (newGame defaultConfig 21)
+          { gsBoard = boardBomb
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsPortals = []
+          , gsCookiesCollected = 0
+          , gsGoal = GoalCookie 5
+          , gsHammers = 2
+          }
+      -- Force bomb activation via useHammer on bomb cell (cookie neighbor)
+      (gsH, outH) = useHammer (3, 4) gs0
+  case outH of
+    NoMatch -> assertFailure "hammer on bomb should apply"
+    InvalidSwap -> assertFailure "hammer on bomb should apply"
+    _ -> pure ()
+  assertEqual "bomb hammer must not collect mid cookie" (0 :: Int) (gsCookiesCollected gsH)
+  assertBool "cookie still present after bomb hammer" $
+    any (\(r, c) -> isCookie (getCell (gsBoard gsH) (r, c)))
+      [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
+  -- Control: bottom-row cookie still drains on unrelated clear
+  let bottom = boardSize - 1
+      boardBot =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (bottom, 4) mkCookie)
+                (2, 0)
+                (mkGem C1))
+             (2, 1)
+             (mkGem C1))
+          (2, 2)
+          (mkGem C1)
+      seedsBot = findMatches boardBot
+      (_bBot, _nBot, _scBot, _cBot, _tBot, _stBot, _chBot, _hBot, _bBot2, cookiesBot, _cakBot, _) =
+        runCascadeScoredFromSeeds Nothing seedsBot (mkStdGen 3) boardBot
+  assertBool ("bottom cookie still drains, got " ++ show cookiesBot) (cookiesBot >= 1)

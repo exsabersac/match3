@@ -3,6 +3,7 @@ module Match3.Game
   ( GameState(..)
   , newGame
   , newGameAtLevel
+  , newDailyGame
   , trySwap
   , runMove
   , restart
@@ -18,6 +19,7 @@ module Match3.Game
   , useCrossClear
   , loseHint
   , unlockAfterClear
+  , unlockAfterOutcome
   , mapClickJump
   ) where
 
@@ -83,6 +85,7 @@ data GameState = GameState
   , gsCarpetOpen    :: [Pos]  -- uncovered carpet / floor tiles (地毯目标)
   , gsCarpetsCovered :: Int   -- carpet tiles covered this level
   , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
+  , gsDaily         :: Bool   -- True for date-seeded daily challenge (通关≠战役推进)
   } deriving (Show)
 
 instance Eq GameState where
@@ -102,6 +105,7 @@ instance Eq GameState where
       && gsSafesOpened a == gsSafesOpened b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
+      && gsDaily a == gsDaily b
       && gsBelts a == gsBelts b
       && gsPortals a == gsPortals b
       && gsHammers a == gsHammers b
@@ -502,9 +506,16 @@ newGameAtLevel li cfg seed =
                    else placed
           , gsCarpetsCovered = 0
           , gsLastCleared = []
+          , gsDaily = False
           }
   -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.
   in ensurePlayable gs0
+
+-- | Date-seeded daily challenge: same bare board as L0 décor, but clears as Won
+-- (not LevelClear into campaign) and never bumps map unlock.
+newDailyGame :: GameConfig -> Int -> GameState
+newDailyGame cfg seed =
+  (newGameAtLevel 0 cfg seed) { gsDaily = True }
 
 restart :: GameConfig -> Int -> GameState
 restart = newGame
@@ -539,10 +550,13 @@ goalSatisfied gs =
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
   | goalSatisfied gs =
-      let nextIdx = gsLevel gs + 1
-      in if nextIdx < length allLevels
-           then LevelClear (gsScore gs) nextIdx
-           else Won (gsScore gs)
+      if gsDaily gs
+        then Won (gsScore gs)  -- daily complete ≠ campaign LevelClear
+        else
+          let nextIdx = gsLevel gs + 1
+          in if nextIdx < length allLevels
+               then LevelClear (gsScore gs) nextIdx
+               else Won (gsScore gs)
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied gained
 
@@ -1100,6 +1114,13 @@ unlockAfterClear :: Int -> Outcome -> Int
 unlockAfterClear reached (LevelClear _ n) = max reached n
 unlockAfterClear reached (Won _) = max reached (length allLevels - 1)
 unlockAfterClear reached _ = reached
+
+-- | Like unlockAfterClear, but daily challenges never bump campaign map progress
+-- (daily Won must not unlock all 38 nodes the way finale Won does).
+unlockAfterOutcome :: GameState -> Int -> Outcome -> Int
+unlockAfterOutcome gs reached out
+  | gsDaily gs = reached
+  | otherwise = unlockAfterClear reached out
 
 -- | Map node click: Just li to jump; Nothing = resume/ignore (same level or locked).
 mapClickJump :: Int -> Int -> Int -> Maybe Int

@@ -482,10 +482,10 @@ flashSites out cleared = case out of
   InvalidSwap -> []
   _ -> cleared
 
--- | Bump map unlock after LevelClear / Won.
+-- | Bump map unlock after LevelClear / Won (daily Won must not unlock campaign).
 withUnlock :: App -> Outcome -> App
 withUnlock app out =
-  app { appMaxReached = unlockAfterClear (appMaxReached app) out }
+  app { appMaxReached = unlockAfterOutcome (appGame app) (appMaxReached app) out }
 
 handleEvent :: IORef App -> Window -> Event -> IO Bool
 handleEvent ref window ev = case eventPayload ev of
@@ -519,7 +519,11 @@ handleEvent ref window ev = case eventPayload ev of
           KeycodeR -> do
             seed <- randomIO
             app <- readIORef ref
-            let gs = restartLevel (appGame app) seed
+            let gs0 = appGame app
+                gs =
+                  if gsDaily gs0
+                    then newDailyGame (GameConfig (appStartMoves app) (gsGoal gs0)) seed
+                    else restartLevel gs0 seed
                 app' = (freshLevelUi gs app) { appMsg = "Restarted level" }
             writeIORef ref app'
             updateTitle window app'
@@ -683,7 +687,7 @@ handleEvent ref window ev = case eventPayload ev of
                   app <- readIORef ref
                   let y = 2026; m = 9; d = 29
                       lvl = dailyLevel y m d
-                      gs = newGameAtLevel 0 (levelConfig lvl) (dailySeed y m d)
+                      gs = newDailyGame (levelConfig lvl) (dailySeed y m d)
                       app' = (freshLevelUi gs app) { appMsg = "Daily challenge!" }
                   writeIORef ref app'
                   updateTitle window app'
@@ -805,7 +809,11 @@ handleEvent ref window ev = case eventPayload ev of
               Just (Lost _) -> do
                 seed <- randomIO
                 app <- readIORef ref
-                let gs = restartLevel (appGame app) seed
+                let gs0 = appGame app
+                    gs =
+                      if gsDaily gs0
+                        then newDailyGame (GameConfig (appStartMoves app) (gsGoal gs0)) seed
+                        else restartLevel gs0 seed
                     app' = (freshLevelUi gs app) { appMsg = "Retry!" }
                 writeIORef ref app'
                 updateTitle window app'
@@ -1038,7 +1046,11 @@ advanceOrMsg ref window = do
       writeIORef ref app'
       updateTitle window app'
     Just (Lost _) -> do
-      let gs = restartLevel (appGame app) seed
+      let gs0 = appGame app
+          gs =
+            if gsDaily gs0
+              then newDailyGame (GameConfig (appStartMoves app) (gsGoal gs0)) seed
+              else restartLevel gs0 seed
           app' = (freshLevelUi gs app) { appMsg = "Retry!" }
       writeIORef ref app'
       updateTitle window app'
@@ -1598,6 +1610,8 @@ drawOverlay ren app = case gsOver (appGame app) of
         rendererDrawColor ren $= V4 80 220 120 255
         drawRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))
         drawBannerWord ren 110 (panelY + 18) 5 (V4 120 255 160 255) "WIN!"
+        let stars = starRating (appStartMoves app) (gsMoves (appGame app))
+        drawNumber ren 200 (panelY + 22) 3 (V4 255 220 80 255) stars
         drawNumber ren 160 (panelY + 70) 3 (V4 200 255 210 255) s
       Lost s -> do
         rendererDrawColor ren $= V4 50 20 20 240

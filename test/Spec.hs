@@ -221,6 +221,8 @@ tests =
     , testCase "carpet_covers_on_surprise_safe_bottom" carpet_covers_on_surprise_safe_bottom
     , testCase "booster_freeswap_skips_countdown_tick" booster_freeswap_skips_countdown_tick
     , testCase "last_cleared_includes_countdown_explode" last_cleared_includes_countdown_explode
+    , testCase "daily_clear_is_won_not_levelclear" daily_clear_is_won_not_levelclear
+    , testCase "daily_won_does_not_unlock_map" daily_won_does_not_unlock_map
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -7400,3 +7402,73 @@ last_cleared_includes_countdown_explode = do
     (3, 3) `elem` cleared
   assertBool ("match cells in particles, got " ++ show cleared) $
     all (`elem` cleared) [(0, 0), (0, 1), (0, 2)]
+
+
+--------------------------------------------------------------------------------
+-- Daily clear must not LevelClear into campaign / unlock map
+--------------------------------------------------------------------------------
+
+-- | newDailyGame clear is Won (not LevelClear nextIdx=1 into 入门→采红).
+-- Regression: daily used newGameAtLevel 0, so meeting the goal looked like
+-- campaign L0 clear and offered NEXT L2 / unlocked map node 1.
+daily_clear_is_won_not_levelclear :: Assertion
+daily_clear_is_won_not_levelclear = do
+  let cfg = GameConfig 20 (GoalScore 10)
+      gs0 = newDailyGame cfg 42
+  assertBool "flagged daily" (gsDaily gs0)
+  assertEqual "daily sits at index 0" (0 :: Int) (gsLevel gs0)
+  let hint = findHint (gsBoard gs0)
+  case hint of
+    Nothing -> assertFailure "daily board must have a move"
+    Just (p1, p2) -> do
+      let (_, out) = trySwap p1 p2 (gs0 { gsScore = 0, gsGoal = GoalScore 10, gsMoves = 15, gsOver = Nothing })
+      case out of
+        Won _ -> pure ()
+        LevelClear _ n ->
+          assertFailure ("daily must Won, got LevelClear next=" ++ show n)
+        MoveApplied _ ->
+          -- score goal 10 may need more points; force via already-met score
+          let gsMet =
+                gs0
+                  { gsScore = 50
+                  , gsGoal = GoalScore 10
+                  , gsMoves = 15
+                  , gsOver = Nothing
+                  }
+              (gs2, out2) = trySwap p1 p2 gsMet
+          in case out2 of
+               Won s -> do
+                 assertBool "won score" (s >= 10)
+                 case gsOver gs2 of
+                   Just (Won _) -> pure ()
+                   other -> assertFailure ("gsOver should be Won, got " ++ show other)
+               LevelClear _ n ->
+                 assertFailure ("daily must Won even when score already met, got LevelClear " ++ show n)
+               other -> assertFailure ("expected Won, got " ++ show other)
+        other -> assertFailure ("expected Won/MoveApplied, got " ++ show other)
+  -- Campaign L0 with same goal still LevelClears
+  let gsCamp = newGameAtLevel 0 (GameConfig 20 (GoalScore 10)) 42
+  assertBool "campaign not daily" (not (gsDaily gsCamp))
+  case findHint (gsBoard gsCamp) of
+    Nothing -> assertFailure "campaign L0 needs a move"
+    Just (p1, p2) -> do
+      let (gsC, outC) =
+            trySwap p1 p2
+              (gsCamp { gsScore = 50, gsGoal = GoalScore 10, gsMoves = 15, gsOver = Nothing })
+      case outC of
+        LevelClear _ 1 -> pure ()
+        Won _ -> assertFailure "campaign L0 must LevelClear, not Won"
+        other -> assertFailure ("expected LevelClear 1, got " ++ show other ++ " over=" ++ show (gsOver gsC))
+
+-- | Daily Won must not bump map unlock (finale Won still unlocks all).
+daily_won_does_not_unlock_map :: Assertion
+daily_won_does_not_unlock_map = do
+  let gsD = newDailyGame (GameConfig 26 (GoalScore 600)) 1
+      reached0 = 0 :: Int
+  assertEqual "daily Won keeps unlock" reached0 (unlockAfterOutcome gsD reached0 (Won 100))
+  assertEqual "daily LevelClear also no-op" reached0 (unlockAfterOutcome gsD reached0 (LevelClear 100 1))
+  -- Campaign parity: unlockAfterClear / unlockAfterOutcome still bump
+  let gsC = newGameAtLevel 0 defaultConfig 1
+  assertEqual "campaign LevelClear unlocks" (1 :: Int) (unlockAfterOutcome gsC 0 (LevelClear 10 1))
+  assertEqual "finale Won unlocks all" (length allLevels - 1) (unlockAfterOutcome gsC 0 (Won 999))
+  assertEqual "unlockAfterClear finale Won unchanged" (length allLevels - 1) (unlockAfterClear 0 (Won 999))

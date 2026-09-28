@@ -167,6 +167,7 @@ module Match3.Core
   , GameState(..)
   , newGame
   , newGameAtLevel
+  , newDailyGame
   , trySwap
   , runMove
   , restart
@@ -182,6 +183,7 @@ module Match3.Core
   , useCrossClear
   , loseHint
   , unlockAfterClear
+  , unlockAfterOutcome
   , mapClickJump
   , hammerClearSeeds
   , crossClearSeeds

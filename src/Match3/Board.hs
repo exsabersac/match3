@@ -218,9 +218,11 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
       in go (acc ++ new) (ps ++ new)
 
 -- | Specials spawned from runs: len>=5 Rainbow, len==4 Line (orient by run).
--- Prefer spawnPos if provided and in the run; else middle of run.
-spawnSpecials :: Maybe Pos -> [MatchRun] -> [(Pos, Cell)]
-spawnSpecials prefer runs =
+-- Only place onto positions that actually clear (holes). Flip / ice>1 seeds stay
+-- on the board, so prefer/middle must fall back to a clearable cell in the run
+-- (otherwise a 4-match with Flip/ice at the anchor silently drops the special).
+spawnSpecials :: Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
+spawnSpecials prefer runs clearable =
   [ (pos, Gem (runColor run) kind 0 Nothing)
   | run <- runs
   , let n = length (runPos run)
@@ -229,9 +231,11 @@ spawnSpecials prefer runs =
           | n >= 5 = Rainbow
           | runIsH run = LineH
           | otherwise = LineV
-        pos = case prefer of
-          Just p | p `elem` runPos run -> p
-          _ -> runPos run !! (n `div` 2)
+        slots = filter (`elem` clearable) (runPos run)
+  , not (null slots)
+  , let pos = case prefer of
+          Just p | p `elem` slots -> p
+          _ -> slots !! (length slots `div` 2)
   ]
 
 -- | Count how many cleared positions have a given color (pre-clear board; stones skip).
@@ -300,9 +304,11 @@ clearMatchesDetailed prefer b =
       (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
       -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
       bMaker = chargeAdjacentMakers bSpirit iceFree
-      -- Surprise: open adjacent boxes → special in place or 3×3 explode seeds
+      -- Surprise: open adjacent boxes → special in place or 3×3 explode seeds.
+      -- Explode seeds expand specials (Bomb/Line) like countdown / clearFromSeeds.
       (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
-      (bSurp2, surpFree) = chipIceOnClear bSurp surpExplode0
+      surpExpanded = expandSpecials bSurp surpExplode0
+      (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
       -- Bottle: dye ortho gem neighbors to bottle color (bottle stays)
       bBottle = triggerAdjacentBottles bSurp2 iceFree
       -- Chocolate / steam: strip overlays orthogonally adjacent to match/special seeds
@@ -311,7 +317,7 @@ clearMatchesDetailed prefer b =
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
-      spawns = spawnSpecials prefer runs
+      spawns = spawnSpecials prefer runs allPos
       mb1 =
         foldl'
           ( \m (p, cell) ->
@@ -551,14 +557,15 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
       bMaker = chargeAdjacentMakers bSpirit iceFree
       (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
-      (bSurp2, surpFree) = chipIceOnClear bSurp surpExplode0
+      surpExpanded = expandSpecials bSurp surpExplode0
+      (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
       bBottle = triggerAdjacentBottles bSurp2 iceFree
       bNoChoco = clearChocoAdjacent bBottle expanded
       bNoSteam = clearSteamAdjacent bNoChoco expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
-      spawns = spawnSpecials prefer runs
+      spawns = spawnSpecials prefer runs allPos
       mb1 =
         foldl'
           ( \m (p, cell) ->

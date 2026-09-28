@@ -148,6 +148,12 @@ tests =
     , testCase "carpet_ice_last_layer_covers" carpet_ice_last_layer_covers
     , testCase "time_spirit_rescues_last_move" time_spirit_rescues_last_move
     , testCase "portal_after_belt_match_teleports" portal_after_belt_match_teleports
+    , testCase "flip_four_match_spawns_line" flip_four_match_spawns_line
+    , testCase "surprise_blast_expands_bomb" surprise_blast_expands_bomb
+    , testCase "maker_bomb_survives_wave" maker_bomb_survives_wave
+    , testCase "chain_freeze_both_peel" chain_freeze_both_peel
+    , testCase "honey_balloon_same_clear" honey_balloon_same_clear
+    , testCase "safe_bottom_cookie_collected" safe_bottom_cookie_collected
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -3867,9 +3873,263 @@ portal_after_belt_match_teleports = do
   assertBool "post-move stable" (not (hasAnyMatch (gsBoard gs1)))
   assertEqual "spent one move" (11 :: Int) (gsMoves gs1)
 
+-- | Flip at the natural 4-match spawn anchor: Line must still appear on a hole.
+-- Locks Flip+Match: non-clearing Flip seeds must not swallow special spawns.
+flip_four_match_spawns_line :: Assertion
+flip_four_match_spawns_line = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkFlip C1 C4))
+          (3, 3)
+          (mkGem C1)
+  assertEqual "4-run" (4 :: Int) (maximum (0 : map (length . runPos) (findMatchRuns board0)))
+  let (mb, n) = clearMatches board0
+  assertEqual "three holes (flip stays)" (3 :: Int) n
+  assertBool "flip became back gem" $
+    case (mb !! 3) !! 2 of
+      Just c -> isGem c && cellColor c == C4 && cellKind c == Normal
+      Nothing -> False
+  let specials =
+        [ (r, c, cellKind cell)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , Just cell <- [((mb !! r) !! c)]
+        , isGem cell
+        , cellKind cell /= Normal
+        ]
+  assertBool ("expected Line spawn, got " ++ show specials) $
+    any (\(_, _, k) -> k == LineH || k == LineV) specials
+  -- ice>1 at middle is the same class of non-hole spawn anchor
+  let boardIce =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (5, 0) (mkGem C2))
+                (5, 1)
+                (mkGem C2))
+             (5, 2)
+             (mkIceGem C2 2))
+          (5, 3)
+          (mkGem C2)
+      (mbI, _) = clearMatches boardIce
+      specsI =
+        [ cellKind cell
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , Just cell <- [((mbI !! r) !! c)]
+        , isGem cell
+        , cellKind cell /= Normal
+        ]
+  assertBool ("ice mid still spawns, got " ++ show specsI) (LineH `elem` specsI || LineV `elem` specsI)
+
+-- | Surprise 3×3 blast that hits a Bomb must expand the Bomb (same as countdown blasts).
+-- Locks Surprise+Cascade: explode seeds go through expandSpecials before chipIce.
+surprise_blast_expands_bomb :: Assertion
+surprise_blast_expands_bomb = do
+  -- (3,3) surpriseOutcome == 3 → explode; Bomb at (2,3) sits inside the 3×3.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (3, 3)
+             mkSurprise)
+          (2, 3)
+          (Gem C5 Bomb 0 Nothing)
+  assertBool "match opens surprise" (not (null (findMatches board0)))
+  let (mb, n) = clearMatches board0
+      holes =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , ((mb !! r) !! c) == Nothing
+        ]
+  assertBool "bomb cell cleared" ((2, 3) `elem` holes)
+  -- Bomb at (2,3) expands to row1; (1,3) is outside surprise 3×3 alone.
+  assertBool "bomb expansion reached (1,3)" ((1, 3) `elem` holes)
+  assertBool "cleared well beyond match+surprise" (n >= 12)
+
+-- | Maker charge-1 → Bomb in place; Bomb is not consumed by the producing wave.
+-- Locks Maker+Bomb: produced Bomb sits until a later match/swap.
+maker_bomb_survives_wave :: Assertion
+maker_bomb_survives_wave = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkMakerCharges C1 1)
+      gs0 =
+        (newGame defaultConfig 11)
+          { gsBoard = board0
+          , gsMoves = 15
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (3, 1) (3, 2) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let cell = getCell (gsBoard gs1) (2, 1)
+  -- trySwap path: Maker is gone (converted); Bomb may still sit or cascade-detonate.
+  assertBool "maker converted away" (not (isMaker cell))
+  -- Unit path: same-wave clearMatches leaves Bomb in place (not consumed by producing wave)
+  let (mb, _) = clearMatches board0
+  case (mb !! 2) !! 1 of
+    Just c -> do
+      assertBool "unit bomb gem" (isGem c)
+      assertEqual "unit Bomb kind" Bomb (cellKind c)
+      assertEqual "unit bomb color" C1 (cellColor c)
+    Nothing -> assertFailure "maker cell must not hole"
+
+-- | Same clear peels an adjacent Chain and an adjacent Freeze.
+-- Locks Chain+Freeze: independent overlays on different cells both respond.
+chain_freeze_both_peel :: Assertion
+chain_freeze_both_peel = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (2, 1)
+             (mkChainGem C2 1))
+          (4, 1)
+          (mkFreezeGem C3 1)
+      ms = findMatches board0
+      (b1, nChain) = chipAdjacentChain board0 ms
+      (b2, nFreeze) = chipAdjacentFreeze b1 ms
+  assertEqual "chain peeled" (1 :: Int) nChain
+  assertEqual "freeze peeled" (1 :: Int) nFreeze
+  assertBool "chain gone" (not (hasChain (getCell b2 (2, 1))))
+  assertBool "freeze gone" (not (hasFreeze (getCell b2 (4, 1))))
+  -- Full clearMatches also leaves both cells as bare gems (not holes)
+  let (mb, _) = clearMatches board0
+  assertBool "chain cell not holed" $
+    case (mb !! 2) !! 1 of
+      Just c -> isGem c && not (hasChain c)
+      Nothing -> False
+  assertBool "freeze cell not holed" $
+    case (mb !! 4) !! 1 of
+      Just c -> isGem c && not (hasFreeze c)
+      Nothing -> False
+
+-- | One match adjacent to Honey and same-color Balloon clears both in the wave.
+-- Locks Honey+Balloon: independent adjacency rules share iceFree seeds.
+honey_balloon_same_clear :: Assertion
+honey_balloon_same_clear = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (2, 1)
+             mkHoney)
+          (4, 1)
+          (mkBalloon C1)
+      gs0 =
+        (newGame defaultConfig 12)
+          { gsBoard = board0
+          , gsMoves = 15
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHoneyCleared = 0
+          , gsBalloonsPopped = 0
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (3, 1) (3, 2) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool "honey counted" (gsHoneyCleared gs1 >= 1)
+  assertBool "balloon counted" (gsBalloonsPopped gs1 >= 1)
+  assertBool "no honey left" $
+    not (any (\r -> any (\c -> isHoney (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
+  assertBool "no balloon left" $
+    not (any (\r -> any (\c -> isBalloon (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
+
+-- | Safe on the bottom row opens to Cookie and collects in the same settle.
+-- Locks Safe→Cookie: open-in-place + drainBottomCookies in one wave.
+safe_bottom_cookie_collected :: Assertion
+safe_bottom_cookie_collected = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (6, 0) (mkGem C1))
+                (6, 1)
+                (mkGem C1))
+             (6, 2)
+             (mkGem C1))
+          (7, 1)
+          mkSafe
+      (mb, _) = clearMatches board0
+  assertBool "opened to cookie pre-settle" $
+    case (mb !! 7) !! 1 of
+      Just Cookie -> True
+      _ -> False
+  let (settled, fallen) = settleBoardPortals [] mb
+  assertEqual "cookie drained" (1 :: Int) fallen
+  assertBool "bottom no longer cookie" $
+    case (settled !! 7) !! 1 of
+      Just Cookie -> False
+      _ -> True
+  let gs0 =
+        (newGame defaultConfig 13)
+          { gsBoard = board0
+          , gsMoves = 15
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsSafesOpened = 0
+          , gsCookiesCollected = 0
+          , gsGoal = GoalSafe 1
+          }
+      (gs1, out) = trySwap (6, 1) (6, 2) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool "safe opened" (gsSafesOpened gs1 >= 1)
+  assertBool "cookie collected" (gsCookiesCollected gs1 >= 1)
+
 --------------------------------------------------------------------------------
 -- Release quality gates (研讨锁定具名测)
 --------------------------------------------------------------------------------
+
 
 -- | After a legal Move, cascade wave count is bounded and the board reaches Stable.
 -- Strengthens inv_move_to_stable / cascade_until_stable with an explicit step bound.

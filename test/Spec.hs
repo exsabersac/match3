@@ -176,6 +176,7 @@ tests =
     , testCase "bottle_dye_followup_match" bottle_dye_followup_match
     , testCase "hat_recolor_followup_match" hat_recolor_followup_match
     , testCase "snail_belt_no_double_step" snail_belt_no_double_step
+    , testCase "snail_crawl_resolves_match" snail_crawl_resolves_match
     , testCase "maker_multi_adjacent_charges_once" maker_multi_adjacent_charges_once
     , testCase "last_cleared_skips_belt_snail" last_cleared_skips_belt_snail
     , testCase "unlock_after_clear_bumps_map" unlock_after_clear_bumps_map
@@ -6511,6 +6512,72 @@ goal_carpet_seeds_open_tiles = do
     any
       (\(r, c) -> r < boardSize - 1 && isCookie (getCell (gsBoard gsCk) (r, c)))
       [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
+
+
+-- | Snail crawl at end of move can assemble a 3-match; must cascade to stable
+-- (regression: trySwap left hasAnyMatch after snail push).
+snail_crawl_resolves_match :: Assertion
+snail_crawl_resolves_match = do
+  -- Trigger match on cols 4/5/7 (away from snail cols 0-3) so gravity does not
+  -- disturb the snail row before crawl.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell
+                         (setCell
+                            (setCell
+                               (setCell stableBoard (1, 4) (mkGem C1))
+                               (1, 5)
+                               (mkGem C1))
+                            (1, 6)
+                            (mkGem C2))
+                         (1, 7)
+                         (mkGem C1))
+                      (2, 3)
+                      (mkGem C2))
+                   (3, 0)
+                   (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkSnail 0 1))
+          (3, 3)
+          (mkGem C1)
+  assertBool "pre-move stable" (not (hasAnyMatch board0))
+  let afterCrawl = stepSnails board0
+  assertBool "crawl creates match" (hasAnyMatch afterCrawl)
+  assertBool "snail at (3,3)" (isSnail (getCell afterCrawl (3, 3)))
+  assertEqual "C1 pushed to (3,2)" C1 (cellColor (getCell afterCrawl (3, 2)))
+  let gs0 =
+        (newGame (GameConfig 20 (GoalScore 99999)) 7)
+          { gsBoard = board0
+          , gsBelts = []
+          , gsPortals = []
+          , gsUfos = []
+          , gsOver = Nothing
+          , gsMoves = 20
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsLastCleared = []
+          }
+      (gs1, out) = trySwap (1, 6) (1, 7) gs0
+  case out of
+    NoMatch -> assertFailure "expected match swap"
+    InvalidSwap -> assertFailure "expected valid swap"
+    _ -> pure ()
+  assertBool "post-move stable" (not (hasAnyMatch (gsBoard gs1)))
+  assertBool "snail still on board" $
+    any
+      (\(r, c) -> isSnail (getCell (gsBoard gs1) (r, c)))
+      [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+  -- Snail-assembled match cells should appear in clear particles
+  assertBool "snail match cleared in particles" $
+    any (`elem` gsLastCleared gs1) [(3, 0), (3, 1), (3, 2)]
+  assertEqual "one move spent" (19 :: Int) (gsMoves gs1)
+
 
 --------------------------------------------------------------------------------
 -- Carpet × Cookie vacate / Safe open (GoalCarpet soft-lock fix)

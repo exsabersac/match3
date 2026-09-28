@@ -1,5 +1,6 @@
 -- | Snails (开心消消乐蜗牛): mobile blockers that crawl one step after each
 -- successful player move. Push gems ahead; reverse at edges / solid blockers.
+-- trySwap runs a follow-up cascade if the crawl assembles a match (no re-crawl).
 module Match3.Snail
   ( stepSnailAt
   , stepSnails

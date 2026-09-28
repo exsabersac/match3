@@ -638,7 +638,7 @@ countTimeSpirits b =
 -- Cookie is immune to mid-board wipe (only gravity + bottom drain); Safe opens
 -- in place to Cookie. Neither path appears in cascade pos lists, so GoalCarpet
 -- under them would soft-lock unless we treat the vacate as a cover seed.
--- Compare pre-move board to post-cascade board (before snail crawl).
+-- Compare pre-move board to final post-move board (after snail + follow-up cascade).
 carpetVacateSeeds :: Board -> Board -> [Pos]
 carpetVacateSeeds before after =
   [ (r, c)
@@ -692,32 +692,39 @@ trySwap p1 p2 gs
                      else runPostBeltCascade ufosCd (gsPortals gs) g1' boardBelt
                  -- Vine / chocolate / steam, then snails crawl (skip belt cells — no double-step)
                  beltCells = nub (concat (gsBelts gs))
-                 board1 = stepSnailsAvoiding beltCells (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
-                 clearedSites = nub (pos0 ++ pos1 ++ pos2)
-                 gained = gained0 + gained1 + gained2
+                 boardSnail = stepSnailsAvoiding beltCells (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
+                 -- Snail push can assemble a match after cascades finished; resolve it
+                 -- (no second belt/snail/countdown — once-per-move end effects stay once).
+                 (board1, cleared3, gained3, combo3, tallies3, stones3, chests3, honey3, balloons3, cookies3, cakes3, uAbs3, ufos3, pos3, gFinal) =
+                   if hasAnyMatch boardSnail
+                     then runCascadeScoredWithUfos Nothing ufos2 (gsPortals gs) g' boardSnail
+                     else (boardSnail, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos2, [], g')
+                 clearedSites = nub (pos0 ++ pos1 ++ pos2 ++ pos3)
+                 gained = gained0 + gained1 + gained2 + gained3
                  combo =
                    let c1 = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
-                   in max c1 (if cleared2 > 0 then c1 + combo2 else c1)
-                 tallies = mergeTallies (mergeTallies tallies0 tallies1) tallies2
-                 stonesHit = stones0 + stones1 + stones2
-                 chestsHit = chests0 + chests1 + chests2
-                 honeyHit = honey0 + honey1 + honey2
-                 balloonHit = balloons0 + balloons1 + balloons2
-                 cookieHit = cookies0 + cookies1 + cookies2
-                 cakeHit = cakes0 + cakes1 + cakes2
+                       c2 = max c1 (if cleared2 > 0 then c1 + combo2 else c1)
+                   in max c2 (if cleared3 > 0 then c2 + combo3 else c2)
+                 tallies = mergeTallies (mergeTallies (mergeTallies tallies0 tallies1) tallies2) tallies3
+                 stonesHit = stones0 + stones1 + stones2 + stones3
+                 chestsHit = chests0 + chests1 + chests2 + chests3
+                 honeyHit = honey0 + honey1 + honey2 + honey3
+                 balloonHit = balloons0 + balloons1 + balloons2 + balloons3
+                 cookieHit = cookies0 + cookies1 + cookies2 + cookies3
+                 cakeHit = cakes0 + cakes1 + cakes2 + cakes3
                  safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
                  (carpetOpen', carpetHit) =
                    coverCarpets
                      (gsCarpetOpen gs)
-                     (pos0 ++ pos1 ++ pos2 ++ carpetVacateSeeds board0 boardBeltCas)
-                 uAbs = uAbs0 + uAbs1 + uAbs2
+                     (pos0 ++ pos1 ++ pos2 ++ pos3 ++ carpetVacateSeeds board0 board1)
+                 uAbs = uAbs0 + uAbs1 + uAbs2 + uAbs3
                  ufoCollected' = gsUfoCollected gs + uAbs
                  cookies' = gsCookiesCollected gs + cookieHit
                  cakes' = gsCakesCleared gs + cakeHit
                  safes' = gsSafesOpened gs + safesHit
                  carpets' = gsCarpetsCovered gs + carpetHit
-                 _cleared = cleared0 + cleared1 + cleared2
+                 _cleared = cleared0 + cleared1 + cleared2 + cleared3
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalCollectMulti _ -> 0
@@ -764,12 +771,12 @@ trySwap p1 p2 gs
                      , gsCookiesCollected = cookies'
                      , gsCakesCleared = cakes'
                      , gsSafesOpened = safes'
-                     , gsGen = g'
+                     , gsGen = gFinal
                      , gsHistory = hist
                      , gsHint = Nothing
                      , gsCombo = combo
                      , gsShuffled = False
-                     , gsUfos = ufos2
+                     , gsUfos = ufos3
                      , gsUfoCollected = ufoCollected'
                      , gsCarpetOpen = carpetOpen'
                      , gsCarpetsCovered = carpets'

@@ -1,6 +1,6 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
 Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
 
@@ -38,6 +38,9 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Dual-face gems** (`Flip front back` / 双面块): matches as front; a clear hit flips to Normal gem of back color
 - **Surprise boxes** (`Surprise` / 彩蛋): adjacent clear opens → Line/Bomb special or 3×3 pop
 - **Dye bottles** (`Bottle c` / 染色瓶): adjacent clear dyes ortho gems to bottle color
+- **Time spirits** (`TimeSpirit` / 时间精灵): adjacent clear awards **+2 moves** this level
+- **Steam** (`Steam` overlay / 蒸汽): blocks match; adjacent clear extinguishes; surviving steam spreads each move
+- **Move bank**: clearing a campaign level carries up to **3 leftover moves** into the next
 - **Juice makers** (`Maker c n` / 果汁机): same-color adjacent clears charge; at 0 produce a Bomb of color c
 - **Portals** (传送门 pairs): after gravity, gem on A with hole at B teleports A→B (bidirectional)
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI (distinct from Freeze overlay)
@@ -47,8 +50,8 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
 - **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / pop balloons / collect cookies / clear cakes / open safes / UFO absorb
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
-- **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 34 campaign levels
+- **Daily challenge** (`D`): date-seeded board + **10 rotating goals** (score/collect/multi/stone/honey/UFO/chest/cake/safe/balloon); **star rating** on clear (3★ ≥40% moves left)
+- Combo scoring, hint, undo, auto-shuffle, **36 campaign levels** with map **chapter separators** (CH1–CH6)
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
@@ -66,11 +69,11 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 9 | 草场 | 24 | Score 600 | grass |
 | 10 | 藤袭 | 22 | Collect 18× RED | vines |
 | 11 | 传送 | 22 | Score 800 | grass + belt |
-| 12 | 轰炸 | 18 | Score 750 | countdown bombs |
+| 12 | 轰炸 | 20 | Score 750 | countdown bombs |
 | 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
-| 15 | 压力 | 18 | Multi RED/GRN/BLU | grass + choco |
-| 16 | 大师 | 18 | Score 1100 | stone+grass+vine+choco+bomb+belts+UFO |
+| 15 | 压力 | 20 | Multi RED/GRN/BLU | grass + choco |
+| 16 | 大师 | 20 | Score 1100 | stone+grass+vine+choco+bomb+belts+UFO |
 | 17 | 宝箱 | 24 | Open 6 chests | chests |
 | 18 | 巧箱 | 22 | Open 5 chests | chests + choco |
 | 19 | 蜂蜜 | 24 | Smash 6 honey jars | honey jars |
@@ -82,13 +85,15 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 25 | 帽宴 | 22 | Clear 5 cakes | cakes + magic hats + choco |
 | 26 | 锁链 | 22 | Score 900 | iron chains + stone + choco |
 | 27 | 果汁 | 24 | Collect 18× RED | juice makers + fog + portals |
-| 28 | 终章 | 16 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO |
+| 28 | 终章 | 18 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO |
 | 29 | 蜗牛 | 20 | Score 850 | crawling snails |
 | 30 | 冰冻 | 20 | Collect 16× GREEN | rocket freeze + choco |
 | 31 | 窗帘 | 22 | Collect 16× RED | curtain columns + choco |
 | 32 | 金库 | 22 | Open 5 safes | safes→cookie + dual-face + choco |
 | 33 | 惊喜 | 22 | Score 900 | surprise boxes + choco |
 | 34 | 染色 | 22 | Collect 16× BLUE | dye bottles + fog |
+| 35 | 时灵 | 22 | Score 850 | time spirits (+2 moves) |
+| 36 | 蒸汽 | 22 | Collect 16× GREEN | steam clouds + choco |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -111,7 +116,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; pink frosted cake = 蛋糕 (layer pips, ≠ cookie); purple brim hat = 魔法帽; metal spout = 果汁机 (color + charge pips); gray cross links = 锁链 (layer pips); deep-blue snowflake glaze = 火箭冰冻 (≠ cyan ice cracks); wine vertical stripes + rod = 窗帘; steel vault + gold dial = 保险箱; split two-tone gem = 双面块; pink gift + gold bow = 彩蛋; tinted bottle + neck = 染色瓶; olive shell + dir tick = 蜗牛; violet rings = 传送门 pair; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; pink frosted cake = 蛋糕 (layer pips, ≠ cookie); purple brim hat = 魔法帽; metal spout = 果汁机 (color + charge pips); gray cross links = 锁链 (layer pips); deep-blue snowflake glaze = 火箭冰冻 (≠ cyan ice cracks); wine vertical stripes + rod = 窗帘; steel vault + gold dial = 保险箱; split two-tone gem = 双面块; pink gift + gold bow = 彩蛋; tinted bottle + neck = 染色瓶; cyan orb + hourglass = 时间精灵; gray steam wisps = 蒸汽; olive shell + dir tick = 蜗牛; violet rings = 传送门 pair; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
 
 ## 对标开心消消乐 / Feature map
 
@@ -131,6 +136,8 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 双面块 | ✅ `Flip front back`（正面参与匹配；命中翻成背面 Normal 宝石） |
 | 彩蛋 / 惊喜盒 | ✅ `Surprise`（邻消打开 → 特殊块或 3×3 小爆炸） |
 | 染色瓶 | ✅ `Bottle c`（邻消把邻格宝石染成瓶色） |
+| 时间精灵 | ✅ `TimeSpirit`（邻消清除，本关 +2 步）；过关剩余步最多携带 3 步入下一关 |
+| 蒸汽 | ✅ `Steam` overlay（挡匹配；邻消扑灭；步末蔓延） |
 | 蜗牛 | ✅ `Snail dr dc`（挡交换；步末爬一格推宝石，碰壁掉头） |
 | 果汁机 / 制造机 | ✅ `Maker c n`（同色邻消充能，满则产出 Bomb） |
 | 传送门 | ✅ 双向 `Portal` 对（重力后 A 有子且 B 为空则传送） |
@@ -141,7 +148,8 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
 | 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
 | 飞碟吸色 | ✅ `Ufo{cell,color}` + `stepUfo` 波末吸同色邻格并移格；`GoalUfo` |
-| 每日挑战 / 三星 | ✅ Daily + starRating |
+| 每日挑战 / 三星 | ✅ Daily（10 目标轮换）+ starRating |
+| 选关章节 | ✅ 地图 CH1–CH6 分隔 |
 | 传送带 | ✅ `Belt` 步末循环移位，可触发新消 |
 | 道具（锤子等） | ✅ 锤子 / 任意交换 / 十字清除：按键进模式 + 点选完整流 |
 
@@ -158,9 +166,9 @@ stack build && stack test && stack exec match3-sdl
 ## Layout
 
 ```
-src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail
+src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (103+ named cases)
+test/Spec.hs tasty (117 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

@@ -26,6 +26,8 @@ module Match3.Obstacles
   , openAdjacentSurprises
   , bottlesAdjacentTo
   , triggerAdjacentBottles
+  , spiritsAdjacentTo
+  , chipAdjacentTimeSpirits
   , withAdjacentStones
   ) where
 
@@ -47,6 +49,7 @@ import Match3.Types
   , isSafe
   , isSurprise
   , isBottle
+  , isTimeSpirit
   , hasChain
   , hasFreeze
   , isSnail
@@ -85,7 +88,7 @@ swapBlockedByStone b p1 p2 =
   let block c =
         isStone c || isChest c || isHoney c || isBalloon c || isCookie c
           || isCake c || isMagicHat c || isMaker c || isSnail c || isSafe c
-          || isSurprise c || isBottle c
+          || isSurprise c || isBottle c || isTimeSpirit c
           || hasChain c || hasFreeze c
   in block (at b p1) || block (at b p2)
 
@@ -409,6 +412,28 @@ triggerAdjacentBottles b cleared =
                 ]
           in foldl (\bd p -> setAt bd p (recolorCell (at bd p) col)) board (nub nbrs)
         _ -> board
+
+
+-- | Time spirit positions orthogonally adjacent to cleared gems.
+spiritsAdjacentTo :: Board -> [Pos] -> [Pos]
+spiritsAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isTimeSpirit (at b p)
+    ]
+
+-- | Remove adjacent time spirits (时间精灵). Dead positions cleared with the wave.
+chipAdjacentTimeSpirits :: Board -> [Pos] -> (Board, [Pos])
+chipAdjacentTimeSpirits b clearedGems =
+  foldl hitOne (b, []) (spiritsAdjacentTo b clearedGems)
+  where
+    hitOne (board, dead) p =
+      case at board p of
+        TimeSpirit -> (board, nub (p : dead))
+        _ -> (board, dead)
 
 -- | Legacy helper: positions that should be removed (last-layer stones only).
 -- Prefer chipAdjacentStones in clear pipeline.

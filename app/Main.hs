@@ -203,6 +203,7 @@ spawnBurst board positions =
                     Flip f _ -> colorRGB f
                     Surprise -> (255, 100, 160)
                     Bottle col -> colorRGB col
+                    TimeSpirit -> (80, 220, 255)
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -1385,16 +1386,40 @@ drawComboPop ren app
       drawBannerWord ren cx cy 3 col "COMBO"
       drawNumber ren (cx + 100) (cy + 8) 4 col combo
 
--- | Simplified campaign map (选关): nodes in a winding path; unlocked up to appMaxReached.
+-- | Chapter boundaries (0-based level index starts). Light map separators.
+chapterStarts :: [Int]
+chapterStarts = [0, 7, 14, 21, 28, 34]
+
+chapterLabel :: Int -> String
+chapterLabel 0 = "CH1"
+chapterLabel 7 = "CH2"
+chapterLabel 14 = "CH3"
+chapterLabel 21 = "CH4"
+chapterLabel 28 = "CH5"
+chapterLabel 34 = "CH6"
+chapterLabel _ = ""
+
+-- | Extra vertical gap before chapter-start nodes.
+chapterGapBefore :: Int -> CInt
+chapterGapBefore i
+  | i `elem` drop 1 chapterStarts = 28
+  | otherwise = 0
+
+-- | Simplified campaign map (选关): zig-zag nodes + chapter gaps.
 mapNodePos :: Int -> (CInt, CInt)
 mapNodePos i =
-  let cols = 5 :: Int
+  let cols = 6 :: Int
       row = i `div` cols
       col = i `mod` cols
-      -- Zig-zag: odd rows reverse
       col' = if even row then col else (cols - 1 - col)
-      x = 48 + fromIntegral col' * 88
-      y = hudH + 50 + fromIntegral row * 90
+      -- Accumulate chapter gaps for rows that contain a chapter start
+      gapY =
+        sum
+          [ chapterGapBefore j
+          | j <- [0 .. i]
+          ]
+      x = 40 + fromIntegral col' * 72
+      y = hudH + 44 + fromIntegral row * 78 + gapY
   in (x, y)
 
 mapHitTest :: Int32 -> Int32 -> Maybe Int
@@ -1421,7 +1446,15 @@ drawLevelMap ren app
       fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW winH)))
       drawBannerWord ren 80 20 4 (V4 255 220 100 255) "MAP"
       drawBannerWord ren 250 28 2 (V4 180 200 220 255) "M"
-      -- Path lines between consecutive nodes
+      -- Chapter separators / labels
+      forM_ chapterStarts $ \ci -> do
+        let lab = chapterLabel ci
+        when (not (null lab)) $ do
+          let (_nx, ny) = mapNodePos ci
+          rendererDrawColor ren $= V4 90 110 140 255
+          fillRect ren (Just (Rectangle (P (V2 16 (ny - 36))) (V2 (winW - 32) 2)))
+          drawBannerWord ren 20 (ny - 32) 2 (V4 160 190 220 255) lab
+      -- Path lines between consecutive nodes (skip visual break at chapter edges)
       rendererDrawColor ren $= V4 60 80 100 255
       forM_ [0 .. length allLevels - 2] $ \i -> do
         let (x0, y0) = mapNodePos i
@@ -1879,6 +1912,19 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  TimeSpirit -> do
+    -- Time spirit (时间精灵): cyan orb + hourglass ticks; adjacent clear → +2 moves
+    rendererDrawColor ren $= V4 40 180 220 255
+    fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + 10))) (V2 (cellPx - 20) (cellPx - 20))))
+    rendererDrawColor ren $= V4 200 250 255 255
+    fillRect ren (Just (Rectangle (P (V2 (x + 16) (y + 14))) (V2 (cellPx - 32) 6)))
+    fillRect ren (Just (Rectangle (P (V2 (x + 16) (y + cellPx - 20))) (V2 (cellPx - 32) 6)))
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + 18))) (V2 6 (cellPx - 36))))
+    rendererDrawColor ren $= V4 255 240 100 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 8) (y + cellPx `div` 2 - 4))) (V2 16 8)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Countdown col turns -> do
     let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -2031,6 +2077,16 @@ drawGemAt ren x y cell flashing = case cell of
                (Rectangle
                   (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
                   (V2 7 5)))
+      Just Steam -> do
+        -- Steam cloud (蒸汽): soft gray wisps; blocks match until adjacent clear
+        rendererDrawColor ren $= V4 170 180 190 190
+        fillRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
+        rendererDrawColor ren $= V4 220 230 240 200
+        fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + 8))) (V2 16 10)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 20) (y + 16))) (V2 18 12)))
+        fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + 28))) (V2 20 10)))
+        rendererDrawColor ren $= V4 140 160 180 255
+        drawRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
       Nothing -> pure ()
     case cellKind cell of
       Normal -> pure ()

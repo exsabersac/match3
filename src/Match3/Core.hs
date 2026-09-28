@@ -42,9 +42,14 @@ module Match3.Core
   , mkBottle
   , isBottle
   , bottleColor
+  , mkTimeSpirit
+  , isTimeSpirit
+  , mkSteamGem
+  , hasSteam
   , cellOverlay
   , clearOverlaysOn
   , clearChocoAdjacent
+  , clearSteamAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
   , chipAdjacentFreeze
@@ -54,8 +59,10 @@ module Match3.Core
   , chainPositions
   , freezePositions
   , curtainPositions
+  , steamPositions
   , spreadVines
   , spreadChoco
+  , spreadSteam
   , stepSnails
   , stepSnailAt
   , snailPositions
@@ -187,6 +194,8 @@ module Match3.Core
   , surprisesAdjacentTo
   , triggerAdjacentBottles
   , bottlesAdjacentTo
+  , spiritsAdjacentTo
+  , chipAdjacentTimeSpirits
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
@@ -216,6 +225,7 @@ import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
+  , clearSteamAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
   , chipAdjacentFreeze
@@ -225,8 +235,10 @@ import Match3.Grass
   , chainPositions
   , freezePositions
   , curtainPositions
+  , steamPositions
   , spreadVines
   , spreadChoco
+  , spreadSteam
   )
 import Match3.Snail
   ( stepSnails
@@ -266,6 +278,8 @@ import Match3.Obstacles
   , surprisesAdjacentTo
   , triggerAdjacentBottles
   , bottlesAdjacentTo
+  , spiritsAdjacentTo
+  , chipAdjacentTimeSpirits
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)

@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main (main) where
 
-import Data.List (sort)
+import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Match3.Board (applyGravity, clearMatches, refill)
 import Match3.Core
@@ -127,6 +127,13 @@ tests =
     , testCase "booster_cross_clears_row_col" booster_cross_clears_row_col
     , testCase "shuffle_preserves_decor" shuffle_preserves_decor
     , testCase "daily_ufo_goal_spawns_saucer" daily_ufo_goal_spawns_saucer
+    , testCase "time_spirit_blocks_swap" time_spirit_blocks_swap
+    , testCase "time_spirit_awards_moves" time_spirit_awards_moves
+    , testCase "steam_blocks_match" steam_blocks_match
+    , testCase "steam_cleared_by_adjacent" steam_cleared_by_adjacent
+    , testCase "steam_spreads_after_move" steam_spreads_after_move
+    , testCase "carry_moves_on_next_level" carry_moves_on_next_level
+    , testCase "daily_goal_rotates_ten" daily_goal_rotates_ten
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -2450,7 +2457,7 @@ chain_layer_decrement = do
           , hasChain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
-  assertEqual "campaign levels" (34 :: Int) (length allLevels)
+  assertEqual "campaign levels" (36 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Maker / 果汁机 (same-color adjacent charge -> Bomb)
@@ -2725,7 +2732,7 @@ freeze_layer_decrement = do
           , hasFreeze (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor freeze >= 8, got " ++ show nFreeze) (nFreeze >= 8)
-  assertEqual "campaign levels" (34 :: Int) (length allLevels)
+  assertEqual "campaign levels" (36 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Curtain / 窗帘 (blocks match; adjacent peel; ≠ Fog soft cloud)
@@ -2796,7 +2803,7 @@ curtain_layer_decrement = do
           , hasCurtain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor curtain >= 8, got " ++ show nCurt) (nCurt >= 8)
-  assertEqual "campaign levels" (34 :: Int) (length allLevels)
+  assertEqual "campaign levels" (36 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Safe / 保险箱 (layered vault; opens into Cookie; GoalSafe)
@@ -3004,7 +3011,7 @@ surprise_opens_to_special = do
           , isSurprise (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor surprises >= 8, got " ++ show nSur) (nSur >= 8)
-  assertEqual "campaign levels" (34 :: Int) (length allLevels)
+  assertEqual "campaign levels" (36 :: Int) (length allLevels)
 
 surprise_explodes_small :: Assertion
 surprise_explodes_small = do
@@ -3110,3 +3117,148 @@ booster_cross_clears_row_col = do
   let (_, out2) = useCrossClear (1, 1) gs1
   out2 @?= InvalidSwap
   assertEqual "unchanged" (0 :: Int) (gsCrossClears gs1)
+
+--------------------------------------------------------------------------------
+-- TimeSpirit / 时间精灵 (+2 moves) & Steam / 蒸汽 & carry bonus
+--------------------------------------------------------------------------------
+
+time_spirit_blocks_swap :: Assertion
+time_spirit_blocks_swap = do
+  let board = setCell stableBoard (3, 3) mkTimeSpirit
+  assertBool "is spirit" (isTimeSpirit (getCell board (3, 3)))
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+
+time_spirit_awards_moves :: Assertion
+time_spirit_awards_moves = do
+  -- Form match via swap (0,2)<->(0,3): C1 C1 C2 C1 → C1 C1 C1 C2; spirit at (1,1) adjacent
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (0, 0) (mkGem C1))
+                   (0, 1)
+                   (mkGem C1))
+                (0, 2)
+                (mkGem C2))
+             (0, 3)
+             (mkGem C1))
+          (1, 1)
+          mkTimeSpirit
+      gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board0
+          , gsMoves = 10
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool "spirit cleared" (not (isTimeSpirit (getCell (gsBoard gs1) (2, 1))))
+  -- spent 1 move, gained +2 → net +1 from 10 → 11
+  assertEqual "moves +2 net" (11 :: Int) (gsMoves gs1)
+  let gsL = newGameAtLevel 34 (levelConfig (allLevels !! 34)) 42
+      nSp =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isTimeSpirit (getCell (gsBoard gsL) (r, c))
+          ]
+  assertBool ("decor spirits >= 6, got " ++ show nSp) (nSp >= 6)
+
+steam_blocks_match :: Assertion
+steam_blocks_match = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (Gem C1 Normal 0 (Just Steam)))
+          (3, 2)
+          (mkGem C1)
+  assertBool "has steam" (hasSteam (getCell board0 (3, 1)))
+  assertBool "no match through steam" (null (findMatches board0))
+
+steam_cleared_by_adjacent :: Assertion
+steam_cleared_by_adjacent = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (Gem C2 Normal 0 (Just Steam))
+  assertBool "steam present" (hasSteam (getCell board0 (2, 1)))
+  let b1 = clearSteamAdjacent board0 (findMatches board0)
+  assertBool "steam extinguished" (not (hasSteam (getCell b1 (2, 1))))
+  assertEqual "gem remains" C2 (cellColor (getCell b1 (2, 1)))
+
+steam_spreads_after_move :: Assertion
+steam_spreads_after_move = do
+  let board0 =
+        setCell
+          (setCell stableBoard (3, 3) (Gem C1 Normal 0 (Just Steam)))
+          (3, 4)
+          (mkGem C5)
+  assertBool "neighbor bare" (cellOverlay (getCell board0 (3, 4)) == Nothing)
+  let b1 = spreadSteam board0
+  assertBool "steam spread" (hasSteam (getCell b1 (3, 4)))
+  let gs = newGameAtLevel 35 (levelConfig (allLevels !! 35)) 42
+      nSt =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , hasSteam (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor steam >= 8, got " ++ show nSt) (nSt >= 8)
+  assertEqual "campaign levels" (36 :: Int) (length allLevels)
+
+carry_moves_on_next_level :: Assertion
+carry_moves_on_next_level = do
+  let cfg0 = levelConfig (allLevels !! 0)
+      gs0 =
+        (newGameAtLevel 0 cfg0 1)
+          { gsOver = Just (LevelClear 100 1)
+          , gsMoves = 5  -- leftover
+          }
+      gs1 = nextLevel gs0 99
+      base = lvlMoves (allLevels !! 1)
+  assertEqual "level advanced" (1 :: Int) (gsLevel gs1)
+  assertEqual "carried min(3,left)" (base + 3) (gsMoves gs1)  -- cap 3
+  let gs2 =
+        (newGameAtLevel 0 cfg0 2)
+          { gsOver = Just (LevelClear 50 1)
+          , gsMoves = 2
+          }
+      gs3 = nextLevel gs2 100
+  assertEqual "carry 2" (base + 2) (gsMoves gs3)
+
+daily_goal_rotates_ten :: Assertion
+daily_goal_rotates_ten = do
+  let flavors =
+        [ cfgGoal (dailyConfig 2026 9 d) | d <- [1 .. 20] ]
+      kinds = length (nub [ show g | g <- flavors ])
+  assertBool ("at least 6 distinct daily goals, got " ++ show kinds) (kinds >= 6)
+  -- Sample includes newer flavors
+  assertBool "has chest or cake or safe or balloon among first 20 days" $
+    any
+      ( \g -> case g of
+          GoalChest _ -> True
+          GoalCake _ -> True
+          GoalSafe _ -> True
+          GoalBalloon _ -> True
+          _ -> False
+      )
+      flavors
+

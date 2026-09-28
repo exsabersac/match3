@@ -43,6 +43,10 @@ module Match3.Types
   , mkBottle
   , isBottle
   , bottleColor
+  , mkTimeSpirit
+  , isTimeSpirit
+  , mkSteamGem
+  , hasSteam
   , clearOverlay
   , setOverlay
   , mkStone
@@ -117,8 +121,9 @@ data GemKind = Normal | LineH | LineV | Bomb | Rainbow
 -- Chain n: iron chains (锁链); adjacent clears peel; chained gems cannot swap or match.
 -- Freeze n: rocket freeze (火箭冰冻); blocks swap only (NOT match); adjacent clears peel.
 -- Curtain n: curtain / roller shade (窗帘); adjacent clears peel; curtained gems do not match.
+-- Steam: steam cloud (蒸汽); blocks match; adjacent clear extinguishes; surviving steam spreads.
 -- Distinct from Ice (gem ice Int): Ice chips when the gem itself matches.
-data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int | Freeze Int | Curtain Int
+data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int | Freeze Int | Curtain Int | Steam
   deriving (Eq, Ord, Show, Generic)
 
 -- | Board cell: gem (optional ice + overlay), stone, chest, honey, cake, balloon, cookie, magic hat, snail, or countdown.
@@ -145,6 +150,7 @@ data CellContents
   | Flip Color Color  -- dual-face gem (双面块): matches as front; hit flips to back as Normal gem
   | Surprise      -- surprise egg/box (彩蛋): adjacent clear opens → special or 3×3 pop
   | Bottle Color  -- dye bottle (染色瓶): adjacent clear dyes ortho gems to bottle color
+  | TimeSpirit   -- time spirit (时间精灵): adjacent clear awards +2 moves
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -216,6 +222,7 @@ iceLayers (Safe _) = 0
 iceLayers (Flip _ _) = 0
 iceLayers Surprise = 0
 iceLayers (Bottle _) = 0
+iceLayers TimeSpirit = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -442,6 +449,21 @@ bottleColor :: Cell -> Color
 bottleColor (Bottle c) = c
 bottleColor _ = error "bottleColor: not a Bottle"
 
+-- | Time spirit (时间精灵): adjacent clear removes it and awards +2 moves.
+mkTimeSpirit :: Cell
+mkTimeSpirit = TimeSpirit
+
+isTimeSpirit :: Cell -> Bool
+isTimeSpirit TimeSpirit = True
+isTimeSpirit _ = False
+
+-- | Gem covered by steam (蒸汽): blocks match; adjacent clear extinguishes; spreads after move.
+mkSteamGem :: Color -> Cell
+mkSteamGem c = Gem c Normal 0 (Just Steam)
+
+hasSteam :: Cell -> Bool
+hasSteam c = cellOverlay c == Just Steam
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -471,6 +493,7 @@ isGem (Safe _) = False
 isGem (Flip _ _) = True
 isGem Surprise = False
 isGem (Bottle _) = False
+isGem TimeSpirit = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -489,6 +512,7 @@ cellColor (Safe _) = error "cellColor: Safe has no color"
 cellColor (Flip f _) = f
 cellColor Surprise = error "cellColor: Surprise has no color"
 cellColor (Bottle _) = error "cellColor: Bottle has no color (use bottleColor)"
+cellColor TimeSpirit = error "cellColor: TimeSpirit has no color"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -507,6 +531,7 @@ cellKind (Safe _) = error "cellKind: Safe has no kind"
 cellKind (Flip _ _) = Normal
 cellKind Surprise = error "cellKind: Surprise has no kind"
 cellKind (Bottle _) = error "cellKind: Bottle has no kind"
+cellKind TimeSpirit = error "cellKind: TimeSpirit has no kind"
 
 numColors :: Int
 numColors = 5
@@ -638,7 +663,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / time-spirit / steam / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -652,11 +677,11 @@ allLevels =
   , Level 8  "草场"   24 (GoalScore 600)
   , Level 9  "藤袭"   22 (GoalCollect C1 18)
   , Level 10 "传送"   22 (GoalScore 800)
-  , Level 11 "轰炸"   18 (GoalScore 750)
+  , Level 11 "轰炸"   20 (GoalScore 750)
   , Level 12 "飞碟"   24 (GoalUfo 10)
   , Level 13 "碟猎"   20 (GoalUfo 14)
-  , Level 14 "压力"   18 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
-  , Level 15 "大师"   18 (GoalScore 1100)
+  , Level 14 "压力"   20 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
+  , Level 15 "大师"   20 (GoalScore 1100)
   , Level 16 "宝箱"   24 (GoalChest 6)
   , Level 17 "巧箱"   22 (GoalChest 5)
   , Level 18 "蜂蜜"   24 (GoalHoney 6)
@@ -668,13 +693,15 @@ allLevels =
   , Level 24 "帽宴"   22 (GoalCake 5)
   , Level 25 "锁链"   22 (GoalScore 900)
   , Level 26 "果汁"   24 (GoalCollect C1 18)
-  , Level 27 "终章"   16 (GoalScore 1500)
+  , Level 27 "终章"   18 (GoalScore 1500)
   , Level 28 "蜗牛"   20 (GoalScore 850)
   , Level 29 "冰冻"   20 (GoalCollect C2 16)
   , Level 30 "窗帘"   22 (GoalCollect C1 16)
   , Level 31 "金库"   22 (GoalSafe 5)
   , Level 32 "惊喜"   22 (GoalScore 900)
   , Level 33 "染色"   22 (GoalCollect C3 16)
+  , Level 34 "时灵"   22 (GoalScore 850)
+  , Level 35 "蒸汽"   22 (GoalCollect C2 16)
   ]
 
 levelConfig :: Level -> GameConfig

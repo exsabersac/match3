@@ -49,6 +49,7 @@ matchesTarget b col p = case at b p of
   Flip c _ -> c == col
   Surprise -> False
   Bottle _ -> False
+  TimeSpirit -> False
 
 -- | Orthogonally adjacent gems / countdowns matching the UFO target color.
 ufoAbsorbTargets :: Board -> Ufo -> [Pos]

@@ -72,5 +72,6 @@ colorPositions b col =
       Safe _ -> False
       Surprise -> False
       Bottle _ -> False
+      TimeSpirit -> False
       Flip col' _ -> col' == col
   ]

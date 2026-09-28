@@ -56,6 +56,9 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
         Bottle _ ->
           -- Dye bottle immune to direct clear (like Maker); stays
           (board, clearable)
+        TimeSpirit ->
+          -- Time spirit clears on direct hit (hammer / blast)
+          (board, p : clearable)
         Countdown _ _ ->
           (board, p : clearable)
     get board (r, c) = (board !! r) !! c

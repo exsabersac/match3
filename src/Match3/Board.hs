@@ -37,7 +37,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog, chipAdjacentChain, chipAdjacentFreeze, chipAdjacentCurtain)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, clearSteamAdjacent, chipAdjacentFog, chipAdjacentChain, chipAdjacentFreeze, chipAdjacentCurtain)
 import Match3.Obstacles
   ( chipAdjacentStones
   , chipAdjacentChests
@@ -45,6 +45,7 @@ import Match3.Obstacles
   , chipAdjacentCakes
   , chipAdjacentSafes
   , chipAdjacentBalloons
+  , chipAdjacentTimeSpirits
   , triggerAdjacentHats
   , chargeAdjacentMakers
   , openAdjacentSurprises
@@ -122,10 +123,12 @@ groupGemRuns b (p : ps) = case getCell b p of
   Safe _ -> groupGemRuns b ps
   Surprise -> groupGemRuns b ps
   Bottle _ -> groupGemRuns b ps
+  TimeSpirit -> groupGemRuns b ps
   Gem _ _ _ (Just (Fog _)) -> groupGemRuns b ps  -- fog hides gem from matches
   Gem _ _ _ (Just (Chain _)) -> groupGemRuns b ps  -- chain locks gem from matches
   Gem _ _ _ (Just (Curtain _)) -> groupGemRuns b ps  -- curtain hides gem from matches
-  -- Freeze does NOT break runs: frozen gems still match (vs Chain/Fog/Curtain)
+  Gem _ _ _ (Just Steam) -> groupGemRuns b ps  -- steam hides gem from matches
+  -- Freeze does NOT break runs: frozen gems still match (vs Chain/Fog/Curtain/Steam)
   Gem col _ _ _ -> go [p] col ps
   Flip col _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
@@ -135,6 +138,7 @@ groupGemRuns b (p : ps) = case getCell b p of
       Gem _ _ _ (Just (Fog _)) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem _ _ _ (Just (Chain _)) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem _ _ _ (Just (Curtain _)) -> (col, reverse run) : groupGemRuns b (q : qs)
+      Gem _ _ _ (Just Steam) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem col' _ _ _ | col' == col -> go (q : run) col qs
       Flip col' _ | col' == col -> go (q : run) col qs
       Countdown col' _ | col' == col -> go (q : run) col qs
@@ -192,6 +196,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
                   Safe _ -> False
                   Surprise -> False
                   Bottle _ -> False
+                  TimeSpirit -> False
               ]
             Gem _ Normal _ _ -> []
             Stone _ -> []
@@ -207,6 +212,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
             Flip _ _ -> []
             Surprise -> []
             Bottle _ -> []
+            TimeSpirit -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
@@ -250,6 +256,7 @@ countColor b ps col =
         Safe _ -> False
         Surprise -> False
         Bottle _ -> False
+        TimeSpirit -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -289,18 +296,21 @@ clearMatchesDetailed prefer b =
       (bCurtain, _curtainCleared) = chipAdjacentCurtain bFreeze iceFree
       -- Safe: adjacent chip; last layer becomes Cookie in place (not removed)
       (bSafe, _openedSafes) = chipAdjacentSafes bCurtain iceFree
+      -- TimeSpirit: adjacent clear removes spirit (+2 moves counted in Game)
+      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
       -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
-      bMaker = chargeAdjacentMakers bSafe iceFree
+      bMaker = chargeAdjacentMakers bSpirit iceFree
       -- Surprise: open adjacent boxes → special in place or 3×3 explode seeds
       (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
       (bSurp2, surpFree) = chipIceOnClear bSurp surpExplode0
       -- Bottle: dye ortho gem neighbors to bottle color (bottle stays)
       bBottle = triggerAdjacentBottles bSurp2 iceFree
-      -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
+      -- Chocolate / steam: strip overlays orthogonally adjacent to match/special seeds
       bNoChoco = clearChocoAdjacent bBottle expanded
-      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ surpFree)
+      bNoSteam = clearSteamAdjacent bNoChoco expanded
+      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
       spawns = spawnSpecials prefer runs
       mb1 =
         foldl'
@@ -538,14 +548,16 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bFreeze, _) = chipAdjacentFreeze bChain iceFree
       (bCurtain, _) = chipAdjacentCurtain bFreeze iceFree
       (bSafe, _) = chipAdjacentSafes bCurtain iceFree
-      bMaker = chargeAdjacentMakers bSafe iceFree
+      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
+      bMaker = chargeAdjacentMakers bSpirit iceFree
       (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
       (bSurp2, surpFree) = chipIceOnClear bSurp surpExplode0
       bBottle = triggerAdjacentBottles bSurp2 iceFree
       bNoChoco = clearChocoAdjacent bBottle expanded
-      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ surpFree)
+      bNoSteam = clearSteamAdjacent bNoChoco expanded
+      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
       spawns = spawnSpecials prefer runs
       mb1 =
         foldl'

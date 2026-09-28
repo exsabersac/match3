@@ -6,9 +6,11 @@
 -- Chain: iron chains; adjacent clears peel; chained gems cannot swap or match.
 -- Freeze: rocket freeze (火箭冰冻); blocks swap only; adjacent clears peel; gems still match.
 -- Curtain: roller shade (窗帘); adjacent clears peel; curtained gems do not match.
+-- Steam: steam cloud (蒸汽); blocks match; adjacent clear extinguishes; surviving steam spreads.
 module Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
+  , clearSteamAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
   , chipAdjacentFreeze
@@ -19,8 +21,10 @@ module Match3.Grass
   , chainPositions
   , freezePositions
   , curtainPositions
+  , steamPositions
   , spreadVines
   , spreadChoco
+  , spreadSteam
   , mkGrassGem
   , mkVineGem
   , mkChocoGem
@@ -28,6 +32,7 @@ module Match3.Grass
   , mkChainGem
   , mkFreezeGem
   , mkCurtainGem
+  , mkSteamGem
   , hasGrass
   , hasVine
   , hasChoco
@@ -39,6 +44,7 @@ module Match3.Grass
   , freezeLayers
   , hasCurtain
   , curtainLayers
+  , hasSteam
   , cellOverlay
   ) where
 
@@ -272,3 +278,51 @@ spreadChoco b =
         Gem col kind ice Nothing ->
           setAt board p (Gem col kind ice (Just Choco))
         _ -> board
+
+steamPositions :: Board -> [Pos]
+steamPositions b =
+  [ (r, c)
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , hasSteam (at b (r, c))
+  ]
+
+-- | Steam (蒸汽): extinguished when orthogonally adjacent to a match/special clear.
+clearSteamAdjacent :: Board -> [Pos] -> Board
+clearSteamAdjacent b seeds =
+  foldl strip b targets
+  where
+    targets =
+      nub
+        [ q
+        | p <- nub seeds
+        , q <- ortho p
+        , hasSteam (at b q)
+        ]
+    strip board p =
+      case at board p of
+        Gem col kind ice (Just Steam) ->
+          setAt board p (Gem col kind ice Nothing)
+        _ -> board
+
+-- | Surviving steam spreads onto adjacent bare gems (same rules as vine/choco).
+spreadSteam :: Board -> Board
+spreadSteam b =
+  let sources = steamPositions b
+      targets =
+        nub
+          [ q
+          | p <- sources
+          , q <- ortho p
+          , case at b q of
+              Gem _ _ _ Nothing -> True
+              _ -> False
+          ]
+  in foldl plant b targets
+  where
+    plant board p =
+      case at board p of
+        Gem col kind ice Nothing ->
+          setAt board p (Gem col kind ice (Just Steam))
+        _ -> board
+

@@ -17,6 +17,7 @@ module Match3.Board
   , runCascade
   , runCascadeAt
   , runCascadeScored
+  , runCascadeScoredFromSeeds
   , randomBoard
   , randomStableBoard
   , randomPlayableBoard
@@ -31,6 +32,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Obstacles (withAdjacentStones)
+import Match3.Rainbow (isRainbow, isRainbowSwap)
 import Match3.Types
 import System.Random (RandomGen, randomR)
 
@@ -123,12 +125,20 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
               , c <- [snd p - 1 .. snd p + 1]
               , inBounds (r, c)
               ]
+            Gem col Rainbow ->
+              [ (r, c)
+              | r <- [0 .. boardSize - 1]
+              , c <- [0 .. boardSize - 1]
+              , case getCell b (r, c) of
+                  Gem col' _ -> col' == col
+                  Stone -> False
+              ]
             Gem _ Normal -> []
             Stone -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
--- | Specials spawned from runs: len>=5 Bomb, len==4 Line (orient by run).
+-- | Specials spawned from runs: len>=5 Rainbow, len==4 Line (orient by run).
 -- Prefer spawnPos if provided and in the run; else middle of run.
 spawnSpecials :: Maybe Pos -> [MatchRun] -> [(Pos, Cell)]
 spawnSpecials prefer runs =
@@ -137,7 +147,7 @@ spawnSpecials prefer runs =
   , let n = length (runPos run)
   , n >= 4
   , let kind
-          | n >= 5 = Bomb
+          | n >= 5 = Rainbow
           | runIsH run = LineH
           | otherwise = LineV
         pos = case prefer of
@@ -286,6 +296,49 @@ runCascadeScored prefer g b = go prefer g b 0 0 0 (zip allColors (repeat 0))
                 ]
           in go Nothing g'' b'' (cells + n) score' wave tallies'
 
+-- | Clear an explicit seed set (expand specials + adjacent stones).
+clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearFromSeedsDetailed prefer b seeds0 =
+  let runs = findMatchRuns b
+      base = nub seeds0
+      expanded = expandSpecials b base
+      allPos = withAdjacentStones b expanded
+      n = length allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM b) allPos
+      spawns = spawnSpecials prefer runs
+      mb1 =
+        foldl'
+          ( \m (p, cell) ->
+              if p `elem` allPos then setM m p (Just cell) else m
+          )
+          mb0
+          spawns
+  in (mb1, n, allPos)
+
+-- | First wave clears explicit seeds (rainbow etc.), then normal match cascades.
+runCascadeScoredFromSeeds
+  :: RandomGen g
+  => Maybe Pos
+  -> [Pos]
+  -> g
+  -> Board
+  -> (Board, Int, Score, Int, [(Color, Int)], g)
+runCascadeScoredFromSeeds prefer seeds g b
+  | null seeds = runCascadeScored prefer g b
+  | otherwise =
+      let (mb, n, pos) = clearFromSeedsDetailed prefer b seeds
+          fallen = applyGravity mb
+          (b1, g1) = refill g fallen
+          score0 = scoreForWave 1 n
+          tallies0 = [(col, countColor b pos col) | col <- allColors]
+          (b2, cells2, score2, maxW2, tallies2, g2) =
+            runCascadeScored Nothing g1 b1
+          mergeT a b' =
+            [ (col, lookupCount a col + lookupCount b' col) | col <- allColors ]
+          lookupCount xs col = maybe 0 id (lookup col xs)
+          maxW = if n > 0 && cells2 > 0 then maxW2 + 1 else (if n > 0 then 1 else maxW2)
+      in (b2, n + cells2, score0 + score2, maxW, mergeT tallies0 tallies2, g2)
+
 randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard g0 =
   let (cells, g') = go (boardSize * boardSize) g0
@@ -316,19 +369,31 @@ randomPlayableBoard g =
 shufflePlayable :: RandomGen g => g -> (Board, g)
 shufflePlayable = randomPlayableBoard
 
--- | First adjacent swap that would create a match (for hint). Skips stone cells.
+-- | First adjacent swap that would create a match or activate a rainbow (for hint).
 findHint :: Board -> Maybe (Pos, Pos)
 findHint b =
-  case
-    [ (p1, p2)
-    | r <- [0 .. boardSize - 1]
-    , c <- [0 .. boardSize - 1]
-    , let p1 = (r, c)
-    , isGem (getCell b p1)
-    , p2 <- [(r, c + 1), (r + 1, c)]
-    , inBounds p2
-    , isGem (getCell b p2)
-    , hasAnyMatch (swapCells b p1 p2)
-    ] of
+  case matchHints ++ rainbowHints of
     (x : _) -> Just x
     [] -> Nothing
+  where
+    matchHints =
+      [ (p1, p2)
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , let p1 = (r, c)
+      , isGem (getCell b p1)
+      , p2 <- [(r, c + 1), (r + 1, c)]
+      , inBounds p2
+      , isGem (getCell b p2)
+      , not (isRainbow (getCell b p1) || isRainbow (getCell b p2))
+      , hasAnyMatch (swapCells b p1 p2)
+      ]
+    rainbowHints =
+      [ (p1, p2)
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , let p1 = (r, c)
+      , p2 <- [(r, c + 1), (r + 1, c)]
+      , inBounds p2
+      , isRainbowSwap b p1 p2
+      ]

@@ -35,8 +35,8 @@ import GHC.Generics (Generic)
 data Color = C1 | C2 | C3 | C4 | C5
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
--- | Normal gem, line clearers (4-match), bomb (5-match).
-data GemKind = Normal | LineH | LineV | Bomb
+-- | Normal gem, line clearers (4-match), bomb, rainbow (5-match color clear).
+data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
 -- | Board cell: a colored gem (possibly special) or an immovable stone blocker.

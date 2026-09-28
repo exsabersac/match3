@@ -66,6 +66,10 @@ module Match3.Core
   , orthoNeighbors
   , stonesAdjacentTo
   , withAdjacentStones
+  , isRainbow
+  , isRainbowSwap
+  , rainbowClearSeeds
+  , runCascadeScoredFromSeeds
   ) where
 
 import Match3.Board
@@ -75,5 +79,10 @@ import Match3.Obstacles
   , orthoNeighbors
   , stonesAdjacentTo
   , withAdjacentStones
+  )
+import Match3.Rainbow
+  ( isRainbow
+  , isRainbowSwap
+  , rainbowClearSeeds
   )
 import Match3.Types

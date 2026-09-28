@@ -910,6 +910,19 @@ drawGemAt ren x y cell flashing = case cell of
         fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 8) (y + cellPx `div` 2 - 8))) (V2 16 16)))
         rendererDrawColor ren $= V4 255 220 80 255
         fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + cellPx `div` 2 - 4))) (V2 8 8)))
+      Rainbow -> do
+        let cx = x + cellPx `div` 2
+            cy = y + cellPx `div` 2
+        rendererDrawColor ren $= V4 255 80 80 255
+        fillRect ren (Just (Rectangle (P (V2 (cx - 14) (cy - 6))) (V2 10 12)))
+        rendererDrawColor ren $= V4 80 220 100 255
+        fillRect ren (Just (Rectangle (P (V2 (cx - 4) (cy - 14))) (V2 10 12)))
+        rendererDrawColor ren $= V4 80 140 255 255
+        fillRect ren (Just (Rectangle (P (V2 (cx + 4) (cy - 6))) (V2 10 12)))
+        rendererDrawColor ren $= V4 255 220 60 255
+        fillRect ren (Just (Rectangle (P (V2 (cx - 4) (cy + 2))) (V2 10 12)))
+        rendererDrawColor ren $= V4 255 255 255 255
+        fillRect ren (Just (Rectangle (P (V2 (cx - 4) (cy - 4))) (V2 8 8)))
 
 drawBoard :: Renderer -> App -> IO ()
 drawBoard ren app = case appAnim app of

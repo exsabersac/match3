@@ -29,6 +29,7 @@ library
       Match3.Board
       Match3.Game
       Match3.Obstacles
+      Match3.Rainbow
   other-modules:
       Paths_match3
   autogen-modules:

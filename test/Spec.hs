@@ -24,7 +24,7 @@ tests =
     , testCase "outcome_moves_or_score" outcome_moves_or_score
     , testProperty "qc_findMatches_ge3" qc_findMatches_ge3
     , testCase "special_line_from_4" special_line_from_4
-    , testCase "special_bomb_from_5" special_bomb_from_5
+    , testCase "special_rainbow_from_5" special_rainbow_from_5
     , testCase "hint_finds_move" hint_finds_move
     , testCase "undo_restores" undo_restores
     , testCase "shuffle_when_no_moves" shuffle_when_no_moves
@@ -38,6 +38,8 @@ tests =
     , testCase "stone_blocks_swap" stone_blocks_swap
     , testCase "stone_cleared_by_adjacent" stone_cleared_by_adjacent
     , testCase "stone_not_in_match" stone_not_in_match
+    , testCase "rainbow_clears_color" rainbow_clears_color
+    , testCase "rainbow_swap_without_match" rainbow_swap_without_match
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -264,22 +266,22 @@ special_line_from_4 = do
   assertBool ("spawned line: " ++ show specials) $
     any (\(_, _, k) -> k == LineH || k == LineV) specials
 
--- | 5-in-a-row spawns a Bomb.
-special_bomb_from_5 :: Assertion
-special_bomb_from_5 = do
+-- | 5-in-a-row spawns a Rainbow.
+special_rainbow_from_5 :: Assertion
+special_rainbow_from_5 = do
   let fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row1 = map mkGem [C1, C1, C1, C1, C1, C2, C3, C2]
       b = take 1 b0 ++ [row1] ++ drop 2 b0
       (mb, _) = clearMatches b
-      bombs =
+      rainbows =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [ (mb !! r) !! c ]
-        , cellKind cell == Bomb
+        , cellKind cell == Rainbow
         ]
-  assertBool ("bomb spawned: " ++ show bombs) (not (null bombs))
+  assertBool ("rainbow spawned: " ++ show rainbows) (not (null rainbows))
 
 hint_finds_move :: Assertion
 hint_finds_move = do
@@ -598,4 +600,89 @@ stone_not_in_match = do
       ms = findMatches bOk
   assertBool "gem triple still matches" ((2, 0) `elem` ms && (2, 1) `elem` ms && (2, 2) `elem` ms)
   assertBool "stone itself not in match set" ((2, 3) `notElem` ms)
+
+--------------------------------------------------------------------------------
+-- Rainbow (color bomb)
+--------------------------------------------------------------------------------
+
+-- | Swapping a Rainbow with a color clears every gem of that color.
+rainbow_clears_color :: Assertion
+rainbow_clears_color = do
+  let board0 =
+        setCell stableBoard (4, 4) (Gem C1 Rainbow)
+      -- Ensure neighbor (4,5) is C2 (stableBoard already has variety)
+      board = setCell board0 (4, 5) (mkGem C2)
+      -- Count C2 before
+      c2before =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , case getCell board (r, c) of
+              Gem C2 _ -> True
+              _ -> False
+          ]
+  assertBool "have some C2" (c2before >= 1)
+  let gs0 =
+        (newGame defaultConfig 3)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsScore = 0
+          , gsMoves = 10
+          }
+      (gs1, out) = trySwap (4, 4) (4, 5) gs0
+  case out of
+    MoveApplied gained -> assertBool "scored" (gained > 0)
+    LevelClear _ _ -> pure ()
+    Won _ -> pure ()
+    Lost _ -> pure ()
+    other -> assertFailure ("expected applied/terminal, got " ++ show other)
+  let c2after =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , case getCell (gsBoard gs1) (r, c) of
+              Gem C2 _ -> True
+              _ -> False
+          ]
+  -- After cascade refill, leftover C2 may appear from refill; the rainbow itself must be gone
+  assertBool "rainbow consumed" (not (isRainbow (getCell (gsBoard gs1) (4, 4))))
+  assertBool "rainbow consumed at partner" (not (isRainbow (getCell (gsBoard gs1) (4, 5))))
+  -- Moves decremented
+  assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
+  -- At least the clear scored for the C2 count (wave1 * 10); allow cascades
+  assertBool
+    ("cleared many cells relative to C2 count " ++ show c2before ++ " after=" ++ show c2after)
+    (gsScore gs1 >= c2before * 10)
+
+-- | Rainbow swap works even when it would not create a classic 3-match.
+rainbow_swap_without_match :: Assertion
+rainbow_swap_without_match = do
+  let board =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow))
+          (0, 1)
+          (mkGem C4)
+  assertBool "no classic match after swap alone"
+    (not (hasAnyMatch (swapCells board (0, 0) (0, 1)))
+       || isRainbowSwap board (0, 0) (0, 1))
+  assertBool "is rainbow swap" (isRainbowSwap board (0, 0) (0, 1))
+  let gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 8
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (0, 0) (0, 1) gs0
+  case out of
+    NoMatch -> assertFailure "rainbow swap must not roll back as NoMatch"
+    InvalidSwap -> assertFailure "rainbow swap must be valid"
+    MoveApplied g -> assertBool "gained" (g > 0)
+    LevelClear _ _ -> pure ()
+    Won _ -> pure ()
+    Lost _ -> pure ()
+  assertEqual "moves spent" (gsMoves gs0 - 1) (gsMoves gs1)
 

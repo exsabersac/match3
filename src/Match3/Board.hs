@@ -273,11 +273,19 @@ clearMatchesAt prefer b =
 -- and re-open nested Surprises until the frontier is quiet.
 -- Bomb parity: Bomb→Surprise opens to special/explode; Surprise explode must
 -- likewise open nested boxes instead of hole-deleting them via chipIce alone.
+-- Saved specials (Bomb/Line from Surprise) must not activate in this pass — mask
+-- them as Normal before expandSpecials. Same-pass placement and later re-explode
+-- of an unconsumed Surprise center would otherwise fire-and-survive the special.
+-- Pre-existing specials (not in saved) still expand. chipIce runs on bOpen so
+-- saved specials remain on the board while explode centers clear.
 -- Returns (board, trueClears, surpriseDirectHits, savedSpecialPositions).
 surpriseClearPass :: Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
 surpriseClearPass b0 seeds0 =
   go b0 (nub seeds0) [] [] []
   where
+    -- Mask saved Surprise-specials so expandSpecials cannot activate them.
+    maskSaved b ps =
+      foldl' (\b' p -> setCell b' p (mkGem C1)) b ps
     go board front trueAcc directAcc saved
       | null front =
           ( board
@@ -292,7 +300,7 @@ surpriseClearPass b0 seeds0 =
           in if null expl
                then go bOpen [] (trueAcc ++ kept) directAcc saved'
                else
-                 let expanded = expandSpecials bOpen expl
+                 let expanded = expandSpecials (maskSaved board saved') expl
                      (bChip, free1) = chipIceOnClear bOpen expanded
                      processed = nub (front ++ trueAcc)
                      front' = filter (`notElem` processed) free1

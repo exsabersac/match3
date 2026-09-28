@@ -195,6 +195,7 @@ tests =
     , testCase "soft_hit_no_adj_side_effects" soft_hit_no_adj_side_effects
     , testCase "soft_hit_preserves_oncell_fog_steam" soft_hit_preserves_oncell_fog_steam
     , testCase "surprise_blast_opens_nested" surprise_blast_opens_nested
+    , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5901,6 +5902,16 @@ surprise_blast_opens_nested = do
       assertEqual "nested Bomb special" Bomb (cellKind c)
       assertBool "not still Surprise" (not (isSurprise c))
     Nothing -> assertFailure "nested Surprise must open to special, not hole-delete"
+  -- Same-pass special must sit (Bomb parity): must NOT fire-and-survive.
+  -- Outer explode footprint is (2..4,2..4); Bomb@ (2,2) firing would hole (1,1).
+  let holesS =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , ((mbS !! r) !! c) == Nothing
+        ]
+  assertBool "nested Bomb must not fire (1,1)" ((1, 1) `notElem` holesS)
+  assertBool "nested Bomb must not fire (2,1)" ((2, 1) `notElem` holesS)
   -- Control: Bomb match hitting Surprise at (2,2) also opens (parity sanity).
   let boardBomb =
         setCell
@@ -5943,3 +5954,71 @@ surprise_blast_opens_nested = do
   assertBool "nested explode center cleared" ((2, 3) `elem` holesC)
   assertBool "chained blast reached (1,3)" ((1, 3) `elem` holesC)
   assertBool ("chained clear count >= 12, got " ++ show nC) (nC >= 12)
+
+--------------------------------------------------------------------------------
+-- Nested Surprise special must sit (not fire-and-survive)
+--------------------------------------------------------------------------------
+
+-- | When an exploding Surprise and a special-outcome Surprise open in the same
+-- openSurprises pass (both ortho-adjacent to the match), expandSpecials must
+-- use the pre-open board so the newly placed Bomb/Line does not activate while
+-- also being saved from holes. Pre-existing Bombs in the blast still expand.
+surprise_nested_special_no_fire :: Assertion
+surprise_nested_special_no_fire = do
+  -- (3,3) explode + (2,2) Bomb special, both ortho-adj to match row.
+  let board =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (3, 3)
+             mkSurprise)
+          (2, 2)
+          mkSurprise
+  assertEqual "outer explode" (3 :: Int) (((3 * 8 + 3) `mod` 4))
+  assertEqual "nested Bomb" (2 :: Int) (((2 * 8 + 2) `mod` 4))
+  let (mb, n) = clearMatches board
+      holes =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , ((mb !! r) !! c) == Nothing
+        ]
+  case (mb !! 2) !! 2 of
+    Just c -> assertEqual "special sits" Bomb (cellKind c)
+    Nothing -> assertFailure "nested special must survive"
+  assertBool "no fire beyond outer blast (1,1)" ((1, 1) `notElem` holes)
+  assertBool "no fire beyond outer blast (1,2)" ((1, 2) `notElem` holes)
+  assertBool "no fire beyond outer blast (2,1)" ((2, 1) `notElem` holes)
+  -- Outer explode + match still clear the expected footprint.
+  assertBool "outer center cleared" ((3, 3) `elem` holes)
+  assertBool ("clear count in outer range, got " ++ show n) (n >= 9 && n <= 12)
+  -- Control: pre-existing Bomb inside Surprise explode MUST still expand.
+  let boardPreBomb =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (3, 3)
+             mkSurprise)
+          (2, 2)
+          (Gem C4 Bomb 0 Nothing)
+      (mbP, _) = clearMatches boardPreBomb
+      holesP =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , ((mbP !! r) !! c) == Nothing
+        ]
+  assertBool "pre-existing Bomb fires (1,1)" ((1, 1) `elem` holesP)
+  assertBool "pre-existing Bomb consumed" (((mbP !! 2) !! 2) == Nothing)

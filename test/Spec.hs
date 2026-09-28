@@ -198,6 +198,8 @@ tests =
     , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
     , testCase "soft_lock_blocks_rainbow_swap" soft_lock_blocks_rainbow_swap
     , testCase "soft_lock_blocks_special_combo" soft_lock_blocks_special_combo
+    , testCase "soft_lock_blocks_freeswap_activation" soft_lock_blocks_freeswap_activation
+    , testCase "soft_lock_blocks_double_rainbow" soft_lock_blocks_double_rainbow
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -6166,3 +6168,146 @@ soft_lock_blocks_special_combo = do
     MoveApplied g -> assertBool "combo score" (g > 0)
     _ -> pure ()
   assertEqual "move spent" (9 :: Int) (gsMoves gsOk)
+
+--------------------------------------------------------------------------------
+-- Soft-lock FreeSwap entry + asymmetric double-Rainbow (boundary)
+--------------------------------------------------------------------------------
+
+-- | useFreeSwap must honor the same soft-lock gates as trySwap (isRainbowSwap /
+-- isSpecialCombo). ice>1 / Curtain Rainbow×gem and ice>1 Line×Bomb must NoMatch
+-- without spending the free-swap charge.
+soft_lock_blocks_freeswap_activation :: Assertion
+soft_lock_blocks_freeswap_activation = do
+  let mkGs board =
+        (newGame defaultConfig 17)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsFreeSwaps = 2
+          }
+  -- ice=2 Rainbow × C4 via free-swap (non-adjacent also OK for booster).
+  let boardIce =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 2 Nothing))
+          (2, 2)
+          (mkGem C4)
+  assertBool "ice>1 Rainbow not soft-activate" $
+    not (isRainbowSwap boardIce (0, 0) (2, 2))
+  let (gsIce, outIce) = useFreeSwap (0, 0) (2, 2) (mkGs boardIce)
+  case outIce of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "ice>1 Rainbow free-swap must not color-clear"
+    _ -> assertFailure "ice>1 Rainbow free-swap must NoMatch"
+  assertEqual "board unchanged" boardIce (gsBoard gsIce)
+  assertEqual "charge kept (ice RB)" (2 :: Int) (gsFreeSwaps gsIce)
+  -- Curtain Rainbow × gem (Curtain allows geometry; soft-lock blocks activate).
+  let boardCu =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0 (Just (Curtain 2))))
+          (2, 2)
+          (mkGem C4)
+  assertBool "curtain Rainbow gated" $
+    not (isRainbowSwap boardCu (0, 0) (2, 2))
+  let (gsCu, outCu) = useFreeSwap (0, 0) (2, 2) (mkGs boardCu)
+  case outCu of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "curtain Rainbow free-swap must not fire"
+    _ -> assertFailure "curtain Rainbow free-swap must NoMatch"
+  assertEqual "curtain board unchanged" boardCu (gsBoard gsCu)
+  assertEqual "charge kept (curtain RB)" (2 :: Int) (gsFreeSwaps gsCu)
+  -- ice=2 LineH × Bomb free-swap: combo blocked, charge kept.
+  let boardCombo =
+        setCell
+          (setCell stableBoard (1, 1) (Gem C1 LineH 2 Nothing))
+          (5, 5)
+          (Gem C2 Bomb 0 Nothing)
+  assertBool "kinds look like line-bomb" (isLineBombCombo boardCombo (1, 1) (5, 5))
+  assertBool "soft ice blocks combo" $
+    not (isSpecialCombo boardCombo (1, 1) (5, 5))
+  let (gsCo, outCo) = useFreeSwap (1, 1) (5, 5) (mkGs boardCombo)
+  case outCo of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "ice>1 Line×Bomb free-swap must not combo"
+    _ -> assertFailure "ice>1 Line×Bomb free-swap must NoMatch"
+  assertEqual "combo board unchanged" boardCombo (gsBoard gsCo)
+  assertEqual "charge kept (combo)" (2 :: Int) (gsFreeSwaps gsCo)
+
+-- | Double-Rainbow requires BOTH endpoints to specialActivates. ice>1 on one
+-- side must not clear the board (conjunction branch of isRainbowSwap).
+soft_lock_blocks_double_rainbow :: Assertion
+soft_lock_blocks_double_rainbow = do
+  let mkGs board =
+        (newGame defaultConfig 19)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+      countGems b =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isGem (getCell b (r, c))
+          ]
+  -- ice=2 Rainbow × unlocked Rainbow: gated.
+  let boardIce =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 2 Nothing))
+          (0, 1)
+          (Gem C4 Rainbow 0 Nothing)
+  assertBool "asymmetric dbl soft-locked" $
+    not (isRainbowSwap boardIce (0, 0) (0, 1))
+  assertBool "symmetric order also gated" $
+    not (isRainbowSwap boardIce (0, 1) (0, 0))
+  let gemsBefore = countGems boardIce
+      (gsIce, outIce) = trySwap (0, 0) (0, 1) (mkGs boardIce)
+  case outIce of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "ice>1 double-Rainbow must not board-wipe"
+    _ -> assertFailure "ice>1 double-Rainbow must NoMatch-rollback"
+  assertEqual "board unchanged" boardIce (gsBoard gsIce)
+  assertEqual "moves unchanged" (10 :: Int) (gsMoves gsIce)
+  assertEqual "gems preserved" gemsBefore (countGems (gsBoard gsIce))
+  -- Curtain on one Rainbow: same conjunction gate.
+  let boardCu =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0 (Just (Curtain 1))))
+          (0, 1)
+          (Gem C4 Rainbow 0 Nothing)
+  assertBool "curtain dbl soft-locked" $
+    not (isRainbowSwap boardCu (0, 0) (0, 1))
+  let (gsCu, outCu) = trySwap (0, 0) (0, 1) (mkGs boardCu)
+  case outCu of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "curtain double-Rainbow must not fire"
+    _ -> assertFailure "curtain double-Rainbow must NoMatch"
+  assertEqual "curtain board unchanged" boardCu (gsBoard gsCu)
+  -- Control: both unlocked double-Rainbow still activates.
+  let boardOk =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0 Nothing))
+          (0, 1)
+          (Gem C4 Rainbow 0 Nothing)
+  assertBool "unlocked dbl activates" (isRainbowSwap boardOk (0, 0) (0, 1))
+  let (gsOk, outOk) = trySwap (0, 0) (0, 1) (mkGs boardOk)
+  case outOk of
+    NoMatch -> assertFailure "unlocked double-Rainbow must apply"
+    InvalidSwap -> assertFailure "unlocked double-Rainbow must be valid"
+    MoveApplied g -> assertBool "board-wipe score" (g >= 100)
+    _ -> pure ()
+  assertEqual "move spent" (9 :: Int) (gsMoves gsOk)
+  assertBool "score reflects wipe" (gsScore gsOk >= 100)
+  -- Refill restores gem count; assert the swapped rainbows were consumed.
+  assertBool "endpoint no longer Rainbow" $
+    not (isRainbow (getCell (gsBoard gsOk) (0, 0)))
+      && not (isRainbow (getCell (gsBoard gsOk) (0, 1)))

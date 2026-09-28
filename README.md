@@ -33,7 +33,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Goals**: score / single collect / multi-color collect / clear stones / open chests / UFO absorb
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 17 campaign levels
+- Combo scoring, hint, undo, auto-shuffle, 19 campaign levels
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
@@ -54,9 +54,11 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 12 | 轰炸 | 18 | Score 750 | countdown bombs |
 | 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
-| 15 | 压力 | 17 | Multi RED/GRN/BLU | grass + choco |
-| 16 | 大师 | 16 | Score 1200 | stone+grass+vine+choco+bomb+belts+UFO |
+| 15 | 压力 | 18 | Multi RED/GRN/BLU | grass + choco |
+| 16 | 大师 | 18 | Score 1100 | stone+grass+vine+choco+bomb+belts+UFO |
 | 17 | 宝箱 | 24 | Open 6 chests | chests |
+| 18 | 巧箱 | 22 | Open 5 chests | chests + choco |
+| 19 | 终章 | 15 | Score 1400 | stone+chest+choco+vine+bomb+belt+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 

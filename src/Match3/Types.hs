@@ -310,9 +310,11 @@ allLevels =
   , Level 11 "轰炸"   18 (GoalScore 750)
   , Level 12 "飞碟"   24 (GoalUfo 10)
   , Level 13 "碟猎"   20 (GoalUfo 14)
-  , Level 14 "压力"   17 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
-  , Level 15 "大师"   16 (GoalScore 1200)
+  , Level 14 "压力"   18 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
+  , Level 15 "大师"   18 (GoalScore 1100)
   , Level 16 "宝箱"   24 (GoalChest 6)
+  , Level 17 "巧箱"   22 (GoalChest 5)
+  , Level 18 "终章"   15 (GoalScore 1400)
   ]
 
 levelConfig :: Level -> GameConfig

@@ -100,6 +100,7 @@ levelBelts 15 =
   , [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)]
   ]
 levelBelts 13 = [[(4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7)]]
+levelBelts 18 = [[(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]]
 levelBelts _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
@@ -156,6 +157,31 @@ decorateLevel 16 b =
   foldl (\board (p, layers) -> setCell board p (mkChestLayers layers))
         b
         [ ((2, 2), 1), ((2, 5), 1), ((4, 1), 2), ((4, 3), 1), ((4, 5), 2), ((6, 2), 1), ((6, 5), 1) ]
+decorateLevel 17 b =
+  let b1 =
+        foldl (\board (p, layers) -> setCell board p (mkChestLayers layers))
+              b
+              [ ((3, 2), 1), ((3, 5), 2), ((5, 3), 1), ((5, 4), 1), ((6, 6), 1) ]
+  in overlayAt b1 Choco [(1, 1), (1, 6), (2, 3), (4, 0), (4, 7)]
+decorateLevel 18 b =
+  let b1 =
+        foldl (\board p -> setCell board p mkStone)
+              b
+              [(0, 0), (0, 7), (7, 0), (7, 7)]
+      b2 =
+        foldl (\board p -> setCell board p mkChest)
+              b1
+              [(3, 1), (3, 6)]
+      b3 = overlayAt b2 Choco [(2, 2), (2, 5), (5, 2), (5, 5)]
+      b4 = overlayAt b3 Vine [(6, 3)]
+  in foldl
+       (\board p ->
+           case getCell board p of
+             Gem col _ _ _ -> spawnCountdown board p col 5
+             _ -> board
+       )
+       b4
+       [(4, 4)]
 decorateLevel _ b = b
 
 -- | UFO placements for campaign levels.
@@ -163,6 +189,7 @@ levelUfos :: Int -> [Ufo]
 levelUfos 12 = [mkUfo (2, 3) C1]
 levelUfos 13 = [mkUfo (1, 2) C1, mkUfo (1, 5) C3]
 levelUfos 15 = [mkUfo (0, 4) C2]
+levelUfos 18 = [mkUfo (2, 4) C1]
 levelUfos _ = []
 
 -- | Stamp Grass/Vine/Choco onto existing gems (keep color/kind/ice).

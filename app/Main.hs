@@ -68,6 +68,8 @@ data App = App
   , appTipFrames :: Int  -- first-level tip/highlight countdown
   , appHelpFrames :: Int -- brief help strip after start / unpause
   , appPaused    :: Bool -- pause + full key help overlay
+  , appStartMoves :: MovesLeft
+  , appDragFrom  :: Maybe Pos
   }
 
 colorRGB :: Color -> (Word8, Word8, Word8)
@@ -78,7 +80,7 @@ colorRGB C4 = (240, 200, 60)
 colorRGB C5 = (180, 80, 200)
 
 helpKeysMsg :: Text
-helpKeysMsg = "H hint | U undo | S shuffle | R restart | N next | P pause/help | Esc quit"
+helpKeysMsg = "H hint | U undo | S shuffle | D daily | R restart | N next | P pause | Esc"
 
 main :: IO ()
 main = do
@@ -106,6 +108,8 @@ main = do
         , appTipFrames = 240
         , appHelpFrames = 300
         , appPaused = False
+        , appStartMoves = lvlMoves lvl
+        , appDragFrom = Nothing
         }
   updateTitle window =<< readIORef ref
   let loop = do
@@ -268,6 +272,7 @@ freshLevelUi gs app =
        , appComboShow = 0
        , appParticles = []
        , appTipFrames = tip
+       , appStartMoves = gsMoves gs
        , appHelpFrames = 300
        , appPaused = False
        }
@@ -371,9 +376,82 @@ handleEvent ref window ev = case eventPayload ev of
                   writeIORef ref app'
                   updateTitle window app'
                   pure False
+                KeycodeD -> do
+                  -- Daily challenge for a fixed demo date (box clock may vary)
+                  app <- readIORef ref
+                  let y = 2026; m = 9; d = 29
+                      lvl = dailyLevel y m d
+                      gs = newGameAtLevel 0 (levelConfig lvl) (dailySeed y m d)
+                      app' = (freshLevelUi gs app) { appMsg = "Daily challenge!" }
+                  writeIORef ref app'
+                  updateTitle window app'
+                  pure False
                 _ -> pure False
     | otherwise -> pure False
   MouseButtonEvent me
+    | mouseButtonEventMotion me == Released
+        && mouseButtonEventButton me == ButtonLeft -> do
+        app0 <- readIORef ref
+        if appPaused app0 || animBusy app0 || isJust (gsOver (appGame app0))
+          then pure False
+          else case appDragFrom app0 of
+            Nothing -> pure False
+            Just p1 -> do
+              let P (V2 mx my) = mouseButtonEventPos me
+              case pixelToCell mx my of
+                Just p2 | p1 /= p2 && adjacent p1 p2 -> do
+                  app <- readIORef ref
+                  let before = gsBoard (appGame app)
+                      (gs', out) = trySwap p1 p2 (appGame app)
+                      after = gsBoard gs'
+                      changed =
+                        [ p
+                        | r <- [0 .. boardSize - 1]
+                        , c <- [0 .. boardSize - 1]
+                        , let p = (r, c)
+                        , getCell before p /= getCell after p
+                        ]
+                      flash = case out of
+                        NoMatch -> []
+                        InvalidSwap -> []
+                        _ -> [(p, 18) | p <- changed]
+                      anim = case out of
+                        MoveApplied _ -> AnimSwap p1 p2 before after 0
+                        Won _ -> AnimSwap p1 p2 before after 0
+                        Lost _ -> AnimSwap p1 p2 before after 0
+                        LevelClear _ _ -> AnimSwap p1 p2 before after 0
+                        _ -> AnimNone
+                  parts <-
+                    if null flash
+                      then pure (appParticles app)
+                      else do
+                        burst <- spawnBurst before changed
+                        pure (burst ++ appParticles app)
+                  let msg = case out of
+                        NoMatch -> "No match; rolled back"
+                        InvalidSwap -> "Need adjacent"
+                        MoveApplied s -> "Drag +" <> T.pack (show s)
+                        Won s -> "YOU WIN score=" <> T.pack (show s)
+                        LevelClear _ n -> "Level clear -> L" <> T.pack (show (n + 1))
+                        Lost s -> "Out of moves score=" <> T.pack (show s)
+                      app' =
+                        app
+                          { appGame = gs'
+                          , appSel = Nothing
+                          , appDragFrom = Nothing
+                          , appMsg = msg
+                          , appFlash = flash
+                          , appAnim = anim
+                          , appComboShow = if gsCombo gs' > 1 then 90 else 0
+                          , appParticles = parts
+                          , appTipFrames = 0
+                          }
+                  writeIORef ref app'
+                  updateTitle window app'
+                  pure False
+                _ -> do
+                  writeIORef ref app0 { appDragFrom = Nothing }
+                  pure False
     | mouseButtonEventMotion me == Pressed
         && mouseButtonEventButton me == ButtonLeft -> do
         app0 <- readIORef ref
@@ -404,7 +482,7 @@ handleEvent ref window ev = case eventPayload ev of
                     app <- readIORef ref
                     case appSel app of
                       Nothing -> do
-                        let app' = app { appSel = Just pos, appMsg = "Selected; click adjacent" }
+                        let app' = app { appSel = Just pos, appDragFrom = Just pos, appMsg = "Selected; click/drag adjacent" }
                         writeIORef ref app'
                         updateTitle window app'
                         pure False
@@ -828,6 +906,8 @@ drawOverlay ren app = case gsOver (appGame app) of
         drawRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))
         drawRect ren (Just (Rectangle (P (V2 26 (panelY + 2))) (V2 (winW - 52) (panelH - 4))))
         drawBannerWord ren 80 (panelY + 18) 5 (V4 255 230 100 255) "CLEAR!"
+        let stars = starRating (appStartMoves app) (gsMoves (appGame app))
+        drawNumber ren 200 (panelY + 22) 3 (V4 255 220 80 255) stars
         drawBannerWord ren 100 (panelY + 70) 3 (V4 200 220 180 255) "NEXT"
         drawNumber ren (winW - 120) (panelY + 68) 3 (V4 200 220 180 255) (gsLevel (appGame app) + 2)
       Won s -> do

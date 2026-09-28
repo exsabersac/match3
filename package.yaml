@@ -38,6 +38,7 @@ library:
   - Match3.Rainbow
   - Match3.Combos
   - Match3.Ice
+  - Match3.Daily
 
 executables:
   match3-sdl:

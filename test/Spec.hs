@@ -47,6 +47,8 @@ tests =
     , testCase "goal_clear_stone_counts" goal_clear_stone_counts
     , testCase "ice_layer_blocks_clear" ice_layer_blocks_clear
     , testCase "ice_layer_chips_then_clears" ice_layer_chips_then_clears
+    , testCase "daily_seed_stable" daily_seed_stable
+    , testCase "star_rating_tiers" star_rating_tiers
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -951,4 +953,27 @@ ice_layer_chips_then_clears = do
   -- ice-1 alone also clears in one chip
   let (_b3, free3) = chipIceOnClear (setCell stableBoard (2, 2) (mkIceGem C3 1)) [(2, 2)]
   assertBool "ice-1 clears immediately" ((2, 2) `elem` free3)
+
+--------------------------------------------------------------------------------
+-- Daily challenge + stars
+--------------------------------------------------------------------------------
+
+daily_seed_stable :: Assertion
+daily_seed_stable = do
+  assertEqual "seed" (20260929 :: Int) (dailySeed 2026 9 29)
+  assertEqual "same day same seed" (dailySeed 2026 1 1) (dailySeed 2026 1 1)
+  assertBool "diff day diff seed" (dailySeed 2026 1 1 /= dailySeed 2026 1 2)
+  let lvl = dailyLevel 2026 9 29
+  assertEqual "name" "每日" (lvlName lvl)
+  assertBool "moves positive" (lvlMoves lvl > 0)
+  let gs = newGameAtLevel 0 (dailyConfig 2026 9 29) (dailySeed 2026 9 29)
+  assertBool "playable daily board" (hasValidMove (gsBoard gs))
+  assertBool "stable daily board" (not (hasAnyMatch (gsBoard gs)))
+
+star_rating_tiers :: Assertion
+star_rating_tiers = do
+  assertEqual "3 star" (3 :: Int) (starRating 30 20)
+  assertEqual "2 star" (2 :: Int) (starRating 30 8)
+  assertEqual "1 star" (1 :: Int) (starRating 30 2)
+  assertEqual "zero left" (1 :: Int) (starRating 30 0)
 

@@ -82,6 +82,10 @@ module Match3.Core
   , isLineBombCombo
   , isSpecialCombo
   , comboClearSeeds
+  , dailySeed
+  , dailyConfig
+  , dailyLevel
+  , starRating
   ) where
 
 import Match3.Board
@@ -94,6 +98,7 @@ import Match3.Obstacles
   , withAdjacentStones
   , chipAdjacentStones
   )
+import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Combos
   ( isLineBombCombo
   , isSpecialCombo

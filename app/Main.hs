@@ -78,6 +78,8 @@ data App = App
   , appStartMoves :: MovesLeft
   , appDragFrom  :: Maybe Pos
   , appTool      :: ToolMode
+  , appMapOpen   :: Bool  -- level map overlay (选关)
+  , appMaxReached :: Int  -- highest unlocked campaign index
   }
 
 colorRGB :: Color -> (Word8, Word8, Word8)
@@ -88,7 +90,7 @@ colorRGB C4 = (240, 200, 60)
 colorRGB C5 = (180, 80, 200)
 
 helpKeysMsg :: Text
-helpKeysMsg = "H hint | 1 hammer | 2 free-swap | U undo | S shuffle | D daily | R restart | N next | P pause | Esc"
+helpKeysMsg = "H hint | 1 hammer | 2 free-swap | U undo | S shuffle | D daily | M map | R restart | N next | P pause | Esc"
 
 main :: IO ()
 main = do
@@ -119,6 +121,8 @@ main = do
         , appStartMoves = lvlMoves lvl
         , appDragFrom = Nothing
         , appTool = ToolNone
+        , appMapOpen = False
+        , appMaxReached = 0
         }
   updateTitle window =<< readIORef ref
   let loop = do
@@ -296,6 +300,8 @@ freshLevelUi gs app =
        , appPaused = False
        , appTool = ToolNone
        , appDragFrom = Nothing
+       , appMapOpen = False
+       , appMaxReached = max (appMaxReached app) (gsLevel gs')
        }
 
 
@@ -338,7 +344,7 @@ applyHammer ref window app pos = do
           , appMsg = msg
           , appFlash = flash
           , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-          , appComboShow = if gsCombo gs' > 1 then 90 else 0
+          , appComboShow = if gsCombo gs' > 1 then 120 else 0
           , appParticles = parts
           }
   writeIORef ref app'
@@ -388,7 +394,7 @@ applyFreeSwap ref window app p1 p2 = do
           , appMsg = msg
           , appFlash = flash
           , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-          , appComboShow = if gsCombo gs' > 1 then 90 else 0
+          , appComboShow = if gsCombo gs' > 1 then 120 else 0
           , appParticles = parts
           }
   writeIORef ref app'
@@ -433,6 +439,20 @@ handleEvent ref window ev = case eventPayload ev of
                   app <- readIORef ref
                   let gs = restartLevel (appGame app) seed
                       app' = (freshLevelUi gs app) { appMsg = "Restarted level" }
+                  writeIORef ref app'
+                  updateTitle window app'
+                  pure False
+                KeycodeM -> do
+                  app <- readIORef ref
+                  let app' =
+                        app
+                          { appMapOpen = not (appMapOpen app)
+                          , appPaused = False
+                          , appMsg =
+                              if appMapOpen app
+                                then helpKeysMsg
+                                else "Level map — click a node (unlocked) / M closes"
+                          }
                   writeIORef ref app'
                   updateTitle window app'
                   pure False
@@ -612,7 +632,7 @@ handleEvent ref window ev = case eventPayload ev of
                           , appMsg = msg
                           , appFlash = flash
                           , appAnim = anim
-                          , appComboShow = if gsCombo gs' > 1 then 90 else 0
+                          , appComboShow = if gsCombo gs' > 1 then 120 else 0
                           , appParticles = parts
                           , appTipFrames = 0
                           }
@@ -625,7 +645,30 @@ handleEvent ref window ev = case eventPayload ev of
     | mouseButtonEventMotion me == Pressed
         && mouseButtonEventButton me == ButtonLeft -> do
         app0 <- readIORef ref
-        if appPaused app0 || animBusy app0
+        let P (V2 mx0 my0) = mouseButtonEventPos me
+        -- Level map click takes priority
+        if appMapOpen app0
+          then case mapHitTest mx0 my0 of
+            Just li | li <= appMaxReached app0 -> do
+              seed <- randomIO
+              let lvl = allLevels !! li
+                  gs = newGameAtLevel li (levelConfig lvl) seed
+                  app' =
+                    (freshLevelUi gs app0)
+                      { appMapOpen = False
+                      , appMsg = "Map -> L" <> T.pack (show (li + 1)) <> " " <> T.pack (lvlName lvl)
+                      , appMaxReached = max (appMaxReached app0) li
+                      }
+              writeIORef ref app'
+              updateTitle window app'
+              pure False
+            _ -> do
+              -- click outside nodes closes map
+              let app' = app0 { appMapOpen = False, appMsg = helpKeysMsg }
+              writeIORef ref app'
+              updateTitle window app'
+              pure False
+          else if appPaused app0 || animBusy app0
           then pure False
           else do
             let P (V2 mx my) = mouseButtonEventPos me
@@ -780,7 +823,7 @@ handleEvent ref window ev = case eventPayload ev of
                                   LevelClear _ _ -> AnimSwap p1 pos before after 0
                                   _ -> AnimNone
                                 comboShow =
-                                  if gsCombo gs' > 1 then 90 else 0
+                                  if gsCombo gs' > 1 then 120 else 0
                             parts <-
                               if null flash
                                 then pure (appParticles app)
@@ -810,9 +853,13 @@ advanceOrMsg ref window = do
   seed <- randomIO
   app <- readIORef ref
   case gsOver (appGame app) of
-    Just (LevelClear _ _) -> do
+    Just (LevelClear _ n) -> do
       let gs = nextLevel (appGame app) seed
-          app' = (freshLevelUi gs app) { appMsg = "Next level!" }
+          app' =
+            (freshLevelUi gs app)
+              { appMsg = "Next level!"
+              , appMaxReached = max (appMaxReached app) n
+              }
       writeIORef ref app'
       updateTitle window app'
     Just (Won _) -> do
@@ -848,10 +895,12 @@ draw ren app = do
   drawHud ren app
   drawBoard ren app
   drawParticles ren (appParticles app)
+  drawComboPop ren app
   drawTipBanner ren app
   drawHelpStrip ren app
   drawOverlay ren app
   drawPauseHelp ren app
+  drawLevelMap ren app
 
 --------------------------------------------------------------------------------
 -- Bitmap 3x5 digits (no TTF)
@@ -1000,7 +1049,7 @@ drawPauseHelp ren app
       rendererDrawColor ren $= V4 8 8 16 200
       fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW winH)))
       let panelY = hudH + 40
-          panelH = 340 :: CInt
+          panelH = 370 :: CInt
       rendererDrawColor ren $= V4 32 32 48 245
       fillRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
       rendererDrawColor ren $= V4 255 200 80 255
@@ -1013,9 +1062,10 @@ drawPauseHelp ren app
             , (2, '2', "SWAP")
             , (3, 'U', "UNDO")
             , (4, 'S', "SHUFFLE")
-            , (5, 'R', "RETRY")
-            , (6, 'N', "NEXT")
-            , (7, 'P', "PLAY")
+            , (5, 'M', "MAP")
+            , (6, 'R', "RETRY")
+            , (7, 'N', "NEXT")
+            , (8, 'P', "PLAY")
             ]
       forM_ rows $ \(i, ch, label) -> do
         let yy = panelY + 70 + fromIntegral i * 32
@@ -1028,7 +1078,7 @@ drawHud ren app = do
       lvl = allLevels !! min (gsLevel gs) (length allLevels - 1)
       white = V4 230 230 245 255 :: V4 Word8
       dim = V4 140 140 170 255
-      accent = V4 255 200 80 255
+      _accent = V4 255 200 80 255 :: V4 Word8
   rendererDrawColor ren $= V4 42 42 58 255
   fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW hudH)))
 
@@ -1104,15 +1154,17 @@ drawHud ren app = do
         drawBannerWord ren (hx) 72 2 (V4 140 200 255 255) "SWAP"
       ToolNone -> pure ()
 
-  -- Combo badge
+  -- Combo badge (连击反馈)
   when (gsCombo gs > 1 && appComboShow app > 0) $ do
-    rendererDrawColor ren $= V4 60 40 20 255
-    fillRect ren (Just (Rectangle (P (V2 (winW - 110) 36)) (V2 80 40)))
-    rendererDrawColor ren $= accent
-    drawRect ren (Just (Rectangle (P (V2 (winW - 110) 36)) (V2 80 40)))
-    fillRect ren (Just (Rectangle (P (V2 (winW - 100) 48)) (V2 10 3)))
-    fillRect ren (Just (Rectangle (P (V2 (winW - 100) 58)) (V2 10 3)))
-    drawNumber ren (winW - 82) 44 3 accent (gsCombo gs)
+    let intensity = min 255 (140 + gsCombo gs * 25)
+        pulseBright = fromIntegral (200 + (appPulse app `mod` 40)) :: Word8
+        badgeCol = V4 255 (fromIntegral intensity) 40 255
+    rendererDrawColor ren $= V4 50 20 10 255
+    fillRect ren (Just (Rectangle (P (V2 (winW - 130) 30)) (V2 110 50)))
+    rendererDrawColor ren $= badgeCol
+    drawRect ren (Just (Rectangle (P (V2 (winW - 130) 30)) (V2 110 50)))
+    drawBannerWord ren (winW - 124) 34 2 (V4 255 pulseBright 80 255) "COMBO"
+    drawNumber ren (winW - 70) 52 3 badgeCol (gsCombo gs)
 
   -- Status strip
   case gsOver gs of
@@ -1123,6 +1175,103 @@ drawHud ren app = do
       rendererDrawColor ren $=
         if gsShuffled gs then V4 180 140 220 255 else V4 70 70 90 255
   fillRect ren (Just (Rectangle (P (V2 (winW - 24) 8)) (V2 16 (hudH - 16))))
+
+
+-- | Floating 连击 pop over the board center (voice-style visual shout).
+drawComboPop :: Renderer -> App -> IO ()
+drawComboPop ren app
+  | appMapOpen app = pure ()
+  | appPaused app = pure ()
+  | gsCombo (appGame app) <= 1 = pure ()
+  | appComboShow app <= 0 = pure ()
+  | otherwise = do
+      let combo = gsCombo (appGame app)
+          life = appComboShow app
+          -- Rise and fade over the show window
+          yOff = fromIntegral ((120 - min 120 life) `div` 2) :: CInt
+          alphaPulse = fromIntegral (180 + (appPulse app `mod` 50)) :: Word8
+          cx = padPx + boardPx `div` 2 - 70
+          cy = hudH + padPx + boardPx `div` 2 - 40 - yOff
+          col =
+            if combo >= 5
+              then V4 255 80 200 alphaPulse
+              else if combo >= 3
+                then V4 255 160 40 alphaPulse
+                else V4 255 220 80 alphaPulse
+      rendererDrawColor ren $= V4 20 10 5 180
+      fillRect ren (Just (Rectangle (P (V2 (cx - 8) (cy - 8))) (V2 160 56)))
+      rendererDrawColor ren $= col
+      drawRect ren (Just (Rectangle (P (V2 (cx - 8) (cy - 8))) (V2 160 56)))
+      drawBannerWord ren cx cy 3 col "COMBO"
+      drawNumber ren (cx + 100) (cy + 8) 4 col combo
+
+-- | Simplified campaign map (选关): nodes in a winding path; unlocked up to appMaxReached.
+mapNodePos :: Int -> (CInt, CInt)
+mapNodePos i =
+  let cols = 5 :: Int
+      row = i `div` cols
+      col = i `mod` cols
+      -- Zig-zag: odd rows reverse
+      col' = if even row then col else (cols - 1 - col)
+      x = 48 + fromIntegral col' * 88
+      y = hudH + 50 + fromIntegral row * 90
+  in (x, y)
+
+mapHitTest :: Int32 -> Int32 -> Maybe Int
+mapHitTest mx my =
+  let hits =
+        [ i
+        | i <- [0 .. length allLevels - 1]
+        , let (nx, ny) = mapNodePos i
+              r = 22 :: CInt
+        , fromIntegral mx >= nx - r
+        , fromIntegral mx <= nx + r
+        , fromIntegral my >= ny - r
+        , fromIntegral my <= ny + r
+        ]
+  in case hits of
+       (i : _) -> Just i
+       [] -> Nothing
+
+drawLevelMap :: Renderer -> App -> IO ()
+drawLevelMap ren app
+  | not (appMapOpen app) = pure ()
+  | otherwise = do
+      rendererDrawColor ren $= V4 12 18 28 230
+      fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW winH)))
+      drawBannerWord ren 80 20 4 (V4 255 220 100 255) "MAP"
+      drawBannerWord ren 250 28 2 (V4 180 200 220 255) "M"
+      -- Path lines between consecutive nodes
+      rendererDrawColor ren $= V4 60 80 100 255
+      forM_ [0 .. length allLevels - 2] $ \i -> do
+        let (x0, y0) = mapNodePos i
+            (x1, y1) = mapNodePos (i + 1)
+        drawLine ren (P (V2 x0 y0)) (P (V2 x1 y1))
+      let reached = appMaxReached app
+          cur = gsLevel (appGame app)
+      forM_ (zip [0 :: Int ..] allLevels) $ \(i, lvl) -> do
+        let (nx, ny) = mapNodePos i
+            unlocked = i <= reached
+            isCur = i == cur
+            body
+              | isCur = V4 255 200 60 255
+              | unlocked = V4 80 180 120 255
+              | otherwise = V4 50 50 70 255
+        rendererDrawColor ren $= body
+        fillRect ren (Just (Rectangle (P (V2 (nx - 18) (ny - 18))) (V2 36 36)))
+        rendererDrawColor ren $= V4 230 230 245 255
+        drawRect ren (Just (Rectangle (P (V2 (nx - 18) (ny - 18))) (V2 36 36)))
+        drawNumber ren (nx - 10) (ny - 8) 2 (V4 240 240 255 255) (i + 1)
+        -- Tiny goal color pip
+        let pip = case lvlGoal lvl of
+              GoalScore _ -> V4 100 220 140 255
+              GoalCollect c _ -> let (r,g,b) = colorRGB c in V4 r g b 255
+              GoalCollectMulti _ -> V4 220 180 100 255
+              GoalClearStone _ -> V4 160 160 170 255
+              GoalChest _ -> V4 220 170 60 255
+              GoalUfo _ -> V4 180 120 255 255
+        rendererDrawColor ren $= pip
+        fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
 
 drawMeter :: Renderer -> CInt -> CInt -> Int -> Int -> V4 Word8 -> IO ()
 drawMeter ren x y value cap col = do

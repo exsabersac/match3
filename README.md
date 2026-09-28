@@ -13,7 +13,7 @@ stack build && stack exec match3-sdl
 ```
 
 1. **左键**点两格相邻交换，或**拖拽**到相邻格；无三连会回滚  
-2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）  
+2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）  
 3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续  
 
 Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec match3-sdl`.
@@ -72,6 +72,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `U` | Undo |
 | `S` | Shuffle |
 | `D` | Daily challenge |
+| `M` | Level map (选关); click unlocked node |
 | `N` / Space / Enter | Next / retry after overlay |
 | `R` | Restart level |
 | `P` | Pause + key help |
@@ -96,6 +97,10 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 每日挑战 / 三星 | ✅ Daily + starRating |
 | 传送带 | ✅ `Belt` 步末循环移位，可触发新消 |
 | 道具（锤子等） | ✅ 锤子 / 任意交换：按键进模式 + 点选完整流 |
+
+## itch.io
+
+See [`ITCH.md`](ITCH.md) for packaging / page checklist.
 
 ## Build & test
 

@@ -199,6 +199,7 @@ tests =
     , testCase "surprise_blast_opens_nested" surprise_blast_opens_nested
     , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
     , testCase "surprise_special_sits_hat_bottle" surprise_special_sits_hat_bottle
+    , testCase "maker_bomb_sits_bottle" maker_bomb_sits_bottle
     , testCase "soft_lock_blocks_rainbow_swap" soft_lock_blocks_rainbow_swap
     , testCase "soft_lock_blocks_special_combo" soft_lock_blocks_special_combo
     , testCase "soft_lock_blocks_freeswap_activation" soft_lock_blocks_freeswap_activation
@@ -6118,6 +6119,43 @@ surprise_special_sits_hat_bottle = do
       assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
       assertEqual "cascade keeps special color (not Bottle/Hat)" C4 (cellColor c)
     Nothing -> assertFailure "Surprise special must sit, not hole"
+
+-- | Maker-produced Bomb must sit through same-wave Bottle dye (Surprise special
+-- parity). Regression: chargeAdjacentMakers ran before Bottle, and surpSaved did
+-- not cover Maker bomb sites, so Bottle recolored C1 Bomb → C3 Bomb in-place.
+maker_bomb_sits_bottle :: Assertion
+maker_bomb_sits_bottle = do
+  -- Match row (3,0..2) C1; Maker C1@1 at (2,1) → Bomb; Bottle C3 at (2,2) ortho.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (2, 1)
+             (mkMakerCharges C1 1))
+          (2, 2)
+          (mkBottle C3)
+      clears = [(3, 0), (3, 1), (3, 2)]
+  -- Unit: unprotected Bottle dyes freshly produced Maker Bomb
+  let (bCharged, saved) = chargeAdjacentMakersSit board0 clears
+  assertEqual "maker bomb sites" [(2, 1)] saved
+  assertEqual "produced C1 Bomb" (Gem C1 Bomb 0 Nothing) (getCell bCharged (2, 1))
+  let dyedBare = triggerAdjacentBottles bCharged clears
+  assertEqual "unprotected Bottle dyes maker bomb" C3 (cellColor (getCell dyedBare (2, 1)))
+  let dyedProt = triggerAdjacentBottlesExcept bCharged clears saved
+  assertEqual "protected Bottle skips maker bomb" (Gem C1 Bomb 0 Nothing) (getCell dyedProt (2, 1))
+  -- Integration: clearMatches keeps Maker Bomb color through Bottle
+  let (mb, _) = clearMatches board0
+  case (mb !! 2) !! 1 of
+    Just c -> do
+      assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
+      assertEqual "cascade keeps maker color (not Bottle)" C1 (cellColor c)
+    Nothing -> assertFailure "Maker Bomb must sit, not hole"
 
 --------------------------------------------------------------------------------
 -- Soft-locked Rainbow / special combo must not fire (parity with expandSpecials)

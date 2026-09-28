@@ -49,7 +49,7 @@ import Match3.Obstacles
   , chipAdjacentBalloonsExcept
   , chipAdjacentTimeSpiritsExcept
   , triggerAdjacentHatsExcept
-  , chargeAdjacentMakers
+  , chargeAdjacentMakersSit
   , openSurprises
   , triggerAdjacentBottlesExcept
   )
@@ -335,8 +335,9 @@ clearMatchesDetailed prefer b =
       (bCurtain, _curtainCleared) = chipAdjacentCurtainExcept bFreeze trueClears directHits
       (bSafe, _openedSafes) = chipAdjacentSafesExcept bCurtain trueClears directHits
       (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
-      bMaker = chargeAdjacentMakers bSpirit trueClears
-      bBottle = triggerAdjacentBottlesExcept bMaker trueClears surpSaved
+      (bMaker, makerSaved) = chargeAdjacentMakersSit bSpirit trueClears
+      -- Protect Surprise specials + Maker-produced Bombs from same-wave Bottle dye
+      bBottle = triggerAdjacentBottlesExcept bMaker trueClears (nub (surpSaved ++ makerSaved))
       -- Chocolate / steam: only true clears extinguish (not soft hits)
       bNoChoco = clearChocoAdjacent bBottle trueClears
       bNoSteam = clearSteamAdjacent bNoChoco trueClears
@@ -629,8 +630,8 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bCurtain, _) = chipAdjacentCurtainExcept bFreeze trueClears directHits
       (bSafe, _) = chipAdjacentSafesExcept bCurtain trueClears directHits
       (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
-      bMaker = chargeAdjacentMakers bSpirit trueClears
-      bBottle = triggerAdjacentBottlesExcept bMaker trueClears surpSaved
+      (bMaker, makerSaved) = chargeAdjacentMakersSit bSpirit trueClears
+      bBottle = triggerAdjacentBottlesExcept bMaker trueClears (nub (surpSaved ++ makerSaved))
       bNoChoco = clearChocoAdjacent bBottle trueClears
       bNoSteam = clearSteamAdjacent bNoChoco trueClears
       allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)

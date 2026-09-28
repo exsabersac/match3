@@ -213,6 +213,7 @@ module Match3.Core
   , triggerAdjacentHatsExcept
   , makersAdjacentSameColor
   , chargeAdjacentMakers
+  , chargeAdjacentMakersSit
   , applyPortalTeleports
   , settleBoardPortals
   , expandSpecials
@@ -291,6 +292,7 @@ import Match3.Obstacles
   , triggerAdjacentHatsExcept
   , makersAdjacentSameColor
   , chargeAdjacentMakers
+  , chargeAdjacentMakersSit
   , openAdjacentSurprises
   , openSurprises
   , surprisesAdjacentTo

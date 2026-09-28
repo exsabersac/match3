@@ -29,6 +29,7 @@ module Match3.Obstacles
   , triggerAdjacentHatsExcept
   , makersAdjacentSameColor
   , chargeAdjacentMakers
+  , chargeAdjacentMakersSit
   , surprisesAdjacentTo
   , openAdjacentSurprises
   , openSurprises
@@ -360,17 +361,23 @@ makersAdjacentSameColor b cleared =
 -- Charge 1 -> produce Bomb of maker color in place; n>1 -> decrement.
 -- Returns board (makers never enter the clear-hole set).
 chargeAdjacentMakers :: Board -> [Pos] -> Board
-chargeAdjacentMakers b clearedGems =
-  foldl chargeOne b (makersAdjacentSameColor b clearedGems)
+chargeAdjacentMakers b clearedGems = fst (chargeAdjacentMakersSit b clearedGems)
+
+-- | Like chargeAdjacentMakers, also returns positions converted to Bomb this wave.
+-- Those Bombs must sit through same-wave Bottle dye (Surprise special parity;
+-- Hat runs before Maker so only Bottle can rewrite a freshly produced Bomb).
+chargeAdjacentMakersSit :: Board -> [Pos] -> (Board, [Pos])
+chargeAdjacentMakersSit b clearedGems =
+  foldl chargeOne (b, []) (makersAdjacentSameColor b clearedGems)
   where
-    chargeOne board p =
+    chargeOne (board, saved) p =
       case at board p of
         Maker col n
           | n <= 1 ->
-              setAt board p (Gem col Bomb 0 Nothing)
+              (setAt board p (Gem col Bomb 0 Nothing), nub (p : saved))
           | otherwise ->
-              setAt board p (mkMakerCharges col (n - 1))
-        _ -> board
+              (setAt board p (mkMakerCharges col (n - 1)), saved)
+        _ -> (board, saved)
 
 -- | Surprise box positions orthogonally adjacent to cleared positions.
 surprisesAdjacentTo :: Board -> [Pos] -> [Pos]
@@ -454,8 +461,8 @@ triggerAdjacentBottles :: Board -> [Pos] -> Board
 triggerAdjacentBottles b cleared = triggerAdjacentBottlesExcept b cleared []
 
 -- | Like triggerAdjacentBottles, but also skip dyeing `protected` cells.
--- Surprise-opened specials sit same-wave; Bottle must not recolor them
--- (parity with maker_bomb_survives_wave / nested Surprise special sit).
+-- Surprise-opened specials and Maker-produced Bombs sit same-wave; Bottle
+-- must not recolor them (parity with maker_bomb_survives_wave / Surprise sit).
 triggerAdjacentBottlesExcept :: Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentBottlesExcept b cleared protected =
   foldl dyeOne b (bottlesAdjacentTo b cleared)

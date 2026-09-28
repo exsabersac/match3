@@ -1132,9 +1132,9 @@ drawGlyph ren x y px col ch = do
     'F' -> [[1,1,1],[1,0,0],[1,1,0],[1,0,0],[1,0,0]]
     'Q' -> [[1,1,1],[1,0,1],[1,0,1],[1,1,1],[0,0,1]]
     '!' -> [[0,1,0],[0,1,0],[0,1,0],[0,0,0],[0,1,0]]
-    '1' -> [[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]]
-    '2' -> [[1,1,1],[0,0,1],[1,1,1],[1,0,0],[1,1,1]]
     ' ' -> [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
+    d | d >= '0' && d <= '9' ->
+      map (map fromIntegral) (digitGlyph (fromEnum d - fromEnum '0'))
     _   -> [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]]
 
 
@@ -1161,8 +1161,11 @@ drawHelpStrip ren app
             [ ('H', V4 255 220 100 255)
             , ('1', V4 255 160 100 255)
             , ('2', V4 160 220 255 255)
+            , ('3', V4 240 140 240 255)
             , ('U', V4 180 200 255 255)
             , ('S', V4 200 160 255 255)
+            , ('D', V4 140 220 200 255)
+            , ('M', V4 180 200 255 255)
             , ('R', V4 255 160 140 255)
             , ('N', V4 140 220 160 255)
             , ('P', V4 255 200 120 255)
@@ -1170,7 +1173,7 @@ drawHelpStrip ren app
       rendererDrawColor ren $= V4 20 20 32 220
       fillRect ren (Just (Rectangle (P (V2 0 y)) (V2 winW 22)))
       forM_ (zip [0 :: CInt ..] keys) $ \(i, (ch, col)) ->
-        drawKeyChip ren (8 + i * 26) (y + 2) ch col
+        drawKeyChip ren (8 + i * 22) (y + 2) ch col
 
 -- | First-level tip banner over the board top edge.
 drawTipBanner :: Renderer -> App -> IO ()
@@ -1204,8 +1207,9 @@ drawPauseHelp ren app
       rendererDrawColor ren $= V4 255 200 80 255
       drawRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
       drawBannerWord ren 100 (panelY + 16) 4 (V4 255 220 100 255) "PAUSE"
-      -- Mechanism reminder strip (carpet / steam / spirit etc.)
+      -- Mechanism reminder strip (carpet / steam)
       drawBannerWord ren 60 (panelY + 52) 2 (V4 200 140 180 255) "CARPET"
+      drawBannerWord ren 220 (panelY + 52) 2 (V4 180 190 200 255) "STEAM"
       let rows :: [(Int, Char, String)]
           rows =
             [ (0, 'H', "HINT")
@@ -1501,6 +1505,12 @@ drawLevelMap ren app
         fillRect ren (Just (Rectangle (P (V2 (nx - 18) (ny - 18))) (V2 36 36)))
         rendererDrawColor ren $= V4 230 230 245 255
         drawRect ren (Just (Rectangle (P (V2 (nx - 18) (ny - 18))) (V2 36 36)))
+        -- Pulse ring on current level so map focus is obvious
+        when isCur $ do
+          let bright = fromIntegral (200 + (appPulse app `mod` 50)) :: Word8
+          rendererDrawColor ren $= V4 255 bright 60 255
+          drawRect ren (Just (Rectangle (P (V2 (nx - 22) (ny - 22))) (V2 44 44)))
+          drawRect ren (Just (Rectangle (P (V2 (nx - 20) (ny - 20))) (V2 40 40)))
         drawNumber ren (nx - 10) (ny - 8) 2 (V4 240 240 255 255) (i + 1)
         -- Tiny goal color pip
         let pip = case lvlGoal lvl of
@@ -1548,7 +1558,7 @@ drawOverlay ren app = case gsOver (appGame app) of
     let panelH = 120 :: CInt
         panelY = hudH + (boardPx - panelH) `div` 2
     case outcome of
-      LevelClear _ _ -> do
+      LevelClear _ nextIdx -> do
         rendererDrawColor ren $= V4 40 50 20 240
         fillRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))
         rendererDrawColor ren $= V4 255 220 80 255
@@ -1557,8 +1567,10 @@ drawOverlay ren app = case gsOver (appGame app) of
         drawBannerWord ren 80 (panelY + 18) 5 (V4 255 230 100 255) "CLEAR!"
         let stars = starRating (appStartMoves app) (gsMoves (appGame app))
         drawNumber ren 200 (panelY + 22) 3 (V4 255 220 80 255) stars
-        drawBannerWord ren 100 (panelY + 70) 3 (V4 200 220 180 255) "NEXT"
-        drawNumber ren (winW - 120) (panelY + 68) 3 (V4 200 220 180 255) (gsLevel (appGame app) + 2)
+        -- Clearer next-level prompt: NEXT L# + N key chip (click / N / Space)
+        drawBannerWord ren 60 (panelY + 70) 3 (V4 200 220 180 255) "NEXT"
+        drawNumber ren 180 (panelY + 68) 3 (V4 200 220 180 255) (nextIdx + 1)
+        drawKeyChip ren (winW - 100) (panelY + 70) 'N' (V4 140 220 160 255)
       Won s -> do
         rendererDrawColor ren $= V4 20 50 30 240
         fillRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))

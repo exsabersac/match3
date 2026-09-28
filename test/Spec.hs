@@ -3623,10 +3623,23 @@ finale_and_pressure_moves_reasonable = do
   let finale = allLevels !! 27
       master = allLevels !! 15
       pressure = allLevels !! 14
+      steam = allLevels !! 35
+      carpet = allLevels !! 36
+      weave = allLevels !! 37
   assertEqual "终章 name" "终章" (lvlName finale)
   assertBool "终章 moves >= 24" (lvlMoves finale >= 24)
   assertBool "大师 moves >= 22" (lvlMoves master >= 22)
   assertBool "压力 moves >= 20" (lvlMoves pressure >= 20)
+  assertBool "蒸汽 moves >= 22" (lvlMoves steam >= 22)
+  assertBool "地毯 moves >= 24" (lvlMoves carpet >= 24)
+  assertBool "织毯 moves >= 24" (lvlMoves weave >= 24)
+  -- Soft score caps so dense décor levels stay fair (numbers only; rules frozen)
+  case lvlGoal master of
+    GoalScore n -> assertBool "大师 score <= 1000" (n <= 1000)
+    _ -> assertFailure "大师 should be GoalScore"
+  case lvlGoal finale of
+    GoalScore n -> assertBool "终章 score <= 1400" (n <= 1400)
+    _ -> assertFailure "终章 should be GoalScore"
   -- Every level at least 18 moves; no zero/negative goals
   mapM_
     ( \lvl -> do

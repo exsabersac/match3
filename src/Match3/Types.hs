@@ -687,7 +687,7 @@ allLevels =
   , Level 12 "飞碟"   24 (GoalUfo 10)
   , Level 13 "碟猎"   20 (GoalUfo 14)
   , Level 14 "压力"   20 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
-  , Level 15 "大师"   22 (GoalScore 1100)
+  , Level 15 "大师"   22 (GoalScore 1000)
   , Level 16 "宝箱"   24 (GoalChest 6)
   , Level 17 "巧箱"   22 (GoalChest 5)
   , Level 18 "蜂蜜"   24 (GoalHoney 6)
@@ -699,7 +699,7 @@ allLevels =
   , Level 24 "帽宴"   22 (GoalCake 5)
   , Level 25 "锁链"   22 (GoalScore 900)
   , Level 26 "果汁"   24 (GoalCollect C1 18)
-  , Level 27 "终章"   24 (GoalScore 1500)
+  , Level 27 "终章"   24 (GoalScore 1400)
   , Level 28 "蜗牛"   20 (GoalScore 850)
   , Level 29 "冰冻"   20 (GoalCollect C2 16)
   , Level 30 "窗帘"   22 (GoalCollect C1 16)
@@ -707,9 +707,9 @@ allLevels =
   , Level 32 "惊喜"   22 (GoalScore 900)
   , Level 33 "染色"   22 (GoalCollect C3 16)
   , Level 34 "时灵"   22 (GoalScore 850)
-  , Level 35 "蒸汽"   20 (GoalCollect C2 16)
+  , Level 35 "蒸汽"   22 (GoalCollect C2 16)
   , Level 36 "地毯"   24 (GoalCarpet 8)
-  , Level 37 "织毯"   22 (GoalCarpet 12)
+  , Level 37 "织毯"   24 (GoalCarpet 12)
   ]
 
 levelConfig :: Level -> GameConfig

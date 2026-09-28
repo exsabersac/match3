@@ -1,6 +1,6 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、蒸汽、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
 Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
 
@@ -74,7 +74,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
 | 15 | 压力 | 20 | Multi RED/GRN/BLU | grass + choco |
-| 16 | 大师 | 22 | Score 1100 | stone+grass+vine+choco+bomb+belts+UFO |
+| 16 | 大师 | 22 | Score 1000 | stone+grass+vine+choco+bomb+belts+UFO |
 | 17 | 宝箱 | 24 | Open 6 chests | chests |
 | 18 | 巧箱 | 22 | Open 5 chests | chests + choco |
 | 19 | 蜂蜜 | 24 | Smash 6 honey jars | honey jars |
@@ -86,7 +86,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 25 | 帽宴 | 22 | Clear 5 cakes | cakes + magic hats + choco |
 | 26 | 锁链 | 22 | Score 900 | iron chains + stone + choco |
 | 27 | 果汁 | 24 | Collect 18× RED | juice makers + fog + portals |
-| 28 | 终章 | 24 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO+carpet |
+| 28 | 终章 | 24 | Score 1400 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO+carpet |
 | 29 | 蜗牛 | 20 | Score 850 | crawling snails |
 | 30 | 冰冻 | 20 | Collect 16× GREEN | rocket freeze + choco |
 | 31 | 窗帘 | 22 | Collect 16× RED | curtain columns + choco |
@@ -94,9 +94,9 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 33 | 惊喜 | 22 | Score 900 | surprise boxes + choco |
 | 34 | 染色 | 22 | Collect 16× BLUE | dye bottles + fog |
 | 35 | 时灵 | 22 | Score 850 | time spirits (+2 moves) |
-| 36 | 蒸汽 | 20 | Collect 16× GREEN | steam clouds + choco |
+| 36 | 蒸汽 | 22 | Collect 16× GREEN | steam clouds + choco |
 | 37 | 地毯 | 24 | Cover 8 carpet tiles | carpet floor + choco |
-| 38 | 织毯 | 22 | Cover 12 carpet tiles | carpet + choco + fog |
+| 38 | 织毯 | 24 | Cover 12 carpet tiles | carpet + choco + fog |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -172,7 +172,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (120 named cases)
+test/Spec.hs tasty (127 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

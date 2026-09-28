@@ -38,6 +38,6 @@ Controls: click/drag swap · `1` hammer · `2` free-swap · `3` cross · `H` hin
 ## Status (repo)
 
 - 38 campaign levels + daily challenge; `stack test` green on lts-21.25 / GHC 9.4.8
-- Finale (终章) 24 moves / Master (大师) 22 moves; map shows CH1–CH7 for all 38 nodes
+- Finale (终章) 24 moves / Score 1400; Master (大师) 22 moves / Score 1000; Steam 22 / Carpet weave 24; map shows CH1–CH7 for all 38 nodes
 - Controls match in-game help strip and pause overlay (H / 1 / 2 / 3 / U / S / D / M / R / N / P)
 

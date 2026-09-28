@@ -24,7 +24,8 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Specials**: 4-match → Line; 5-match → Rainbow (clear all of a color); Bomb exists for combos
 - **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
-- **Ice**: layers on gems; match chips ice; last layer clears the gem
+- **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
+- **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
 - **Goals**: score / single collect / multi-color collect / clear stones
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear
 - Combo scoring, hint, undo, auto-shuffle, 9 campaign levels
@@ -60,7 +61,21 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white bar = line; multi-color ring = rainbow; black/yellow = bomb; gray rock = stone (layer pips); cyan frame = ice.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); cyan frame + cracks = ice; dark fuse + turn pips = countdown bomb.
+
+## 对标开心消消乐 / Feature map
+
+| 开心消消乐 | 本项目 |
+|-----------|--------|
+| 三消 / 四消横竖线 / 五消彩色精灵 | ✅ Normal / LineH·V / Rainbow |
+| 炸弹与特殊合成 | ✅ Bomb；Line×Bomb / Rainbow×Line / Bomb×Bomb / Line×Line |
+| 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
+| 冰层 | ✅ gem 上 ice；裂纹绘制 |
+| 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
+| 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
+| 每日挑战 / 三星 | ✅ Daily + starRating |
+| 传送带 | ⏳ 下一步 |
+| 道具（锤子等） | ⏳ 计划中 |
 
 ## Build & test
 
@@ -71,9 +86,9 @@ stack build && stack test && stack exec match3-sdl
 ## Layout
 
 ```
-src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily
+src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (30+ named cases)
+test/Spec.hs tasty (40 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

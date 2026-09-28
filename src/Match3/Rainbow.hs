@@ -19,6 +19,8 @@ isRainbowSwap b p1 p2 =
     (Gem _ Rainbow _, Gem _ k _) | k /= Rainbow -> True
     (Gem _ k _, Gem _ Rainbow _) | k /= Rainbow -> True
     (Gem _ Rainbow _, Gem _ Rainbow _) -> True -- double rainbow: clear all gems
+    (Gem _ Rainbow _, Countdown _ _) -> True
+    (Countdown _ _, Gem _ Rainbow _) -> True
     _ -> False
   where
     at board (r, c) = (board !! r) !! c
@@ -46,6 +48,8 @@ rainbowClearSeeds b p1 p2 =
         ]
       (Gem _ Rainbow _, Gem col _ _) -> colorPositions b col
       (Gem col _ _, Gem _ Rainbow _) -> colorPositions b col
+      (Gem _ Rainbow _, Countdown col _) -> colorPositions b col
+      (Countdown col _, Gem _ Rainbow _) -> colorPositions b col
       _ -> []
 
 colorPositions :: Board -> Color -> [Pos]
@@ -55,5 +59,6 @@ colorPositions b col =
   , c <- [0 .. boardSize - 1]
   , case (b !! r) !! c of
       Gem col' _ _ -> col' == col
+      Countdown col' _ -> col' == col
       Stone _ -> False
   ]

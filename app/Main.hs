@@ -177,6 +177,7 @@ spawnBurst board positions =
               cy = fromIntegral oy + fromIntegral cellPx / 2
               (cr, cg, cb) = case getCell board pos of
                     Stone _ -> (120, 120, 130)
+                    Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
             ( \_ -> do
@@ -992,6 +993,34 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Countdown col turns -> do
+    let (cr0, cg0, cb0) = colorRGB col
+        (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
+        gap = 3 :: CInt
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    -- Dark fuse / bomb body
+    rendererDrawColor ren $= V4 20 20 20 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 10) (y + cellPx `div` 2 - 10))) (V2 20 20)))
+    rendererDrawColor ren $= V4 255 180 40 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 5) (y + cellPx `div` 2 - 5))) (V2 10 10)))
+    -- Turn pips (up to 9)
+    rendererDrawColor ren $= V4 255 255 255 255
+    forM_ [0 .. min 8 turns - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 6 + fromIntegral (i `mod` 3) * 10) (y + 6 + fromIntegral (i `div` 3) * 8)))
+              (V2 6 5)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Gem _ _ ice -> do
     let (cr0, cg0, cb0) = colorRGB (cellColor cell)
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -1006,25 +1035,36 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
-    -- Ice overlay (cyan frames = layers)
+    -- Ice overlay: cyan frames + crack scratches (开心消消乐冰裂纹)
     when (ice > 0) $ do
       rendererDrawColor ren $= V4 140 220 255 220
       drawRect ren (Just (Rectangle (P (V2 (x + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
-      when (ice > 1) $
+      rendererDrawColor ren $= V4 200 240 255 200
+      -- Diagonal crack lines
+      drawLine ren (P (V2 (x + 8) (y + 12))) (P (V2 (x + cellPx - 10) (y + cellPx - 14)))
+      drawLine ren (P (V2 (x + cellPx - 12) (y + 10))) (P (V2 (x + 14) (y + cellPx - 12)))
+      when (ice > 1) $ do
         drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
+        drawLine ren (P (V2 (x + 10) (y + cellPx `div` 2))) (P (V2 (x + cellPx - 10) (y + cellPx `div` 2 + 4)))
     case cellKind cell of
       Normal -> pure ()
       LineH -> do
-        rendererDrawColor ren $= V4 255 255 255 220
-        fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx `div` 2 - 3))) (V2 (cellPx - 20) 6)))
+        rendererDrawColor ren $= V4 255 255 255 230
+        fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + cellPx `div` 2 - 4))) (V2 (cellPx - 16) 8)))
+        rendererDrawColor ren $= V4 255 200 80 255
+        fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + cellPx `div` 2 - 1))) (V2 (cellPx - 16) 2)))
       LineV -> do
-        rendererDrawColor ren $= V4 255 255 255 220
-        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + 10))) (V2 6 (cellPx - 20))))
+        rendererDrawColor ren $= V4 255 255 255 230
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + 8))) (V2 8 (cellPx - 16))))
+        rendererDrawColor ren $= V4 255 200 80 255
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 1) (y + 8))) (V2 2 (cellPx - 16))))
       Bomb -> do
         rendererDrawColor ren $= V4 20 20 20 255
-        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 8) (y + cellPx `div` 2 - 8))) (V2 16 16)))
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 10) (y + cellPx `div` 2 - 10))) (V2 20 20)))
         rendererDrawColor ren $= V4 255 220 80 255
-        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + cellPx `div` 2 - 4))) (V2 8 8)))
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 5) (y + cellPx `div` 2 - 5))) (V2 10 10)))
+        rendererDrawColor ren $= V4 255 80 40 255
+        drawRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 12) (y + cellPx `div` 2 - 12))) (V2 24 24)))
       Rainbow -> do
         let cx = x + cellPx `div` 2
             cy = y + cellPx `div` 2

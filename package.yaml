@@ -39,6 +39,7 @@ library:
   - Match3.Combos
   - Match3.Ice
   - Match3.Daily
+  - Match3.Countdown
 
 executables:
   match3-sdl:

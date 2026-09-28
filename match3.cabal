@@ -33,6 +33,7 @@ library
       Match3.Combos
       Match3.Ice
       Match3.Daily
+      Match3.Countdown
   other-modules:
       Paths_match3
   autogen-modules:

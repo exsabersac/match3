@@ -11,6 +11,9 @@ module Match3.Types
   , mkStoneLayers
   , stoneLayers
   , isStone
+  , mkCountdown
+  , isCountdown
+  , countdownTurns
   , isGem
   , cellColor
   , cellKind
@@ -46,11 +49,13 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: a colored gem (possibly special) or a layered stone blocker.
--- Stone n = n hit points; adjacent clears decrement; removed when it would go to 0.
+-- | Board cell: gem (optional ice), layered stone crate, or countdown bomb.
+-- Stone n = hit points; adjacent clears chip; removed at 0.
+-- Countdown c n = colored timer bomb (开心消消乐倒计时炸弹); matches as color c.
 data CellContents
   = Gem Color GemKind Int  -- ice layers on gem (0 = none); 开心消消乐冰层
   | Stone Int
+  | Countdown Color Int    -- turns remaining; ticks after each successful move
   deriving (Eq, Ord, Show, Generic)
 
 type Cell = CellContents
@@ -65,6 +70,7 @@ mkIceGem c n = Gem c Normal (max 0 n)
 iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n) = n
 iceLayers (Stone _) = 0
+iceLayers (Countdown _ _) = 0
 
 -- | Single-layer stone (cleared by one adjacent clear).
 mkStone :: Cell
@@ -82,18 +88,34 @@ isStone :: Cell -> Bool
 isStone (Stone _) = True
 isStone _ = False
 
+-- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
+mkCountdown :: Color -> Int -> Cell
+mkCountdown c n = Countdown c (max 1 n)
+
+isCountdown :: Cell -> Bool
+isCountdown (Countdown _ _) = True
+isCountdown _ = False
+
+countdownTurns :: Cell -> Int
+countdownTurns (Countdown _ n) = n
+countdownTurns _ = 0
+
+-- | True for ordinary gems and countdown bombs (both match by color).
 isGem :: Cell -> Bool
 isGem (Gem _ _ _) = True
+isGem (Countdown _ _) = True
 isGem (Stone _) = False
 
--- | Color of a gem cell. Partial on Stone — call only after isGem / pattern match.
+-- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
 cellColor (Gem c _ _) = c
+cellColor (Countdown c _) = c
 cellColor (Stone _) = error "cellColor: Stone has no color"
 
--- | Kind of a gem cell. Partial on Stone.
+-- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
 cellKind (Gem _ k _) = k
+cellKind (Countdown _ _) = Normal
 cellKind (Stone _) = error "cellKind: Stone has no kind"
 
 numColors :: Int

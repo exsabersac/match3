@@ -11,6 +11,15 @@ module Match3.Core
   , mkStoneLayers
   , stoneLayers
   , isStone
+  , mkCountdown
+  , isCountdown
+  , countdownTurns
+  , spawnCountdown
+  , tickCountdowns
+  , countdownsAtZero
+  , explodeRadius
+  , explodeSeedsFor
+  , resolveCountdowns
   , isGem
   , cellColor
   , cellKind
@@ -102,6 +111,13 @@ import Match3.Obstacles
   , chipAdjacentStones
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
+import Match3.Countdown
+  ( spawnCountdown
+  , tickCountdowns
+  , countdownsAtZero
+  , explodeRadius
+  , explodeSeedsFor
+  )
 import Match3.Combos
   ( isLineBombCombo
   , isRainbowLineCombo

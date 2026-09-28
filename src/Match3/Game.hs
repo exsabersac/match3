@@ -25,6 +25,7 @@ import Match3.Board
   , randomPlayableBoard
   , runCascadeScored
   , runCascadeScoredFromSeeds
+  , resolveCountdowns
   , shufflePlayable
   , swapCells
   )
@@ -160,7 +161,7 @@ trySwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (board1, _cleared, gained, combo, tallies, stonesHit, g') =
+             let (board0', cleared0, gained0, combo0, tallies0, stones0, g0') =
                    if rainbow
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
@@ -170,6 +171,14 @@ trySwap p1 p2 gs
                          let seeds = comboClearSeeds swapped p1 p2
                          in runCascadeScoredFromSeeds (Just p2) seeds (gsGen gs) swapped
                        else runCascadeScored (Just p2) (gsGen gs) swapped
+                 -- Countdown bombs: tick after move; zeros explode 3×3
+                 (board1, cleared1, gained1, combo1, tallies1, stones1, g') =
+                   resolveCountdowns g0' board0'
+                 gained = gained0 + gained1
+                 combo = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
+                 tallies = mergeTallies tallies0 tallies1
+                 stonesHit = stones0 + stones1
+                 _cleared = cleared0 + cleared1
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalCollectMulti _ -> 0

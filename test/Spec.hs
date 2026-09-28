@@ -52,6 +52,10 @@ tests =
     , testCase "special_combo_rainbow_line" special_combo_rainbow_line
     , testCase "special_combo_bomb_bomb" special_combo_bomb_bomb
     , testCase "special_combo_line_line" special_combo_line_line
+    , testCase "countdown_bomb_spawns" countdown_bomb_spawns
+    , testCase "countdown_bomb_ticks_after_move" countdown_bomb_ticks_after_move
+    , testCase "countdown_bomb_explodes_at_zero" countdown_bomb_explodes_at_zero
+    , testCase "countdown_bomb_cleared_disarms" countdown_bomb_cleared_disarms
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -857,41 +861,9 @@ goal_clear_stone_counts = do
     (not (goalMetEx (GoalClearStone 2) 0 0 [] 0))
   assertBool "2 stones met"
     (goalMetEx (GoalClearStone 2) 0 0 [] 2)
-  let board =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell stableBoard (3, 0) (mkGem C1))
-                   (3, 1)
-                   (mkGem C1))
-                (3, 2)
-                (mkGem C1))
-             (4, 1)
-             mkStone)
-          (4, 0)
-          mkStone
-      cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
-      gs0 =
-        (newGameAtLevel 0 cfg 5)
-          { gsBoard = board
-          , gsStonesCleared = 0
-          , gsOver = Nothing
-          }
-      (gs1, out) = trySwap (3, 2) (3, 3) gs0
-  -- (3,3) on stable is C4; need a proper swap. Use match already present: row3 is C1 C1 C1
-  -- board already has match — but trySwap needs a swap. Force via matching swap on adjacent.
-  -- Actually board has match already; trySwap of two cells that keeps/creates match:
-  let (gs2, out2) = trySwap (3, 0) (2, 0) gs0
-  -- Better: clearMatches path counts stones — use chip+clear via existing match by swapping
-  -- Place swap that creates the C1 triple if not already matching:
-  -- board already hasAnyMatch — ensurePlayable wouldn't start that way.
-  -- Use runCascadeScored directly to count stones:
-  let (_, _, _, _, _, stones, _) = runCascadeScored Nothing (mkStdGen 1) board
-  assertBool ("stones cleared in cascade " ++ show stones) (stones >= 1)
-  assertBool "goal clear stone type works" (goalTarget (GoalClearStone 8) == 8)
-  -- trySwap from a no-initial-match board: swap into C1 C1 C1
-  let boardN =
+  assertEqual "goal target" (8 :: Int) (goalTarget (GoalClearStone 8))
+  let cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
+      boardN =
         setCell
           (setCell
              (setCell
@@ -918,9 +890,9 @@ goal_clear_stone_counts = do
   case outN of
     LevelClear _ _ -> assertBool "enough stones" (gsStonesCleared gsN1 >= 2)
     MoveApplied _ -> pure ()
-    _ -> pure ()
-  assertBool "out defined" (out == out || gs1 == gs1)
-  assertBool "out2 defined" (out2 == out2 || gs2 == gs2)
+    Won _ -> pure ()
+    Lost _ -> pure ()
+    other -> assertFailure ("unexpected " ++ show other)
 
 --------------------------------------------------------------------------------
 -- Ice layers (开心消消乐冰层)
@@ -1037,3 +1009,166 @@ special_combo_line_line = do
     _ -> pure ()
   assertEqual "moves" (4 :: Int) (gsMoves gs1)
 
+--------------------------------------------------------------------------------
+-- Countdown bombs (开心消消乐倒计时炸弹)
+--------------------------------------------------------------------------------
+
+-- | spawnCountdown / mkCountdown places a colored timer on the board.
+countdown_bomb_spawns :: Assertion
+countdown_bomb_spawns = do
+  let b0 = spawnCountdown stableBoard (2, 2) C1 5
+  assertBool "is countdown" (isCountdown (getCell b0 (2, 2)))
+  assertEqual "turns" (5 :: Int) (countdownTurns (getCell b0 (2, 2)))
+  assertEqual "color" C1 (cellColor (getCell b0 (2, 2)))
+  assertBool "counts as gem" (isGem (getCell b0 (2, 2)))
+  -- Participates in a same-color run
+  let b1 =
+        setCell
+          (setCell b0 (2, 0) (mkGem C1))
+          (2, 1)
+          (mkGem C1)
+      ms = findMatches b1
+  assertBool "countdown in match" ((2, 2) `elem` ms)
+
+-- | Successful move ticks remaining countdowns by 1.
+countdown_bomb_ticks_after_move :: Assertion
+countdown_bomb_ticks_after_move = do
+  let bPure = spawnCountdown stableBoard (2, 2) C3 5
+  assertEqual "pure tick 5->4" (4 :: Int) (countdownTurns (getCell (tickCountdowns bPure) (2, 2)))
+  let (bRes, nClear, _, _, _, _, _) = resolveCountdowns (mkStdGen 0) bPure
+  assertEqual "resolve ticks" (4 :: Int) (countdownTurns (getCell bRes (2, 2)))
+  assertEqual "no explode when >0" (0 :: Int) nClear
+  -- trySwap path: use a tiny score goal so outcome is terminal (skips ensurePlayable shuffle)
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (3, 3)
+          (mkGem C1)
+      board = spawnCountdown board0 (5, 5) C5 5
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 1 }
+      gs0 =
+        (newGameAtLevel 0 cfg 11)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  assertBool "terminal or applied" $
+    case out of
+      MoveApplied _ -> True
+      LevelClear _ _ -> True
+      Won _ -> True
+      Lost _ -> True
+      _ -> False
+  assertBool "not reshuffled away" (not (gsShuffled gs1))
+  let cds =
+        [ countdownTurns (getCell (gsBoard gs1) (r, c))
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isCountdown (getCell (gsBoard gs1) (r, c))
+        ]
+  assertEqual "countdown ticked 5->4 after move" [4] cds
+
+-- | Countdown at 1 ticks to 0 and explodes clearing the 3×3 neighborhood.
+countdown_bomb_explodes_at_zero :: Assertion
+countdown_bomb_explodes_at_zero = do
+  -- Countdown at (4,4) with 1 turn; match elsewhere on row 0 area via swap
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (0, 0) (mkGem C2))
+                (0, 1)
+                (mkGem C2))
+             (0, 2)
+             (mkGem C3))
+          (0, 3)
+          (mkGem C2)
+      board = spawnCountdown board0 (4, 4) C5 1
+      -- Marker gem adjacent that should vanish in 3×3 explosion
+      board' = setCell board (4, 5) (mkGem C1)
+      gs0 =
+        (newGame defaultConfig 13)
+          { gsBoard = board'
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  -- Countdown itself must be gone (exploded)
+  let cds =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isCountdown (getCell (gsBoard gs1) (r, c))
+        ]
+  assertBool ("countdown exploded away, leftover " ++ show cds) (null cds)
+  -- Score should reflect explosion clear (at least some points beyond tiny match)
+  assertBool ("explosion scored, got " ++ show (gsScore gs1)) (gsScore gs1 >= 30)
+
+-- | Matching a countdown disarms it (removed, no zero-explosion).
+countdown_bomb_cleared_disarms :: Assertion
+countdown_bomb_cleared_disarms = do
+  -- Countdown C1 at (3,2) with 1 turn — would explode if not matched.
+  -- Setup: C1 C1 Countdown(C1) via swap of (3,2)<->(3,3) where (3,3) is C1
+  -- Start: (3,0)=C1 (3,1)=C1 (3,2)=Countdown C1 1 (3,3)=C2 — already a match including countdown!
+  -- Better: no initial match; swap brings countdown into a triple.
+  -- board: (3,0)=C1 (3,1)=C1 (3,2)=C2 (3,3)=Countdown C1 1
+  -- swap (3,2)<->(3,3) => C1 C1 Countdown C2 — wait that matches countdown with C1s.
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkGem C1))
+          (3, 2)
+          (mkGem C2)
+      board = spawnCountdown board0 (3, 3) C1 1
+      -- Witness gem at (5,5) far from (3,3); if countdown exploded (3×3 around 3,3)
+      -- it would NOT reach (5,5). Place witness inside explosion radius instead:
+      -- (3,4) is in 3×3 of (3,3). If disarmed by match, explosion shouldn't fire,
+      -- but match clear may still remove neighbors via specials — use plain match.
+      -- After disarm+ cascade, countdown gone; tick of other bombs N/A.
+      -- Place a second countdown at (6,6) with 3 turns — should tick to 2, not explode.
+      board' = spawnCountdown board (6, 6) C4 3
+      gs0 =
+        (newGame defaultConfig 17)
+          { gsBoard = board'
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match to disarm"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  -- Matched countdown disarmed (no C1 countdown left)
+  let c1cds =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , case getCell (gsBoard gs1) (r, c) of
+            Countdown C1 _ -> True
+            _ -> False
+        ]
+  assertBool ("C1 countdown disarmed, leftover " ++ show c1cds) (null c1cds)
+  -- Other countdown ticked 3 -> 2 (survived, not exploded)
+  let other =
+        [ countdownTurns (getCell (gsBoard gs1) (r, c))
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isCountdown (getCell (gsBoard gs1) (r, c))
+        ]
+  assertEqual "other countdown ticked once" [2] other

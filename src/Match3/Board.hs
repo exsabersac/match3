@@ -28,11 +28,17 @@ module Match3.Board
   , findHint
   , MatchRun(..)
   , countColor
+  , resolveCountdowns
   ) where
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
 import Match3.Obstacles (chipAdjacentStones)
+import Match3.Countdown
+  ( countdownsAtZero
+  , explodeSeedsFor
+  , tickCountdowns
+  )
 import Match3.Combos (isSpecialCombo)
 import Match3.Rainbow (isRainbow, isRainbowSwap)
 import Match3.Types
@@ -89,10 +95,12 @@ groupGemRuns _ [] = []
 groupGemRuns b (p : ps) = case getCell b p of
   Stone _ -> groupGemRuns b ps
   Gem col _ _ -> go [p] col ps
+  Countdown col _ -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
     go run col (q : qs) = case getCell b q of
       Gem col' _ _ | col' == col -> go (q : run) col qs
+      Countdown col' _ | col' == col -> go (q : run) col qs
       _ -> (col, reverse run) : groupGemRuns b (q : qs)
 
 findMatches :: Board -> [Pos]
@@ -133,10 +141,12 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
               , c <- [0 .. boardSize - 1]
               , case getCell b (r, c) of
                   Gem col' _ _ -> col' == col
+                  Countdown col' _ -> col' == col
                   Stone _ -> False
               ]
             Gem _ Normal _ -> []
             Stone _ -> []
+            Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
@@ -165,6 +175,7 @@ countColor b ps col =
     | p <- ps
     , case getCell b p of
         Gem c _ _ -> c == col
+        Countdown c _ -> c == col
         Stone _ -> False
     ]
 
@@ -378,6 +389,23 @@ randomPlayableBoard g =
 -- | Reshuffle into a playable stable board (ignores previous layout).
 shufflePlayable :: RandomGen g => g -> (Board, g)
 shufflePlayable = randomPlayableBoard
+
+
+-- | After a successful cascade: tick countdown bombs; any at 0 explode (3×3) + cascade.
+-- Returns same tuple shape as runCascadeScoredFromSeeds extras (may be zero if nothing ticks to 0).
+resolveCountdowns
+  :: RandomGen g
+  => g
+  -> Board
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, g)
+resolveCountdowns g b =
+  let bTick = tickCountdowns b
+      zeros = countdownsAtZero bTick
+  in if null zeros
+       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, g)
+       else
+         let seeds = explodeSeedsFor bTick
+         in runCascadeScoredFromSeeds Nothing seeds g bTick
 
 -- | First adjacent swap that would create a match or activate a rainbow (for hint).
 findHint :: Board -> Maybe (Pos, Pos)

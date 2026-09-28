@@ -45,6 +45,7 @@ library:
   - Match3.Grass
   - Match3.Ufo
   - Match3.Snail
+  - Match3.Carpet
 
 executables:
   match3-sdl:

@@ -266,6 +266,8 @@ updateTitle window app = do
           "safe=" ++ show (gsSafesOpened gs) ++ "/" ++ show n
         GoalUfo n ->
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
+        GoalCarpet n ->
+          "carpet=" ++ show (gsCarpetsCovered gs) ++ "/" ++ show n
       title =
         T.pack $
           "L"
@@ -935,6 +937,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalCarpet n ->
+                                    " [carpet "
+                                      <> T.pack (show (gsCarpetsCovered gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   _ -> ""
                                 msg = case out of
                                   InvalidSwap -> "Need 4-neighbor adjacent"
@@ -961,6 +969,8 @@ handleEvent ref window ev = case eventPayload ev of
                                   Lost _ -> AnimSwap p1 pos before after 0
                                   LevelClear _ _ -> AnimSwap p1 pos before after 0
                                   _ -> AnimNone
+                                -- Combo SFX placeholder: when audio lands, play a rising
+                                -- pitched blip for gsCombo gs' >= 2 (cascade wave cheer).
                                 comboShow =
                                   if gsCombo gs' > 1 then 120 else 0
                             parts <-
@@ -1194,6 +1204,8 @@ drawPauseHelp ren app
       rendererDrawColor ren $= V4 255 200 80 255
       drawRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
       drawBannerWord ren 100 (panelY + 16) 4 (V4 255 220 100 255) "PAUSE"
+      -- Mechanism reminder strip (carpet / steam / spirit etc.)
+      drawBannerWord ren 60 (panelY + 52) 2 (V4 200 140 180 255) "CARPET"
       let rows :: [(Int, Char, String)]
           rows =
             [ (0, 'H', "HINT")
@@ -1207,7 +1219,7 @@ drawPauseHelp ren app
             , (8, 'P', "PLAY")
             ]
       forM_ rows $ \(i, ch, label) -> do
-        let yy = panelY + 70 + fromIntegral i * 32
+        let yy = panelY + 78 + fromIntegral i * 30
         drawKeyChip ren 80 yy ch (V4 255 220 120 255)
         drawBannerWord ren 120 yy 2 (V4 210 210 230 255) label
 
@@ -1247,6 +1259,7 @@ drawHud ren app = do
         GoalCake _ -> V4 255 140 180 255
         GoalSafe _ -> V4 200 170 50 255
         GoalUfo _ -> V4 180 120 255 255
+        GoalCarpet _ -> V4 180 100 160 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
   drawMeter ren 10 36 prog targ meterCol
@@ -1299,6 +1312,16 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
       rendererDrawColor ren $= V4 220 200 255 255
       fillRect ren (Just (Rectangle (P (V2 204 40)) (V2 12 6)))
+    GoalCarpet _ -> do
+      -- Magenta weave swatch (地毯)
+      rendererDrawColor ren $= V4 180 100 160 255
+      fillRect ren (Just (Rectangle (P (V2 200 40)) (V2 20 20)))
+      rendererDrawColor ren $= V4 220 140 200 255
+      fillRect ren (Just (Rectangle (P (V2 204 44)) (V2 4 4)))
+      fillRect ren (Just (Rectangle (P (V2 212 44)) (V2 4 4)))
+      fillRect ren (Just (Rectangle (P (V2 208 50)) (V2 4 4)))
+      fillRect ren (Just (Rectangle (P (V2 204 52)) (V2 4 4)))
+      fillRect ren (Just (Rectangle (P (V2 212 52)) (V2 4 4)))
     GoalCollect col _ -> do
       let (r, g, b) = colorRGB col
       rendererDrawColor ren $= V4 r g b 255
@@ -1388,7 +1411,7 @@ drawComboPop ren app
 
 -- | Chapter boundaries (0-based level index starts). Light map separators.
 chapterStarts :: [Int]
-chapterStarts = [0, 7, 14, 21, 28, 34]
+chapterStarts = [0, 7, 14, 21, 28, 34, 36]
 
 chapterLabel :: Int -> String
 chapterLabel 0 = "CH1"
@@ -1397,6 +1420,7 @@ chapterLabel 14 = "CH3"
 chapterLabel 21 = "CH4"
 chapterLabel 28 = "CH5"
 chapterLabel 34 = "CH6"
+chapterLabel 36 = "CH7"
 chapterLabel _ = ""
 
 -- | Extra vertical gap before chapter-start nodes.
@@ -1488,6 +1512,7 @@ drawLevelMap ren app
               GoalCake _ -> V4 255 140 180 255
               GoalSafe _ -> V4 200 170 50 255
               GoalUfo _ -> V4 180 120 255 255
+              GoalCarpet _ -> V4 180 100 160 255
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
 
@@ -2143,11 +2168,35 @@ drawStatic ren app board yOff = do
             (x0, y0) = cellOrigin pos
             y = y0 + yOff
             flashing = pos `elem` flashSet
-            -- Soft checkerboard under gems (visual polish; does not change gem shapes)
+            -- Soft checkerboard under gems; carpet weave if open / covered target
+            carpetOpen = pos `elem` gsCarpetOpen (appGame app)
+            carpetCovered =
+              pos `elem` levelCarpets (gsLevel (appGame app))
+                && not carpetOpen
+                && not (null (levelCarpets (gsLevel (appGame app))))
             (br, bg, bb) =
-              if even (r + c) then (36, 36, 48) else (28, 28, 40)
+              if carpetOpen
+                then (90, 40, 80)  -- uncovered target (magenta base)
+                else if carpetCovered
+                  then (140, 70, 120)  -- covered weave
+                  else if even (r + c) then (36, 36, 48) else (28, 28, 40)
         rendererDrawColor ren $= V4 br bg bb 255
         fillRect ren (Just (Rectangle (P (V2 x0 y)) (V2 cellPx cellPx)))
+        -- Carpet weave ticks (目标地砖底纹)
+        when (carpetOpen || carpetCovered) $ do
+          let tick = if carpetCovered then V4 200 120 180 220 else V4 160 80 140 200
+          rendererDrawColor ren $= tick
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 8) (y + 10))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 22) (y + 10))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 36) (y + 10))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 15) (y + 24))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 29) (y + 24))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 8) (y + 38))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 22) (y + 38))) (V2 6 6)))
+          fillRect ren (Just (Rectangle (P (V2 (x0 + 36) (y + 38))) (V2 6 6)))
+          when carpetCovered $ do
+            rendererDrawColor ren $= V4 255 200 230 180
+            drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
         drawGemAt ren x0 y cell flashing
         when (sel == Just pos) $ do
           let bright = fromIntegral (180 + (pulse `mod` 40) * 2) :: Word8

@@ -63,6 +63,8 @@ module Match3.Core
   , spreadVines
   , spreadChoco
   , spreadSteam
+  , coverCarpets
+  , levelCarpets
   , stepSnails
   , stepSnailAt
   , snailPositions
@@ -240,6 +242,7 @@ import Match3.Grass
   , spreadChoco
   , spreadSteam
   )
+import Match3.Carpet (coverCarpets, levelCarpets)
 import Match3.Snail
   ( stepSnails
   , stepSnailAt

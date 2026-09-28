@@ -39,6 +39,7 @@ import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Obstacles (swapBlockedByStone)
 import Match3.Conveyor (Belt, shiftBelts)
 import Match3.Grass (spreadVines, spreadChoco, spreadSteam)
+import Match3.Carpet (coverCarpets, levelCarpets)
 import Match3.Snail (stepSnails)
 import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
@@ -75,6 +76,8 @@ data GameState = GameState
   , gsCrossClears   :: Int    -- cross-clear booster charges
   , gsUfos          :: [Ufo]  -- flying saucers (飞碟)
   , gsUfoCollected  :: Int    -- gems absorbed by UFOs
+  , gsCarpetOpen    :: [Pos]  -- uncovered carpet / floor tiles (地毯目标)
+  , gsCarpetsCovered :: Int   -- carpet tiles covered this level
   } deriving (Show)
 
 instance Eq GameState where
@@ -101,6 +104,8 @@ instance Eq GameState where
       && gsCrossClears a == gsCrossClears b
       && gsUfos a == gsUfos b
       && gsUfoCollected a == gsUfoCollected b
+      && gsCarpetOpen a == gsCarpetOpen b
+      && gsCarpetsCovered a == gsCarpetsCovered b
 
 snapshot :: GameState -> GameState
 snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
@@ -364,6 +369,13 @@ decorateLevel 35 b =
   let b1 = overlayAt b Steam [(2, 2), (2, 5), (3, 3), (3, 4), (4, 1), (4, 6), (5, 3), (6, 2), (6, 5)]
       b2 = overlayAt b1 Steam [(1, 3), (1, 4), (4, 3), (4, 4)]
   in overlayAt b2 Choco [(7, 2), (7, 5)]
+decorateLevel 36 b =
+  -- 地毯: open floor tiles via levelCarpets; light choco garnish
+  overlayAt b Choco [(1, 1), (1, 6), (6, 1), (6, 6)]
+decorateLevel 37 b =
+  -- 织毯: carpet + choco + fog mix
+  let b1 = overlayAt b Choco [(1, 2), (1, 5), (6, 2), (6, 5)]
+  in overlayAt b1 (Fog 1) [(0, 3), (0, 4), (7, 3), (7, 4)]
 decorateLevel _ b = b
 
 -- | UFO placements for campaign levels.
@@ -422,6 +434,8 @@ newGameAtLevel li cfg seed =
                        _ -> []
                 else placed
        , gsUfoCollected = 0
+       , gsCarpetOpen = levelCarpets li
+       , gsCarpetsCovered = 0
        }
 
 restart :: GameConfig -> Int -> GameState
@@ -566,7 +580,7 @@ trySwap p1 p2 gs
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
              let ufos0 = gsUfos gs
-                 (board0', cleared0, gained0, combo0, tallies0, stones0, chests0, honey0, balloons0, cookies0, cakes0, uAbs0, ufos1, g0') =
+                 (board0', cleared0, gained0, combo0, tallies0, stones0, chests0, honey0, balloons0, cookies0, cakes0, uAbs0, ufos1, pos0, g0') =
                    if rainbow
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
@@ -577,13 +591,13 @@ trySwap p1 p2 gs
                          in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsPortals gs) (gsGen gs) swapped
                        else runCascadeScoredWithUfos (Just p2) ufos0 (gsPortals gs) (gsGen gs) swapped
                  -- Countdown bombs: tick after move; zeros explode 3×3
-                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, cookies1, cakes1, g1') =
+                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, cookies1, cakes1, pos1, g1') =
                    resolveCountdowns g0' board0'
                  -- Conveyor belts: shift then cascade if new matches
                  boardBelt = shiftBelts boardCd (gsBelts gs)
-                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos2, g') =
+                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos2, pos2, g') =
                    if null (gsBelts gs)
-                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos1, g1')
+                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos1, [], g1')
                      else runCascadeScoredWithUfos Nothing ufos1 (gsPortals gs) g1' boardBelt
                  -- Vine / chocolate spread, then snails crawl one step (推宝石 / 碰壁掉头)
                  board1 = stepSnails (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
@@ -600,11 +614,13 @@ trySwap p1 p2 gs
                  cakeHit = cakes0 + cakes1 + cakes2
                  safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
+                 (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) (pos0 ++ pos1 ++ pos2)
                  uAbs = uAbs0 + uAbs2
                  ufoCollected' = gsUfoCollected gs + uAbs
                  cookies' = gsCookiesCollected gs + cookieHit
                  cakes' = gsCakesCleared gs + cakeHit
                  safes' = gsSafesOpened gs + safesHit
+                 carpets' = gsCarpetsCovered gs + carpetHit
                  _cleared = cleared0 + cleared1 + cleared2
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
@@ -616,6 +632,7 @@ trySwap p1 p2 gs
                    GoalCookie _ -> 0
                    GoalCake _ -> 0
                    GoalSafe _ -> 0
+                   GoalCarpet _ -> 0
                    GoalScore _ -> 0
                    GoalUfo _ -> uAbs
                  -- For multi-collect, primary meter = sum of progress toward reqs
@@ -631,6 +648,7 @@ trySwap p1 p2 gs
                    GoalCookie _ -> cookies'
                    GoalCake _ -> cakes'
                    GoalSafe _ -> safes'
+                   GoalCarpet _ -> carpets'
                    GoalScore _ -> gsCollected gs
                    GoalUfo _ -> ufoCollected'
                  score' = gsScore gs + gained
@@ -657,6 +675,8 @@ trySwap p1 p2 gs
                      , gsShuffled = False
                      , gsUfos = ufos2
                      , gsUfoCollected = ufoCollected'
+                     , gsCarpetOpen = carpetOpen'
+                     , gsCarpetsCovered = carpets'
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -705,7 +725,7 @@ useHammer p gs
   | not (inBounds p) = (gs, InvalidSwap)
   | otherwise =
       let seeds = [p]
-          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', g') =
+          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =
             runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsPortals gs) (gsGen gs) (gsBoard gs)
           board1 = spreadSteam (spreadChoco (spreadVines boardH))
           score' = gsScore gs + gained
@@ -716,6 +736,8 @@ useHammer p gs
           safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
           spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
           safes' = gsSafesOpened gs + safesHit
+          (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) posCleared
+          carpets' = gsCarpetsCovered gs + carpetHit
           collectDelta = case gsGoal gs of
             GoalCollect col _ -> lookupColor tallies col
             GoalUfo _ -> uAbs
@@ -732,6 +754,7 @@ useHammer p gs
             GoalCookie _ -> cookies'
             GoalCake _ -> cakes'
             GoalSafe _ -> safes'
+            GoalCarpet _ -> carpets'
             GoalScore _ -> gsCollected gs
             GoalUfo _ -> ufoCollected'
           gs' =
@@ -756,6 +779,8 @@ useHammer p gs
               , gsMoves = gsMoves gs + 2 * spiritHit
               , gsUfos = ufos'
               , gsUfoCollected = ufoCollected'
+              , gsCarpetOpen = carpetOpen'
+              , gsCarpetsCovered = carpets'
               }
           outcome = decideOutcome gs' gained
           gs'' = case outcome of
@@ -785,7 +810,7 @@ useFreeSwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', g') =
+             let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =
                    if rainbow
                      then runCascadeScoredFromSeedsWithUfos (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
                      else if specialCombo
@@ -800,6 +825,8 @@ useFreeSwap p1 p2 gs
                  safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
                  safes' = gsSafesOpened gs + safesHit
+                 (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) posCleared
+                 carpets' = gsCarpetsCovered gs + carpetHit
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalUfo _ -> uAbs
@@ -816,6 +843,7 @@ useFreeSwap p1 p2 gs
                    GoalCookie _ -> cookies'
                    GoalCake _ -> cakes'
                    GoalSafe _ -> safes'
+                   GoalCarpet _ -> carpets'
                    GoalScore _ -> gsCollected gs
                    GoalUfo _ -> ufoCollected'
                  gs' =
@@ -840,6 +868,8 @@ useFreeSwap p1 p2 gs
                      , gsMoves = gsMoves gs + 2 * spiritHit
                      , gsUfos = ufos'
                      , gsUfoCollected = ufoCollected'
+                     , gsCarpetOpen = carpetOpen'
+                     , gsCarpetsCovered = carpets'
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -861,7 +891,7 @@ useCrossClear p gs
   | not (inBounds p) = (gs, InvalidSwap)
   | otherwise =
       let seeds = crossClearSeeds p
-          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', g') =
+          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =
             runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsPortals gs) (gsGen gs) (gsBoard gs)
           board1 = spreadSteam (spreadChoco (spreadVines boardH))
           score' = gsScore gs + gained
@@ -872,6 +902,8 @@ useCrossClear p gs
           safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
           spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
           safes' = gsSafesOpened gs + safesHit
+          (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) posCleared
+          carpets' = gsCarpetsCovered gs + carpetHit
           collectDelta = case gsGoal gs of
             GoalCollect col _ -> lookupColor tallies col
             GoalUfo _ -> uAbs
@@ -888,6 +920,7 @@ useCrossClear p gs
             GoalCookie _ -> cookies'
             GoalCake _ -> cakes'
             GoalSafe _ -> safes'
+            GoalCarpet _ -> carpets'
             GoalScore _ -> gsCollected gs
             GoalUfo _ -> ufoCollected'
           gs' =
@@ -912,6 +945,8 @@ useCrossClear p gs
               , gsMoves = gsMoves gs + 2 * spiritHit
               , gsUfos = ufos'
               , gsUfoCollected = ufoCollected'
+              , gsCarpetOpen = carpetOpen'
+              , gsCarpetsCovered = carpets'
               }
           outcome = decideOutcome gs' gained
           gs'' = case outcome of
@@ -938,3 +973,4 @@ loseHint (GoalCookie n) = "打通下方让饼干掉到底部，目标 " ++ show 
 loseHint (GoalCake n) = "邻消削掉蛋糕层，目标 " ++ show n ++ " 个"
 loseHint (GoalSafe n) = "邻消打开保险箱掉出饼干，目标 " ++ show n ++ " 个"
 loseHint (GoalUfo n) = "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"
+loseHint (GoalCarpet n) = "在地毯格上消除宝石以铺地毯，目标 " ++ show n ++ " 格"

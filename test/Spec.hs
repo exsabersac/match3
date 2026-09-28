@@ -132,6 +132,9 @@ tests =
     , testCase "steam_blocks_match" steam_blocks_match
     , testCase "steam_cleared_by_adjacent" steam_cleared_by_adjacent
     , testCase "steam_spreads_after_move" steam_spreads_after_move
+    , testCase "carpet_covers_on_clear" carpet_covers_on_clear
+    , testCase "goal_carpet_counts" goal_carpet_counts
+    , testCase "carpet_already_covered_noop" carpet_already_covered_noop
     , testCase "carry_moves_on_next_level" carry_moves_on_next_level
     , testCase "daily_goal_rotates_ten" daily_goal_rotates_ten
     ]
@@ -1118,7 +1121,7 @@ countdown_bomb_ticks_after_move :: Assertion
 countdown_bomb_ticks_after_move = do
   let bPure = spawnCountdown stableBoard (2, 2) C3 5
   assertEqual "pure tick 5->4" (4 :: Int) (countdownTurns (getCell (tickCountdowns bPure) (2, 2)))
-  let (bRes, nClear, _, _, _, _, _, _, _, _, _, _) = resolveCountdowns (mkStdGen 0) bPure
+  let (bRes, nClear, _, _, _, _, _, _, _, _, _, _, _) = resolveCountdowns (mkStdGen 0) bPure
   assertEqual "resolve ticks" (4 :: Int) (countdownTurns (getCell bRes (2, 2)))
   assertEqual "no explode when >0" (0 :: Int) nClear
   -- trySwap path: use a tiny score goal so outcome is terminal (skips ensurePlayable shuffle)
@@ -1458,6 +1461,7 @@ lose_hint_by_goal = do
   assertBool "cake hint" (not (null (loseHint (GoalCake 6))))
   assertBool "safe hint" (not (null (loseHint (GoalSafe 5))))
   assertBool "ufo hint" (not (null (loseHint (GoalUfo 10))))
+  assertBool "carpet hint" (not (null (loseHint (GoalCarpet 8))))
 
 --------------------------------------------------------------------------------
 -- Grass / Vine overlays (开心消消乐草·藤蔓)
@@ -2457,7 +2461,7 @@ chain_layer_decrement = do
           , hasChain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
-  assertEqual "campaign levels" (36 :: Int) (length allLevels)
+  assertEqual "campaign levels" (38 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Maker / 果汁机 (same-color adjacent charge -> Bomb)
@@ -2732,7 +2736,7 @@ freeze_layer_decrement = do
           , hasFreeze (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor freeze >= 8, got " ++ show nFreeze) (nFreeze >= 8)
-  assertEqual "campaign levels" (36 :: Int) (length allLevels)
+  assertEqual "campaign levels" (38 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Curtain / 窗帘 (blocks match; adjacent peel; ≠ Fog soft cloud)
@@ -2803,7 +2807,7 @@ curtain_layer_decrement = do
           , hasCurtain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor curtain >= 8, got " ++ show nCurt) (nCurt >= 8)
-  assertEqual "campaign levels" (36 :: Int) (length allLevels)
+  assertEqual "campaign levels" (38 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Safe / 保险箱 (layered vault; opens into Cookie; GoalSafe)
@@ -3011,7 +3015,7 @@ surprise_opens_to_special = do
           , isSurprise (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor surprises >= 8, got " ++ show nSur) (nSur >= 8)
-  assertEqual "campaign levels" (36 :: Int) (length allLevels)
+  assertEqual "campaign levels" (38 :: Int) (length allLevels)
 
 surprise_explodes_small :: Assertion
 surprise_explodes_small = do
@@ -3222,7 +3226,104 @@ steam_spreads_after_move = do
           , hasSteam (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor steam >= 8, got " ++ show nSt) (nSt >= 8)
-  assertEqual "campaign levels" (36 :: Int) (length allLevels)
+  assertEqual "campaign levels" (38 :: Int) (length allLevels)
+
+--------------------------------------------------------------------------------
+-- Carpet / 地毯 (floor tiles covered when gems on them clear)
+--------------------------------------------------------------------------------
+
+carpet_covers_on_clear :: Assertion
+carpet_covers_on_clear = do
+  -- Horizontal match on row 3 cols 0-2; carpet targets under those cells
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkGem C1))
+          (3, 2)
+          (mkGem C1)
+      cfg = GameConfig 20 (GoalCarpet 8)
+      gs0 =
+        (newGameAtLevel 0 cfg 7)
+          { gsBoard = board0
+          , gsBelts = []
+          , gsOver = Nothing
+          , gsMoves = 20
+          , gsScore = 0
+          , gsCarpetOpen = [(3, 0), (3, 1), (3, 2), (4, 4)]
+          , gsCarpetsCovered = 0
+          , gsGoal = GoalCarpet 8
+          , gsCollected = 0
+          }
+  assertBool "match ready" (hasAnyMatch board0)
+  -- Force cascade via trySwap of a neighboring pair that creates/uses the match
+  -- Board already has match; use hammer on one carpet cell to clear seeds then cascade
+  let (gs1, out) = useHammer (3, 1) gs0 { gsHammers = 2 }
+  case out of
+    InvalidSwap -> assertFailure "hammer should apply"
+    _ -> pure ()
+  assertBool
+    ("carpet covered some of match cells, covered=" ++ show (gsCarpetsCovered gs1)
+       ++ " open=" ++ show (gsCarpetOpen gs1))
+    (gsCarpetsCovered gs1 >= 1)
+  assertBool "covered cells removed from open" $
+    all (`notElem` gsCarpetOpen gs1) [(3, 0), (3, 1), (3, 2)]
+      || gsCarpetsCovered gs1 >= 1
+  -- Pure unit
+  let (open', n) = coverCarpets [(3, 0), (3, 1), (4, 4)] [(3, 0), (3, 1), (5, 5)]
+  assertEqual "pure cover count" (2 :: Int) n
+  assertEqual "pure remain" [(4, 4)] open'
+
+goal_carpet_counts :: Assertion
+goal_carpet_counts = do
+  assertBool "unmet" (not (goalMet (GoalCarpet 2) 0 0))
+  assertBool "met" (goalMet (GoalCarpet 2) 0 2)
+  assertBool "ex unmet" (not (goalMetEx (GoalCarpet 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "ex met" (goalMetEx (GoalCarpet 2) 0 2 [] 0 0 0 0 0 0 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgress (GoalCarpet 5) 0 2)
+  assertEqual "progressEx" (2 :: Int) (goalProgressEx (GoalCarpet 5) 0 2 [] 0 0 0 0 0 0 0 0)
+  assertEqual "target" (5 :: Int) (goalTarget (GoalCarpet 5))
+  -- Campaign includes GoalCarpet
+  assertBool "campaign has GoalCarpet" $
+    any (\g -> case g of GoalCarpet _ -> True; _ -> False) (map lvlGoal allLevels)
+  let gs = newGameAtLevel 36 (levelConfig (allLevels !! 36)) 42
+  assertEqual "level 36 carpet open" (8 :: Int) (length (gsCarpetOpen gs))
+  assertEqual "goal" (GoalCarpet 8) (gsGoal gs)
+  assertEqual "campaign levels" (38 :: Int) (length allLevels)
+
+carpet_already_covered_noop :: Assertion
+carpet_already_covered_noop = do
+  -- Covering the same cell twice must not double-count
+  let open0 = [(2, 2), (2, 3)]
+      (open1, n1) = coverCarpets open0 [(2, 2)]
+      (open2, n2) = coverCarpets open1 [(2, 2), (2, 3)]
+  assertEqual "first hit" (1 :: Int) n1
+  assertEqual "second hit only new" (1 :: Int) n2
+  assertEqual "all covered" ([] :: [Pos]) open2
+  -- Re-feeding already-covered positions into coverCarpets is a no-op
+  let (open3, n3) = coverCarpets [] [(2, 2), (9, 9)]
+  assertEqual "empty open stays empty" ([] :: [Pos]) open3
+  assertEqual "no spurious covers" (0 :: Int) n3
+  -- Game path: cover once, then clear same cell again with empty open → count unchanged
+  let cfg = GameConfig 15 (GoalCarpet 3)
+      gs0 =
+        (newGameAtLevel 0 cfg 3)
+          { gsCarpetOpen = [(5, 5)]
+          , gsCarpetsCovered = 0
+          , gsCollected = 0
+          , gsGoal = GoalCarpet 3
+          , gsHammers = 3
+          , gsBoard = setCell stableBoard (5, 5) (mkGem C2)
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, _) = useHammer (5, 5) gs0
+  assertEqual "covered once" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "open emptied" ([] :: [Pos]) (gsCarpetOpen gs1)
+  let (gs2, _) = useHammer (5, 5) gs1 { gsHammers = 2, gsOver = Nothing }
+  assertEqual "second clear does not double-count" (1 :: Int) (gsCarpetsCovered gs2)
+  assertEqual "still empty open" ([] :: [Pos]) (gsCarpetOpen gs2)
 
 carry_moves_on_next_level :: Assertion
 carry_moves_on_next_level = do

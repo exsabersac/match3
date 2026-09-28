@@ -39,6 +39,7 @@ library
       Match3.Grass
       Match3.Ufo
       Match3.Snail
+      Match3.Carpet
   other-modules:
       Paths_match3
   autogen-modules:

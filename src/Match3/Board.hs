@@ -480,13 +480,13 @@ runCascadeScored
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
 runCascadeScored prefer g b =
-  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _uAbs, _ufos, g') =
+  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _uAbs, _ufos, _cleared, g') =
         runCascadeScoredWithUfos prefer [] [] g b
   in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, g')
 
 -- | Like runCascadeScored but steps UFOs after each cascade wave (吸同色 + 移格).
 -- portals: bidirectional pairs applied during settle (落入 A 从 B 出).
--- Returns (... stones, chests, honey, balloons, cookies, cakes, ufoAbsorbed, ufos', gen).
+-- Returns (... stones, chests, honey, balloons, cookies, cakes, ufoAbsorbed, ufos', clearedPos, gen).
 runCascadeScoredWithUfos
   :: RandomGen g
   => Maybe Pos
@@ -494,13 +494,13 @@ runCascadeScoredWithUfos
   -> [(Pos, Pos)]
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
 runCascadeScoredWithUfos prefer ufos0 portals g b =
-  go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 0 0 0 0 0 ufos0
+  go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 0 0 0 0 0 ufos0 []
   where
-    go pref g' b' cells score maxW tallies stones chests honey balloons cookies cakes uAbs ufos =
+    go pref g' b' cells score maxW tallies stones chests honey balloons cookies cakes uAbs ufos clearedAcc =
       case stepCascadeDetailed pref portals g' b' of
-        Nothing -> (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos, g')
+        Nothing -> (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos, nub clearedAcc, g')
         Just (b'', n, pos, stn, cht, hny, bal, cok, cak, g'') ->
           let wave = maxW + 1
               score' = score + scoreForWave wave n
@@ -510,7 +510,7 @@ runCascadeScoredWithUfos prefer ufos0 portals g b =
                 ]
               (absorbed, ufos') = stepUfos b'' ufos
           in if null absorbed
-               then go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn) (chests + cht) (honey + hny) (balloons + bal) (cookies + cok) (cakes + cak) uAbs ufos'
+               then go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn) (chests + cht) (honey + hny) (balloons + bal) (cookies + cok) (cakes + cak) uAbs ufos' (clearedAcc ++ pos)
                else
                  let (mb, n2, pos2) = clearFromSeedsDetailed Nothing b'' absorbed
                      stn2 = length [p | p <- pos2, isStone (getCell b'' p)]
@@ -527,7 +527,7 @@ runCascadeScoredWithUfos prefer ufos0 portals g b =
                        | (col, cnt) <- tallies'
                        ]
                      uAbs' = uAbs + length absorbed
-                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) (cookies + cok + cok2 + cokFall) (cakes + cak + cak2) uAbs' ufos'
+                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) (cookies + cok + cok2 + cokFall) (cakes + cak + cak2) uAbs' ufos' (clearedAcc ++ pos ++ pos2)
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
 clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
@@ -577,7 +577,7 @@ runCascadeScoredFromSeeds
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
 runCascadeScoredFromSeeds prefer seeds g b =
-  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _u, _ufos, g') =
+  let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _u, _ufos, _cleared, g') =
         runCascadeScoredFromSeedsWithUfos prefer seeds [] [] g b
   in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, g')
 
@@ -589,7 +589,7 @@ runCascadeScoredFromSeedsWithUfos
   -> [(Pos, Pos)]
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
 runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
   | null seeds = runCascadeScoredWithUfos prefer ufos0 portals g b
   | otherwise =
@@ -605,9 +605,9 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColor b pos col) | col <- allColors]
           (absorbed, ufos1) = stepUfos b1 ufos0
-          (b1', g1', nU, stonesU, chestsU, honeyU, balloonsU, cookiesU, cakesU, talliesU, uAbs0, ufos2) =
+          (b1', g1', nU, stonesU, chestsU, honeyU, balloonsU, cookiesU, cakesU, talliesU, uAbs0, ufos2, posU) =
             if null absorbed
-              then (b1, g1, 0, 0, 0, 0, 0, 0, 0, zip allColors (repeat 0), 0, ufos1)
+              then (b1, g1, 0, 0, 0, 0, 0, 0, 0, zip allColors (repeat 0), 0, ufos1, [])
               else
                 let (mb2, n2, pos2) = clearFromSeedsDetailed Nothing b1 absorbed
                     stn2 = length [p | p <- pos2, isStone (getCell b1 p)]
@@ -619,8 +619,8 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
                     (settled2, cokFall2) = settleBoardPortals portals mb2
                     (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColor b1 pos2 col) | col <- allColors]
-                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length absorbed, ufos1)
-          (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos3, g2) =
+                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length absorbed, ufos1, pos2)
+          (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos3, cleared2, g2) =
             runCascadeScoredWithUfos Nothing ufos2 portals g1' b1'
           mergeT a b' =
             [ (col, lc a col + lc b' col) | col <- allColors ]
@@ -642,6 +642,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
          , cakes0 + cakesU + cakes2
          , uAbs0 + uAbs2
          , ufos3
+         , nub (pos ++ posU ++ cleared2)
          , g2
          )
 
@@ -677,20 +678,22 @@ shufflePlayable = randomPlayableBoard
 
 
 -- | After a successful cascade: tick countdown bombs; any at 0 explode (3×3) + cascade.
--- Returns same tuple shape as runCascadeScoredFromSeeds extras (may be zero if nothing ticks to 0).
+-- Returns same extras as runCascadeScoredFromSeeds plus cleared positions.
 resolveCountdowns
   :: RandomGen g
   => g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, [Pos], g)
 resolveCountdowns g b =
   let bTick = tickCountdowns b
       zeros = countdownsAtZero bTick
   in if null zeros
-       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, g)
+       then (bTick, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, [], g)
        else
          let seeds = explodeSeedsFor bTick
-         in runCascadeScoredFromSeeds Nothing seeds g bTick
+             (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _u, _ufos, cleared, g') =
+               runCascadeScoredFromSeedsWithUfos Nothing seeds [] [] g bTick
+         in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, cleared, g')
 
 -- | First adjacent swap that would create a match or activate a rainbow (for hint).
 findHint :: Board -> Maybe (Pos, Pos)

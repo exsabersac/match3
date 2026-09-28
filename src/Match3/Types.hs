@@ -571,6 +571,7 @@ data LevelGoal
   | GoalCake Int                       -- clear N cake layers fully (蛋糕)
   | GoalSafe Int                       -- open N vaults / safes (保险箱)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
+  | GoalCarpet Int                     -- cover N carpet / floor tiles (地毯)
   deriving (Eq, Show, Generic)
 
 -- | Whether the goal is satisfied given current score / primary collected count.
@@ -587,6 +588,7 @@ goalMet (GoalCookie _) _ _ = False
 goalMet (GoalCake _) _ _ = False
 goalMet (GoalSafe _) _ _ = False
 goalMet (GoalUfo _) _ _ = False
+goalMet (GoalCarpet n) _ collected = collected >= n
 
 -- | Full goal check: bag + stones/UFO/chests/honey/balloon/cookie/cake/safe counters.
 goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
@@ -602,6 +604,7 @@ goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ _ _ = balloons >= n
 goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ _ = cookies >= n
 goalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes _ = cakes >= n
 goalMetEx (GoalSafe n) _ _ _ _ _ _ _ _ _ _ safes = safes >= n
+goalMetEx (GoalCarpet n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -619,6 +622,7 @@ goalProgress (GoalCookie _) _ collected = collected
 goalProgress (GoalCake _) _ collected = collected
 goalProgress (GoalSafe _) _ collected = collected
 goalProgress (GoalUfo _) _ collected = collected
+goalProgress (GoalCarpet _) _ collected = collected
 
 goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
 goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ _ = score
@@ -633,6 +637,7 @@ goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ _ _ = balloons
 goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ _ = cookies
 goalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes _ = cakes
 goalProgressEx (GoalSafe _) _ _ _ _ _ _ _ _ _ _ safes = safes
+goalProgressEx (GoalCarpet _) _ collected _ _ _ _ _ _ _ _ _ = collected
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -647,6 +652,7 @@ goalTarget (GoalCookie n) = n
 goalTarget (GoalCake n) = n
 goalTarget (GoalSafe n) = n
 goalTarget (GoalUfo n) = n
+goalTarget (GoalCarpet n) = n
 
 data GameConfig = GameConfig
   { cfgMoves :: MovesLeft
@@ -663,7 +669,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / time-spirit / steam / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / time-spirit / steam / carpet / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -693,7 +699,7 @@ allLevels =
   , Level 24 "帽宴"   22 (GoalCake 5)
   , Level 25 "锁链"   22 (GoalScore 900)
   , Level 26 "果汁"   24 (GoalCollect C1 18)
-  , Level 27 "终章"   18 (GoalScore 1500)
+  , Level 27 "终章"   20 (GoalScore 1500)
   , Level 28 "蜗牛"   20 (GoalScore 850)
   , Level 29 "冰冻"   20 (GoalCollect C2 16)
   , Level 30 "窗帘"   22 (GoalCollect C1 16)
@@ -701,7 +707,9 @@ allLevels =
   , Level 32 "惊喜"   22 (GoalScore 900)
   , Level 33 "染色"   22 (GoalCollect C3 16)
   , Level 34 "时灵"   22 (GoalScore 850)
-  , Level 35 "蒸汽"   22 (GoalCollect C2 16)
+  , Level 35 "蒸汽"   20 (GoalCollect C2 16)
+  , Level 36 "地毯"   24 (GoalCarpet 8)
+  , Level 37 "织毯"   22 (GoalCarpet 12)
   ]
 
 levelConfig :: Level -> GameConfig

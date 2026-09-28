@@ -1,6 +1,6 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾、宝箱、蜂蜜罐、蛋糕、魔法帽、气球、饼干掉落收集、传送带、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链、宝箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
 Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
 
@@ -30,6 +30,9 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Cookies** (`Cookie` / 饼干): fall with gravity; collected on the **bottom row**; `GoalCookie`
 - **Cakes** (`Cake n` / 蛋糕): layered obstacles (≠ Cookie); adjacent clears chip; `GoalCake`
 - **Magic hats** (`MagicHat` / 魔法帽): adjacent clear swaps/recolors neighbor gem colors
+- **Chains** (`Chain n` / 锁链): lock gems; adjacent clears peel; chained gems cannot swap or match
+- **Juice makers** (`Maker c n` / 果汁机): same-color adjacent clears charge; at 0 produce a Bomb of color c
+- **Portals** (传送门 pairs): after gravity, gem on A with hole at B teleports A→B (bidirectional)
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
 - **Grass / Vine / Chocolate / Fog** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads; **Fog n** peels by adjacent clear (fogged gems do not match until clear)
 - **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
@@ -38,7 +41,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / pop balloons / collect cookies / clear cakes / UFO absorb
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 26 campaign levels
+- Combo scoring, hint, undo, auto-shuffle, 28 campaign levels
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
@@ -70,7 +73,9 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 23 | 巧饼 | 22 | Collect 5 cookies | cookies + choco + fog |
 | 24 | 蛋糕 | 24 | Clear 6 cakes | layered cakes |
 | 25 | 帽宴 | 22 | Clear 5 cakes | cakes + magic hats + choco |
-| 26 | 终章 | 16 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+choco+fog+vine+bomb+belt+UFO |
+| 26 | 锁链 | 22 | Score 900 | iron chains + stone + choco |
+| 27 | 果汁 | 24 | Collect 18× RED | juice makers + fog + portals |
+| 28 | 终章 | 16 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+choco+fog+vine+bomb+belt+portal+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 
@@ -92,7 +97,7 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `P` | Pause + key help |
 | `Esc` / `Q` | Quit |
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; pink frosted cake = 蛋糕 (layer pips, ≠ cookie); purple brim hat = 魔法帽; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
+Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; pink frosted cake = 蛋糕 (layer pips, ≠ cookie); purple brim hat = 魔法帽; metal spout = 果汁机 (color + charge pips); gray cross links = 锁链 (layer pips); violet rings = 传送门 pair; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
 
 ## 对标开心消消乐 / Feature map
 
@@ -105,6 +110,9 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 饼干 / 掉落收集 | ✅ `Cookie` + `GoalCookie`（重力掉落，底行收集） |
 | 蛋糕（分层障碍） | ✅ `Cake n` + `GoalCake`（邻消削层；≠ 饼干） |
 | 魔法帽 | ✅ `MagicHat`（邻消触发，交换/重染邻格颜色） |
+| 锁链 / 铁链 | ✅ `Chain n` overlay（邻消揭层；锁住不可交换/匹配） |
+| 果汁机 / 制造机 | ✅ `Maker c n`（同色邻消充能，满则产出 Bomb） |
+| 传送门 | ✅ 双向 `Portal` 对（重力后 A 有子且 B 为空则传送） |
 | 云朵 / 迷雾 | ✅ `Fog n` overlay（邻消揭层；雾下宝石不可匹配） |
 | 冰层 | ✅ gem 上 ice；裂纹绘制 |
 | 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
@@ -131,7 +139,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (69+ named cases)
+test/Spec.hs tasty (90+ named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

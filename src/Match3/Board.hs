@@ -31,11 +31,13 @@ module Match3.Board
   , MatchRun(..)
   , countColor
   , resolveCountdowns
+  , applyPortalTeleports
+  , settleBoardPortals
   ) where
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog, chipAdjacentChain)
 import Match3.Obstacles
   ( chipAdjacentStones
   , chipAdjacentChests
@@ -43,6 +45,7 @@ import Match3.Obstacles
   , chipAdjacentCakes
   , chipAdjacentBalloons
   , triggerAdjacentHats
+  , chargeAdjacentMakers
   )
 import Match3.Countdown
   ( countdownsAtZero
@@ -111,13 +114,16 @@ groupGemRuns b (p : ps) = case getCell b p of
   Cookie -> groupGemRuns b ps
   Cake _ -> groupGemRuns b ps
   MagicHat -> groupGemRuns b ps
+  Maker _ _ -> groupGemRuns b ps
   Gem _ _ _ (Just (Fog _)) -> groupGemRuns b ps  -- fog hides gem from matches
+  Gem _ _ _ (Just (Chain _)) -> groupGemRuns b ps  -- chain locks gem from matches
   Gem col _ _ _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
     go run col (q : qs) = case getCell b q of
       Gem _ _ _ (Just (Fog _)) -> (col, reverse run) : groupGemRuns b (q : qs)
+      Gem _ _ _ (Just (Chain _)) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem col' _ _ _ | col' == col -> go (q : run) col qs
       Countdown col' _ | col' == col -> go (q : run) col qs
       _ -> (col, reverse run) : groupGemRuns b (q : qs)
@@ -168,6 +174,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
                   Cookie -> False
                   Cake _ -> False
                   MagicHat -> False
+                  Maker _ _ -> False
               ]
             Gem _ Normal _ _ -> []
             Stone _ -> []
@@ -177,6 +184,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
             Cookie -> []
             Cake _ -> []
             MagicHat -> []
+            Maker _ _ -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
@@ -214,6 +222,7 @@ countColor b ps col =
         Cookie -> False
         Cake _ -> False
         MagicHat -> False
+        Maker _ _ -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -245,8 +254,12 @@ clearMatchesDetailed prefer b =
       bHat = triggerAdjacentHats bBal iceFree
       -- Fog: peel adjacent fog layers (gem stays)
       (bFog, _fogCleared) = chipAdjacentFog bHat iceFree
+      -- Chain: peel adjacent chain layers (gem stays)
+      (bChain, _chainCleared) = chipAdjacentChain bFog iceFree
+      -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
+      bMaker = chargeAdjacentMakers bChain iceFree
       -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
-      bNoChoco = clearChocoAdjacent bFog expanded
+      bNoChoco = clearChocoAdjacent bMaker expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
@@ -299,11 +312,36 @@ drainBottomCookies mb =
              (mb2, n2) = drainBottomCookies fallen
          in (mb2, n + n2)
 
--- | Gravity then drain any cookies that reached the bottom.
+-- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
+-- moves A -> B (and reverse). Used after gravity so clears can open exits.
+applyPortalTeleports :: [(Pos, Pos)] -> MBoard -> MBoard
+applyPortalTeleports portals mb =
+  -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
+  foldl tryPair mb (nub portals)
+  where
+    atM m (r, c) = (m !! r) !! c
+    transferable (Just (Gem _ _ _ _)) = True
+    transferable (Just (Countdown _ _)) = True
+    transferable (Just Cookie) = True
+    transferable _ = False
+    tryPair m (a, b) =
+      case (atM m a, atM m b) of
+        (ca, Nothing)
+          | transferable ca -> setM (setM m a Nothing) b ca
+        (Nothing, cb)
+          | transferable cb -> setM (setM m b Nothing) a cb
+        _ -> m
+
+-- | Gravity, portal teleports (optional), then drain bottom cookies.
 settleBoard :: MBoard -> (MBoard, Int)
-settleBoard mb =
+settleBoard = settleBoardPortals []
+
+settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int)
+settleBoardPortals portals mb =
   let fallen = applyGravity mb
-  in drainBottomCookies fallen
+      ported = applyPortalTeleports portals fallen
+      fallen2 = if ported == fallen then ported else applyGravity ported
+  in drainBottomCookies fallen2
 
 randomColor :: RandomGen g => g -> (Color, g)
 randomColor g =
@@ -340,7 +378,7 @@ stepCascade = stepCascadeAt Nothing
 
 stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
 stepCascadeAt prefer g b =
-  case stepCascadeDetailed prefer g b of
+  case stepCascadeDetailed prefer [] g b of
     Nothing -> Nothing
     Just (b', n, _, _, _, _, _, _, _, g') -> Just (b', n, g')
 
@@ -349,10 +387,11 @@ stepCascadeAt prefer g b =
 stepCascadeDetailed
   :: RandomGen g
   => Maybe Pos
+  -> [(Pos, Pos)]
   -> g
   -> Board
   -> Maybe (Board, Int, [Pos], Int, Int, Int, Int, Int, Int, g)
-stepCascadeDetailed prefer g b
+stepCascadeDetailed prefer portals g b
   | not (hasAnyMatch b) = Nothing
   | otherwise =
       let (mb, n, pos) = clearMatchesDetailed prefer b
@@ -368,7 +407,7 @@ stepCascadeDetailed prefer g b
             length [p | p <- pos, isCookie (getCell b p)]
           cakesHit =
             length [p | p <- pos, isCake (getCell b p)]
-          (settled, cookiesFallen) = settleBoard mb
+          (settled, cookiesFallen) = settleBoardPortals portals mb
           (b', g') = refill g settled
       in Just (b', n, pos, stonesHit, chestsHit, honeyHit, balloonHit, cookiesCleared + cookiesFallen, cakesHit, g')
 
@@ -393,23 +432,25 @@ runCascadeScored
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
 runCascadeScored prefer g b =
   let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _uAbs, _ufos, g') =
-        runCascadeScoredWithUfos prefer [] g b
+        runCascadeScoredWithUfos prefer [] [] g b
   in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, g')
 
 -- | Like runCascadeScored but steps UFOs after each cascade wave (吸同色 + 移格).
+-- portals: bidirectional pairs applied during settle (落入 A 从 B 出).
 -- Returns (... stones, chests, honey, balloons, cookies, cakes, ufoAbsorbed, ufos', gen).
 runCascadeScoredWithUfos
   :: RandomGen g
   => Maybe Pos
   -> [Ufo]
+  -> [(Pos, Pos)]
   -> g
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], g)
-runCascadeScoredWithUfos prefer ufos0 g b =
+runCascadeScoredWithUfos prefer ufos0 portals g b =
   go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 0 0 0 0 0 ufos0
   where
     go pref g' b' cells score maxW tallies stones chests honey balloons cookies cakes uAbs ufos =
-      case stepCascadeDetailed pref g' b' of
+      case stepCascadeDetailed pref portals g' b' of
         Nothing -> (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos, g')
         Just (b'', n, pos, stn, cht, hny, bal, cok, cak, g'') ->
           let wave = maxW + 1
@@ -429,7 +470,7 @@ runCascadeScoredWithUfos prefer ufos0 g b =
                      bal2 = length [p | p <- pos2, isBalloon (getCell b'' p)]
                      cok2 = length [p | p <- pos2, isCookie (getCell b'' p)]
                      cak2 = length [p | p <- pos2, isCake (getCell b'' p)]
-                     (settled, cokFall) = settleBoard mb
+                     (settled, cokFall) = settleBoardPortals portals mb
                      (b3, g3) = refill g'' settled
                      score2 = score' + scoreForWave (wave + 1) n2
                      tallies2 =
@@ -454,7 +495,9 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bBal, deadBalloons) = chipAdjacentBalloons bCake iceFree
       bHat = triggerAdjacentHats bBal iceFree
       (bFog, _) = chipAdjacentFog bHat iceFree
-      bNoChoco = clearChocoAdjacent bFog expanded
+      (bChain, _) = chipAdjacentChain bFog iceFree
+      bMaker = chargeAdjacentMakers bChain iceFree
+      bNoChoco = clearChocoAdjacent bMaker expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
@@ -478,7 +521,7 @@ runCascadeScoredFromSeeds
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
 runCascadeScoredFromSeeds prefer seeds g b =
   let (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, _u, _ufos, g') =
-        runCascadeScoredFromSeedsWithUfos prefer seeds [] g b
+        runCascadeScoredFromSeedsWithUfos prefer seeds [] [] g b
   in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, g')
 
 runCascadeScoredFromSeedsWithUfos
@@ -486,11 +529,12 @@ runCascadeScoredFromSeedsWithUfos
   => Maybe Pos
   -> [Pos]
   -> [Ufo]
+  -> [(Pos, Pos)]
   -> g
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], g)
-runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
-  | null seeds = runCascadeScoredWithUfos prefer ufos0 g b
+runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
+  | null seeds = runCascadeScoredWithUfos prefer ufos0 portals g b
   | otherwise =
       let (mb, n, pos) = clearFromSeedsDetailed prefer b seeds
           stones0 = length [p | p <- pos, isStone (getCell b p)]
@@ -499,7 +543,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
           balloons0 = length [p | p <- pos, isBalloon (getCell b p)]
           cookies0 = length [p | p <- pos, isCookie (getCell b p)]
           cakes0 = length [p | p <- pos, isCake (getCell b p)]
-          (settled0, cookiesFall0) = settleBoard mb
+          (settled0, cookiesFall0) = settleBoardPortals portals mb
           (b1, g1) = refill g settled0
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColor b pos col) | col <- allColors]
@@ -515,12 +559,12 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 g b
                     bal2 = length [p | p <- pos2, isBalloon (getCell b1 p)]
                     cok2 = length [p | p <- pos2, isCookie (getCell b1 p)]
                     cak2 = length [p | p <- pos2, isCake (getCell b1 p)]
-                    (settled2, cokFall2) = settleBoard mb2
+                    (settled2, cokFall2) = settleBoardPortals portals mb2
                     (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColor b1 pos2 col) | col <- allColors]
                 in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length absorbed, ufos1)
           (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos3, g2) =
-            runCascadeScoredWithUfos Nothing ufos2 g1' b1'
+            runCascadeScoredWithUfos Nothing ufos2 portals g1' b1'
           mergeT a b' =
             [ (col, lc a col + lc b' col) | col <- allColors ]
           lc xs col = maybe 0 id (lookup col xs)
@@ -604,9 +648,11 @@ findHint b =
       , c <- [0 .. boardSize - 1]
       , let p1 = (r, c)
       , isGem (getCell b p1)
+      , not (hasChain (getCell b p1))
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
       , isGem (getCell b p2)
+      , not (hasChain (getCell b p2))
       , not (isRainbow (getCell b p1) || isRainbow (getCell b p2))
       , hasAnyMatch (swapCells b p1 p2)
       ]
@@ -617,6 +663,7 @@ findHint b =
       , let p1 = (r, c)
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
+      , not (hasChain (getCell b p1) || hasChain (getCell b p2))
       , isRainbowSwap b p1 p2
       ]
     comboHints =
@@ -626,5 +673,6 @@ findHint b =
       , let p1 = (r, c)
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
+      , not (hasChain (getCell b p1) || hasChain (getCell b p2))
       , isSpecialCombo b p1 p2
       ]

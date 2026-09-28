@@ -15,13 +15,13 @@ Runtime needs `libsdl2-2.0-0`. Headless: `xvfb-run -a stack exec match3-sdl`.
 
 - [ ] Ship `match3-sdl` binary + note SDL2 system dependency
 - [ ] Include `README.md` and `LICENSE` (BSD-3-Clause)
-- [ ] Short GIF / screenshots: swap, cascade combo, chocolate, chest, honey jar, cake, magic hat, balloon, cookie, UFO, map (`M`)
+- [ ] Short GIF / screenshots: swap, cascade combo, chocolate, chest, honey jar, cake, magic hat, chain, juice maker, portal, balloon, cookie, UFO, map (`M`)
 - [ ] Cover image 630×500 (itch) with gem board + title
 - [ ] Description: 8×8 / 5-color Match-3 inspired by 开心消消乐; Haskell + SDL2
 
 ## Page copy (short)
 
-**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, grass / vine / chocolate, conveyor belts, countdown bombs, treasure chests, honey jars (蜂蜜罐), cakes (蛋糕 layered), magic hats (魔法帽), balloons (气球), cookies (饼干 drop-collect), fog/clouds (迷雾), UFO absorb, daily challenge, boosters (hammer / free-swap), campaign map (26 levels).
+**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, grass / vine / chocolate, conveyor belts, portals (传送门), countdown bombs, treasure chests, honey jars (蜂蜜罐), cakes (蛋糕 layered), magic hats (魔法帽), chains (锁链), juice makers (果汁机), balloons (气球), cookies (饼干 drop-collect), fog/clouds (迷雾), UFO absorb, daily challenge, boosters (hammer / free-swap), campaign map (28 levels).
 
 Controls: click/drag swap · `1` hammer · `2` free-swap · `H` hint · `M` map · `D` daily · `P` pause
 

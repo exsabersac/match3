@@ -18,6 +18,9 @@ module Match3.Types
   , hasFog
   , fogLayers
   , mkFogGem
+  , hasChain
+  , chainLayers
+  , mkChainGem
   , clearOverlay
   , setOverlay
   , mkStone
@@ -43,6 +46,11 @@ module Match3.Types
   , isCake
   , mkMagicHat
   , isMagicHat
+  , mkMaker
+  , mkMakerCharges
+  , makerColor
+  , makerCharges
+  , isMaker
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -84,7 +92,8 @@ data GemKind = Normal | LineH | LineV | Bomb | Rainbow
 -- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力 / 迷雾).
 -- Grass: clears on match. Vine: spreads after move. Choco: adjacent-clear + spreads.
 -- Fog n: layers; adjacent clears peel one layer; fogged gems do not match until clear.
-data CellOverlay = Grass | Vine | Choco | Fog Int
+-- Chain n: iron chains (锁链); adjacent clears peel; chained gems cannot swap or match.
+data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int
   deriving (Eq, Ord, Show, Generic)
 
 -- | Board cell: gem (optional ice + overlay), stone, chest, honey, cake, balloon, cookie, magic hat, or countdown.
@@ -92,6 +101,7 @@ data CellOverlay = Grass | Vine | Choco | Fog Int
 -- Cookie: falls with gravity; collected when it reaches the bottom row (开心消消乐饼干).
 -- Cake: layered obstacle (蛋糕, distinct from Cookie); adjacent clears chip layers.
 -- MagicHat: adjacent clear triggers color swap/recolor of neighboring gems (魔法帽).
+-- Maker c n: juice maker (果汁机); n adjacent same-color clears produce a Bomb of color c.
 -- Countdown c n = colored timer bomb; matches as color c.
 -- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
@@ -103,6 +113,7 @@ data CellContents
   | Cookie        -- biscuit (饼干): falls with gravity; collected on bottom row
   | Cake Int      -- cake layers (蛋糕): adjacent clears chip; not a collectible cookie
   | MagicHat      -- magic hat (魔法帽): adjacent clear swaps/recolors neighbor gem colors
+  | Maker Color Int  -- juice maker (果汁机): needs N same-color adjacent clears; produces Bomb
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -131,6 +142,10 @@ mkChocoGem c = Gem c Normal 0 (Just Choco)
 mkFogGem :: Color -> Int -> Cell
 mkFogGem c n = Gem c Normal 0 (Just (Fog (max 1 n)))
 
+-- | Gem locked by iron chain (锁链): adjacent clears peel; cannot swap/match while chained.
+mkChainGem :: Color -> Int -> Cell
+mkChainGem c n = Gem c Normal 0 (Just (Chain (max 1 n)))
+
 iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n _) = n
 iceLayers (Stone _) = 0
@@ -140,6 +155,7 @@ iceLayers (Balloon _) = 0
 iceLayers Cookie = 0
 iceLayers (Cake _) = 0
 iceLayers MagicHat = 0
+iceLayers (Maker _ _) = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -163,6 +179,16 @@ hasFog c = case cellOverlay c of
 fogLayers :: Cell -> Int
 fogLayers c = case cellOverlay c of
   Just (Fog n) -> n
+  _ -> 0
+
+hasChain :: Cell -> Bool
+hasChain c = case cellOverlay c of
+  Just (Chain _) -> True
+  _ -> False
+
+chainLayers :: Cell -> Int
+chainLayers c = case cellOverlay c of
+  Just (Chain n) -> n
   _ -> 0
 
 -- | Strip overlay, keep gem/ice.
@@ -266,6 +292,25 @@ isMagicHat :: Cell -> Bool
 isMagicHat MagicHat = True
 isMagicHat _ = False
 
+-- | Juice maker / factory (果汁机): needs N same-color adjacent clears.
+mkMaker :: Color -> Cell
+mkMaker c = Maker c 3
+
+mkMakerCharges :: Color -> Int -> Cell
+mkMakerCharges c n = Maker c (max 1 n)
+
+makerColor :: Cell -> Color
+makerColor (Maker c _) = c
+makerColor _ = error "makerColor: not a maker"
+
+makerCharges :: Cell -> Int
+makerCharges (Maker _ n) = n
+makerCharges _ = 0
+
+isMaker :: Cell -> Bool
+isMaker (Maker _ _) = True
+isMaker _ = False
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -289,6 +334,7 @@ isGem (Balloon _) = False
 isGem Cookie = False
 isGem (Cake _) = False
 isGem MagicHat = False
+isGem (Maker _ _) = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -301,6 +347,7 @@ cellColor (Balloon _) = error "cellColor: Balloon has no color (use balloonColor
 cellColor Cookie = error "cellColor: Cookie has no color"
 cellColor (Cake _) = error "cellColor: Cake has no color"
 cellColor MagicHat = error "cellColor: MagicHat has no color"
+cellColor (Maker _ _) = error "cellColor: Maker has no color (use makerColor)"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -313,6 +360,7 @@ cellKind (Balloon _) = error "cellKind: Balloon has no kind"
 cellKind Cookie = error "cellKind: Cookie has no kind"
 cellKind (Cake _) = error "cellKind: Cake has no kind"
 cellKind MagicHat = error "cellKind: MagicHat has no kind"
+cellKind (Maker _ _) = error "cellKind: Maker has no kind"
 
 numColors :: Int
 numColors = 5
@@ -438,7 +486,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / UFO / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -466,7 +514,9 @@ allLevels =
   , Level 22 "巧饼"   22 (GoalCookie 5)
   , Level 23 "蛋糕"   24 (GoalCake 6)
   , Level 24 "帽宴"   22 (GoalCake 5)
-  , Level 25 "终章"   16 (GoalScore 1500)
+  , Level 25 "锁链"   22 (GoalScore 900)
+  , Level 26 "果汁"   24 (GoalCollect C1 18)
+  , Level 27 "终章"   16 (GoalScore 1500)
   ]
 
 levelConfig :: Level -> GameConfig

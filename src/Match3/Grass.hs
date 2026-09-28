@@ -3,24 +3,30 @@
 -- Vine: spreads to adjacent bare gems after a successful move; cleared vines do not spread.
 -- Choco: cleared by adjacent match/special; surviving chocolate spreads like vine.
 -- Fog: layered cloud; adjacent clears peel one layer; fogged gems do not match.
+-- Chain: iron chains; adjacent clears peel; chained gems cannot swap or match.
 module Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
+  , chipAdjacentChain
   , vinePositions
   , chocoPositions
   , fogPositions
+  , chainPositions
   , spreadVines
   , spreadChoco
   , mkGrassGem
   , mkVineGem
   , mkChocoGem
   , mkFogGem
+  , mkChainGem
   , hasGrass
   , hasVine
   , hasChoco
   , hasFog
   , fogLayers
+  , hasChain
+  , chainLayers
   , cellOverlay
   ) where
 
@@ -118,6 +124,36 @@ fogPositions b =
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
   , hasFog (at b (r, c))
+  ]
+
+-- | Chain / iron lock (锁链): peel one layer on cells orthogonally adjacent to clears.
+-- Chain 1 -> strip; Chain n>1 -> Chain (n-1). Gem stays. Returns fully unlocked count.
+chipAdjacentChain :: Board -> [Pos] -> (Board, Int)
+chipAdjacentChain b seeds =
+  foldl hit (b, 0) targets
+  where
+    targets =
+      nub
+        [ q
+        | p <- nub seeds
+        , q <- ortho p
+        , hasChain (at b q)
+        ]
+    hit (board, n) p =
+      case at board p of
+        Gem col kind ice (Just (Chain layers))
+          | layers <= 1 ->
+              (setAt board p (Gem col kind ice Nothing), n + 1)
+          | otherwise ->
+              (setAt board p (Gem col kind ice (Just (Chain (layers - 1)))), n)
+        _ -> (board, n)
+
+chainPositions :: Board -> [Pos]
+chainPositions b =
+  [ (r, c)
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , hasChain (at b (r, c))
   ]
 
 -- | Each remaining vine spreads onto every orthogonally adjacent bare gem

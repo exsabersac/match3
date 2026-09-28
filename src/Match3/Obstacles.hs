@@ -1,6 +1,7 @@
--- | Stone / chest / honey / cake blockers + magic hat trigger.
+-- | Stone / chest / honey / cake / maker blockers + magic hat trigger.
 -- Never match, block swaps; adjacent gem clears chip one layer; removed at 0
--- (开心消消乐箱子 / 宝箱 / 蜂蜜罐 / 蛋糕). MagicHat: adjacent clear swaps neighbor colors.
+-- (开心消消乐箱子 / 宝箱 / 蜂蜜罐 / 蛋糕 / 果汁机). MagicHat: adjacent clear swaps neighbor colors.
+-- Maker: same-color adjacent clear charges; at 0 produces Bomb in place.
 module Match3.Obstacles
   ( swapBlockedByStone
   , orthoNeighbors
@@ -16,6 +17,8 @@ module Match3.Obstacles
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
+  , makersAdjacentSameColor
+  , chargeAdjacentMakers
   , withAdjacentStones
   ) where
 
@@ -33,16 +36,22 @@ import Match3.Types
   , isCookie
   , isCake
   , isMagicHat
+  , isMaker
+  , hasChain
   , balloonColor
+  , makerColor
+  , makerCharges
   , mkStoneLayers
   , mkChestLayers
   , mkHoneyLayers
   , mkCakeLayers
+  , mkMakerCharges
   , stoneLayers
   , chestLayers
   , honeyLayers
   , cakeLayers
   , CellContents(..)
+  , GemKind(..)
   , cellColor
   , isGem
   )
@@ -56,12 +65,12 @@ setAt b (r, c) v =
   where
     row = b !! r
 
--- | True if either swap endpoint is a blocker (stone/chest/honey/balloon/cookie/cake/hat).
+-- | True if either swap endpoint is a blocker or a chained gem.
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
   let block c =
         isStone c || isChest c || isHoney c || isBalloon c || isCookie c
-          || isCake c || isMagicHat c
+          || isCake c || isMagicHat c || isMaker c || hasChain c
   in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).
@@ -243,6 +252,37 @@ triggerAdjacentHats b cleared =
              let c = cellColor (at board p1)
              in setAt board p1 (recolorCell (at board p1) (cycleColor c))
            [] -> board
+
+-- | Maker positions orthogonally adjacent to a same-color cleared gem.
+makersAdjacentSameColor :: Board -> [Pos] -> [Pos]
+makersAdjacentSameColor b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , let clearedCell = at b cpos
+    , isGem clearedCell
+    , let col = cellColor clearedCell
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isMaker (at b p)
+    , makerColor (at b p) == col
+    ]
+
+-- | Charge juice makers adjacent to same-color clears.
+-- Charge 1 -> produce Bomb of maker color in place; n>1 -> decrement.
+-- Returns board (makers never enter the clear-hole set).
+chargeAdjacentMakers :: Board -> [Pos] -> Board
+chargeAdjacentMakers b clearedGems =
+  foldl chargeOne b (makersAdjacentSameColor b clearedGems)
+  where
+    chargeOne board p =
+      case at board p of
+        Maker col n
+          | n <= 1 ->
+              setAt board p (Gem col Bomb 0 Nothing)
+          | otherwise ->
+              setAt board p (mkMakerCharges col (n - 1))
+        _ -> board
 
 -- | Legacy helper: positions that should be removed (last-layer stones only).
 -- Prefer chipAdjacentStones in clear pipeline.

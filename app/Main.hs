@@ -196,6 +196,7 @@ spawnBurst board positions =
                     Cookie -> (210, 160, 90)
                     Cake _ -> (255, 140, 180)
                     MagicHat -> (140, 90, 200)
+                    Maker col _ -> colorRGB col
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -1126,8 +1127,10 @@ drawHud ren app = do
           if i == gsLevel gs
             then V4 255 200 80 255
             else if i < gsLevel gs then V4 80 180 120 255 else V4 60 60 80 255
+        -- 28 levels fit in HUD: 8px stride
+        xDot = 60 + fromIntegral i * 8
     rendererDrawColor ren $= col
-    fillRect ren (Just (Rectangle (P (V2 (70 + fromIntegral i * 12) 10)) (V2 10 14)))
+    fillRect ren (Just (Rectangle (P (V2 xDot 10)) (V2 7 14)))
 
   -- Goal meter (score or collect)
   let prog = goalProgress (gsGoal gs) (gsScore gs) (gsCollected gs)
@@ -1613,6 +1616,35 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Maker col charges -> do
+    -- Juice maker / factory (果汁机): metallic body + color spout + charge pips
+    let gap = 4 :: CInt
+        (cr0, cg0, cb0) = colorRGB col
+        (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
+    rendererDrawColor ren $= V4 90 100 120 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap + 8)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap - 8))))
+    -- Spout / hopper tinted with target color
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 8) (y + gap))) (V2 (cellPx - 2 * gap - 16) 12)))
+    rendererDrawColor ren $= V4 200 210 230 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 6) (y + gap + 14))) (V2 12 8)))
+    -- Charge pips
+    rendererDrawColor ren $= V4 255 220 80 255
+    forM_ [0 .. min 3 charges - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+              (V2 7 5)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Countdown col turns -> do
     let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -1706,6 +1738,23 @@ drawGemAt ren x y cell flashing = case cell of
                (Rectangle
                   (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
                   (V2 7 5)))
+      Just (Chain layers) -> do
+        -- Iron chain lock (锁链): gray links over gem
+        rendererDrawColor ren $= V4 70 75 90 220
+        drawRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
+        rendererDrawColor ren $= V4 140 150 170 255
+        fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx `div` 2 - 4))) (V2 (cellPx - 20) 8)))
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + 10))) (V2 8 (cellPx - 20))))
+        rendererDrawColor ren $= V4 200 210 230 255
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 6) (y + cellPx `div` 2 - 6))) (V2 12 12)))
+        rendererDrawColor ren $= V4 180 190 210 255
+        forM_ [0 .. min 3 layers - 1] $ \i ->
+          fillRect
+            ren
+            (Just
+               (Rectangle
+                  (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+                  (V2 7 5)))
       Nothing -> pure ()
     case cellKind cell of
       Normal -> pure ()
@@ -1790,6 +1839,8 @@ drawStatic ren app board yOff = do
     [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
   -- Conveyor belt path markers (teal chevrons)
   mapM_ (drawBelt ren yOff) (gsBelts (appGame app))
+  -- Portal pair markers (violet rings)
+  mapM_ (drawPortal ren yOff) (gsPortals (appGame app))
   -- Vine / chocolate spread preview pulses
   drawVineSpreadHints ren yOff pulse (gsBoard (appGame app))
   drawChocoSpreadHints ren yOff pulse (gsBoard (appGame app))
@@ -1858,6 +1909,18 @@ drawChocoSpreadHints ren yOff pulse board = do
     )
     targets
 
+
+drawPortal :: Renderer -> CInt -> (Pos, Pos) -> IO ()
+drawPortal ren yOff (a, b) = do
+  let mark pos = do
+        let (x0, y0) = cellOrigin pos
+            y = y0 + yOff
+        rendererDrawColor ren $= V4 160 80 220 220
+        drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
+        rendererDrawColor ren $= V4 220 160 255 180
+        drawRect ren (Just (Rectangle (P (V2 (x0 + 8) (y + 8))) (V2 (cellPx - 16) (cellPx - 16))))
+  mark a
+  mark b
 
 drawUfo :: Renderer -> CInt -> Int -> Ufo -> IO ()
 drawUfo ren yOff pulse (Ufo cell col) = do

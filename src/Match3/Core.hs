@@ -17,12 +17,17 @@ module Match3.Core
   , hasFog
   , fogLayers
   , mkFogGem
+  , hasChain
+  , chainLayers
+  , mkChainGem
   , cellOverlay
   , clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
+  , chipAdjacentChain
   , vinePositions
   , chocoPositions
+  , chainPositions
   , spreadVines
   , spreadChoco
   , Ufo(..)
@@ -54,6 +59,11 @@ module Match3.Core
   , isCake
   , mkMagicHat
   , isMagicHat
+  , mkMaker
+  , mkMakerCharges
+  , makerColor
+  , makerCharges
+  , isMaker
   , mkCountdown
   , isCountdown
   , countdownTurns
@@ -144,6 +154,10 @@ module Match3.Core
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
+  , makersAdjacentSameColor
+  , chargeAdjacentMakers
+  , applyPortalTeleports
+  , settleBoardPortals
   , isRainbow
   , isRainbowSwap
   , rainbowClearSeeds
@@ -166,8 +180,10 @@ import Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
+  , chipAdjacentChain
   , vinePositions
   , chocoPositions
+  , chainPositions
   , spreadVines
   , spreadChoco
   )
@@ -196,6 +212,8 @@ import Match3.Obstacles
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
+  , makersAdjacentSameColor
+  , chargeAdjacentMakers
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)

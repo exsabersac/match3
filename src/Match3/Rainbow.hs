@@ -67,4 +67,5 @@ colorPositions b col =
       Cookie -> False
       Cake _ -> False
       MagicHat -> False
+      Maker _ _ -> False
   ]

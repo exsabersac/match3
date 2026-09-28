@@ -94,6 +94,14 @@ tests =
     , testCase "goal_cake_counts" goal_cake_counts
     , testCase "hat_triggered_by_adjacent" hat_triggered_by_adjacent
     , testCase "hat_swaps_colors" hat_swaps_colors
+    , testCase "chain_blocks_match" chain_blocks_match
+    , testCase "chain_blocks_swap" chain_blocks_swap
+    , testCase "chain_cleared_by_adjacent" chain_cleared_by_adjacent
+    , testCase "chain_layer_decrement" chain_layer_decrement
+    , testCase "maker_blocks_swap" maker_blocks_swap
+    , testCase "maker_charges_on_same_color" maker_charges_on_same_color
+    , testCase "maker_produces_bomb" maker_produces_bomb
+    , testCase "portal_teleports_gem" portal_teleports_gem
     , testCase "ufo_collects_target_color" ufo_collects_target_color
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
@@ -2331,3 +2339,193 @@ hat_swaps_colors = do
   assertEqual "left got right" C5 cLeft1
   assertEqual "right got left" C4 cRight1
   assertBool "hat remains" (isMagicHat (getCell board1 (2, 1)))
+
+
+--------------------------------------------------------------------------------
+-- Chain / 锁链 (locks gem: no swap/match; adjacent peel)
+--------------------------------------------------------------------------------
+
+chain_blocks_match :: Assertion
+chain_blocks_match = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkChainGem C1 1))
+          (3, 2)
+          (mkGem C1)
+  assertBool "chain present" (hasChain (getCell board0 (3, 1)))
+  assertBool "chained gem breaks run" (null (findMatches board0))
+  assertEqual "chain layers" (1 :: Int) (chainLayers (getCell board0 (3, 1)))
+
+chain_blocks_swap :: Assertion
+chain_blocks_swap = do
+  let board = setCell stableBoard (3, 3) (mkChainGem C2 1)
+      gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsScore = 40
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  out @?= NoMatch
+  gsBoard gs1 @?= gsBoard gs0
+  gsMoves gs1 @?= gsMoves gs0
+  assertBool "swapBlocked" (swapBlockedByStone board (3, 3) (3, 4))
+
+chain_cleared_by_adjacent :: Assertion
+chain_cleared_by_adjacent = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkChainGem C2 1)
+  assertBool "chain above match" (hasChain (getCell board0 (2, 1)))
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentChain board0 ms
+  assertEqual "one chain unlocked" (1 :: Int) cleared
+  assertBool "chain gone" (not (hasChain (getCell b1 (2, 1))))
+  assertBool "gem remains" (isGem (getCell b1 (2, 1)))
+  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
+        runCascadeScoredFromSeeds Nothing ms (mkStdGen 1) board0
+  assertBool "chain cleared in cascade" (not (hasChain (getCell board1 (2, 1))))
+
+chain_layer_decrement :: Assertion
+chain_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkChainGem C3 2)
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentChain board0 ms
+  assertEqual "no full unlock yet" (0 :: Int) cleared
+  assertEqual "layers 2->1" (1 :: Int) (chainLayers (getCell b1 (4, 1)))
+  let (b2, cleared2) = chipAdjacentChain b1 ms
+  assertEqual "now unlocked" (1 :: Int) cleared2
+  assertBool "chain gone" (not (hasChain (getCell b2 (4, 1))))
+  let gs = newGameAtLevel 25 (levelConfig (allLevels !! 25)) 42
+      nChain =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , hasChain (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
+  assertEqual "campaign levels" (28 :: Int) (length allLevels)
+
+--------------------------------------------------------------------------------
+-- Maker / 果汁机 (same-color adjacent charge -> Bomb)
+--------------------------------------------------------------------------------
+
+maker_blocks_swap :: Assertion
+maker_blocks_swap = do
+  let board = setCell stableBoard (3, 3) (mkMaker C1)
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "is maker" (isMaker (getCell board (3, 3)))
+  assertEqual "default charges" (3 :: Int) (makerCharges (getCell board (3, 3)))
+
+maker_charges_on_same_color :: Assertion
+maker_charges_on_same_color = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkMakerCharges C1 3)
+  let ms = findMatches board0
+      b1 = chargeAdjacentMakers board0 ms
+  assertBool "still maker" (isMaker (getCell b1 (2, 1)))
+  assertEqual "charges 3->2" (2 :: Int) (makerCharges (getCell b1 (2, 1)))
+  -- Wrong color adjacent clear does not charge
+  let boardWrong =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C2))
+                (3, 1)
+                (mkGem C2))
+             (3, 2)
+             (mkGem C2))
+          (2, 1)
+          (mkMakerCharges C1 2)
+      ms2 = findMatches boardWrong
+      b2 = chargeAdjacentMakers boardWrong ms2
+  assertEqual "wrong color no charge" (2 :: Int) (makerCharges (getCell b2 (2, 1)))
+
+maker_produces_bomb :: Assertion
+maker_produces_bomb = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkMakerCharges C1 1)
+  let ms = findMatches board0
+      b1 = chargeAdjacentMakers board0 ms
+  assertBool "became gem" (isGem (getCell b1 (2, 1)))
+  assertEqual "bomb kind" Bomb (cellKind (getCell b1 (2, 1)))
+  assertEqual "bomb color" C1 (cellColor (getCell b1 (2, 1)))
+  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
+      nMaker =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isMaker (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor makers >= 3, got " ++ show nMaker) (nMaker >= 3)
+  assertBool "level has portals" (not (null (gsPortals gs)))
+
+--------------------------------------------------------------------------------
+-- Portal / 传送门 (gem on A with hole at B teleports)
+--------------------------------------------------------------------------------
+
+portal_teleports_gem :: Assertion
+portal_teleports_gem = do
+  -- Build MBoard: gem at (0,0), hole at (7,7)
+  let setMBoard b (r, c) v =
+        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+        where
+          row = b !! r
+      fill = Just (mkGem C5)
+      mb0 = replicate boardSize (replicate boardSize fill)
+      mb1 = setMBoard mb0 (0, 0) (Just (mkGem C1))
+      mb2 = setMBoard mb1 (7, 7) Nothing
+      portals = [((0, 0), (7, 7))]
+      mb3 = applyPortalTeleports portals mb2
+  assertEqual "entrance emptied" Nothing ((mb3 !! 0) !! 0)
+  case (mb3 !! 7) !! 7 of
+    Just cell -> do
+      assertBool "exit got gem" (isGem cell)
+      assertEqual "teleported color" C1 (cellColor cell)
+    Nothing -> assertFailure "expected gem at exit"
+  assertBool "identity on full board" (applyPortalTeleports portals mb0 == mb0)
+  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
+  assertEqual "two portal pairs" (2 :: Int) (length (gsPortals gs))

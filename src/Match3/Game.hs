@@ -65,6 +65,7 @@ data GameState = GameState
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
   , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
   , gsBelts         :: [Belt] -- conveyor paths (开心消消乐传送带)
+  , gsPortals       :: [(Pos, Pos)] -- bidirectional portal pairs (传送门)
   , gsHammers       :: Int    -- hammer booster charges
   , gsFreeSwaps     :: Int    -- free-swap booster charges (any two cells)
   , gsUfos          :: [Ufo]  -- flying saucers (飞碟)
@@ -88,6 +89,7 @@ instance Eq GameState where
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
       && gsBelts a == gsBelts b
+      && gsPortals a == gsPortals b
       && gsHammers a == gsHammers b
       && gsFreeSwaps a == gsFreeSwaps b
       && gsUfos a == gsUfos b
@@ -108,8 +110,14 @@ levelBelts 15 =
   , [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)]
   ]
 levelBelts 13 = [[(4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7)]]
-levelBelts 25 = [[(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]]
+levelBelts 27 = [[(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]]
 levelBelts _ = []
+
+-- | Bidirectional portal pairs for campaign levels.
+levelPortals :: Int -> [(Pos, Pos)]
+levelPortals 26 = [((0, 1), (7, 6)), ((0, 6), (7, 1))]
+levelPortals 27 = [((0, 3), (7, 4))]
+levelPortals _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
 decorateLevel :: Int -> Board -> Board
@@ -216,6 +224,23 @@ decorateLevel 24 b =
               [(1, 1), (1, 6), (2, 3), (4, 0), (4, 7)]
   in overlayAt b2 Choco [(6, 1), (6, 5)]
 decorateLevel 25 b =
+  -- 锁链: iron chains lock gems; peel by adjacent clear
+  let b1 = overlayAt b (Chain 1) [(2, 2), (2, 5), (3, 3), (3, 4), (4, 1), (4, 6), (5, 3), (6, 2), (6, 5)]
+      b2 = overlayAt b1 (Chain 2) [(4, 3), (4, 4)]
+      b3 =
+        foldl (\board p -> setCell board p mkStone)
+              b2
+              [(1, 1), (1, 6)]
+  in overlayAt b3 Choco [(5, 1), (5, 6)]
+decorateLevel 26 b =
+  -- 果汁: juice makers + fog; portals applied via levelPortals
+  let b1 =
+        foldl (\board (p, col, n) -> setCell board p (mkMakerCharges col n))
+              b
+              [ ((2, 2), C1, 2), ((2, 5), C1, 3), ((5, 3), C1, 2), ((5, 4), C3, 2) ]
+      b2 = overlayAt b1 (Fog 1) [(3, 1), (3, 6), (6, 2), (6, 5)]
+  in overlayAt b2 Choco [(1, 3), (1, 4)]
+decorateLevel 27 b =
   let b1 =
         foldl (\board p -> setCell board p mkStone)
               b
@@ -244,9 +269,14 @@ decorateLevel 25 b =
         foldl (\board p -> setCell board p mkMagicHat)
               b2k
               [(7, 2), (7, 5)]
-      b3 = overlayAt b2h Choco [(2, 2), (2, 5)]
-      b3f = overlayAt b3 (Fog 2) [(5, 2), (5, 5), (6, 1), (6, 6)]
-      b4 = overlayAt b3f Vine [(6, 3)]
+      b2m =
+        foldl (\board p -> setCell board p (mkMakerCharges C2 2))
+              b2h
+              [(4, 0), (4, 7)]
+      b3 = overlayAt b2m Choco [(2, 2), (2, 5)]
+      b3f = overlayAt b3 (Fog 2) [(5, 2), (5, 5)]
+      b3c = overlayAt b3f (Chain 1) [(6, 1), (6, 6)]
+      b4 = overlayAt b3c Vine [(6, 3)]
   in foldl
        (\board p ->
            case getCell board p of
@@ -262,7 +292,7 @@ levelUfos :: Int -> [Ufo]
 levelUfos 12 = [mkUfo (2, 3) C1]
 levelUfos 13 = [mkUfo (1, 2) C1, mkUfo (1, 5) C3]
 levelUfos 15 = [mkUfo (0, 4) C2]
-levelUfos 25 = [mkUfo (2, 4) C1]
+levelUfos 27 = [mkUfo (2, 4) C1]
 levelUfos _ = []
 
 -- | Stamp Grass/Vine/Choco onto existing gems (keep color/kind/ice).
@@ -300,6 +330,7 @@ newGameAtLevel li cfg seed =
        , gsCombo = 0
        , gsShuffled = False
        , gsBelts = levelBelts li
+       , gsPortals = levelPortals li
        , gsHammers = 2
        , gsFreeSwaps = 1
        , gsUfos =
@@ -381,6 +412,7 @@ extractDecor b =
     keep Cookie = True
     keep (Cake _) = True
     keep MagicHat = True
+    keep (Maker _ _) = True
     keep (Countdown _ _) = True
     keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
     -- Normal bare gems are shuffled away
@@ -427,12 +459,12 @@ trySwap p1 p2 gs
                    if rainbow
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
-                       in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsGen gs) swapped
+                       in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsPortals gs) (gsGen gs) swapped
                      else if specialCombo
                        then
                          let seeds = comboClearSeeds swapped p1 p2
-                         in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsGen gs) swapped
-                       else runCascadeScoredWithUfos (Just p2) ufos0 (gsGen gs) swapped
+                         in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsPortals gs) (gsGen gs) swapped
+                       else runCascadeScoredWithUfos (Just p2) ufos0 (gsPortals gs) (gsGen gs) swapped
                  -- Countdown bombs: tick after move; zeros explode 3×3
                  (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, cookies1, cakes1, g1') =
                    resolveCountdowns g0' board0'
@@ -441,7 +473,7 @@ trySwap p1 p2 gs
                  (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos2, g') =
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos1, g1')
-                     else runCascadeScoredWithUfos Nothing ufos1 g1' boardBelt
+                     else runCascadeScoredWithUfos Nothing ufos1 (gsPortals gs) g1' boardBelt
                  -- Vine / chocolate spread at end of move (cleared overlays already stripped)
                  board1 = spreadChoco (spreadVines boardBeltCas)
                  gained = gained0 + gained1 + gained2
@@ -553,7 +585,7 @@ useHammer p gs
   | otherwise =
       let seeds = [p]
           (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', g') =
-            runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsGen gs) (gsBoard gs)
+            runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsPortals gs) (gsGen gs) (gsBoard gs)
           board1 = spreadChoco (spreadVines boardH)
           score' = gsScore gs + gained
           hist = take 20 (snapshot gs : gsHistory gs)
@@ -628,10 +660,10 @@ useFreeSwap p1 p2 gs
            else
              let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', g') =
                    if rainbow
-                     then runCascadeScoredFromSeedsWithUfos (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) (gsGen gs) swapped
+                     then runCascadeScoredFromSeedsWithUfos (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
                      else if specialCombo
-                       then runCascadeScoredFromSeedsWithUfos (Just p2) (comboClearSeeds swapped p1 p2) (gsUfos gs) (gsGen gs) swapped
-                       else runCascadeScoredWithUfos (Just p2) (gsUfos gs) (gsGen gs) swapped
+                       then runCascadeScoredFromSeedsWithUfos (Just p2) (comboClearSeeds swapped p1 p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
+                       else runCascadeScoredWithUfos (Just p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
                  board1 = spreadChoco (spreadVines boardF)
                  score' = gsScore gs + gained
                  hist = take 20 (snapshot gs : gsHistory gs)

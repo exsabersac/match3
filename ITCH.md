@@ -14,10 +14,10 @@ Runtime needs `libsdl2-2.0-0`. Headless: `xvfb-run -a stack exec match3-sdl`.
 ## Package
 
 - [ ] Ship `match3-sdl` binary + note SDL2 system dependency
-- [ ] Include `README.md` and `LICENSE` (BSD-3-Clause)
+- [x] Include `README.md` and `LICENSE` (BSD-3-Clause) — in repo root
 - [ ] Short GIF / screenshots: swap, cascade combo, chocolate, chest, safe, honey jar, cake, magic hat, chain, freeze, curtain, flip, surprise, bottle, time spirit, steam, carpet, snail, juice maker, portal, balloon, cookie, UFO, map (`M`)
 - [ ] Cover image 630×500 (itch) with gem board + title
-- [ ] Description: 8×8 / 5-color Match-3 inspired by 开心消消乐; Haskell + SDL2
+- [x] Description draft ready (see **Page copy** below): 8×8 / 5-color Match-3 inspired by 开心消消乐; Haskell + SDL2
 
 ## Page copy (short)
 
@@ -33,11 +33,12 @@ Controls: click/drag swap · `1` hammer · `2` free-swap · `3` cross · `H` hin
 
 - [ ] Test download on clean machine / container
 - [ ] Set price / donation as preferred
-- [ ] Link GitHub: https://github.com/exsabersac/match3
+- [x] GitHub link ready: https://github.com/exsabersac/match3
 
 ## Status (repo)
 
-- 38 campaign levels + daily challenge; `stack test` green on lts-21.25 / GHC 9.4.8
+- 38 campaign levels + daily challenge; `stack test` **131** green on lts-21.25 / GHC 9.4.8
 - Finale (终章) 24 moves / Score 1400; Master (大师) 22 moves / Score 1000; Steam 22 / Carpet weave 24; map shows CH1–CH7 for all 38 nodes
 - Controls match in-game help strip and pause overlay (H / 1 / 2 / 3 / U / S / D / M / R / N / P)
+- Fragile locks: Carpet↔Ice cover boundary, TimeSpirit last-move rescue (−1+2), Portal after Belt match teleport, Steam→Snail / Belt→Steam order
 

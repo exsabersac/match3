@@ -8,7 +8,8 @@ Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure 
 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
-sudo apt-get install -y libsdl2-dev   # once
+sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
+stack test                            # 131 green — optional but recommended
 stack build && stack exec match3-sdl
 ```
 
@@ -16,7 +17,7 @@ stack build && stack exec match3-sdl
 2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / **3** 十字清除 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）  
 3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续  
 
-Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec match3-sdl`.
+Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stack test`.
 
 ## Features / 功能
 
@@ -172,7 +173,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (127 named cases)
+test/Spec.hs tasty (131 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

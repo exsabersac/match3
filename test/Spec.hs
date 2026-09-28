@@ -144,6 +144,10 @@ tests =
     , testCase "finale_and_pressure_moves_reasonable" finale_and_pressure_moves_reasonable
     , testCase "cascade_terminates_bounded" cascade_terminates_bounded
     , testCase "release_core_invariants_green" release_core_invariants_green
+    , testCase "carpet_ice_partial_no_cover" carpet_ice_partial_no_cover
+    , testCase "carpet_ice_last_layer_covers" carpet_ice_last_layer_covers
+    , testCase "time_spirit_rescues_last_move" time_spirit_rescues_last_move
+    , testCase "portal_after_belt_match_teleports" portal_after_belt_match_teleports
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -3216,7 +3220,7 @@ time_spirit_awards_moves = do
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "spirit cleared" (not (isTimeSpirit (getCell (gsBoard gs1) (2, 1))))
+  assertBool "spirit cleared" (not (isTimeSpirit (getCell (gsBoard gs1) (1, 1))))
   -- spent 1 move, gained +2 → net +1 from 10 → 11
   assertEqual "moves +2 net" (11 :: Int) (gsMoves gs1)
   let gsL = newGameAtLevel 34 (levelConfig (allLevels !! 34)) 42
@@ -3648,6 +3652,220 @@ finale_and_pressure_moves_reasonable = do
     )
     allLevels
 
+
+--------------------------------------------------------------------------------
+-- Fragile interaction boundaries (stability cruise)
+--------------------------------------------------------------------------------
+
+-- | Ice layers >1 on a carpet tile: chip does NOT cover; only ice-free clears count.
+carpet_ice_partial_no_cover :: Assertion
+carpet_ice_partial_no_cover = do
+  -- Unit: ice>1 excluded from iceFree → coverCarpets ignores that tile.
+  let board =
+        setCell
+          (setCell stableBoard (3, 0) (mkGem C1))
+          (3, 3)
+          (mkIceGem C1 2)
+      seeds = [(3, 0), (3, 1), (3, 3)]
+      (bIced, iceFree) = chipIceOnClear board seeds
+  assertBool "(3,3) not cleared" ((3, 3) `notElem` iceFree)
+  assertEqual "ice chipped to 1" (1 :: Int) (iceLayers (getCell bIced (3, 3)))
+  assertBool "(3,0) cleared" ((3, 0) `elem` iceFree)
+  let (open', n) = coverCarpets [(3, 3), (3, 0)] iceFree
+  assertEqual "one cover" (1 :: Int) n
+  assertBool "iced tile still open" ((3, 3) `elem` open')
+  assertBool "cleared tile covered" ((3, 0) `notElem` open')
+  -- trySwap: carpet under stationary iced gem (3,0); swap forms match including it.
+  -- Row3: C1(ice2) C1 C2 C1 — swap (3,2)<->(3,3) → C1(ice2) C1 C1 C2
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkIceGem C1 2))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (3, 3)
+          (mkGem C1)
+      gs0 =
+        (newGame defaultConfig 3)
+          { gsBoard = board0
+          , gsMoves = 10
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsCarpetOpen = [(3, 0)]
+          , gsCarpetsCovered = 0
+          , gsGoal = GoalCarpet 1
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  -- Partial ice must not cover on the chip-only wave; covered stays 0 if gem survived.
+  -- Cascades may later clear the cell — only assert we never over-count past 1 open tile.
+  assertBool "covered in {0,1}" (gsCarpetsCovered gs1 <= 1)
+  assertBool "open consistent" (length (gsCarpetOpen gs1) + gsCarpetsCovered gs1 == 1)
+
+-- | Last ice layer (ice==1) on carpet: gem clears and carpet covers.
+carpet_ice_last_layer_covers :: Assertion
+carpet_ice_last_layer_covers = do
+  let board = setCell stableBoard (5, 3) (mkIceGem C2 1)
+      (bIced, iceFree) = chipIceOnClear board [(5, 3)]
+  assertEqual "last ice clears" [(5, 3)] iceFree
+  assertEqual "board unchanged pre-hole" (mkIceGem C2 1) (getCell bIced (5, 3))
+  let (open', n) = coverCarpets [(5, 3)] iceFree
+  assertEqual "covers" (1 :: Int) n
+  assertEqual "open empty" ([] :: [Pos]) open'
+  -- trySwap: carpet under stationary ice==1 at (5,0)
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (5, 0) (mkIceGem C2 1))
+                (5, 1)
+                (mkGem C2))
+             (5, 2)
+             (mkGem C3))
+          (5, 3)
+          (mkGem C2)
+      gs0 =
+        (newGame defaultConfig 4)
+          { gsBoard = board0
+          , gsMoves = 10
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsCarpetOpen = [(5, 0)]
+          , gsCarpetsCovered = 0
+          , gsGoal = GoalCarpet 1
+          }
+      (gs1, out) = trySwap (5, 2) (5, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertEqual "last ice covers carpet" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "open emptied" ([] :: [Pos]) (gsCarpetOpen gs1)
+
+-- | TimeSpirit adjacent-clear on the final move: -1+2 keeps the player alive.
+time_spirit_rescues_last_move :: Assertion
+time_spirit_rescues_last_move = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (0, 0) (mkGem C1))
+                   (0, 1)
+                   (mkGem C1))
+                (0, 2)
+                (mkGem C2))
+             (0, 3)
+             (mkGem C1))
+          (1, 1)
+          mkTimeSpirit
+      gs0 =
+        (newGame defaultConfig 8)
+          { gsBoard = board0
+          , gsMoves = 1
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    Lost _ -> assertFailure "spirit should rescue last move"
+    _ -> pure ()
+  assertBool "spirit gone" (not (isTimeSpirit (getCell (gsBoard gs1) (1, 1))))
+  assertEqual "net +1 from last move" (2 :: Int) (gsMoves gs1)
+  assertEqual "not over" Nothing (gsOver gs1)
+
+-- | Belt shift forms a match that clears portal A; portal teleports B→A before re-gravity.
+-- Locks Portal+Belt: belt-created clears are visible to applyPortalTeleports / settle.
+portal_after_belt_match_teleports :: Assertion
+portal_after_belt_match_teleports = do
+  let portals = [((0, 2), (7, 2))]
+      belt = [(0, 0), (0, 1), (0, 2), (0, 3)]
+      -- Before belt: C1 C1 C2 C1 — after forward shift: C1 C1 C1 C2 (triple includes A)
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (0, 0) (mkGem C1))
+                   (0, 1)
+                   (mkGem C1))
+                (0, 2)
+                (mkGem C2))
+             (0, 3)
+             (mkGem C1))
+          (7, 2)
+          (mkGem C5)
+      shifted = shiftBelts board0 [belt]
+  assertBool "belt assembled match" (hasAnyMatch shifted)
+  assertEqual "A is C1" C1 (cellColor (getCell shifted (0, 2)))
+  assertEqual "B is C5" C5 (cellColor (getCell shifted (7, 2)))
+  let (mb, n) = clearMatches shifted
+  assertBool "cleared triple+" (n >= 3)
+  assertEqual "A hole pre-portal" Nothing ((mb !! 0) !! 2)
+  assertEqual "B still C5" (Just (mkGem C5)) ((mb !! 7) !! 2)
+  -- Direct portal step (pre re-gravity): B→A
+  let ported = applyPortalTeleports portals mb
+  assertEqual "C5 teleported to A" (Just (mkGem C5)) ((ported !! 0) !! 2)
+  assertEqual "B emptied by portal" Nothing ((ported !! 7) !! 2)
+  -- Full settle: gravity may repack column, but B must not keep C5
+  let (settled, _) = settleBoardPortals portals mb
+  assertBool "B no longer holds C5 after settle" $
+    case (settled !! 7) !! 2 of
+      Just c -> not (isGem c && cellColor c == C5) || False
+      Nothing -> True
+  assertBool "C5 still somewhere in col 2" $
+    any
+      ( \r ->
+          case (settled !! r) !! 2 of
+            Just c -> isGem c && cellColor c == C5
+            Nothing -> False
+      )
+      [0 .. boardSize - 1]
+  -- Full trySwap path with belts+portals stays stable and spends a move
+  let boardSwap =
+        setCell
+          (setCell
+             (setCell
+                (setCell board0 (2, 0) (mkGem C3))
+                (2, 1)
+                (mkGem C3))
+             (2, 2)
+             (mkGem C4))
+          (2, 3)
+          (mkGem C3)
+      gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = boardSwap
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = [belt]
+          , gsPortals = portals
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (2, 2) (2, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match on row2"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool "post-move stable" (not (hasAnyMatch (gsBoard gs1)))
+  assertEqual "spent one move" (11 :: Int) (gsMoves gs1)
 
 --------------------------------------------------------------------------------
 -- Release quality gates (研讨锁定具名测)

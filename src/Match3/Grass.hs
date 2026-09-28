@@ -84,8 +84,9 @@ clearOverlaysOn b seeds = foldl strip b (nub seeds)
           setAt board p (Gem col kind ice Nothing)
         _ -> board
 
--- | Chocolate (巧克力): cleared when orthogonally adjacent to a match/special clear.
--- The gem under the chocolate stays; only the Choco overlay is stripped.
+-- | Chocolate (巧克力): cleared when orthogonally adjacent to a *true* clear hole.
+-- Callers must pass iceFree/surpFree (not raw expand seeds): ice-chip / Flip soft
+-- hits must not extinguish chocolate. Gem under chocolate stays.
 clearChocoAdjacent :: Board -> [Pos] -> Board
 clearChocoAdjacent b seeds =
   foldl strip b targets
@@ -292,7 +293,8 @@ steamPositions b =
   , hasSteam (at b (r, c))
   ]
 
--- | Steam (蒸汽): extinguished when orthogonally adjacent to a match/special clear.
+-- | Steam (蒸汽): extinguished when orthogonally adjacent to a *true* clear hole.
+-- Same seed discipline as clearChocoAdjacent (no soft-hit extinguish).
 clearSteamAdjacent :: Board -> [Pos] -> Board
 clearSteamAdjacent b seeds =
   foldl strip b targets

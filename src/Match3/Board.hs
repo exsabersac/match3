@@ -295,10 +295,12 @@ clearMatchesDetailed prefer b =
       iceFree' = filter (`notElem` surpSaved) iceFree
       -- Bottle: dye ortho gem neighbors to bottle color (bottle stays)
       bBottle = triggerAdjacentBottles bSurp2 iceFree'
-      -- Chocolate / steam: strip overlays orthogonally adjacent to match/special seeds
-      bNoChoco = clearChocoAdjacent bBottle expanded
-      bNoSteam = clearSteamAdjacent bNoChoco expanded
-      allPos = nub (iceFree' ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
+      -- Chocolate / steam: strip only against *true* clear holes (iceFree'+surpFree).
+      -- Soft hits (ice chip, Flip face-flip) stay out of iceFree — must not extinguish.
+      trueClears = nub (iceFree' ++ surpFree)
+      bNoChoco = clearChocoAdjacent bBottle trueClears
+      bNoSteam = clearSteamAdjacent bNoChoco trueClears
+      allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
       spawns = spawnSpecials prefer runs allPos
@@ -561,9 +563,11 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
       iceFree' = filter (`notElem` surpSaved) iceFree
       bBottle = triggerAdjacentBottles bSurp2 iceFree'
-      bNoChoco = clearChocoAdjacent bBottle expanded
-      bNoSteam = clearSteamAdjacent bNoChoco expanded
-      allPos = nub (iceFree' ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
+      -- Soft hits must not strip choco/steam (same as clearMatchesDetailed).
+      trueClears = nub (iceFree' ++ surpFree)
+      bNoChoco = clearChocoAdjacent bBottle trueClears
+      bNoSteam = clearSteamAdjacent bNoChoco trueClears
+      allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
       spawns = spawnSpecials prefer runs allPos

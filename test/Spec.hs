@@ -184,6 +184,7 @@ tests =
     , testCase "hammer_immune_no_spend" hammer_immune_no_spend
     , testCase "rainbow_swap_flip_partner" rainbow_swap_flip_partner
     , testCase "surprise_direct_seed_opens" surprise_direct_seed_opens
+    , testCase "soft_hit_preserves_choco_steam" soft_hit_preserves_choco_steam
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5158,3 +5159,70 @@ surprise_direct_seed_opens = do
   assertBool "surprise gone after explode" $
     not (isSurprise (getCell (gsBoard gsB1) (3, 3)))
   assertBool ("explode score >= 90, got " ++ show (gsScore gsB1)) (gsScore gsB1 >= 90)
+
+
+--------------------------------------------------------------------------------
+-- Soft-hit must not strip adjacent Choco / Steam (ice chip / Flip face-flip)
+--------------------------------------------------------------------------------
+
+-- | ice>1 chip and Flip face-flip are soft hits (not clear holes). They must NOT
+-- extinguish orthogonally adjacent Chocolate or Steam — only true clears do.
+-- Regression: clear pipeline used raw expand seeds, so soft hits stripped décor.
+soft_hit_preserves_choco_steam :: Assertion
+soft_hit_preserves_choco_steam = do
+  -- ice=2 mid of a 3-match: chips to ice=1, stays; adjacent choco must survive.
+  let boardIce =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkIceGem C1 2))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkChocoGem C2)
+  assertBool "ice match present" (not (null (findMatches boardIce)))
+  let expanded = expandSpecials boardIce (findMatches boardIce)
+      (_, iceFree) = chipIceOnClear boardIce expanded
+  assertBool "soft ice not a hole" ((3, 1) `notElem` iceFree)
+  let (boardI1, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 21) boardIce
+  assertEqual "ice chipped once" (1 :: Int) (iceLayers (getCell boardI1 (3, 1)))
+  assertBool "choco survives ice soft-hit" (hasChoco (getCell boardI1 (2, 1)))
+  -- Control: same layout with bare mid gem — true clear *does* strip choco.
+  let boardHard =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkChocoGem C2)
+      (boardH1, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 22) boardHard
+  assertBool "true clear strips choco" (not (hasChoco (getCell boardH1 (2, 1))))
+  -- Flip in a 3-match: flips to back, stays; adjacent steam must survive.
+  let boardFlip =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (4, 0) (mkGem C2))
+                (4, 1)
+                (mkFlip C2 C5))
+             (4, 2)
+             (mkGem C2))
+          (5, 1)
+          (mkSteamGem C3)
+  assertBool "flip match present" (not (null (findMatches boardFlip)))
+  let (_, iceF) = chipIceOnClear boardFlip (expandSpecials boardFlip (findMatches boardFlip))
+  assertBool "flip not a hole" ((4, 1) `notElem` iceF)
+  let (boardF1, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 23) boardFlip
+  assertBool "became back gem" $
+    isGem (getCell boardF1 (4, 1)) && not (isFlip (getCell boardF1 (4, 1)))
+  assertEqual "back color C5" C5 (cellColor (getCell boardF1 (4, 1)))
+  assertBool "steam survives flip soft-hit" (hasSteam (getCell boardF1 (5, 1)))

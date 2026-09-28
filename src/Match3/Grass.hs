@@ -5,17 +5,20 @@
 -- Fog: layered cloud; adjacent clears peel one layer; fogged gems do not match.
 -- Chain: iron chains; adjacent clears peel; chained gems cannot swap or match.
 -- Freeze: rocket freeze (火箭冰冻); blocks swap only; adjacent clears peel; gems still match.
+-- Curtain: roller shade (窗帘); adjacent clears peel; curtained gems do not match.
 module Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
   , chipAdjacentFreeze
+  , chipAdjacentCurtain
   , vinePositions
   , chocoPositions
   , fogPositions
   , chainPositions
   , freezePositions
+  , curtainPositions
   , spreadVines
   , spreadChoco
   , mkGrassGem
@@ -24,6 +27,7 @@ module Match3.Grass
   , mkFogGem
   , mkChainGem
   , mkFreezeGem
+  , mkCurtainGem
   , hasGrass
   , hasVine
   , hasChoco
@@ -33,6 +37,8 @@ module Match3.Grass
   , chainLayers
   , hasFreeze
   , freezeLayers
+  , hasCurtain
+  , curtainLayers
   , cellOverlay
   ) where
 
@@ -191,6 +197,36 @@ freezePositions b =
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
   , hasFreeze (at b (r, c))
+  ]
+
+-- | Curtain / roller shade (窗帘): peel one layer on cells orthogonally adjacent to clears.
+-- Curtain 1 -> strip; Curtain n>1 -> Curtain (n-1). Gem stays. Returns fully cleared count.
+chipAdjacentCurtain :: Board -> [Pos] -> (Board, Int)
+chipAdjacentCurtain b seeds =
+  foldl hit (b, 0) targets
+  where
+    targets =
+      nub
+        [ q
+        | p <- nub seeds
+        , q <- ortho p
+        , hasCurtain (at b q)
+        ]
+    hit (board, n) p =
+      case at board p of
+        Gem col kind ice (Just (Curtain layers))
+          | layers <= 1 ->
+              (setAt board p (Gem col kind ice Nothing), n + 1)
+          | otherwise ->
+              (setAt board p (Gem col kind ice (Just (Curtain (layers - 1)))), n)
+        _ -> (board, n)
+
+curtainPositions :: Board -> [Pos]
+curtainPositions b =
+  [ (r, c)
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , hasCurtain (at b (r, c))
   ]
 
 -- | Each remaining vine spreads onto every orthogonally adjacent bare gem

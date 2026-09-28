@@ -69,4 +69,6 @@ colorPositions b col =
       MagicHat -> False
       Maker _ _ -> False
       Snail _ _ -> False
+      Safe _ -> False
+      Flip col' _ -> col' == col
   ]

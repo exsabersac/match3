@@ -23,19 +23,32 @@ module Match3.Core
   , hasFreeze
   , freezeLayers
   , mkFreezeGem
+  , hasCurtain
+  , curtainLayers
+  , mkCurtainGem
   , mkSnail
   , isSnail
   , snailDir
+  , mkSafe
+  , mkSafeLayers
+  , safeLayers
+  , isSafe
+  , mkFlip
+  , isFlip
+  , flipFront
+  , flipBack
   , cellOverlay
   , clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
   , chipAdjacentFreeze
+  , chipAdjacentCurtain
   , vinePositions
   , chocoPositions
   , chainPositions
   , freezePositions
+  , curtainPositions
   , spreadVines
   , spreadChoco
   , stepSnails
@@ -161,6 +174,8 @@ module Match3.Core
   , honeysAdjacentTo
   , chipAdjacentCakes
   , cakesAdjacentTo
+  , chipAdjacentSafes
+  , safesAdjacentTo
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
@@ -193,10 +208,12 @@ import Match3.Grass
   , chipAdjacentFog
   , chipAdjacentChain
   , chipAdjacentFreeze
+  , chipAdjacentCurtain
   , vinePositions
   , chocoPositions
   , chainPositions
   , freezePositions
+  , curtainPositions
   , spreadVines
   , spreadChoco
   )
@@ -226,6 +243,8 @@ import Match3.Obstacles
   , honeysAdjacentTo
   , chipAdjacentCakes
   , cakesAdjacentTo
+  , chipAdjacentSafes
+  , safesAdjacentTo
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
   , hatsAdjacentTo

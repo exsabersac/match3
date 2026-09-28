@@ -36,12 +36,14 @@ blocksSnail c =
     || isCake c
     || isMagicHat c
     || isMaker c
+    || isSafe c
     || isSnail c
 
 -- | Pushable: ordinary gems and countdown bombs.
 pushable :: Cell -> Bool
 pushable (Gem _ _ _ _) = True
 pushable (Countdown _ _) = True
+pushable (Flip _ _) = True
 pushable _ = False
 
 snailPositions :: Board -> [Pos]

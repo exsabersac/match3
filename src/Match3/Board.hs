@@ -37,12 +37,13 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog, chipAdjacentChain, chipAdjacentFreeze)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog, chipAdjacentChain, chipAdjacentFreeze, chipAdjacentCurtain)
 import Match3.Obstacles
   ( chipAdjacentStones
   , chipAdjacentChests
   , chipAdjacentHoney
   , chipAdjacentCakes
+  , chipAdjacentSafes
   , chipAdjacentBalloons
   , triggerAdjacentHats
   , chargeAdjacentMakers
@@ -116,17 +117,22 @@ groupGemRuns b (p : ps) = case getCell b p of
   MagicHat -> groupGemRuns b ps
   Maker _ _ -> groupGemRuns b ps
   Snail _ _ -> groupGemRuns b ps
+  Safe _ -> groupGemRuns b ps
   Gem _ _ _ (Just (Fog _)) -> groupGemRuns b ps  -- fog hides gem from matches
   Gem _ _ _ (Just (Chain _)) -> groupGemRuns b ps  -- chain locks gem from matches
-  -- Freeze does NOT break runs: frozen gems still match (vs Chain/Fog/Ice-chip)
+  Gem _ _ _ (Just (Curtain _)) -> groupGemRuns b ps  -- curtain hides gem from matches
+  -- Freeze does NOT break runs: frozen gems still match (vs Chain/Fog/Curtain)
   Gem col _ _ _ -> go [p] col ps
+  Flip col _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
     go run col (q : qs) = case getCell b q of
       Gem _ _ _ (Just (Fog _)) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem _ _ _ (Just (Chain _)) -> (col, reverse run) : groupGemRuns b (q : qs)
+      Gem _ _ _ (Just (Curtain _)) -> (col, reverse run) : groupGemRuns b (q : qs)
       Gem col' _ _ _ | col' == col -> go (q : run) col qs
+      Flip col' _ | col' == col -> go (q : run) col qs
       Countdown col' _ | col' == col -> go (q : run) col qs
       _ -> (col, reverse run) : groupGemRuns b (q : qs)
 
@@ -168,6 +174,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
               , c <- [0 .. boardSize - 1]
               , case getCell b (r, c) of
                   Gem col' _ _ _ -> col' == col
+                  Flip col' _ -> col' == col
                   Countdown col' _ -> col' == col
                   Stone _ -> False
                   Chest _ -> False
@@ -178,6 +185,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
                   MagicHat -> False
                   Maker _ _ -> False
                   Snail _ _ -> False
+                  Safe _ -> False
               ]
             Gem _ Normal _ _ -> []
             Stone _ -> []
@@ -189,6 +197,8 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
             MagicHat -> []
             Maker _ _ -> []
             Snail _ _ -> []
+            Safe _ -> []
+            Flip _ _ -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
@@ -218,6 +228,7 @@ countColor b ps col =
     | p <- ps
     , case getCell b p of
         Gem c _ _ _ -> c == col
+        Flip c _ -> c == col
         Countdown c _ -> c == col
         Stone _ -> False
         Chest _ -> False
@@ -228,6 +239,7 @@ countColor b ps col =
         MagicHat -> False
         Maker _ _ -> False
         Snail _ _ -> False
+        Safe _ -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -263,8 +275,12 @@ clearMatchesDetailed prefer b =
       (bChain, _chainCleared) = chipAdjacentChain bFog iceFree
       -- Freeze: peel adjacent freeze layers (gem stays; still matchable)
       (bFreeze, _freezeCleared) = chipAdjacentFreeze bChain iceFree
+      -- Curtain: peel adjacent curtain layers (gem stays)
+      (bCurtain, _curtainCleared) = chipAdjacentCurtain bFreeze iceFree
+      -- Safe: adjacent chip; last layer becomes Cookie in place (not removed)
+      (bSafe, _openedSafes) = chipAdjacentSafes bCurtain iceFree
       -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
-      bMaker = chargeAdjacentMakers bFreeze iceFree
+      bMaker = chargeAdjacentMakers bSafe iceFree
       -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
       bNoChoco = clearChocoAdjacent bMaker expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
@@ -330,6 +346,7 @@ applyPortalTeleports portals mb =
     transferable (Just (Gem _ _ _ _)) = True
     transferable (Just (Countdown _ _)) = True
     transferable (Just Cookie) = True
+    transferable (Just (Flip _ _)) = True
     transferable _ = False
     tryPair m (a, b) =
       case (atM m a, atM m b) of
@@ -504,7 +521,9 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bFog, _) = chipAdjacentFog bHat iceFree
       (bChain, _) = chipAdjacentChain bFog iceFree
       (bFreeze, _) = chipAdjacentFreeze bChain iceFree
-      bMaker = chargeAdjacentMakers bFreeze iceFree
+      (bCurtain, _) = chipAdjacentCurtain bFreeze iceFree
+      (bSafe, _) = chipAdjacentSafes bCurtain iceFree
+      bMaker = chargeAdjacentMakers bSafe iceFree
       bNoChoco = clearChocoAdjacent bMaker expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
       n = length allPos

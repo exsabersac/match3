@@ -42,6 +42,14 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
         Snail _ _ ->
           -- Snails crawl; immune to direct clear seeds (persist as mobile blockers)
           (board, clearable)
+        Safe n ->
+          -- Direct hit chips safe; last layer opens into Cookie (stays on board)
+          if n <= 1
+            then (set board p mkCookie, clearable)
+            else (set board p (mkSafeLayers (n - 1)), clearable)
+        Flip _ back ->
+          -- Dual-face: first hit flips to Normal gem of back color (does not clear)
+          (set board p (mkGem back), clearable)
         Countdown _ _ ->
           (board, p : clearable)
     get board (r, c) = (board !! r) !! c

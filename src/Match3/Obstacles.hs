@@ -9,10 +9,12 @@ module Match3.Obstacles
   , chestsAdjacentTo
   , honeysAdjacentTo
   , cakesAdjacentTo
+  , safesAdjacentTo
   , chipAdjacentStones
   , chipAdjacentChests
   , chipAdjacentHoney
   , chipAdjacentCakes
+  , chipAdjacentSafes
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
@@ -37,9 +39,13 @@ import Match3.Types
   , isCake
   , isMagicHat
   , isMaker
+  , isSafe
   , hasChain
   , hasFreeze
   , isSnail
+  , mkSafeLayers
+  , safeLayers
+  , mkCookie
   , balloonColor
   , makerColor
   , makerCharges
@@ -72,7 +78,7 @@ swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
   let block c =
         isStone c || isChest c || isHoney c || isBalloon c || isCookie c
-          || isCake c || isMagicHat c || isMaker c || isSnail c
+          || isCake c || isMagicHat c || isMaker c || isSnail c || isSafe c
           || hasChain c || hasFreeze c
   in block (at b p1) || block (at b p2)
 
@@ -207,6 +213,33 @@ chipAdjacentCakes b clearedGems =
                else (setAt board p (mkCakeLayers (n - 1)), dead)
         _ -> (board, dead)
 
+-- | Safe / vault positions orthogonally adjacent to cleared positions.
+safesAdjacentTo :: Board -> [Pos] -> [Pos]
+safesAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isSafe (at b p)
+    ]
+
+-- | Chip one layer off each adjacent safe (保险箱).
+-- Last layer opens into a Cookie in place (collectible drop); cookie is NOT removed here.
+-- Returns (board, positions that fully opened).
+chipAdjacentSafes :: Board -> [Pos] -> (Board, [Pos])
+chipAdjacentSafes b clearedGems =
+  foldl hitOne (b, []) (safesAdjacentTo b clearedGems)
+  where
+    hitOne (board, opened) p =
+      case at board p of
+        cell | isSafe cell ->
+          let n = safeLayers cell
+          in if n <= 1
+               then (setAt board p mkCookie, nub (p : opened))
+               else (setAt board p (mkSafeLayers (n - 1)), opened)
+        _ -> (board, opened)
+
 -- | Magic hat positions orthogonally adjacent to cleared gems.
 hatsAdjacentTo :: Board -> [Pos] -> [Pos]
 hatsAdjacentTo b cleared =
@@ -221,6 +254,7 @@ hatsAdjacentTo b cleared =
 recolorCell :: Cell -> Color -> Cell
 recolorCell (Gem _ kind ice ov) col = Gem col kind ice ov
 recolorCell (Countdown _ n) col = Countdown col n
+recolorCell (Flip _ back) col = Flip col back
 recolorCell x _ = x
 
 cycleColor :: Color -> Color

@@ -58,6 +58,7 @@ data GameState = GameState
   , gsBalloonsPopped :: Int         -- balloons popped (气球)
   , gsCookiesCollected :: Int       -- biscuits collected at bottom (饼干)
   , gsCakesCleared  :: Int          -- cakes fully cleared (蛋糕)
+  , gsSafesOpened   :: Int          -- vaults / safes opened (保险箱)
   , gsGen           :: StdGen
   , gsOver          :: Maybe Outcome
   , gsLevel         :: Int
@@ -87,6 +88,7 @@ instance Eq GameState where
       && gsBalloonsPopped a == gsBalloonsPopped b
       && gsCookiesCollected a == gsCookiesCollected b
       && gsCakesCleared a == gsCakesCleared b
+      && gsSafesOpened a == gsSafesOpened b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
       && gsBelts a == gsBelts b
@@ -278,7 +280,13 @@ decorateLevel 27 b =
       b3f = overlayAt b3 (Fog 2) [(5, 2), (5, 5)]
       b3c = overlayAt b3f (Chain 1) [(6, 1), (6, 6)]
       b3z = overlayAt b3c (Freeze 1) [(3, 3), (3, 4)]
-      b4 = overlayAt b3z Vine [(6, 3)]
+      b3u = overlayAt b3z (Curtain 1) [(5, 3), (5, 4)]
+      b3s =
+        foldl (\board p -> setCell board p (mkSafeLayers 1))
+              b3u
+              [(6, 4)]
+      b3p = setCell b3s (7, 3) (mkFlip C1 C3)
+      b4 = overlayAt b3p Vine [(6, 3)]
       b5 =
         foldl (\board (p, dr, dc) -> setCell board p (mkSnail dr dc))
               b4
@@ -303,6 +311,27 @@ decorateLevel 29 b =
   let b1 = overlayAt b (Freeze 1) [(2, 2), (2, 5), (3, 3), (3, 4), (4, 1), (4, 6), (5, 3), (6, 2), (6, 5)]
       b2 = overlayAt b1 (Freeze 2) [(4, 3), (4, 4)]
   in overlayAt b2 Choco [(1, 1), (1, 6)]
+decorateLevel 30 b =
+  -- 窗帘: curtain columns (遮挡整列/区域，邻消揭开)
+  let cols = [1, 6]
+      rows = [1, 2, 3, 4, 5, 6]
+      pos1 = [(r, c) | r <- rows, c <- cols]
+      b1 = overlayAt b (Curtain 1) pos1
+      b2 = overlayAt b1 (Curtain 2) [(2, 3), (2, 4), (5, 3), (5, 4)]
+  in overlayAt b2 Choco [(0, 2), (0, 5)]
+decorateLevel 31 b =
+  -- 金库: safes open into cookies; dual-face flips mixed in
+  let b1 =
+        foldl (\board (p, layers) -> setCell board p (mkSafeLayers layers))
+              b
+              [ ((2, 2), 1), ((2, 5), 2), ((4, 1), 1), ((4, 3), 2), ((4, 5), 1), ((6, 2), 1), ((6, 5), 2) ]
+      b2 =
+        foldl (\board (p, f, bk) -> setCell board p (mkFlip f bk))
+              b1
+              [ ((1, 1), C1, C3), ((1, 6), C2, C4), ((3, 0), C3, C1)
+              , ((3, 7), C4, C2), ((5, 3), C1, C2), ((5, 4), C2, C1)
+              ]
+  in overlayAt b2 Choco [(7, 1), (7, 6)]
 decorateLevel _ b = b
 
 -- | UFO placements for campaign levels.
@@ -340,6 +369,7 @@ newGameAtLevel li cfg seed =
        , gsBalloonsPopped = 0
        , gsCookiesCollected = 0
        , gsCakesCleared = 0
+       , gsSafesOpened = 0
        , gsGen = g1
        , gsOver = Nothing
        , gsLevel = li
@@ -389,6 +419,7 @@ goalSatisfied gs =
     (gsBalloonsPopped gs)
     (gsCookiesCollected gs)
     (gsCakesCleared gs)
+    (gsSafesOpened gs)
 
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
@@ -432,6 +463,8 @@ extractDecor b =
     keep MagicHat = True
     keep (Maker _ _) = True
     keep (Snail _ _) = True
+    keep (Safe _) = True
+    keep (Flip _ _) = True
     keep (Countdown _ _) = True
     keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
     -- Normal bare gems are shuffled away
@@ -457,6 +490,15 @@ shuffleGame gs =
       (board0, g') = shufflePlayable (gsGen gs)
       board = restoreDecor board0 decor
   in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True, gsOver = Nothing }
+
+countSafes :: Board -> Int
+countSafes b =
+  length
+    [ ()
+    | r <- [0 .. boardSize - 1]
+    , c <- [0 .. boardSize - 1]
+    , isSafe (getCell b (r, c))
+    ]
 
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwap p1 p2 gs
@@ -506,10 +548,12 @@ trySwap p1 p2 gs
                  balloonHit = balloons0 + balloons1 + balloons2
                  cookieHit = cookies0 + cookies1 + cookies2
                  cakeHit = cakes0 + cakes1 + cakes2
+                 safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  uAbs = uAbs0 + uAbs2
                  ufoCollected' = gsUfoCollected gs + uAbs
                  cookies' = gsCookiesCollected gs + cookieHit
                  cakes' = gsCakesCleared gs + cakeHit
+                 safes' = gsSafesOpened gs + safesHit
                  _cleared = cleared0 + cleared1 + cleared2
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
@@ -520,6 +564,7 @@ trySwap p1 p2 gs
                    GoalBalloon _ -> 0
                    GoalCookie _ -> 0
                    GoalCake _ -> 0
+                   GoalSafe _ -> 0
                    GoalScore _ -> 0
                    GoalUfo _ -> uAbs
                  -- For multi-collect, primary meter = sum of progress toward reqs
@@ -534,6 +579,7 @@ trySwap p1 p2 gs
                    GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
                    GoalCookie _ -> cookies'
                    GoalCake _ -> cakes'
+                   GoalSafe _ -> safes'
                    GoalScore _ -> gsCollected gs
                    GoalUfo _ -> ufoCollected'
                  score' = gsScore gs + gained
@@ -552,6 +598,7 @@ trySwap p1 p2 gs
                      , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
                      , gsCookiesCollected = cookies'
                      , gsCakesCleared = cakes'
+                     , gsSafesOpened = safes'
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing
@@ -611,6 +658,8 @@ useHammer p gs
           ufoCollected' = gsUfoCollected gs + uAbs
           cookies' = gsCookiesCollected gs + cookieHit
           cakes' = gsCakesCleared gs + cakeHit
+          safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
+          safes' = gsSafesOpened gs + safesHit
           collectDelta = case gsGoal gs of
             GoalCollect col _ -> lookupColor tallies col
             GoalUfo _ -> uAbs
@@ -626,6 +675,7 @@ useHammer p gs
             GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
             GoalCookie _ -> cookies'
             GoalCake _ -> cakes'
+            GoalSafe _ -> safes'
             GoalScore _ -> gsCollected gs
             GoalUfo _ -> ufoCollected'
           gs' =
@@ -640,6 +690,7 @@ useHammer p gs
               , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
               , gsCookiesCollected = cookies'
               , gsCakesCleared = cakes'
+              , gsSafesOpened = safes'
               , gsGen = g'
               , gsHistory = hist
               , gsHint = Nothing
@@ -689,6 +740,8 @@ useFreeSwap p1 p2 gs
                  ufoCollected' = gsUfoCollected gs + uAbs
                  cookies' = gsCookiesCollected gs + cookieHit
                  cakes' = gsCakesCleared gs + cakeHit
+                 safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
+                 safes' = gsSafesOpened gs + safesHit
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalUfo _ -> uAbs
@@ -704,6 +757,7 @@ useFreeSwap p1 p2 gs
                    GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
                    GoalCookie _ -> cookies'
                    GoalCake _ -> cakes'
+                   GoalSafe _ -> safes'
                    GoalScore _ -> gsCollected gs
                    GoalUfo _ -> ufoCollected'
                  gs' =
@@ -718,6 +772,7 @@ useFreeSwap p1 p2 gs
                      , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
                      , gsCookiesCollected = cookies'
                      , gsCakesCleared = cakes'
+                     , gsSafesOpened = safes'
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing
@@ -750,4 +805,5 @@ loseHint (GoalHoney n) = "邻消砸开蜂蜜罐，目标 " ++ show n ++ " 个"
 loseHint (GoalBalloon n) = "用同色邻消戳破气球，目标 " ++ show n ++ " 个"
 loseHint (GoalCookie n) = "打通下方让饼干掉到底部，目标 " ++ show n ++ " 个"
 loseHint (GoalCake n) = "邻消削掉蛋糕层，目标 " ++ show n ++ " 个"
+loseHint (GoalSafe n) = "邻消打开保险箱掉出饼干，目标 " ++ show n ++ " 个"
 loseHint (GoalUfo n) = "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"

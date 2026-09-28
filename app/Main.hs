@@ -198,6 +198,8 @@ spawnBurst board positions =
                     MagicHat -> (140, 90, 200)
                     Maker col _ -> colorRGB col
                     Snail _ _ -> (90, 160, 70)
+                    Safe _ -> (180, 150, 40)
+                    Flip f _ -> colorRGB f
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -256,6 +258,8 @@ updateTitle window app = do
           "cookie=" ++ show (gsCookiesCollected gs) ++ "/" ++ show n
         GoalCake n ->
           "cake=" ++ show (gsCakesCleared gs) ++ "/" ++ show n
+        GoalSafe n ->
+          "safe=" ++ show (gsSafesOpened gs) ++ "/" ++ show n
         GoalUfo n ->
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
       title =
@@ -829,6 +833,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalSafe n ->
+                                    " [safe "
+                                      <> T.pack (show (gsSafesOpened gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   GoalUfo n ->
                                     " [ufo "
                                       <> T.pack (show (gsUfoCollected gs'))
@@ -1128,7 +1138,7 @@ drawHud ren app = do
           if i == gsLevel gs
             then V4 255 200 80 255
             else if i < gsLevel gs then V4 80 180 120 255 else V4 60 60 80 255
-        -- 30 levels fit in HUD: 8px stride
+        -- 32 levels fit in HUD: 8px stride
         xDot = 60 + fromIntegral i * 8
     rendererDrawColor ren $= col
     fillRect ren (Just (Rectangle (P (V2 xDot 10)) (V2 7 14)))
@@ -1145,6 +1155,7 @@ drawHud ren app = do
         GoalBalloon _ -> V4 255 120 160 255
         GoalCookie _ -> V4 210 160 90 255
         GoalCake _ -> V4 255 140 180 255
+        GoalSafe _ -> V4 200 170 50 255
         GoalUfo _ -> V4 180 120 255 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
@@ -1187,6 +1198,12 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 12 8)))
       rendererDrawColor ren $= V4 255 80 120 255
       fillRect ren (Just (Rectangle (P (V2 208 36)) (V2 4 4)))
+    GoalSafe _ -> do
+      -- Brass vault door swatch
+      rendererDrawColor ren $= V4 200 170 50 255
+      fillRect ren (Just (Rectangle (P (V2 202 40)) (V2 16 18)))
+      rendererDrawColor ren $= V4 80 80 90 255
+      fillRect ren (Just (Rectangle (P (V2 208 46)) (V2 6 6)))
     GoalUfo _ -> do
       rendererDrawColor ren $= V4 180 120 255 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
@@ -1342,6 +1359,7 @@ drawLevelMap ren app
               GoalBalloon _ -> V4 255 120 160 255
               GoalCookie _ -> V4 210 160 90 255
               GoalCake _ -> V4 255 140 180 255
+              GoalSafe _ -> V4 200 170 50 255
               GoalUfo _ -> V4 180 120 255 255
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
@@ -1675,6 +1693,59 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Safe layers -> do
+    -- Vault / safe (保险箱): dark steel door + gold dial; distinct from Chest
+    let gap = 3 :: CInt
+        (cr, cg, cb) = if flashing then (220, 200, 120) else (70, 75, 85)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    rendererDrawColor ren $= V4 200 170 50 255
+    drawRect ren (Just (Rectangle (P (V2 (x + gap + 2) (y + gap + 2))) (V2 (cellPx - 2 * gap - 4) (cellPx - 2 * gap - 4))))
+    -- Dial
+    rendererDrawColor ren $= V4 220 190 60 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 8) (y + cellPx `div` 2 - 8))) (V2 16 16)))
+    rendererDrawColor ren $= V4 40 40 50 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + cellPx `div` 2 - 3))) (V2 6 6)))
+    rendererDrawColor ren $= V4 255 230 120 255
+    forM_ [0 .. min 3 layers - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+              (V2 7 5)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Flip front back -> do
+    -- Dual-face gem (双面块): front color body + back color corner triangle
+    let gap = 4 :: CInt
+        (fr, fg, fb) = colorRGB front
+        (br, bg, bb) = colorRGB back
+        (cr, cg, cb) = if flashing then (255, 255, 255) else (fr, fg, fb)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    -- Back-face wedge (top-right)
+    rendererDrawColor ren $= V4 br bg bb 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2) (y + gap))) (V2 (cellPx `div` 2 - gap) (cellPx `div` 2 - gap))))
+    rendererDrawColor ren $= V4 255 255 255 200
+    drawRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    -- Split line
+    rendererDrawColor ren $= V4 30 30 40 220
+    drawLine ren (P (V2 (x + gap) (y + cellPx - gap))) (P (V2 (x + cellPx - gap) (y + gap)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Countdown col turns -> do
     let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -1797,6 +1868,29 @@ drawGemAt ren x y cell flashing = case cell of
         drawLine ren (P (V2 (x + 14) (y + 14))) (P (V2 (x + cellPx - 14) (y + cellPx - 14)))
         drawLine ren (P (V2 (x + cellPx - 14) (y + 14))) (P (V2 (x + 14) (y + cellPx - 14)))
         rendererDrawColor ren $= V4 220 240 255 255
+        forM_ [0 .. min 3 layers - 1] $ \i ->
+          fillRect
+            ren
+            (Just
+               (Rectangle
+                  (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+                  (V2 7 5)))
+      Just (Curtain layers) -> do
+        -- Curtain / roller shade (窗帘): vertical fabric stripes; ≠ soft Fog clouds
+        rendererDrawColor ren $= V4 160 50 90 200
+        fillRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
+        rendererDrawColor ren $= V4 200 80 120 220
+        forM_ [0 .. 3] $ \i ->
+          fillRect
+            ren
+            (Just
+               (Rectangle
+                  (P (V2 (x + 8 + fromIntegral i * 10) (y + 6)))
+                  (V2 5 (cellPx - 14))))
+        -- Rod
+        rendererDrawColor ren $= V4 220 180 100 255
+        fillRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) 5)))
+        rendererDrawColor ren $= V4 255 220 180 255
         forM_ [0 .. min 3 layers - 1] $ \i ->
           fillRect
             ren

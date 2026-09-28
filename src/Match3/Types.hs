@@ -24,9 +24,20 @@ module Match3.Types
   , hasFreeze
   , freezeLayers
   , mkFreezeGem
+  , hasCurtain
+  , curtainLayers
+  , mkCurtainGem
   , mkSnail
   , isSnail
   , snailDir
+  , mkSafe
+  , mkSafeLayers
+  , safeLayers
+  , isSafe
+  , mkFlip
+  , isFlip
+  , flipFront
+  , flipBack
   , clearOverlay
   , setOverlay
   , mkStone
@@ -95,13 +106,14 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力 / 迷雾 / 锁链 / 火箭冰冻).
+-- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力 / 迷雾 / 锁链 / 火箭冰冻 / 窗帘).
 -- Grass: clears on match. Vine: spreads after move. Choco: adjacent-clear + spreads.
 -- Fog n: layers; adjacent clears peel one layer; fogged gems do not match until clear.
 -- Chain n: iron chains (锁链); adjacent clears peel; chained gems cannot swap or match.
 -- Freeze n: rocket freeze (火箭冰冻); blocks swap only (NOT match); adjacent clears peel.
+-- Curtain n: curtain / roller shade (窗帘); adjacent clears peel; curtained gems do not match.
 -- Distinct from Ice (gem ice Int): Ice chips when the gem itself matches.
-data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int | Freeze Int
+data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int | Freeze Int | Curtain Int
   deriving (Eq, Ord, Show, Generic)
 
 -- | Board cell: gem (optional ice + overlay), stone, chest, honey, cake, balloon, cookie, magic hat, snail, or countdown.
@@ -114,7 +126,7 @@ data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int | Freeze Int
 -- Countdown c n = colored timer bomb; matches as color c.
 -- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
-  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine|Choco|Freeze|…)
+  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine|Choco|Freeze|Curtain|…)
   | Stone Int
   | Chest Int   -- treasure chest (宝箱) layers; adjacent clears chip
   | Honey Int   -- honey jar (蜂蜜罐) layers; adjacent clears chip
@@ -124,6 +136,8 @@ data CellContents
   | MagicHat      -- magic hat (魔法帽): adjacent clear swaps/recolors neighbor gem colors
   | Maker Color Int  -- juice maker (果汁机): needs N same-color adjacent clears; produces Bomb
   | Snail Int Int    -- snail (蜗牛): direction (dr, dc); crawls after each move
+  | Safe Int      -- vault / safe (保险箱): adjacent clears chip; opens into Cookie
+  | Flip Color Color  -- dual-face gem (双面块): matches as front; hit flips to back as Normal gem
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -161,6 +175,10 @@ mkChainGem c n = Gem c Normal 0 (Just (Chain (max 1 n)))
 mkFreezeGem :: Color -> Int -> Cell
 mkFreezeGem c n = Gem c Normal 0 (Just (Freeze (max 1 n)))
 
+-- | Gem behind a curtain / roller shade (窗帘): adjacent clears peel; no match until clear.
+mkCurtainGem :: Color -> Int -> Cell
+mkCurtainGem c n = Gem c Normal 0 (Just (Curtain (max 1 n)))
+
 -- | Snail facing (dr, dc); typically (0,1) right or (1,0) down.
 mkSnail :: Int -> Int -> Cell
 mkSnail dr dc =
@@ -187,6 +205,8 @@ iceLayers (Cake _) = 0
 iceLayers MagicHat = 0
 iceLayers (Maker _ _) = 0
 iceLayers (Snail _ _) = 0
+iceLayers (Safe _) = 0
+iceLayers (Flip _ _) = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -230,6 +250,16 @@ hasFreeze c = case cellOverlay c of
 freezeLayers :: Cell -> Int
 freezeLayers c = case cellOverlay c of
   Just (Freeze n) -> n
+  _ -> 0
+
+hasCurtain :: Cell -> Bool
+hasCurtain c = case cellOverlay c of
+  Just (Curtain _) -> True
+  _ -> False
+
+curtainLayers :: Cell -> Int
+curtainLayers c = case cellOverlay c of
+  Just (Curtain n) -> n
   _ -> 0
 
 -- | Strip overlay, keep gem/ice.
@@ -352,6 +382,37 @@ isMaker :: Cell -> Bool
 isMaker (Maker _ _) = True
 isMaker _ = False
 
+-- | Single-layer vault / safe (保险箱). Opens into a Cookie.
+mkSafe :: Cell
+mkSafe = Safe 1
+
+mkSafeLayers :: Int -> Cell
+mkSafeLayers n = Safe (max 1 n)
+
+safeLayers :: Cell -> Int
+safeLayers (Safe n) = n
+safeLayers _ = 0
+
+isSafe :: Cell -> Bool
+isSafe (Safe _) = True
+isSafe _ = False
+
+-- | Dual-face gem (双面块): matches as front color; a clear hit flips to Normal gem of back.
+mkFlip :: Color -> Color -> Cell
+mkFlip front back = Flip front back
+
+isFlip :: Cell -> Bool
+isFlip (Flip _ _) = True
+isFlip _ = False
+
+flipFront :: Cell -> Color
+flipFront (Flip f _) = f
+flipFront _ = error "flipFront: not a Flip"
+
+flipBack :: Cell -> Color
+flipBack (Flip _ b) = b
+flipBack _ = error "flipBack: not a Flip"
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -377,6 +438,8 @@ isGem (Cake _) = False
 isGem MagicHat = False
 isGem (Maker _ _) = False
 isGem (Snail _ _) = False
+isGem (Safe _) = False
+isGem (Flip _ _) = True
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -391,6 +454,8 @@ cellColor (Cake _) = error "cellColor: Cake has no color"
 cellColor MagicHat = error "cellColor: MagicHat has no color"
 cellColor (Maker _ _) = error "cellColor: Maker has no color (use makerColor)"
 cellColor (Snail _ _) = error "cellColor: Snail has no color"
+cellColor (Safe _) = error "cellColor: Safe has no color"
+cellColor (Flip f _) = f
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -405,6 +470,8 @@ cellKind (Cake _) = error "cellKind: Cake has no kind"
 cellKind MagicHat = error "cellKind: MagicHat has no kind"
 cellKind (Maker _ _) = error "cellKind: Maker has no kind"
 cellKind (Snail _ _) = error "cellKind: Snail has no kind"
+cellKind (Safe _) = error "cellKind: Safe has no kind"
+cellKind (Flip _ _) = Normal
 
 numColors :: Int
 numColors = 5
@@ -442,6 +509,7 @@ data LevelGoal
   | GoalBalloon Int                    -- pop N balloons (气球)
   | GoalCookie Int                     -- collect N biscuits at bottom (饼干)
   | GoalCake Int                       -- clear N cake layers fully (蛋糕)
+  | GoalSafe Int                       -- open N vaults / safes (保险箱)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   deriving (Eq, Show, Generic)
 
@@ -457,21 +525,23 @@ goalMet (GoalHoney _) _ _ = False
 goalMet (GoalBalloon _) _ _ = False
 goalMet (GoalCookie _) _ _ = False
 goalMet (GoalCake _) _ _ = False
+goalMet (GoalSafe _) _ _ = False
 goalMet (GoalUfo _) _ _ = False
 
--- | Full goal check with color bag + stones/UFO/chests/honey/balloon/cookie/cake counters.
-goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
-goalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ _ = score >= t
-goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ _ = collected >= n
-goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ =
+-- | Full goal check: bag + stones/UFO/chests/honey/balloon/cookie/cake/safe counters.
+goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
+goalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ _ _ = score >= t
+goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
+goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ _ =
   all (\(col, n) -> lookupCount bag col >= n) reqs
-goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ _ = stones >= n
-goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ _ = ufos >= n
-goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ _ = chests >= n
-goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ _ = honey >= n
-goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ _ = balloons >= n
-goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ = cookies >= n
-goalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes = cakes >= n
+goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ _ _ = stones >= n
+goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ _ _ = ufos >= n
+goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ _ _ = chests >= n
+goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ _ _ = honey >= n
+goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ _ _ = balloons >= n
+goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ _ = cookies >= n
+goalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes _ = cakes >= n
+goalMetEx (GoalSafe n) _ _ _ _ _ _ _ _ _ _ safes = safes >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -487,20 +557,22 @@ goalProgress (GoalHoney _) _ collected = collected
 goalProgress (GoalBalloon _) _ collected = collected
 goalProgress (GoalCookie _) _ collected = collected
 goalProgress (GoalCake _) _ collected = collected
+goalProgress (GoalSafe _) _ collected = collected
 goalProgress (GoalUfo _) _ collected = collected
 
-goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
-goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ = score
-goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ _ = collected
-goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ =
+goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
+goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ _ = score
+goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ _ _ = collected
+goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ _ =
   sum [min n (lookupCount bag c) | (c, n) <- reqs]
-goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ _ = stones
-goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ _ = ufos
-goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ _ = chests
-goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ _ = honey
-goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ _ = balloons
-goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ = cookies
-goalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes = cakes
+goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ _ _ = stones
+goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ _ _ = ufos
+goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ _ _ = chests
+goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ _ _ = honey
+goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ _ _ = balloons
+goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ _ = cookies
+goalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes _ = cakes
+goalProgressEx (GoalSafe _) _ _ _ _ _ _ _ _ _ _ safes = safes
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -513,6 +585,7 @@ goalTarget (GoalHoney n) = n
 goalTarget (GoalBalloon n) = n
 goalTarget (GoalCookie n) = n
 goalTarget (GoalCake n) = n
+goalTarget (GoalSafe n) = n
 goalTarget (GoalUfo n) = n
 
 data GameConfig = GameConfig
@@ -530,7 +603,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -561,8 +634,10 @@ allLevels =
   , Level 25 "锁链"   22 (GoalScore 900)
   , Level 26 "果汁"   24 (GoalCollect C1 18)
   , Level 27 "终章"   16 (GoalScore 1500)
-  , Level 28 "蜗牛"   22 (GoalScore 850)
-  , Level 29 "冰冻"   22 (GoalCollect C2 16)
+  , Level 28 "蜗牛"   20 (GoalScore 850)
+  , Level 29 "冰冻"   20 (GoalCollect C2 16)
+  , Level 30 "窗帘"   22 (GoalCollect C1 16)
+  , Level 31 "金库"   22 (GoalSafe 5)
   ]
 
 levelConfig :: Level -> GameConfig

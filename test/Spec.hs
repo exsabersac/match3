@@ -110,6 +110,15 @@ tests =
     , testCase "freeze_blocks_swap" freeze_blocks_swap
     , testCase "freeze_cleared_by_adjacent" freeze_cleared_by_adjacent
     , testCase "freeze_layer_decrement" freeze_layer_decrement
+    , testCase "curtain_blocks_match" curtain_blocks_match
+    , testCase "curtain_cleared_by_adjacent" curtain_cleared_by_adjacent
+    , testCase "curtain_layer_decrement" curtain_layer_decrement
+    , testCase "safe_blocks_swap" safe_blocks_swap
+    , testCase "safe_opens_to_cookie" safe_opens_to_cookie
+    , testCase "safe_layer_decrement" safe_layer_decrement
+    , testCase "goal_safe_counts" goal_safe_counts
+    , testCase "flip_matches_front" flip_matches_front
+    , testCase "flip_becomes_back_on_clear" flip_becomes_back_on_clear
     , testCase "shuffle_preserves_decor" shuffle_preserves_decor
     , testCase "daily_ufo_goal_spawns_saucer" daily_ufo_goal_spawns_saucer
     ]
@@ -901,25 +910,25 @@ goal_collect_multi_color = do
   case out of
     LevelClear _ _ ->
       assertBool "if cleared, both quotas met" $
-        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1) (gsChestsCleared gs1) (gsHoneyCleared gs1) (gsBalloonsPopped gs1) (gsCookiesCollected gs1) (gsCakesCleared gs1)
+        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1) (gsChestsCleared gs1) (gsHoneyCleared gs1) (gsBalloonsPopped gs1) (gsCookiesCollected gs1) (gsCakesCleared gs1) (gsSafesOpened gs1)
     MoveApplied _ ->
       assertBool "multi goal not met with only C1" $
-        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0 0 0 0 0 0)
+        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0 0 0 0 0 0 0)
           || lookupCount (gsColorBag gs1) C2 >= 1
     _ -> pure ()
   -- Direct unit: goalMetEx logic
   assertBool "both met"
-    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0 0 0 0 0 0 0)
+    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0 0 0 0 0 0 0 0)
   assertBool "missing color"
-    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0 0 0 0 0 0 0))
+    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0 0 0 0 0 0 0 0))
 
 -- | GoalClearStone counts fully destroyed stones toward the goal.
 goal_clear_stone_counts :: Assertion
 goal_clear_stone_counts = do
   assertBool "0 stones unmet"
-    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0 0 0 0 0 0 0))
+    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0 0 0 0 0 0 0 0))
   assertBool "2 stones met"
-    (goalMetEx (GoalClearStone 2) 0 0 [] 2 0 0 0 0 0 0)
+    (goalMetEx (GoalClearStone 2) 0 0 [] 2 0 0 0 0 0 0 0)
   assertEqual "goal target" (8 :: Int) (goalTarget (GoalClearStone 8))
   let cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
       boardN =
@@ -1434,6 +1443,7 @@ lose_hint_by_goal = do
   assertBool "balloon hint" (not (null (loseHint (GoalBalloon 6))))
   assertBool "cookie hint" (not (null (loseHint (GoalCookie 6))))
   assertBool "cake hint" (not (null (loseHint (GoalCake 6))))
+  assertBool "safe hint" (not (null (loseHint (GoalSafe 5))))
   assertBool "ufo hint" (not (null (loseHint (GoalUfo 10))))
 
 --------------------------------------------------------------------------------
@@ -1736,9 +1746,9 @@ chest_layer_decrement = do
 
 goal_chest_counts :: Assertion
 goal_chest_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalChest 2) 0 0 [] 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalChest 2) 0 0 [] 0 0 2 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalChest 5) 0 0 [] 0 0 2 0 0 0 0)
+  assertBool "unmet" (not (goalMetEx (GoalChest 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalChest 2) 0 0 [] 0 0 2 0 0 0 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalChest 5) 0 0 [] 0 0 2 0 0 0 0 0)
   assertEqual "target" (6 :: Int) (goalTarget (GoalChest 6))
   assertBool
     "campaign has GoalChest"
@@ -1810,9 +1820,9 @@ ufo_moves_each_cascade = do
 -- | GoalUfo progress increments with UFO absorbs.
 ufo_goal_counts :: Assertion
 ufo_goal_counts = do
-  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0 0 0 0 0 0))
-  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2 0 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2 0 0 0 0 0)
+  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2 0 0 0 0 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2 0 0 0 0 0 0)
   assertEqual "target" (5 :: Int) (goalTarget (GoalUfo 5))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       b1 = setCell b0 (3, 3) (mkGem C5)
@@ -1851,7 +1861,8 @@ ufo_goal_counts = do
        (gsHoneyCleared gsSim)
        (gsBalloonsPopped gsSim)
        (gsCookiesCollected gsSim)
-       (gsCakesCleared gsSim))
+       (gsCakesCleared gsSim)
+       (gsSafesOpened gsSim))
   -- Level table includes GoalUfo stages
   assertBool
     "campaign has GoalUfo"
@@ -1915,9 +1926,9 @@ honey_layer_decrement = do
 
 goal_honey_counts :: Assertion
 goal_honey_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 2 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalHoney 5) 0 0 [] 0 0 0 2 0 0 0)
+  assertBool "unmet" (not (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 2 0 0 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalHoney 5) 0 0 [] 0 0 0 2 0 0 0 0)
   assertEqual "target" (6 :: Int) (goalTarget (GoalHoney 6))
   assertBool
     "campaign has GoalHoney"
@@ -1986,9 +1997,9 @@ balloon_ignores_other_color = do
 
 goal_balloon_counts :: Assertion
 goal_balloon_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalBalloon 2) 0 0 [] 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalBalloon 2) 0 0 [] 0 0 0 0 2 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalBalloon 5) 0 0 [] 0 0 0 0 2 0 0)
+  assertBool "unmet" (not (goalMetEx (GoalBalloon 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalBalloon 2) 0 0 [] 0 0 0 0 2 0 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalBalloon 5) 0 0 [] 0 0 0 0 2 0 0 0)
   assertEqual "target" (6 :: Int) (goalTarget (GoalBalloon 6))
   assertBool
     "campaign has GoalBalloon"
@@ -2104,9 +2115,9 @@ cookie_collected_at_bottom = do
 
 goal_cookie_counts :: Assertion
 goal_cookie_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalCookie 2) 0 0 [] 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalCookie 2) 0 0 [] 0 0 0 0 0 2 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalCookie 5) 0 0 [] 0 0 0 0 0 2 0)
+  assertBool "unmet" (not (goalMetEx (GoalCookie 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalCookie 2) 0 0 [] 0 0 0 0 0 2 0 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalCookie 5) 0 0 [] 0 0 0 0 0 2 0 0)
   assertEqual "target" (6 :: Int) (goalTarget (GoalCookie 6))
   assertBool
     "campaign has GoalCookie"
@@ -2249,9 +2260,9 @@ cake_clears_at_zero = do
 
 goal_cake_counts :: Assertion
 goal_cake_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalCake 2) 0 0 [] 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalCake 2) 0 0 [] 0 0 0 0 0 0 2)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalCake 5) 0 0 [] 0 0 0 0 0 0 2)
+  assertBool "unmet" (not (goalMetEx (GoalCake 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalCake 2) 0 0 [] 0 0 0 0 0 0 2 0)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalCake 5) 0 0 [] 0 0 0 0 0 0 2 0)
   assertEqual "target" (6 :: Int) (goalTarget (GoalCake 6))
   assertBool
     "campaign has GoalCake"
@@ -2433,7 +2444,7 @@ chain_layer_decrement = do
           , hasChain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
-  assertEqual "campaign levels" (30 :: Int) (length allLevels)
+  assertEqual "campaign levels" (32 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Maker / 果汁机 (same-color adjacent charge -> Bomb)
@@ -2708,4 +2719,230 @@ freeze_layer_decrement = do
           , hasFreeze (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor freeze >= 8, got " ++ show nFreeze) (nFreeze >= 8)
-  assertEqual "campaign levels" (30 :: Int) (length allLevels)
+  assertEqual "campaign levels" (32 :: Int) (length allLevels)
+
+--------------------------------------------------------------------------------
+-- Curtain / 窗帘 (blocks match; adjacent peel; ≠ Fog soft cloud)
+--------------------------------------------------------------------------------
+
+curtain_blocks_match :: Assertion
+curtain_blocks_match = do
+  let boardM =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkCurtainGem C1 1))
+          (3, 2)
+          (mkGem C1)
+  assertBool "curtain breaks match" (null (findMatches boardM))
+  assertBool "has curtain" (hasCurtain (getCell boardM (3, 1)))
+
+curtain_cleared_by_adjacent :: Assertion
+curtain_cleared_by_adjacent = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkCurtainGem C2 1)
+  assertBool "curtain above match" (hasCurtain (getCell board0 (2, 1)))
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentCurtain board0 ms
+  assertEqual "fully opened" (1 :: Int) cleared
+  assertBool "curtain gone" (not (hasCurtain (getCell b1 (2, 1))))
+  assertBool "gem remains" (isGem (getCell b1 (2, 1)))
+  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
+        runCascadeScored Nothing (mkStdGen 1) board0
+  assertBool "curtain cleared in cascade" (not (hasCurtain (getCell board1 (2, 1))))
+
+curtain_layer_decrement :: Assertion
+curtain_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkCurtainGem C3 2)
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentCurtain board0 ms
+  assertEqual "no full clear yet" (0 :: Int) cleared
+  assertEqual "layers 2->1" (1 :: Int) (curtainLayers (getCell b1 (4, 1)))
+  let (b2, cleared2) = chipAdjacentCurtain b1 ms
+  assertEqual "now clear" (1 :: Int) cleared2
+  assertBool "curtain gone" (not (hasCurtain (getCell b2 (4, 1))))
+  let gs = newGameAtLevel 30 (levelConfig (allLevels !! 30)) 42
+      nCurt =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , hasCurtain (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor curtain >= 8, got " ++ show nCurt) (nCurt >= 8)
+  assertEqual "campaign levels" (32 :: Int) (length allLevels)
+
+--------------------------------------------------------------------------------
+-- Safe / 保险箱 (layered vault; opens into Cookie; GoalSafe)
+--------------------------------------------------------------------------------
+
+safe_blocks_swap :: Assertion
+safe_blocks_swap = do
+  let board = setCell stableBoard (3, 3) mkSafe
+  assertBool "is safe" (isSafe (getCell board (3, 3)))
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  let gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsScore = 40
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  out @?= NoMatch
+  gsBoard gs1 @?= gsBoard gs0
+
+safe_opens_to_cookie :: Assertion
+safe_opens_to_cookie = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          mkSafe
+  assertBool "safe present" (isSafe (getCell board0 (2, 1)))
+  let ms = findMatches board0
+      (b1, opened) = chipAdjacentSafes board0 ms
+  assertEqual "opened" (1 :: Int) (length opened)
+  assertBool "became cookie" (isCookie (getCell b1 (2, 1)))
+  assertBool "not still safe" (not (isSafe (getCell b1 (2, 1))))
+  -- Cascade path: open + cookie may fall/collect
+  let gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = board0
+          , gsScore = 0
+          , gsMoves = 20
+          , gsGoal = GoalSafe 1
+          , gsSafesOpened = 0
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, out) = trySwap (3, 1) (3, 2) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool "goal progress" (gsSafesOpened gs1 >= 1)
+  assertBool "safe gone from board" $
+    not (any (\r -> any (\c -> isSafe (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
+
+safe_layer_decrement :: Assertion
+safe_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkSafeLayers 2)
+  let ms = findMatches board0
+      (b1, opened) = chipAdjacentSafes board0 ms
+  assertEqual "not open yet" (0 :: Int) (length opened)
+  assertEqual "layers 2->1" (1 :: Int) (safeLayers (getCell b1 (4, 1)))
+  let (b2, opened2) = chipAdjacentSafes b1 ms
+  assertEqual "opened" (1 :: Int) (length opened2)
+  assertBool "cookie" (isCookie (getCell b2 (4, 1)))
+
+goal_safe_counts :: Assertion
+goal_safe_counts = do
+  assertBool "unmet" (not (goalMetEx (GoalSafe 2) 0 0 [] 0 0 0 0 0 0 0 0))
+  assertBool "met" (goalMetEx (GoalSafe 2) 0 0 [] 0 0 0 0 0 0 0 2)
+  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalSafe 5) 0 0 [] 0 0 0 0 0 0 0 2)
+  assertEqual "target" (5 :: Int) (goalTarget (GoalSafe 5))
+  assertBool
+    "campaign has GoalSafe"
+    (any (\g -> case g of GoalSafe _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = newGameAtLevel 31 (levelConfig (allLevels !! 31)) 42
+      nSafes =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isSafe (getCell (gsBoard gs) (r, c))
+          ]
+      nFlip =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isFlip (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor safes >= 5, got " ++ show nSafes) (nSafes >= 5)
+  assertBool ("decor flips >= 4, got " ++ show nFlip) (nFlip >= 4)
+
+--------------------------------------------------------------------------------
+-- Flip / 双面块 (matches as front; clear hit flips to back Normal gem)
+--------------------------------------------------------------------------------
+
+flip_matches_front :: Assertion
+flip_matches_front = do
+  let boardM =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkFlip C1 C3))
+          (3, 2)
+          (mkGem C1)
+  assertBool "flip participates" (not (null (findMatches boardM)))
+  assertBool "is flip" (isFlip (getCell boardM (3, 1)))
+  assertEqual "front" C1 (flipFront (getCell boardM (3, 1)))
+  assertEqual "back" C3 (flipBack (getCell boardM (3, 1)))
+  -- Can swap like a gem
+  assertBool "not blocked" (not (swapBlockedByStone boardM (3, 1) (3, 3)))
+
+flip_becomes_back_on_clear :: Assertion
+flip_becomes_back_on_clear = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkFlip C1 C4))
+          (3, 2)
+          (mkGem C1)
+  assertBool "has match" (not (null (findMatches board0)))
+  let ms = findMatches board0
+      (b1, iceFree) = chipIceOnClear board0 ms
+      cellAfter = getCell b1 (3, 1)
+  assertBool "became gem" (isGem cellAfter)
+  assertBool "not still flip" (not (isFlip cellAfter))
+  assertEqual "back color" C4 (cellColor cellAfter)
+  -- Flip stays on board (not listed as clearable hole)
+  assertBool "flip not cleared away" ((3, 1) `notElem` iceFree)
+  -- Full cascade also leaves a gem (possibly later matched as C4)
+  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
+        runCascadeScored Nothing (mkStdGen 2) board0
+  assertBool "no flip remains at seed" (not (isFlip (getCell board1 (3, 1))))

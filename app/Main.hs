@@ -497,7 +497,7 @@ handleEvent ref window ev = case eventPayload ev of
                     { appPaused = paused'
                     , appMsg =
                         if paused'
-                          then "Paused — keys: H U S R N P Esc"
+                          then "Paused — keys: H 1 2 3 U S D M R N P Esc"
                           else helpKeysMsg
                     , appHelpFrames =
                         if paused' then appHelpFrames appGate else 240
@@ -1198,7 +1198,7 @@ drawPauseHelp ren app
       rendererDrawColor ren $= V4 8 8 16 200
       fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW winH)))
       let panelY = hudH + 40
-          panelH = 370 :: CInt
+          panelH = 430 :: CInt
       rendererDrawColor ren $= V4 32 32 48 245
       fillRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
       rendererDrawColor ren $= V4 255 200 80 255
@@ -1211,15 +1211,17 @@ drawPauseHelp ren app
             [ (0, 'H', "HINT")
             , (1, '1', "HAMMER")
             , (2, '2', "SWAP")
-            , (3, 'U', "UNDO")
-            , (4, 'S', "SHUFFLE")
-            , (5, 'M', "MAP")
-            , (6, 'R', "RETRY")
-            , (7, 'N', "NEXT")
-            , (8, 'P', "PLAY")
+            , (3, '3', "CROSS")
+            , (4, 'U', "UNDO")
+            , (5, 'S', "SHUFFLE")
+            , (6, 'D', "DAILY")
+            , (7, 'M', "MAP")
+            , (8, 'R', "RETRY")
+            , (9, 'N', "NEXT")
+            , (10, 'P', "PLAY")
             ]
       forM_ rows $ \(i, ch, label) -> do
-        let yy = panelY + 78 + fromIntegral i * 30
+        let yy = panelY + 72 + fromIntegral i * 28
         drawKeyChip ren 80 yy ch (V4 255 220 120 255)
         drawBannerWord ren 120 yy 2 (V4 210 210 230 255) label
 
@@ -1240,8 +1242,8 @@ drawHud ren app = do
           if i == gsLevel gs
             then V4 255 200 80 255
             else if i < gsLevel gs then V4 80 180 120 255 else V4 60 60 80 255
-        -- 32 levels fit in HUD: 8px stride
-        xDot = 60 + fromIntegral i * 8
+        -- 38 levels fit in HUD: 7px stride
+        xDot = 60 + fromIntegral i * 7
     rendererDrawColor ren $= col
     fillRect ren (Just (Rectangle (P (V2 xDot 10)) (V2 7 14)))
 
@@ -1426,7 +1428,7 @@ chapterLabel _ = ""
 -- | Extra vertical gap before chapter-start nodes.
 chapterGapBefore :: Int -> CInt
 chapterGapBefore i
-  | i `elem` drop 1 chapterStarts = 28
+  | i `elem` drop 1 chapterStarts = 14
   | otherwise = 0
 
 -- | Simplified campaign map (选关): zig-zag nodes + chapter gaps.
@@ -1437,13 +1439,14 @@ mapNodePos i =
       col = i `mod` cols
       col' = if even row then col else (cols - 1 - col)
       -- Accumulate chapter gaps for rows that contain a chapter start
+      -- Compact spacing so all 38 nodes + CH1–CH7 labels fit in winH.
       gapY =
         sum
           [ chapterGapBefore j
           | j <- [0 .. i]
           ]
       x = 40 + fromIntegral col' * 72
-      y = hudH + 44 + fromIntegral row * 78 + gapY
+      y = hudH + 36 + fromIntegral row * 52 + gapY
   in (x, y)
 
 mapHitTest :: Int32 -> Int32 -> Maybe Int

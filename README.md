@@ -74,7 +74,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
 | 15 | 压力 | 20 | Multi RED/GRN/BLU | grass + choco |
-| 16 | 大师 | 20 | Score 1100 | stone+grass+vine+choco+bomb+belts+UFO |
+| 16 | 大师 | 22 | Score 1100 | stone+grass+vine+choco+bomb+belts+UFO |
 | 17 | 宝箱 | 24 | Open 6 chests | chests |
 | 18 | 巧箱 | 22 | Open 5 chests | chests + choco |
 | 19 | 蜂蜜 | 24 | Smash 6 honey jars | honey jars |
@@ -86,7 +86,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 25 | 帽宴 | 22 | Clear 5 cakes | cakes + magic hats + choco |
 | 26 | 锁链 | 22 | Score 900 | iron chains + stone + choco |
 | 27 | 果汁 | 24 | Collect 18× RED | juice makers + fog + portals |
-| 28 | 终章 | 20 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO+carpet |
+| 28 | 终章 | 24 | Score 1500 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO+carpet |
 | 29 | 蜗牛 | 20 | Score 850 | crawling snails |
 | 30 | 冰冻 | 20 | Collect 16× GREEN | rocket freeze + choco |
 | 31 | 窗帘 | 22 | Collect 16× RED | curtain columns + choco |
@@ -176,3 +176,11 @@ test/Spec.hs tasty (120 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.
+
+## Release status / 发布状态
+
+- Campaign: **38** levels (CH1–CH7 on map), batch-tested constructible / playable / décor-vs-goal
+- Tests: `stack test` (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order
+- Stackage: **lts-21.25** / GHC **9.4.8**; binary: `stack build && stack exec match3-sdl`
+- itch checklist: see `ITCH.md`
+

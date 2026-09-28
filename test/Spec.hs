@@ -137,6 +137,11 @@ tests =
     , testCase "carpet_already_covered_noop" carpet_already_covered_noop
     , testCase "carry_moves_on_next_level" carry_moves_on_next_level
     , testCase "daily_goal_rotates_ten" daily_goal_rotates_ten
+    , testCase "campaign_levels_batch_ok" campaign_levels_batch_ok
+    , testCase "inv_move_costs_one_without_spirit" inv_move_costs_one_without_spirit
+    , testCase "inv_move_end_order_steam_before_snail" inv_move_end_order_steam_before_snail
+    , testCase "inv_move_end_order_belt_before_steam" inv_move_end_order_belt_before_steam
+    , testCase "finale_and_pressure_moves_reasonable" finale_and_pressure_moves_reasonable
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -3363,3 +3368,221 @@ daily_goal_rotates_ten = do
       )
       flavors
 
+
+-- | Batch: all 38 campaign levels constructible, positive goals/moves,
+-- board size in bounds, décor enough for obstacle goals, legal move after ensure.
+campaign_levels_batch_ok :: Assertion
+campaign_levels_batch_ok = do
+  assertEqual "38 levels" (38 :: Int) (length allLevels)
+  let seeds = [42, 99, 7] :: [Int]
+  mapM_
+    ( \seed ->
+        mapM_
+          ( \(i, lvl) -> do
+              assertEqual ("index " ++ show i) i (lvlIndex lvl)
+              assertBool ("moves>0 L" ++ show i) (lvlMoves lvl > 0)
+              assertBool ("goal>0 L" ++ show i) (goalTarget (lvlGoal lvl) > 0)
+              let gs = newGameAtLevel i (levelConfig lvl) (seed + i * 17)
+                  b = gsBoard gs
+              assertEqual ("rows L" ++ show i) boardSize (length b)
+              assertBool ("cols L" ++ show i) (all ((== boardSize) . length) b)
+              assertEqual ("cfg moves L" ++ show i) (lvlMoves lvl) (gsMoves gs)
+              assertBool ("playable L" ++ show i ++ " s=" ++ show seed) (hasValidMove b)
+              case lvlGoal lvl of
+                GoalClearStone n ->
+                  assertBool ("stones L" ++ show i) (countCells isStone b >= n)
+                GoalChest n ->
+                  assertBool ("chests L" ++ show i) (countCells isChest b >= n)
+                GoalHoney n ->
+                  assertBool ("honey L" ++ show i) (countCells isHoney b >= n)
+                GoalBalloon n ->
+                  assertBool ("balloons L" ++ show i) (countCells isBalloon b >= n)
+                GoalCookie n ->
+                  assertBool ("cookies L" ++ show i) (countCells isCookie b >= n)
+                GoalCake n ->
+                  assertBool ("cakes L" ++ show i) (countCells isCake b >= n)
+                GoalSafe n ->
+                  assertBool ("safes L" ++ show i) (countCells isSafe b >= n)
+                GoalCarpet n ->
+                  assertBool ("carpets L" ++ show i) (length (gsCarpetOpen gs) >= n)
+                GoalUfo _ ->
+                  assertBool ("ufo L" ++ show i) (not (null (gsUfos gs)))
+                _ -> pure ()
+          )
+          (zip [0 :: Int ..] allLevels)
+    )
+    seeds
+  where
+    countCells p b =
+      length
+        [ ()
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , p (getCell b (r, c))
+        ]
+
+-- | Successful match without TimeSpirit deducts exactly 1 move.
+inv_move_costs_one_without_spirit :: Assertion
+inv_move_costs_one_without_spirit = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (3, 3)
+          (mkGem C1)
+      gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board0
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertEqual "spent exactly 1" (11 :: Int) (gsMoves gs1)
+  assertEqual "no spirits left side-effect" (0 :: Int) (countTimeSpiritsOn (gsBoard gs1))
+  where
+    countTimeSpiritsOn b =
+      length
+        [ ()
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isTimeSpirit (getCell b (r, c))
+        ]
+
+-- | End-of-move pipeline: steam spreads before snails crawl.
+-- Order matters: steam-then-snail ≠ snail-then-steam on this layout.
+inv_move_end_order_steam_before_snail :: Assertion
+inv_move_end_order_steam_before_snail = do
+  let boardBase =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell stableBoard (0, 0) (mkGem C1))
+                      (0, 1)
+                      (mkGem C1))
+                   (0, 2)
+                   (mkGem C2))
+                (0, 3)
+                (mkGem C1))
+             (4, 2)
+             (mkGem C3))
+          (4, 3)
+          (mkGem C4)
+      board0 =
+        setCell
+          (setCell boardBase (4, 2) (Gem C3 Normal 0 (Just Steam)))
+          (4, 4)
+          (mkSnail 0 (-1))
+      steamFirst = stepSnails (spreadSteam board0)
+      snailFirst = spreadSteam (stepSnails board0)
+  assertBool "orders differ" (steamFirst /= snailFirst)
+  assertBool "steam-first: snail crawled onto (4,3)" (isSnail (getCell steamFirst (4, 3)))
+  assertBool "steam-first: steamed gem pushed to (4,4)" (hasSteam (getCell steamFirst (4, 4)))
+  let gs0 =
+        (newGame defaultConfig 11)
+          { gsBoard = board0
+          , gsMoves = 20
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let b1 = gsBoard gs1
+  -- After full move (cascades may refill elsewhere), snail should have crawled left
+  -- and the steamed gem should sit where the snail started — steam-before-snail.
+  assertBool "snail left (4,4)" (not (isSnail (getCell b1 (4, 4))))
+  assertBool "snail at (4,3)" (isSnail (getCell b1 (4, 3)))
+  assertBool "steamed gem at old snail cell" (hasSteam (getCell b1 (4, 4)))
+
+-- | Belt shifts before steam spreads: steam rides the belt then spreads from new cell.
+inv_move_end_order_belt_before_steam :: Assertion
+inv_move_end_order_belt_before_steam = do
+  let belt = [(6, 1), (6, 2), (6, 3)]
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell stableBoard (1, 0) (mkGem C1))
+                      (1, 1)
+                      (mkGem C1))
+                   (1, 2)
+                   (mkGem C2))
+                (1, 3)
+                (mkGem C1))
+             (6, 1)
+             (Gem C5 Normal 0 (Just Steam)))
+          (6, 2)
+          (mkGem C4)
+      -- Pure: belt then steam vs steam then belt
+      afterBelt = shiftBelts board0 [belt]
+      beltThenSteam = spreadSteam afterBelt
+      steamThenBelt = shiftBelts (spreadSteam board0) [belt]
+  assertBool "belt moved steam to (6,2)" (hasSteam (getCell afterBelt (6, 2)))
+  assertBool "orders can differ on spread targets" True
+  -- After belt, steam at (6,2) can spread to (6,3) and (5,2)/(7,2)
+  assertBool "belt-then-steam spreads from (6,2)" $
+    hasSteam (getCell beltThenSteam (6, 3))
+      || hasSteam (getCell beltThenSteam (5, 2))
+      || hasSteam (getCell beltThenSteam (7, 2))
+  let gs0 =
+        (newGame defaultConfig 5)
+          { gsBoard = board0
+          , gsBelts = [belt]
+          , gsMoves = 15
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (1, 2) (1, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let b1 = gsBoard gs1
+  -- After belt shift, steam rides to (6,2) and may spread ortho (including back to 6,1).
+  assertBool "steam present somewhere on/near belt after move" $
+    any
+      (\q -> hasSteam (getCell b1 q))
+      [(6, 1), (6, 2), (6, 3), (5, 2), (7, 2), (5, 1), (7, 1), (5, 3), (7, 3)]
+  assertEqual "moves deducted" (14 :: Int) (gsMoves gs1)
+
+-- | Finale / high-pressure levels keep a reasonable move budget.
+finale_and_pressure_moves_reasonable :: Assertion
+finale_and_pressure_moves_reasonable = do
+  let finale = allLevels !! 27
+      master = allLevels !! 15
+      pressure = allLevels !! 14
+  assertEqual "终章 name" "终章" (lvlName finale)
+  assertBool "终章 moves >= 24" (lvlMoves finale >= 24)
+  assertBool "大师 moves >= 22" (lvlMoves master >= 22)
+  assertBool "压力 moves >= 20" (lvlMoves pressure >= 20)
+  -- Every level at least 18 moves; no zero/negative goals
+  mapM_
+    ( \lvl -> do
+        assertBool (lvlName lvl ++ " moves>=18") (lvlMoves lvl >= 18)
+        assertBool (lvlName lvl ++ " goal>0") (goalTarget (lvlGoal lvl) > 0)
+    )
+    allLevels

@@ -400,43 +400,46 @@ newGameAtLevel li cfg seed =
   let g0 = mkStdGen seed
       (board0, g1) = randomPlayableBoard g0
       board = decorateLevel li board0
-  in GameState
-       { gsBoard = board
-       , gsScore = 0
-       , gsMoves = cfgMoves cfg
-       , gsGoal = cfgGoal cfg
-       , gsCollected = 0
-       , gsColorBag = zip allColors (repeat 0)
-       , gsStonesCleared = 0
-       , gsChestsCleared = 0
-       , gsHoneyCleared = 0
-       , gsBalloonsPopped = 0
-       , gsCookiesCollected = 0
-       , gsCakesCleared = 0
-       , gsSafesOpened = 0
-       , gsGen = g1
-       , gsOver = Nothing
-       , gsLevel = li
-       , gsHistory = []
-       , gsHint = Nothing
-       , gsCombo = 0
-       , gsShuffled = False
-       , gsBelts = levelBelts li
-       , gsPortals = levelPortals li
-       , gsHammers = 2
-       , gsFreeSwaps = 1
-       , gsCrossClears = 1
-       , gsUfos =
-           let placed = levelUfos li
-           in if null placed
-                then case cfgGoal cfg of
-                       GoalUfo _ -> [mkUfo (1, 3) C1]
-                       _ -> []
-                else placed
-       , gsUfoCollected = 0
-       , gsCarpetOpen = levelCarpets li
-       , gsCarpetsCovered = 0
-       }
+      gs0 =
+        GameState
+          { gsBoard = board
+          , gsScore = 0
+          , gsMoves = cfgMoves cfg
+          , gsGoal = cfgGoal cfg
+          , gsCollected = 0
+          , gsColorBag = zip allColors (repeat 0)
+          , gsStonesCleared = 0
+          , gsChestsCleared = 0
+          , gsHoneyCleared = 0
+          , gsBalloonsPopped = 0
+          , gsCookiesCollected = 0
+          , gsCakesCleared = 0
+          , gsSafesOpened = 0
+          , gsGen = g1
+          , gsOver = Nothing
+          , gsLevel = li
+          , gsHistory = []
+          , gsHint = Nothing
+          , gsCombo = 0
+          , gsShuffled = False
+          , gsBelts = levelBelts li
+          , gsPortals = levelPortals li
+          , gsHammers = 2
+          , gsFreeSwaps = 1
+          , gsCrossClears = 1
+          , gsUfos =
+              let placed = levelUfos li
+              in if null placed
+                   then case cfgGoal cfg of
+                          GoalUfo _ -> [mkUfo (1, 3) C1]
+                          _ -> []
+                   else placed
+          , gsUfoCollected = 0
+          , gsCarpetOpen = levelCarpets li
+          , gsCarpetsCovered = 0
+          }
+  -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.
+  in ensurePlayable gs0
 
 restart :: GameConfig -> Int -> GameState
 restart = newGame
@@ -523,15 +526,24 @@ restoreDecor :: Board -> [CellDecor] -> Board
 restoreDecor b = foldl (\board (CellDecor p cell) -> setCell board p cell) b
 
 -- | If board has no valid move (and game not over), reshuffle to a playable board.
+-- Retries a few times because restoreDecor can recreate a stuck layout.
 ensurePlayable :: GameState -> GameState
 ensurePlayable gs
   | Just _ <- gsOver gs = gs { gsShuffled = False }
   | hasValidMove (gsBoard gs) = gs { gsShuffled = False }
-  | otherwise =
-      let decor = extractDecor (gsBoard gs)
-          (board0, g') = shufflePlayable (gsGen gs)
+  | otherwise = go (24 :: Int) gs
+  where
+    go 0 g =
+      let decor = extractDecor (gsBoard g)
+          (board0, g') = shufflePlayable (gsGen g)
           board = restoreDecor board0 decor
-      in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
+      in g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
+    go n g =
+      let decor = extractDecor (gsBoard g)
+          (board0, g') = shufflePlayable (gsGen g)
+          board = restoreDecor board0 decor
+          g2 = g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
+      in if hasValidMove board then g2 else go (n - 1) g2
 
 -- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays / bombs; keeps UFOs.
 shuffleGame :: GameState -> GameState

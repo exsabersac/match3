@@ -211,6 +211,7 @@ tests =
     , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
     , testCase "carpet_covers_on_cookie_vacate" carpet_covers_on_cookie_vacate
     , testCase "carpet_covers_on_safe_open" carpet_covers_on_safe_open
+    , testCase "carpet_covers_on_cookie_bottom_drain" carpet_covers_on_cookie_bottom_drain
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -3890,7 +3891,7 @@ portal_after_belt_match_teleports = do
   assertEqual "C5 teleported to A" (Just (mkGem C5)) ((ported !! 0) !! 2)
   assertEqual "B emptied by portal" Nothing ((ported !! 7) !! 2)
   -- Full settle: gravity may repack column, but B must not keep C5
-  let (settled, _) = settleBoardPortals portals mb
+  let (settled, _, _) = settleBoardPortals portals mb
   assertBool "B no longer holds C5 after settle" $
     case (settled !! 7) !! 2 of
       Just c -> not (isGem c && cellColor c == C5) || False
@@ -4161,7 +4162,7 @@ safe_bottom_cookie_collected = do
     case (mb !! 7) !! 1 of
       Just Cookie -> True
       _ -> False
-  let (settled, fallen) = settleBoardPortals [] mb
+  let (settled, fallen, _) = settleBoardPortals [] mb
   assertEqual "cookie drained" (1 :: Int) fallen
   assertBool "bottom no longer cookie" $
     case (settled !! 7) !! 1 of
@@ -4201,7 +4202,7 @@ cookie_bottom_portal_collects = do
       -- Cookie already on bottom portal A; exit B empty (buggy order teleports up)
       mb = setMB (setMB mb0 (bottom, 1) (Just Cookie)) (0, 6) Nothing
       portals = [((0, 6), (bottom, 1))]
-      (settled, fallen) = settleBoardPortals portals mb
+      (settled, fallen, _) = settleBoardPortals portals mb
       cookieLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -6893,3 +6894,77 @@ ufo_absorb_no_special_expand = do
     case getCell bL (2, 3) of
       Gem _ LineH _ _ -> False
       _ -> True
+
+--------------------------------------------------------------------------------
+-- Carpet × Cookie mid-settle bottom drain (GoalCarpet soft-lock fix)
+--------------------------------------------------------------------------------
+
+-- | Cookie that only lands on a bottom-row carpet mid-settle (belt delivery /
+-- gravity into drainBottomCookies) must cover that tile. before/after board
+-- compare misses intermediate occupancy; drain positions must seed coverCarpets.
+carpet_covers_on_cookie_bottom_drain :: Assertion
+carpet_covers_on_cookie_bottom_drain = do
+  let bottom = boardSize - 1
+      -- Unit: settle drains Cookie that fell onto bottom; sites include that cell
+      setMB b (r, c) v =
+        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+        where
+          row = b !! r
+      fill = Just (mkGem C5)
+      mb0 = replicate boardSize (replicate boardSize fill)
+      -- Hole under Cookie at (3,4) so gravity packs Cookie to bottom col 4
+      mb =
+        foldl
+          (\m r -> setMB m (r, 4) Nothing)
+          (setMB mb0 (3, 4) (Just Cookie))
+          [4 .. bottom]
+      (_, fallen, sites) = settleBoardPortals [] mb
+  assertEqual "one cookie drained" (1 :: Int) fallen
+  assertEqual "drain site is bottom carpet col" [(bottom, 4)] sites
+  -- Live: Cookie starts OFF the bottom so the match-cascade settle cannot
+  -- drain it early; belt then parks it on the carpet cell (not a clear-hole).
+  let belt = [(5, 4), (6, 4), (bottom, 4)]
+      board =
+        foldl
+          (\b (p, cell) -> setCell b p cell)
+          stableBoard
+          [ ((6, 4), Cookie)
+          , ((0, 0), mkGem C1)
+          , ((0, 1), mkGem C1)
+          , ((0, 2), mkGem C2)
+          , ((0, 3), mkGem C1)
+          ]
+  assertBool "pre stable" (not (hasAnyMatch board))
+  assertBool "cookie not already bottom" (not (isCookie (getCell board (bottom, 4))))
+  assertBool "belt parks cookie on bottom carpet" $
+    isCookie (getCell (shiftBelts board [belt]) (bottom, 4))
+  assertBool "belt alone forms no match" $
+    not (hasAnyMatch (shiftBelts board [belt]))
+  let gs0 =
+        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 3)
+          { gsBoard = board
+          , gsCarpetOpen = [(bottom, 4)]
+          , gsCarpetsCovered = 0
+          , gsOver = Nothing
+          , gsBelts = [belt]
+          , gsPortals = []
+          , gsUfos = []
+          , gsMoves = 20
+          , gsGoal = GoalCarpet 1
+          , gsCollected = 0
+          , gsCookiesCollected = 0
+          , gsLastCleared = []
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match swap"
+    InvalidSwap -> assertFailure "expected valid swap"
+    _ -> pure ()
+  assertBool ("cookie collected via belt drain, got " ++ show (gsCookiesCollected gs1)) (gsCookiesCollected gs1 >= 1)
+  assertBool "cookie not left on carpet" $
+    not (isCookie (getCell (gsBoard gs1) (bottom, 4)))
+  assertBool ("drain site in lastCleared, got " ++ show (gsLastCleared gs1)) $
+    (bottom, 4) `elem` gsLastCleared gs1
+  assertEqual "bottom carpet covered by drain" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
+  assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)

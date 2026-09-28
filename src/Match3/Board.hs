@@ -368,7 +368,10 @@ applyGravity mb = transposeM (map colGravity (transposeM mb))
 
 -- | Collect cookies that sit on the bottom row after gravity (开心消消乐饼干掉落收集).
 -- Removes them, re-applies gravity, repeats until no bottom-row cookies remain.
-drainBottomCookies :: MBoard -> (MBoard, Int)
+-- Returns drained bottom positions so GoalCarpet can cover tiles Cookie only
+-- occupied mid-settle (gravity/portal/belt → bottom → drain) — before/after
+-- board compare cannot see that intermediate occupancy.
+drainBottomCookies :: MBoard -> (MBoard, Int, [Pos])
 drainBottomCookies mb =
   let bottom = boardSize - 1
       cols =
@@ -378,9 +381,10 @@ drainBottomCookies mb =
             Just Cookie -> True
             _ -> False
         ]
+      sites = [(bottom, c) | c <- cols]
       n = length cols
   in if n == 0
-       then (mb, 0)
+       then (mb, 0, [])
        else
          let mb1 =
                foldl
@@ -388,8 +392,8 @@ drainBottomCookies mb =
                  mb
                  cols
              fallen = applyGravity mb1
-             (mb2, n2) = drainBottomCookies fallen
-         in (mb2, n + n2)
+             (mb2, n2, sites2) = drainBottomCookies fallen
+         in (mb2, n + n2, sites ++ sites2)
 
 -- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
 -- moves A -> B (and reverse). Used after gravity + bottom-cookie drain so clears can
@@ -416,14 +420,15 @@ applyPortalTeleports portals mb =
 -- | Gravity, drain bottom cookies, portal teleports (optional), gravity, drain again.
 -- Cookies that reach the bottom must collect before a portal can snatch them
 -- (触底优先于传送门); cookies that teleport onto a bottom exit still drain after.
-settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int)
+-- Third component: bottom cells cookies drained from (Carpet / particle seeds).
+settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
 settleBoardPortals portals mb =
   let fallen = applyGravity mb
-      (drained1, n1) = drainBottomCookies fallen
+      (drained1, n1, sites1) = drainBottomCookies fallen
       ported = applyPortalTeleports portals drained1
       fallen2 = if ported == drained1 then ported else applyGravity ported
-      (drained2, n2) = drainBottomCookies fallen2
-  in (drained2, n1 + n2)
+      (drained2, n2, sites2) = drainBottomCookies fallen2
+  in (drained2, n1 + n2, sites1 ++ sites2)
 
 randomColor :: RandomGen g => g -> (Color, g)
 randomColor g =
@@ -489,9 +494,9 @@ stepCascadeDetailed prefer portals g b
             length [p | p <- pos, isCookie (getCell b p)]
           cakesHit =
             length [p | p <- pos, isCake (getCell b p)]
-          (settled, cookiesFallen) = settleBoardPortals portals mb
+          (settled, cookiesFallen, cookSites) = settleBoardPortals portals mb
           (b', g') = refill g settled
-      in Just (b', n, pos, stonesHit, chestsHit, honeyHit, balloonHit, cookiesCleared + cookiesFallen, cakesHit, g')
+      in Just (b', n, nub (pos ++ cookSites), stonesHit, chestsHit, honeyHit, balloonHit, cookiesCleared + cookiesFallen, cakesHit, g')
 
 runCascade :: RandomGen g => g -> Board -> (Board, Int, g)
 runCascade = runCascadeAt Nothing
@@ -587,7 +592,7 @@ runCascadeScoredWithUfosFromWave startW prefer ufos0 portals g b =
                      bal2 = length [p | p <- pos2, isBalloon (getCell b'' p)]
                      cok2 = length [p | p <- pos2, isCookie (getCell b'' p)]
                      cak2 = length [p | p <- pos2, isCake (getCell b'' p)]
-                     (settled, cokFall) = settleBoardPortals portals mb
+                     (settled, cokFall, cookSites) = settleBoardPortals portals mb
                      (b3, g3) = refill g'' settled
                      score2 = score' + scoreForWave (wave + 1) n2
                      tallies2 =
@@ -595,7 +600,7 @@ runCascadeScoredWithUfosFromWave startW prefer ufos0 portals g b =
                        | (col, cnt) <- tallies'
                        ]
                      uAbs' = uAbs + length [p | p <- absorbed, p `elem` pos2]
-                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) (cookies + cok + cok2 + cokFall) (cakes + cak + cak2) uAbs' ufos' (clearedAcc ++ pos ++ pos2)
+                 in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2 (stones + stn + stn2) (chests + cht + cht2) (honey + hny + hny2) (balloons + bal + bal2) (cookies + cok + cok2 + cokFall) (cakes + cak + cak2) uAbs' ufos' (clearedAcc ++ pos ++ pos2 ++ cookSites)
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
 clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
@@ -672,7 +677,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
           balloons0 = length [p | p <- pos, isBalloon (getCell b p)]
           cookies0 = length [p | p <- pos, isCookie (getCell b p)]
           cakes0 = length [p | p <- pos, isCake (getCell b p)]
-          (settled0, cookiesFall0) = settleBoardPortals portals mb
+          (settled0, cookiesFall0, cookSites0) = settleBoardPortals portals mb
           (b1, g1) = refill g settled0
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColor b pos col) | col <- allColors]
@@ -688,10 +693,10 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
                     bal2 = length [p | p <- pos2, isBalloon (getCell b1 p)]
                     cok2 = length [p | p <- pos2, isCookie (getCell b1 p)]
                     cak2 = length [p | p <- pos2, isCake (getCell b1 p)]
-                    (settled2, cokFall2) = settleBoardPortals portals mb2
+                    (settled2, cokFall2, cookSitesU) = settleBoardPortals portals mb2
                     (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColor b1 pos2 col) | col <- allColors]
-                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length [p | p <- absorbed, p `elem` pos2], ufos1, pos2)
+                in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length [p | p <- absorbed, p `elem` pos2], ufos1, nub (pos2 ++ cookSitesU))
           wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
           (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos3, cleared2, g2) =
             -- Continue wave multipliers after seed (+ optional UFO) clear.
@@ -713,7 +718,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
          , cakes0 + cakesU + cakes2
          , uAbs0 + uAbs2
          , ufos3
-         , nub (pos ++ posU ++ cleared2)
+         , nub (pos ++ cookSites0 ++ posU ++ cleared2)
          , g2
          )
 
@@ -765,15 +770,15 @@ runPostBeltCascade ufos portals g boardBelt
   | hasAnyMatch boardBelt =
       runCascadeScoredWithUfos Nothing ufos portals g boardBelt
   | otherwise =
-      let (settled, nCook) = settleBoardPortals portals (toM boardBelt)
+      let (settled, nCook, cookSites) = settleBoardPortals portals (toM boardBelt)
           (b1, g1) = refill g settled
       in if hasAnyMatch b1
            then
              let (b2, cells, score, maxW, tallies, st, ch, h, bal, cok, cak, uAbs, ufos', cleared, g2) =
                    runCascadeScoredWithUfos Nothing ufos portals g1 b1
-             in (b2, cells, score, maxW, tallies, st, ch, h, bal, cok + nCook, cak, uAbs, ufos', cleared, g2)
+             in (b2, cells, score, maxW, tallies, st, ch, h, bal, cok + nCook, cak, uAbs, ufos', nub (cookSites ++ cleared), g2)
            else
-             (b1, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, nCook, 0, 0, ufos, [], g1)
+             (b1, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, nCook, 0, 0, ufos, cookSites, g1)
 
 -- | After a successful cascade: tick countdown bombs; any at 0 explode (3×3) + cascade.
 -- Threads UFOs + portals so explode settle still teleports / absorbs (到期爆炸不丢飞碟与门).

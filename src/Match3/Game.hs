@@ -640,8 +640,10 @@ countTimeSpirits b =
 
 -- | Carpet seeds when Cookie / Safe leave a cell without entering clear-holes.
 -- Cookie is immune to mid-board wipe (only gravity + bottom drain); Safe opens
--- in place to Cookie. Neither path appears in cascade pos lists, so GoalCarpet
--- under them would soft-lock unless we treat the vacate as a cover seed.
+-- in place to Cookie. Start-of-move Cookie occupancy / Safe→Cookie would miss
+-- GoalCarpet unless we treat the vacate as a cover seed. (Cookies that only
+-- arrive on a tile mid-settle then drain are covered via Board drain positions
+-- in cascade clear lists — see settleBoardPortals.)
 -- Compare pre-move board to final post-move board (after snail + follow-up cascade).
 carpetVacateSeeds :: Board -> Board -> [Pos]
 carpetVacateSeeds before after =

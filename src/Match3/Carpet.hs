@@ -1,8 +1,10 @@
 -- | Carpet / floor tiles (地毯 / 目标地砖).
 -- Uncovered carpet targets sit under gems; when a gem on that cell is fully
 -- cleared (match / special / booster), the tile becomes covered. Cookie vacate
--- (gravity / bottom drain) and Safe→Cookie open also cover (via Game
--- carpetVacateSeeds) — otherwise immune Cookie / Safe soft-lock GoalCarpet.
+-- (start-of-move occupancy) and Safe→Cookie open also cover (via Game
+-- carpetVacateSeeds). Cookies that only touch a carpet mid-settle (fall/portal/
+-- belt onto bottom then drain) cover via Board drain positions threaded into
+-- cascade clear lists — otherwise bottom-row GoalCarpet soft-locks.
 -- GoalCarpet counts newly covered tiles. Re-clearing an already-covered cell is a no-op.
 module Match3.Carpet
   ( coverCarpets

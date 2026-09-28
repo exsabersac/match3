@@ -35,6 +35,9 @@ tests =
     , testCase "collect_goal_lose_on_moves" collect_goal_lose_on_moves
     , testCase "level_table_mixes_collect" level_table_mixes_collect
     , testCase "score_goal_ignores_collect" score_goal_ignores_collect
+    , testCase "stone_blocks_swap" stone_blocks_swap
+    , testCase "stone_cleared_by_adjacent" stone_cleared_by_adjacent
+    , testCase "stone_not_in_match" stone_not_in_match
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -478,3 +481,121 @@ score_goal_ignores_collect = do
     Just (p1, p2) -> do
       let (gs1, _) = trySwap p1 p2 gs0
       gsCollected gs1 @?= 0
+
+--------------------------------------------------------------------------------
+-- Stone blockers
+--------------------------------------------------------------------------------
+
+-- | Stable board with no accidental 3-runs.
+stableBoard :: Board
+stableBoard =
+  [ map mkGem [C1, C2, C3, C4, C5, C1, C2, C3]
+  , map mkGem [C2, C3, C4, C5, C1, C2, C3, C4]
+  , map mkGem [C3, C4, C5, C1, C2, C3, C4, C5]
+  , map mkGem [C4, C5, C1, C2, C3, C4, C5, C1]
+  , map mkGem [C5, C1, C2, C3, C4, C5, C1, C2]
+  , map mkGem [C1, C2, C3, C4, C5, C1, C2, C3]
+  , map mkGem [C2, C3, C4, C5, C1, C2, C3, C4]
+  , map mkGem [C3, C4, C5, C1, C2, C3, C4, C5]
+  ]
+
+-- | trySwap involving a Stone returns NoMatch; board/moves/score unchanged.
+stone_blocks_swap :: Assertion
+stone_blocks_swap = do
+  let board = setCell stableBoard (3, 3) mkStone
+      gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsScore = 40
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsShuffled = False
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  out @?= NoMatch
+  gsBoard gs1 @?= gsBoard gs0
+  gsScore gs1 @?= gsScore gs0
+  gsMoves gs1 @?= gsMoves gs0
+  let (gs2, out2) = trySwap (3, 4) (3, 3) gs0
+  out2 @?= NoMatch
+  gsBoard gs2 @?= gsBoard gs0
+  gsMoves gs2 @?= gsMoves gs0
+
+-- | Clearing gems next to a stone also removes that stone.
+stone_cleared_by_adjacent :: Assertion
+stone_cleared_by_adjacent = do
+  -- Row 3: C1 C1 C2 C1 ... — swap (3,2)<->(3,3) yields C1 C1 C1
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (3, 3)
+          (mkGem C1)
+      board = setCell board0 (2, 1) mkStone
+  assertBool "stone placed" (isStone (getCell board (2, 1)))
+  assertBool "no match yet" (not (hasAnyMatch board))
+  let gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    MoveApplied _ -> pure ()
+    LevelClear _ _ -> pure ()
+    Won _ -> pure ()
+    Lost _ -> pure ()
+    other -> assertFailure ("expected applied/terminal, got " ++ show other)
+  assertBool
+    "stone cleared by adjacent match"
+    (not (isStone (getCell (gsBoard gs1) (2, 1))))
+
+-- | Stones never form matches; they interrupt color runs.
+stone_not_in_match :: Assertion
+stone_not_in_match = do
+  let bStones =
+        setCell
+          (setCell (setCell stableBoard (0, 0) mkStone) (0, 1) mkStone)
+          (0, 2)
+          mkStone
+  assertBool "three stones not a match" (null (findMatches bStones))
+  assertBool "hasAnyMatch false for stones" (not (hasAnyMatch bStones))
+  -- C1 C1 Stone C1 C1 on a stable base — stone breaks the run
+  let bBreak =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (1, 0) (mkGem C1))
+                   (1, 1)
+                   (mkGem C1))
+                (1, 2)
+                mkStone)
+             (1, 3)
+             (mkGem C1))
+          (1, 4)
+          (mkGem C1)
+  assertBool "stone breaks C1 run" (null (findMatches bBreak))
+  -- Gem triple with a stone beside still matches only the gems
+  let bOk =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (2, 0) (mkGem C1))
+                (2, 1)
+                (mkGem C1))
+             (2, 2)
+             (mkGem C1))
+          (2, 3)
+          mkStone
+      ms = findMatches bOk
+  assertBool "gem triple still matches" ((2, 0) `elem` ms && (2, 1) `elem` ms && (2, 2) `elem` ms)
+  assertBool "stone itself not in match set" ((2, 3) `notElem` ms)
+

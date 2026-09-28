@@ -2,8 +2,14 @@
 module Match3.Types
   ( Color(..)
   , GemKind(..)
-  , Cell(..)
+  , CellContents(..)
+  , Cell
   , mkGem
+  , mkStone
+  , isStone
+  , isGem
+  , cellColor
+  , cellKind
   , Pos
   , Board
   , boardSize
@@ -33,13 +39,37 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb
   deriving (Eq, Ord, Show, Generic)
 
-data Cell = Cell
-  { cellColor :: Color
-  , cellKind  :: GemKind
-  } deriving (Eq, Ord, Show, Generic)
+-- | Board cell: a colored gem (possibly special) or an immovable stone blocker.
+data CellContents
+  = Gem Color GemKind
+  | Stone
+  deriving (Eq, Ord, Show, Generic)
+
+type Cell = CellContents
 
 mkGem :: Color -> Cell
-mkGem c = Cell c Normal
+mkGem c = Gem c Normal
+
+mkStone :: Cell
+mkStone = Stone
+
+isStone :: Cell -> Bool
+isStone Stone = True
+isStone _ = False
+
+isGem :: Cell -> Bool
+isGem (Gem _ _) = True
+isGem Stone = False
+
+-- | Color of a gem cell. Partial on Stone — call only after isGem / pattern match.
+cellColor :: Cell -> Color
+cellColor (Gem c _) = c
+cellColor Stone = error "cellColor: Stone has no color"
+
+-- | Kind of a gem cell. Partial on Stone.
+cellKind :: Cell -> GemKind
+cellKind (Gem _ k) = k
+cellKind Stone = error "cellKind: Stone has no kind"
 
 numColors :: Int
 numColors = 5

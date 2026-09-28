@@ -30,6 +30,7 @@ module Match3.Board
   ) where
 
 import Data.List (foldl', nub)
+import Match3.Obstacles (withAdjacentStones)
 import Match3.Types
 import System.Random (RandomGen, randomR)
 
@@ -55,7 +56,7 @@ adjacent :: Pos -> Pos -> Bool
 adjacent (r1, c1) (r2, c2) =
   (abs (r1 - r2) == 1 && c1 == c2) || (abs (c1 - c2) == 1 && r1 == r2)
 
--- | A contiguous same-color run of length >= 3.
+-- | A contiguous same-color gem run of length >= 3 (stones break runs).
 data MatchRun = MatchRun
   { runColor :: Color
   , runPos   :: [Pos]
@@ -66,28 +67,29 @@ findMatchRuns :: Board -> [MatchRun]
 findMatchRuns b = filter ((>= 3) . length . runPos) (hRuns ++ vRuns)
   where
     hRuns =
-      [ MatchRun (cellColor (getCell b (r, c0))) ps True
+      [ MatchRun col ps True
       | r <- [0 .. boardSize - 1]
       , let rowPs = [(r, c) | c <- [0 .. boardSize - 1]]
-      , ps <- groupByColor b rowPs
-      , let c0 = snd (head ps)
+      , (col, ps) <- groupGemRuns b rowPs
       ]
     vRuns =
-      [ MatchRun (cellColor (getCell b (r0, c))) ps False
+      [ MatchRun col ps False
       | c <- [0 .. boardSize - 1]
       , let colPs = [(r, c) | r <- [0 .. boardSize - 1]]
-      , ps <- groupByColor b colPs
-      , let r0 = fst (head ps)
+      , (col, ps) <- groupGemRuns b colPs
       ]
 
-groupByColor :: Board -> [Pos] -> [[Pos]]
-groupByColor _ [] = []
-groupByColor b (p : ps) = go [p] (cellColor (getCell b p)) ps
+-- | Group contiguous same-color *gems*; stones and color changes break runs.
+groupGemRuns :: Board -> [Pos] -> [(Color, [Pos])]
+groupGemRuns _ [] = []
+groupGemRuns b (p : ps) = case getCell b p of
+  Stone -> groupGemRuns b ps
+  Gem col _ -> go [p] col ps
   where
-    go run _ [] = [reverse run]
-    go run col (q : qs)
-      | cellColor (getCell b q) == col = go (q : run) col qs
-      | otherwise = reverse run : go [q] (cellColor (getCell b q)) qs
+    go run col [] = [(col, reverse run)]
+    go run col (q : qs) = case getCell b q of
+      Gem col' _ | col' == col -> go (q : run) col qs
+      _ -> (col, reverse run) : groupGemRuns b (q : qs)
 
 findMatches :: Board -> [Pos]
 findMatches b = nub (concatMap runPos (findMatchRuns b))
@@ -106,22 +108,23 @@ setM b (r, c) v =
   where
     row = b !! r
 
--- | Expand clears: LineH/LineV/Bomb effects when those cells are in the match set.
+-- | Expand clears: LineH/LineV/Bomb effects when those gem cells are in the match set.
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials b seeds = go (nub seeds) (nub seeds)
   where
     go acc [] = acc
     go acc (p : ps) =
-      let extra = case cellKind (getCell b p) of
-            LineH -> [(fst p, c) | c <- [0 .. boardSize - 1]]
-            LineV -> [(r, snd p) | r <- [0 .. boardSize - 1]]
-            Bomb ->
+      let extra = case getCell b p of
+            Gem _ LineH -> [(fst p, c) | c <- [0 .. boardSize - 1]]
+            Gem _ LineV -> [(r, snd p) | r <- [0 .. boardSize - 1]]
+            Gem _ Bomb ->
               [ (r, c)
               | r <- [fst p - 1 .. fst p + 1]
               , c <- [snd p - 1 .. snd p + 1]
               , inBounds (r, c)
               ]
-            Normal -> []
+            Gem _ Normal -> []
+            Stone -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
@@ -129,7 +132,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
 -- Prefer spawnPos if provided and in the run; else middle of run.
 spawnSpecials :: Maybe Pos -> [MatchRun] -> [(Pos, Cell)]
 spawnSpecials prefer runs =
-  [ (pos, Cell (runColor run) kind)
+  [ (pos, Gem (runColor run) kind)
   | run <- runs
   , let n = length (runPos run)
   , n >= 4
@@ -142,12 +145,18 @@ spawnSpecials prefer runs =
           _ -> runPos run !! (n `div` 2)
   ]
 
--- | Count how many cleared positions have a given color (pre-clear board).
+-- | Count how many cleared positions have a given color (pre-clear board; stones skip).
 countColor :: Board -> [Pos] -> Color -> Int
 countColor b ps col =
-  length [p | p <- ps, cellColor (getCell b p) == col]
+  length
+    [ p
+    | p <- ps
+    , case getCell b p of
+        Gem c _ -> c == col
+        Stone -> False
+    ]
 
--- | Clear matches (+ special expansions), place new specials, return hole board + cleared positions.
+-- | Clear matches (+ special expansions + adjacent stones), place new specials.
 clearMatches :: Board -> (MBoard, Int)
 clearMatches b = clearMatchesAt Nothing b
 
@@ -161,7 +170,9 @@ clearMatchesDetailed :: Maybe Pos -> Board -> (MBoard, Int, [Pos])
 clearMatchesDetailed prefer b =
   let runs = findMatchRuns b
       base = nub (concatMap runPos runs)
-      allPos = expandSpecials b base
+      expanded = expandSpecials b base
+      -- Adjacent stones chip away when a neighbor clears
+      allPos = withAdjacentStones b expanded
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM b) allPos
       spawns = spawnSpecials prefer runs
@@ -255,8 +266,6 @@ runCascadeAt prefer g b = case stepCascadeAt prefer g b of
 
 -- | Cascade with per-wave combo scoring + color tallies from cleared cells.
 -- Returns (board, cellsCleared, scoreGained, maxComboWave, colorCounts, gen).
--- colorCounts: for each Color, how many cleared cells had that color.
--- maxComboWave is 0 if nothing cleared, else highest 1-based wave index.
 runCascadeScored
   :: RandomGen g
   => Maybe Pos
@@ -293,7 +302,7 @@ randomStableBoard g =
   let (b, g') = randomBoard g
   in if hasAnyMatch b then randomStableBoard g' else (b, g')
 
--- | True if some adjacent swap would create a match.
+-- | True if some adjacent gem-gem swap would create a match.
 hasValidMove :: Board -> Bool
 hasValidMove = maybe False (const True) . findHint
 
@@ -307,7 +316,7 @@ randomPlayableBoard g =
 shufflePlayable :: RandomGen g => g -> (Board, g)
 shufflePlayable = randomPlayableBoard
 
--- | First adjacent swap that would create a match (for hint).
+-- | First adjacent swap that would create a match (for hint). Skips stone cells.
 findHint :: Board -> Maybe (Pos, Pos)
 findHint b =
   case
@@ -315,8 +324,10 @@ findHint b =
     | r <- [0 .. boardSize - 1]
     , c <- [0 .. boardSize - 1]
     , let p1 = (r, c)
+    , isGem (getCell b p1)
     , p2 <- [(r, c + 1), (r + 1, c)]
     , inBounds p2
+    , isGem (getCell b p2)
     , hasAnyMatch (swapCells b p1 p2)
     ] of
     (x : _) -> Just x

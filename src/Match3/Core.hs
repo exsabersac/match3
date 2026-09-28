@@ -1,8 +1,14 @@
 module Match3.Core
   ( Color(..)
   , GemKind(..)
-  , Cell(..)
+  , CellContents(..)
+  , Cell
   , mkGem
+  , mkStone
+  , isStone
+  , isGem
+  , cellColor
+  , cellKind
   , Pos
   , Board
   , boardSize
@@ -56,8 +62,18 @@ module Match3.Core
   , nextLevel
   , ensurePlayable
   , shuffleGame
+  , swapBlockedByStone
+  , orthoNeighbors
+  , stonesAdjacentTo
+  , withAdjacentStones
   ) where
 
 import Match3.Board
 import Match3.Game
+import Match3.Obstacles
+  ( swapBlockedByStone
+  , orthoNeighbors
+  , stonesAdjacentTo
+  , withAdjacentStones
+  )
 import Match3.Types

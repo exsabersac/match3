@@ -171,7 +171,9 @@ spawnBurst board positions =
           let (ox, oy) = cellOrigin pos
               cx = fromIntegral ox + fromIntegral cellPx / 2
               cy = fromIntegral oy + fromIntegral cellPx / 2
-              (cr, cg, cb) = colorRGB (cellColor (getCell board pos))
+              (cr, cg, cb) = case getCell board pos of
+                    Stone -> (120, 120, 130)
+                    Gem _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
             ( \_ -> do
                 ang <- randomRIO (0, 2 * pi :: Float)
@@ -863,34 +865,51 @@ lerpI a b frame maxF
       in a + round (fromIntegral (b - a) * u)
 
 drawGemAt :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
-drawGemAt ren x y cell flashing = do
-  let (cr0, cg0, cb0) = colorRGB (cellColor cell)
-      (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
-      gap = 3 :: CInt
-  rendererDrawColor ren $= V4 cr cg cb 255
-  fillRect
-    ren
-    (Just
-       (Rectangle
-          (P (V2 (x + gap) (y + gap)))
-          (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
-  -- Extra flash ring when clearing
-  when flashing $ do
-    rendererDrawColor ren $= V4 255 255 200 200
-    drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
-  case cellKind cell of
-    Normal -> pure ()
-    LineH -> do
-      rendererDrawColor ren $= V4 255 255 255 220
-      fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx `div` 2 - 3))) (V2 (cellPx - 20) 6)))
-    LineV -> do
-      rendererDrawColor ren $= V4 255 255 255 220
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + 10))) (V2 6 (cellPx - 20))))
-    Bomb -> do
-      rendererDrawColor ren $= V4 20 20 20 255
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 8) (y + cellPx `div` 2 - 8))) (V2 16 16)))
-      rendererDrawColor ren $= V4 255 220 80 255
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + cellPx `div` 2 - 4))) (V2 8 8)))
+drawGemAt ren x y cell flashing = case cell of
+  Stone -> do
+    let gap = 3 :: CInt
+        (cr, cg, cb) = if flashing then (200, 200, 200) else (90, 90, 100)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    -- Speckle to look rocky
+    rendererDrawColor ren $= V4 60 60 70 255
+    fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 14))) (V2 8 6)))
+    fillRect ren (Just (Rectangle (P (V2 (x + 28) (y + 30))) (V2 10 7)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Gem _ _ -> do
+    let (cr0, cg0, cb0) = colorRGB (cellColor cell)
+        (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
+        gap = 3 :: CInt
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+    case cellKind cell of
+      Normal -> pure ()
+      LineH -> do
+        rendererDrawColor ren $= V4 255 255 255 220
+        fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx `div` 2 - 3))) (V2 (cellPx - 20) 6)))
+      LineV -> do
+        rendererDrawColor ren $= V4 255 255 255 220
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + 10))) (V2 6 (cellPx - 20))))
+      Bomb -> do
+        rendererDrawColor ren $= V4 20 20 20 255
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 8) (y + cellPx `div` 2 - 8))) (V2 16 16)))
+        rendererDrawColor ren $= V4 255 220 80 255
+        fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + cellPx `div` 2 - 4))) (V2 8 8)))
 
 drawBoard :: Renderer -> App -> IO ()
 drawBoard ren app = case appAnim app of

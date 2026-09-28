@@ -27,6 +27,7 @@ import Match3.Board
   , shufflePlayable
   , swapCells
   )
+import Match3.Obstacles (swapBlockedByStone)
 import Match3.Types
 import System.Random (StdGen, mkStdGen)
 
@@ -127,6 +128,8 @@ trySwap p1 p2 gs
   | Just o <- gsOver gs = (gs, o)
   | not (inBounds p1 && inBounds p2) = (gs, InvalidSwap)
   | not (adjacent p1 p2) = (gs, InvalidSwap)
+  | swapBlockedByStone (gsBoard gs) p1 p2 =
+      (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
   | otherwise =
       let swapped = swapCells (gsBoard gs) p1 p2
       in if not (hasAnyMatch swapped)

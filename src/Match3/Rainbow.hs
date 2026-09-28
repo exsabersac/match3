@@ -68,4 +68,5 @@ colorPositions b col =
       Cake _ -> False
       MagicHat -> False
       Maker _ _ -> False
+      Snail _ _ -> False
   ]

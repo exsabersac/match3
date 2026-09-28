@@ -37,7 +37,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog, chipAdjacentChain)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, chipAdjacentFog, chipAdjacentChain, chipAdjacentFreeze)
 import Match3.Obstacles
   ( chipAdjacentStones
   , chipAdjacentChests
@@ -115,8 +115,10 @@ groupGemRuns b (p : ps) = case getCell b p of
   Cake _ -> groupGemRuns b ps
   MagicHat -> groupGemRuns b ps
   Maker _ _ -> groupGemRuns b ps
+  Snail _ _ -> groupGemRuns b ps
   Gem _ _ _ (Just (Fog _)) -> groupGemRuns b ps  -- fog hides gem from matches
   Gem _ _ _ (Just (Chain _)) -> groupGemRuns b ps  -- chain locks gem from matches
+  -- Freeze does NOT break runs: frozen gems still match (vs Chain/Fog/Ice-chip)
   Gem col _ _ _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
   where
@@ -175,6 +177,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
                   Cake _ -> False
                   MagicHat -> False
                   Maker _ _ -> False
+                  Snail _ _ -> False
               ]
             Gem _ Normal _ _ -> []
             Stone _ -> []
@@ -185,6 +188,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
             Cake _ -> []
             MagicHat -> []
             Maker _ _ -> []
+            Snail _ _ -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
@@ -223,6 +227,7 @@ countColor b ps col =
         Cake _ -> False
         MagicHat -> False
         Maker _ _ -> False
+        Snail _ _ -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -256,8 +261,10 @@ clearMatchesDetailed prefer b =
       (bFog, _fogCleared) = chipAdjacentFog bHat iceFree
       -- Chain: peel adjacent chain layers (gem stays)
       (bChain, _chainCleared) = chipAdjacentChain bFog iceFree
+      -- Freeze: peel adjacent freeze layers (gem stays; still matchable)
+      (bFreeze, _freezeCleared) = chipAdjacentFreeze bChain iceFree
       -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
-      bMaker = chargeAdjacentMakers bChain iceFree
+      bMaker = chargeAdjacentMakers bFreeze iceFree
       -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
       bNoChoco = clearChocoAdjacent bMaker expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
@@ -496,7 +503,8 @@ clearFromSeedsDetailed prefer b seeds0 =
       bHat = triggerAdjacentHats bBal iceFree
       (bFog, _) = chipAdjacentFog bHat iceFree
       (bChain, _) = chipAdjacentChain bFog iceFree
-      bMaker = chargeAdjacentMakers bChain iceFree
+      (bFreeze, _) = chipAdjacentFreeze bChain iceFree
+      bMaker = chargeAdjacentMakers bFreeze iceFree
       bNoChoco = clearChocoAdjacent bMaker expanded
       allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
       n = length allPos
@@ -648,11 +656,11 @@ findHint b =
       , c <- [0 .. boardSize - 1]
       , let p1 = (r, c)
       , isGem (getCell b p1)
-      , not (hasChain (getCell b p1))
+      , not (hasChain (getCell b p1) || hasFreeze (getCell b p1))
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
       , isGem (getCell b p2)
-      , not (hasChain (getCell b p2))
+      , not (hasChain (getCell b p2) || hasFreeze (getCell b p2))
       , not (isRainbow (getCell b p1) || isRainbow (getCell b p2))
       , hasAnyMatch (swapCells b p1 p2)
       ]
@@ -663,7 +671,8 @@ findHint b =
       , let p1 = (r, c)
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
-      , not (hasChain (getCell b p1) || hasChain (getCell b p2))
+      , not (hasChain (getCell b p1) || hasChain (getCell b p2)
+               || hasFreeze (getCell b p1) || hasFreeze (getCell b p2))
       , isRainbowSwap b p1 p2
       ]
     comboHints =
@@ -673,6 +682,7 @@ findHint b =
       , let p1 = (r, c)
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
-      , not (hasChain (getCell b p1) || hasChain (getCell b p2))
+      , not (hasChain (getCell b p1) || hasChain (getCell b p2)
+               || hasFreeze (getCell b p1) || hasFreeze (getCell b p2))
       , isSpecialCombo b p1 p2
       ]

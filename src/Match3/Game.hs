@@ -38,6 +38,7 @@ import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Obstacles (swapBlockedByStone)
 import Match3.Conveyor (Belt, shiftBelts)
 import Match3.Grass (spreadVines, spreadChoco)
+import Match3.Snail (stepSnails)
 import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
@@ -276,15 +277,32 @@ decorateLevel 27 b =
       b3 = overlayAt b2m Choco [(2, 2), (2, 5)]
       b3f = overlayAt b3 (Fog 2) [(5, 2), (5, 5)]
       b3c = overlayAt b3f (Chain 1) [(6, 1), (6, 6)]
-      b4 = overlayAt b3c Vine [(6, 3)]
+      b3z = overlayAt b3c (Freeze 1) [(3, 3), (3, 4)]
+      b4 = overlayAt b3z Vine [(6, 3)]
+      b5 =
+        foldl (\board (p, dr, dc) -> setCell board p (mkSnail dr dc))
+              b4
+              [((0, 4), 0, 1)]
   in foldl
        (\board p ->
            case getCell board p of
              Gem col _ _ _ -> spawnCountdown board p col 5
              _ -> board
        )
-       b4
+       b5
        [(4, 4)]
+decorateLevel 28 b =
+  -- 蜗牛: crawling snails that push gems after each move
+  foldl (\board (p, dr, dc) -> setCell board p (mkSnail dr dc))
+        b
+        [ ((1, 1), 0, 1), ((1, 6), 0, -1), ((4, 2), 1, 0), ((4, 5), 1, 0)
+        , ((6, 3), 0, 1), ((2, 4), 0, -1)
+        ]
+decorateLevel 29 b =
+  -- 冰冻: rocket freeze overlays (block swap, peel by adjacent; gems still match)
+  let b1 = overlayAt b (Freeze 1) [(2, 2), (2, 5), (3, 3), (3, 4), (4, 1), (4, 6), (5, 3), (6, 2), (6, 5)]
+      b2 = overlayAt b1 (Freeze 2) [(4, 3), (4, 4)]
+  in overlayAt b2 Choco [(1, 1), (1, 6)]
 decorateLevel _ b = b
 
 -- | UFO placements for campaign levels.
@@ -413,6 +431,7 @@ extractDecor b =
     keep (Cake _) = True
     keep MagicHat = True
     keep (Maker _ _) = True
+    keep (Snail _ _) = True
     keep (Countdown _ _) = True
     keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
     -- Normal bare gems are shuffled away
@@ -474,8 +493,8 @@ trySwap p1 p2 gs
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufos1, g1')
                      else runCascadeScoredWithUfos Nothing ufos1 (gsPortals gs) g1' boardBelt
-                 -- Vine / chocolate spread at end of move (cleared overlays already stripped)
-                 board1 = spreadChoco (spreadVines boardBeltCas)
+                 -- Vine / chocolate spread, then snails crawl one step (推宝石 / 碰壁掉头)
+                 board1 = stepSnails (spreadChoco (spreadVines boardBeltCas))
                  gained = gained0 + gained1 + gained2
                  combo =
                    let c1 = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)

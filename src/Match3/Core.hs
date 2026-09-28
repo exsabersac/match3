@@ -20,16 +20,27 @@ module Match3.Core
   , hasChain
   , chainLayers
   , mkChainGem
+  , hasFreeze
+  , freezeLayers
+  , mkFreezeGem
+  , mkSnail
+  , isSnail
+  , snailDir
   , cellOverlay
   , clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
+  , chipAdjacentFreeze
   , vinePositions
   , chocoPositions
   , chainPositions
+  , freezePositions
   , spreadVines
   , spreadChoco
+  , stepSnails
+  , stepSnailAt
+  , snailPositions
   , Ufo(..)
   , mkUfo
   , ufoAbsorbTargets
@@ -181,11 +192,18 @@ import Match3.Grass
   , clearChocoAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
+  , chipAdjacentFreeze
   , vinePositions
   , chocoPositions
   , chainPositions
+  , freezePositions
   , spreadVines
   , spreadChoco
+  )
+import Match3.Snail
+  ( stepSnails
+  , stepSnailAt
+  , snailPositions
   )
 import Match3.Ufo
   ( Ufo(..)

@@ -197,6 +197,7 @@ spawnBurst board positions =
                     Cake _ -> (255, 140, 180)
                     MagicHat -> (140, 90, 200)
                     Maker col _ -> colorRGB col
+                    Snail _ _ -> (90, 160, 70)
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -1127,7 +1128,7 @@ drawHud ren app = do
           if i == gsLevel gs
             then V4 255 200 80 255
             else if i < gsLevel gs then V4 80 180 120 255 else V4 60 60 80 255
-        -- 28 levels fit in HUD: 8px stride
+        -- 30 levels fit in HUD: 8px stride
         xDot = 60 + fromIntegral i * 8
     rendererDrawColor ren $= col
     fillRect ren (Just (Rectangle (P (V2 xDot 10)) (V2 7 14)))
@@ -1645,6 +1646,35 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Snail dr dc -> do
+    -- Snail (蜗牛): olive body + shell spiral; tip shows crawl direction
+    let gap = 5 :: CInt
+        (cr, cg, cb) = if flashing then (180, 230, 140) else (90, 150, 60)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap + 4) (y + gap + 12)))
+            (V2 (cellPx - 2 * gap - 8) (cellPx - 2 * gap - 16))))
+    rendererDrawColor ren $= V4 60 110 40 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 10) (y + gap + 4))) (V2 (cellPx - 2 * gap - 20) 14)))
+    rendererDrawColor ren $= V4 200 230 120 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + gap + 8))) (V2 8 8)))
+    -- Direction tick
+    rendererDrawColor ren $= V4 255 255 200 255
+    let (tx, ty) =
+          if abs dr >= abs dc
+            then if dr >= 0
+                   then (x + cellPx `div` 2 - 3, y + cellPx - 14)
+                   else (x + cellPx `div` 2 - 3, y + 8)
+            else if dc >= 0
+                   then (x + cellPx - 14, y + cellPx `div` 2 - 3)
+                   else (x + 8, y + cellPx `div` 2 - 3)
+    fillRect ren (Just (Rectangle (P (V2 tx ty)) (V2 6 6)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Countdown col turns -> do
     let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -1748,6 +1778,25 @@ drawGemAt ren x y cell flashing = case cell of
         rendererDrawColor ren $= V4 200 210 230 255
         fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 6) (y + cellPx `div` 2 - 6))) (V2 12 12)))
         rendererDrawColor ren $= V4 180 190 210 255
+        forM_ [0 .. min 3 layers - 1] $ \i ->
+          fillRect
+            ren
+            (Just
+               (Rectangle
+                  (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+                  (V2 7 5)))
+      Just (Freeze layers) -> do
+        -- Rocket freeze (火箭冰冻): deep-blue glaze + snowflake ticks; ≠ cyan ice cracks
+        rendererDrawColor ren $= V4 40 90 200 180
+        fillRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
+        rendererDrawColor ren $= V4 180 220 255 230
+        drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
+        -- Snowflake cross
+        drawLine ren (P (V2 (x + cellPx `div` 2) (y + 10))) (P (V2 (x + cellPx `div` 2) (y + cellPx - 10)))
+        drawLine ren (P (V2 (x + 10) (y + cellPx `div` 2))) (P (V2 (x + cellPx - 10) (y + cellPx `div` 2)))
+        drawLine ren (P (V2 (x + 14) (y + 14))) (P (V2 (x + cellPx - 14) (y + cellPx - 14)))
+        drawLine ren (P (V2 (x + cellPx - 14) (y + 14))) (P (V2 (x + 14) (y + cellPx - 14)))
+        rendererDrawColor ren $= V4 220 240 255 255
         forM_ [0 .. min 3 layers - 1] $ \i ->
           fillRect
             ren

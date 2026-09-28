@@ -38,6 +38,7 @@ library
       Match3.Boosters
       Match3.Grass
       Match3.Ufo
+      Match3.Snail
   other-modules:
       Paths_match3
   autogen-modules:

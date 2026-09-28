@@ -1,18 +1,21 @@
--- | Grass / vine / chocolate / fog overlays on gems (开心消消乐草·藤蔓·巧克力·迷雾).
+-- | Grass / vine / chocolate / fog / freeze overlays on gems.
 -- Grass: cleared when the cell is part of a match / special clear.
 -- Vine: spreads to adjacent bare gems after a successful move; cleared vines do not spread.
 -- Choco: cleared by adjacent match/special; surviving chocolate spreads like vine.
 -- Fog: layered cloud; adjacent clears peel one layer; fogged gems do not match.
 -- Chain: iron chains; adjacent clears peel; chained gems cannot swap or match.
+-- Freeze: rocket freeze (火箭冰冻); blocks swap only; adjacent clears peel; gems still match.
 module Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent
   , chipAdjacentFog
   , chipAdjacentChain
+  , chipAdjacentFreeze
   , vinePositions
   , chocoPositions
   , fogPositions
   , chainPositions
+  , freezePositions
   , spreadVines
   , spreadChoco
   , mkGrassGem
@@ -20,6 +23,7 @@ module Match3.Grass
   , mkChocoGem
   , mkFogGem
   , mkChainGem
+  , mkFreezeGem
   , hasGrass
   , hasVine
   , hasChoco
@@ -27,6 +31,8 @@ module Match3.Grass
   , fogLayers
   , hasChain
   , chainLayers
+  , hasFreeze
+  , freezeLayers
   , cellOverlay
   ) where
 
@@ -154,6 +160,37 @@ chainPositions b =
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
   , hasChain (at b (r, c))
+  ]
+
+-- | Rocket freeze (火箭冰冻): peel one layer on cells orthogonally adjacent to clears.
+-- Freeze 1 -> strip; Freeze n>1 -> Freeze (n-1). Gem stays and can still match.
+-- Returns fully thawed count.
+chipAdjacentFreeze :: Board -> [Pos] -> (Board, Int)
+chipAdjacentFreeze b seeds =
+  foldl hit (b, 0) targets
+  where
+    targets =
+      nub
+        [ q
+        | p <- nub seeds
+        , q <- ortho p
+        , hasFreeze (at b q)
+        ]
+    hit (board, n) p =
+      case at board p of
+        Gem col kind ice (Just (Freeze layers))
+          | layers <= 1 ->
+              (setAt board p (Gem col kind ice Nothing), n + 1)
+          | otherwise ->
+              (setAt board p (Gem col kind ice (Just (Freeze (layers - 1)))), n)
+        _ -> (board, n)
+
+freezePositions :: Board -> [Pos]
+freezePositions b =
+  [ (r, c)
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , hasFreeze (at b (r, c))
   ]
 
 -- | Each remaining vine spreads onto every orthogonally adjacent bare gem

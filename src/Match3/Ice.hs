@@ -39,6 +39,9 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
         Maker _ _ ->
           -- Makers only charge via adjacent same-color; immune to direct clear seeds
           (board, clearable)
+        Snail _ _ ->
+          -- Snails crawl; immune to direct clear seeds (persist as mobile blockers)
+          (board, clearable)
         Countdown _ _ ->
           (board, p : clearable)
     get board (r, c) = (board !! r) !! c

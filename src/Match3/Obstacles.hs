@@ -38,6 +38,8 @@ import Match3.Types
   , isMagicHat
   , isMaker
   , hasChain
+  , hasFreeze
+  , isSnail
   , balloonColor
   , makerColor
   , makerCharges
@@ -65,12 +67,13 @@ setAt b (r, c) v =
   where
     row = b !! r
 
--- | True if either swap endpoint is a blocker or a chained gem.
+-- | True if either swap endpoint is a blocker, chained, frozen, or snail.
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
   let block c =
         isStone c || isChest c || isHoney c || isBalloon c || isCookie c
-          || isCake c || isMagicHat c || isMaker c || hasChain c
+          || isCake c || isMagicHat c || isMaker c || isSnail c
+          || hasChain c || hasFreeze c
   in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).

@@ -105,6 +105,11 @@ tests =
     , testCase "ufo_collects_target_color" ufo_collects_target_color
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
+    , testCase "snail_moves_after_move" snail_moves_after_move
+    , testCase "snail_blocks_swap" snail_blocks_swap
+    , testCase "freeze_blocks_swap" freeze_blocks_swap
+    , testCase "freeze_cleared_by_adjacent" freeze_cleared_by_adjacent
+    , testCase "freeze_layer_decrement" freeze_layer_decrement
     , testCase "shuffle_preserves_decor" shuffle_preserves_decor
     , testCase "daily_ufo_goal_spawns_saucer" daily_ufo_goal_spawns_saucer
     ]
@@ -2428,7 +2433,7 @@ chain_layer_decrement = do
           , hasChain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
-  assertEqual "campaign levels" (28 :: Int) (length allLevels)
+  assertEqual "campaign levels" (30 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Maker / 果汁机 (same-color adjacent charge -> Bomb)
@@ -2529,3 +2534,178 @@ portal_teleports_gem = do
   assertBool "identity on full board" (applyPortalTeleports portals mb0 == mb0)
   let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
   assertEqual "two portal pairs" (2 :: Int) (length (gsPortals gs))
+
+
+--------------------------------------------------------------------------------
+-- Snail / 蜗牛 (crawls after move; blocks swap; pushes gems)
+--------------------------------------------------------------------------------
+
+snail_blocks_swap :: Assertion
+snail_blocks_swap = do
+  let board = setCell stableBoard (3, 3) (mkSnail 0 1)
+  assertBool "is snail" (isSnail (getCell board (3, 3)))
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  let gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsScore = 40
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  out @?= NoMatch
+  gsBoard gs1 @?= gsBoard gs0
+  gsMoves gs1 @?= gsMoves gs0
+
+snail_moves_after_move :: Assertion
+snail_moves_after_move = do
+  -- Match far from snail: row 3 swap like stone_cleared; snail on bottom row
+  -- so gravity cannot drop it. Faces right and pushes the gem at (7,2).
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C2))
+             (3, 3)
+             (mkGem C1))
+          (7, 1)
+          (mkSnail 0 1)
+  assertBool "snail at start" (isSnail (getCell board0 (7, 1)))
+  assertBool "gem to the right" (isGem (getCell board0 (7, 2)))
+  -- Pure unit: stepSnails crawls without a full move
+  let stepped = stepSnails board0
+  let gemRight = getCell board0 (7, 2)
+  assertBool "pure left start" (not (isSnail (getCell stepped (7, 1))))
+  assertBool "pure at (7,2)" (isSnail (getCell stepped (7, 2)))
+  assertEqual "pure pushed gem back" gemRight (getCell stepped (7, 1))
+  let gs0 =
+        (newGame defaultConfig 11)
+          { gsBoard = board0
+          , gsScore = 0
+          , gsMoves = 20
+          , gsGoal = GoalScore 99999
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let b1 = gsBoard gs1
+  -- After cascades/refill colors may change; only require snail relocated one step
+  assertBool "snail left start" (not (isSnail (getCell b1 (7, 1))))
+  assertBool "snail crawled right" (isSnail (getCell b1 (7, 2)))
+  assertBool "cell behind is gem (pushed)" (isGem (getCell b1 (7, 1)))
+  -- Edge reverse: snail at right edge facing right flips dir
+  let edgeB = setCell stableBoard (0, 7) (mkSnail 0 1)
+      edge1 = stepSnailAt edgeB (0, 7)
+  assertEqual "reversed at edge" (0, -1) (snailDir (getCell edge1 (0, 7)))
+  assertBool "still at edge" (isSnail (getCell edge1 (0, 7)))
+  let gsL = newGameAtLevel 28 (levelConfig (allLevels !! 28)) 42
+      nSnail =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isSnail (getCell (gsBoard gsL) (r, c))
+          ]
+  assertBool ("decor snails >= 4, got " ++ show nSnail) (nSnail >= 4)
+
+--------------------------------------------------------------------------------
+-- Freeze / 火箭冰冻 (blocks swap only; adjacent peel; ≠ Ice match-chip)
+--------------------------------------------------------------------------------
+
+freeze_blocks_swap :: Assertion
+freeze_blocks_swap = do
+  let board = setCell stableBoard (3, 3) (mkFreezeGem C2 1)
+  assertBool "has freeze" (hasFreeze (getCell board (3, 3)))
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  -- Frozen gem CAN still participate in matches (unlike Chain)
+  let boardM =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (mkFreezeGem C1 1))
+          (3, 2)
+          (mkGem C1)
+  assertBool "freeze does not break match" (not (null (findMatches boardM)))
+  let gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsScore = 40
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  out @?= NoMatch
+  gsBoard gs1 @?= gsBoard gs0
+
+freeze_cleared_by_adjacent :: Assertion
+freeze_cleared_by_adjacent = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (2, 1)
+          (mkFreezeGem C2 1)
+  assertBool "freeze above match" (hasFreeze (getCell board0 (2, 1)))
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentFreeze board0 ms
+  assertEqual "fully thawed" (1 :: Int) cleared
+  assertBool "freeze gone" (not (hasFreeze (getCell b1 (2, 1))))
+  assertBool "gem remains" (isGem (getCell b1 (2, 1)))
+  -- Cascade path also peels
+  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
+        runCascadeScored Nothing (mkStdGen 1) board0
+  assertBool "freeze cleared in cascade" (not (hasFreeze (getCell board1 (2, 1))))
+
+freeze_layer_decrement :: Assertion
+freeze_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkFreezeGem C3 2)
+  let ms = findMatches board0
+      (b1, cleared) = chipAdjacentFreeze board0 ms
+  assertEqual "no full thaw yet" (0 :: Int) cleared
+  assertEqual "layers 2->1" (1 :: Int) (freezeLayers (getCell b1 (4, 1)))
+  let (b2, cleared2) = chipAdjacentFreeze b1 ms
+  assertEqual "now thawed" (1 :: Int) cleared2
+  assertBool "freeze gone" (not (hasFreeze (getCell b2 (4, 1))))
+  -- Distinct from Ice: ice layers live on Gem Int field, not Freeze overlay
+  let iced = mkIceGem C1 2
+  assertEqual "ice layers" (2 :: Int) (iceLayers iced)
+  assertBool "ice is not freeze overlay" (not (hasFreeze iced))
+  let gs = newGameAtLevel 29 (levelConfig (allLevels !! 29)) 42
+      nFreeze =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , hasFreeze (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor freeze >= 8, got " ++ show nFreeze) (nFreeze >= 8)
+  assertEqual "campaign levels" (30 :: Int) (length allLevels)

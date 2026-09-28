@@ -44,6 +44,7 @@ library:
   - Match3.Boosters
   - Match3.Grass
   - Match3.Ufo
+  - Match3.Snail
 
 executables:
   match3-sdl:

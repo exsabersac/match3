@@ -21,6 +21,12 @@ module Match3.Types
   , hasChain
   , chainLayers
   , mkChainGem
+  , hasFreeze
+  , freezeLayers
+  , mkFreezeGem
+  , mkSnail
+  , isSnail
+  , snailDir
   , clearOverlay
   , setOverlay
   , mkStone
@@ -89,23 +95,26 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力 / 迷雾).
+-- | Overlay on a gem (开心消消乐草 / 藤蔓 / 巧克力 / 迷雾 / 锁链 / 火箭冰冻).
 -- Grass: clears on match. Vine: spreads after move. Choco: adjacent-clear + spreads.
 -- Fog n: layers; adjacent clears peel one layer; fogged gems do not match until clear.
 -- Chain n: iron chains (锁链); adjacent clears peel; chained gems cannot swap or match.
-data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int
+-- Freeze n: rocket freeze (火箭冰冻); blocks swap only (NOT match); adjacent clears peel.
+-- Distinct from Ice (gem ice Int): Ice chips when the gem itself matches.
+data CellOverlay = Grass | Vine | Choco | Fog Int | Chain Int | Freeze Int
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: gem (optional ice + overlay), stone, chest, honey, cake, balloon, cookie, magic hat, or countdown.
+-- | Board cell: gem (optional ice + overlay), stone, chest, honey, cake, balloon, cookie, magic hat, snail, or countdown.
 -- Stone/Chest/Honey/Cake n = hit points; adjacent clears chip; removed at 0.
 -- Cookie: falls with gravity; collected when it reaches the bottom row (开心消消乐饼干).
 -- Cake: layered obstacle (蛋糕, distinct from Cookie); adjacent clears chip layers.
 -- MagicHat: adjacent clear triggers color swap/recolor of neighboring gems (魔法帽).
 -- Maker c n: juice maker (果汁机); n adjacent same-color clears produce a Bomb of color c.
+-- Snail dr dc: crawling snail (蜗牛); blocks swap; after each player move crawls one step (pushes gems).
 -- Countdown c n = colored timer bomb; matches as color c.
 -- Gem overlay: Grass on match; Vine spreads; Choco cleared by adjacent match then spreads.
 data CellContents
-  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine|Choco)
+  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine|Choco|Freeze|…)
   | Stone Int
   | Chest Int   -- treasure chest (宝箱) layers; adjacent clears chip
   | Honey Int   -- honey jar (蜂蜜罐) layers; adjacent clears chip
@@ -114,6 +123,7 @@ data CellContents
   | Cake Int      -- cake layers (蛋糕): adjacent clears chip; not a collectible cookie
   | MagicHat      -- magic hat (魔法帽): adjacent clear swaps/recolors neighbor gem colors
   | Maker Color Int  -- juice maker (果汁机): needs N same-color adjacent clears; produces Bomb
+  | Snail Int Int    -- snail (蜗牛): direction (dr, dc); crawls after each move
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -146,6 +156,26 @@ mkFogGem c n = Gem c Normal 0 (Just (Fog (max 1 n)))
 mkChainGem :: Color -> Int -> Cell
 mkChainGem c n = Gem c Normal 0 (Just (Chain (max 1 n)))
 
+-- | Gem sealed under rocket freeze (火箭冰冻): blocks swap only; adjacent clears peel.
+-- Unlike Ice (match-chips gem ice) and Chain (blocks match too).
+mkFreezeGem :: Color -> Int -> Cell
+mkFreezeGem c n = Gem c Normal 0 (Just (Freeze (max 1 n)))
+
+-- | Snail facing (dr, dc); typically (0,1) right or (1,0) down.
+mkSnail :: Int -> Int -> Cell
+mkSnail dr dc =
+  let dr' = if dr == 0 && dc == 0 then 0 else dr
+      dc' = if dr == 0 && dc == 0 then 1 else dc
+  in Snail dr' dc'
+
+isSnail :: Cell -> Bool
+isSnail (Snail _ _) = True
+isSnail _ = False
+
+snailDir :: Cell -> (Int, Int)
+snailDir (Snail dr dc) = (dr, dc)
+snailDir _ = (0, 0)
+
 iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n _) = n
 iceLayers (Stone _) = 0
@@ -156,6 +186,7 @@ iceLayers Cookie = 0
 iceLayers (Cake _) = 0
 iceLayers MagicHat = 0
 iceLayers (Maker _ _) = 0
+iceLayers (Snail _ _) = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -189,6 +220,16 @@ hasChain c = case cellOverlay c of
 chainLayers :: Cell -> Int
 chainLayers c = case cellOverlay c of
   Just (Chain n) -> n
+  _ -> 0
+
+hasFreeze :: Cell -> Bool
+hasFreeze c = case cellOverlay c of
+  Just (Freeze _) -> True
+  _ -> False
+
+freezeLayers :: Cell -> Int
+freezeLayers c = case cellOverlay c of
+  Just (Freeze n) -> n
   _ -> 0
 
 -- | Strip overlay, keep gem/ice.
@@ -335,6 +376,7 @@ isGem Cookie = False
 isGem (Cake _) = False
 isGem MagicHat = False
 isGem (Maker _ _) = False
+isGem (Snail _ _) = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -348,6 +390,7 @@ cellColor Cookie = error "cellColor: Cookie has no color"
 cellColor (Cake _) = error "cellColor: Cake has no color"
 cellColor MagicHat = error "cellColor: MagicHat has no color"
 cellColor (Maker _ _) = error "cellColor: Maker has no color (use makerColor)"
+cellColor (Snail _ _) = error "cellColor: Snail has no color"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -361,6 +404,7 @@ cellKind Cookie = error "cellKind: Cookie has no kind"
 cellKind (Cake _) = error "cellKind: Cake has no kind"
 cellKind MagicHat = error "cellKind: MagicHat has no kind"
 cellKind (Maker _ _) = error "cellKind: Maker has no kind"
+cellKind (Snail _ _) = error "cellKind: Snail has no kind"
 
 numColors :: Int
 numColors = 5
@@ -486,7 +530,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -517,6 +561,8 @@ allLevels =
   , Level 25 "锁链"   22 (GoalScore 900)
   , Level 26 "果汁"   24 (GoalCollect C1 18)
   , Level 27 "终章"   16 (GoalScore 1500)
+  , Level 28 "蜗牛"   22 (GoalScore 850)
+  , Level 29 "冰冻"   22 (GoalCollect C2 16)
   ]
 
 levelConfig :: Level -> GameConfig

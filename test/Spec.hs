@@ -212,6 +212,8 @@ tests =
     , testCase "carpet_covers_on_cookie_vacate" carpet_covers_on_cookie_vacate
     , testCase "carpet_covers_on_safe_open" carpet_covers_on_safe_open
     , testCase "carpet_covers_on_cookie_bottom_drain" carpet_covers_on_cookie_bottom_drain
+    , testCase "carpet_covers_on_portal_cookie_drain" carpet_covers_on_portal_cookie_drain
+    , testCase "carpet_covers_on_surprise_safe_bottom" carpet_covers_on_surprise_safe_bottom
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -6966,5 +6968,114 @@ carpet_covers_on_cookie_bottom_drain = do
   assertBool ("drain site in lastCleared, got " ++ show (gsLastCleared gs1)) $
     (bottom, 4) `elem` gsLastCleared gs1
   assertEqual "bottom carpet covered by drain" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
+  assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
+
+--------------------------------------------------------------------------------
+-- Portal / Surprise × Cookie mid-settle bottom drain → GoalCarpet (boundary)
+--------------------------------------------------------------------------------
+
+-- | Portal teleport onto an empty bottom-row carpet must drain the Cookie and
+-- cover that tile (same cookSites → coverCarpets path as belt/gravity drain).
+-- Unit: settleBoardPortals sites; live: cross-clear empties the exit column so
+-- the portal can deliver mid-settle.
+carpet_covers_on_portal_cookie_drain :: Assertion
+carpet_covers_on_portal_cookie_drain = do
+  let bottom = boardSize - 1
+      setMB b (r, c) v =
+        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+        where
+          row = b !! r
+      fill = Just (mkGem C5)
+      mb0 = replicate boardSize (replicate boardSize fill)
+      -- Empty exit column 6; Cookie at portal A (4,2) → B (bottom,6)
+      mb1 = foldl (\m r -> setMB m (r, 6) Nothing) mb0 [0 .. bottom]
+      mb = setMB mb1 (4, 2) (Just Cookie)
+      (_, fallen, sites) = settleBoardPortals [((4, 2), (bottom, 6))] mb
+  assertEqual "portal-delivered cookie drained" (1 :: Int) fallen
+  assertEqual "drain site is portal B bottom" [(bottom, 6)] sites
+  let (open', hit) = coverCarpets [(bottom, 6)] sites
+  assertEqual "coverCarpets hits portal drain" (1 :: Int) hit
+  assertEqual "carpet closed after portal drain" ([] :: [Pos]) open'
+  -- Live: Cookie at A; cross-clear empties exit column so settle can teleport+drain
+  let board = setCell stableBoard (5, 3) Cookie
+      gs0 =
+        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 4)
+          { gsBoard = board
+          , gsCarpetOpen = [(bottom, 6)]
+          , gsCarpetsCovered = 0
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsPortals = [((5, 3), (bottom, 6))]
+          , gsUfos = []
+          , gsCrossClears = 2
+          , gsMoves = 20
+          , gsGoal = GoalCarpet 1
+          , gsCollected = 0
+          , gsCookiesCollected = 0
+          , gsLastCleared = []
+          }
+      (gs1, out) = useCrossClear (3, 6) gs0
+  case out of
+    InvalidSwap -> assertFailure "cross should fire"
+    NoMatch -> assertFailure "cross should apply"
+    _ -> pure ()
+  assertBool ("portal cookie collected, got " ++ show (gsCookiesCollected gs1)) $
+    gsCookiesCollected gs1 >= 1
+  assertBool "cookie not left on board" $
+    null
+      [ (r, c)
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , isCookie (getCell (gsBoard gs1) (r, c))
+      ]
+  assertBool ("portal drain in lastCleared, got " ++ show (gsLastCleared gs1)) $
+    (bottom, 6) `elem` gsLastCleared gs1
+  assertEqual "bottom carpet covered by portal drain" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
+  assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
+
+-- | Surprise 3×3 explode that opens a bottom-row Safe must drain the Cookie and
+-- cover that carpet (Safe→Cookie then settle drainSites — Surprise blast path).
+-- surpriseOutcome (6,3) == 3 (explode); blast includes (bottom,3).
+carpet_covers_on_surprise_safe_bottom :: Assertion
+carpet_covers_on_surprise_safe_bottom = do
+  let bottom = boardSize - 1
+  assertEqual "fixture Surprise explodes" (3 :: Int) (((6 * 8 + 3) `mod` 4) :: Int)
+  let board =
+        setCell
+          (setCell stableBoard (6, 3) mkSurprise)
+          (bottom, 3)
+          (mkSafeLayers 1)
+      gs0 =
+        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 5)
+          { gsBoard = board
+          , gsCarpetOpen = [(bottom, 3)]
+          , gsCarpetsCovered = 0
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsPortals = []
+          , gsUfos = []
+          , gsHammers = 2
+          , gsMoves = 20
+          , gsGoal = GoalCarpet 1
+          , gsCollected = 0
+          , gsCookiesCollected = 0
+          , gsSafesOpened = 0
+          , gsLastCleared = []
+          }
+      (gs1, out) = useHammer (6, 3) gs0
+  case out of
+    InvalidSwap -> assertFailure "hammer Surprise should fire"
+    NoMatch -> assertFailure "hammer Surprise should apply"
+    _ -> pure ()
+  assertEqual "safe opened" (1 :: Int) (gsSafesOpened gs1)
+  assertBool ("cookie drained after safe open, got " ++ show (gsCookiesCollected gs1)) $
+    gsCookiesCollected gs1 >= 1
+  assertBool "no cookie left on bottom carpet" $
+    not (isCookie (getCell (gsBoard gs1) (bottom, 3)))
+  assertBool ("drain site in lastCleared, got " ++ show (gsLastCleared gs1)) $
+    (bottom, 3) `elem` gsLastCleared gs1
+  assertEqual "bottom carpet covered" (1 :: Int) (gsCarpetsCovered gs1)
   assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
   assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)

@@ -106,11 +106,11 @@ data Level = Level
 allLevels :: [Level]
 allLevels =
   [ Level 0 "入门"   30 (GoalScore 300)
-  , Level 1 "采红"   28 (GoalCollect C1 20)
+  , Level 1 "采红"   30 (GoalCollect C1 20)
   , Level 2 "热身"   26 (GoalScore 500)
-  , Level 3 "采蓝"   24 (GoalCollect C3 25)
+  , Level 3 "采蓝"   26 (GoalCollect C3 22)
   , Level 4 "进阶"   22 (GoalScore 700)
-  , Level 5 "采绿"   20 (GoalCollect C2 30)
+  , Level 5 "采绿"   24 (GoalCollect C2 26)
   , Level 6 "大师"   18 (GoalScore 1100)
   ]
 

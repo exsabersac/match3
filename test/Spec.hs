@@ -32,6 +32,7 @@ tests =
     , testCase "combo_wave_scoring" combo_wave_scoring
     , testCase "collect_goal_progress" collect_goal_progress
     , testCase "collect_goal_clears_level" collect_goal_clears_level
+    , testCase "collect_goal_lose_on_moves" collect_goal_lose_on_moves
     , testCase "level_table_mixes_collect" level_table_mixes_collect
     , testCase "score_goal_ignores_collect" score_goal_ignores_collect
     ]
@@ -421,6 +422,36 @@ collect_goal_clears_level = do
       assertBool "gsOver set" (gsOver gs1 == Just out)
     Won _ -> assertFailure "should LevelClear on non-last level"
     other -> assertFailure ("expected LevelClear, got " ++ show other ++ " collected=" ++ show (gsCollected gs1))
+
+
+-- | One legal clear with moves=1 but GoalCollect unmet → Lost; collected < target.
+collect_goal_lose_on_moves :: Assertion
+collect_goal_lose_on_moves = do
+  let cfg = GameConfig { cfgMoves = 1, cfgGoal = GoalCollect C1 99 }
+      fill = mkGem C5
+      b0 = replicate boardSize (replicate boardSize fill)
+      row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
+      board = take 3 b0 ++ [row3] ++ drop 4 b0
+      gs0 =
+        (newGameAtLevel 0 cfg 55)
+          { gsBoard = board
+          , gsCollected = 0
+          , gsOver = Nothing
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    Lost s -> do
+      assertBool "score non-negative" (s >= 0)
+      assertBool
+        ("collected < 99, got " ++ show (gsCollected gs1))
+        (gsCollected gs1 < 99)
+      assertBool "gsOver is Lost" (gsOver gs1 == Just out)
+      assertEqual "moves spent" (0 :: Int) (gsMoves gs1)
+    other ->
+      assertFailure
+        ("expected Lost, got " ++ show other
+           ++ " collected=" ++ show (gsCollected gs1)
+           ++ " moves=" ++ show (gsMoves gs1))
 
 -- | Campaign table mixes GoalScore and GoalCollect stages.
 level_table_mixes_collect :: Assertion

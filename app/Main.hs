@@ -65,6 +65,9 @@ data App = App
   , appAnim      :: Anim
   , appComboShow :: Int  -- frames left to highlight combo
   , appParticles :: [Particle]
+  , appTipFrames :: Int  -- first-level tip/highlight countdown
+  , appHelpFrames :: Int -- brief help strip after start / unpause
+  , appPaused    :: Bool -- pause + full key help overlay
   }
 
 colorRGB :: Color -> (Word8, Word8, Word8)
@@ -73,6 +76,9 @@ colorRGB C2 = (70, 180, 90)
 colorRGB C3 = (70, 120, 220)
 colorRGB C4 = (240, 200, 60)
 colorRGB C5 = (180, 80, 200)
+
+helpKeysMsg :: Text
+helpKeysMsg = "H hint | U undo | S shuffle | R restart | N next | P pause/help | Esc quit"
 
 main :: IO ()
 main = do
@@ -85,17 +91,21 @@ main = do
       "Match-3"
       defaultWindow { windowInitialSize = V2 winW winH }
   renderer <- createRenderer window (-1) defaultRenderer
+  let (gsHinted, _) = applyHint gs0
   ref <-
     newIORef
       App
-        { appGame = gs0
+        { appGame = gsHinted
         , appSel = Nothing
-        , appMsg = "Click swap | H hint | U undo | S shuffle | N next | R restart | Esc"
+        , appMsg = helpKeysMsg
         , appFlash = []
         , appPulse = 0
         , appAnim = AnimNone
         , appComboShow = 0
         , appParticles = []
+        , appTipFrames = 240
+        , appHelpFrames = 300
+        , appPaused = False
         }
   updateTitle window =<< readIORef ref
   let loop = do
@@ -116,6 +126,8 @@ tickAnim :: App -> App
 tickAnim app =
   let flash' = [ (p, n - 1) | (p, n) <- appFlash app, n > 1 ]
       combo' = max 0 (appComboShow app - 1)
+      tip' = if appPaused app then appTipFrames app else max 0 (appTipFrames app - 1)
+      help' = if appPaused app then appHelpFrames app else max 0 (appHelpFrames app - 1)
       anim' = case appAnim app of
         AnimNone -> AnimNone
         AnimSwap { asP1, asP2, asBefore, asAfter, asFrame }
@@ -133,6 +145,8 @@ tickAnim app =
        , appAnim = anim'
        , appComboShow = combo'
        , appParticles = parts'
+       , appTipFrames = tip'
+       , appHelpFrames = help'
        }
 
 tickParticles :: [Particle] -> [Particle]
@@ -231,6 +245,27 @@ foldEvents ref window = go False
       q' <- handleEvent ref window e
       go (q || q') es
 
+-- | Reset tip/help for a (re)started level; auto-hint on level 1 (index 0).
+freshLevelUi :: GameState -> App -> App
+freshLevelUi gs app =
+  let (gs', _) =
+        if gsLevel gs == 0
+          then applyHint gs
+          else (gs { gsHint = Nothing }, Nothing)
+      tip = if gsLevel gs' == 0 then 240 else 0
+  in app
+       { appGame = gs'
+       , appSel = Nothing
+       , appMsg = helpKeysMsg
+       , appFlash = []
+       , appAnim = AnimNone
+       , appComboShow = 0
+       , appParticles = []
+       , appTipFrames = tip
+       , appHelpFrames = 300
+       , appPaused = False
+       }
+
 -- | Ignore input while a tween is playing (rules already committed).
 animBusy :: App -> Bool
 animBusy app = case appAnim app of
@@ -241,90 +276,102 @@ handleEvent :: IORef App -> Window -> Event -> IO Bool
 handleEvent ref window ev = case eventPayload ev of
   QuitEvent -> pure True
   KeyboardEvent ke
-    | keyboardEventKeyMotion ke == Pressed ->
-        case keysymKeycode (keyboardEventKeysym ke) of
+    | keyboardEventKeyMotion ke == Pressed -> do
+        appGate <- readIORef ref
+        let code = keysymKeycode (keyboardEventKeysym ke)
+        case code of
           KeycodeEscape -> pure True
           KeycodeQ -> pure True
-          KeycodeR -> do
-            seed <- randomIO
-            app <- readIORef ref
-            let gs = restartLevel (appGame app) seed
+          KeycodeP -> do
+            let paused' = not (appPaused appGate)
                 app' =
-                  app
-                    { appGame = gs
-                    , appSel = Nothing
-                    , appMsg = "Restarted level"
-                    , appFlash = []
-                    , appAnim = AnimNone
-                    , appComboShow = 0
-                    , appParticles = []
+                  appGate
+                    { appPaused = paused'
+                    , appMsg =
+                        if paused'
+                          then "Paused — keys: H U S R N P Esc"
+                          else helpKeysMsg
+                    , appHelpFrames =
+                        if paused' then appHelpFrames appGate else 240
                     }
             writeIORef ref app'
             updateTitle window app'
             pure False
-          KeycodeS -> do
-            app <- readIORef ref
-            unless (animBusy app || isJust (gsOver (appGame app))) $ do
-              let gs = shuffleGame (appGame app)
-                  app' =
-                    app
-                      { appGame = gs
-                      , appSel = Nothing
-                      , appMsg = "Shuffled"
-                      , appFlash = []
-                      , appAnim = AnimFall { afBoard = gsBoard gs, afFrame = 0 }
-                      }
-              writeIORef ref app'
-              updateTitle window app'
-            pure False
-          KeycodeN -> do
-            advanceOrMsg ref window
-            pure False
-          KeycodeReturn -> do
-            advanceOrMsg ref window
-            pure False
-          KeycodeSpace -> do
-            advanceOrMsg ref window
-            pure False
-          KeycodeU -> do
-            app <- readIORef ref
-            unless (animBusy app) $
-              case undoMove (appGame app) of
-                Nothing -> do
-                  let app' = app { appMsg = "Nothing to undo" }
+          _
+            | appPaused appGate -> pure False
+            | otherwise -> case code of
+                KeycodeR -> do
+                  seed <- randomIO
+                  app <- readIORef ref
+                  let gs = restartLevel (appGame app) seed
+                      app' = (freshLevelUi gs app) { appMsg = "Restarted level" }
                   writeIORef ref app'
                   updateTitle window app'
-                Just gs -> do
-                  let app' =
-                        app
-                          { appGame = gs
-                          , appSel = Nothing
-                          , appMsg = "Undone"
-                          , appFlash = []
-                          , appAnim = AnimNone
-                          , appComboShow = 0
-                          , appParticles = []
-                          }
+                  pure False
+                KeycodeS -> do
+                  app <- readIORef ref
+                  unless (animBusy app || isJust (gsOver (appGame app))) $ do
+                    let gs = shuffleGame (appGame app)
+                        app' =
+                          app
+                            { appGame = gs
+                            , appSel = Nothing
+                            , appMsg = "Shuffled"
+                            , appFlash = []
+                            , appAnim = AnimFall { afBoard = gsBoard gs, afFrame = 0 }
+                            }
+                    writeIORef ref app'
+                    updateTitle window app'
+                  pure False
+                KeycodeN -> do
+                  advanceOrMsg ref window
+                  pure False
+                KeycodeReturn -> do
+                  advanceOrMsg ref window
+                  pure False
+                KeycodeSpace -> do
+                  advanceOrMsg ref window
+                  pure False
+                KeycodeU -> do
+                  app <- readIORef ref
+                  unless (animBusy app) $
+                    case undoMove (appGame app) of
+                      Nothing -> do
+                        let app' = app { appMsg = "Nothing to undo" }
+                        writeIORef ref app'
+                        updateTitle window app'
+                      Just gs -> do
+                        let app' =
+                              app
+                                { appGame = gs
+                                , appSel = Nothing
+                                , appMsg = "Undone"
+                                , appFlash = []
+                                , appAnim = AnimNone
+                                , appComboShow = 0
+                                , appParticles = []
+                                }
+                        writeIORef ref app'
+                        updateTitle window app'
+                  pure False
+                KeycodeH -> do
+                  app <- readIORef ref
+                  let (gs, h) = applyHint (appGame app)
+                      msg = case h of
+                        Just (p1, p2) ->
+                          "Hint: " <> T.pack (show p1) <> " <-> " <> T.pack (show p2)
+                        Nothing -> "No moves — press S to shuffle"
+                      app' = app { appGame = gs, appMsg = msg }
                   writeIORef ref app'
                   updateTitle window app'
-            pure False
-          KeycodeH -> do
-            app <- readIORef ref
-            let (gs, h) = applyHint (appGame app)
-                msg = case h of
-                  Just (p1, p2) -> "Hint: " <> T.pack (show p1) <> " <-> " <> T.pack (show p2)
-                  Nothing -> "No moves — press S to shuffle"
-                app' = app { appGame = gs, appMsg = msg }
-            writeIORef ref app'
-            updateTitle window app'
-            pure False
-          _ -> pure False
+                  pure False
+                _ -> pure False
     | otherwise -> pure False
   MouseButtonEvent me
     | mouseButtonEventMotion me == Pressed
         && mouseButtonEventButton me == ButtonLeft -> do
         app0 <- readIORef ref
-        if animBusy app0
+        if appPaused app0 || animBusy app0
           then pure False
           else do
             let P (V2 mx my) = mouseButtonEventPos me
@@ -340,16 +387,7 @@ handleEvent ref window ev = case eventPayload ev of
                 seed <- randomIO
                 app <- readIORef ref
                 let gs = restartLevel (appGame app) seed
-                    app' =
-                      app
-                        { appGame = gs
-                        , appSel = Nothing
-                        , appMsg = "Retry!"
-                        , appFlash = []
-                        , appAnim = AnimNone
-                        , appComboShow = 0
-                        , appParticles = []
-                        }
+                    app' = (freshLevelUi gs app) { appMsg = "Retry!" }
                 writeIORef ref app'
                 updateTitle window app'
                 pure False
@@ -444,6 +482,7 @@ handleEvent ref window ev = case eventPayload ev of
                                     , appAnim = anim
                                     , appComboShow = comboShow
                                     , appParticles = parts
+                                    , appTipFrames = 0
                                     }
                             writeIORef ref app'
                             updateTitle window app'
@@ -459,44 +498,17 @@ advanceOrMsg ref window = do
   case gsOver (appGame app) of
     Just (LevelClear _ _) -> do
       let gs = nextLevel (appGame app) seed
-          app' =
-            app
-              { appGame = gs
-              , appSel = Nothing
-              , appMsg = "Next level!"
-              , appFlash = []
-              , appAnim = AnimNone
-              , appComboShow = 0
-              , appParticles = []
-              }
+          app' = (freshLevelUi gs app) { appMsg = "Next level!" }
       writeIORef ref app'
       updateTitle window app'
     Just (Won _) -> do
       let gs = newGameAtLevel 0 (levelConfig (head allLevels)) seed
-          app' =
-            app
-              { appGame = gs
-              , appSel = Nothing
-              , appMsg = "New campaign"
-              , appFlash = []
-              , appAnim = AnimNone
-              , appComboShow = 0
-              , appParticles = []
-              }
+          app' = (freshLevelUi gs app) { appMsg = "New campaign" }
       writeIORef ref app'
       updateTitle window app'
     Just (Lost _) -> do
       let gs = restartLevel (appGame app) seed
-          app' =
-            app
-              { appGame = gs
-              , appSel = Nothing
-              , appMsg = "Retry!"
-              , appFlash = []
-              , appAnim = AnimNone
-              , appComboShow = 0
-              , appParticles = []
-              }
+          app' = (freshLevelUi gs app) { appMsg = "Retry!" }
       writeIORef ref app'
       updateTitle window app'
     _ -> do
@@ -522,7 +534,10 @@ draw ren app = do
   drawHud ren app
   drawBoard ren app
   drawParticles ren (appParticles app)
+  drawTipBanner ren app
+  drawHelpStrip ren app
   drawOverlay ren app
+  drawPauseHelp ren app
 
 --------------------------------------------------------------------------------
 -- Bitmap 3x5 digits (no TTF)
@@ -595,9 +610,97 @@ drawGlyph ren x y px col ch = do
     'T' -> [[1,1,1],[0,1,0],[0,1,0],[0,1,0],[0,1,0]]
     'Y' -> [[1,0,1],[1,0,1],[0,1,0],[0,1,0],[0,1,0]]
     'P' -> [[1,1,0],[1,0,1],[1,1,0],[1,0,0],[1,0,0]]
+    'H' -> [[1,0,1],[1,0,1],[1,1,1],[1,0,1],[1,0,1]]
+    'U' -> [[1,0,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]]
+    'G' -> [[1,1,1],[1,0,0],[1,0,1],[1,0,1],[1,1,1]]
+    'M' -> [[1,0,1],[1,1,1],[1,1,1],[1,0,1],[1,0,1]]
+    'K' -> [[1,0,1],[1,0,1],[1,1,0],[1,0,1],[1,0,1]]
+    'B' -> [[1,1,0],[1,0,1],[1,1,0],[1,0,1],[1,1,0]]
+    'D' -> [[1,1,0],[1,0,1],[1,0,1],[1,0,1],[1,1,0]]
+    'F' -> [[1,1,1],[1,0,0],[1,1,0],[1,0,0],[1,0,0]]
+    'Q' -> [[1,1,1],[1,0,1],[1,0,1],[1,1,1],[0,0,1]]
     '!' -> [[0,1,0],[0,1,0],[0,1,0],[0,0,0],[0,1,0]]
     ' ' -> [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
     _   -> [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]]
+
+
+--------------------------------------------------------------------------------
+-- Help / tip / pause overlays (bitmap, no TTF)
+--------------------------------------------------------------------------------
+
+drawKeyChip :: Renderer -> CInt -> CInt -> Char -> V4 Word8 -> IO ()
+drawKeyChip ren x y ch col = do
+  rendererDrawColor ren $= V4 30 30 45 255
+  fillRect ren (Just (Rectangle (P (V2 x y)) (V2 18 18)))
+  rendererDrawColor ren $= col
+  drawRect ren (Just (Rectangle (P (V2 x y)) (V2 18 18)))
+  drawGlyph ren (x + 4) (y + 3) 2 col ch
+
+-- | Brief key strip along bottom of HUD (start / after unpause).
+drawHelpStrip :: Renderer -> App -> IO ()
+drawHelpStrip ren app
+  | appPaused app = pure ()
+  | appHelpFrames app <= 0 = pure ()
+  | otherwise = do
+      let y = hudH - 22
+          keys =
+            [ ('H', V4 255 220 100 255)
+            , ('U', V4 180 200 255 255)
+            , ('S', V4 200 160 255 255)
+            , ('R', V4 255 160 140 255)
+            , ('N', V4 140 220 160 255)
+            , ('P', V4 255 200 120 255)
+            ]
+      rendererDrawColor ren $= V4 20 20 32 220
+      fillRect ren (Just (Rectangle (P (V2 0 y)) (V2 winW 22)))
+      forM_ (zip [0 :: CInt ..] keys) $ \(i, (ch, col)) ->
+        drawKeyChip ren (8 + i * 26) (y + 2) ch col
+
+-- | First-level tip banner over the board top edge.
+drawTipBanner :: Renderer -> App -> IO ()
+drawTipBanner ren app
+  | appPaused app = pure ()
+  | appTipFrames app <= 0 = pure ()
+  | gsLevel (appGame app) /= 0 = pure ()
+  | otherwise = do
+      let y = hudH + 6
+          pulse = appPulse app
+          bright = fromIntegral (200 + (pulse `mod` 30)) :: Word8
+      rendererDrawColor ren $= V4 40 35 15 230
+      fillRect ren (Just (Rectangle (P (V2 24 y)) (V2 (winW - 48) 28)))
+      rendererDrawColor ren $= V4 255 bright 80 255
+      drawRect ren (Just (Rectangle (P (V2 24 y)) (V2 (winW - 48) 28)))
+      drawBannerWord ren 40 (y + 6) 2 (V4 255 230 120 255) "TIP"
+      drawKeyChip ren 120 (y + 5) 'H' (V4 255 220 100 255)
+      drawBannerWord ren 150 (y + 8) 2 (V4 220 220 200 255) "HINT"
+
+-- | Full pause overlay with key legend.
+drawPauseHelp :: Renderer -> App -> IO ()
+drawPauseHelp ren app
+  | not (appPaused app) = pure ()
+  | otherwise = do
+      rendererDrawColor ren $= V4 8 8 16 200
+      fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW winH)))
+      let panelY = hudH + 40
+          panelH = 280 :: CInt
+      rendererDrawColor ren $= V4 32 32 48 245
+      fillRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
+      rendererDrawColor ren $= V4 255 200 80 255
+      drawRect ren (Just (Rectangle (P (V2 32 panelY)) (V2 (winW - 64) panelH)))
+      drawBannerWord ren 100 (panelY + 16) 4 (V4 255 220 100 255) "PAUSE"
+      let rows :: [(Int, Char, String)]
+          rows =
+            [ (0, 'H', "HINT")
+            , (1, 'U', "UNDO")
+            , (2, 'S', "SHUFFLE")
+            , (3, 'R', "RETRY")
+            , (4, 'N', "NEXT")
+            , (5, 'P', "PLAY")
+            ]
+      forM_ rows $ \(i, ch, label) -> do
+        let yy = panelY + 70 + fromIntegral i * 32
+        drawKeyChip ren 80 yy ch (V4 255 220 120 255)
+        drawBannerWord ren 120 yy 2 (V4 210 210 230 255) label
 
 drawHud :: Renderer -> App -> IO ()
 drawHud ren app = do

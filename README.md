@@ -4,6 +4,21 @@
 
 Playable 8×8 / 5-color match-3. Pure rules live in the library (`Match3.Core`); the SDL2 frontend is `match3-sdl`.
 
+## 30 秒上手 / 30-second start
+
+```bash
+export PATH="$HOME/.ghcup/bin:$PATH"
+sudo apt-get install -y libsdl2-dev   # once
+stack build && stack exec match3-sdl
+```
+
+1. **左键**点两格相邻宝石交换；无三连会回滚  
+2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / U 撤销 / S 洗牌 / R 重开 / N 过关）  
+3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续  
+
+Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec match3-sdl`.
+
+
 ## Features / 功能
 
 - Adjacent 4-neighbor swaps; horizontal/vertical same-color runs ≥3 clear (no L/T shapes)
@@ -21,6 +36,8 @@ Playable 8×8 / 5-color match-3. Pure rules live in the library (`Match3.Core`);
 - **Levels**: 7 stages mixing score + collect; press `N` / Space / Enter / click after clear
 - **多关卡**：7 关混入分数 / 收集目标；过关按 `N`、空格、回车或点击
 - Hint `H`, undo `U`, restart / retry `R` (or click on lose overlay)
+- Start help strip + **P** pause key legend; level-1 tip + auto-hint highlight
+- 开局帮助条 + **P** 暂停键位一览；第一关 tip + 自动提示高亮
 - Selection pulse, hint outline, clear flash + particle bursts, swap/fall tweens
 - 选中脉冲、提示黄框、消除闪白 + 粒子爆散、交换/下落补间
 - Fullscreen outcome banners: CLEAR! / WIN! / LOSE + NEXT / RETRY
@@ -35,11 +52,11 @@ Playable 8×8 / 5-color match-3. Pure rules live in the library (`Match3.Core`);
 | # | Name 名称 | Moves 步数 | Goal 目标 |
 |---|-----------|------------|-----------|
 | 1 | 入门 Beginner | 30 | Score 300 |
-| 2 | 采红 Collect Red | 28 | Clear 20× RED (C1) |
+| 2 | 采红 Collect Red | 30 | Clear 20× RED (C1) |
 | 3 | 热身 Warm-up | 26 | Score 500 |
-| 4 | 采蓝 Collect Blue | 24 | Clear 25× BLUE (C3) |
+| 4 | 采蓝 Collect Blue | 26 | Clear 22× BLUE (C3) |
 | 5 | 进阶 Intermediate | 22 | Score 700 |
-| 6 | 采绿 Collect Green | 20 | Clear 30× GREEN (C2) |
+| 6 | 采绿 Collect Green | 24 | Clear 26× GREEN (C2) |
 | 7 | 大师 Master | 18 | Score 1100 |
 
 Reach the goal to clear the level (`LevelClear` → `N` / Space / Enter / click). Finish level 7 to win the campaign. Running out of moves loses (`R` / click to retry).
@@ -56,6 +73,7 @@ Reach the goal to clear the level (`LevelClear` → `N` / Space / Enter / click)
 | `S` | Shuffle board (stable + playable) / 洗牌（无初始三连且有解） |
 | `N` / Space / Enter | Next level after clear / campaign restart after win / retry after lose |
 | `R` | Restart current level / 重开当前关 |
+| `P` | Pause + key help overlay / 暂停并显示键位 |
 | `Esc` / `Q` | Quit / 退出 |
 
 HUD: green (or collect-color) bar ≈ goal progress, blue bar ≈ moves left; right strip green=win / yellow=level clear / red=lose / purple=just auto-shuffled. Combo badge shows `xN` after multi-wave cascades. Collect levels show a color swatch next to the meter.
@@ -127,9 +145,9 @@ Ship a playable Linux (and optionally Windows) build without asking players to i
 5. **Optional Windows**: cross-compile or build on Windows with Stack + SDL2; ship `SDL2.dll` next to the `.exe`
 6. **Out of scope for v0.1**: audio, mobile, save slots, online leaderboard
 
-## CI
+## CI (optional)
 
-GitHub Actions runs `stack test` on push/PR (`.github/workflows/ci.yml`) when the workflow file is present on the default branch.
+A sample `.github/workflows/ci.yml` may exist locally for `stack test` on push/PR. It is **not required** for local play or itch builds; omit it from the release zip.
 
 ## Layout / 工程结构
 

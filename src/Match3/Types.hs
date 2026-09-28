@@ -13,6 +13,10 @@ module Match3.Types
   , MovesLeft
   , TargetScore
   , Outcome(..)
+  , LevelGoal(..)
+  , goalMet
+  , goalProgress
+  , goalTarget
   , GameConfig(..)
   , defaultConfig
   , Level(..)
@@ -62,29 +66,53 @@ data Outcome
   | LevelClear Score Int  -- score, next level index (0-based)
   deriving (Eq, Show, Generic)
 
+-- | Level win condition: reach a score, or clear N gems of a color.
+data LevelGoal
+  = GoalScore TargetScore
+  | GoalCollect Color Int
+  deriving (Eq, Show, Generic)
+
+-- | Whether the goal is satisfied given current score / collected count.
+goalMet :: LevelGoal -> Score -> Int -> Bool
+goalMet (GoalScore t) score _ = score >= t
+goalMet (GoalCollect _ n) _ collected = collected >= n
+
+-- | Current progress toward the goal (score or collected count).
+goalProgress :: LevelGoal -> Score -> Int -> Int
+goalProgress (GoalScore _) score _ = score
+goalProgress (GoalCollect _ _) _ collected = collected
+
+-- | Target number shown in HUD (score target or collect count).
+goalTarget :: LevelGoal -> Int
+goalTarget (GoalScore t) = t
+goalTarget (GoalCollect _ n) = n
+
 data GameConfig = GameConfig
-  { cfgMoves  :: MovesLeft
-  , cfgTarget :: TargetScore
+  { cfgMoves :: MovesLeft
+  , cfgGoal  :: LevelGoal
   } deriving (Eq, Show)
 
 defaultConfig :: GameConfig
-defaultConfig = GameConfig { cfgMoves = 30, cfgTarget = 500 }
+defaultConfig = GameConfig { cfgMoves = 30, cfgGoal = GoalScore 500 }
 
 data Level = Level
-  { lvlIndex  :: Int
-  , lvlName   :: String
-  , lvlMoves  :: MovesLeft
-  , lvlTarget :: TargetScore
+  { lvlIndex :: Int
+  , lvlName  :: String
+  , lvlMoves :: MovesLeft
+  , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
+-- | Mixed campaign: score targets + color-collect stages.
 allLevels :: [Level]
 allLevels =
-  [ Level 0 "入门" 30 300
-  , Level 1 "热身" 28 450
-  , Level 2 "进阶" 25 650
-  , Level 3 "高手" 22 850
-  , Level 4 "大师" 20 1100
+  [ Level 0 "入门"   30 (GoalScore 300)
+  , Level 1 "采红"   28 (GoalCollect C1 20)
+  , Level 2 "热身"   26 (GoalScore 500)
+  , Level 3 "采蓝"   24 (GoalCollect C3 25)
+  , Level 4 "进阶"   22 (GoalScore 700)
+  , Level 5 "采绿"   20 (GoalCollect C2 30)
+  , Level 6 "大师"   18 (GoalScore 1100)
   ]
 
 levelConfig :: Level -> GameConfig
-levelConfig l = GameConfig { cfgMoves = lvlMoves l, cfgTarget = lvlTarget l }
+levelConfig l = GameConfig { cfgMoves = lvlMoves l, cfgGoal = lvlGoal l }

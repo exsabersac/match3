@@ -26,6 +26,7 @@ module Match3.Board
   , scoreForWave
   , findHint
   , MatchRun(..)
+  , countColor
   ) where
 
 import Data.List (foldl', nub)
@@ -141,19 +142,29 @@ spawnSpecials prefer runs =
           _ -> runPos run !! (n `div` 2)
   ]
 
--- | Clear matches (+ special expansions), place new specials, return hole board.
+-- | Count how many cleared positions have a given color (pre-clear board).
+countColor :: Board -> [Pos] -> Color -> Int
+countColor b ps col =
+  length [p | p <- ps, cellColor (getCell b p) == col]
+
+-- | Clear matches (+ special expansions), place new specials, return hole board + cleared positions.
 clearMatches :: Board -> (MBoard, Int)
 clearMatches b = clearMatchesAt Nothing b
 
 clearMatchesAt :: Maybe Pos -> Board -> (MBoard, Int)
 clearMatchesAt prefer b =
+  let (mb, n, _) = clearMatchesDetailed prefer b
+  in (mb, n)
+
+-- | Like clearMatchesAt but also returns the cleared positions (pre-spawn).
+clearMatchesDetailed :: Maybe Pos -> Board -> (MBoard, Int, [Pos])
+clearMatchesDetailed prefer b =
   let runs = findMatchRuns b
       base = nub (concatMap runPos runs)
       allPos = expandSpecials b base
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM b) allPos
       spawns = spawnSpecials prefer runs
-      -- Only place spawn if that position was cleared
       mb1 =
         foldl'
           ( \m (p, cell) ->
@@ -161,7 +172,7 @@ clearMatchesAt prefer b =
           )
           mb0
           spawns
-  in (mb1, n)
+  in (mb1, n, allPos)
 
 colGravity :: [Maybe Cell] -> [Maybe Cell]
 colGravity col =
@@ -211,13 +222,25 @@ stepCascade :: RandomGen g => g -> Board -> Maybe (Board, Int, g)
 stepCascade = stepCascadeAt Nothing
 
 stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
-stepCascadeAt prefer g b
+stepCascadeAt prefer g b =
+  case stepCascadeDetailed prefer g b of
+    Nothing -> Nothing
+    Just (b', n, _, g') -> Just (b', n, g')
+
+-- | Cascade step returning cleared positions for color tallying.
+stepCascadeDetailed
+  :: RandomGen g
+  => Maybe Pos
+  -> g
+  -> Board
+  -> Maybe (Board, Int, [Pos], g)
+stepCascadeDetailed prefer g b
   | not (hasAnyMatch b) = Nothing
   | otherwise =
-      let (mb, n) = clearMatchesAt prefer b
+      let (mb, n, pos) = clearMatchesDetailed prefer b
           fallen = applyGravity mb
           (b', g') = refill g fallen
-      in Just (b', n, g')
+      in Just (b', n, pos, g')
 
 runCascade :: RandomGen g => g -> Board -> (Board, Int, g)
 runCascade = runCascadeAt Nothing
@@ -230,24 +253,29 @@ runCascadeAt prefer g b = case stepCascadeAt prefer g b of
     let (b'', n', g'') = runCascadeAt Nothing g' b'
     in (b'', n + n', g'')
 
--- | Cascade with per-wave combo scoring.
--- Returns (board, cellsCleared, scoreGained, maxComboWave, gen).
+-- | Cascade with per-wave combo scoring + color tallies from cleared cells.
+-- Returns (board, cellsCleared, scoreGained, maxComboWave, colorCounts, gen).
+-- colorCounts: for each Color, how many cleared cells had that color.
 -- maxComboWave is 0 if nothing cleared, else highest 1-based wave index.
 runCascadeScored
   :: RandomGen g
   => Maybe Pos
   -> g
   -> Board
-  -> (Board, Int, Score, Int, g)
-runCascadeScored prefer g b = go prefer g b 0 0 0
+  -> (Board, Int, Score, Int, [(Color, Int)], g)
+runCascadeScored prefer g b = go prefer g b 0 0 0 (zip allColors (repeat 0))
   where
-    go pref g' b' cells score maxW =
-      case stepCascadeAt pref g' b' of
-        Nothing -> (b', cells, score, maxW, g')
-        Just (b'', n, g'') ->
+    go pref g' b' cells score maxW tallies =
+      case stepCascadeDetailed pref g' b' of
+        Nothing -> (b', cells, score, maxW, tallies, g')
+        Just (b'', n, pos, g'') ->
           let wave = maxW + 1
               score' = score + scoreForWave wave n
-          in go Nothing g'' b'' (cells + n) score' wave
+              tallies' =
+                [ (col, cnt + countColor b' pos col)
+                | (col, cnt) <- tallies
+                ]
+          in go Nothing g'' b'' (cells + n) score' wave tallies'
 
 randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard g0 =

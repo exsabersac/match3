@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main (main) where
 
-import Data.Maybe (isNothing)
+import Data.Maybe (fromMaybe, isNothing)
 import Match3.Board (applyGravity, clearMatches, refill)
 import Match3.Core
 import System.Random (mkStdGen)
@@ -30,6 +30,10 @@ tests =
     , testCase "shuffle_when_no_moves" shuffle_when_no_moves
     , testCase "playable_board_stable_and_has_move" playable_board_stable_and_has_move
     , testCase "combo_wave_scoring" combo_wave_scoring
+    , testCase "collect_goal_progress" collect_goal_progress
+    , testCase "collect_goal_clears_level" collect_goal_clears_level
+    , testCase "level_table_mixes_collect" level_table_mixes_collect
+    , testCase "score_goal_ignores_collect" score_goal_ignores_collect
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -123,14 +127,10 @@ match_line_ge3 = do
   assertBool "stable base" (not (hasAnyMatch stable))
 
   -- Negative: only 2-in-a-row horizontally — not a match
-  -- Place C1 at (0,0)(0,1); (0,2) is C3, (1,0) is C2 — no 3-run
   let b2 = setCell (setCell stable (0, 0) (mkGem C1)) (0, 1) (mkGem C1)
   assertBool "2-in-a-row not a match" (null (findMatches b2))
 
   -- Negative: only 2-in-a-row vertically — not a match
-  -- Place C5 at (3,0)(4,0); neighbors (2,0)=C3 (5,0)=C1 (3,1)=C5 careful!
-  -- stable (3,1)=C5 already — horizontal would be C5,C5 at (3,0)(3,1) only 2
-  -- (4,1)=C1 so OK. (2,0)=C3, (5,0)=C1 OK.
   let bV = setCell (setCell stable (3, 0) (mkGem C5)) (4, 0) (mkGem C5)
   assertBool "vert 2-in-a-row not a match" (null (findMatches bV))
 
@@ -143,7 +143,6 @@ match_line_ge3 = do
              (mkGem C1))
           (2, 2)
           (mkGem C1)
-  -- Check we did not accidentally create ortho 3-runs
   assertBool "diagonal not a match" (null (findMatches diag))
   assertBool "diag hasAnyMatch false" (not (hasAnyMatch diag))
 
@@ -199,12 +198,12 @@ outcome_moves_or_score = do
           assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
           assertEqual "score" (gsScore gs0 + gained) (gsScore gs1)
           assertBool "gained > 0" (gained > 0)
-        Won s -> assertBool "won" (s >= gsTarget gs1)
-        LevelClear s _ -> assertBool "level" (s >= gsTarget gs1)
+        Won s -> assertBool "won" (goalMet (gsGoal gs1) s (gsCollected gs1))
+        LevelClear s _ -> assertBool "level" (goalMet (gsGoal gs1) s (gsCollected gs1))
         Lost _ -> gsMoves gs1 @?= 0
         other -> assertFailure ("unexpected: " ++ show other)
 
-  let cfgW = GameConfig { cfgMoves = 5, cfgTarget = 1 }
+  let cfgW = GameConfig { cfgMoves = 5, cfgGoal = GoalScore 1 }
       gsW0 = newGameAtLevel (length allLevels - 1) cfgW 42
   case findMatchPair (gsBoard gsW0) of
     Nothing -> assertFailure "win mover"
@@ -214,7 +213,7 @@ outcome_moves_or_score = do
         Won _ -> pure ()
         other -> assertFailure ("expected Won on last level, got " ++ show other)
 
-  let cfgL = GameConfig { cfgMoves = 1, cfgTarget = 999999 }
+  let cfgL = GameConfig { cfgMoves = 1, cfgGoal = GoalScore 999999 }
       gsL0 = newGame cfgL 42
   case findMatchPair (gsBoard gsL0) of
     Nothing -> assertFailure "lose mover"
@@ -301,6 +300,7 @@ undo_restores = do
           gsBoard gsU @?= gsBoard gs0
           gsScore gsU @?= gsScore gs0
           gsMoves gsU @?= gsMoves gs0
+          gsCollected gsU @?= gsCollected gs0
 
 -- | Stuck board (no valid adjacent swap) is reshuffled to a playable stable board.
 shuffle_when_no_moves :: Assertion
@@ -328,7 +328,6 @@ shuffle_when_no_moves = do
 -- | Cyclic (r+c) mod 5 board: stable and no valid adjacent swap.
 stuckNoMoveBoard :: Board
 stuckNoMoveBoard =
-  -- Cyclic (r+c) mod 5: no 3-run and no adjacent swap creates a match.
   [ [ mkGem (toEnum ((r + c) `mod` 5))
     | c <- [0 .. boardSize - 1]
     ]
@@ -348,9 +347,6 @@ playable_board_stable_and_has_move = do
 -- | Multi-wave cascade scores with increasing wave multiplier.
 combo_wave_scoring :: Assertion
 combo_wave_scoring = do
-  -- Wave-1 only: three-in-a-row of C1 on an otherwise C5 board that won't cascade
-  -- (clearing leaves holes refilled — may cascade). Check scoreForWave math +
-  -- runCascadeScored returns combo >= 1 when matches exist.
   assertEqual "wave1" (30 :: Int) (scoreForWave 1 3)
   assertEqual "wave2" (60 :: Int) (scoreForWave 2 3)
   assertEqual "wave3" (90 :: Int) (scoreForWave 3 3)
@@ -358,7 +354,96 @@ combo_wave_scoring = do
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
       b = take 3 b0 ++ [row3] ++ drop 4 b0
-      (_, cells, scored, combo, _) = runCascadeScored Nothing (mkStdGen 3) b
+      (_, cells, scored, combo, tallies, _) = runCascadeScored Nothing (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
   assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)
+  let c1n = fromMaybe 0 (lookup C1 tallies)
+  assertBool "tallied some C1" (c1n >= 3)
+
+--------------------------------------------------------------------------------
+-- Color-collect goals
+--------------------------------------------------------------------------------
+
+-- | Clearing gems of the target color increments gsCollected.
+collect_goal_progress :: Assertion
+collect_goal_progress = do
+  let cfg = GameConfig { cfgMoves = 20, cfgGoal = GoalCollect C1 100 }
+      -- Build a board with a clearable C1 triple at row 3, rest C5 (won't make C1 match elsewhere)
+      fill = mkGem C5
+      b0 = replicate boardSize (replicate boardSize fill)
+      -- Place C1 C1 C2 and an adjacent C1 so swap creates three C1
+      -- row3: C1 C1 C2 C3 C4 C5 C2 C3  — swap (3,2)=C2 with (3,1) wouldn't help
+      -- Better: put C1 at (3,0)(3,1)(3,3) and C2 at (3,2); swap (3,2)<->something...
+      -- Simpler: board already has match of three C1 — but then newGame uses random board.
+      -- Override board after newGame, then force a matching swap.
+      row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
+      board = take 3 b0 ++ [row3] ++ drop 4 b0
+      -- Swap (3,2)=C2 with (3,3)=C1 → row becomes C1 C1 C1 C2 ... match!
+      gs0 =
+        (newGame cfg 55)
+          { gsBoard = board
+          , gsCollected = 0
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    MoveApplied _ -> pure ()
+    LevelClear _ _ -> pure ()
+    Won _ -> pure ()
+    Lost _ -> pure ()
+    other -> assertFailure ("expected applied/terminal, got " ++ show other)
+  assertBool
+    ("collected C1 increased, got " ++ show (gsCollected gs1))
+    (gsCollected gs1 >= 3)
+
+-- | Reaching collect count triggers LevelClear (or Won on last level).
+collect_goal_clears_level :: Assertion
+collect_goal_clears_level = do
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalCollect C1 3 }
+      fill = mkGem C5
+      b0 = replicate boardSize (replicate boardSize fill)
+      row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
+      board = take 3 b0 ++ [row3] ++ drop 4 b0
+      -- Level 0 so LevelClear (not Won)
+      gs0 =
+        (newGameAtLevel 0 cfg 55)
+          { gsBoard = board
+          , gsCollected = 0
+          , gsOver = Nothing
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  case out of
+    LevelClear _ next -> do
+      assertEqual "next level" (1 :: Int) next
+      assertBool "collected enough" (gsCollected gs1 >= 3)
+      assertBool "gsOver set" (gsOver gs1 == Just out)
+    Won _ -> assertFailure "should LevelClear on non-last level"
+    other -> assertFailure ("expected LevelClear, got " ++ show other ++ " collected=" ++ show (gsCollected gs1))
+
+-- | Campaign table mixes GoalScore and GoalCollect stages.
+level_table_mixes_collect :: Assertion
+level_table_mixes_collect = do
+  let goals = map lvlGoal allLevels
+      scores = [g | g@GoalScore {} <- goals]
+      collects = [g | g@GoalCollect {} <- goals]
+  assertBool "has score levels" (not (null scores))
+  assertBool "has collect levels" (not (null collects))
+  assertBool "at least 5 levels" (length allLevels >= 5)
+  -- Named collect stages present
+  let names = map lvlName allLevels
+  assertBool "has 采红" ("采红" `elem` names)
+  assertBool "has 采蓝" ("采蓝" `elem` names)
+  assertBool "has 采绿" ("采绿" `elem` names)
+
+-- | Score-goal levels do not increment gsCollected (stays 0).
+score_goal_ignores_collect :: Assertion
+score_goal_ignores_collect = do
+  let cfg = GameConfig { cfgMoves = 20, cfgGoal = GoalScore 99999 }
+      gs0 = newGame cfg 42
+  case findMatchPair (gsBoard gs0) of
+    Nothing -> assertFailure "need move"
+    Just (p1, p2) -> do
+      let (gs1, _) = trySwap p1 p2 gs0
+      gsCollected gs1 @?= 0

@@ -12,6 +12,10 @@ module Match3.Core
   , MovesLeft
   , TargetScore
   , Outcome(..)
+  , LevelGoal(..)
+  , goalMet
+  , goalProgress
+  , goalTarget
   , GameConfig(..)
   , defaultConfig
   , Level(..)
@@ -38,6 +42,7 @@ module Match3.Core
   , scoreForWave
   , findHint
   , MatchRun(..)
+  , countColor
   , GameState(..)
   , newGame
   , newGameAtLevel

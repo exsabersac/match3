@@ -15,6 +15,7 @@ module Match3.Game
   , shuffleGame
   ) where
 
+import Data.Maybe (fromMaybe)
 import Match3.Board
   ( findHint
   , hasAnyMatch
@@ -30,17 +31,18 @@ import Match3.Types
 import System.Random (StdGen, mkStdGen)
 
 data GameState = GameState
-  { gsBoard   :: Board
-  , gsScore   :: Score
-  , gsMoves   :: MovesLeft
-  , gsTarget  :: TargetScore
-  , gsGen     :: StdGen
-  , gsOver    :: Maybe Outcome
-  , gsLevel   :: Int
-  , gsHistory :: [GameState]
-  , gsHint    :: Maybe (Pos, Pos)
-  , gsCombo   :: Int   -- last move max cascade wave (0 if none)
-  , gsShuffled :: Bool -- True if last ensurePlayable reshuffled
+  { gsBoard     :: Board
+  , gsScore     :: Score
+  , gsMoves     :: MovesLeft
+  , gsGoal      :: LevelGoal
+  , gsCollected :: Int          -- gems of collect-color cleared (0 if score goal)
+  , gsGen       :: StdGen
+  , gsOver      :: Maybe Outcome
+  , gsLevel     :: Int
+  , gsHistory   :: [GameState]
+  , gsHint      :: Maybe (Pos, Pos)
+  , gsCombo     :: Int   -- last move max cascade wave (0 if none)
+  , gsShuffled  :: Bool  -- True if last ensurePlayable reshuffled
   } deriving (Show)
 
 instance Eq GameState where
@@ -48,7 +50,8 @@ instance Eq GameState where
     gsBoard a == gsBoard b
       && gsScore a == gsScore b
       && gsMoves a == gsMoves b
-      && gsTarget a == gsTarget b
+      && gsGoal a == gsGoal b
+      && gsCollected a == gsCollected b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
 
@@ -66,7 +69,8 @@ newGameAtLevel li cfg seed =
        { gsBoard = board
        , gsScore = 0
        , gsMoves = cfgMoves cfg
-       , gsTarget = cfgTarget cfg
+       , gsGoal = cfgGoal cfg
+       , gsCollected = 0
        , gsGen = g1
        , gsOver = Nothing
        , gsLevel = li
@@ -86,19 +90,22 @@ restartLevel gs seed =
 
 checkOutcome :: GameState -> Outcome
 checkOutcome gs
-  | gsScore gs >= gsTarget gs = Won (gsScore gs)
+  | goalMet (gsGoal gs) (gsScore gs) (gsCollected gs) = Won (gsScore gs)
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied 0
 
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
-  | gsScore gs >= gsTarget gs =
+  | goalMet (gsGoal gs) (gsScore gs) (gsCollected gs) =
       let nextIdx = gsLevel gs + 1
       in if nextIdx < length allLevels
            then LevelClear (gsScore gs) nextIdx
            else Won (gsScore gs)
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied gained
+
+lookupColor :: [(Color, Int)] -> Color -> Int
+lookupColor tallies col = fromMaybe 0 (lookup col tallies)
 
 -- | If board has no valid move (and game not over), reshuffle to a playable board.
 ensurePlayable :: GameState -> GameState
@@ -125,9 +132,13 @@ trySwap p1 p2 gs
       in if not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (board1, _cleared, gained, combo, g') =
+             let (board1, _cleared, gained, combo, tallies, g') =
                    runCascadeScored (Just p2) (gsGen gs) swapped
+                 collectDelta = case gsGoal gs of
+                   GoalCollect col _ -> lookupColor tallies col
+                   GoalScore _ -> 0
                  score' = gsScore gs + gained
+                 collected' = gsCollected gs + collectDelta
                  moves' = gsMoves gs - 1
                  hist = take 20 (snapshot gs : gsHistory gs)
                  gs' =
@@ -135,6 +146,7 @@ trySwap p1 p2 gs
                      { gsBoard = board1
                      , gsScore = score'
                      , gsMoves = moves'
+                     , gsCollected = collected'
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing

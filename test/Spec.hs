@@ -204,6 +204,8 @@ tests =
     , testCase "belt_delivers_cookie_bottom_drains" belt_delivers_cookie_bottom_drains
     , testCase "portal_teleports_flip" portal_teleports_flip
     , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
+    , testCase "carpet_covers_on_cookie_vacate" carpet_covers_on_cookie_vacate
+    , testCase "carpet_covers_on_safe_open" carpet_covers_on_safe_open
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -6509,3 +6511,70 @@ goal_carpet_seeds_open_tiles = do
     any
       (\(r, c) -> r < boardSize - 1 && isCookie (getCell (gsBoard gsCk) (r, c)))
       [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
+
+--------------------------------------------------------------------------------
+-- Carpet × Cookie vacate / Safe open (GoalCarpet soft-lock fix)
+--------------------------------------------------------------------------------
+
+-- | Cookie on a carpet tile that falls away (column clear → gravity → drain)
+-- must cover that carpet — Cookie never enters clear-hole lists.
+carpet_covers_on_cookie_vacate :: Assertion
+carpet_covers_on_cookie_vacate = do
+  let board = setCell stableBoard (3, 3) Cookie
+      gs0 =
+        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 1)
+          { gsBoard = board
+          , gsCarpetOpen = [(3, 3)]
+          , gsCarpetsCovered = 0
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsPortals = []
+          , gsUfos = []
+          , gsCrossClears = 1
+          , gsMoves = 20
+          , gsGoal = GoalCarpet 1
+          , gsCollected = 0
+          , gsCookiesCollected = 0
+          }
+      (gs1, out) = useCrossClear (5, 3) gs0
+  case out of
+    InvalidSwap -> assertFailure "cross should fire"
+    NoMatch -> assertFailure "cross should apply"
+    _ -> pure ()
+  assertBool "cookie drained or left (3,3)" $
+    not (isCookie (getCell (gsBoard gs1) (3, 3)))
+  assertEqual "carpet covered by cookie vacate" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
+  assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
+
+-- | Safe opening to Cookie on a carpet tile covers that carpet (Safe→Cookie
+-- never digs a clear-hole either).
+carpet_covers_on_safe_open :: Assertion
+carpet_covers_on_safe_open = do
+  let board = setCell stableBoard (3, 3) (mkSafeLayers 1)
+      gs0 =
+        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 2)
+          { gsBoard = board
+          , gsCarpetOpen = [(3, 3)]
+          , gsCarpetsCovered = 0
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsPortals = []
+          , gsUfos = []
+          , gsHammers = 2
+          , gsMoves = 20
+          , gsGoal = GoalCarpet 1
+          , gsCollected = 0
+          , gsSafesOpened = 0
+          }
+      -- Hammer an orthogonal neighbor: adj peel opens Safe → Cookie
+      (gs1, out) = useHammer (3, 2) gs0
+  case out of
+    InvalidSwap -> assertFailure "hammer should fire"
+    NoMatch -> assertFailure "hammer should apply"
+    _ -> pure ()
+  assertBool "safe opened to cookie" $
+    isCookie (getCell (gsBoard gs1) (3, 3)) || not (isSafe (getCell (gsBoard gs1) (3, 3)))
+  assertEqual "safes opened" (1 :: Int) (gsSafesOpened gs1)
+  assertEqual "carpet covered on safe open" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "carpet closed" ([] :: [Pos]) (gsCarpetOpen gs1)

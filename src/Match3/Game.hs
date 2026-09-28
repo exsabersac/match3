@@ -633,6 +633,23 @@ countTimeSpirits b =
     , isTimeSpirit (getCell b (r, c))
     ]
 
+
+-- | Carpet seeds when Cookie / Safe leave a cell without entering clear-holes.
+-- Cookie is immune to mid-board wipe (only gravity + bottom drain); Safe opens
+-- in place to Cookie. Neither path appears in cascade pos lists, so GoalCarpet
+-- under them would soft-lock unless we treat the vacate as a cover seed.
+-- Compare pre-move board to post-cascade board (before snail crawl).
+carpetVacateSeeds :: Board -> Board -> [Pos]
+carpetVacateSeeds before after =
+  [ (r, c)
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , let cell0 = getCell before (r, c)
+        cell1 = getCell after (r, c)
+  , (isCookie cell0 && not (isCookie cell1))
+      || (isSafe cell0 && not (isSafe cell1))
+  ]
+
 -- | Leftover moves carried into the next campaign level (cap 3).
 carryMovesBonus :: MovesLeft -> MovesLeft
 carryMovesBonus left = min 3 (max 0 left)
@@ -690,7 +707,10 @@ trySwap p1 p2 gs
                  cakeHit = cakes0 + cakes1 + cakes2
                  safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
-                 (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) (pos0 ++ pos1 ++ pos2)
+                 (carpetOpen', carpetHit) =
+                   coverCarpets
+                     (gsCarpetOpen gs)
+                     (pos0 ++ pos1 ++ pos2 ++ carpetVacateSeeds board0 boardBeltCas)
                  uAbs = uAbs0 + uAbs1 + uAbs2
                  ufoCollected' = gsUfoCollected gs + uAbs
                  cookies' = gsCookiesCollected gs + cookieHit
@@ -821,7 +841,10 @@ useHammer p gs
           safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
           spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
           safes' = gsSafesOpened gs + safesHit
-          (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) posCleared
+          (carpetOpen', carpetHit) =
+            coverCarpets
+              (gsCarpetOpen gs)
+              (posCleared ++ carpetVacateSeeds (gsBoard gs) boardH)
           carpets' = gsCarpetsCovered gs + carpetHit
           collectDelta = case gsGoal gs of
             GoalCollect col _ -> lookupColor tallies col
@@ -911,7 +934,10 @@ useFreeSwap p1 p2 gs
                  safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
                  spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
                  safes' = gsSafesOpened gs + safesHit
-                 (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) posCleared
+                 (carpetOpen', carpetHit) =
+                   coverCarpets
+                     (gsCarpetOpen gs)
+                     (posCleared ++ carpetVacateSeeds (gsBoard gs) boardF)
                  carpets' = gsCarpetsCovered gs + carpetHit
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
@@ -989,7 +1015,10 @@ useCrossClear p gs
           safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
           spiritHit = max 0 (countTimeSpirits (gsBoard gs) - countTimeSpirits board1)
           safes' = gsSafesOpened gs + safesHit
-          (carpetOpen', carpetHit) = coverCarpets (gsCarpetOpen gs) posCleared
+          (carpetOpen', carpetHit) =
+            coverCarpets
+              (gsCarpetOpen gs)
+              (posCleared ++ carpetVacateSeeds (gsBoard gs) boardH)
           carpets' = gsCarpetsCovered gs + carpetHit
           collectDelta = case gsGoal gs of
             GoalCollect col _ -> lookupColor tallies col

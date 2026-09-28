@@ -187,6 +187,7 @@ tests =
     , testCase "soft_hit_preserves_choco_steam" soft_hit_preserves_choco_steam
     , testCase "surprise_blast_peels_adjacent" surprise_blast_peels_adjacent
     , testCase "shuffle_preserves_specials" shuffle_preserves_specials
+    , testCase "soft_lock_blocks_special_expand" soft_lock_blocks_special_expand
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5361,3 +5362,83 @@ shuffle_preserves_specials = do
       gsCd = shuffleGame (gs0 { gsBoard = boardCd })
   assertBool "countdown kept" (isCountdown (getCell (gsBoard gsCd) (2, 2)))
   assertEqual "countdown turns" (4 :: Int) (countdownTurns (getCell (gsBoard gsCd) (2, 2)))
+
+--------------------------------------------------------------------------------
+-- Soft-locked Line/Bomb must not expand (ice>1 / Chain / Curtain)
+--------------------------------------------------------------------------------
+
+-- | ice>1 and Chain/Curtain peel-locks must suppress Line/Bomb expandSpecials.
+-- Regression: expand fired while chipIce only soft-chipped, clearing whole rows
+-- / 3×3 around still-locked specials (and Chain+Line hammer double-peeled via
+-- adjacent after the illicit row clear).
+soft_lock_blocks_special_expand :: Assertion
+soft_lock_blocks_special_expand = do
+  -- ice=2 LineH in a 3-match: chips ice only; does NOT clear the rest of the row.
+  let boardIce =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (Gem C1 LineH 2 Nothing))
+          (3, 2)
+          (mkGem C1)
+  assertBool "ice match" (not (null (findMatches boardIce)))
+  let expIce = expandSpecials boardIce (findMatches boardIce)
+  assertEqual "ice>1 LineH does not expand row" (sort (findMatches boardIce)) (sort expIce)
+  let (bIce, nIce, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 31) boardIce
+  assertEqual "only two match partners clear" (2 :: Int) nIce
+  assertEqual "LineH survives" LineH (cellKind (getCell bIce (3, 1)))
+  assertEqual "ice chipped 2→1" (1 :: Int) (iceLayers (getCell bIce (3, 1)))
+  assertBool "far cell (3,7) untouched kind" $
+    isGem (getCell bIce (3, 7)) && cellKind (getCell bIce (3, 7)) == Normal
+  -- Control: last ice (ice==1) LineH still expands the row.
+  let boardLast =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (Gem C1 LineH 1 Nothing))
+          (3, 2)
+          (mkGem C1)
+      expLast = expandSpecials boardLast (findMatches boardLast)
+  assertEqual "last-ice expands full row" (8 :: Int) (length [c | (3, c) <- expLast])
+  -- ice=2 Bomb: no 3×3 while soft-locked.
+  let boardBomb =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (Gem C1 Bomb 2 Nothing))
+          (3, 2)
+          (mkGem C1)
+      expBomb = expandSpecials boardBomb (findMatches boardBomb)
+  assertEqual "ice>1 Bomb does not blast" (sort (findMatches boardBomb)) (sort expBomb)
+  -- Hammer on Chain+LineH: peel one layer only (no row clear / no double peel).
+  let boardCh = setCell stableBoard (4, 4) (Gem C2 LineH 0 (Just (Chain 2)))
+      gsCh0 =
+        (newGame defaultConfig 11)
+          { gsBoard = boardCh
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsMoves = 20
+          , gsScore = 0
+          }
+      (gsCh1, outCh) = useHammer (4, 4) gsCh0
+  case outCh of
+    NoMatch -> assertFailure "hammer peel should apply"
+    InvalidSwap -> assertFailure "hammer charges present"
+    _ -> pure ()
+  let cellCh = getCell (gsBoard gsCh1) (4, 4)
+  assertEqual "LineH kept" LineH (cellKind cellCh)
+  assertBool "chain peeled 2→1" (hasChain cellCh && chainLayers cellCh == 1)
+  assertEqual "no illicit row score" (0 :: Int) (gsScore gsCh1)
+  assertEqual "hammer spent" (1 :: Int) (gsHammers gsCh1)
+  -- Curtain+Bomb: expandSpecials is identity on the seed.
+  let boardCu = setCell stableBoard (5, 5) (Gem C3 Bomb 0 (Just (Curtain 2)))
+      expCu = expandSpecials boardCu [(5, 5)]
+  assertEqual "curtain Bomb does not blast" [(5, 5)] expCu

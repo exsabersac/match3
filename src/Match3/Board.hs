@@ -163,21 +163,35 @@ setM b (r, c) v =
     row = b !! r
 
 -- | Expand clears: LineH/LineV/Bomb effects when those gem cells are in the seed set.
+-- Soft-locked specials do not fire: ice>1 only chips; Chain/Curtain peel without
+-- clearing (same discipline as chipIceOnClear). Last ice (ice==1) clears + activates.
 -- Rainbow is a no-op here (partner color comes from rainbowClearSeeds only).
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials b seeds = go (nub seeds) (nub seeds)
   where
+    -- True when this wave would hole the cell (so Line/Bomb may expand).
+    activates ice ov
+      | ice > 1 = False
+      | ice == 1 = True -- last ice clears gem + overlay
+      | Just (Chain _) <- ov = False
+      | Just (Curtain _) <- ov = False
+      | otherwise = True
     go acc [] = acc
     go acc (p : ps) =
       let extra = case getCell b p of
-            Gem _ LineH _ _ -> [(fst p, c) | c <- [0 .. boardSize - 1]]
-            Gem _ LineV _ _ -> [(r, snd p) | r <- [0 .. boardSize - 1]]
-            Gem _ Bomb _ _ ->
+            Gem _ LineH ice ov | activates ice ov ->
+              [(fst p, c) | c <- [0 .. boardSize - 1]]
+            Gem _ LineV ice ov | activates ice ov ->
+              [(r, snd p) | r <- [0 .. boardSize - 1]]
+            Gem _ Bomb ice ov | activates ice ov ->
               [ (r, c)
               | r <- [fst p - 1 .. fst p + 1]
               , c <- [snd p - 1 .. snd p + 1]
               , inBounds (r, c)
               ]
+            Gem _ LineH _ _ -> []
+            Gem _ LineV _ _ -> []
+            Gem _ Bomb _ _ -> []
             -- Rainbow activation is only via rainbowClearSeeds (swap partner color).
             -- Expanding own color here double-cleared partner+own on every Rainbow×gem swap.
             Gem _ Rainbow _ _ -> []

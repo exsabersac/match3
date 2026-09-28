@@ -169,21 +169,15 @@ setM b (r, c) v =
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials b seeds = go (nub seeds) (nub seeds)
   where
-    -- True when this wave would hole the cell (so Line/Bomb may expand).
-    activates ice ov
-      | ice > 1 = False
-      | ice == 1 = True -- last ice clears gem + overlay
-      | Just (Chain _) <- ov = False
-      | Just (Curtain _) <- ov = False
-      | otherwise = True
     go acc [] = acc
     go acc (p : ps) =
-      let extra = case getCell b p of
-            Gem _ LineH ice ov | activates ice ov ->
+      let cell = getCell b p
+          extra = case cell of
+            Gem _ LineH _ _ | specialActivates cell ->
               [(fst p, c) | c <- [0 .. boardSize - 1]]
-            Gem _ LineV ice ov | activates ice ov ->
+            Gem _ LineV _ _ | specialActivates cell ->
               [(r, snd p) | r <- [0 .. boardSize - 1]]
-            Gem _ Bomb ice ov | activates ice ov ->
+            Gem _ Bomb _ _ | specialActivates cell ->
               [ (r, c)
               | r <- [fst p - 1 .. fst p + 1]
               , c <- [snd p - 1 .. snd p + 1]

@@ -196,6 +196,8 @@ tests =
     , testCase "soft_hit_preserves_oncell_fog_steam" soft_hit_preserves_oncell_fog_steam
     , testCase "surprise_blast_opens_nested" surprise_blast_opens_nested
     , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
+    , testCase "soft_lock_blocks_rainbow_swap" soft_lock_blocks_rainbow_swap
+    , testCase "soft_lock_blocks_special_combo" soft_lock_blocks_special_combo
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -6022,3 +6024,145 @@ surprise_nested_special_no_fire = do
         ]
   assertBool "pre-existing Bomb fires (1,1)" ((1, 1) `elem` holesP)
   assertBool "pre-existing Bomb consumed" (((mbP !! 2) !! 2) == Nothing)
+
+--------------------------------------------------------------------------------
+-- Soft-locked Rainbow / special combo must not fire (parity with expandSpecials)
+--------------------------------------------------------------------------------
+
+-- | ice>1 / Curtain Rainbow×gem must not color-clear (Line/Bomb soft-lock parity).
+-- Regression: isRainbowSwap ignored soft-lock, so ice=2 Rainbow cleared partner
+-- color while surviving (fire-and-survive). Last-ice Rainbow still activates.
+soft_lock_blocks_rainbow_swap :: Assertion
+soft_lock_blocks_rainbow_swap = do
+  let mkGs board =
+        (newGame defaultConfig 11)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+      countC4 b =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , case getCell b (r, c) of
+              Gem C4 _ _ _ -> True
+              Flip C4 _ -> True
+              Countdown C4 _ -> True
+              _ -> False
+          ]
+  -- ice=2 Rainbow × C4: not a rainbow activation; NoMatch if swap forms no match.
+  let boardIce =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 2 Nothing))
+          (0, 1)
+          (mkGem C4)
+  assertBool "ice>1 Rainbow does not soft-activate" $
+    not (isRainbowSwap boardIce (0, 0) (0, 1))
+  assertBool "no classic match after swap" $
+    not (hasAnyMatch (swapCells boardIce (0, 0) (0, 1)))
+  let (gsIce, outIce) = trySwap (0, 0) (0, 1) (mkGs boardIce)
+  case outIce of
+    NoMatch -> pure ()
+    InvalidSwap -> assertFailure "swap geometry ok"
+    MoveApplied _ -> assertFailure "ice>1 Rainbow must not fire color clear"
+    other -> assertFailure ("unexpected: " ++ show other)
+  assertEqual "board unchanged on rollback" boardIce (gsBoard gsIce)
+  assertEqual "moves unchanged" (10 :: Int) (gsMoves gsIce)
+  -- Curtain Rainbow × C4: same soft-lock (Curtain allows swap, blocks activate).
+  let boardCu =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0 (Just (Curtain 2))))
+          (0, 1)
+          (mkGem C4)
+  assertBool "curtain Rainbow does not activate" $
+    not (isRainbowSwap boardCu (0, 0) (0, 1))
+  let (gsCu, outCu) = trySwap (0, 0) (0, 1) (mkGs boardCu)
+  case outCu of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "curtain Rainbow must not fire"
+    _ -> assertFailure "curtain Rainbow must NoMatch-rollback"
+  assertEqual "curtain board unchanged" boardCu (gsBoard gsCu)
+  -- Control: ice==1 Rainbow still activates and clears partner color.
+  let boardLast =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 1 Nothing))
+          (0, 1)
+          (mkGem C4)
+  assertBool "last-ice Rainbow activates" (isRainbowSwap boardLast (0, 0) (0, 1))
+  let c4Before = countC4 boardLast
+      (gsLast, outLast) = trySwap (0, 0) (0, 1) (mkGs boardLast)
+  case outLast of
+    NoMatch -> assertFailure "last-ice Rainbow must apply"
+    InvalidSwap -> assertFailure "last-ice Rainbow must be valid"
+    MoveApplied g -> assertBool "gained" (g > 0)
+    _ -> pure ()
+  assertBool "partner color reduced" (countC4 (gsBoard gsLast) < c4Before)
+  assertEqual "move spent" (9 :: Int) (gsMoves gsLast)
+
+-- | ice>1 / Curtain Line×Bomb must not fire combo geometry (soft-lock parity).
+-- Regression: isSpecialCombo was kind-only, so soft-locked Line×Bomb still
+-- cleared the full cross via comboClearSeeds while Line survived.
+soft_lock_blocks_special_combo :: Assertion
+soft_lock_blocks_special_combo = do
+  let mkGs board =
+        (newGame defaultConfig 13)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+  -- ice=2 LineH × Bomb: combo blocked.
+  let boardIce =
+        setCell
+          (setCell stableBoard (3, 3) (Gem C1 LineH 2 Nothing))
+          (3, 4)
+          (Gem C2 Bomb 0 Nothing)
+  assertBool "kinds look like line-bomb" (isLineBombCombo boardIce (3, 3) (3, 4))
+  assertBool "soft ice blocks combo" $
+    not (isSpecialCombo boardIce (3, 3) (3, 4))
+  assertBool "no classic match" $
+    not (hasAnyMatch (swapCells boardIce (3, 3) (3, 4)))
+  let (gsIce, outIce) = trySwap (3, 3) (3, 4) (mkGs boardIce)
+  case outIce of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "ice>1 Line×Bomb must not fire combo"
+    _ -> assertFailure "ice>1 Line×Bomb must NoMatch-rollback"
+  assertEqual "ice combo board unchanged" boardIce (gsBoard gsIce)
+  -- Curtain Line × Bomb: combo blocked.
+  let boardCu =
+        setCell
+          (setCell stableBoard (4, 3) (Gem C1 LineH 0 (Just (Curtain 2))))
+          (4, 4)
+          (Gem C2 Bomb 0 Nothing)
+  assertBool "curtain blocks combo" $
+    not (isSpecialCombo boardCu (4, 3) (4, 4))
+  let (gsCu, outCu) = trySwap (4, 3) (4, 4) (mkGs boardCu)
+  case outCu of
+    NoMatch -> pure ()
+    MoveApplied _ -> assertFailure "curtain Line×Bomb must not fire"
+    _ -> assertFailure "curtain Line×Bomb must NoMatch-rollback"
+  assertEqual "curtain combo board unchanged" boardCu (gsBoard gsCu)
+  -- Control: unlocked Line×Bomb still fires.
+  let boardOk =
+        setCell
+          (setCell stableBoard (5, 3) (Gem C1 LineH 0 Nothing))
+          (5, 4)
+          (Gem C2 Bomb 0 Nothing)
+  assertBool "unlocked combo" (isSpecialCombo boardOk (5, 3) (5, 4))
+  let (gsOk, outOk) = trySwap (5, 3) (5, 4) (mkGs boardOk)
+  case outOk of
+    NoMatch -> assertFailure "unlocked Line×Bomb must apply"
+    InvalidSwap -> assertFailure "unlocked Line×Bomb must be valid"
+    MoveApplied g -> assertBool "combo score" (g > 0)
+    _ -> pure ()
+  assertEqual "move spent" (9 :: Int) (gsMoves gsOk)

@@ -11,6 +11,7 @@ module Match3.Types
   , mkVineGem
   , mkChocoGem
   , iceLayers
+  , specialActivates
   , cellOverlay
   , hasGrass
   , hasVine
@@ -206,6 +207,20 @@ isSnail _ = False
 snailDir :: Cell -> (Int, Int)
 snailDir (Snail dr dc) = (dr, dc)
 snailDir _ = (0, 0)
+
+
+-- | True when a Line/Bomb/Rainbow gem would fire on a clear/activation seed.
+-- Matches expandSpecials soft-lock discipline: ice>1 chips only; Chain/Curtain
+-- peel without activating. Last ice (ice==1) clears and activates. Fog/Steam/
+-- Freeze do not soft-lock (blast still fires). Non-gem cells never activate.
+specialActivates :: Cell -> Bool
+specialActivates (Gem _ _ ice ov)
+  | ice > 1 = False
+  | ice == 1 = True
+  | Just (Chain _) <- ov = False
+  | Just (Curtain _) <- ov = False
+  | otherwise = True
+specialActivates _ = False
 
 iceLayers :: Cell -> Int
 iceLayers (Gem _ _ n _) = n

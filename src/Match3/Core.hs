@@ -6,6 +6,7 @@ module Match3.Core
   , mkGem
   , mkIceGem
   , iceLayers
+  , specialActivates
   , chipIceOnClear
   , CellOverlay(..)
   , mkGrassGem

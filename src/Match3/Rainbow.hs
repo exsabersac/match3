@@ -16,19 +16,24 @@ isRainbow _ = False
 -- colored partner (Normal/special gem, Countdown, or Flip front color).
 -- Flip matches Countdown as a colored activator — without this, Rainbow×Flip
 -- rolled back as NoMatch whenever the swap formed no classic 3-match.
+-- Soft-locked Rainbow (ice>1 / Chain / Curtain) does not activate — same
+-- discipline as expandSpecials for Line/Bomb (no fire-and-survive).
 isRainbowSwap :: Board -> Pos -> Pos -> Bool
 isRainbowSwap b p1 p2 =
-  case (at b p1, at b p2) of
-    (Gem _ Rainbow _ _, Gem _ k _ _) | k /= Rainbow -> True
-    (Gem _ k _ _, Gem _ Rainbow _ _) | k /= Rainbow -> True
-    (Gem _ Rainbow _ _, Gem _ Rainbow _ _) -> True -- double rainbow: clear all gems
-    (Gem _ Rainbow _ _, Countdown _ _) -> True
-    (Countdown _ _, Gem _ Rainbow _ _) -> True
-    (Gem _ Rainbow _ _, Flip _ _) -> True
-    (Flip _ _, Gem _ Rainbow _ _) -> True
+  case (c1, c2) of
+    (Gem _ Rainbow _ _, Gem _ k _ _) | k /= Rainbow -> specialActivates c1
+    (Gem _ k _ _, Gem _ Rainbow _ _) | k /= Rainbow -> specialActivates c2
+    (Gem _ Rainbow _ _, Gem _ Rainbow _ _) ->
+      specialActivates c1 && specialActivates c2 -- double rainbow
+    (Gem _ Rainbow _ _, Countdown _ _) -> specialActivates c1
+    (Countdown _ _, Gem _ Rainbow _ _) -> specialActivates c2
+    (Gem _ Rainbow _ _, Flip _ _) -> specialActivates c1
+    (Flip _ _, Gem _ Rainbow _ _) -> specialActivates c2
     _ -> False
   where
     at board (r, c) = (board !! r) !! c
+    c1 = at b p1
+    c2 = at b p2
 
 -- | On the *already swapped* board, positions to clear for a rainbow activation.
 -- Includes the rainbow cell(s) and every gem of the partner color (or all gems if double).

@@ -60,10 +60,17 @@ isLineLineCombo b p1 p2 =
 
 isSpecialCombo :: Board -> Pos -> Pos -> Bool
 isSpecialCombo b p1 p2 =
-  isLineBombCombo b p1 p2
-    || isRainbowLineCombo b p1 p2
-    || isBombBombCombo b p1 p2
-    || isLineLineCombo b p1 p2
+  kindCombo
+    && specialActivates (at b p1)
+    && specialActivates (at b p2)
+  where
+    -- Soft-locked endpoints (ice>1 / Chain / Curtain) must not fire combo
+    -- geometry — same discipline as expandSpecials / isRainbowSwap.
+    kindCombo =
+      isLineBombCombo b p1 p2
+        || isRainbowLineCombo b p1 p2
+        || isBombBombCombo b p1 p2
+        || isLineLineCombo b p1 p2
 
 comboClearSeeds :: Board -> Pos -> Pos -> [Pos]
 comboClearSeeds b p1 p2

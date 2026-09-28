@@ -345,13 +345,7 @@ applyHammer ref window app pos = do
   let before = gsBoard (appGame app)
       (gs', out) = useHammer pos (appGame app)
       after = gsBoard gs'
-      changed =
-        [ p
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , let p = (r, c)
-        , getCell before p /= getCell after p
-        ]
+      changed = flashSites out (gsLastCleared gs')
       flash = case out of
         NoMatch -> []
         InvalidSwap -> []
@@ -370,17 +364,19 @@ applyHammer ref window app pos = do
         burst <- spawnBurst before changed
         pure (burst ++ appParticles app)
   let app' =
-        app
-          { appGame = gs'
-          , appSel = Nothing
-          , appTool = ToolNone
-          , appDragFrom = Nothing
-          , appMsg = msg
-          , appFlash = flash
-          , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-          , appComboShow = if gsCombo gs' > 1 then 120 else 0
-          , appParticles = parts
-          }
+        withUnlock
+          app
+            { appGame = gs'
+            , appSel = Nothing
+            , appTool = ToolNone
+            , appDragFrom = Nothing
+            , appMsg = msg
+            , appFlash = flash
+            , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
+            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+            , appParticles = parts
+            }
+          out
   writeIORef ref app'
   updateTitle window app'
   pure app'
@@ -392,13 +388,7 @@ applyCrossClear ref window app pos = do
   let before = gsBoard (appGame app)
       (gs', out) = useCrossClear pos (appGame app)
       after = gsBoard gs'
-      changed =
-        [ p
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , let p = (r, c)
-        , getCell before p /= getCell after p
-        ]
+      changed = flashSites out (gsLastCleared gs')
       flash = case out of
         NoMatch -> []
         InvalidSwap -> []
@@ -417,17 +407,19 @@ applyCrossClear ref window app pos = do
         burst <- spawnBurst before changed
         pure (burst ++ appParticles app)
   let app' =
-        app
-          { appGame = gs'
-          , appSel = Nothing
-          , appTool = ToolNone
-          , appDragFrom = Nothing
-          , appMsg = msg
-          , appFlash = flash
-          , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-          , appComboShow = if gsCombo gs' > 1 then 120 else 0
-          , appParticles = parts
-          }
+        withUnlock
+          app
+            { appGame = gs'
+            , appSel = Nothing
+            , appTool = ToolNone
+            , appDragFrom = Nothing
+            , appMsg = msg
+            , appFlash = flash
+            , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
+            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+            , appParticles = parts
+            }
+          out
   writeIORef ref app'
   updateTitle window app'
   pure app'
@@ -437,13 +429,7 @@ applyFreeSwap ref window app p1 p2 = do
   let before = gsBoard (appGame app)
       (gs', out) = useFreeSwap p1 p2 (appGame app)
       after = gsBoard gs'
-      changed =
-        [ p
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , let p = (r, c)
-        , getCell before p /= getCell after p
-        ]
+      changed = flashSites out (gsLastCleared gs')
       flash = case out of
         NoMatch -> []
         InvalidSwap -> []
@@ -467,17 +453,19 @@ applyFreeSwap ref window app p1 p2 = do
         burst <- spawnBurst before changed
         pure (burst ++ appParticles app)
   let app' =
-        app
-          { appGame = gs'
-          , appSel = Nothing
-          , appTool = tool'
-          , appDragFrom = Nothing
-          , appMsg = msg
-          , appFlash = flash
-          , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-          , appComboShow = if gsCombo gs' > 1 then 120 else 0
-          , appParticles = parts
-          }
+        withUnlock
+          app
+            { appGame = gs'
+            , appSel = Nothing
+            , appTool = tool'
+            , appDragFrom = Nothing
+            , appMsg = msg
+            , appFlash = flash
+            , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
+            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+            , appParticles = parts
+            }
+          out
   writeIORef ref app'
   updateTitle window app'
 
@@ -486,6 +474,18 @@ animBusy :: App -> Bool
 animBusy app = case appAnim app of
   AnimNone -> False
   _ -> True
+
+-- | Flash/particle sites from last cascade clears (skips belt/snail relocation noise).
+flashSites :: Outcome -> [Pos] -> [Pos]
+flashSites out cleared = case out of
+  NoMatch -> []
+  InvalidSwap -> []
+  _ -> cleared
+
+-- | Bump map unlock after LevelClear / Won.
+withUnlock :: App -> Outcome -> App
+withUnlock app out =
+  app { appMaxReached = unlockAfterClear (appMaxReached app) out }
 
 handleEvent :: IORef App -> Window -> Event -> IO Bool
 handleEvent ref window ev = case eventPayload ev of
@@ -712,13 +712,7 @@ handleEvent ref window ev = case eventPayload ev of
                   let before = gsBoard (appGame app)
                       (gs', out) = trySwap p1 p2 (appGame app)
                       after = gsBoard gs'
-                      changed =
-                        [ p
-                        | r <- [0 .. boardSize - 1]
-                        , c <- [0 .. boardSize - 1]
-                        , let p = (r, c)
-                        , getCell before p /= getCell after p
-                        ]
+                      changed = flashSites out (gsLastCleared gs')
                       flash = case out of
                         NoMatch -> []
                         InvalidSwap -> []
@@ -743,17 +737,19 @@ handleEvent ref window ev = case eventPayload ev of
                         LevelClear _ n -> "Level clear -> L" <> T.pack (show (n + 1))
                         Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal (appGame app)))
                       app' =
-                        app
-                          { appGame = gs'
-                          , appSel = Nothing
-                          , appDragFrom = Nothing
-                          , appMsg = msg
-                          , appFlash = flash
-                          , appAnim = anim
-                          , appComboShow = if gsCombo gs' > 1 then 120 else 0
-                          , appParticles = parts
-                          , appTipFrames = 0
-                          }
+                        withUnlock
+                          app
+                            { appGame = gs'
+                            , appSel = Nothing
+                            , appDragFrom = Nothing
+                            , appMsg = msg
+                            , appFlash = flash
+                            , appAnim = anim
+                            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+                            , appParticles = parts
+                            , appTipFrames = 0
+                            }
+                          out
                   writeIORef ref app'
                   updateTitle window app'
                   pure False
@@ -767,20 +763,28 @@ handleEvent ref window ev = case eventPayload ev of
         -- Level map click takes priority
         if appMapOpen app0
           then case mapHitTest mx0 my0 of
-            Just li | li <= appMaxReached app0 -> do
-              seed <- randomIO
-              let lvl = allLevels !! li
-                  gs = newGameAtLevel li (levelConfig lvl) seed
-                  app' =
-                    (freshLevelUi gs app0)
-                      { appMapOpen = False
-                      , appMsg = "Map -> L" <> T.pack (show (li + 1)) <> " " <> T.pack (lvlName lvl)
-                      , appMaxReached = max (appMaxReached app0) li
-                      }
-              writeIORef ref app'
-              updateTitle window app'
-              pure False
-            _ -> do
+            Just li ->
+              case mapClickJump (gsLevel (appGame app0)) (appMaxReached app0) li of
+                Just jump -> do
+                  seed <- randomIO
+                  let lvl = allLevels !! jump
+                      gs = newGameAtLevel jump (levelConfig lvl) seed
+                      app' =
+                        (freshLevelUi gs app0)
+                          { appMapOpen = False
+                          , appMsg = "Map -> L" <> T.pack (show (jump + 1)) <> " " <> T.pack (lvlName lvl)
+                          , appMaxReached = max (appMaxReached app0) jump
+                          }
+                  writeIORef ref app'
+                  updateTitle window app'
+                  pure False
+                Nothing -> do
+                  -- Same level / locked: close map and resume (keep mid-level progress)
+                  let app' = app0 { appMapOpen = False, appMsg = helpKeysMsg }
+                  writeIORef ref app'
+                  updateTitle window app'
+                  pure False
+            Nothing -> do
               -- click outside nodes closes map
               let app' = app0 { appMapOpen = False, appMsg = helpKeysMsg }
               writeIORef ref app'
@@ -873,13 +877,7 @@ handleEvent ref window ev = case eventPayload ev of
                             let before = gsBoard (appGame app)
                                 (gs', out) = trySwap p1 pos (appGame app)
                                 after = gsBoard gs'
-                                changed =
-                                  [ p
-                                  | r <- [0 .. boardSize - 1]
-                                  , c <- [0 .. boardSize - 1]
-                                  , let p = (r, c)
-                                  , getCell before p /= getCell after p
-                                  ]
+                                changed = flashSites out (gsLastCleared gs')
                                 flash =
                                   case out of
                                     NoMatch -> []
@@ -997,17 +995,19 @@ handleEvent ref window ev = case eventPayload ev of
                                   burst <- spawnBurst before changed
                                   pure (burst ++ appParticles app)
                             let app' =
-                                  app
-                                    { appGame = gs'
-                                    , appSel = Nothing
-                                    , appDragFrom = Nothing
-                                    , appMsg = msg
-                                    , appFlash = flash
-                                    , appAnim = anim
-                                    , appComboShow = comboShow
-                                    , appParticles = parts
-                                    , appTipFrames = 0
-                                    }
+                                  withUnlock
+                                    app
+                                      { appGame = gs'
+                                      , appSel = Nothing
+                                      , appDragFrom = Nothing
+                                      , appMsg = msg
+                                      , appFlash = flash
+                                      , appAnim = anim
+                                      , appComboShow = comboShow
+                                      , appParticles = parts
+                                      , appTipFrames = 0
+                                      }
+                                    out
                             writeIORef ref app'
                             updateTitle window app'
                             pure False

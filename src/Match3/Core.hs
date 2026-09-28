@@ -66,6 +66,7 @@ module Match3.Core
   , coverCarpets
   , levelCarpets
   , stepSnails
+  , stepSnailsAvoiding
   , stepSnailAt
   , snailPositions
   , Ufo(..)
@@ -177,6 +178,8 @@ module Match3.Core
   , useFreeSwap
   , useCrossClear
   , loseHint
+  , unlockAfterClear
+  , mapClickJump
   , hammerClearSeeds
   , crossClearSeeds
   , swapBlockedByStone
@@ -246,6 +249,7 @@ import Match3.Grass
 import Match3.Carpet (coverCarpets, levelCarpets)
 import Match3.Snail
   ( stepSnails
+  , stepSnailsAvoiding
   , stepSnailAt
   , snailPositions
   )

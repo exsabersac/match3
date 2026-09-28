@@ -175,6 +175,11 @@ tests =
     , testCase "combo_seed_continues_wave_score" combo_seed_continues_wave_score
     , testCase "bottle_dye_followup_match" bottle_dye_followup_match
     , testCase "hat_recolor_followup_match" hat_recolor_followup_match
+    , testCase "snail_belt_no_double_step" snail_belt_no_double_step
+    , testCase "maker_multi_adjacent_charges_once" maker_multi_adjacent_charges_once
+    , testCase "last_cleared_skips_belt_snail" last_cleared_skips_belt_snail
+    , testCase "unlock_after_clear_bumps_map" unlock_after_clear_bumps_map
+    , testCase "map_click_same_level_resumes" map_click_same_level_resumes
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -4847,3 +4852,143 @@ hat_recolor_followup_match = do
   -- Hat may fall with gravity after the clear below it; must still exist.
   assertEqual "hat still on board" (1 :: Int) (length hatLeft)
   assertBool "scored" (scored >= scoreForWave 1 3)
+
+
+--------------------------------------------------------------------------------
+-- Stability cruise: snail×belt, maker charge edge, particle sites, map unlock
+--------------------------------------------------------------------------------
+
+-- | Snail sitting on a belt must not crawl after the belt shift (no double-step).
+snail_belt_no_double_step :: Assertion
+snail_belt_no_double_step = do
+  let belt = [(4, 1), (4, 2), (4, 3), (4, 4)]
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (4, 1) (mkSnail 0 1))
+                   (0, 0)
+                   (mkGem C1))
+                (0, 1)
+                (mkGem C1))
+             (0, 2)
+             (mkGem C2))
+          (0, 3)
+          (mkGem C1)
+      afterBelt = shiftBelts board0 [belt]
+  assertBool "belt moved snail to (4,2)" (isSnail (getCell afterBelt (4, 2)))
+  let skipped = stepSnailsAvoiding (concat [belt]) afterBelt
+      crawled = stepSnails afterBelt
+  assertBool "avoid: still at (4,2)" (isSnail (getCell skipped (4, 2)))
+  assertBool "avoid: not at (4,3)" (not (isSnail (getCell skipped (4, 3))))
+  assertBool "raw crawl would reach (4,3)" (isSnail (getCell crawled (4, 3)))
+  let gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = board0
+          , gsBelts = [belt]
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let b1 = gsBoard gs1
+      snails =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isSnail (getCell b1 (r, c))
+        ]
+  assertEqual "one snail survives" (1 :: Int) (length snails)
+  assertEqual "belt-only step lands on (4,2)" [(4, 2)] snails
+
+-- | Three same-color adjacent clears in one wave charge a maker only once.
+maker_multi_adjacent_charges_once :: Assertion
+maker_multi_adjacent_charges_once = do
+  let board =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (2, 2) (mkMakerCharges C1 2))
+                (2, 1)
+                (mkGem C1))
+             (2, 3)
+             (mkGem C1))
+          (1, 2)
+          (mkGem C1)
+      cleared = [(2, 1), (2, 3), (1, 2)]
+      adj = makersAdjacentSameColor board cleared
+  assertEqual "nub single maker" [(2, 2)] adj
+  let b1 = chargeAdjacentMakers board cleared
+  assertBool "still maker" (isMaker (getCell b1 (2, 2)))
+  assertEqual "2->1 once" (1 :: Int) (makerCharges (getCell b1 (2, 2)))
+  let bLow = setCell board (2, 2) (mkMakerCharges C1 1)
+      bBomb = chargeAdjacentMakers bLow cleared
+  assertBool "became bomb" (cellKind (getCell bBomb (2, 2)) == Bomb)
+  assertBool "not maker" (not (isMaker (getCell bBomb (2, 2))))
+
+-- | gsLastCleared tracks cascade clears, not belt rotation / snail crawl cells.
+last_cleared_skips_belt_snail :: Assertion
+last_cleared_skips_belt_snail = do
+  let belt = [(6, 1), (6, 2), (6, 3)]
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell stableBoard (6, 1) (mkSnail 0 1))
+                      (1, 0)
+                      (mkGem C1))
+                   (1, 1)
+                   (mkGem C1))
+                (1, 2)
+                (mkGem C2))
+             (1, 3)
+             (mkGem C1))
+          (6, 2)
+          (mkGem C4)
+      gs0 =
+        (newGame defaultConfig 8)
+          { gsBoard = board0
+          , gsBelts = [belt]
+          , gsMoves = 10
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          , gsLastCleared = []
+          }
+      (gs1, out) = trySwap (1, 2) (1, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let cleared = gsLastCleared gs1
+  assertBool "recorded clears" (not (null cleared))
+  assertBool "match row cleared" $
+    any (`elem` cleared) [(1, 0), (1, 1), (1, 3), (1, 2)]
+  assertBool "snail start not a clear site" ((6, 1) `notElem` cleared)
+  assertBool "snail belt mid not a clear site" ((6, 2) `notElem` cleared)
+
+-- | LevelClear must unlock the next map index immediately (before N advance).
+unlock_after_clear_bumps_map :: Assertion
+unlock_after_clear_bumps_map = do
+  assertEqual "clear L0 unlocks 1" (1 :: Int) (unlockAfterClear 0 (LevelClear 10 1))
+  assertEqual "already past stays" (5 :: Int) (unlockAfterClear 5 (LevelClear 10 3))
+  assertEqual "move no bump" (2 :: Int) (unlockAfterClear 2 (MoveApplied 30))
+  assertEqual "won unlocks finale" (length allLevels - 1) (unlockAfterClear 0 (Won 99))
+
+-- | Clicking the active level on the map resumes (no restart / progress loss).
+map_click_same_level_resumes :: Assertion
+map_click_same_level_resumes = do
+  assertEqual "same level -> resume" Nothing (mapClickJump 3 7 3)
+  assertEqual "locked -> ignore" Nothing (mapClickJump 3 7 9)
+  assertEqual "other unlocked -> jump" (Just 5) (mapClickJump 3 7 5)
+  assertEqual "earlier unlocked -> jump" (Just 1) (mapClickJump 3 7 1)

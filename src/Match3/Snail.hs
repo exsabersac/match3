@@ -3,6 +3,7 @@
 module Match3.Snail
   ( stepSnailAt
   , stepSnails
+  , stepSnailsAvoiding
   , snailPositions
   , mkSnail
   , isSnail
@@ -76,8 +77,14 @@ stepSnailAt b pos = case at b pos of
 -- | Step every snail once (left-to-right, top-to-bottom snapshot order).
 -- Newly moved snails are not stepped again this turn.
 stepSnails :: Board -> Board
-stepSnails b0 =
-  foldl stepOne b0 (snailPositions b0)
+stepSnails = stepSnailsAvoiding []
+
+-- | Like stepSnails but skip snails currently sitting on @avoid@ cells.
+-- Used after conveyor shift so a snail on a belt is not also crawled
+-- (belt already moved it once this turn — avoids double-step on belt/same-col).
+stepSnailsAvoiding :: [Pos] -> Board -> Board
+stepSnailsAvoiding avoid b0 =
+  foldl stepOne b0 [p | p <- snailPositions b0, p `notElem` avoid]
   where
     stepOne board pos =
       -- Only step if a snail is still at the snapshot position

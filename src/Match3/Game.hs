@@ -17,6 +17,8 @@ module Match3.Game
   , useFreeSwap
   , useCrossClear
   , loseHint
+  , unlockAfterClear
+  , mapClickJump
   ) where
 
 import Data.Maybe (fromMaybe)
@@ -40,7 +42,8 @@ import Match3.Obstacles (swapBlockedByStone)
 import Match3.Conveyor (Belt, shiftBelts)
 import Match3.Grass (spreadVines, spreadChoco, spreadSteam)
 import Match3.Carpet (coverCarpets, levelCarpets)
-import Match3.Snail (stepSnails)
+import Data.List (nub)
+import Match3.Snail (stepSnailsAvoiding)
 import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
@@ -78,6 +81,7 @@ data GameState = GameState
   , gsUfoCollected  :: Int    -- gems absorbed by UFOs
   , gsCarpetOpen    :: [Pos]  -- uncovered carpet / floor tiles (地毯目标)
   , gsCarpetsCovered :: Int   -- carpet tiles covered this level
+  , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
   } deriving (Show)
 
 instance Eq GameState where
@@ -476,6 +480,7 @@ newGameAtLevel li cfg seed =
           , gsUfoCollected = 0
           , gsCarpetOpen = levelCarpets li
           , gsCarpetsCovered = 0
+          , gsLastCleared = []
           }
   -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.
   in ensurePlayable gs0
@@ -621,14 +626,14 @@ trySwap p1 p2 gs
   | not (inBounds p1 && inBounds p2) = (gs, InvalidSwap)
   | not (adjacent p1 p2) = (gs, InvalidSwap)
   | swapBlockedByStone (gsBoard gs) p1 p2 =
-      (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
+      (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
   | otherwise =
       let board0 = gsBoard gs
           swapped = swapCells board0 p1 p2
           rainbow = isRainbowSwap board0 p1 p2
           specialCombo = isSpecialCombo board0 p1 p2
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
-           then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
+           then (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
            else
              let ufos0 = gsUfos gs
                  (board0', cleared0, gained0, combo0, tallies0, stones0, chests0, honey0, balloons0, cookies0, cakes0, uAbs0, ufos1, pos0, g0') =
@@ -650,8 +655,10 @@ trySwap p1 p2 gs
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, 0, 0, ufosCd, [], g1')
                      else runCascadeScoredWithUfos Nothing ufosCd (gsPortals gs) g1' boardBelt
-                 -- Vine / chocolate spread, then snails crawl one step (推宝石 / 碰壁掉头)
-                 board1 = stepSnails (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
+                 -- Vine / chocolate / steam, then snails crawl (skip belt cells — no double-step)
+                 beltCells = nub (concat (gsBelts gs))
+                 board1 = stepSnailsAvoiding beltCells (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
+                 clearedSites = nub (pos0 ++ pos1 ++ pos2)
                  gained = gained0 + gained1 + gained2
                  combo =
                    let c1 = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
@@ -728,6 +735,7 @@ trySwap p1 p2 gs
                      , gsUfoCollected = ufoCollected'
                      , gsCarpetOpen = carpetOpen'
                      , gsCarpetsCovered = carpets'
+                     , gsLastCleared = clearedSites
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -832,6 +840,7 @@ useHammer p gs
               , gsUfoCollected = ufoCollected'
               , gsCarpetOpen = carpetOpen'
               , gsCarpetsCovered = carpets'
+              , gsLastCleared = nub posCleared
               }
           outcome = decideOutcome gs' gained
           gs'' = case outcome of
@@ -852,14 +861,14 @@ useFreeSwap p1 p2 gs
   | not (inBounds p1 && inBounds p2) = (gs, InvalidSwap)
   | p1 == p2 = (gs, InvalidSwap)
   | swapBlockedByStone (gsBoard gs) p1 p2 =
-      (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
+      (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
   | otherwise =
       let board0 = gsBoard gs
           swapped = swapCells board0 p1 p2
           rainbow = isRainbowSwap board0 p1 p2
           specialCombo = isSpecialCombo board0 p1 p2
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
-           then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
+           then (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
            else
              let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =
                    if rainbow
@@ -921,6 +930,7 @@ useFreeSwap p1 p2 gs
                      , gsUfoCollected = ufoCollected'
                      , gsCarpetOpen = carpetOpen'
                      , gsCarpetsCovered = carpets'
+                     , gsLastCleared = nub posCleared
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -998,6 +1008,7 @@ useCrossClear p gs
               , gsUfoCollected = ufoCollected'
               , gsCarpetOpen = carpetOpen'
               , gsCarpetsCovered = carpets'
+              , gsLastCleared = nub posCleared
               }
           outcome = decideOutcome gs' gained
           gs'' = case outcome of
@@ -1009,6 +1020,19 @@ useCrossClear p gs
             MoveApplied _ -> ensurePlayable gs''
             _ -> gs''
       in (gs''', outcome)
+
+-- | Map unlock index after a terminal outcome (LevelClear unlocks through nextIdx).
+unlockAfterClear :: Int -> Outcome -> Int
+unlockAfterClear reached (LevelClear _ n) = max reached n
+unlockAfterClear reached (Won _) = max reached (length allLevels - 1)
+unlockAfterClear reached _ = reached
+
+-- | Map node click: Just li to jump; Nothing = resume/ignore (same level or locked).
+mapClickJump :: Int -> Int -> Int -> Maybe Int
+mapClickJump curLevel reached clicked
+  | clicked < 0 || clicked > reached = Nothing
+  | clicked == curLevel = Nothing
+  | otherwise = Just clicked
 
 -- | Short tip shown after a Lost outcome (失败提示).
 loseHint :: LevelGoal -> String

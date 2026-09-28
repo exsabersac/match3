@@ -7,6 +7,15 @@ module Match3.Core
   , mkIceGem
   , iceLayers
   , chipIceOnClear
+  , CellOverlay(..)
+  , mkGrassGem
+  , mkVineGem
+  , hasGrass
+  , hasVine
+  , cellOverlay
+  , clearOverlaysOn
+  , vinePositions
+  , spreadVines
   , mkStone
   , mkStoneLayers
   , stoneLayers
@@ -109,6 +118,11 @@ module Match3.Core
 
 import Match3.Board
 import Match3.Ice (chipIceOnClear)
+import Match3.Grass
+  ( clearOverlaysOn
+  , vinePositions
+  , spreadVines
+  )
 import Match3.Game
 import Match3.Obstacles
   ( swapBlockedByStone

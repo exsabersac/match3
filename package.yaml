@@ -42,6 +42,7 @@ library:
   - Match3.Countdown
   - Match3.Conveyor
   - Match3.Boosters
+  - Match3.Grass
 
 executables:
   match3-sdl:

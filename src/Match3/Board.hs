@@ -33,6 +33,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
+import Match3.Grass (clearOverlaysOn)
 import Match3.Obstacles (chipAdjacentStones)
 import Match3.Countdown
   ( countdownsAtZero
@@ -94,12 +95,12 @@ groupGemRuns :: Board -> [Pos] -> [(Color, [Pos])]
 groupGemRuns _ [] = []
 groupGemRuns b (p : ps) = case getCell b p of
   Stone _ -> groupGemRuns b ps
-  Gem col _ _ -> go [p] col ps
+  Gem col _ _ _ -> go [p] col ps
   Countdown col _ -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
     go run col (q : qs) = case getCell b q of
-      Gem col' _ _ | col' == col -> go (q : run) col qs
+      Gem col' _ _ _ | col' == col -> go (q : run) col qs
       Countdown col' _ | col' == col -> go (q : run) col qs
       _ -> (col, reverse run) : groupGemRuns b (q : qs)
 
@@ -127,24 +128,24 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
     go acc [] = acc
     go acc (p : ps) =
       let extra = case getCell b p of
-            Gem _ LineH _ -> [(fst p, c) | c <- [0 .. boardSize - 1]]
-            Gem _ LineV _ -> [(r, snd p) | r <- [0 .. boardSize - 1]]
-            Gem _ Bomb _ ->
+            Gem _ LineH _ _ -> [(fst p, c) | c <- [0 .. boardSize - 1]]
+            Gem _ LineV _ _ -> [(r, snd p) | r <- [0 .. boardSize - 1]]
+            Gem _ Bomb _ _ ->
               [ (r, c)
               | r <- [fst p - 1 .. fst p + 1]
               , c <- [snd p - 1 .. snd p + 1]
               , inBounds (r, c)
               ]
-            Gem col Rainbow _ ->
+            Gem col Rainbow _ _ ->
               [ (r, c)
               | r <- [0 .. boardSize - 1]
               , c <- [0 .. boardSize - 1]
               , case getCell b (r, c) of
-                  Gem col' _ _ -> col' == col
+                  Gem col' _ _ _ -> col' == col
                   Countdown col' _ -> col' == col
                   Stone _ -> False
               ]
-            Gem _ Normal _ -> []
+            Gem _ Normal _ _ -> []
             Stone _ -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
@@ -154,7 +155,7 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
 -- Prefer spawnPos if provided and in the run; else middle of run.
 spawnSpecials :: Maybe Pos -> [MatchRun] -> [(Pos, Cell)]
 spawnSpecials prefer runs =
-  [ (pos, Gem (runColor run) kind 0)
+  [ (pos, Gem (runColor run) kind 0 Nothing)
   | run <- runs
   , let n = length (runPos run)
   , n >= 4
@@ -174,7 +175,7 @@ countColor b ps col =
     [ p
     | p <- ps
     , case getCell b p of
-        Gem c _ _ -> c == col
+        Gem c _ _ _ -> c == col
         Countdown c _ -> c == col
         Stone _ -> False
     ]
@@ -194,8 +195,10 @@ clearMatchesDetailed prefer b =
   let runs = findMatchRuns b
       base = nub (concatMap runPos runs)
       expanded = expandSpecials b base
+      -- Match/special hits strip Grass/Vine overlays (vine then cannot spread)
+      bStripped = clearOverlaysOn b expanded
       -- Ice chips first: iced gems stay, ice-free positions may clear
-      (bIced, iceFree) = chipIceOnClear b expanded
+      (bIced, iceFree) = chipIceOnClear bStripped expanded
       -- Chip adjacent stone layers against the ice-free clear set
       (bChipped, deadStones) = chipAdjacentStones bIced iceFree
       allPos = nub (iceFree ++ deadStones)
@@ -320,7 +323,8 @@ clearFromSeedsDetailed prefer b seeds0 =
   let runs = findMatchRuns b
       base = nub seeds0
       expanded = expandSpecials b base
-      (bIced, iceFree) = chipIceOnClear b expanded
+      bStripped = clearOverlaysOn b expanded
+      (bIced, iceFree) = chipIceOnClear bStripped expanded
       (bChipped, deadStones) = chipAdjacentStones bIced iceFree
       allPos = nub (iceFree ++ deadStones)
       n = length allPos

@@ -16,9 +16,9 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
   where
     step (board, clearable) p =
       case get board p of
-        Gem col kind n
+        Gem col kind n o
           | n > 1 ->
-              (set board p (Gem col kind (n - 1)), clearable)
+              (set board p (Gem col kind (n - 1) o), clearable)
           | otherwise ->
               -- n == 1 (last ice) or n == 0: gem clears
               (board, p : clearable)

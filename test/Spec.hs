@@ -63,6 +63,9 @@ tests =
     , testCase "booster_hammer_clears_cell" booster_hammer_clears_cell
     , testCase "booster_free_swap_any_cells" booster_free_swap_any_cells
     , testCase "lose_hint_by_goal" lose_hint_by_goal
+    , testCase "grass_cleared_by_match_above" grass_cleared_by_match_above
+    , testCase "vine_spreads_after_move" vine_spreads_after_move
+    , testCase "vine_blocked_by_clear" vine_blocked_by_clear
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -637,7 +640,7 @@ stone_not_in_match = do
 rainbow_clears_color :: Assertion
 rainbow_clears_color = do
   let board0 =
-        setCell stableBoard (4, 4) (Gem C1 Rainbow 0)
+        setCell stableBoard (4, 4) (Gem C1 Rainbow 0 Nothing)
       -- Ensure neighbor (4,5) is C2 (stableBoard already has variety)
       board = setCell board0 (4, 5) (mkGem C2)
       -- Count C2 before
@@ -647,7 +650,7 @@ rainbow_clears_color = do
           | r <- [0 .. boardSize - 1]
           , c <- [0 .. boardSize - 1]
           , case getCell board (r, c) of
-              Gem C2 _ _ -> True
+              Gem C2 _ _ Nothing -> True
               _ -> False
           ]
   assertBool "have some C2" (c2before >= 1)
@@ -672,7 +675,7 @@ rainbow_clears_color = do
           | r <- [0 .. boardSize - 1]
           , c <- [0 .. boardSize - 1]
           , case getCell (gsBoard gs1) (r, c) of
-              Gem C2 _ _ -> True
+              Gem C2 _ _ Nothing -> True
               _ -> False
           ]
   -- After cascade refill, leftover C2 may appear from refill; the rainbow itself must be gone
@@ -690,7 +693,7 @@ rainbow_swap_without_match :: Assertion
 rainbow_swap_without_match = do
   let board =
         setCell
-          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0))
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0 Nothing))
           (0, 1)
           (mkGem C4)
   assertBool "no classic match after swap alone"
@@ -788,9 +791,9 @@ special_combo_line_bomb :: Assertion
 special_combo_line_bomb = do
   let board =
         setCell
-          (setCell stableBoard (4, 3) (Gem C1 LineH 0))
+          (setCell stableBoard (4, 3) (Gem C1 LineH 0 Nothing))
           (4, 4)
-          (Gem C2 Bomb 0)
+          (Gem C2 Bomb 0 Nothing)
   assertBool "is line+bomb combo" (isLineBombCombo board (4, 3) (4, 4))
   assertBool "special combo" (isSpecialCombo board (4, 3) (4, 4))
   -- Seeds on post-swap board: bomb moves to (4,3)
@@ -966,9 +969,9 @@ special_combo_rainbow_line :: Assertion
 special_combo_rainbow_line = do
   let board =
         setCell
-          (setCell stableBoard (5, 2) (Gem C2 Rainbow 0))
+          (setCell stableBoard (5, 2) (Gem C2 Rainbow 0 Nothing))
           (5, 3)
-          (Gem C4 LineV 0)
+          (Gem C4 LineV 0 Nothing)
   assertBool "rainbow+line" (isRainbowLineCombo board (5, 2) (5, 3))
   assertBool "special" (isSpecialCombo board (5, 2) (5, 3))
   let gs0 =
@@ -990,9 +993,9 @@ special_combo_bomb_bomb :: Assertion
 special_combo_bomb_bomb = do
   let board =
         setCell
-          (setCell stableBoard (3, 3) (Gem C1 Bomb 0))
+          (setCell stableBoard (3, 3) (Gem C1 Bomb 0 Nothing))
           (3, 4)
-          (Gem C2 Bomb 0)
+          (Gem C2 Bomb 0 Nothing)
   assertBool "bomb×bomb" (isBombBombCombo board (3, 3) (3, 4))
   let seeds = comboClearSeeds (swapCells board (3, 3) (3, 4)) (3, 3) (3, 4)
   assertBool ("5x5-ish seeds " ++ show (length seeds)) (length seeds >= 25)
@@ -1007,9 +1010,9 @@ special_combo_line_line :: Assertion
 special_combo_line_line = do
   let board =
         setCell
-          (setCell stableBoard (2, 2) (Gem C3 LineH 0))
+          (setCell stableBoard (2, 2) (Gem C3 LineH 0 Nothing))
           (2, 3)
-          (Gem C4 LineV 0)
+          (Gem C4 LineV 0 Nothing)
   assertBool "line×line" (isLineLineCombo board (2, 2) (2, 3))
   let (gs1, out) = trySwap (2, 2) (2, 3) (newGame defaultConfig 1) { gsBoard = board, gsOver = Nothing, gsMoves = 5 }
   case out of
@@ -1377,3 +1380,125 @@ lose_hint_by_goal = do
   assertBool "collect hint" (not (null (loseHint (GoalCollect C1 20))))
   assertBool "multi hint" (not (null (loseHint (GoalCollectMulti [(C1, 1)]))))
   assertBool "stone hint" (not (null (loseHint (GoalClearStone 8))))
+
+--------------------------------------------------------------------------------
+-- Grass / Vine overlays (开心消消乐草·藤蔓)
+--------------------------------------------------------------------------------
+
+-- | Match on a grass-covered cell clears the Grass overlay (gem may stay if iced).
+grass_cleared_by_match_above :: Assertion
+grass_cleared_by_match_above = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell stableBoard (3, 0) (mkGem C1))
+             (3, 1)
+             (Gem C1 Normal 2 (Just Grass)))
+          (3, 2)
+          (mkGem C1)
+  assertBool "grass present" (hasGrass (getCell board0 (3, 1)))
+  assertBool "has match" (hasAnyMatch board0)
+  -- Unit: clearOverlaysOn strips grass on match seeds
+  let stripped = clearOverlaysOn board0 [(3, 0), (3, 1), (3, 2)]
+  assertBool "grass cleared by match" (not (hasGrass (getCell stripped (3, 1))))
+  assertEqual "ice untouched by overlay clear" (2 :: Int) (iceLayers (getCell stripped (3, 1)))
+  -- Match path: strip overlays then chip ice → grass gone, ice 2→1, gem stays
+  let ms = findMatches board0
+      b1 = clearOverlaysOn board0 ms
+      (b2, free) = chipIceOnClear b1 ms
+  assertBool "grass gone after match path" (not (hasGrass (getCell b2 (3, 1))))
+  assertEqual "ice 2->1" (1 :: Int) (iceLayers (getCell b2 (3, 1)))
+  assertBool "iced gem not free yet" ((3, 1) `notElem` free)
+
+-- | Surviving vines spread onto adjacent bare gems after a successful move.
+vine_spreads_after_move :: Assertion
+vine_spreads_after_move = do
+  -- Vine at (5,5); bare neighbors. Match on row 0 so vine survives.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (0, 0) (mkGem C1))
+                   (0, 1)
+                   (mkGem C1))
+                (0, 2)
+                (mkGem C2))
+             (0, 3)
+             (mkGem C1))
+          (5, 5)
+          (mkVineGem C4)
+  assertBool "vine placed" (hasVine (getCell board0 (5, 5)))
+  assertBool "neighbor bare" (cellOverlay (getCell board0 (5, 4)) == Nothing)
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+      gs0 =
+        (newGameAtLevel 0 cfg 12)
+          { gsBoard = board0
+          , gsBelts = []
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  let b1 = gsBoard gs1
+  assertBool "source vine remains or was shifted" $
+    hasVine (getCell b1 (5, 5))
+      || any hasVine [getCell b1 p | r <- [4 .. 6], c <- [4 .. 6], let p = (r, c)]
+  -- At least one orthogonal neighbor of original vine should now have vine
+  -- (unless cascade destroyed the area — keep vine far from match)
+  let neighbors = [(5, 4), (5, 6), (4, 5), (6, 5)]
+  assertBool
+    ("vine spread to a neighbor, board snippet: " ++ show [(p, cellOverlay (getCell b1 p)) | p <- (5, 5) : neighbors])
+    (any (\p -> hasVine (getCell b1 p)) neighbors
+       || (hasVine (getCell b1 (5, 5)) && any (\p -> hasVine (getCell b1 p)) neighbors))
+  -- Pure spreadVines unit check
+  let pureB = spreadVines board0
+  assertBool "pure spread" (any (\p -> hasVine (getCell pureB p)) neighbors)
+
+-- | A vine cleared by the move does not spread; uncleared vines still may.
+vine_blocked_by_clear :: Assertion
+vine_blocked_by_clear = do
+  -- Vine ON the match at (3,1): cleared with the match → must not spread.
+  -- Isolated vine at (6,6) far away: should still spread.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkVineGem C1))
+                (3, 2)
+                (mkGem C1))
+             (6, 6)
+             (mkVineGem C5))
+          (0, 0)
+          (mkGem C2)  -- keep stable-ish
+  assertBool "match vine" (hasVine (getCell board0 (3, 1)))
+  assertBool "safe vine" (hasVine (getCell board0 (6, 6)))
+  -- clearOverlaysOn on match seeds strips the match vine
+  let ms = findMatches board0
+  assertBool "vine in match" ((3, 1) `elem` ms)
+  let stripped = clearOverlaysOn board0 ms
+  assertBool "cleared vine stripped" (not (hasVine (getCell stripped (3, 1))))
+  assertBool "safe vine kept" (hasVine (getCell stripped (6, 6)))
+  -- After strip + clear of match cells, spread only from remaining vines
+  let afterClear =
+        -- simulate: match cells become empty of vine; then if we spread on stripped
+        -- before removing gems, match vine already gone so cannot spread from (3,1)
+        spreadVines stripped
+  -- Neighbors of (3,1) should NOT have gained vine from the cleared vine.
+  -- (safe vine at 6,6 may spread to its own neighbors)
+  -- (3,0) and (3,2) still C1 gems with no overlay after strip — would have been
+  -- spread targets IF vine at (3,1) survived; it did not.
+  assertBool "no spread from cleared vine onto (3,0)" (not (hasVine (getCell afterClear (3, 0))))
+  assertBool "no spread from cleared vine onto (3,2)" (not (hasVine (getCell afterClear (3, 2))))
+  -- Safe vine still spreads
+  let safeNeighbors = [(6, 5), (6, 7), (5, 6), (7, 6)]
+  assertBool
+    "safe vine spreads"
+    (any (\p -> hasVine (getCell afterClear p)) safeNeighbors)

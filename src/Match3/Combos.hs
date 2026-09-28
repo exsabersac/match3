@@ -29,7 +29,7 @@ isRainbowK Rainbow = True
 isRainbowK _ = False
 
 kindOf :: Cell -> Maybe GemKind
-kindOf (Gem _ k _) = Just k
+kindOf (Gem _ k _ _) = Just k
 kindOf _ = Nothing
 
 isLineBombCombo :: Board -> Pos -> Pos -> Bool
@@ -73,8 +73,8 @@ comboClearSeeds b p1 p2
       nub (fullRowCol b p1 ++ fullRowCol b p2)
   | isLineBombCombo b p1 p2 || lineBombAfter =
       case (at b p1, at b p2) of
-        (Gem _ Bomb _, _) -> lineBombCross b p1
-        (_, Gem _ Bomb _) -> lineBombCross b p2
+        (Gem _ Bomb _ _, _) -> lineBombCross b p1
+        (_, Gem _ Bomb _ _) -> lineBombCross b p2
         _ -> nub (lineBombCross b p1 ++ lineBombCross b p2)
   | isRainbowLineCombo b p1 p2 = rainbowClearSeeds b p1 p2
   | otherwise = []

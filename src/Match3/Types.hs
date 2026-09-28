@@ -2,11 +2,19 @@
 module Match3.Types
   ( Color(..)
   , GemKind(..)
+  , CellOverlay(..)
   , CellContents(..)
   , Cell
   , mkGem
   , mkIceGem
+  , mkGrassGem
+  , mkVineGem
   , iceLayers
+  , cellOverlay
+  , hasGrass
+  , hasVine
+  , clearOverlay
+  , setOverlay
   , mkStone
   , mkStoneLayers
   , stoneLayers
@@ -49,28 +57,60 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: gem (optional ice), layered stone crate, or countdown bomb.
+-- | Overlay on a gem (开心消消乐草 / 藤蔓). Grass clears on match; Vine spreads after move.
+data CellOverlay = Grass | Vine
+  deriving (Eq, Ord, Show, Generic)
+
+-- | Board cell: gem (optional ice + overlay), layered stone crate, or countdown bomb.
 -- Stone n = hit points; adjacent clears chip; removed at 0.
--- Countdown c n = colored timer bomb (开心消消乐倒计时炸弹); matches as color c.
+-- Countdown c n = colored timer bomb; matches as color c.
+-- Gem overlay: Grass cleared when cell is in a match; Vine spreads at end of move unless cleared.
 data CellContents
-  = Gem Color GemKind Int  -- ice layers on gem (0 = none); 开心消消乐冰层
+  = Gem Color GemKind Int (Maybe CellOverlay)  -- ice layers; overlay (Grass|Vine)
   | Stone Int
-  | Countdown Color Int    -- turns remaining; ticks after each successful move
+  | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
 type Cell = CellContents
 
 mkGem :: Color -> Cell
-mkGem c = Gem c Normal 0
+mkGem c = Gem c Normal 0 Nothing
 
 -- | Gem sealed under N ice layers (must chip ice before the gem clears).
 mkIceGem :: Color -> Int -> Cell
-mkIceGem c n = Gem c Normal (max 0 n)
+mkIceGem c n = Gem c Normal (max 0 n) Nothing
+
+-- | Gem covered by grass (草坪): match on this cell clears the grass.
+mkGrassGem :: Color -> Cell
+mkGrassGem c = Gem c Normal 0 (Just Grass)
+
+-- | Gem wrapped by vine (藤蔓): spreads after move unless cleared.
+mkVineGem :: Color -> Cell
+mkVineGem c = Gem c Normal 0 (Just Vine)
 
 iceLayers :: Cell -> Int
-iceLayers (Gem _ _ n) = n
+iceLayers (Gem _ _ n _) = n
 iceLayers (Stone _) = 0
 iceLayers (Countdown _ _) = 0
+
+cellOverlay :: Cell -> Maybe CellOverlay
+cellOverlay (Gem _ _ _ o) = o
+cellOverlay _ = Nothing
+
+hasGrass :: Cell -> Bool
+hasGrass c = cellOverlay c == Just Grass
+
+hasVine :: Cell -> Bool
+hasVine c = cellOverlay c == Just Vine
+
+-- | Strip overlay, keep gem/ice.
+clearOverlay :: Cell -> Cell
+clearOverlay (Gem col kind ice _) = Gem col kind ice Nothing
+clearOverlay x = x
+
+setOverlay :: Maybe CellOverlay -> Cell -> Cell
+setOverlay o (Gem col kind ice _) = Gem col kind ice o
+setOverlay _ x = x
 
 -- | Single-layer stone (cleared by one adjacent clear).
 mkStone :: Cell
@@ -102,19 +142,19 @@ countdownTurns _ = 0
 
 -- | True for ordinary gems and countdown bombs (both match by color).
 isGem :: Cell -> Bool
-isGem (Gem _ _ _) = True
+isGem (Gem _ _ _ _) = True
 isGem (Countdown _ _) = True
 isGem (Stone _) = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
-cellColor (Gem c _ _) = c
+cellColor (Gem c _ _ _) = c
 cellColor (Countdown c _) = c
 cellColor (Stone _) = error "cellColor: Stone has no color"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
-cellKind (Gem _ k _) = k
+cellKind (Gem _ k _ _) = k
 cellKind (Countdown _ _) = Normal
 cellKind (Stone _) = error "cellKind: Stone has no kind"
 
@@ -206,7 +246,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score targets + color-collect stages.
+-- | Mixed campaign: score / collect / stone / later levels mix hazards in board décor.
 allLevels :: [Level]
 allLevels =
   [ Level 0 "入门"   30 (GoalScore 300)
@@ -217,7 +257,11 @@ allLevels =
   , Level 5 "采绿"   24 (GoalCollect C2 26)
   , Level 6 "双采"   28 (GoalCollectMulti [(C1, 12), (C3, 12)])
   , Level 7 "碎石"   26 (GoalClearStone 8)
-  , Level 8 "大师"   18 (GoalScore 1100)
+  , Level 8 "草场"   24 (GoalScore 600)
+  , Level 9 "藤袭"   22 (GoalCollect C1 18)
+  , Level 10 "传送"  24 (GoalScore 800)
+  , Level 11 "轰炸"  20 (GoalScore 700)
+  , Level 12 "大师"  18 (GoalScore 1100)
   ]
 
 levelConfig :: Level -> GameConfig

@@ -31,9 +31,13 @@ import Match3.Board
   , resolveCountdowns
   , shufflePlayable
   , swapCells
+  , setCell
+  , getCell
   )
 import Match3.Obstacles (swapBlockedByStone)
 import Match3.Conveyor (Belt, shiftBelts)
+import Match3.Grass (spreadVines)
+import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
 import Match3.Types
@@ -80,15 +84,66 @@ snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
 newGame :: GameConfig -> Int -> GameState
 newGame = newGameAtLevel 0
 
--- | Demo conveyor on 碎石 (level 7): top-row cycle.
+-- | Conveyor paths for mixed campaign levels.
 levelBelts :: Int -> [Belt]
 levelBelts 7 = [[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (2, 5), (2, 4), (2, 3), (2, 2), (2, 1)]]
+levelBelts 10 = [[(3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (3, 7)]]
+levelBelts 12 =
+  [ [(0, 2), (0, 3), (0, 4), (0, 5), (1, 5), (1, 4), (1, 3), (1, 2)]
+  , [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)]
+  ]
 levelBelts _ = []
+
+-- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
+decorateLevel :: Int -> Board -> Board
+decorateLevel 7 b =
+  foldl (\board p -> setCell board p mkStone)
+        b
+        [(4, 1), (4, 3), (4, 5), (5, 2), (5, 4), (6, 1), (6, 3), (6, 5)]
+decorateLevel 8 b = overlayAt b Grass [(2, 2), (2, 5), (3, 3), (3, 6), (5, 1), (5, 4), (6, 3), (6, 6)]
+decorateLevel 9 b = overlayAt b Vine [(2, 2), (2, 4), (4, 3), (5, 5)]
+decorateLevel 10 b = overlayAt b Grass [(5, 1), (5, 3), (5, 5), (6, 2), (6, 4)]
+decorateLevel 11 b =
+  foldl
+    (\board p ->
+        case getCell board p of
+          Gem col _ _ _ -> spawnCountdown board p col 4
+          Countdown col _ -> spawnCountdown board p col 4
+          _ -> board
+    )
+    b
+    [(2, 2), (2, 5), (5, 3), (6, 6)]
+decorateLevel 12 b =
+  let b1 =
+        foldl (\board p -> setCell board p mkStone)
+              b
+              [(4, 0), (4, 7), (5, 1), (5, 6)]
+      b2 = overlayAt b1 Grass [(2, 1), (2, 6)]
+      b3 = overlayAt b2 Vine [(6, 3)]
+  in foldl
+       (\board p ->
+           case getCell board p of
+             Gem col _ _ _ -> spawnCountdown board p col 4
+             _ -> board
+       )
+       b3
+       [(3, 3)]
+decorateLevel _ b = b
+
+-- | Stamp Grass/Vine onto existing gems (keep color/kind/ice).
+overlayAt :: Board -> CellOverlay -> [Pos] -> Board
+overlayAt b ov = foldl step b
+  where
+    step board p =
+      case getCell board p of
+        Gem col kind ice _ -> setCell board p (Gem col kind ice (Just ov))
+        _ -> board
 
 newGameAtLevel :: Int -> GameConfig -> Int -> GameState
 newGameAtLevel li cfg seed =
   let g0 = mkStdGen seed
-      (board, g1) = randomPlayableBoard g0
+      (board0, g1) = randomPlayableBoard g0
+      board = decorateLevel li board0
   in GameState
        { gsBoard = board
        , gsScore = 0
@@ -194,10 +249,12 @@ trySwap p1 p2 gs
                    resolveCountdowns g0' board0'
                  -- Conveyor belts: shift then cascade if new matches
                  boardBelt = shiftBelts boardCd (gsBelts gs)
-                 (board1, cleared2, gained2, combo2, tallies2, stones2, g') =
+                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, g') =
                    if null (gsBelts gs)
                      then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, g1')
                      else runCascadeScored Nothing g1' boardBelt
+                 -- Vine spread at end of move (cleared vines already stripped during cascade)
+                 board1 = spreadVines boardBeltCas
                  gained = gained0 + gained1 + gained2
                  combo =
                    let c1 = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
@@ -278,8 +335,9 @@ useHammer p gs
   | not (inBounds p) = (gs, InvalidSwap)
   | otherwise =
       let seeds = [p]
-          (board1, _n, gained, combo, tallies, stonesHit, g') =
+          (boardH, _n, gained, combo, tallies, stonesHit, g') =
             runCascadeScoredFromSeeds Nothing seeds (gsGen gs) (gsBoard gs)
+          board1 = spreadVines boardH
           score' = gsScore gs + gained
           hist = take 20 (snapshot gs : gsHistory gs)
           collectDelta = case gsGoal gs of
@@ -334,12 +392,13 @@ useFreeSwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (board1, _c, gained, combo, tallies, stonesHit, g') =
+             let (boardF, _c, gained, combo, tallies, stonesHit, g') =
                    if rainbow
                      then runCascadeScoredFromSeeds (Just p2) (rainbowClearSeeds swapped p1 p2) (gsGen gs) swapped
                      else if specialCombo
                        then runCascadeScoredFromSeeds (Just p2) (comboClearSeeds swapped p1 p2) (gsGen gs) swapped
                        else runCascadeScored (Just p2) (gsGen gs) swapped
+                 board1 = spreadVines boardF
                  score' = gsScore gs + gained
                  hist = take 20 (snapshot gs : gsHistory gs)
                  collectDelta = case gsGoal gs of

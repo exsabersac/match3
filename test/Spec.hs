@@ -172,6 +172,9 @@ tests =
     , testCase "curtain_allows_swap_blocks_match" curtain_allows_swap_blocks_match
     , testCase "hammer_clears_grass_vine" hammer_clears_grass_vine
     , testCase "freeze_blocks_freeswap_and_swap" freeze_blocks_freeswap_and_swap
+    , testCase "combo_seed_continues_wave_score" combo_seed_continues_wave_score
+    , testCase "bottle_dye_followup_match" bottle_dye_followup_match
+    , testCase "hat_recolor_followup_match" hat_recolor_followup_match
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -4724,3 +4727,123 @@ freeze_blocks_freeswap_and_swap = do
   let (gs2, out2) = useFreeSwap (2, 2) (5, 5) gs0
   assertEqual "free-swap NoMatch" NoMatch out2
   assertEqual "free-swap charge kept" (gsFreeSwaps gs0) (gsFreeSwaps gs2)
+
+
+--------------------------------------------------------------------------------
+-- Stability cruise: seed-cascade combo score + bottle/hat follow-up matches
+--------------------------------------------------------------------------------
+
+-- | Rainbow/special seed clears are wave 1; later match cascades must keep rising
+-- multipliers (bug: fromSeeds restarted at 1x so score == cells*10).
+combo_seed_continues_wave_score :: Assertion
+combo_seed_continues_wave_score = do
+  let bSafe =
+        [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
+        | r <- [0 .. 7]
+        ]
+      board =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell bSafe (0, 0) (mkGem C1))
+                      (0, 1)
+                      (mkGem C1))
+                   (0, 2)
+                   (mkGem C1))
+                (7, 5)
+                (mkGem C2))
+             (7, 6)
+             (mkGem C2))
+          (7, 7)
+          (mkGem C2)
+      seeds = [(0, 0), (0, 1), (0, 2)]
+      (_, cells, scored, maxW, _, _, _, _, _, _, _, _) =
+        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 0) board
+  assertBool "cleared both seed + follow-up" (cells >= 6)
+  assertBool ("maxW >= 2, got " ++ show maxW) (maxW >= 2)
+  -- With wave multipliers, score must beat flat 10/cell (all waves at 1x).
+  assertBool
+    ("score " ++ show scored ++ " > flat " ++ show (cells * 10))
+    (scored > cells * 10)
+  assertEqual
+    "wave1+wave2 lower bound for 3+3"
+    True
+    (scored >= scoreForWave 1 3 + scoreForWave 2 3)
+
+-- | Dye bottle recolors neighbors mid-clear; a new match must cascade (not stall).
+bottle_dye_followup_match :: Assertion
+bottle_dye_followup_match = do
+  let bSafe =
+        [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
+        | r <- [0 .. 7]
+        ]
+      board =
+        foldl
+          (\b (p, c) -> setCell b p c)
+          bSafe
+          [ ((6, 0), mkGem C1)
+          , ((6, 1), mkGem C1)
+          , ((6, 2), mkGem C1)
+          , ((5, 1), mkBottle C3)
+          , ((5, 0), mkGem C4)
+          , ((5, 2), mkGem C4)
+          , ((4, 2), mkGem C3)
+          , ((3, 2), mkGem C3)
+          ]
+      ms = findMatches board
+  assertBool "seed match includes row6" $
+    all (`elem` ms) [(6, 0), (6, 1), (6, 2)]
+  let dyed = triggerAdjacentBottles board ms
+  assertEqual "dyed (5,2)" C3 (cellColor (getCell dyed (5, 2)))
+  assertBool "dye created vertical C3" $
+    all (`elem` findMatches dyed) [(3, 2), (4, 2), (5, 2)]
+  let (_, cells, scored, maxW, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 42) board
+  assertBool ("follow-up cascade cells>=6 got " ++ show cells) (cells >= 6)
+  assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
+  assertBool "scored" (scored >= scoreForWave 1 3 + scoreForWave 2 3)
+
+-- | Magic hat recolor of neighbors can create a match; cascade must clear it.
+hat_recolor_followup_match :: Assertion
+hat_recolor_followup_match = do
+  let bSafe =
+        [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
+        | r <- [0 .. 7]
+        ]
+      board =
+        foldl
+          (\b (p, c) -> setCell b p c)
+          bSafe
+          [ ((6, 0), mkGem C1)
+          , ((6, 1), mkGem C1)
+          , ((6, 2), mkGem C1)
+          , ((5, 1), mkMagicHat)
+          , ((4, 1), mkStone) -- only left/right gem neighbors
+          , ((5, 0), mkGem C2)
+          , ((5, 2), mkGem C3)
+          , ((4, 0), mkGem C3)
+          , ((3, 0), mkGem C3)
+          ]
+      ms = findMatches board
+      hatted = triggerAdjacentHats board ms
+  assertEqual "hat swapped left to C3" C3 (cellColor (getCell hatted (5, 0)))
+  assertEqual "hat swapped right to C2" C2 (cellColor (getCell hatted (5, 2)))
+  assertBool "hat created col0 C3 match" $
+    all (`elem` findMatches hatted) [(3, 0), (4, 0), (5, 0)]
+  let (_, cells, scored, maxW, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 7) board
+  assertBool ("hat follow-up cells>=6 got " ++ show cells) (cells >= 6)
+  assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
+  let (bAfter, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 7) board
+      hatLeft =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , isMagicHat (getCell bAfter (r, c))
+        ]
+  -- Hat may fall with gravity after the clear below it; must still exist.
+  assertEqual "hat still on board" (1 :: Int) (length hatLeft)
+  assertBool "scored" (scored >= scoreForWave 1 3)

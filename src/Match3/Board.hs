@@ -487,7 +487,21 @@ runCascadeScoredWithUfos
   -> Board
   -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
 runCascadeScoredWithUfos prefer ufos0 portals g b =
-  go prefer g b 0 0 0 (zip allColors (repeat 0)) 0 0 0 0 0 0 0 ufos0 []
+  runCascadeScoredWithUfosFromWave 0 prefer ufos0 portals g b
+
+-- | Like runCascadeScoredWithUfos but combo wave numbering continues from startW
+-- (waves already completed, e.g. seed clear / UFO absorb before match cascades).
+runCascadeScoredWithUfosFromWave
+  :: RandomGen g
+  => Int
+  -> Maybe Pos
+  -> [Ufo]
+  -> [(Pos, Pos)]
+  -> g
+  -> Board
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
+runCascadeScoredWithUfosFromWave startW prefer ufos0 portals g b =
+  go prefer g b 0 0 startW (zip allColors (repeat 0)) 0 0 0 0 0 0 0 ufos0 []
   where
     go pref g' b' cells score maxW tallies stones chests honey balloons cookies cakes uAbs ufos clearedAcc =
       case stepCascadeDetailed pref portals g' b' of
@@ -612,18 +626,17 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
                     (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColor b1 pos2 col) | col <- allColors]
                 in (b2u, g2u, n2, stn2, cht2, hny2, bal2, cok2 + cokFall2, cak2, t2, length absorbed, ufos1, pos2)
+          wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
           (b2, cells2, score2, maxW2, tallies2, stones2, chests2, honey2, balloons2, cookies2, cakes2, uAbs2, ufos3, cleared2, g2) =
-            runCascadeScoredWithUfos Nothing ufos2 portals g1' b1'
+            -- Continue wave multipliers after seed (+ optional UFO) clear.
+            runCascadeScoredWithUfosFromWave wavesDone Nothing ufos2 portals g1' b1'
           mergeT a b' =
             [ (col, lc a col + lc b' col) | col <- allColors ]
           lc xs col = maybe 0 id (lookup col xs)
-          maxW =
-            let base = if n > 0 then 1 else 0
-                extra = (if nU > 0 then 1 else 0) + (if cells2 > 0 then maxW2 else 0)
-            in if base + extra == 0 then maxW2 else base + extra
+          maxW = if cells2 > 0 then maxW2 else wavesDone
       in ( b2
          , n + nU + cells2
-         , score0 + scoreForWave 2 nU + score2
+         , score0 + (if nU > 0 then scoreForWave 2 nU else 0) + score2
          , maxW
          , mergeT (mergeT tallies0 talliesU) tallies2
          , stones0 + stonesU + stones2

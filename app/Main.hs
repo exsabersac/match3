@@ -142,21 +142,28 @@ main = do
 
 tickAnim :: App -> App
 tickAnim app =
-  let flash' = [ (p, n - 1) | (p, n) <- appFlash app, n > 1 ]
-      combo' = max 0 (appComboShow app - 1)
-      tip' = if appPaused app then appTipFrames app else max 0 (appTipFrames app - 1)
-      help' = if appPaused app then appHelpFrames app else max 0 (appHelpFrames app - 1)
-      anim' = case appAnim app of
-        AnimNone -> AnimNone
-        AnimSwap { asP1, asP2, asBefore, asAfter, asFrame }
-          | asFrame + 1 >= swapFrames ->
-              AnimFall { afBoard = asAfter, afFrame = 0 }
-          | otherwise ->
-              AnimSwap asP1 asP2 asBefore asAfter (asFrame + 1)
-        AnimFall { afBoard, afFrame }
-          | afFrame + 1 >= fallFrames -> AnimNone
-          | otherwise -> AnimFall afBoard (afFrame + 1)
-      parts' = tickParticles (appParticles app)
+  let paused = appPaused app
+      flash' =
+        if paused then appFlash app else [ (p, n - 1) | (p, n) <- appFlash app, n > 1 ]
+      combo' =
+        if paused then appComboShow app else max 0 (appComboShow app - 1)
+      tip' = if paused then appTipFrames app else max 0 (appTipFrames app - 1)
+      help' = if paused then appHelpFrames app else max 0 (appHelpFrames app - 1)
+      anim' =
+        if paused
+          then appAnim app
+          else case appAnim app of
+            AnimNone -> AnimNone
+            AnimSwap { asP1, asP2, asBefore, asAfter, asFrame }
+              | asFrame + 1 >= swapFrames ->
+                  AnimFall { afBoard = asAfter, afFrame = 0 }
+              | otherwise ->
+                  AnimSwap asP1 asP2 asBefore asAfter (asFrame + 1)
+            AnimFall { afBoard, afFrame }
+              | afFrame + 1 >= fallFrames -> AnimNone
+              | otherwise -> AnimFall afBoard (afFrame + 1)
+      parts' =
+        if paused then appParticles app else tickParticles (appParticles app)
   in app
        { appFlash = flash'
        , appPulse = appPulse app + 1
@@ -495,9 +502,12 @@ handleEvent ref window ev = case eventPayload ev of
                 app' =
                   appGate
                     { appPaused = paused'
+                      -- Drop in-flight drag/selection so resume cannot double-swap.
+                    , appDragFrom = Nothing
+                    , appSel = Nothing
                     , appMsg =
                         if paused'
-                          then "Paused — keys: H 1 2 3 U S D M R N P Esc"
+                          then "Paused — R restart / P resume / Esc quit"
                           else helpKeysMsg
                     , appHelpFrames =
                         if paused' then appHelpFrames appGate else 240
@@ -505,17 +515,18 @@ handleEvent ref window ev = case eventPayload ev of
             writeIORef ref app'
             updateTitle window app'
             pure False
+          -- Restart works while paused (暂停重开); freshLevelUi clears pause.
+          KeycodeR -> do
+            seed <- randomIO
+            app <- readIORef ref
+            let gs = restartLevel (appGame app) seed
+                app' = (freshLevelUi gs app) { appMsg = "Restarted level" }
+            writeIORef ref app'
+            updateTitle window app'
+            pure False
           _
             | appPaused appGate -> pure False
             | otherwise -> case code of
-                KeycodeR -> do
-                  seed <- randomIO
-                  app <- readIORef ref
-                  let gs = restartLevel (appGame app) seed
-                      app' = (freshLevelUi gs app) { appMsg = "Restarted level" }
-                  writeIORef ref app'
-                  updateTitle window app'
-                  pure False
                 KeycodeM -> do
                   app <- readIORef ref
                   let app' =
@@ -684,7 +695,13 @@ handleEvent ref window ev = case eventPayload ev of
         && mouseButtonEventButton me == ButtonLeft -> do
         app0 <- readIORef ref
         if appPaused app0 || animBusy app0 || isJust (gsOver (appGame app0))
-          then pure False
+          then do
+            -- Drop sticky drag if pause/anim/overlay ate the release.
+            case appDragFrom app0 of
+              Nothing -> pure False
+              Just _ -> do
+                writeIORef ref app0 { appDragFrom = Nothing }
+                pure False
           else case appDragFrom app0 of
             Nothing -> pure False
             Just p1 -> do
@@ -983,6 +1000,7 @@ handleEvent ref window ev = case eventPayload ev of
                                   app
                                     { appGame = gs'
                                     , appSel = Nothing
+                                    , appDragFrom = Nothing
                                     , appMsg = msg
                                     , appFlash = flash
                                     , appAnim = anim

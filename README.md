@@ -9,7 +9,7 @@ Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
 sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
-stack test                            # 155 green — optional but recommended
+stack test                            # 158 green — optional but recommended
 stack build && stack exec match3-sdl
 ```
 
@@ -53,7 +53,7 @@ Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stac
 - **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / pop balloons / collect cookies / clear cakes / open safes / UFO absorb / cover carpet
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
 - **Daily challenge** (`D`): date-seeded board + **10 rotating goals** (score/collect/multi/stone/honey/UFO/chest/cake/safe/balloon); obstacle goals auto-seed décor when level index has none; **star rating** on clear (3★ ≥40% of **printed** level moves left; carry does not inflate the denominator)
-- Combo scoring, hint, undo, auto-shuffle, **38 campaign levels** with map **chapter separators** (CH1–CH7)
+- Combo scoring (seed clears continue wave multipliers), hint, undo, auto-shuffle, **38 campaign levels** with map **chapter separators** (CH1–CH7)
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
@@ -116,8 +116,8 @@ Press `D` for a **每日** daily run (seed from calendar date).
 | `D` | Daily challenge |
 | `M` | Level map (选关); click unlocked node |
 | `N` / Space / Enter | Next / retry after overlay |
-| `R` | Restart level |
-| `P` | Pause + key help |
+| `R` | Restart level (also works while paused) |
+| `P` | Pause + key help (freezes anim; clears in-flight drag) |
 | `Esc` / `Q` | Quit |
 
 Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; pink frosted cake = 蛋糕 (layer pips, ≠ cookie); purple brim hat = 魔法帽; metal spout = 果汁机 (color + charge pips); gray cross links = 锁链 (layer pips); deep-blue snowflake glaze = 火箭冰冻 (≠ cyan ice cracks); wine vertical stripes + rod = 窗帘; steel vault + gold dial = 保险箱; split two-tone gem = 双面块; pink gift + gold bow = 彩蛋; tinted bottle + neck = 染色瓶; cyan orb + hourglass = 时间精灵; gray steam wisps = 蒸汽; magenta weave floor = 地毯 (target / covered); olive shell + dir tick = 蜗牛; violet rings = 传送门 pair; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.

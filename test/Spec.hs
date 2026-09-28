@@ -190,6 +190,7 @@ tests =
     , testCase "soft_lock_blocks_special_expand" soft_lock_blocks_special_expand
     , testCase "line_blast_no_double_peel" line_blast_no_double_peel
     , testCase "blast_chips_layered_obstacles_once" blast_chips_layered_obstacles_once
+    , testCase "hat_immune_to_direct_clear" hat_immune_to_direct_clear
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5047,6 +5048,7 @@ hammer_immune_no_spend = do
   check "maker" (mkMakerCharges C1 2)
   check "snail" (mkSnail 0 1)
   check "bottle" (mkBottle C2)
+  check "hat" mkMagicHat
   -- Control: bare gem still spends
   let gsG0 = mkGs (mkGem C1)
       (gsG1, outG) = useHammer (3, 3) gsG0
@@ -5613,3 +5615,80 @@ blast_chips_layered_obstacles_once = do
   assertEqual "chest 2→1" (1 :: Int) (chestLayers (getCell bChest (1, 1)))
   assertEqual "cake2 not clearable" ([] :: [Pos]) freeCake
   assertEqual "cake 2→1" (1 :: Int) (cakeLayers (getCell bCake (2, 2)))
+
+--------------------------------------------------------------------------------
+-- MagicHat survives Line/Bomb/Hammer direct seeds (Maker/Bottle parity)
+--------------------------------------------------------------------------------
+
+-- | Hats only recolor via adjacent clears and must stay on the board. chipIceOnClear
+-- used to list MagicHat as clearable, so LineH/Bomb/Hammer/Cross wiped hats without
+-- a useful trigger (row neighbors already in the clear set). Align with Maker /
+-- Snail / Bottle immunity; hammer rejects without spending. Adjacent trigger still
+-- works. Regression: hat_immune_to_direct_clear.
+hat_immune_to_direct_clear :: Assertion
+hat_immune_to_direct_clear = do
+  -- Unit: direct seed does not mark hat clearable; cell unchanged.
+  let (bU, freeU) = chipIceOnClear (setCell stableBoard (2, 2) mkMagicHat) [(2, 2)]
+  assertEqual "hat not clearable" ([] :: [Pos]) freeU
+  assertBool "hat stays on chipIce" (isMagicHat (getCell bU (2, 2)))
+  -- LineH blast through a hat: hat survives (Maker parity).
+  let lineBoard lock =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell
+                         (setCell
+                            (setCell stableBoard (3, 0) (mkGem C1))
+                            (3, 1)
+                            (Gem C1 LineH 0 Nothing))
+                         (3, 2)
+                         (mkGem C1))
+                      (3, 3)
+                      (mkGem C3))
+                   (3, 4)
+                   (mkGem C4))
+                (3, 5)
+                lock)
+             (3, 6)
+             (mkGem C5))
+          (3, 7)
+          (mkGem C3)
+  assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
+  let (bLine, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 61) (lineBoard mkMagicHat)
+  assertBool "hat survives line blast" (isMagicHat (getCell bLine (3, 5)))
+  -- Hammer on hat: NoMatch, charge kept, board unchanged.
+  let gs0 =
+        (newGame defaultConfig 12)
+          { gsBoard = setCell stableBoard (4, 4) mkMagicHat
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsMoves = 20
+          , gsScore = 0
+          }
+      (gs1, outH) = useHammer (4, 4) gs0
+  outH @?= NoMatch
+  assertEqual "hammer not spent" (2 :: Int) (gsHammers gs1)
+  assertBool "hat remains after hammer" (isMagicHat (getCell (gsBoard gs1) (4, 4)))
+  -- Adjacent clear still triggers hat (recolor) and hat stays.
+  let boardAdj =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (2, 0) (mkGem C1))
+                (2, 1)
+                (mkGem C1))
+             (2, 2)
+             (mkGem C1))
+          (1, 1)
+          mkMagicHat
+      ms = [(2, 0), (2, 1), (2, 2)]
+  assertBool "hat present" (isMagicHat (getCell boardAdj (1, 1)))
+  let boardTrig = triggerAdjacentHats boardAdj ms
+  assertBool "hat still after adj trigger" (isMagicHat (getCell boardTrig (1, 1)))

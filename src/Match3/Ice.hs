@@ -14,7 +14,7 @@ import Match3.Types
 -- ice==0 + Chain/Curtain: peel one lock layer (gem stays) — hammer/cross/line.
 -- ice==0 bare/Freeze/Fog: gem clears. Layered blockers (Stone/Chest/Honey/Cake/Safe)
 -- chip one layer per direct hit (hammer/cross/line/bomb); last layer clears
--- (Safe opens to Cookie).
+-- (Safe opens to Cookie). MagicHat/Maker/Snail/Bottle are immune (persist).
 chipIceOnClear :: Board -> [Pos] -> (Board, [Pos])
 chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
   where
@@ -60,7 +60,8 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
             then (board, p : clearable)
             else (set board p (mkCakeLayers (n - 1)), clearable)
         MagicHat ->
-          (board, p : clearable)
+          -- Hats only trigger via adjacent clear; immune to direct seeds (Maker parity)
+          (board, clearable)
         Maker _ _ ->
           -- Makers only charge via adjacent same-color; immune to direct clear seeds
           (board, clearable)

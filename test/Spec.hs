@@ -182,6 +182,7 @@ tests =
     , testCase "map_click_same_level_resumes" map_click_same_level_resumes
     , testCase "ufo_skips_peel_locks" ufo_skips_peel_locks
     , testCase "hammer_immune_no_spend" hammer_immune_no_spend
+    , testCase "rainbow_swap_flip_partner" rainbow_swap_flip_partner
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5047,3 +5048,61 @@ hammer_immune_no_spend = do
     InvalidSwap -> assertFailure "bare gem hammer should apply"
     _ -> pure ()
   assertEqual "bare spends hammer" (1 :: Int) (gsHammers gsG1)
+
+-- | Rainbow×Flip activates like Rainbow×Countdown: partner front color is the
+-- clear target even when the swap forms no classic 3-match. Partner Flip flips
+-- to its back face (does not hole); other front-color gems clear.
+rainbow_swap_flip_partner :: Assertion
+rainbow_swap_flip_partner = do
+  let board =
+        setCell
+          (setCell stableBoard (0, 0) (Gem C3 Rainbow 0 Nothing))
+          (0, 1)
+          (mkFlip C4 C1)
+  assertBool "is rainbow×flip swap" (isRainbowSwap board (0, 0) (0, 1))
+  assertBool "symmetric flip×rainbow" (isRainbowSwap board (0, 1) (0, 0))
+  assertBool "no classic match required" $
+    not (hasAnyMatch (swapCells board (0, 0) (0, 1)))
+  let swapped = swapCells board (0, 0) (0, 1)
+      seeds = rainbowClearSeeds swapped (0, 0) (0, 1)
+  assertBool "seeds include rainbow" $
+    any (\p -> isRainbow (getCell swapped p)) seeds
+  assertBool "seeds include partner flip" ((0, 0) `elem` seeds)  -- Flip landed at (0,0)
+  assertBool "seeds include other C4" $
+    any
+      ( \p ->
+          p /= (0, 0)
+            && case getCell swapped p of
+              Gem C4 _ _ _ -> True
+              Flip C4 _ -> True
+              _ -> False
+      )
+      seeds
+  -- Unit: direct seed hit flips partner (gem stays as back color)
+  let (bIced, iceFree) = chipIceOnClear swapped [(0, 0)]
+  assertBool "partner not holed" ((0, 0) `notElem` iceFree)
+  assertEqual "flipped to back C1" C1 (cellColor (getCell bIced (0, 0)))
+  assertBool "no longer flip" (not (isFlip (getCell bIced (0, 0))))
+  -- Live trySwap must apply (regression: used to NoMatch-rollback)
+  let gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 8
+          , gsScore = 0
+          , gsBelts = []
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (0, 0) (0, 1) gs0
+  case out of
+    NoMatch -> assertFailure "rainbow×flip must not roll back as NoMatch"
+    InvalidSwap -> assertFailure "rainbow×flip must be valid"
+    MoveApplied g -> assertBool "gained" (g > 0)
+    LevelClear _ _ -> pure ()
+    Won _ -> pure ()
+    Lost _ -> pure ()
+  assertBool "rainbow consumed" $
+    not (isRainbow (getCell (gsBoard gs1) (0, 0)))
+      && not (isRainbow (getCell (gsBoard gs1) (0, 1)))
+  assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)

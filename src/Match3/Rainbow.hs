@@ -12,7 +12,10 @@ isRainbow :: Cell -> Bool
 isRainbow (Gem _ Rainbow _ _) = True
 isRainbow _ = False
 
--- | Adjacent swap where exactly one endpoint is a Rainbow and the other is a colored gem.
+-- | Adjacent swap where exactly one endpoint is a Rainbow and the other is a
+-- colored partner (Normal/special gem, Countdown, or Flip front color).
+-- Flip matches Countdown as a colored activator — without this, Rainbow×Flip
+-- rolled back as NoMatch whenever the swap formed no classic 3-match.
 isRainbowSwap :: Board -> Pos -> Pos -> Bool
 isRainbowSwap b p1 p2 =
   case (at b p1, at b p2) of
@@ -21,12 +24,15 @@ isRainbowSwap b p1 p2 =
     (Gem _ Rainbow _ _, Gem _ Rainbow _ _) -> True -- double rainbow: clear all gems
     (Gem _ Rainbow _ _, Countdown _ _) -> True
     (Countdown _ _, Gem _ Rainbow _ _) -> True
+    (Gem _ Rainbow _ _, Flip _ _) -> True
+    (Flip _ _, Gem _ Rainbow _ _) -> True
     _ -> False
   where
     at board (r, c) = (board !! r) !! c
 
 -- | On the *already swapped* board, positions to clear for a rainbow activation.
 -- Includes the rainbow cell(s) and every gem of the partner color (or all gems if double).
+-- Partner Flip uses front color (same as match / colorPositions).
 rainbowClearSeeds :: Board -> Pos -> Pos -> [Pos]
 rainbowClearSeeds b p1 p2 =
   nub (rainbows ++ targets)
@@ -50,6 +56,8 @@ rainbowClearSeeds b p1 p2 =
       (Gem col _ _ _, Gem _ Rainbow _ _) -> colorPositions b col
       (Gem _ Rainbow _ _, Countdown col _) -> colorPositions b col
       (Countdown col _, Gem _ Rainbow _ _) -> colorPositions b col
+      (Gem _ Rainbow _ _, Flip col _) -> colorPositions b col
+      (Flip col _, Gem _ Rainbow _ _) -> colorPositions b col
       _ -> []
 
 colorPositions :: Board -> Color -> [Pos]

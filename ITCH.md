@@ -37,10 +37,10 @@ Controls: click/drag swap · `1` hammer · `2` free-swap · `3` cross · `H` hin
 
 ## Status (repo)
 
-Stability cruise: Rainbow×Flip partner activation (front color); UFO peel-lock skip; hammer immune; 38 levels / 166 tests green.
+Stability cruise: Surprise direct-seed opens (special sits / explode 3×3); Rainbow×Flip; UFO peel-lock; hammer immune; 38 levels / 167 tests green.
 
-- 38 campaign levels + daily challenge; `stack test` **166** green on lts-21.25 / GHC 9.4.8
+- 38 campaign levels + daily challenge; `stack test` **167** green on lts-21.25 / GHC 9.4.8
 - Finale (终章) 24 moves / Score 1400; Master (大师) 22 moves / Score 1000; Steam 22 / Carpet weave 24; map shows CH1–CH7 for all 38 nodes
 - Controls match in-game help strip and pause overlay (H / 1 / 2 / 3 / U / S / D / M / R / N / P)
-- Fragile locks: Carpet↔Ice cover; TimeSpirit last-move rescue (−1+2); Portal after Belt match teleport; Steam→Snail / Belt→Steam; Flip 4-match spawn; Surprise blast expands Bomb; Maker→Bomb same-wave sit; Chain+Freeze co-peel; Honey+Balloon same clear; Safe bottom→Cookie collect; Cookie bottom before Portal teleport; Countdown explode keeps UFO+portals; Hammer/Cross peel Chain·Curtain + chip Stone; Daily obstacle-goal décor seed; Rainbow expand noop (partner-only); Rainbow×Bomb 3×3; star vs printed moves; map/restart no carry; curtain allows swap / blocks match; Freeze blocks trySwap+free-swap; Hammer clears Grass/Vine; snail×belt no double-step; maker multi-adj once; gsLastCleared particles; map unlock+resume; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner
+- Fragile locks: Carpet↔Ice cover; TimeSpirit last-move rescue (−1+2); Portal after Belt match teleport; Steam→Snail / Belt→Steam; Flip 4-match spawn; Surprise blast expands Bomb; Maker→Bomb same-wave sit; Chain+Freeze co-peel; Honey+Balloon same clear; Safe bottom→Cookie collect; Cookie bottom before Portal teleport; Countdown explode keeps UFO+portals; Hammer/Cross peel Chain·Curtain + chip Stone; Daily obstacle-goal décor seed; Rainbow expand noop (partner-only); Rainbow×Bomb 3×3; star vs printed moves; map/restart no carry; curtain allows swap / blocks match; Freeze blocks trySwap+free-swap; Hammer clears Grass/Vine; snail×belt no double-step; maker multi-adj once; gsLastCleared particles; map unlock+resume; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens
 

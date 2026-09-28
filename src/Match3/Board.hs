@@ -49,7 +49,7 @@ import Match3.Obstacles
   , chipAdjacentTimeSpirits
   , triggerAdjacentHats
   , chargeAdjacentMakers
-  , openAdjacentSurprises
+  , openSurprises
   , triggerAdjacentBottles
   )
 import Match3.Countdown
@@ -287,17 +287,18 @@ clearMatchesDetailed prefer b =
       (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
       -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
       bMaker = chargeAdjacentMakers bSpirit iceFree
-      -- Surprise: open adjacent boxes → special in place or 3×3 explode seeds.
-      -- Explode seeds expand specials (Bomb/Line) like countdown / clearFromSeeds.
-      (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
+      -- Surprise: open adjacent *or* direct-seed boxes → special in place or 3×3.
+      -- Specials placed on former seed cells must stay out of clear holes.
+      (bSurp, surpExplode0, surpSaved) = openSurprises bMaker iceFree
       surpExpanded = expandSpecials bSurp surpExplode0
       (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
+      iceFree' = filter (`notElem` surpSaved) iceFree
       -- Bottle: dye ortho gem neighbors to bottle color (bottle stays)
-      bBottle = triggerAdjacentBottles bSurp2 iceFree
+      bBottle = triggerAdjacentBottles bSurp2 iceFree'
       -- Chocolate / steam: strip overlays orthogonally adjacent to match/special seeds
       bNoChoco = clearChocoAdjacent bBottle expanded
       bNoSteam = clearSteamAdjacent bNoChoco expanded
-      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
+      allPos = nub (iceFree' ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
       spawns = spawnSpecials prefer runs allPos
@@ -555,13 +556,14 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bSafe, _) = chipAdjacentSafes bCurtain iceFree
       (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
       bMaker = chargeAdjacentMakers bSpirit iceFree
-      (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
+      (bSurp, surpExplode0, surpSaved) = openSurprises bMaker iceFree
       surpExpanded = expandSpecials bSurp surpExplode0
       (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
-      bBottle = triggerAdjacentBottles bSurp2 iceFree
+      iceFree' = filter (`notElem` surpSaved) iceFree
+      bBottle = triggerAdjacentBottles bSurp2 iceFree'
       bNoChoco = clearChocoAdjacent bBottle expanded
       bNoSteam = clearSteamAdjacent bNoChoco expanded
-      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
+      allPos = nub (iceFree' ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits ++ surpFree)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
       spawns = spawnSpecials prefer runs allPos

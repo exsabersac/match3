@@ -183,6 +183,7 @@ tests =
     , testCase "ufo_skips_peel_locks" ufo_skips_peel_locks
     , testCase "hammer_immune_no_spend" hammer_immune_no_spend
     , testCase "rainbow_swap_flip_partner" rainbow_swap_flip_partner
+    , testCase "surprise_direct_seed_opens" surprise_direct_seed_opens
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5106,3 +5107,54 @@ rainbow_swap_flip_partner = do
     not (isRainbow (getCell (gsBoard gs1) (0, 0)))
       && not (isRainbow (getCell (gsBoard gs1) (0, 1)))
   assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
+
+--------------------------------------------------------------------------------
+-- Surprise direct-seed open (hammer / cross): special survives; explode blasts
+--------------------------------------------------------------------------------
+
+-- | Direct-hit Surprise must open like adjacent open — not spawn-then-hole or
+-- single-cell delete. Seed cascade keeps special; explode hammers 3×3.
+surprise_direct_seed_opens :: Assertion
+surprise_direct_seed_opens = do
+  -- Unit: openSurprises on a direct-seed iceFree list saves special-outcome cells.
+  let boardSpecial = setCell stableBoard (4, 0) mkSurprise
+      (bOpen, expl0, saved0) = openSurprises boardSpecial [(4, 0)]
+  assertEqual "no explode for outcome 0" (0 :: Int) (length expl0)
+  assertEqual "saved special cell" [(4, 0)] saved0
+  let cellU = getCell bOpen (4, 0)
+  assertBool "opened to special" (isGem cellU && cellKind cellU /= Normal)
+  assertEqual "LineH" LineH (cellKind cellU)
+  -- Seed cascade (hammer path): special sits; not dug by iceFree hole.
+  let g0 = mkStdGen 11
+      (bCas, nCleared, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScoredFromSeeds Nothing [(4, 0)] g0 boardSpecial
+  assertEqual "special open clears no hole" (0 :: Int) nCleared
+  let cellC = getCell bCas (4, 0)
+  assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Normal)
+  assertEqual "cascade LineH" LineH (cellKind cellC)
+  -- Direct-hit alongside another seed: special is saved (not spawn-then-hole).
+  let (bOpen2, _, saved2) = openSurprises boardSpecial [(4, 0), (4, 1)]
+  assertBool "saved when co-seeded" ((4, 0) `elem` saved2)
+  assertEqual "still LineH when co-seeded" LineH (cellKind (getCell bOpen2 (4, 0)))
+  -- (3,3) explode-outcome: hammer 3×3 scores >= 90 (single-cell would be 10).
+  let boardBoom = setCell stableBoard (3, 3) mkSurprise
+      gsB0 =
+        (newGame defaultConfig 11)
+          { gsBoard = boardBoom
+          , gsHammers = 2
+          , gsMoves = 20
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsGoal = GoalScore 99999
+          }
+      (gsB1, outB) = useHammer (3, 3) gsB0
+  case outB of
+    NoMatch -> assertFailure "hammer explode surprise should apply"
+    InvalidSwap -> assertFailure "hammer charges present"
+    _ -> pure ()
+  assertEqual "hammer spent" (1 :: Int) (gsHammers gsB1)
+  assertBool "surprise gone after explode" $
+    not (isSurprise (getCell (gsBoard gsB1) (3, 3)))
+  assertBool ("explode score >= 90, got " ++ show (gsScore gsB1)) (gsScore gsB1 >= 90)

@@ -24,6 +24,7 @@ module Match3.Obstacles
   , chargeAdjacentMakers
   , surprisesAdjacentTo
   , openAdjacentSurprises
+  , openSurprises
   , bottlesAdjacentTo
   , triggerAdjacentBottles
   , spiritsAdjacentTo
@@ -365,22 +366,36 @@ surpriseBlast (r, c) =
   , inBoard (rr, cc)
   ]
 
--- | Open surprises adjacent to clears.
--- Special outcomes replace the box in place (not in explode set).
--- Explosion outcomes remove the box and return 3×3 clear seeds.
--- Returns (board, explosion seed positions).
-openAdjacentSurprises :: Board -> [Pos] -> (Board, [Pos])
-openAdjacentSurprises b clearedGems =
-  foldl openOne (b, []) (surprisesAdjacentTo b clearedGems)
+-- | Open surprises adjacent to clears *or* sitting on a clear seed
+-- (hammer / cross / line / bomb direct hit). Special outcomes replace the box
+-- in place; those positions are returned so callers can keep them out of clear
+-- holes (otherwise a direct-hit special was spawned then immediately dug away).
+-- Explosion outcomes contribute 3×3 clear seeds (box cleared via those seeds).
+-- Returns (board, explosion seeds, special-placed positions).
+openSurprises :: Board -> [Pos] -> (Board, [Pos], [Pos])
+openSurprises b clearedGems =
+  foldl openOne (b, [], []) targets
   where
-    openOne (board, explodes) p =
+    direct =
+      [ p
+      | p <- nub clearedGems
+      , isSurprise (at b p)
+      ]
+    targets = nub (surprisesAdjacentTo b clearedGems ++ direct)
+    openOne (board, explodes, saved) p =
       case at board p of
         Surprise
           | surpriseOutcome p == 3 ->
-              (board, nub (surpriseBlast p ++ explodes))
+              (board, nub (surpriseBlast p ++ explodes), saved)
           | otherwise ->
-              (setAt board p (surpriseSpecial p), explodes)
-        _ -> (board, explodes)
+              (setAt board p (surpriseSpecial p), explodes, nub (p : saved))
+        _ -> (board, explodes, saved)
+
+-- | Adjacent-only wrapper (same targets as openSurprises, discards saved list).
+openAdjacentSurprises :: Board -> [Pos] -> (Board, [Pos])
+openAdjacentSurprises b clearedGems =
+  let (b', expl, _) = openSurprises b clearedGems
+  in (b', expl)
 
 -- | Dye bottle positions orthogonally adjacent to cleared gems.
 bottlesAdjacentTo :: Board -> [Pos] -> [Pos]

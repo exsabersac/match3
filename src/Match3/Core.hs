@@ -196,6 +196,7 @@ module Match3.Core
   , chipAdjacentSafes
   , safesAdjacentTo
   , openAdjacentSurprises
+  , openSurprises
   , surprisesAdjacentTo
   , triggerAdjacentBottles
   , bottlesAdjacentTo
@@ -283,6 +284,7 @@ import Match3.Obstacles
   , makersAdjacentSameColor
   , chargeAdjacentMakers
   , openAdjacentSurprises
+  , openSurprises
   , surprisesAdjacentTo
   , triggerAdjacentBottles
   , bottlesAdjacentTo

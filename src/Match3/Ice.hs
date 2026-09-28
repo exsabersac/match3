@@ -67,7 +67,8 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
           -- Dual-face: first hit flips to Normal gem of back color (does not clear)
           (set board p (mkGem back), clearable)
         Surprise ->
-          -- Hammer / direct seed: treat as opened explosion center (clears)
+          -- Direct seed: listed clearable so openSurprises sees the hit;
+          -- special outcomes are saved from holes there; explode expands 3×3.
           (board, p : clearable)
         Bottle _ ->
           -- Dye bottle immune to direct clear (like Maker); stays

@@ -9,7 +9,7 @@ Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
 sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
-stack test                            # 166 green — optional but recommended
+stack test                            # 167 green — optional but recommended
 stack build && stack exec match3-sdl
 ```
 
@@ -37,7 +37,7 @@ Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stac
 - **Curtains** (`Curtain n` / 窗帘): column/region shade overlay; adjacent clears peel; curtained gems do not match
 - **Safes** (`Safe n` / 保险箱): layered vault; adjacent clears chip; last layer opens into a Cookie; `GoalSafe`
 - **Dual-face gems** (`Flip front back` / 双面块): matches as front; a clear hit flips to Normal gem of back color
-- **Surprise boxes** (`Surprise` / 彩蛋): adjacent clear opens → Line/Bomb special or 3×3 pop
+- **Surprise boxes** (`Surprise` / 彩蛋): adjacent *or* direct-seed (hammer/cross/line) opens → Line/Bomb special or 3×3 pop
 - **Dye bottles** (`Bottle c` / 染色瓶): adjacent clear dyes ortho gems to bottle color
 - **Time spirits** (`TimeSpirit` / 时间精灵): adjacent clear awards **+2 moves** this level
 - **Steam** (`Steam` overlay / 蒸汽): blocks match; adjacent clear extinguishes; surviving steam spreads each move
@@ -138,7 +138,7 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 窗帘 / 卷帘 | ✅ `Curtain n` overlay（邻消揭层；帘下宝石不可匹配；≠ 迷雾） |
 | 保险箱 / 金库 | ✅ `Safe n` + `GoalSafe`（邻消削层，开出 Cookie） |
 | 双面块 | ✅ `Flip front back`（正面参与匹配；命中翻成背面 Normal 宝石） |
-| 彩蛋 / 惊喜盒 | ✅ `Surprise`（邻消打开 → 特殊块或 3×3 小爆炸） |
+| 彩蛋 / 惊喜盒 | ✅ `Surprise`（邻消/直接命中打开 → 特殊块或 3×3 小爆炸） |
 | 染色瓶 | ✅ `Bottle c`（邻消把邻格宝石染成瓶色） |
 | 时间精灵 | ✅ `TimeSpirit`（邻消清除，本关 +2 步）；过关剩余步最多携带 3 步入下一关 |
 | 蒸汽 | ✅ `Steam` overlay（挡匹配；邻消扑灭；步末蔓延） |
@@ -173,7 +173,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (166 named cases)
+test/Spec.hs tasty (167 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.
@@ -181,7 +181,7 @@ Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame`
 ## Release status / 发布状态
 
 - Campaign: **38** levels (CH1–CH7 on map), batch-tested constructible / playable / décor-vs-goal
-- Tests: `stack test` **166** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner
+- Tests: `stack test` **167** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens
 - Stackage: **lts-21.25** / GHC **9.4.8**; binary: `stack build && stack exec match3-sdl`
 - itch checklist: see `ITCH.md`
 

@@ -1,6 +1,6 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力、宝箱、蜂蜜罐、传送带、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力、宝箱、蜂蜜罐、气球、传送带、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
 Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
 
@@ -26,15 +26,16 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
 - **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent clears chip; `GoalChest`
 - **Honey jars** (`Honey n` / 蜂蜜罐): amber jars; adjacent clears chip; `GoalHoney`
+- **Balloons** (`Balloon c` / 气球): colored; adjacent **same-color** clear pops; `GoalBalloon`
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
 - **Grass / Vine / Chocolate** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads (cleared choco does not)
 - **Boosters**: `1` → hammer mode → click cell; `2` → free-swap mode → click two cells (any distance); limited charges; select-then-1 still works
 - **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
-- **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / UFO absorb
+- **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / pop balloons / UFO absorb
 - **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear (3★ ≥40% moves left)
-- Combo scoring, hint, undo, auto-shuffle, 21 campaign levels
+- Combo scoring, hint, undo, auto-shuffle, 22 campaign levels
 - HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
 
 ## Levels / 关卡
@@ -45,7 +46,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 2 | 采红 | 30 | Collect 20× RED | — |
 | 3 | 热身 | 26 | Score 500 | — |
 | 4 | 采蓝 | 26 | Collect 22× BLUE | — |
-| 5 | 进阶 | 22 | Score 700 | choco |
+| 5 | 进阶 | 24 | Score 700 | choco |
 | 6 | 冰绿 | 24 | Collect 26× GREEN | ice |
 | 7 | 双采 | 28 | Collect RED 12 + BLUE 12 | — |
 | 8 | 碎石 | 26 | Destroy 8 stones | stones + belt |
@@ -60,8 +61,9 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 17 | 宝箱 | 24 | Open 6 chests | chests |
 | 18 | 巧箱 | 22 | Open 5 chests | chests + choco |
 | 19 | 蜂蜜 | 24 | Smash 6 honey jars | honey jars |
-| 20 | 蜜压 | 20 | Smash 5 honey jars | honey + choco |
-| 21 | 终章 | 16 | Score 1300 | stone+chest+honey+choco+vine+bomb+belt+UFO |
+| 20 | 蜜压 | 22 | Smash 5 honey jars | honey + choco |
+| 21 | 气球 | 24 | Pop 6 balloons | colored balloons |
+| 22 | 终章 | 16 | Score 1300 | stone+chest+honey+balloon+choco+vine+bomb+belt+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).
 

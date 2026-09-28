@@ -39,6 +39,7 @@ matchesTarget b col p = case at b p of
   Stone _ -> False
   Chest _ -> False
   Honey _ -> False
+  Balloon _ -> False
 
 -- | Orthogonally adjacent gems / countdowns matching the UFO target color.
 ufoAbsorbTargets :: Board -> Ufo -> [Pos]

@@ -10,6 +10,8 @@ module Match3.Obstacles
   , chipAdjacentStones
   , chipAdjacentChests
   , chipAdjacentHoney
+  , chipAdjacentBalloons
+  , balloonsAdjacentSameColor
   , withAdjacentStones
   ) where
 
@@ -22,12 +24,16 @@ import Match3.Types
   , isStone
   , isChest
   , isHoney
+  , isBalloon
+  , balloonColor
   , mkStoneLayers
   , mkChestLayers
   , mkHoneyLayers
   , stoneLayers
   , chestLayers
   , honeyLayers
+  , cellColor
+  , isGem
   )
 
 at :: Board -> Pos -> Cell
@@ -42,7 +48,7 @@ setAt b (r, c) v =
 -- | True if either swap endpoint is a stone, chest, or honey jar.
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
-  let block c = isStone c || isChest c || isHoney c
+  let block c = isStone c || isChest c || isHoney c || isBalloon c
   in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).
@@ -129,6 +135,27 @@ chipAdjacentHoney b clearedGems =
                then (board, nub (p : dead))
                else (setAt board p (mkHoneyLayers (n - 1)), dead)
         _ -> (board, dead)
+
+-- | Balloon positions orthogonally adjacent to a same-color cleared gem.
+balloonsAdjacentSameColor :: Board -> [Pos] -> [Pos]
+balloonsAdjacentSameColor b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , let clearedCell = at b cpos
+    , isGem clearedCell
+    , let col = cellColor clearedCell
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isBalloon (at b p)
+    , balloonColor (at b p) == col
+    ]
+
+-- | Pop balloons adjacent to same-color clears (single hit; no layers).
+chipAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
+chipAdjacentBalloons b clearedGems =
+  let dead = balloonsAdjacentSameColor b clearedGems
+  in (b, dead)  -- board unchanged until clear pipeline removes them
 
 -- | Legacy helper: positions that should be removed (last-layer stones only).
 -- Prefer chipAdjacentStones in clear pipeline.

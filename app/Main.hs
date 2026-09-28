@@ -192,6 +192,7 @@ spawnBurst board positions =
                     Stone _ -> (120, 120, 130)
                     Chest _ -> (220, 170, 60)
                     Honey _ -> (240, 180, 40)
+                    Balloon col -> colorRGB col
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -244,6 +245,8 @@ updateTitle window app = do
           "chest=" ++ show (gsChestsCleared gs) ++ "/" ++ show n
         GoalHoney n ->
           "honey=" ++ show (gsHoneyCleared gs) ++ "/" ++ show n
+        GoalBalloon n ->
+          "balloon=" ++ show (gsBalloonsPopped gs) ++ "/" ++ show n
         GoalUfo n ->
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
       title =
@@ -799,6 +802,12 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
+                                  GoalBalloon n ->
+                                    " [balloon "
+                                      <> T.pack (show (gsBalloonsPopped gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
                                   GoalUfo n ->
                                     " [ufo "
                                       <> T.pack (show (gsUfoCollected gs'))
@@ -1110,6 +1119,7 @@ drawHud ren app = do
         GoalClearStone _ -> V4 160 160 170 255
         GoalChest _ -> V4 220 170 60 255
         GoalHoney _ -> V4 240 180 40 255
+        GoalBalloon _ -> V4 255 120 160 255
         GoalUfo _ -> V4 180 120 255 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
@@ -1133,6 +1143,11 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 202 40)) (V2 16 18)))
       rendererDrawColor ren $= V4 200 140 20 255
       fillRect ren (Just (Rectangle (P (V2 206 36)) (V2 8 6)))
+    GoalBalloon _ -> do
+      rendererDrawColor ren $= V4 255 120 160 255
+      fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 14 16)))
+      rendererDrawColor ren $= V4 200 80 120 255
+      fillRect ren (Just (Rectangle (P (V2 209 54)) (V2 4 6)))
     GoalUfo _ -> do
       rendererDrawColor ren $= V4 180 120 255 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
@@ -1285,6 +1300,7 @@ drawLevelMap ren app
               GoalClearStone _ -> V4 160 160 170 255
               GoalChest _ -> V4 220 170 60 255
               GoalHoney _ -> V4 240 180 40 255
+              GoalBalloon _ -> V4 255 120 160 255
               GoalUfo _ -> V4 180 120 255 255
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
@@ -1465,6 +1481,27 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Balloon col -> do
+    let (cr0, cg0, cb0) = colorRGB col
+        (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
+        gap = 6 :: CInt
+    -- Roundish body
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap - 8))))
+    -- Highlight
+    rendererDrawColor ren $= V4 255 255 255 160
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 4) (y + gap + 4))) (V2 8 8)))
+    -- String
+    rendererDrawColor ren $= V4 220 220 230 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 1) (y + cellPx - 14))) (V2 2 10)))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Countdown col turns -> do
     let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -1598,6 +1635,11 @@ drawStatic ren app board yOff = do
             (x0, y0) = cellOrigin pos
             y = y0 + yOff
             flashing = pos `elem` flashSet
+            -- Soft checkerboard under gems (visual polish; does not change gem shapes)
+            (br, bg, bb) =
+              if even (r + c) then (36, 36, 48) else (28, 28, 40)
+        rendererDrawColor ren $= V4 br bg bb 255
+        fillRect ren (Just (Rectangle (P (V2 x0 y)) (V2 cellPx cellPx)))
         drawGemAt ren x0 y cell flashing
         when (sel == Just pos) $ do
           let bright = fromIntegral (180 + (pulse `mod` 40) * 2) :: Word8
@@ -1605,6 +1647,9 @@ drawStatic ren app board yOff = do
                 ToolHammer -> (255, 160, 80)
                 ToolFreeSwap _ -> (100, 180, 255)
                 ToolNone -> (255, bright, bright)
+          -- Outer glow ring
+          rendererDrawColor ren $= V4 sr sg sb 120
+          drawRect ren (Just (Rectangle (P (V2 (x0 - 1) (y - 1))) (V2 (cellPx + 2) (cellPx + 2))))
           rendererDrawColor ren $= V4 sr sg sb 255
           drawRect ren (Just (Rectangle (P (V2 (x0 + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
           drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))

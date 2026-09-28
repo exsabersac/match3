@@ -63,4 +63,5 @@ colorPositions b col =
       Stone _ -> False
       Chest _ -> False
       Honey _ -> False
+      Balloon _ -> False
   ]

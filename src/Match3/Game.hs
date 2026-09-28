@@ -54,6 +54,7 @@ data GameState = GameState
   , gsStonesCleared :: Int          -- fully destroyed stones
   , gsChestsCleared :: Int          -- fully opened treasure chests (宝箱)
   , gsHoneyCleared  :: Int          -- fully smashed honey jars (蜂蜜罐)
+  , gsBalloonsPopped :: Int         -- balloons popped (气球)
   , gsGen           :: StdGen
   , gsOver          :: Maybe Outcome
   , gsLevel         :: Int
@@ -79,6 +80,7 @@ instance Eq GameState where
       && gsStonesCleared a == gsStonesCleared b
       && gsChestsCleared a == gsChestsCleared b
       && gsHoneyCleared a == gsHoneyCleared b
+      && gsBalloonsPopped a == gsBalloonsPopped b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
       && gsBelts a == gsBelts b
@@ -102,7 +104,7 @@ levelBelts 15 =
   , [(6, 1), (6, 2), (6, 3), (6, 4), (6, 5)]
   ]
 levelBelts 13 = [[(4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7)]]
-levelBelts 20 = [[(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]]
+levelBelts 21 = [[(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]]
 levelBelts _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
@@ -177,6 +179,11 @@ decorateLevel 19 b =
               [ ((3, 2), 1), ((3, 5), 2), ((5, 3), 1), ((5, 4), 1), ((6, 6), 1) ]
   in overlayAt b1 Choco [(1, 1), (1, 6), (2, 3), (4, 0), (4, 7)]
 decorateLevel 20 b =
+  -- 气球: colored balloons popped by same-color adjacent clears
+  foldl (\board (p, col) -> setCell board p (mkBalloon col))
+        b
+        [ ((2, 2), C1), ((2, 5), C3), ((4, 1), C2), ((4, 3), C1), ((4, 5), C4), ((6, 2), C3), ((6, 5), C5) ]
+decorateLevel 21 b =
   let b1 =
         foldl (\board p -> setCell board p mkStone)
               b
@@ -189,7 +196,11 @@ decorateLevel 20 b =
         foldl (\board p -> setCell board p mkHoney)
               b2
               [(2, 3), (2, 4)]
-      b3 = overlayAt b2' Choco [(2, 2), (2, 5), (5, 2), (5, 5)]
+      b2'' =
+        foldl (\board (p, col) -> setCell board p (mkBalloon col))
+              b2'
+              [((5, 1), C1), ((5, 6), C3)]
+      b3 = overlayAt b2'' Choco [(2, 2), (2, 5), (5, 2), (5, 5)]
       b4 = overlayAt b3 Vine [(6, 3)]
   in foldl
        (\board p ->
@@ -206,7 +217,7 @@ levelUfos :: Int -> [Ufo]
 levelUfos 12 = [mkUfo (2, 3) C1]
 levelUfos 13 = [mkUfo (1, 2) C1, mkUfo (1, 5) C3]
 levelUfos 15 = [mkUfo (0, 4) C2]
-levelUfos 20 = [mkUfo (2, 4) C1]
+levelUfos 21 = [mkUfo (2, 4) C1]
 levelUfos _ = []
 
 -- | Stamp Grass/Vine/Choco onto existing gems (keep color/kind/ice).
@@ -233,6 +244,7 @@ newGameAtLevel li cfg seed =
        , gsStonesCleared = 0
        , gsChestsCleared = 0
        , gsHoneyCleared = 0
+       , gsBalloonsPopped = 0
        , gsGen = g1
        , gsOver = Nothing
        , gsLevel = li
@@ -278,6 +290,7 @@ goalSatisfied gs =
     (gsUfoCollected gs)
     (gsChestsCleared gs)
     (gsHoneyCleared gs)
+    (gsBalloonsPopped gs)
 
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
@@ -315,6 +328,7 @@ extractDecor b =
     keep (Stone _) = True
     keep (Chest _) = True
     keep (Honey _) = True
+    keep (Balloon _) = True
     keep (Countdown _ _) = True
     keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
     -- Normal bare gems are shuffled away
@@ -357,7 +371,7 @@ trySwap p1 p2 gs
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
              let ufos0 = gsUfos gs
-                 (board0', cleared0, gained0, combo0, tallies0, stones0, chests0, honey0, uAbs0, ufos1, g0') =
+                 (board0', cleared0, gained0, combo0, tallies0, stones0, chests0, honey0, balloons0, uAbs0, ufos1, g0') =
                    if rainbow
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
@@ -368,13 +382,13 @@ trySwap p1 p2 gs
                          in runCascadeScoredFromSeedsWithUfos (Just p2) seeds ufos0 (gsGen gs) swapped
                        else runCascadeScoredWithUfos (Just p2) ufos0 (gsGen gs) swapped
                  -- Countdown bombs: tick after move; zeros explode 3×3
-                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, g1') =
+                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, chests1, honey1, balloons1, g1') =
                    resolveCountdowns g0' board0'
                  -- Conveyor belts: shift then cascade if new matches
                  boardBelt = shiftBelts boardCd (gsBelts gs)
-                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, uAbs2, ufos2, g') =
+                 (boardBeltCas, cleared2, gained2, combo2, tallies2, stones2, chests2, honey2, balloons2, uAbs2, ufos2, g') =
                    if null (gsBelts gs)
-                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, ufos1, g1')
+                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, 0, 0, 0, 0, ufos1, g1')
                      else runCascadeScoredWithUfos Nothing ufos1 g1' boardBelt
                  -- Vine / chocolate spread at end of move (cleared overlays already stripped)
                  board1 = spreadChoco (spreadVines boardBeltCas)
@@ -386,6 +400,7 @@ trySwap p1 p2 gs
                  stonesHit = stones0 + stones1 + stones2
                  chestsHit = chests0 + chests1 + chests2
                  honeyHit = honey0 + honey1 + honey2
+                 balloonHit = balloons0 + balloons1 + balloons2
                  uAbs = uAbs0 + uAbs2
                  ufoCollected' = gsUfoCollected gs + uAbs
                  _cleared = cleared0 + cleared1 + cleared2
@@ -395,6 +410,7 @@ trySwap p1 p2 gs
                    GoalClearStone _ -> 0
                    GoalChest _ -> 0
                    GoalHoney _ -> 0
+                   GoalBalloon _ -> 0
                    GoalScore _ -> 0
                    GoalUfo _ -> uAbs
                  -- For multi-collect, primary meter = sum of progress toward reqs
@@ -406,6 +422,7 @@ trySwap p1 p2 gs
                    GoalClearStone _ -> gsStonesCleared gs + stonesHit
                    GoalChest _ -> gsChestsCleared gs + chestsHit
                    GoalHoney _ -> gsHoneyCleared gs + honeyHit
+                   GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
                    GoalScore _ -> gsCollected gs
                    GoalUfo _ -> ufoCollected'
                  score' = gsScore gs + gained
@@ -421,6 +438,7 @@ trySwap p1 p2 gs
                      , gsStonesCleared = gsStonesCleared gs + stonesHit
                      , gsChestsCleared = gsChestsCleared gs + chestsHit
                      , gsHoneyCleared = gsHoneyCleared gs + honeyHit
+                     , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing
@@ -472,7 +490,7 @@ useHammer p gs
   | not (inBounds p) = (gs, InvalidSwap)
   | otherwise =
       let seeds = [p]
-          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, uAbs, ufos', g') =
+          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, uAbs, ufos', g') =
             runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsGen gs) (gsBoard gs)
           board1 = spreadChoco (spreadVines boardH)
           score' = gsScore gs + gained
@@ -490,6 +508,7 @@ useHammer p gs
             GoalClearStone _ -> gsStonesCleared gs + stonesHit
             GoalChest _ -> gsChestsCleared gs + chestsHit
             GoalHoney _ -> gsHoneyCleared gs + honeyHit
+            GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
             GoalScore _ -> gsCollected gs
             GoalUfo _ -> ufoCollected'
           gs' =
@@ -501,6 +520,7 @@ useHammer p gs
               , gsStonesCleared = gsStonesCleared gs + stonesHit
               , gsChestsCleared = gsChestsCleared gs + chestsHit
               , gsHoneyCleared = gsHoneyCleared gs + honeyHit
+              , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
               , gsGen = g'
               , gsHistory = hist
               , gsHint = Nothing
@@ -538,7 +558,7 @@ useFreeSwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, uAbs, ufos', g') =
+             let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, uAbs, ufos', g') =
                    if rainbow
                      then runCascadeScoredFromSeedsWithUfos (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) (gsGen gs) swapped
                      else if specialCombo
@@ -560,6 +580,7 @@ useFreeSwap p1 p2 gs
                    GoalClearStone _ -> gsStonesCleared gs + stonesHit
                    GoalChest _ -> gsChestsCleared gs + chestsHit
                    GoalHoney _ -> gsHoneyCleared gs + honeyHit
+                   GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
                    GoalScore _ -> gsCollected gs
                    GoalUfo _ -> ufoCollected'
                  gs' =
@@ -571,6 +592,7 @@ useFreeSwap p1 p2 gs
                      , gsStonesCleared = gsStonesCleared gs + stonesHit
                      , gsChestsCleared = gsChestsCleared gs + chestsHit
                      , gsHoneyCleared = gsHoneyCleared gs + honeyHit
+                     , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing
@@ -600,4 +622,5 @@ loseHint (GoalCollectMulti reqs) =
 loseHint (GoalClearStone n) = "用邻消或特效砸箱子，目标 " ++ show n ++ " 个"
 loseHint (GoalChest n) = "邻消打开宝箱，目标 " ++ show n ++ " 个"
 loseHint (GoalHoney n) = "邻消砸开蜂蜜罐，目标 " ++ show n ++ " 个"
+loseHint (GoalBalloon n) = "用同色邻消戳破气球，目标 " ++ show n ++ " 个"
 loseHint (GoalUfo n) = "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"

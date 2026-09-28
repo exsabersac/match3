@@ -517,7 +517,28 @@ runCascadeScored prefer g b =
         runCascadeScoredWithUfos prefer [] [] g b
   in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, g')
 
+
+-- | Demote Line/Bomb/Rainbow at UFO absorb seeds to Normal so clearFromSeedsDetailed
+-- removes them without expandSpecials detonation (吸走 ≠ 引爆). Ice / overlays kept.
+maskUfoAbsorbSpecials :: Board -> [Pos] -> Board
+maskUfoAbsorbSpecials b ps =
+  foldl' maskOne b (nub ps)
+  where
+    maskOne board p =
+      case getCell board p of
+        Gem c k ice ov
+          | k /= Normal ->
+              setCell board p (Gem c Normal ice ov)
+        _ -> board
+
+-- | Clear UFO-absorbed cells: mask specials first, then normal seed clear.
+clearUfoAbsorbed :: Board -> [Pos] -> (MBoard, Int, [Pos])
+clearUfoAbsorbed b absorbed =
+  clearFromSeedsDetailed Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
+
 -- | Like runCascadeScored but steps UFOs after each cascade wave (吸同色 + 移格).
+-- UFO absorb clears seeds without expandSpecials: absorbing a Bomb/Line/Rainbow
+-- removes it (GoalUfo counts) but must not detonate (吸走 ≠ 引爆).
 -- portals: bidirectional pairs applied during settle (落入 A 从 B 出).
 -- Returns (... stones, chests, honey, balloons, cookies, cakes, ufoAbsorbed, ufos', clearedPos, gen).
 runCascadeScoredWithUfos
@@ -559,7 +580,7 @@ runCascadeScoredWithUfosFromWave startW prefer ufos0 portals g b =
           in if null absorbed
                then go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn) (chests + cht) (honey + hny) (balloons + bal) (cookies + cok) (cakes + cak) uAbs ufos' (clearedAcc ++ pos)
                else
-                 let (mb, n2, pos2) = clearFromSeedsDetailed Nothing b'' absorbed
+                 let (mb, n2, pos2) = clearUfoAbsorbed b'' absorbed
                      stn2 = length [p | p <- pos2, isStone (getCell b'' p)]
                      cht2 = length [p | p <- pos2, isChest (getCell b'' p)]
                      hny2 = length [p | p <- pos2, isHoney (getCell b'' p)]
@@ -660,7 +681,7 @@ runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b
             if null absorbed
               then (b1, g1, 0, 0, 0, 0, 0, 0, 0, zip allColors (repeat 0), 0, ufos1, [])
               else
-                let (mb2, n2, pos2) = clearFromSeedsDetailed Nothing b1 absorbed
+                let (mb2, n2, pos2) = clearUfoAbsorbed b1 absorbed
                     stn2 = length [p | p <- pos2, isStone (getCell b1 p)]
                     cht2 = length [p | p <- pos2, isChest (getCell b1 p)]
                     hny2 = length [p | p <- pos2, isHoney (getCell b1 p)]

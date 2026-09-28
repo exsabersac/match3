@@ -1,7 +1,8 @@
 -- | Flying saucers (开心消消乐飞碟感): overlay entities that absorb adjacent
 -- same-color gems and relocate after each cascade wave.
 -- Skips peel-locks (Chain/Curtain/Fog/Steam), multi-ice, and Flip so GoalUfo
--- only counts true clears (no phantom progress).
+-- only counts true clears (no phantom progress). Absorbing Line/Bomb/Rainbow
+-- removes them without expandSpecials detonation (吸走 ≠ 引爆).
 module Match3.Ufo
   ( Ufo(..)
   , mkUfo
@@ -37,6 +38,8 @@ at b (r, c) = (b !! r) !! c
 -- | True if UFO can absorb this cell as a *full clear* of target color.
 -- Skip peel-locks (Chain/Curtain/Fog/Steam), multi-ice (chip-only), and Flip
 -- (direct hit only flips face) so GoalUfo cannot phantom-count soft hits.
+-- Specials (Line/Bomb/Rainbow) are absorbable; Board.clearUfoAbsorbed masks them
+-- so expandSpecials does not detonate on absorb.
 matchesTarget :: Board -> Color -> Pos -> Bool
 matchesTarget b col p =
   let cell = at b p

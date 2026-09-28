@@ -4,7 +4,7 @@ module Main (main) where
 import Control.Monad (when)
 import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
-import Match3.Board (applyGravity, clearMatches, expandSpecials, refill)
+import Match3.Board (applyGravity, clearMatches, expandSpecials, refill, runCascadeScoredWithUfos)
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -207,6 +207,7 @@ tests =
     , testCase "portal_teleports_flip" portal_teleports_flip
     , testCase "portal_endpoints_not_immortal_blocked" portal_endpoints_not_immortal_blocked
     , testCase "snail_reverses_at_portal_endpoint" snail_reverses_at_portal_endpoint
+    , testCase "ufo_absorb_no_special_expand" ufo_absorb_no_special_expand
     , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
     , testCase "carpet_covers_on_cookie_vacate" carpet_covers_on_cookie_vacate
     , testCase "carpet_covers_on_safe_open" carpet_covers_on_safe_open
@@ -6812,3 +6813,83 @@ carpet_covers_on_safe_open = do
   assertEqual "safes opened" (1 :: Int) (gsSafesOpened gs1)
   assertEqual "carpet covered on safe open" (1 :: Int) (gsCarpetsCovered gs1)
   assertEqual "carpet closed" ([] :: [Pos]) (gsCarpetOpen gs1)
+-- | UFO absorb of Bomb/Line/Rainbow must remove the special without expandSpecials
+-- detonation (吸走 ≠ 引爆). Regression: clearFromSeedsDetailed expanded absorbed
+-- Bombs into 3×3 / Lines into full rows, wiping cells UFO never targeted.
+ufo_absorb_no_special_expand :: Assertion
+ufo_absorb_no_special_expand = do
+  let paint (r, c) = if even (r + c) then mkGem C4 else mkGem C5
+      base =
+        [[paint (r, c) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
+      boardBomb =
+        setCell
+          (setCell base (3, 3) (Gem C1 Bomb 0 Nothing))
+          (3, 1)
+          (mkGem C3)
+      u = mkUfo (3, 2) C1
+  assertBool "bomb board stable" (not (hasAnyMatch boardBomb))
+  assertEqual "absorbs bomb" [(3, 3)] (ufoAbsorbTargets boardBomb u)
+  -- Unit: raw Bomb/Line seeds expand; Normal-masked seeds do not
+  -- (same mask Board.clearUfoAbsorbed applies before clearFromSeedsDetailed).
+  let rawBomb = expandSpecials boardBomb [(3, 3)]
+      maskedBomb = setCell boardBomb (3, 3) (Gem C1 Normal 0 Nothing)
+  assertBool "raw bomb expands beyond seed" (length rawBomb > 1)
+  assertEqual "masked bomb is seed-only" [(3, 3)] (expandSpecials maskedBomb [(3, 3)])
+  let boardLine =
+        foldl
+          (\b (p, c) -> setCell b p c)
+          base
+          [ ((2, 2), mkGem C2)
+          , ((2, 3), Gem C1 LineH 0 Nothing)
+          , ((2, 4), mkGem C3)
+          ]
+      rawLine = expandSpecials boardLine [(2, 3)]
+      maskedLine = setCell boardLine (2, 3) (Gem C1 Normal 0 Nothing)
+  assertBool "raw LineH expands full row" $
+    all (`elem` rawLine) [(2, c) | c <- [0 .. boardSize - 1]]
+  assertEqual "masked LineH seed-only" [(2, 3)] (expandSpecials maskedLine [(2, 3)])
+  -- Live cascade: UFO absorbs Bomb; GoalUfo counts; cell is no longer Bomb
+  let boardMatch =
+        setCell
+          (setCell
+             (setCell
+                (setCell boardBomb (0, 0) (mkGem C3))
+                (0, 1)
+                (mkGem C3))
+             (0, 2)
+             (mkGem C2))
+          (0, 3)
+          (mkGem C3)
+      swapped = swapCells boardMatch (0, 2) (0, 3)
+  assertBool "setup match" (hasAnyMatch swapped)
+  let (b2, _, _, _, _, _, _, _, _, _, _, uAbs2, _, _, _) =
+        runCascadeScoredWithUfos (Just (0, 3)) [u] [] (mkStdGen 5) swapped
+  assertBool "UFO absorbed bomb" (uAbs2 >= 1)
+  assertBool "bomb cell no longer Bomb" $
+    case getCell b2 (3, 3) of
+      Gem _ Bomb _ _ -> False
+      _ -> True
+  -- Live LineH absorb: special gone, GoalUfo counts
+  let uL = mkUfo (2, 2) C1
+  assertEqual "absorbs line" [(2, 3)] (ufoAbsorbTargets boardLine uL)
+  assertBool "line board stable" (not (hasAnyMatch boardLine))
+  let boardLM =
+        setCell
+          (setCell
+             (setCell
+                (setCell boardLine (6, 0) (mkGem C3))
+                (6, 1)
+                (mkGem C3))
+             (6, 2)
+             (mkGem C4))
+          (6, 3)
+          (mkGem C3)
+      swappedL = swapCells boardLM (6, 2) (6, 3)
+  assertBool "line setup match" (hasAnyMatch swappedL)
+  let (bL, _, _, _, _, _, _, _, _, _, _, uAbsL, _, _, _) =
+        runCascadeScoredWithUfos (Just (6, 3)) [uL] [] (mkStdGen 11) swappedL
+  assertBool "absorbed line" (uAbsL >= 1)
+  assertBool "line cell no longer LineH" $
+    case getCell bL (2, 3) of
+      Gem _ LineH _ _ -> False
+      _ -> True

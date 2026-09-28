@@ -194,6 +194,7 @@ tests =
     , testCase "soft_hit_preserves_oncell_overlays" soft_hit_preserves_oncell_overlays
     , testCase "soft_hit_no_adj_side_effects" soft_hit_no_adj_side_effects
     , testCase "soft_hit_preserves_oncell_fog_steam" soft_hit_preserves_oncell_fog_steam
+    , testCase "surprise_blast_opens_nested" surprise_blast_opens_nested
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5866,3 +5867,79 @@ soft_hit_preserves_oncell_fog_steam = do
       (gsBare, _) = useHammer (4, 4) (mkGs boardBare)
   assertBool "bare Fog direct-cleared" (not (hasFog (getCell (gsBoard gsBare) (4, 4))))
   assertEqual "bare Fog hammer spent" (1 :: Int) (gsHammers gsBare)
+
+--------------------------------------------------------------------------------
+-- Surprise explode must open nested Surprises (Bomb parity)
+--------------------------------------------------------------------------------
+
+-- | Surprise 3×3 explode that hits another Surprise must open it (special or
+-- chained explode) — not hole-delete via chipIce alone. Bomb→Surprise already
+-- opened; Surprise→Surprise lacked the second openSurprises pass.
+surprise_blast_opens_nested :: Assertion
+surprise_blast_opens_nested = do
+  -- (3,3) outcome 3 → explode; (2,2) outcome 2 → Bomb special inside the 3×3.
+  let boardSpecial =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (3, 3)
+             mkSurprise)
+          (2, 2)
+          mkSurprise
+  assertEqual "outer explode" (3 :: Int) (((3 * 8 + 3) `mod` 4))
+  assertEqual "nested special" (2 :: Int) (((2 * 8 + 2) `mod` 4))
+  let (mbS, _) = clearMatches boardSpecial
+  case (mbS !! 2) !! 2 of
+    Just c -> do
+      assertBool "nested opened to gem" (isGem c)
+      assertEqual "nested Bomb special" Bomb (cellKind c)
+      assertBool "not still Surprise" (not (isSurprise c))
+    Nothing -> assertFailure "nested Surprise must open to special, not hole-delete"
+  -- Control: Bomb match hitting Surprise at (2,2) also opens (parity sanity).
+  let boardBomb =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (Gem C1 Bomb 0 Nothing))
+          (2, 2)
+          mkSurprise
+      (mbB, _) = clearMatches boardBomb
+  case (mbB !! 2) !! 2 of
+    Just c -> assertEqual "bomb-hit nested Bomb" Bomb (cellKind c)
+    Nothing -> assertFailure "bomb-hit Surprise must open"
+  -- Nested explode at (2,3): chain must reach (1,3) outside outer 3×3 alone.
+  let boardChain =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (3, 3)
+             mkSurprise)
+          (2, 3)
+          mkSurprise
+  assertEqual "nested explode" (3 :: Int) (((2 * 8 + 3) `mod` 4))
+  let (mbC, nC) = clearMatches boardChain
+      holesC =
+        [ (r, c)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , ((mbC !! r) !! c) == Nothing
+        ]
+  assertBool "nested explode center cleared" ((2, 3) `elem` holesC)
+  assertBool "chained blast reached (1,3)" ((1, 3) `elem` holesC)
+  assertBool ("chained clear count >= 12, got " ++ show nC) (nC >= 12)

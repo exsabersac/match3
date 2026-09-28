@@ -200,6 +200,8 @@ tests =
     , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
     , testCase "surprise_special_sits_hat_bottle" surprise_special_sits_hat_bottle
     , testCase "maker_bomb_sits_bottle" maker_bomb_sits_bottle
+    , testCase "immortal_no_gravity_fall" immortal_no_gravity_fall
+    , testCase "cross_keeps_maker_in_place" cross_keeps_maker_in_place
     , testCase "soft_lock_blocks_rainbow_swap" soft_lock_blocks_rainbow_swap
     , testCase "soft_lock_blocks_special_combo" soft_lock_blocks_special_combo
     , testCase "soft_lock_blocks_freeswap_activation" soft_lock_blocks_freeswap_activation
@@ -4887,8 +4889,9 @@ hat_recolor_followup_match = do
         , c <- [0 .. boardSize - 1]
         , isMagicHat (getCell bAfter (r, c))
         ]
-  -- Hat may fall with gravity after the clear below it; must still exist.
+  -- Hat is gravity-fixed (immortal class); stays put through clears below.
   assertEqual "hat still on board" (1 :: Int) (length hatLeft)
+  assertEqual "hat stayed put" [(5, 1)] hatLeft
   assertBool "scored" (scored >= scoreForWave 1 3)
 
 
@@ -7234,3 +7237,70 @@ carpet_covers_on_surprise_safe_bottom = do
   assertEqual "bottom carpet covered" (1 :: Int) (gsCarpetsCovered gs1)
   assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
   assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
+
+
+--------------------------------------------------------------------------------
+-- Immortal décor must not fall with gravity (portal/belt soft-lock class)
+--------------------------------------------------------------------------------
+
+-- | Bottle / Maker / MagicHat / Snail never clear and are not portal-transferable.
+-- If gravity packs them into holes they can land on a portal/belt slot (or leave
+-- a décor seed via Cross column wipe) and permanently soft-lock the layout —
+-- same immortal class as portal_endpoints_not_immortal_blocked /
+-- belt_cells_not_stuck_immortal. Gems / Cookie still fall.
+immortal_no_gravity_fall :: Assertion
+immortal_no_gravity_fall = do
+  let seeds = [(6, 3), (7, 3)]  -- far below (3,3); buffer gems avoid adj peels
+      check name cell isImm = do
+        let board = setCell stableBoard (3, 3) cell
+            (b1, _, _, _, _, _, _, _, _, _, _, _) =
+              runCascadeScoredFromSeeds Nothing seeds (mkStdGen 0) board
+            positions =
+              [ (r, c)
+              | r <- [0 .. boardSize - 1]
+              , c <- [0 .. boardSize - 1]
+              , isImm (getCell b1 (r, c))
+              ]
+        assertEqual (name ++ " stayed put") [(3, 3)] positions
+  check "Maker" (mkMakerCharges C5 5) isMaker
+  check "Bottle" (mkBottle C2) isBottle
+  check "Hat" mkMagicHat isMagicHat
+  check "Snail" (mkSnail 1 0) isSnail
+  -- Control: Cookie still falls toward bottom (may drain).
+  let boardC = setCell stableBoard (3, 3) mkCookie
+      (bC, _, _, _, _, _, _, _, _, cookies, _, _) =
+        runCascadeScoredFromSeeds Nothing [(4, 3), (5, 3), (6, 3), (7, 3)] (mkStdGen 1) boardC
+  assertBool "cookie left (3,3)" (not (isCookie (getCell bC (3, 3))))
+  assertBool ("cookie fell or drained, cookies=" ++ show cookies) $
+    cookies >= 1
+      || any
+           (\(r, c) -> isCookie (getCell bC (r, c)) && r > 3)
+           [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
+
+-- | Cross clear through a Maker must not gravity-pack it off its seed cell.
+-- Regression: colGravity treated Maker as a fallable solid, so wiping the column
+-- below relocated the immortal (and refill covered the décor slot).
+cross_keeps_maker_in_place :: Assertion
+cross_keeps_maker_in_place = do
+  let board = setCell stableBoard (3, 3) (mkMakerCharges C5 5)
+      gs0 =
+        (newGame defaultConfig 3)
+          { gsBoard = board
+          , gsCrossClears = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsMoves = 10
+          }
+      (gs1, out) = useCrossClear (3, 3) gs0
+  case out of
+    NoMatch -> assertFailure "cross should apply"
+    InvalidSwap -> assertFailure "cross should be valid"
+    _ -> pure ()
+  assertEqual "cross spent" (1 :: Int) (gsCrossClears gs1)
+  assertBool "Maker still at seed" (isMaker (getCell (gsBoard gs1) (3, 3)))
+  -- Ortho cross seeds may same-color charge once; décor slot must not relocate.
+  assertBool "Maker still charged maker" $
+    makerCharges (getCell (gsBoard gs1) (3, 3)) >= 4

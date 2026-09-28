@@ -354,11 +354,32 @@ clearMatchesDetailed prefer b =
           spawns
   in (mb1, n, allPos)
 
+-- | Immortal décor that must not fall with gravity. Same class as portal/belt
+-- stuck blockers (Bottle / Maker / MagicHat / Snail): they never clear and are
+-- not portal-transferable, so gravity-packing them into a portal/belt slot (or
+-- off a décor seed via Cross column wipe) permanently soft-locks the layout.
+gravityFixedCell :: Cell -> Bool
+gravityFixedCell c =
+  isBottle c || isMaker c || isMagicHat c || isSnail c
+
+-- | Column gravity: fixed immortals stay put and split the column into segments;
+-- fallable cells (gems / Cookie / Countdown / Flip / clearable obstacles) pack
+-- down within each segment.
 colGravity :: [Maybe Cell] -> [Maybe Cell]
-colGravity col =
-  let solids = [x | Just x <- col]
-      holes = length col - length solids
-  in replicate holes Nothing ++ map Just solids
+colGravity = concatMap packSegment . splitFixed
+  where
+    isFixed (Just c) = gravityFixedCell c
+    isFixed Nothing = False
+    splitFixed [] = []
+    splitFixed xs =
+      let (seg, rest) = span (not . isFixed) xs
+      in case rest of
+           (fix : ys) -> seg : [fix] : splitFixed ys
+           [] -> [seg]
+    packSegment seg =
+      let solids = [x | Just x <- seg]
+          holes = length seg - length solids
+      in replicate holes Nothing ++ map Just solids
 
 transposeM :: MBoard -> MBoard
 transposeM [] = []

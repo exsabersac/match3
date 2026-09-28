@@ -5,6 +5,8 @@ module Match3.Core
   , Cell
   , mkGem
   , mkStone
+  , mkStoneLayers
+  , stoneLayers
   , isStone
   , isGem
   , cellColor
@@ -66,6 +68,7 @@ module Match3.Core
   , orthoNeighbors
   , stonesAdjacentTo
   , withAdjacentStones
+  , chipAdjacentStones
   , isRainbow
   , isRainbowSwap
   , rainbowClearSeeds
@@ -79,6 +82,7 @@ import Match3.Obstacles
   , orthoNeighbors
   , stonesAdjacentTo
   , withAdjacentStones
+  , chipAdjacentStones
   )
 import Match3.Rainbow
   ( isRainbow

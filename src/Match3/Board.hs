@@ -31,7 +31,7 @@ module Match3.Board
   ) where
 
 import Data.List (foldl', nub)
-import Match3.Obstacles (withAdjacentStones)
+import Match3.Obstacles (chipAdjacentStones)
 import Match3.Rainbow (isRainbow, isRainbowSwap)
 import Match3.Types
 import System.Random (RandomGen, randomR)
@@ -85,7 +85,7 @@ findMatchRuns b = filter ((>= 3) . length . runPos) (hRuns ++ vRuns)
 groupGemRuns :: Board -> [Pos] -> [(Color, [Pos])]
 groupGemRuns _ [] = []
 groupGemRuns b (p : ps) = case getCell b p of
-  Stone -> groupGemRuns b ps
+  Stone _ -> groupGemRuns b ps
   Gem col _ -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
@@ -131,10 +131,10 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
               , c <- [0 .. boardSize - 1]
               , case getCell b (r, c) of
                   Gem col' _ -> col' == col
-                  Stone -> False
+                  Stone _ -> False
               ]
             Gem _ Normal -> []
-            Stone -> []
+            Stone _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
@@ -163,7 +163,7 @@ countColor b ps col =
     | p <- ps
     , case getCell b p of
         Gem c _ -> c == col
-        Stone -> False
+        Stone _ -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -181,10 +181,11 @@ clearMatchesDetailed prefer b =
   let runs = findMatchRuns b
       base = nub (concatMap runPos runs)
       expanded = expandSpecials b base
-      -- Adjacent stones chip away when a neighbor clears
-      allPos = withAdjacentStones b expanded
+      -- Chip adjacent stone layers; only last-layer stones join the clear set
+      (bChipped, deadStones) = chipAdjacentStones b expanded
+      allPos = nub (expanded ++ deadStones)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM b) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bChipped) allPos
       spawns = spawnSpecials prefer runs
       mb1 =
         foldl'
@@ -302,9 +303,10 @@ clearFromSeedsDetailed prefer b seeds0 =
   let runs = findMatchRuns b
       base = nub seeds0
       expanded = expandSpecials b base
-      allPos = withAdjacentStones b expanded
+      (bChipped, deadStones) = chipAdjacentStones b expanded
+      allPos = nub (expanded ++ deadStones)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM b) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bChipped) allPos
       spawns = spawnSpecials prefer runs
       mb1 =
         foldl'

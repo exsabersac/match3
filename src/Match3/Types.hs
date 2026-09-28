@@ -6,6 +6,8 @@ module Match3.Types
   , Cell
   , mkGem
   , mkStone
+  , mkStoneLayers
+  , stoneLayers
   , isStone
   , isGem
   , cellColor
@@ -39,10 +41,11 @@ data Color = C1 | C2 | C3 | C4 | C5
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
   deriving (Eq, Ord, Show, Generic)
 
--- | Board cell: a colored gem (possibly special) or an immovable stone blocker.
+-- | Board cell: a colored gem (possibly special) or a layered stone blocker.
+-- Stone n = n hit points; adjacent clears decrement; removed when it would go to 0.
 data CellContents
   = Gem Color GemKind
-  | Stone
+  | Stone Int
   deriving (Eq, Ord, Show, Generic)
 
 type Cell = CellContents
@@ -50,26 +53,35 @@ type Cell = CellContents
 mkGem :: Color -> Cell
 mkGem c = Gem c Normal
 
+-- | Single-layer stone (cleared by one adjacent clear).
 mkStone :: Cell
-mkStone = Stone
+mkStone = Stone 1
+
+-- | Multi-layer stone / crate (开心消消乐-style box).
+mkStoneLayers :: Int -> Cell
+mkStoneLayers n = Stone (max 1 n)
+
+stoneLayers :: Cell -> Int
+stoneLayers (Stone n) = n
+stoneLayers _ = 0
 
 isStone :: Cell -> Bool
-isStone Stone = True
+isStone (Stone _) = True
 isStone _ = False
 
 isGem :: Cell -> Bool
 isGem (Gem _ _) = True
-isGem Stone = False
+isGem (Stone _) = False
 
 -- | Color of a gem cell. Partial on Stone — call only after isGem / pattern match.
 cellColor :: Cell -> Color
 cellColor (Gem c _) = c
-cellColor Stone = error "cellColor: Stone has no color"
+cellColor (Stone _) = error "cellColor: Stone has no color"
 
 -- | Kind of a gem cell. Partial on Stone.
 cellKind :: Cell -> GemKind
 cellKind (Gem _ k) = k
-cellKind Stone = error "cellKind: Stone has no kind"
+cellKind (Stone _) = error "cellKind: Stone has no kind"
 
 numColors :: Int
 numColors = 5

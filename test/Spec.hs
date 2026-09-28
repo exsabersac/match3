@@ -38,6 +38,8 @@ tests =
     , testCase "stone_blocks_swap" stone_blocks_swap
     , testCase "stone_cleared_by_adjacent" stone_cleared_by_adjacent
     , testCase "stone_not_in_match" stone_not_in_match
+    , testCase "stone_layer_decrement" stone_layer_decrement
+    , testCase "stone_layer_clears_at_zero" stone_layer_clears_at_zero
     , testCase "rainbow_clears_color" rainbow_clears_color
     , testCase "rainbow_swap_without_match" rainbow_swap_without_match
     ]
@@ -685,4 +687,69 @@ rainbow_swap_without_match = do
     Won _ -> pure ()
     Lost _ -> pure ()
   assertEqual "moves spent" (gsMoves gs0 - 1) (gsMoves gs1)
+
+-- | Multi-layer stone loses one layer on a single adjacent clear, stays on board.
+-- Stone placed *below* the match so gravity does not relocate it.
+stone_layer_decrement :: Assertion
+stone_layer_decrement = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (mkStoneLayers 3)
+  assertEqual "3 layers" (3 :: Int) (stoneLayers (getCell board0 (4, 1)))
+  assertBool "has match" (hasAnyMatch board0)
+  let (b1, dead) = chipAdjacentStones board0 [(3, 0), (3, 1), (3, 2)]
+  assertBool "not removed on first chip" (null dead)
+  assertBool "still stone" (isStone (getCell b1 (4, 1)))
+  assertEqual "3 -> 2" (2 :: Int) (stoneLayers (getCell b1 (4, 1)))
+  let g = mkStdGen 1
+  case stepCascade g board0 of
+    Nothing -> assertFailure "expected a cascade step"
+    Just (b2, _n, _) -> do
+      assertBool "stone survives one wave" (isStone (getCell b2 (4, 1)))
+      assertEqual "one wave chips once" (2 :: Int) (stoneLayers (getCell b2 (4, 1)))
+
+-- | Last layer chip removes the stone (Stone 1, or Stone 2 hit twice).
+stone_layer_clears_at_zero :: Assertion
+stone_layer_clears_at_zero = do
+  -- First: Stone 1 clears in one adjacent hit (existing behavior)
+  let board1 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C2))
+             (3, 3)
+             (mkGem C1))
+          (2, 1)
+          (mkStoneLayers 1)
+      gsA0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board1
+          , gsOver = Nothing
+          }
+      (gsA1, _) = trySwap (3, 2) (3, 3) gsA0
+  assertBool "Stone 1 cleared" (not (isStone (getCell (gsBoard gsA1) (2, 1))))
+
+  -- Second: Stone 2 needs two adjacent clears to vanish
+  let board2 = setCell board1 (2, 1) (mkStoneLayers 2)
+      -- First hit via clearMatches pipeline directly for control
+      (_, dead1) = chipAdjacentStones board2 [(3, 1)]
+  assertBool "first hit does not remove" (null dead1)
+  let (bMid, _) = chipAdjacentStones board2 [(3, 1)]
+  assertEqual "after first chip" (1 :: Int) (stoneLayers (getCell bMid (2, 1)))
+  let (bEnd, dead2) = chipAdjacentStones bMid [(3, 1)]
+  assertEqual "second hit removes" [(2, 1)] dead2
+  assertBool "board still has stone until clear applied" (isStone (getCell bEnd (2, 1)))
 

@@ -172,7 +172,7 @@ spawnBurst board positions =
               cx = fromIntegral ox + fromIntegral cellPx / 2
               cy = fromIntegral oy + fromIntegral cellPx / 2
               (cr, cg, cb) = case getCell board pos of
-                    Stone -> (120, 120, 130)
+                    Stone _ -> (120, 120, 130)
                     Gem _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
             ( \_ -> do
@@ -866,7 +866,7 @@ lerpI a b frame maxF
 
 drawGemAt :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
 drawGemAt ren x y cell flashing = case cell of
-  Stone -> do
+  Stone layers -> do
     let gap = 3 :: CInt
         (cr, cg, cb) = if flashing then (200, 200, 200) else (90, 90, 100)
     rendererDrawColor ren $= V4 cr cg cb 255
@@ -880,6 +880,15 @@ drawGemAt ren x y cell flashing = case cell of
     rendererDrawColor ren $= V4 60 60 70 255
     fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 14))) (V2 8 6)))
     fillRect ren (Just (Rectangle (P (V2 (x + 28) (y + 30))) (V2 10 7)))
+    -- Layer pips (开心消消乐箱子层数感)
+    rendererDrawColor ren $= V4 220 200 120 255
+    forM_ [0 .. min 3 layers - 1] $ \i ->
+      fillRect
+        ren
+        (Just
+           (Rectangle
+              (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
+              (V2 7 5)))
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))

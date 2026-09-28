@@ -1,25 +1,46 @@
--- | Stone blockers: occupy a cell, never match, block swaps, cleared by adjacent clears.
+-- | Stone blockers: layered crates. Never match, block swaps;
+-- adjacent gem clears chip one layer; removed at 0 (开心消消乐箱子感).
 module Match3.Obstacles
   ( swapBlockedByStone
   , orthoNeighbors
   , stonesAdjacentTo
+  , chipAdjacentStones
   , withAdjacentStones
   ) where
 
 import Data.List (nub)
-import Match3.Types (Board, Pos, boardSize, isStone)
+import Match3.Types
+  ( Board
+  , Cell
+  , Pos
+  , boardSize
+  , isStone
+  , mkStoneLayers
+  , stoneLayers
+  )
+
+at :: Board -> Pos -> Cell
+at board (r, c) = (board !! r) !! c
+
+setAt :: Board -> Pos -> Cell -> Board
+setAt b (r, c) v =
+  take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+  where
+    row = b !! r
 
 -- | True if either swap endpoint is a stone (cannot swap stones).
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
   isStone (at b p1) || isStone (at b p2)
-  where
-    at board (r, c) = (board !! r) !! c
 
 -- | Up / down / left / right neighbors (may be out of bounds).
 orthoNeighbors :: Pos -> [Pos]
 orthoNeighbors (r, c) =
   [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+
+inBoard :: Pos -> Bool
+inBoard (r, c) =
+  r >= 0 && r < boardSize && c >= 0 && c < boardSize
 
 -- | Stone positions orthogonally adjacent to any of the given cleared positions.
 stonesAdjacentTo :: Board -> [Pos] -> [Pos]
@@ -31,11 +52,25 @@ stonesAdjacentTo b cleared =
     , inBoard p
     , isStone (at b p)
     ]
-  where
-    at board (r, c) = (board !! r) !! c
-    inBoard (r, c) =
-      r >= 0 && r < boardSize && c >= 0 && c < boardSize
 
--- | Extend a clear-set with any stones sitting next to cleared cells.
+-- | Chip one layer off each adjacent stone.
+-- Returns (board with surviving stones decremented, positions whose last layer was chipped).
+chipAdjacentStones :: Board -> [Pos] -> (Board, [Pos])
+chipAdjacentStones b clearedGems =
+  foldl hitOne (b, []) (stonesAdjacentTo b clearedGems)
+  where
+    hitOne (board, dead) p =
+      case at board p of
+        cell | isStone cell ->
+          let n = stoneLayers cell
+          in if n <= 1
+               then (board, nub (p : dead))
+               else (setAt board p (mkStoneLayers (n - 1)), dead)
+        _ -> (board, dead)
+
+-- | Legacy helper: positions that should be removed (last-layer stones only).
+-- Prefer chipAdjacentStones in clear pipeline.
 withAdjacentStones :: Board -> [Pos] -> [Pos]
-withAdjacentStones b seeds = nub (seeds ++ stonesAdjacentTo b seeds)
+withAdjacentStones b seeds =
+  let (_, dead) = chipAdjacentStones b seeds
+  in nub (seeds ++ dead)

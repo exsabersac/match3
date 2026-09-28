@@ -55,5 +55,5 @@ colorPositions b col =
   , c <- [0 .. boardSize - 1]
   , case (b !! r) !! c of
       Gem col' _ -> col' == col
-      Stone -> False
+      Stone _ -> False
   ]

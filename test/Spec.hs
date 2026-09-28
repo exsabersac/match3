@@ -219,6 +219,8 @@ tests =
     , testCase "carpet_covers_on_cookie_bottom_drain" carpet_covers_on_cookie_bottom_drain
     , testCase "carpet_covers_on_portal_cookie_drain" carpet_covers_on_portal_cookie_drain
     , testCase "carpet_covers_on_surprise_safe_bottom" carpet_covers_on_surprise_safe_bottom
+    , testCase "booster_freeswap_skips_countdown_tick" booster_freeswap_skips_countdown_tick
+    , testCase "last_cleared_includes_countdown_explode" last_cleared_includes_countdown_explode
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -7304,3 +7306,97 @@ cross_keeps_maker_in_place = do
   -- Ortho cross seeds may same-color charge once; décor slot must not relocate.
   assertBool "Maker still charged maker" $
     makerCharges (getCell (gsBoard gs1) (3, 3)) >= 4
+
+--------------------------------------------------------------------------------
+-- Stability cruise: booster / countdown / particle boundaries
+--------------------------------------------------------------------------------
+
+-- | Free-swap does not consume a move, so surviving countdowns must NOT tick.
+-- trySwap (move-costing) still ticks  N→N-1 on the same board. Locks Booster ×
+-- Countdown asymmetry (boosters skip belt/snail/countdown end-of-move effects).
+booster_freeswap_skips_countdown_tick :: Assertion
+booster_freeswap_skips_countdown_tick = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (0, 0) (mkGem C1))
+                (0, 1)
+                (mkGem C1))
+             (0, 2)
+             (mkGem C2))
+          (0, 3)
+          (mkGem C1)
+      board = spawnCountdown board0 (5, 5) C5 3
+      mkGs free =
+        (newGame defaultConfig 9)
+          { gsBoard = board
+          , gsFreeSwaps = free
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsBelts = []
+          , gsUfos = []
+          , gsPortals = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+      (gsFree, outFree) = useFreeSwap (0, 2) (0, 3) (mkGs 1)
+      (gsMove, outMove) = trySwap (0, 2) (0, 3) (mkGs 0)
+  case outFree of
+    NoMatch -> assertFailure "free-swap match must apply"
+    InvalidSwap -> assertFailure "free-swap must be valid"
+    _ -> pure ()
+  case outMove of
+    NoMatch -> assertFailure "trySwap match must apply"
+    InvalidSwap -> assertFailure "trySwap must be valid"
+    _ -> pure ()
+  assertEqual "free-swap leaves countdown at 3" (3 :: Int) $
+    countdownTurns (getCell (gsBoard gsFree) (5, 5))
+  assertEqual "free-swap does not spend a move" (10 :: Int) (gsMoves gsFree)
+  assertEqual "free-swap spends charge" (0 :: Int) (gsFreeSwaps gsFree)
+  assertEqual "trySwap ticks countdown 3→2" (2 :: Int) $
+    countdownTurns (getCell (gsBoard gsMove) (5, 5))
+  assertEqual "trySwap spends a move" (9 :: Int) (gsMoves gsMove)
+
+-- | Countdown explode footprint lands in gsLastCleared (UI particles), together
+-- with the move's match clears. Locks particle × countdown end-of-move explode.
+last_cleared_includes_countdown_explode :: Assertion
+last_cleared_includes_countdown_explode = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (0, 0) (mkGem C1))
+                (0, 1)
+                (mkGem C1))
+             (0, 2)
+             (mkGem C2))
+          (0, 3)
+          (mkGem C1)
+      board = spawnCountdown board0 (4, 4) C5 1
+      gs0 =
+        (newGame defaultConfig 11)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsBelts = []
+          , gsUfos = []
+          , gsPortals = []
+          , gsLastCleared = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "match must apply"
+    InvalidSwap -> assertFailure "swap must be valid"
+    _ -> pure ()
+  assertBool "countdown exploded away" $
+    not (isCountdown (getCell (gsBoard gs1) (4, 4)))
+  let cleared = gsLastCleared gs1
+  assertBool ("explode center in particles, got " ++ show cleared) $
+    (4, 4) `elem` cleared
+  assertBool ("3×3 corner in particles, got " ++ show cleared) $
+    (3, 3) `elem` cleared
+  assertBool ("match cells in particles, got " ++ show cleared) $
+    all (`elem` cleared) [(0, 0), (0, 1), (0, 2)]

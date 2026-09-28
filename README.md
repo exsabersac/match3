@@ -9,7 +9,7 @@ Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
 sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
-stack test                            # 168 green — optional but recommended
+stack test                            # 169 green — optional but recommended
 stack build && stack exec match3-sdl
 ```
 
@@ -173,7 +173,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (168 named cases)
+test/Spec.hs tasty (169 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.
@@ -181,7 +181,7 @@ Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame`
 ## Release status / 发布状态
 
 - Campaign: **38** levels (CH1–CH7 on map), batch-tested constructible / playable / décor-vs-goal
-- Tests: `stack test` **168** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam
+- Tests: `stack test` **169** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles
 - Stackage: **lts-21.25** / GHC **9.4.8**; binary: `stack build && stack exec match3-sdl`
 - itch checklist: see `ITCH.md`
 

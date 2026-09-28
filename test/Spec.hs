@@ -185,6 +185,7 @@ tests =
     , testCase "rainbow_swap_flip_partner" rainbow_swap_flip_partner
     , testCase "surprise_direct_seed_opens" surprise_direct_seed_opens
     , testCase "soft_hit_preserves_choco_steam" soft_hit_preserves_choco_steam
+    , testCase "surprise_blast_peels_adjacent" surprise_blast_peels_adjacent
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5226,3 +5227,92 @@ soft_hit_preserves_choco_steam = do
     isGem (getCell boardF1 (4, 1)) && not (isFlip (getCell boardF1 (4, 1)))
   assertEqual "back color C5" C5 (cellColor (getCell boardF1 (4, 1)))
   assertBool "steam survives flip soft-hit" (hasSteam (getCell boardF1 (5, 1)))
+
+-- | Surprise 3×3 explode must peel/chip adjacent obstacles like Bomb (trueClears).
+-- Regression: surpFree used to skip stone/fog/chain/freeze/curtain/honey peels.
+surprise_blast_peels_adjacent :: Assertion
+surprise_blast_peels_adjacent = do
+  -- (3,3) outcome 3 → explode; obstacles sit just outside the 3×3 blast.
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell
+                         (setCell
+                            (setCell
+                               (setCell stableBoard (3, 0) (mkGem C1))
+                               (3, 1)
+                               (mkGem C1))
+                            (3, 2)
+                            (mkGem C1))
+                         (3, 3)
+                         mkSurprise)
+                      (2, 5)
+                      (mkStoneLayers 2))
+                   (1, 4)
+                   (mkFogGem C4 2))
+                (4, 5)
+                (Gem C3 Normal 0 (Just (Chain 2))))
+             (5, 3)
+             (Gem C2 Normal 0 (Just (Freeze 2))))
+          (3, 5)
+          (Gem C1 Normal 0 (Just (Curtain 2)))
+  assertEqual "explode outcome" (3 :: Int) (((3 * 8 + 3) `mod` 4))
+  let (mb, _) = clearMatches board0
+      stone = case (mb !! 2) !! 5 of
+        Just c -> c
+        Nothing -> error "stone must remain"
+      fog = case (mb !! 1) !! 4 of
+        Just c -> c
+        Nothing -> error "fog gem must remain"
+      chain = case (mb !! 4) !! 5 of
+        Just c -> c
+        Nothing -> error "chain gem must remain"
+      freeze = case (mb !! 5) !! 3 of
+        Just c -> c
+        Nothing -> error "freeze gem must remain"
+      curtain = case (mb !! 3) !! 5 of
+        Just c -> c
+        Nothing -> error "curtain gem must remain"
+  assertEqual "stone chipped 2→1" (1 :: Int) (stoneLayers stone)
+  assertEqual "fog peeled 2→1" (Just (Fog 1)) (cellOverlay fog)
+  assertEqual "chain peeled 2→1" (Just (Chain 1)) (cellOverlay chain)
+  assertEqual "freeze peeled 2→1" (Just (Freeze 1)) (cellOverlay freeze)
+  assertEqual "curtain peeled 2→1" (Just (Curtain 1)) (cellOverlay curtain)
+  -- Honey outside blast, ortho-adjacent to a blast cell, chips one layer.
+  let boardH =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (3, 3)
+             mkSurprise)
+          (2, 5)
+          (mkHoneyLayers 2)
+      (mbH, _) = clearMatches boardH
+  case (mbH !! 2) !! 5 of
+    Just h -> assertEqual "honey chipped 2→1" (1 :: Int) (honeyLayers h)
+    Nothing -> assertFailure "honey must remain (not last layer)"
+  -- Control: Bomb in-match 3×3 still peels the same way (parity sanity).
+  let boardB =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (Gem C1 Bomb 0 Nothing))
+          (2, 4)
+          (mkStoneLayers 2)
+      (mbB, _) = clearMatches boardB
+  case (mbB !! 2) !! 4 of
+    Just s -> assertEqual "bomb still chips stone" (1 :: Int) (stoneLayers s)
+    Nothing -> assertFailure "bomb stone must remain"

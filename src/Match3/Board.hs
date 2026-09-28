@@ -265,39 +265,32 @@ clearMatchesDetailed prefer b =
       bStripped = clearOverlaysOn b expanded
       -- Ice chips first: iced gems stay, ice-free positions may clear
       (bIced, iceFree) = chipIceOnClear bStripped expanded
-      -- Chip adjacent stone / chest layers against the ice-free clear set
-      (bChipped, deadStones) = chipAdjacentStones bIced iceFree
-      (bChest, deadChests) = chipAdjacentChests bChipped iceFree
-      (bHoney, deadHoney) = chipAdjacentHoney bChest iceFree
-      (bCake, deadCakes) = chipAdjacentCakes bHoney iceFree
-      (bBal, deadBalloons) = chipAdjacentBalloons bCake iceFree
-      -- Magic hat: swap/recolor adjacent gem colors (hat stays)
-      bHat = triggerAdjacentHats bBal iceFree
-      -- Fog: peel adjacent fog layers (gem stays)
-      (bFog, _fogCleared) = chipAdjacentFog bHat iceFree
-      -- Chain: peel adjacent chain layers (gem stays)
-      (bChain, _chainCleared) = chipAdjacentChain bFog iceFree
-      -- Freeze: peel adjacent freeze layers (gem stays; still matchable)
-      (bFreeze, _freezeCleared) = chipAdjacentFreeze bChain iceFree
-      -- Curtain: peel adjacent curtain layers (gem stays)
-      (bCurtain, _curtainCleared) = chipAdjacentCurtain bFreeze iceFree
-      -- Safe: adjacent chip; last layer becomes Cookie in place (not removed)
-      (bSafe, _openedSafes) = chipAdjacentSafes bCurtain iceFree
-      -- TimeSpirit: adjacent clear removes spirit (+2 moves counted in Game)
-      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
-      -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
-      bMaker = chargeAdjacentMakers bSpirit iceFree
-      -- Surprise: open adjacent *or* direct-seed boxes → special in place or 3×3.
+      -- Surprise opens against match/special clears *before* adjacent peels, so a
+      -- 3×3 explode contributes to trueClears (Bomb-parity for stone/fog/chain/…).
       -- Specials placed on former seed cells must stay out of clear holes.
-      (bSurp, surpExplode0, surpSaved) = openSurprises bMaker iceFree
+      (bSurp, surpExplode0, surpSaved) = openSurprises bIced iceFree
       surpExpanded = expandSpecials bSurp surpExplode0
-      (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
+      bSurpStrip = clearOverlaysOn bSurp surpExpanded
+      (bSurp2, surpFree) = chipIceOnClear bSurpStrip surpExpanded
       iceFree' = filter (`notElem` surpSaved) iceFree
-      -- Bottle: dye ortho gem neighbors to bottle color (bottle stays)
-      bBottle = triggerAdjacentBottles bSurp2 iceFree'
-      -- Chocolate / steam: strip only against *true* clear holes (iceFree'+surpFree).
-      -- Soft hits (ice chip, Flip face-flip) stay out of iceFree — must not extinguish.
+      -- Soft hits (ice chip, Flip) stay out of iceFree/surpFree — not true holes.
       trueClears = nub (iceFree' ++ surpFree)
+      -- Adjacent obstacle peels / charges against *all* true clear holes (once)
+      (bChipped, deadStones) = chipAdjacentStones bSurp2 trueClears
+      (bChest, deadChests) = chipAdjacentChests bChipped trueClears
+      (bHoney, deadHoney) = chipAdjacentHoney bChest trueClears
+      (bCake, deadCakes) = chipAdjacentCakes bHoney trueClears
+      (bBal, deadBalloons) = chipAdjacentBalloons bCake trueClears
+      bHat = triggerAdjacentHats bBal trueClears
+      (bFog, _fogCleared) = chipAdjacentFog bHat trueClears
+      (bChain, _chainCleared) = chipAdjacentChain bFog trueClears
+      (bFreeze, _freezeCleared) = chipAdjacentFreeze bChain trueClears
+      (bCurtain, _curtainCleared) = chipAdjacentCurtain bFreeze trueClears
+      (bSafe, _openedSafes) = chipAdjacentSafes bCurtain trueClears
+      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe trueClears
+      bMaker = chargeAdjacentMakers bSpirit trueClears
+      bBottle = triggerAdjacentBottles bMaker trueClears
+      -- Chocolate / steam: only true clears extinguish (not soft hits)
       bNoChoco = clearChocoAdjacent bBottle trueClears
       bNoSteam = clearSteamAdjacent bNoChoco trueClears
       allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)
@@ -545,26 +538,27 @@ clearFromSeedsDetailed prefer b seeds0 =
       expanded = expandSpecials b base
       bStripped = clearOverlaysOn b expanded
       (bIced, iceFree) = chipIceOnClear bStripped expanded
-      (bChipped, deadStones) = chipAdjacentStones bIced iceFree
-      (bChest, deadChests) = chipAdjacentChests bChipped iceFree
-      (bHoney, deadHoney) = chipAdjacentHoney bChest iceFree
-      (bCake, deadCakes) = chipAdjacentCakes bHoney iceFree
-      (bBal, deadBalloons) = chipAdjacentBalloons bCake iceFree
-      bHat = triggerAdjacentHats bBal iceFree
-      (bFog, _) = chipAdjacentFog bHat iceFree
-      (bChain, _) = chipAdjacentChain bFog iceFree
-      (bFreeze, _) = chipAdjacentFreeze bChain iceFree
-      (bCurtain, _) = chipAdjacentCurtain bFreeze iceFree
-      (bSafe, _) = chipAdjacentSafes bCurtain iceFree
-      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe iceFree
-      bMaker = chargeAdjacentMakers bSpirit iceFree
-      (bSurp, surpExplode0, surpSaved) = openSurprises bMaker iceFree
+      -- Surprise before adjacent peels (same as clearMatchesDetailed / Bomb parity)
+      (bSurp, surpExplode0, surpSaved) = openSurprises bIced iceFree
       surpExpanded = expandSpecials bSurp surpExplode0
-      (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
+      bSurpStrip = clearOverlaysOn bSurp surpExpanded
+      (bSurp2, surpFree) = chipIceOnClear bSurpStrip surpExpanded
       iceFree' = filter (`notElem` surpSaved) iceFree
-      bBottle = triggerAdjacentBottles bSurp2 iceFree'
-      -- Soft hits must not strip choco/steam (same as clearMatchesDetailed).
       trueClears = nub (iceFree' ++ surpFree)
+      (bChipped, deadStones) = chipAdjacentStones bSurp2 trueClears
+      (bChest, deadChests) = chipAdjacentChests bChipped trueClears
+      (bHoney, deadHoney) = chipAdjacentHoney bChest trueClears
+      (bCake, deadCakes) = chipAdjacentCakes bHoney trueClears
+      (bBal, deadBalloons) = chipAdjacentBalloons bCake trueClears
+      bHat = triggerAdjacentHats bBal trueClears
+      (bFog, _) = chipAdjacentFog bHat trueClears
+      (bChain, _) = chipAdjacentChain bFog trueClears
+      (bFreeze, _) = chipAdjacentFreeze bChain trueClears
+      (bCurtain, _) = chipAdjacentCurtain bFreeze trueClears
+      (bSafe, _) = chipAdjacentSafes bCurtain trueClears
+      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe trueClears
+      bMaker = chargeAdjacentMakers bSpirit trueClears
+      bBottle = triggerAdjacentBottles bMaker trueClears
       bNoChoco = clearChocoAdjacent bBottle trueClears
       bNoSteam = clearSteamAdjacent bNoChoco trueClears
       allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)

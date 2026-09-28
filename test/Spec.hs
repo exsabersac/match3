@@ -188,6 +188,7 @@ tests =
     , testCase "surprise_blast_peels_adjacent" surprise_blast_peels_adjacent
     , testCase "shuffle_preserves_specials" shuffle_preserves_specials
     , testCase "soft_lock_blocks_special_expand" soft_lock_blocks_special_expand
+    , testCase "line_blast_no_double_peel" line_blast_no_double_peel
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5442,3 +5443,82 @@ soft_lock_blocks_special_expand = do
   let boardCu = setCell stableBoard (5, 5) (Gem C3 Bomb 0 (Just (Curtain 2)))
       expCu = expandSpecials boardCu [(5, 5)]
   assertEqual "curtain Bomb does not blast" [(5, 5)] expCu
+
+--------------------------------------------------------------------------------
+-- Line/Bomb blast must not double-peel direct-hit layered obstacles
+--------------------------------------------------------------------------------
+
+-- | Chain/Curtain/Stone/Safe on a Line clear path already take one direct chip
+-- via chipIceOnClear; ortho adjacent peels from neighbor holes must not chip
+-- them again (regression: Chain2/Stone2/Safe2 fully cleared in one Line wave).
+line_blast_no_double_peel :: Assertion
+line_blast_no_double_peel = do
+  let lineBoard lock =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell
+                         (setCell
+                            (setCell stableBoard (3, 0) (mkGem C1))
+                            (3, 1)
+                            (Gem C1 LineH 0 Nothing))
+                         (3, 2)
+                         (mkGem C1))
+                      (3, 3)
+                      (mkGem C3))
+                   (3, 4)
+                   (mkGem C4))
+                (3, 5)
+                lock)
+             (3, 6)
+             (mkGem C5))
+          (3, 7)
+          (mkGem C3)
+  assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
+  -- Chain 2 on blast path: peel once → Chain 1 (not fully unlocked).
+  let (bCh, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 41) (lineBoard (Gem C2 Normal 0 (Just (Chain 2))))
+      cellCh = getCell bCh (3, 5)
+  assertBool "chain survives" (hasChain cellCh)
+  assertEqual "chain peeled once 2→1" (1 :: Int) (chainLayers cellCh)
+  -- Curtain 2: same single peel.
+  let (bCu, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 42) (lineBoard (Gem C2 Normal 0 (Just (Curtain 2))))
+      cellCu = getCell bCu (3, 5)
+  assertBool "curtain survives" (hasCurtain cellCu)
+  assertEqual "curtain peeled once 2→1" (1 :: Int) (curtainLayers cellCu)
+  -- Stone 2: chip once → Stone 1 (not removed).
+  let (bSt, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 43) (lineBoard (mkStoneLayers 2))
+      cellSt = getCell bSt (3, 5)
+  assertBool "stone survives" (isStone cellSt)
+  assertEqual "stone chipped once 2→1" (1 :: Int) (stoneLayers cellSt)
+  -- Safe 2: chip once → Safe 1 (not opened to Cookie).
+  let (bSa, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 44) (lineBoard (mkSafeLayers 2))
+      cellSa = getCell bSa (3, 5)
+  assertBool "safe survives" (isSafe cellSa)
+  assertEqual "safe chipped once 2→1" (1 :: Int) (safeLayers cellSa)
+  -- Control: Chain 1 on path fully unlocks (single peel strips last layer).
+  let (bC1, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 45) (lineBoard (Gem C2 Normal 0 (Just (Chain 1))))
+  assertBool "chain1 unlocked" (not (hasChain (getCell bC1 (3, 5))))
+  -- Control: adjacent-only Chain 2 (not on blast) still peels once.
+  let boardAdj =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 1)
+          (Gem C2 Normal 0 (Just (Chain 2)))
+      (bAdj, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 46) boardAdj
+      cellAdj = getCell bAdj (4, 1)
+  assertBool "adj chain survives" (hasChain cellAdj)
+  assertEqual "adj chain peeled 2→1" (1 :: Int) (chainLayers cellAdj)

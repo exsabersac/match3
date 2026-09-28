@@ -12,11 +12,17 @@ module Match3.Obstacles
   , cakesAdjacentTo
   , safesAdjacentTo
   , chipAdjacentStones
+  , chipAdjacentStonesExcept
   , chipAdjacentChests
+  , chipAdjacentChestsExcept
   , chipAdjacentHoney
+  , chipAdjacentHoneyExcept
   , chipAdjacentCakes
+  , chipAdjacentCakesExcept
   , chipAdjacentSafes
+  , chipAdjacentSafesExcept
   , chipAdjacentBalloons
+  , chipAdjacentBalloonsExcept
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
   , triggerAdjacentHats
@@ -29,6 +35,7 @@ module Match3.Obstacles
   , triggerAdjacentBottles
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits
+  , chipAdjacentTimeSpiritsExcept
   , withAdjacentStones
   ) where
 
@@ -127,8 +134,12 @@ chestsAdjacentTo b cleared =
 -- | Chip one layer off each adjacent stone.
 -- Returns (board with surviving stones decremented, positions whose last layer was chipped).
 chipAdjacentStones :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentStones b clearedGems =
-  foldl hitOne (b, []) (stonesAdjacentTo b clearedGems)
+chipAdjacentStones b clearedGems = chipAdjacentStonesExcept b clearedGems []
+
+-- | Like chipAdjacentStones but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentStonesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentStonesExcept b clearedGems except =
+  foldl hitOne (b, []) [p | p <- stonesAdjacentTo b clearedGems, p `notElem` except]
   where
     hitOne (board, dead) p =
       case at board p of
@@ -141,8 +152,12 @@ chipAdjacentStones b clearedGems =
 
 -- | Chip one layer off each adjacent treasure chest (宝箱).
 chipAdjacentChests :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentChests b clearedGems =
-  foldl hitOne (b, []) (chestsAdjacentTo b clearedGems)
+chipAdjacentChests b clearedGems = chipAdjacentChestsExcept b clearedGems []
+
+-- | Like chipAdjacentChests but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentChestsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentChestsExcept b clearedGems except =
+  foldl hitOne (b, []) [p | p <- chestsAdjacentTo b clearedGems, p `notElem` except]
   where
     hitOne (board, dead) p =
       case at board p of
@@ -166,8 +181,12 @@ honeysAdjacentTo b cleared =
 
 -- | Chip one layer off each adjacent honey jar (蜂蜜罐).
 chipAdjacentHoney :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentHoney b clearedGems =
-  foldl hitOne (b, []) (honeysAdjacentTo b clearedGems)
+chipAdjacentHoney b clearedGems = chipAdjacentHoneyExcept b clearedGems []
+
+-- | Like chipAdjacentHoney but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentHoneyExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentHoneyExcept b clearedGems except =
+  foldl hitOne (b, []) [p | p <- honeysAdjacentTo b clearedGems, p `notElem` except]
   where
     hitOne (board, dead) p =
       case at board p of
@@ -195,8 +214,12 @@ balloonsAdjacentSameColor b cleared =
 
 -- | Pop balloons adjacent to same-color clears (single hit; no layers).
 chipAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentBalloons b clearedGems =
-  let dead = balloonsAdjacentSameColor b clearedGems
+chipAdjacentBalloons b clearedGems = chipAdjacentBalloonsExcept b clearedGems []
+
+-- | Like chipAdjacentBalloons but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentBalloonsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentBalloonsExcept b clearedGems except =
+  let dead = [p | p <- balloonsAdjacentSameColor b clearedGems, p `notElem` except]
   in (b, dead)  -- board unchanged until clear pipeline removes them
 
 -- | Cake positions orthogonally adjacent to cleared positions.
@@ -212,8 +235,12 @@ cakesAdjacentTo b cleared =
 
 -- | Chip one layer off each adjacent cake (蛋糕). Cleared at 0.
 chipAdjacentCakes :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentCakes b clearedGems =
-  foldl hitOne (b, []) (cakesAdjacentTo b clearedGems)
+chipAdjacentCakes b clearedGems = chipAdjacentCakesExcept b clearedGems []
+
+-- | Like chipAdjacentCakes but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentCakesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentCakesExcept b clearedGems except =
+  foldl hitOne (b, []) [p | p <- cakesAdjacentTo b clearedGems, p `notElem` except]
   where
     hitOne (board, dead) p =
       case at board p of
@@ -239,8 +266,12 @@ safesAdjacentTo b cleared =
 -- Last layer opens into a Cookie in place (collectible drop); cookie is NOT removed here.
 -- Returns (board, positions that fully opened).
 chipAdjacentSafes :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentSafes b clearedGems =
-  foldl hitOne (b, []) (safesAdjacentTo b clearedGems)
+chipAdjacentSafes b clearedGems = chipAdjacentSafesExcept b clearedGems []
+
+-- | Like chipAdjacentSafes but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentSafesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentSafesExcept b clearedGems except =
+  foldl hitOne (b, []) [p | p <- safesAdjacentTo b clearedGems, p `notElem` except]
   where
     hitOne (board, opened) p =
       case at board p of
@@ -442,8 +473,12 @@ spiritsAdjacentTo b cleared =
 
 -- | Remove adjacent time spirits (时间精灵). Dead positions cleared with the wave.
 chipAdjacentTimeSpirits :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentTimeSpirits b clearedGems =
-  foldl hitOne (b, []) (spiritsAdjacentTo b clearedGems)
+chipAdjacentTimeSpirits b clearedGems = chipAdjacentTimeSpiritsExcept b clearedGems []
+
+-- | Like chipAdjacentTimeSpirits but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentTimeSpiritsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
+chipAdjacentTimeSpiritsExcept b clearedGems except =
+  foldl hitOne (b, []) [p | p <- spiritsAdjacentTo b clearedGems, p `notElem` except]
   where
     hitOne (board, dead) p =
       case at board p of

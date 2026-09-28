@@ -12,9 +12,13 @@ module Match3.Grass
   , clearChocoAdjacent
   , clearSteamAdjacent
   , chipAdjacentFog
+  , chipAdjacentFogExcept
   , chipAdjacentChain
+  , chipAdjacentChainExcept
   , chipAdjacentFreeze
+  , chipAdjacentFreezeExcept
   , chipAdjacentCurtain
+  , chipAdjacentCurtainExcept
   , vinePositions
   , chocoPositions
   , fogPositions
@@ -107,7 +111,11 @@ clearChocoAdjacent b seeds =
 -- | Fog / cloud (迷雾): peel one layer on cells orthogonally adjacent to clears.
 -- Fog 1 -> strip; Fog n>1 -> Fog (n-1). Gem stays. Returns fully cleared fog count.
 chipAdjacentFog :: Board -> [Pos] -> (Board, Int)
-chipAdjacentFog b seeds =
+chipAdjacentFog b seeds = chipAdjacentFogExcept b seeds []
+
+-- | Like chipAdjacentFog but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentFogExcept :: Board -> [Pos] -> [Pos] -> (Board, Int)
+chipAdjacentFogExcept b seeds except =
   foldl hit (b, 0) targets
   where
     targets =
@@ -115,6 +123,7 @@ chipAdjacentFog b seeds =
         [ q
         | p <- nub seeds
         , q <- ortho p
+        , q `notElem` except
         , hasFog (at b q)
         ]
     hit (board, n) p =
@@ -153,7 +162,11 @@ fogPositions b =
 -- | Chain / iron lock (锁链): peel one layer on cells orthogonally adjacent to clears.
 -- Chain 1 -> strip; Chain n>1 -> Chain (n-1). Gem stays. Returns fully unlocked count.
 chipAdjacentChain :: Board -> [Pos] -> (Board, Int)
-chipAdjacentChain b seeds =
+chipAdjacentChain b seeds = chipAdjacentChainExcept b seeds []
+
+-- | Like chipAdjacentChain but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentChainExcept :: Board -> [Pos] -> [Pos] -> (Board, Int)
+chipAdjacentChainExcept b seeds except =
   foldl hit (b, 0) targets
   where
     targets =
@@ -161,6 +174,7 @@ chipAdjacentChain b seeds =
         [ q
         | p <- nub seeds
         , q <- ortho p
+        , q `notElem` except
         , hasChain (at b q)
         ]
     hit (board, n) p =
@@ -184,7 +198,11 @@ chainPositions b =
 -- Freeze 1 -> strip; Freeze n>1 -> Freeze (n-1). Gem stays and can still match.
 -- Returns fully thawed count.
 chipAdjacentFreeze :: Board -> [Pos] -> (Board, Int)
-chipAdjacentFreeze b seeds =
+chipAdjacentFreeze b seeds = chipAdjacentFreezeExcept b seeds []
+
+-- | Like chipAdjacentFreeze but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentFreezeExcept :: Board -> [Pos] -> [Pos] -> (Board, Int)
+chipAdjacentFreezeExcept b seeds except =
   foldl hit (b, 0) targets
   where
     targets =
@@ -192,6 +210,7 @@ chipAdjacentFreeze b seeds =
         [ q
         | p <- nub seeds
         , q <- ortho p
+        , q `notElem` except
         , hasFreeze (at b q)
         ]
     hit (board, n) p =
@@ -214,7 +233,11 @@ freezePositions b =
 -- | Curtain / roller shade (窗帘): peel one layer on cells orthogonally adjacent to clears.
 -- Curtain 1 -> strip; Curtain n>1 -> Curtain (n-1). Gem stays. Returns fully cleared count.
 chipAdjacentCurtain :: Board -> [Pos] -> (Board, Int)
-chipAdjacentCurtain b seeds =
+chipAdjacentCurtain b seeds = chipAdjacentCurtainExcept b seeds []
+
+-- | Like chipAdjacentCurtain but skips cells in 'except' (already direct-hit this wave).
+chipAdjacentCurtainExcept :: Board -> [Pos] -> [Pos] -> (Board, Int)
+chipAdjacentCurtainExcept b seeds except =
   foldl hit (b, 0) targets
   where
     targets =
@@ -222,6 +245,7 @@ chipAdjacentCurtain b seeds =
         [ q
         | p <- nub seeds
         , q <- ortho p
+        , q `notElem` except
         , hasCurtain (at b q)
         ]
     hit (board, n) p =

@@ -38,15 +38,15 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, clearSteamAdjacent, chipAdjacentFog, chipAdjacentChain, chipAdjacentFreeze, chipAdjacentCurtain)
+import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, clearSteamAdjacent, chipAdjacentFogExcept, chipAdjacentChainExcept, chipAdjacentFreezeExcept, chipAdjacentCurtainExcept)
 import Match3.Obstacles
-  ( chipAdjacentStones
-  , chipAdjacentChests
-  , chipAdjacentHoney
-  , chipAdjacentCakes
-  , chipAdjacentSafes
-  , chipAdjacentBalloons
-  , chipAdjacentTimeSpirits
+  ( chipAdjacentStonesExcept
+  , chipAdjacentChestsExcept
+  , chipAdjacentHoneyExcept
+  , chipAdjacentCakesExcept
+  , chipAdjacentSafesExcept
+  , chipAdjacentBalloonsExcept
+  , chipAdjacentTimeSpiritsExcept
   , triggerAdjacentHats
   , chargeAdjacentMakers
   , openSurprises
@@ -289,19 +289,23 @@ clearMatchesDetailed prefer b =
       iceFree' = filter (`notElem` surpSaved) iceFree
       -- Soft hits (ice chip, Flip) stay out of iceFree/surpFree — not true holes.
       trueClears = nub (iceFree' ++ surpFree)
+      -- Cells that already took a direct-hit peel/chip (expand → chipIce) must not
+      -- also receive an ortho adjacent peel this wave (Chain2/Stone2/Safe2 on a
+      -- Line/Bomb path were double-chipped via neighbor clears).
+      directHits = nub (expanded ++ surpExpanded)
       -- Adjacent obstacle peels / charges against *all* true clear holes (once)
-      (bChipped, deadStones) = chipAdjacentStones bSurp2 trueClears
-      (bChest, deadChests) = chipAdjacentChests bChipped trueClears
-      (bHoney, deadHoney) = chipAdjacentHoney bChest trueClears
-      (bCake, deadCakes) = chipAdjacentCakes bHoney trueClears
-      (bBal, deadBalloons) = chipAdjacentBalloons bCake trueClears
+      (bChipped, deadStones) = chipAdjacentStonesExcept bSurp2 trueClears directHits
+      (bChest, deadChests) = chipAdjacentChestsExcept bChipped trueClears directHits
+      (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
+      (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
+      (bBal, deadBalloons) = chipAdjacentBalloonsExcept bCake trueClears directHits
       bHat = triggerAdjacentHats bBal trueClears
-      (bFog, _fogCleared) = chipAdjacentFog bHat trueClears
-      (bChain, _chainCleared) = chipAdjacentChain bFog trueClears
-      (bFreeze, _freezeCleared) = chipAdjacentFreeze bChain trueClears
-      (bCurtain, _curtainCleared) = chipAdjacentCurtain bFreeze trueClears
-      (bSafe, _openedSafes) = chipAdjacentSafes bCurtain trueClears
-      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe trueClears
+      (bFog, _fogCleared) = chipAdjacentFogExcept bHat trueClears directHits
+      (bChain, _chainCleared) = chipAdjacentChainExcept bFog trueClears directHits
+      (bFreeze, _freezeCleared) = chipAdjacentFreezeExcept bChain trueClears directHits
+      (bCurtain, _curtainCleared) = chipAdjacentCurtainExcept bFreeze trueClears directHits
+      (bSafe, _openedSafes) = chipAdjacentSafesExcept bCurtain trueClears directHits
+      (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
       bMaker = chargeAdjacentMakers bSpirit trueClears
       bBottle = triggerAdjacentBottles bMaker trueClears
       -- Chocolate / steam: only true clears extinguish (not soft hits)
@@ -559,18 +563,20 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bSurp2, surpFree) = chipIceOnClear bSurpStrip surpExpanded
       iceFree' = filter (`notElem` surpSaved) iceFree
       trueClears = nub (iceFree' ++ surpFree)
-      (bChipped, deadStones) = chipAdjacentStones bSurp2 trueClears
-      (bChest, deadChests) = chipAdjacentChests bChipped trueClears
-      (bHoney, deadHoney) = chipAdjacentHoney bChest trueClears
-      (bCake, deadCakes) = chipAdjacentCakes bHoney trueClears
-      (bBal, deadBalloons) = chipAdjacentBalloons bCake trueClears
+      -- Exclude direct-hit cells from adjacent peels (same as clearMatchesDetailed).
+      directHits = nub (expanded ++ surpExpanded)
+      (bChipped, deadStones) = chipAdjacentStonesExcept bSurp2 trueClears directHits
+      (bChest, deadChests) = chipAdjacentChestsExcept bChipped trueClears directHits
+      (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
+      (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
+      (bBal, deadBalloons) = chipAdjacentBalloonsExcept bCake trueClears directHits
       bHat = triggerAdjacentHats bBal trueClears
-      (bFog, _) = chipAdjacentFog bHat trueClears
-      (bChain, _) = chipAdjacentChain bFog trueClears
-      (bFreeze, _) = chipAdjacentFreeze bChain trueClears
-      (bCurtain, _) = chipAdjacentCurtain bFreeze trueClears
-      (bSafe, _) = chipAdjacentSafes bCurtain trueClears
-      (bSpirit, deadSpirits) = chipAdjacentTimeSpirits bSafe trueClears
+      (bFog, _) = chipAdjacentFogExcept bHat trueClears directHits
+      (bChain, _) = chipAdjacentChainExcept bFog trueClears directHits
+      (bFreeze, _) = chipAdjacentFreezeExcept bChain trueClears directHits
+      (bCurtain, _) = chipAdjacentCurtainExcept bFreeze trueClears directHits
+      (bSafe, _) = chipAdjacentSafesExcept bCurtain trueClears directHits
+      (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
       bMaker = chargeAdjacentMakers bSpirit trueClears
       bBottle = triggerAdjacentBottles bMaker trueClears
       bNoChoco = clearChocoAdjacent bBottle trueClears

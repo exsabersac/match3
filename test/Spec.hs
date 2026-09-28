@@ -70,6 +70,7 @@ tests =
     , testCase "ufo_moves_each_cascade" ufo_moves_each_cascade
     , testCase "ufo_goal_counts" ufo_goal_counts
     , testCase "shuffle_preserves_decor" shuffle_preserves_decor
+    , testCase "daily_ufo_goal_spawns_saucer" daily_ufo_goal_spawns_saucer
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -1637,3 +1638,12 @@ shuffle_preserves_decor = do
       gsU' = shuffleGame gsU
   assertEqual "UFO count kept" (length (gsUfos gsU)) (length (gsUfos gsU'))
   assertEqual "UFO cells kept" (map ufoCell (gsUfos gsU)) (map ufoCell (gsUfos gsU'))
+
+
+-- | Daily (or any) GoalUfo config without level décor still gets a default UFO.
+daily_ufo_goal_spawns_saucer :: Assertion
+daily_ufo_goal_spawns_saucer = do
+  let cfg = GameConfig 26 (GoalUfo 8)
+      gs = newGame cfg 20260929
+  assertBool "default UFO placed" (not (null (gsUfos gs)))
+  assertEqual "target color" C1 (ufoColor (head (gsUfos gs)))

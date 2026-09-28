@@ -186,7 +186,13 @@ newGameAtLevel li cfg seed =
        , gsBelts = levelBelts li
        , gsHammers = 2
        , gsFreeSwaps = 1
-       , gsUfos = levelUfos li
+       , gsUfos =
+           let placed = levelUfos li
+           in if null placed
+                then case cfgGoal cfg of
+                       GoalUfo _ -> [mkUfo (1, 3) C1]
+                       _ -> []
+                else placed
        , gsUfoCollected = 0
        }
 

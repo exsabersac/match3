@@ -265,11 +265,11 @@ allLevels =
   , Level 7  "碎石"   26 (GoalClearStone 8)
   , Level 8  "草场"   24 (GoalScore 600)
   , Level 9  "藤袭"   22 (GoalCollect C1 18)
-  , Level 10 "传送"   24 (GoalScore 800)
-  , Level 11 "轰炸"   20 (GoalScore 700)
+  , Level 10 "传送"   22 (GoalScore 800)
+  , Level 11 "轰炸"   18 (GoalScore 750)
   , Level 12 "飞碟"   24 (GoalUfo 10)
   , Level 13 "碟猎"   20 (GoalUfo 14)
-  , Level 14 "压力"   18 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
+  , Level 14 "压力"   17 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
   , Level 15 "大师"   16 (GoalScore 1200)
   ]
 

@@ -49,11 +49,11 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 | 8 | 碎石 | 26 | Destroy 8 stones | stones + belt |
 | 9 | 草场 | 24 | Score 600 | grass |
 | 10 | 藤袭 | 22 | Collect 18× RED | vines |
-| 11 | 传送 | 24 | Score 800 | grass + belt |
-| 12 | 轰炸 | 20 | Score 700 | countdown bombs |
+| 11 | 传送 | 22 | Score 800 | grass + belt |
+| 12 | 轰炸 | 18 | Score 750 | countdown bombs |
 | 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
 | 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
-| 15 | 压力 | 18 | Multi RED/GRN/BLU | grass |
+| 15 | 压力 | 17 | Multi RED/GRN/BLU | grass |
 | 16 | 大师 | 16 | Score 1200 | stone+grass+vine+bomb+belts+UFO |
 
 Press `D` for a **每日** daily run (seed from calendar date).

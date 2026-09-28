@@ -189,6 +189,7 @@ tests =
     , testCase "shuffle_preserves_specials" shuffle_preserves_specials
     , testCase "soft_lock_blocks_special_expand" soft_lock_blocks_special_expand
     , testCase "line_blast_no_double_peel" line_blast_no_double_peel
+    , testCase "blast_chips_layered_obstacles_once" blast_chips_layered_obstacles_once
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5522,3 +5523,93 @@ line_blast_no_double_peel = do
       cellAdj = getCell bAdj (4, 1)
   assertBool "adj chain survives" (hasChain cellAdj)
   assertEqual "adj chain peeled 2→1" (1 :: Int) (chainLayers cellAdj)
+
+--------------------------------------------------------------------------------
+-- Line/Bomb/Hammer direct hit must single-chip Chest/Honey/Cake (Stone parity)
+--------------------------------------------------------------------------------
+
+-- | Multi-layer Chest/Honey/Cake on a Line blast path (or hammer seed) must chip
+-- one layer — not fully wipe. Regression: chipIceOnClear listed them clearable
+-- regardless of layers while Stone/Safe correctly decremented, so LineH/Bomb/
+-- Hammer erased Honey2/Chest2/Cake2 in one hit (Except peels were moot).
+blast_chips_layered_obstacles_once :: Assertion
+blast_chips_layered_obstacles_once = do
+  let lineBoard lock =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell
+                      (setCell
+                         (setCell
+                            (setCell stableBoard (3, 0) (mkGem C1))
+                            (3, 1)
+                            (Gem C1 LineH 0 Nothing))
+                         (3, 2)
+                         (mkGem C1))
+                      (3, 3)
+                      (mkGem C3))
+                   (3, 4)
+                   (mkGem C4))
+                (3, 5)
+                lock)
+             (3, 6)
+             (mkGem C5))
+          (3, 7)
+          (mkGem C3)
+  assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
+  -- Honey 2 on blast path: chip once → Honey 1 (not removed).
+  let (bH, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
+      cellH = getCell bH (3, 5)
+  assertBool "honey survives" (isHoney cellH)
+  assertEqual "honey chipped once 2→1" (1 :: Int) (honeyLayers cellH)
+  -- Chest 2: same single chip.
+  let (bC, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 52) (lineBoard (mkChestLayers 2))
+      cellC = getCell bC (3, 5)
+  assertBool "chest survives" (isChest cellC)
+  assertEqual "chest chipped once 2→1" (1 :: Int) (chestLayers cellC)
+  -- Cake 2: same single chip.
+  let (bK, _, _, _, _, _, _, _, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 53) (lineBoard (mkCakeLayers 2))
+      cellK = getCell bK (3, 5)
+  assertBool "cake survives" (isCake cellK)
+  assertEqual "cake chipped once 2→1" (1 :: Int) (cakeLayers cellK)
+  -- Control: Honey 1 on path fully clears (last layer).
+  let (bH1, _, _, _, _, _, _, honeyHit, _, _, _, _) =
+        runCascadeScored Nothing (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
+  assertBool "honey1 cleared" (not (isHoney (getCell bH1 (3, 5))))
+  assertBool "honey1 counted" (honeyHit >= 1)
+  -- Hammer on Honey 3: chip 3→2, charge spent, not goal-counted yet.
+  let boardHam = setCell stableBoard (5, 5) (mkHoneyLayers 3)
+      gs0 =
+        (newGame defaultConfig 12)
+          { gsBoard = boardHam
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalHoney 8
+          , gsMoves = 20
+          , gsScore = 0
+          , gsHoneyCleared = 0
+          }
+      (gs1, outH) = useHammer (5, 5) gs0
+  case outH of
+    NoMatch -> assertFailure "hammer chip should apply"
+    InvalidSwap -> assertFailure "hammer charges present"
+    _ -> pure ()
+  let cellHam = getCell (gsBoard gs1) (5, 5)
+  assertBool "honey remains after hammer" (isHoney cellHam)
+  assertEqual "hammer chips 3→2" (2 :: Int) (honeyLayers cellHam)
+  assertEqual "not counted until last" (0 :: Int) (gsHoneyCleared gs1)
+  assertEqual "hammer spent" (1 :: Int) (gsHammers gs1)
+  -- chipIceOnClear unit: Chest2/Cake2 not clearable; layers decremented.
+  let (bChest, freeChest) = chipIceOnClear (setCell stableBoard (1, 1) (mkChestLayers 2)) [(1, 1)]
+      (bCake, freeCake) = chipIceOnClear (setCell stableBoard (2, 2) (mkCakeLayers 2)) [(2, 2)]
+  assertEqual "chest2 not clearable" ([] :: [Pos]) freeChest
+  assertEqual "chest 2→1" (1 :: Int) (chestLayers (getCell bChest (1, 1)))
+  assertEqual "cake2 not clearable" ([] :: [Pos]) freeCake
+  assertEqual "cake 2→1" (1 :: Int) (cakeLayers (getCell bCake (2, 2)))

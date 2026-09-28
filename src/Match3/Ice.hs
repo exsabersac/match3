@@ -12,7 +12,9 @@ import Match3.Types
 -- | Chip one ice layer on each seed / handle direct-hit peel locks.
 -- ice>1: decrement, keep gem; ice==1: last layer + gem clear.
 -- ice==0 + Chain/Curtain: peel one lock layer (gem stays) — hammer/cross/line.
--- ice==0 bare/Freeze: gem clears. Stone: chip one layer (like Safe).
+-- ice==0 bare/Freeze/Fog: gem clears. Layered blockers (Stone/Chest/Honey/Cake/Safe)
+-- chip one layer per direct hit (hammer/cross/line/bomb); last layer clears
+-- (Safe opens to Cookie).
 chipIceOnClear :: Board -> [Pos] -> (Board, [Pos])
 chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
   where
@@ -40,16 +42,23 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
           if n <= 1
             then (board, p : clearable)
             else (set board p (mkStoneLayers (n - 1)), clearable)
-        Chest _ ->
-          (board, p : clearable)
-        Honey _ ->
-          (board, p : clearable)
+        Chest n ->
+          -- Same single-layer chip as Stone (not full wipe on Line/Bomb/Hammer)
+          if n <= 1
+            then (board, p : clearable)
+            else (set board p (mkChestLayers (n - 1)), clearable)
+        Honey n ->
+          if n <= 1
+            then (board, p : clearable)
+            else (set board p (mkHoneyLayers (n - 1)), clearable)
         Balloon _ ->
           (board, p : clearable)
         Cookie ->
           (board, p : clearable)
-        Cake _ ->
-          (board, p : clearable)
+        Cake n ->
+          if n <= 1
+            then (board, p : clearable)
+            else (set board p (mkCakeLayers (n - 1)), clearable)
         MagicHat ->
           (board, p : clearable)
         Maker _ _ ->

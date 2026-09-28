@@ -9,7 +9,7 @@ Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
 sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
-stack test                            # 172 green — optional but recommended
+stack test                            # 173 green — optional but recommended
 stack build && stack exec match3-sdl
 ```
 
@@ -25,11 +25,11 @@ Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stac
 - **Specials**: 4-match → Line; 5-match → Rainbow (swap clears partner color only — Gem/Countdown/Flip front; own-color expand is a no-op); Bomb exists for combos
 - **Line×Bomb (3×3 cross), Rainbow×Line / Rainbow×Bomb (partner color + Line/Bomb expand), Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
-- **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent clears chip; `GoalChest`
-- **Honey jars** (`Honey n` / 蜂蜜罐): amber jars; adjacent clears chip; `GoalHoney`
+- **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent / Line·Bomb·Hammer chip one layer; `GoalChest`
+- **Honey jars** (`Honey n` / 蜂蜜罐): amber jars; adjacent / Line·Bomb·Hammer chip one layer; `GoalHoney`
 - **Balloons** (`Balloon c` / 气球): colored; adjacent **same-color** clear pops; `GoalBalloon`
 - **Cookies** (`Cookie` / 饼干): fall with gravity; collected on the **bottom row**; `GoalCookie`
-- **Cakes** (`Cake n` / 蛋糕): layered obstacles (≠ Cookie); adjacent clears chip; `GoalCake`
+- **Cakes** (`Cake n` / 蛋糕): layered obstacles (≠ Cookie); adjacent / Line·Bomb·Hammer chip one layer; `GoalCake`
 - **Magic hats** (`MagicHat` / 魔法帽): adjacent clear swaps/recolors neighbor gem colors
 - **Chains** (`Chain n` / 锁链): lock gems; adjacent clears peel; chained gems cannot swap or match
 - **Rocket freeze** (`Freeze n` / 火箭冰冻): blocks **swap only** (gems still match); adjacent clears peel; ≠ Ice (Ice chips when the gem itself matches)
@@ -129,9 +129,9 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 三消 / 四消横竖线 / 五消彩色精灵 | ✅ Normal / LineH·V / Rainbow |
 | 炸弹与特殊合成 | ✅ Bomb；Line×Bomb / Rainbow×Line / Bomb×Bomb / Line×Line |
 | 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
-| 宝箱 | ✅ `Chest n` + `GoalChest`（邻消削层打开） |
+| 宝箱 | ✅ `Chest n` + `GoalChest`（邻消/直线·炸弹·锤子削层打开） |
 | 饼干 / 掉落收集 | ✅ `Cookie` + `GoalCookie`（重力掉落，底行收集） |
-| 蛋糕（分层障碍） | ✅ `Cake n` + `GoalCake`（邻消削层；≠ 饼干） |
+| 蛋糕（分层障碍） | ✅ `Cake n` + `GoalCake`（邻消/直线·炸弹·锤子削层） |
 | 魔法帽 | ✅ `MagicHat`（邻消触发，交换/重染邻格颜色） |
 | 锁链 / 铁链 | ✅ `Chain n` overlay（邻消揭层；锁住不可交换/匹配） |
 | 火箭冰冻 | ✅ `Freeze n` overlay（只挡交换不挡匹配；邻消揭层；≠ Ice 自消削层） |
@@ -173,7 +173,7 @@ stack build && stack test && stack exec match3-sdl
 ```
 src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (172 named cases)
+test/Spec.hs tasty (173 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.
@@ -181,7 +181,7 @@ Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame`
 ## Release status / 发布状态
 
 - Campaign: **38** levels (CH1–CH7 on map), batch-tested constructible / playable / décor-vs-goal
-- Tests: `stack test` **172** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles; shuffle preserves Line/Bomb/Rainbow; soft-lock blocks Line/Bomb expand; Line blast no double-peel Chain/Curtain/Stone/Safe
+- Tests: `stack test` **173** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles; shuffle preserves Line/Bomb/Rainbow; soft-lock blocks Line/Bomb expand; Line blast no double-peel Chain/Curtain/Stone/Safe; Line/Bomb/Hammer single-chip Chest/Honey/Cake
 - Stackage: **lts-21.25** / GHC **9.4.8**; binary: `stack build && stack exec match3-sdl`
 - itch checklist: see `ITCH.md`
 

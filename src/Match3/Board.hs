@@ -47,6 +47,8 @@ import Match3.Obstacles
   , chipAdjacentBalloons
   , triggerAdjacentHats
   , chargeAdjacentMakers
+  , openAdjacentSurprises
+  , triggerAdjacentBottles
   )
 import Match3.Countdown
   ( countdownsAtZero
@@ -118,6 +120,8 @@ groupGemRuns b (p : ps) = case getCell b p of
   Maker _ _ -> groupGemRuns b ps
   Snail _ _ -> groupGemRuns b ps
   Safe _ -> groupGemRuns b ps
+  Surprise -> groupGemRuns b ps
+  Bottle _ -> groupGemRuns b ps
   Gem _ _ _ (Just (Fog _)) -> groupGemRuns b ps  -- fog hides gem from matches
   Gem _ _ _ (Just (Chain _)) -> groupGemRuns b ps  -- chain locks gem from matches
   Gem _ _ _ (Just (Curtain _)) -> groupGemRuns b ps  -- curtain hides gem from matches
@@ -186,6 +190,8 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
                   Maker _ _ -> False
                   Snail _ _ -> False
                   Safe _ -> False
+                  Surprise -> False
+                  Bottle _ -> False
               ]
             Gem _ Normal _ _ -> []
             Stone _ -> []
@@ -199,6 +205,8 @@ expandSpecials b seeds = go (nub seeds) (nub seeds)
             Snail _ _ -> []
             Safe _ -> []
             Flip _ _ -> []
+            Surprise -> []
+            Bottle _ -> []
             Countdown _ _ -> []
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
@@ -240,6 +248,8 @@ countColor b ps col =
         Maker _ _ -> False
         Snail _ _ -> False
         Safe _ -> False
+        Surprise -> False
+        Bottle _ -> False
     ]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
@@ -281,9 +291,14 @@ clearMatchesDetailed prefer b =
       (bSafe, _openedSafes) = chipAdjacentSafes bCurtain iceFree
       -- Maker: same-color adjacent clear charges; at 0 becomes Bomb in place
       bMaker = chargeAdjacentMakers bSafe iceFree
+      -- Surprise: open adjacent boxes → special in place or 3×3 explode seeds
+      (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
+      (bSurp2, surpFree) = chipIceOnClear bSurp surpExplode0
+      -- Bottle: dye ortho gem neighbors to bottle color (bottle stays)
+      bBottle = triggerAdjacentBottles bSurp2 iceFree
       -- Chocolate: also strip Choco orthogonally adjacent to match/special seeds
-      bNoChoco = clearChocoAdjacent bMaker expanded
-      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
+      bNoChoco = clearChocoAdjacent bBottle expanded
+      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ surpFree)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
       spawns = spawnSpecials prefer runs
@@ -524,8 +539,11 @@ clearFromSeedsDetailed prefer b seeds0 =
       (bCurtain, _) = chipAdjacentCurtain bFreeze iceFree
       (bSafe, _) = chipAdjacentSafes bCurtain iceFree
       bMaker = chargeAdjacentMakers bSafe iceFree
-      bNoChoco = clearChocoAdjacent bMaker expanded
-      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons)
+      (bSurp, surpExplode0) = openAdjacentSurprises bMaker iceFree
+      (bSurp2, surpFree) = chipIceOnClear bSurp surpExplode0
+      bBottle = triggerAdjacentBottles bSurp2 iceFree
+      bNoChoco = clearChocoAdjacent bBottle expanded
+      allPos = nub (iceFree ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ surpFree)
       n = length allPos
       mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoChoco) allPos
       spawns = spawnSpecials prefer runs

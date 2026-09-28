@@ -37,6 +37,11 @@ module Match3.Core
   , isFlip
   , flipFront
   , flipBack
+  , mkSurprise
+  , isSurprise
+  , mkBottle
+  , isBottle
+  , bottleColor
   , cellOverlay
   , clearOverlaysOn
   , clearChocoAdjacent
@@ -161,8 +166,10 @@ module Match3.Core
   , shuffleGame
   , useHammer
   , useFreeSwap
+  , useCrossClear
   , loseHint
   , hammerClearSeeds
+  , crossClearSeeds
   , swapBlockedByStone
   , orthoNeighbors
   , stonesAdjacentTo
@@ -176,6 +183,10 @@ module Match3.Core
   , cakesAdjacentTo
   , chipAdjacentSafes
   , safesAdjacentTo
+  , openAdjacentSurprises
+  , surprisesAdjacentTo
+  , triggerAdjacentBottles
+  , bottlesAdjacentTo
   , chipAdjacentBalloons
   , balloonsAdjacentSameColor
   , hatsAdjacentTo
@@ -251,10 +262,14 @@ import Match3.Obstacles
   , triggerAdjacentHats
   , makersAdjacentSameColor
   , chargeAdjacentMakers
+  , openAdjacentSurprises
+  , surprisesAdjacentTo
+  , triggerAdjacentBottles
+  , bottlesAdjacentTo
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)
-import Match3.Boosters (hammerClearSeeds)
+import Match3.Boosters (hammerClearSeeds, crossClearSeeds)
 import Match3.Countdown
   ( spawnCountdown
   , tickCountdowns

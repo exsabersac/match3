@@ -15,6 +15,7 @@ module Match3.Game
   , shuffleGame
   , useHammer
   , useFreeSwap
+  , useCrossClear
   , loseHint
   ) where
 
@@ -42,6 +43,7 @@ import Match3.Snail (stepSnails)
 import Match3.Countdown (spawnCountdown)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
+import Match3.Boosters (crossClearSeeds)
 import Match3.Types
 import System.Random (StdGen, mkStdGen)
 
@@ -70,6 +72,7 @@ data GameState = GameState
   , gsPortals       :: [(Pos, Pos)] -- bidirectional portal pairs (传送门)
   , gsHammers       :: Int    -- hammer booster charges
   , gsFreeSwaps     :: Int    -- free-swap booster charges (any two cells)
+  , gsCrossClears   :: Int    -- cross-clear booster charges
   , gsUfos          :: [Ufo]  -- flying saucers (飞碟)
   , gsUfoCollected  :: Int    -- gems absorbed by UFOs
   } deriving (Show)
@@ -95,6 +98,7 @@ instance Eq GameState where
       && gsPortals a == gsPortals b
       && gsHammers a == gsHammers b
       && gsFreeSwaps a == gsFreeSwaps b
+      && gsCrossClears a == gsCrossClears b
       && gsUfos a == gsUfos b
       && gsUfoCollected a == gsUfoCollected b
 
@@ -286,7 +290,9 @@ decorateLevel 27 b =
               b3u
               [(6, 4)]
       b3p = setCell b3s (7, 3) (mkFlip C1 C3)
-      b4 = overlayAt b3p Vine [(6, 3)]
+      b3q = setCell b3p (5, 0) mkSurprise
+      b3r = setCell b3q (0, 3) (mkBottle C1)
+      b4 = overlayAt b3r Vine [(6, 3)]
       b5 =
         foldl (\board (p, dr, dc) -> setCell board p (mkSnail dr dc))
               b4
@@ -332,6 +338,22 @@ decorateLevel 31 b =
               , ((3, 7), C4, C2), ((5, 3), C1, C2), ((5, 4), C2, C1)
               ]
   in overlayAt b2 Choco [(7, 1), (7, 6)]
+decorateLevel 32 b =
+  -- surprise boxes: open to special or 3x3 pop
+  let b1 =
+        foldl (\board p -> setCell board p mkSurprise)
+              b
+              [ (1, 1), (1, 6), (2, 3), (3, 1), (3, 6), (4, 0), (4, 4), (5, 2), (5, 5), (6, 3) ]
+  in overlayAt b1 Choco [(7, 2), (7, 5)]
+decorateLevel 33 b =
+  -- dye bottles paint neighbors on adjacent clear
+  let b1 =
+        foldl (\board (p, col) -> setCell board p (mkBottle col))
+              b
+              [ ((2, 2), C3), ((2, 5), C3), ((4, 1), C1), ((4, 6), C3)
+              , ((5, 3), C3), ((5, 4), C2), ((6, 2), C3), ((6, 5), C3)
+              ]
+  in overlayAt b1 (Fog 1) [(1, 3), (1, 4)]
 decorateLevel _ b = b
 
 -- | UFO placements for campaign levels.
@@ -381,6 +403,7 @@ newGameAtLevel li cfg seed =
        , gsPortals = levelPortals li
        , gsHammers = 2
        , gsFreeSwaps = 1
+       , gsCrossClears = 1
        , gsUfos =
            let placed = levelUfos li
            in if null placed
@@ -465,6 +488,8 @@ extractDecor b =
     keep (Snail _ _) = True
     keep (Safe _) = True
     keep (Flip _ _) = True
+    keep Surprise = True
+    keep (Bottle _) = True
     keep (Countdown _ _) = True
     keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
     -- Normal bare gems are shuffled away
@@ -792,6 +817,76 @@ useFreeSwap p1 p2 gs
                    MoveApplied _ -> ensurePlayable gs''
                    _ -> gs''
              in (gs''', outcome)
+
+-- | Cross clear: spend one charge to clear row+col through a cell, then cascade.
+-- Does not consume a move.
+useCrossClear :: Pos -> GameState -> (GameState, Outcome)
+useCrossClear p gs
+  | Just o <- gsOver gs = (gs, o)
+  | gsCrossClears gs <= 0 = (gs, InvalidSwap)
+  | not (inBounds p) = (gs, InvalidSwap)
+  | otherwise =
+      let seeds = crossClearSeeds p
+          (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', g') =
+            runCascadeScoredFromSeedsWithUfos Nothing seeds (gsUfos gs) (gsPortals gs) (gsGen gs) (gsBoard gs)
+          board1 = spreadChoco (spreadVines boardH)
+          score' = gsScore gs + gained
+          hist = take 20 (snapshot gs : gsHistory gs)
+          ufoCollected' = gsUfoCollected gs + uAbs
+          cookies' = gsCookiesCollected gs + cookieHit
+          cakes' = gsCakesCleared gs + cakeHit
+          safesHit = max 0 (countSafes (gsBoard gs) - countSafes board1)
+          safes' = gsSafesOpened gs + safesHit
+          collectDelta = case gsGoal gs of
+            GoalCollect col _ -> lookupColor tallies col
+            GoalUfo _ -> uAbs
+            _ -> 0
+          collected' = case gsGoal gs of
+            GoalCollect _ _ -> gsCollected gs + collectDelta
+            GoalCollectMulti reqs ->
+              let bag' = mergeTallies (gsColorBag gs) tallies
+              in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
+            GoalClearStone _ -> gsStonesCleared gs + stonesHit
+            GoalChest _ -> gsChestsCleared gs + chestsHit
+            GoalHoney _ -> gsHoneyCleared gs + honeyHit
+            GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
+            GoalCookie _ -> cookies'
+            GoalCake _ -> cakes'
+            GoalSafe _ -> safes'
+            GoalScore _ -> gsCollected gs
+            GoalUfo _ -> ufoCollected'
+          gs' =
+            gs
+              { gsBoard = board1
+              , gsScore = score'
+              , gsCollected = collected'
+              , gsColorBag = mergeTallies (gsColorBag gs) tallies
+              , gsStonesCleared = gsStonesCleared gs + stonesHit
+              , gsChestsCleared = gsChestsCleared gs + chestsHit
+              , gsHoneyCleared = gsHoneyCleared gs + honeyHit
+              , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
+              , gsCookiesCollected = cookies'
+              , gsCakesCleared = cakes'
+              , gsSafesOpened = safes'
+              , gsGen = g'
+              , gsHistory = hist
+              , gsHint = Nothing
+              , gsCombo = combo
+              , gsShuffled = False
+              , gsCrossClears = gsCrossClears gs - 1
+              , gsUfos = ufos'
+              , gsUfoCollected = ufoCollected'
+              }
+          outcome = decideOutcome gs' gained
+          gs'' = case outcome of
+            Won s -> gs' { gsOver = Just (Won s) }
+            Lost s -> gs' { gsOver = Just (Lost s) }
+            LevelClear s n -> gs' { gsOver = Just (LevelClear s n) }
+            _ -> gs'
+          gs''' = case outcome of
+            MoveApplied _ -> ensurePlayable gs''
+            _ -> gs''
+      in (gs''', outcome)
 
 -- | Short tip shown after a Lost outcome (失败提示).
 loseHint :: LevelGoal -> String

@@ -70,5 +70,7 @@ colorPositions b col =
       Maker _ _ -> False
       Snail _ _ -> False
       Safe _ -> False
+      Surprise -> False
+      Bottle _ -> False
       Flip col' _ -> col' == col
   ]

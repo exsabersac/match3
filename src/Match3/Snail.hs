@@ -37,6 +37,8 @@ blocksSnail c =
     || isMagicHat c
     || isMaker c
     || isSafe c
+    || isSurprise c
+    || isBottle c
     || isSnail c
 
 -- | Pushable: ordinary gems and countdown bombs.

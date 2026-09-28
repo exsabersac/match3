@@ -119,6 +119,12 @@ tests =
     , testCase "goal_safe_counts" goal_safe_counts
     , testCase "flip_matches_front" flip_matches_front
     , testCase "flip_becomes_back_on_clear" flip_becomes_back_on_clear
+    , testCase "surprise_blocks_swap" surprise_blocks_swap
+    , testCase "surprise_opens_to_special" surprise_opens_to_special
+    , testCase "surprise_explodes_small" surprise_explodes_small
+    , testCase "bottle_blocks_swap" bottle_blocks_swap
+    , testCase "bottle_dyes_neighbors" bottle_dyes_neighbors
+    , testCase "booster_cross_clears_row_col" booster_cross_clears_row_col
     , testCase "shuffle_preserves_decor" shuffle_preserves_decor
     , testCase "daily_ufo_goal_spawns_saucer" daily_ufo_goal_spawns_saucer
     ]
@@ -2444,7 +2450,7 @@ chain_layer_decrement = do
           , hasChain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
-  assertEqual "campaign levels" (32 :: Int) (length allLevels)
+  assertEqual "campaign levels" (34 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Maker / 果汁机 (same-color adjacent charge -> Bomb)
@@ -2719,7 +2725,7 @@ freeze_layer_decrement = do
           , hasFreeze (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor freeze >= 8, got " ++ show nFreeze) (nFreeze >= 8)
-  assertEqual "campaign levels" (32 :: Int) (length allLevels)
+  assertEqual "campaign levels" (34 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Curtain / 窗帘 (blocks match; adjacent peel; ≠ Fog soft cloud)
@@ -2790,7 +2796,7 @@ curtain_layer_decrement = do
           , hasCurtain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor curtain >= 8, got " ++ show nCurt) (nCurt >= 8)
-  assertEqual "campaign levels" (32 :: Int) (length allLevels)
+  assertEqual "campaign levels" (34 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Safe / 保险箱 (layered vault; opens into Cookie; GoalSafe)
@@ -2946,3 +2952,161 @@ flip_becomes_back_on_clear = do
   let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
         runCascadeScored Nothing (mkStdGen 2) board0
   assertBool "no flip remains at seed" (not (isFlip (getCell board1 (3, 1))))
+
+--------------------------------------------------------------------------------
+-- Surprise / 彩蛋 (adjacent open → special or 3×3 pop)
+--------------------------------------------------------------------------------
+
+surprise_blocks_swap :: Assertion
+surprise_blocks_swap = do
+  let board = setCell stableBoard (3, 3) mkSurprise
+  assertBool "is surprise" (isSurprise (getCell board (3, 3)))
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  let gs0 =
+        (newGame defaultConfig 7)
+          { gsBoard = board
+          , gsScore = 40
+          , gsMoves = 12
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = trySwap (3, 3) (3, 4) gs0
+  out @?= NoMatch
+  gsBoard gs1 @?= gsBoard gs0
+
+surprise_opens_to_special :: Assertion
+surprise_opens_to_special = do
+  -- (4,0): outcome 0 → LineH special
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (4, 0)
+          mkSurprise
+  assertBool "surprise present" (isSurprise (getCell board0 (4, 0)))
+  let ms = findMatches board0
+      (b1, expl) = openAdjacentSurprises board0 ms
+  assertEqual "no explode" (0 :: Int) (length expl)
+  let cell = getCell b1 (4, 0)
+  assertBool "became special gem" (isGem cell && cellKind cell /= Normal)
+  assertEqual "LineH" LineH (cellKind cell)
+  let gs = newGameAtLevel 32 (levelConfig (allLevels !! 32)) 42
+      nSur =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isSurprise (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor surprises >= 8, got " ++ show nSur) (nSur >= 8)
+  assertEqual "campaign levels" (34 :: Int) (length allLevels)
+
+surprise_explodes_small :: Assertion
+surprise_explodes_small = do
+  -- (3,3): outcome 3 → 3×3 blast; ortho-adjacent to match at (3,2)
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C1))
+          (3, 3)
+          mkSurprise
+  let ms = findMatches board0
+      (b1, expl) = openAdjacentSurprises board0 ms
+  assertBool "explode seeds" (length expl >= 5)
+  assertBool "center in blast" ((3, 3) `elem` expl)
+  -- Still Surprise on board until clear holes applied
+  assertBool "still surprise until clear" (isSurprise (getCell b1 (3, 3)))
+  let gs0 =
+        (newGame defaultConfig 11)
+          { gsBoard = board0
+          , gsScore = 0
+          , gsMoves = 20
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, out) = trySwap (3, 1) (3, 2) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    _ -> pure ()
+  assertBool "surprise cleared by blast" $
+    not (isSurprise (getCell (gsBoard gs1) (3, 3)))
+
+--------------------------------------------------------------------------------
+-- Bottle / 染色瓶 (adjacent clear dyes ortho gems)
+--------------------------------------------------------------------------------
+
+bottle_blocks_swap :: Assertion
+bottle_blocks_swap = do
+  let board = setCell stableBoard (3, 3) (mkBottle C2)
+  assertBool "is bottle" (isBottle (getCell board (3, 3)))
+  assertEqual "color" C2 (bottleColor (getCell board (3, 3)))
+  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+
+bottle_dyes_neighbors :: Assertion
+bottle_dyes_neighbors = do
+  let board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (2, 1)
+             (mkBottle C3))
+          (2, 2)
+          (mkGem C5)
+  let ms = findMatches board0
+      b1 = triggerAdjacentBottles board0 ms
+  assertBool "bottle stays" (isBottle (getCell b1 (2, 1)))
+  assertEqual "dyed neighbor" C3 (cellColor (getCell b1 (2, 2)))
+  let gs = newGameAtLevel 33 (levelConfig (allLevels !! 33)) 42
+      nBot =
+        length
+          [ ()
+          | r <- [0 .. boardSize - 1]
+          , c <- [0 .. boardSize - 1]
+          , isBottle (getCell (gsBoard gs) (r, c))
+          ]
+  assertBool ("decor bottles >= 6, got " ++ show nBot) (nBot >= 6)
+
+--------------------------------------------------------------------------------
+-- Cross clear booster (十字清除)
+--------------------------------------------------------------------------------
+
+booster_cross_clears_row_col :: Assertion
+booster_cross_clears_row_col = do
+  let seeds = crossClearSeeds (3, 4)
+  assertEqual "row+col size" (15 :: Int) (length seeds)  -- 8+8-1
+  assertBool "has row" (all (\c -> (3, c) `elem` seeds) [0 .. boardSize - 1])
+  assertBool "has col" (all (\r -> (r, 4) `elem` seeds) [0 .. boardSize - 1])
+  let gs0 =
+        (newGame defaultConfig 5)
+          { gsCrossClears = 1
+          , gsOver = Nothing
+          , gsHint = Nothing
+          }
+      (gs1, out) = useCrossClear (3, 3) gs0
+  case out of
+    InvalidSwap -> assertFailure "expected cross to apply"
+    NoMatch -> assertFailure "expected cascade"
+    _ -> pure ()
+  assertEqual "charge spent" (0 :: Int) (gsCrossClears gs1)
+  let (_, out2) = useCrossClear (1, 1) gs1
+  out2 @?= InvalidSwap
+  assertEqual "unchanged" (0 :: Int) (gsCrossClears gs1)

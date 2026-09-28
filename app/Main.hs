@@ -61,6 +61,7 @@ data ToolMode
   = ToolNone
   | ToolHammer          -- next cell click hammers
   | ToolFreeSwap (Maybe Pos)  -- first click stores, second free-swaps
+  | ToolCross           -- next cell click cross-clears row+col
   deriving (Eq, Show)
 
 data App = App
@@ -90,7 +91,7 @@ colorRGB C4 = (240, 200, 60)
 colorRGB C5 = (180, 80, 200)
 
 helpKeysMsg :: Text
-helpKeysMsg = "H hint | 1 hammer | 2 free-swap | U undo | S shuffle | D daily | M map | R restart | N next | P pause | Esc"
+helpKeysMsg = "H hint | 1 hammer | 2 free-swap | 3 cross | U undo | S shuffle | D daily | M map | R restart | N next | P pause | Esc"
 
 main :: IO ()
 main = do
@@ -200,6 +201,8 @@ spawnBurst board positions =
                     Snail _ _ -> (90, 160, 70)
                     Safe _ -> (180, 150, 40)
                     Flip f _ -> colorRGB f
+                    Surprise -> (255, 100, 160)
+                    Bottle col -> colorRGB col
                     Countdown _ _ -> colorRGB (cellColor (getCell board pos))
                     Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
           mapM
@@ -277,6 +280,8 @@ updateTitle window app = do
             ++ show (gsHammers gs)
             ++ " Sw="
             ++ show (gsFreeSwaps gs)
+            ++ " Cr="
+            ++ show (gsCrossClears gs)
             ++ status
             ++ "  |  "
             ++ T.unpack (appMsg app)
@@ -347,6 +352,53 @@ applyHammer ref window app pos = do
         MoveApplied g -> "Hammer +" <> T.pack (show g)
         LevelClear _ _ -> "Hammer cleared level!"
         Won _ -> "Hammer won!"
+        Lost _ -> T.pack (loseHint (gsGoal gs'))
+  parts <-
+    if null flash
+      then pure (appParticles app)
+      else do
+        burst <- spawnBurst before changed
+        pure (burst ++ appParticles app)
+  let app' =
+        app
+          { appGame = gs'
+          , appSel = Nothing
+          , appTool = ToolNone
+          , appDragFrom = Nothing
+          , appMsg = msg
+          , appFlash = flash
+          , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
+          , appComboShow = if gsCombo gs' > 1 then 120 else 0
+          , appParticles = parts
+          }
+  writeIORef ref app'
+  updateTitle window app'
+  pure app'
+
+
+-- | Apply cross-clear booster at pos with flash / particles / msg.
+applyCrossClear :: IORef App -> Window -> App -> Pos -> IO App
+applyCrossClear ref window app pos = do
+  let before = gsBoard (appGame app)
+      (gs', out) = useCrossClear pos (appGame app)
+      after = gsBoard gs'
+      changed =
+        [ p
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p = (r, c)
+        , getCell before p /= getCell after p
+        ]
+      flash = case out of
+        NoMatch -> []
+        InvalidSwap -> []
+        _ -> [(p, 18) | p <- changed]
+      msg = case out of
+        InvalidSwap -> "No cross-clears left"
+        NoMatch -> "Cross failed"
+        MoveApplied g -> "Cross +" <> T.pack (show g)
+        LevelClear _ _ -> "Cross cleared level!"
+        Won _ -> "Cross won!"
         Lost _ -> T.pack (loseHint (gsGoal gs'))
   parts <-
     if null flash
@@ -574,6 +626,33 @@ handleEvent ref window ev = case eventPayload ev of
                           )
                         updateTitle window =<< readIORef ref
                   pure False
+                Keycode3 -> do
+                  app <- readIORef ref
+                  unless (animBusy app || isJust (gsOver (appGame app))) $ do
+                    case appTool app of
+                      ToolCross -> do
+                        let app' = app { appTool = ToolNone, appMsg = "Cross cancelled" }
+                        writeIORef ref app'
+                        updateTitle window app'
+                      _ ->
+                        case appSel app of
+                          Just pos | gsCrossClears (appGame app) > 0 -> do
+                            _ <- applyCrossClear ref window app pos
+                            pure ()
+                          _ -> do
+                            let app' =
+                                  app
+                                    { appTool = ToolCross
+                                    , appSel = Nothing
+                                    , appDragFrom = Nothing
+                                    , appMsg =
+                                        if gsCrossClears (appGame app) <= 0
+                                          then "No cross-clears left"
+                                          else "Cross: click a cell (3 again cancels)"
+                                    }
+                            writeIORef ref app'
+                            updateTitle window app'
+                  pure False
                 KeycodeH -> do
                   app <- readIORef ref
                   let (gs, h) = applyHint (appGame app)
@@ -721,6 +800,16 @@ handleEvent ref window ev = case eventPayload ev of
                             updateTitle window app'
                           else do
                             _ <- applyHammer ref window app pos
+                            pure ()
+                        pure False
+                      ToolCross -> do
+                        if gsCrossClears (appGame app) <= 0
+                          then do
+                            let app' = app { appTool = ToolNone, appMsg = "No cross-clears left" }
+                            writeIORef ref app'
+                            updateTitle window app'
+                          else do
+                            _ <- applyCrossClear ref window app pos
                             pure ()
                         pure False
                       ToolFreeSwap Nothing -> do
@@ -1232,12 +1321,17 @@ drawHud ren app = do
     rendererDrawColor ren $= V4 100 180 255 255
     fillRect ren (Just (Rectangle (P (V2 (hx + 50) 8)) (V2 14 14)))
     drawNumber ren (hx + 68) 8 2 white (gsFreeSwaps gs)
+    rendererDrawColor ren $= V4 220 80 220 255
+    fillRect ren (Just (Rectangle (P (V2 (hx + 100) 8)) (V2 14 14)))
+    drawNumber ren (hx + 118) 8 2 white (gsCrossClears gs)
     case appTool app of
       ToolHammer -> do
         rendererDrawColor ren $= V4 255 180 80 255
         drawBannerWord ren (hx) 72 2 (V4 255 200 100 255) "HAMMER"
       ToolFreeSwap _ -> do
         drawBannerWord ren (hx) 72 2 (V4 140 200 255 255) "SWAP"
+      ToolCross -> do
+        drawBannerWord ren (hx) 72 2 (V4 240 140 240 255) "CROSS"
       ToolNone -> pure ()
 
   -- Combo badge (连击反馈)
@@ -1746,6 +1840,45 @@ drawGemAt ren x y cell flashing = case cell of
     when flashing $ do
       rendererDrawColor ren $= V4 255 255 200 200
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Surprise -> do
+    -- Surprise egg / gift box (彩蛋): pink package + gold bow
+    let gap = 4 :: CInt
+        (cr, cg, cb) = if flashing then (255, 200, 220) else (255, 90, 150)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap)))
+            (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    rendererDrawColor ren $= V4 255 210 80 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 3) (y + gap))) (V2 6 (cellPx - 2 * gap))))
+    fillRect ren (Just (Rectangle (P (V2 (x + gap) (y + cellPx `div` 2 - 3))) (V2 (cellPx - 2 * gap) 6)))
+    rendererDrawColor ren $= V4 255 255 255 220
+    drawRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
+  Bottle col -> do
+    -- Dye bottle (染色瓶): body tinted with bottle color + neck
+    let gap = 6 :: CInt
+        (cr0, cg0, cb0) = colorRGB col
+        (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
+    rendererDrawColor ren $= V4 cr cg cb 255
+    fillRect
+      ren
+      (Just
+         (Rectangle
+            (P (V2 (x + gap) (y + gap + 10)))
+            (V2 (cellPx - 2 * gap) (cellPx - gap - 14))))
+    -- Neck
+    rendererDrawColor ren $= V4 220 220 230 255
+    fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 5) (y + gap))) (V2 10 12)))
+    rendererDrawColor ren $= V4 40 40 50 255
+    drawRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap + 10))) (V2 (cellPx - 2 * gap) (cellPx - gap - 14))))
+    when flashing $ do
+      rendererDrawColor ren $= V4 255 255 200 200
+      drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
   Countdown col turns -> do
     let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
@@ -1965,6 +2098,7 @@ drawStatic ren app board yOff = do
               (sr, sg, sb) = case appTool app of
                 ToolHammer -> (255, 160, 80)
                 ToolFreeSwap _ -> (100, 180, 255)
+                ToolCross -> (220, 80, 220)
                 ToolNone -> (255, bright, bright)
           -- Outer glow ring
           rendererDrawColor ren $= V4 sr sg sb 120

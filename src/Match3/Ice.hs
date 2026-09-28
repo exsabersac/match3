@@ -50,6 +50,12 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
         Flip _ back ->
           -- Dual-face: first hit flips to Normal gem of back color (does not clear)
           (set board p (mkGem back), clearable)
+        Surprise ->
+          -- Hammer / direct seed: treat as opened explosion center (clears)
+          (board, p : clearable)
+        Bottle _ ->
+          -- Dye bottle immune to direct clear (like Maker); stays
+          (board, clearable)
         Countdown _ _ ->
           (board, p : clearable)
     get board (r, c) = (board !! r) !! c

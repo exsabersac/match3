@@ -38,6 +38,11 @@ module Match3.Types
   , isFlip
   , flipFront
   , flipBack
+  , mkSurprise
+  , isSurprise
+  , mkBottle
+  , isBottle
+  , bottleColor
   , clearOverlay
   , setOverlay
   , mkStone
@@ -138,6 +143,8 @@ data CellContents
   | Snail Int Int    -- snail (蜗牛): direction (dr, dc); crawls after each move
   | Safe Int      -- vault / safe (保险箱): adjacent clears chip; opens into Cookie
   | Flip Color Color  -- dual-face gem (双面块): matches as front; hit flips to back as Normal gem
+  | Surprise      -- surprise egg/box (彩蛋): adjacent clear opens → special or 3×3 pop
+  | Bottle Color  -- dye bottle (染色瓶): adjacent clear dyes ortho gems to bottle color
   | Countdown Color Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -207,6 +214,8 @@ iceLayers (Maker _ _) = 0
 iceLayers (Snail _ _) = 0
 iceLayers (Safe _) = 0
 iceLayers (Flip _ _) = 0
+iceLayers Surprise = 0
+iceLayers (Bottle _) = 0
 iceLayers (Countdown _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
@@ -413,6 +422,26 @@ flipBack :: Cell -> Color
 flipBack (Flip _ b) = b
 flipBack _ = error "flipBack: not a Flip"
 
+-- | Surprise egg / gift box (彩蛋 / 惊喜盒).
+mkSurprise :: Cell
+mkSurprise = Surprise
+
+isSurprise :: Cell -> Bool
+isSurprise Surprise = True
+isSurprise _ = False
+
+-- | Dye bottle (染色瓶): adjacent clear dyes ortho gems to this color.
+mkBottle :: Color -> Cell
+mkBottle = Bottle
+
+isBottle :: Cell -> Bool
+isBottle (Bottle _) = True
+isBottle _ = False
+
+bottleColor :: Cell -> Color
+bottleColor (Bottle c) = c
+bottleColor _ = error "bottleColor: not a Bottle"
+
 -- | Countdown bomb (倒计时炸弹): colored, matchable; n = turns left.
 mkCountdown :: Color -> Int -> Cell
 mkCountdown c n = Countdown c (max 1 n)
@@ -440,6 +469,8 @@ isGem (Maker _ _) = False
 isGem (Snail _ _) = False
 isGem (Safe _) = False
 isGem (Flip _ _) = True
+isGem Surprise = False
+isGem (Bottle _) = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -456,6 +487,8 @@ cellColor (Maker _ _) = error "cellColor: Maker has no color (use makerColor)"
 cellColor (Snail _ _) = error "cellColor: Snail has no color"
 cellColor (Safe _) = error "cellColor: Safe has no color"
 cellColor (Flip f _) = f
+cellColor Surprise = error "cellColor: Surprise has no color"
+cellColor (Bottle _) = error "cellColor: Bottle has no color (use bottleColor)"
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -472,6 +505,8 @@ cellKind (Maker _ _) = error "cellKind: Maker has no kind"
 cellKind (Snail _ _) = error "cellKind: Snail has no kind"
 cellKind (Safe _) = error "cellKind: Safe has no kind"
 cellKind (Flip _ _) = Normal
+cellKind Surprise = error "cellKind: Surprise has no kind"
+cellKind (Bottle _) = error "cellKind: Bottle has no kind"
 
 numColors :: Int
 numColors = 5
@@ -603,7 +638,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / hazards; difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -638,6 +673,8 @@ allLevels =
   , Level 29 "冰冻"   20 (GoalCollect C2 16)
   , Level 30 "窗帘"   22 (GoalCollect C1 16)
   , Level 31 "金库"   22 (GoalSafe 5)
+  , Level 32 "惊喜"   22 (GoalScore 900)
+  , Level 33 "染色"   22 (GoalCollect C3 16)
   ]
 
 levelConfig :: Level -> GameConfig

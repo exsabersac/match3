@@ -47,6 +47,8 @@ matchesTarget b col p = case at b p of
   Snail _ _ -> False
   Safe _ -> False
   Flip c _ -> c == col
+  Surprise -> False
+  Bottle _ -> False
 
 -- | Orthogonally adjacent gems / countdowns matching the UFO target color.
 ufoAbsorbTargets :: Board -> Ufo -> [Pos]

@@ -1,7 +1,8 @@
--- | Stone / chest / honey / cake / maker blockers + magic hat trigger.
+-- | Stone / chest / honey / cake / maker / surprise / bottle blockers + magic hat trigger.
 -- Never match, block swaps; adjacent gem clears chip one layer; removed at 0
--- (开心消消乐箱子 / 宝箱 / 蜂蜜罐 / 蛋糕 / 果汁机). MagicHat: adjacent clear swaps neighbor colors.
+-- (开心消消乐箱子 / 宝箱 / 蜂蜜罐 / 蛋糕 / 果汁机 / 彩蛋 / 染色瓶). MagicHat: adjacent clear swaps neighbor colors.
 -- Maker: same-color adjacent clear charges; at 0 produces Bomb in place.
+-- Surprise: adjacent clear opens → special gem or 3×3 pop. Bottle: dyes ortho gems.
 module Match3.Obstacles
   ( swapBlockedByStone
   , orthoNeighbors
@@ -21,6 +22,10 @@ module Match3.Obstacles
   , triggerAdjacentHats
   , makersAdjacentSameColor
   , chargeAdjacentMakers
+  , surprisesAdjacentTo
+  , openAdjacentSurprises
+  , bottlesAdjacentTo
+  , triggerAdjacentBottles
   , withAdjacentStones
   ) where
 
@@ -40,6 +45,8 @@ import Match3.Types
   , isMagicHat
   , isMaker
   , isSafe
+  , isSurprise
+  , isBottle
   , hasChain
   , hasFreeze
   , isSnail
@@ -48,7 +55,6 @@ import Match3.Types
   , mkCookie
   , balloonColor
   , makerColor
-  , makerCharges
   , mkStoneLayers
   , mkChestLayers
   , mkHoneyLayers
@@ -79,6 +85,7 @@ swapBlockedByStone b p1 p2 =
   let block c =
         isStone c || isChest c || isHoney c || isBalloon c || isCookie c
           || isCake c || isMagicHat c || isMaker c || isSnail c || isSafe c
+          || isSurprise c || isBottle c
           || hasChain c || hasFreeze c
   in block (at b p1) || block (at b p2)
 
@@ -319,6 +326,88 @@ chargeAdjacentMakers b clearedGems =
               setAt board p (Gem col Bomb 0 Nothing)
           | otherwise ->
               setAt board p (mkMakerCharges col (n - 1))
+        _ -> board
+
+-- | Surprise box positions orthogonally adjacent to cleared positions.
+surprisesAdjacentTo :: Board -> [Pos] -> [Pos]
+surprisesAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isSurprise (at b p)
+    ]
+
+-- | Deterministic surprise outcome from board position.
+-- 0..2 → become LineH / LineV / Bomb; 3 → 3×3 explosion (box cleared).
+surpriseOutcome :: Pos -> Int
+surpriseOutcome (r, c) = (r * 8 + c) `mod` 4
+
+surpriseSpecial :: Pos -> Cell
+surpriseSpecial (r, c) =
+  let col = toEnum ((r + 3 * c) `mod` 5) :: Color
+      kind = case surpriseOutcome (r, c) of
+        0 -> LineH
+        1 -> LineV
+        _ -> Bomb
+  in Gem col kind 0 Nothing
+
+-- | 3×3 blast centered at pos (same footprint as countdown / bomb).
+surpriseBlast :: Pos -> [Pos]
+surpriseBlast (r, c) =
+  [ (rr, cc)
+  | rr <- [r - 1 .. r + 1]
+  , cc <- [c - 1 .. c + 1]
+  , inBoard (rr, cc)
+  ]
+
+-- | Open surprises adjacent to clears.
+-- Special outcomes replace the box in place (not in explode set).
+-- Explosion outcomes remove the box and return 3×3 clear seeds.
+-- Returns (board, explosion seed positions).
+openAdjacentSurprises :: Board -> [Pos] -> (Board, [Pos])
+openAdjacentSurprises b clearedGems =
+  foldl openOne (b, []) (surprisesAdjacentTo b clearedGems)
+  where
+    openOne (board, explodes) p =
+      case at board p of
+        Surprise
+          | surpriseOutcome p == 3 ->
+              (board, nub (surpriseBlast p ++ explodes))
+          | otherwise ->
+              (setAt board p (surpriseSpecial p), explodes)
+        _ -> (board, explodes)
+
+-- | Dye bottle positions orthogonally adjacent to cleared gems.
+bottlesAdjacentTo :: Board -> [Pos] -> [Pos]
+bottlesAdjacentTo b cleared =
+  nub
+    [ p
+    | cpos <- cleared
+    , p <- orthoNeighbors cpos
+    , inBoard p
+    , isBottle (at b p)
+    ]
+
+-- | Trigger dye bottles: recolor every ortho gem neighbor to the bottle color.
+-- Bottle itself stays. Neighbors in the cleared set are skipped.
+triggerAdjacentBottles :: Board -> [Pos] -> Board
+triggerAdjacentBottles b cleared =
+  foldl dyeOne b (bottlesAdjacentTo b cleared)
+  where
+    dyeOne board bottlePos =
+      case at board bottlePos of
+        Bottle col ->
+          let nbrs =
+                [ p
+                | p <- orthoNeighbors bottlePos
+                , inBoard p
+                , p `notElem` cleared
+                , let cell = at board p
+                , isGem cell
+                ]
+          in foldl (\bd p -> setAt bd p (recolorCell (at bd p) col)) board (nub nbrs)
         _ -> board
 
 -- | Legacy helper: positions that should be removed (last-layer stones only).

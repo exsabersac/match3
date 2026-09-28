@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main (main) where
 
+import Data.List (sort)
 import Data.Maybe (fromMaybe, isNothing)
 import Match3.Board (applyGravity, clearMatches, refill)
 import Match3.Core
@@ -56,6 +57,9 @@ tests =
     , testCase "countdown_bomb_ticks_after_move" countdown_bomb_ticks_after_move
     , testCase "countdown_bomb_explodes_at_zero" countdown_bomb_explodes_at_zero
     , testCase "countdown_bomb_cleared_disarms" countdown_bomb_cleared_disarms
+    , testCase "conveyor_cycle_preserves_cells" conveyor_cycle_preserves_cells
+    , testCase "conveyor_shifts_after_move" conveyor_shifts_after_move
+    , testCase "conveyor_can_create_match" conveyor_can_create_match
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -1172,3 +1176,126 @@ countdown_bomb_cleared_disarms = do
         , isCountdown (getCell (gsBoard gs1) (r, c))
         ]
   assertEqual "other countdown ticked once" [2] other
+
+--------------------------------------------------------------------------------
+-- Conveyor belts (开心消消乐传送带)
+--------------------------------------------------------------------------------
+
+-- | Shifting a cycle permutes cells; multiset of belt cells is unchanged.
+conveyor_cycle_preserves_cells :: Assertion
+conveyor_cycle_preserves_cells = do
+  let belt = [(0, 0), (0, 1), (0, 2), (1, 2)]
+      b0 = stableBoard
+      cellsBefore = map (getCell b0) belt
+      b1 = shiftBelt b0 belt
+      cellsAfter = map (getCell b1) belt
+  assertEqual "same multiset" (sort cellsBefore) (sort cellsAfter)
+  -- Forward: new[i] = old[i-1]
+  assertEqual "wrap" (last cellsBefore) (head cellsAfter)
+  assertEqual "step" (cellsBefore !! 0) (cellsAfter !! 1)
+  -- Identity on empty / singleton
+  assertEqual "empty" b0 (shiftBelt b0 [])
+  assertEqual "singleton" b0 (shiftBelt b0 [(3, 3)])
+
+-- | After a successful move, belt cells advance one step.
+conveyor_shifts_after_move :: Assertion
+conveyor_shifts_after_move = do
+  let belt = [(5, 0), (5, 1), (5, 2)]
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (3, 3)
+          (mkGem C1)
+      -- Distinct colors on belt so we can see the rotation
+      board1 =
+        setCell
+          (setCell
+             (setCell board0 (5, 0) (mkGem C1))
+             (5, 1)
+             (mkGem C2))
+          (5, 2)
+          (mkGem C3)
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 1 }  -- terminal => no shuffle
+      gs0 =
+        (newGameAtLevel 0 cfg 3)
+          { gsBoard = board1
+          , gsBelts = [belt]
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      before = map (getCell (gsBoard gs0)) belt
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  assertBool "move ok" $
+    case out of
+      NoMatch -> False
+      InvalidSwap -> False
+      _ -> True
+  assertBool "not shuffled" (not (gsShuffled gs1))
+  let afterCells = map (getCell (gsBoard gs1)) belt
+      expected = shiftBelt board1 belt
+      expectCells = map (getCell expected) belt
+  assertEqual "belt advanced one step" expectCells afterCells
+  assertEqual "multiset kept" (sort before) (sort afterCells)
+
+-- | Belt shift can assemble a 3-match that then clears.
+conveyor_can_create_match :: Assertion
+conveyor_can_create_match = do
+  -- Belt moves C1 into a row of two C1s to form a triple.
+  -- Row 4: C1, C1, C2 at (4,0)(4,1)(4,2). Belt on col2: (6,2)->(5,2)->(4,2)
+  -- Put C1 at (5,2); after shift forward on [(6,2),(5,2),(4,2)]:
+  --   new(6,2)=old(4,2)=C2, new(5,2)=old(6,2)=?, new(4,2)=old(5,2)=C1
+  -- So we need old(5,2)=C1 to land on (4,2), making (4,0)(4,1)(4,2) all C1.
+  let belt = [(6, 2), (5, 2), (4, 2)]
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (4, 0) (mkGem C1))
+                   (4, 1)
+                   (mkGem C1))
+                (4, 2)
+                (mkGem C2))
+             (5, 2)
+             (mkGem C1))
+          (6, 2)
+          (mkGem C3)
+  assertBool "no match yet" (not (hasAnyMatch board0))
+  let shifted = shiftBelt board0 belt
+  assertEqual "C1 arrived" C1 (cellColor (getCell shifted (4, 2)))
+  assertBool "match formed" (hasAnyMatch shifted)
+  -- Via trySwap: match elsewhere + belt creates extra clear
+  let boardM =
+        setCell
+          (setCell
+             (setCell
+                (setCell board0 (0, 0) (mkGem C4))
+                (0, 1)
+                (mkGem C4))
+             (0, 2)
+             (mkGem C5))
+          (0, 3)
+          (mkGem C4)
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+      gs0 =
+        (newGameAtLevel 0 cfg 9)
+          { gsBoard = boardM
+          , gsBelts = [belt]
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (0, 2) (0, 3) gs0
+  case out of
+    NoMatch -> assertFailure "expected match"
+    InvalidSwap -> assertFailure "expected valid"
+    MoveApplied g -> assertBool ("belt cascade scored extra, got " ++ show g) (g >= 60)
+    _ -> pure ()
+  assertBool "stable after" (not (hasAnyMatch (gsBoard gs1)))

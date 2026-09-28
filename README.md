@@ -25,6 +25,7 @@ Need `libSDL2` at runtime (`libsdl2-2.0-0`). Headless: `xvfb-run -a stack exec m
 - **Line×Bomb (3×3 cross), Rainbow×Line, Bomb×Bomb (5×5), Line×Line (row+col)
 - **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
 - **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI
+- **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
 - **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
 - **Goals**: score / single collect / multi-color collect / clear stones
 - **Daily challenge** (`D`): date-seeded board + rotating goal; **star rating** on clear
@@ -74,7 +75,7 @@ Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+re
 | 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
 | 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
 | 每日挑战 / 三星 | ✅ Daily + starRating |
-| 传送带 | ⏳ 下一步 |
+| 传送带 | ✅ `Belt` 步末循环移位，可触发新消 |
 | 道具（锤子等） | ⏳ 计划中 |
 
 ## Build & test
@@ -86,9 +87,9 @@ stack build && stack test && stack exec match3-sdl
 ## Layout
 
 ```
-src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown
+src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor
 app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (40 named cases)
+test/Spec.hs tasty (43 named cases)
 ```
 
 Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.

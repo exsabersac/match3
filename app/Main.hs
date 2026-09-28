@@ -1115,6 +1115,29 @@ drawStatic ren app board yOff = do
           _ -> pure ()
     )
     [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+  -- Conveyor belt path markers (teal chevrons)
+  mapM_ (drawBelt ren yOff) (gsBelts (appGame app))
+
+drawBelt :: Renderer -> CInt -> [Pos] -> IO ()
+drawBelt _ _ [] = pure ()
+drawBelt ren yOff belt = do
+  rendererDrawColor ren $= V4 40 200 180 220
+  let pairs = zip belt (tail belt ++ [head belt])
+  mapM_
+    ( \(a, b) -> do
+        let (x0, y0) = cellOrigin a
+            (x1, y1) = cellOrigin b
+            y0' = y0 + yOff
+            y1' = y1 + yOff
+            cx0 = x0 + cellPx `div` 2
+            cy0 = y0' + cellPx `div` 2
+            cx1 = x1 + cellPx `div` 2
+            cy1 = y1' + cellPx `div` 2
+        drawLine ren (P (V2 cx0 cy0)) (P (V2 cx1 cy1))
+        -- small chevron near destination
+        fillRect ren (Just (Rectangle (P (V2 (cx1 - 3) (cy1 - 3))) (V2 6 6)))
+    )
+    pairs
 
 drawSwap :: Renderer -> App -> Board -> Pos -> Pos -> Int -> IO ()
 drawSwap ren app board p1 p2 frame = do

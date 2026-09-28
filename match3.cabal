@@ -34,6 +34,7 @@ library
       Match3.Ice
       Match3.Daily
       Match3.Countdown
+      Match3.Conveyor
   other-modules:
       Paths_match3
   autogen-modules:

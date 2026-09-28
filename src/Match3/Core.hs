@@ -20,6 +20,9 @@ module Match3.Core
   , explodeRadius
   , explodeSeedsFor
   , resolveCountdowns
+  , Belt
+  , shiftBelt
+  , shiftBelts
   , isGem
   , cellColor
   , cellKind
@@ -111,6 +114,7 @@ import Match3.Obstacles
   , chipAdjacentStones
   )
 import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
+import Match3.Conveyor (Belt, shiftBelt, shiftBelts)
 import Match3.Countdown
   ( spawnCountdown
   , tickCountdowns

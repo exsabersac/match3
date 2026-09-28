@@ -30,6 +30,7 @@ import Match3.Board
   , swapCells
   )
 import Match3.Obstacles (swapBlockedByStone)
+import Match3.Conveyor (Belt, shiftBelts)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
 import Match3.Types
@@ -50,6 +51,7 @@ data GameState = GameState
   , gsHint          :: Maybe (Pos, Pos)
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
   , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
+  , gsBelts         :: [Belt] -- conveyor paths (开心消消乐传送带)
   } deriving (Show)
 
 instance Eq GameState where
@@ -63,12 +65,18 @@ instance Eq GameState where
       && gsStonesCleared a == gsStonesCleared b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
+      && gsBelts a == gsBelts b
 
 snapshot :: GameState -> GameState
 snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
 
 newGame :: GameConfig -> Int -> GameState
 newGame = newGameAtLevel 0
+
+-- | Demo conveyor on 碎石 (level 7): top-row cycle.
+levelBelts :: Int -> [Belt]
+levelBelts 7 = [[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (2, 5), (2, 4), (2, 3), (2, 2), (2, 1)]]
+levelBelts _ = []
 
 newGameAtLevel :: Int -> GameConfig -> Int -> GameState
 newGameAtLevel li cfg seed =
@@ -89,6 +97,7 @@ newGameAtLevel li cfg seed =
        , gsHint = Nothing
        , gsCombo = 0
        , gsShuffled = False
+       , gsBelts = levelBelts li
        }
 
 restart :: GameConfig -> Int -> GameState
@@ -172,13 +181,21 @@ trySwap p1 p2 gs
                          in runCascadeScoredFromSeeds (Just p2) seeds (gsGen gs) swapped
                        else runCascadeScored (Just p2) (gsGen gs) swapped
                  -- Countdown bombs: tick after move; zeros explode 3×3
-                 (board1, cleared1, gained1, combo1, tallies1, stones1, g') =
+                 (boardCd, cleared1, gained1, combo1, tallies1, stones1, g1') =
                    resolveCountdowns g0' board0'
-                 gained = gained0 + gained1
-                 combo = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
-                 tallies = mergeTallies tallies0 tallies1
-                 stonesHit = stones0 + stones1
-                 _cleared = cleared0 + cleared1
+                 -- Conveyor belts: shift then cascade if new matches
+                 boardBelt = shiftBelts boardCd (gsBelts gs)
+                 (board1, cleared2, gained2, combo2, tallies2, stones2, g') =
+                   if null (gsBelts gs)
+                     then (boardCd, 0, 0, 0, zip allColors (repeat 0), 0, g1')
+                     else runCascadeScored Nothing g1' boardBelt
+                 gained = gained0 + gained1 + gained2
+                 combo =
+                   let c1 = max combo0 (if cleared1 > 0 then combo0 + combo1 else combo0)
+                   in max c1 (if cleared2 > 0 then c1 + combo2 else c1)
+                 tallies = mergeTallies (mergeTallies tallies0 tallies1) tallies2
+                 stonesHit = stones0 + stones1 + stones2
+                 _cleared = cleared0 + cleared1 + cleared2
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalCollectMulti _ -> 0

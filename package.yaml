@@ -40,6 +40,7 @@ library:
   - Match3.Ice
   - Match3.Daily
   - Match3.Countdown
+  - Match3.Conveyor
 
 executables:
   match3-sdl:

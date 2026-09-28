@@ -9,8 +9,10 @@ module Match3.Ice
 import Data.List (nub)
 import Match3.Types
 
--- | Chip one ice layer on each seed.
--- ice>1: decrement, keep gem; ice==1: last layer + gem clear; ice==0: clear.
+-- | Chip one ice layer on each seed / handle direct-hit peel locks.
+-- ice>1: decrement, keep gem; ice==1: last layer + gem clear.
+-- ice==0 + Chain/Curtain: peel one lock layer (gem stays) — hammer/cross/line.
+-- ice==0 bare/Freeze: gem clears. Stone: chip one layer (like Safe).
 chipIceOnClear :: Board -> [Pos] -> (Board, [Pos])
 chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
   where
@@ -19,11 +21,25 @@ chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
         Gem col kind n o
           | n > 1 ->
               (set board p (Gem col kind (n - 1) o), clearable)
-          | otherwise ->
-              -- n == 1 (last ice) or n == 0: gem clears
+          | n == 1 ->
+              -- last ice: gem clears (overlays go with the cell)
               (board, p : clearable)
-        Stone _ ->
-          (board, p : clearable)
+          | Just (Chain layers) <- o ->
+              if layers <= 1
+                then (set board p (Gem col kind 0 Nothing), clearable)
+                else (set board p (Gem col kind 0 (Just (Chain (layers - 1)))), clearable)
+          | Just (Curtain layers) <- o ->
+              if layers <= 1
+                then (set board p (Gem col kind 0 Nothing), clearable)
+                else (set board p (Gem col kind 0 (Just (Curtain (layers - 1)))), clearable)
+          | otherwise ->
+              -- bare gem / Freeze / Fog / Steam / Grass…: clear
+              (board, p : clearable)
+        Stone n ->
+          -- Direct hit chips one stone layer (hammer/cross); last layer removes
+          if n <= 1
+            then (board, p : clearable)
+            else (set board p (mkStoneLayers (n - 1)), clearable)
         Chest _ ->
           (board, p : clearable)
         Honey _ ->

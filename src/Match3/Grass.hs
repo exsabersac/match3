@@ -68,14 +68,19 @@ ortho :: Pos -> [Pos]
 ortho (r, c) =
   filter inBoard [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
 
--- | Strip Grass/Vine/Choco on any seed cell that still holds a gem (match-above clears;
--- clear-hit vines/choco are removed so they will not spread).
+-- | Strip Grass/Vine/Choco on seed cells (match-above clears; so they will not spread).
+-- Does NOT strip peel-locks (Chain/Curtain/Fog/Freeze/Steam) — those peel via
+-- chipAdjacent* or direct-hit peel in chipIceOnClear (hammer/cross/line).
 clearOverlaysOn :: Board -> [Pos] -> Board
 clearOverlaysOn b seeds = foldl strip b (nub seeds)
   where
     strip board p =
       case at board p of
-        Gem col kind ice (Just _) ->
+        Gem col kind ice (Just Grass) ->
+          setAt board p (Gem col kind ice Nothing)
+        Gem col kind ice (Just Vine) ->
+          setAt board p (Gem col kind ice Nothing)
+        Gem col kind ice (Just Choco) ->
           setAt board p (Gem col kind ice Nothing)
         _ -> board
 

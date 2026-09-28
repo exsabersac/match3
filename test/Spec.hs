@@ -156,6 +156,14 @@ tests =
     , testCase "safe_bottom_cookie_collected" safe_bottom_cookie_collected
     , testCase "cookie_bottom_portal_collects" cookie_bottom_portal_collects
     , testCase "countdown_explode_keeps_ufo_portals" countdown_explode_keeps_ufo_portals
+    , testCase "hammer_peels_chain_not_gem" hammer_peels_chain_not_gem
+    , testCase "hammer_peels_curtain_not_gem" hammer_peels_curtain_not_gem
+    , testCase "hammer_chips_stone_layer" hammer_chips_stone_layer
+    , testCase "cross_peels_chain_on_seed" cross_peels_chain_on_seed
+    , testCase "freeswap_blocked_by_stone_chain" freeswap_blocked_by_stone_chain
+    , testCase "daily_obstacle_goal_spawns_decor" daily_obstacle_goal_spawns_decor
+    , testCase "undo_restores_carry_moves" undo_restores_carry_moves
+    , testCase "shuffle_preserves_goal_progress" shuffle_preserves_goal_progress
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -4320,3 +4328,173 @@ release_core_invariants_green = do
               Won _ -> True
               Lost _ -> True
               LevelClear _ _ -> True
+
+
+--------------------------------------------------------------------------------
+-- Booster × Stone/Chain/Curtain + Daily décor + Undo/Shuffle progress
+--------------------------------------------------------------------------------
+
+-- | Hammer on a chained gem peels one chain layer; gem stays (not cleared).
+hammer_peels_chain_not_gem :: Assertion
+hammer_peels_chain_not_gem = do
+  let board0 = setCell stableBoard (3, 3) (mkChainGem C2 2)
+      gs0 =
+        (newGame defaultConfig 3)
+          { gsBoard = board0
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          }
+      (gs1, out) = useHammer (3, 3) gs0
+  case out of
+    InvalidSwap -> assertFailure "hammer should apply"
+    NoMatch -> assertFailure "hammer should apply"
+    _ -> pure ()
+  let cell = getCell (gsBoard gs1) (3, 3)
+  assertBool "gem remains" (isGem cell)
+  assertBool "chain peeled to 1" (hasChain cell && chainLayers cell == 1)
+  assertEqual "color kept" C2 (cellColor cell)
+  -- second hammer unlocks fully (gem may reshuffle if board was stuck)
+  let (gs2, _) = useHammer (3, 3) gs1 { gsOver = Nothing }
+      cell2 = getCell (gsBoard gs2) (3, 3)
+  assertBool "chain fully peeled" (not (hasChain cell2))
+
+-- | Hammer on curtain peels one layer; gem stays.
+hammer_peels_curtain_not_gem :: Assertion
+hammer_peels_curtain_not_gem = do
+  let board0 = setCell stableBoard (2, 4) (mkCurtainGem C3 2)
+      gs0 =
+        (newGame defaultConfig 4)
+          { gsBoard = board0
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, _) = useHammer (2, 4) gs0
+      cell = getCell (gsBoard gs1) (2, 4)
+  assertBool "gem remains" (isGem cell)
+  assertBool "curtain -> 1" (hasCurtain cell && curtainLayers cell == 1)
+
+-- | Hammer on multi-layer stone chips one layer (does not nuke all).
+hammer_chips_stone_layer :: Assertion
+hammer_chips_stone_layer = do
+  let board0 = setCell stableBoard (5, 5) (mkStoneLayers 3)
+      gs0 =
+        (newGame defaultConfig 5)
+          { gsBoard = board0
+          , gsHammers = 2
+          , gsGoal = GoalClearStone 8
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, _) = useHammer (5, 5) gs0
+      cell = getCell (gsBoard gs1) (5, 5)
+  assertBool "still stone" (isStone cell)
+  assertEqual "3 -> 2" (2 :: Int) (stoneLayers cell)
+  assertEqual "not counted until last layer" (0 :: Int) (gsStonesCleared gs1)
+  -- chip down to 1 then clear
+  let (gs2, _) = useHammer (5, 5) gs1 { gsHammers = 2, gsOver = Nothing }
+  assertEqual "2 -> 1" (1 :: Int) (stoneLayers (getCell (gsBoard gs2) (5, 5)))
+  let (gs3, _) = useHammer (5, 5) gs2 { gsHammers = 2, gsOver = Nothing }
+  assertBool "removed" (not (isStone (getCell (gsBoard gs3) (5, 5))))
+  assertEqual "cleared counted" (1 :: Int) (gsStonesCleared gs3)
+
+-- | Cross clear seed on a chain cell peels (does not clear gem).
+cross_peels_chain_on_seed :: Assertion
+cross_peels_chain_on_seed = do
+  let board0 = setCell stableBoard (3, 3) (mkChainGem C1 1)
+      gs0 =
+        (newGame defaultConfig 6)
+          { gsBoard = board0
+          , gsCrossClears = 1
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          }
+      (gs1, out) = useCrossClear (3, 3) gs0
+  case out of
+    InvalidSwap -> assertFailure "cross should apply"
+    _ -> pure ()
+  let cell = getCell (gsBoard gs1) (3, 3)
+  -- Chain 1 peeled → unlocked gem; cross also clears other row/col gems so
+  -- this cell may refill — assert either unlocked gem or a refill cell, not chain.
+  assertBool "chain gone from seed cell" (not (hasChain cell))
+
+-- | Free-swap refuses stone and chained endpoints (same gate as trySwap).
+freeswap_blocked_by_stone_chain :: Assertion
+freeswap_blocked_by_stone_chain = do
+  let bStone = setCell stableBoard (1, 1) mkStone
+      bChain = setCell stableBoard (2, 2) (mkChainGem C2 1)
+      gsS =
+        (newGame defaultConfig 7)
+          { gsBoard = bStone, gsFreeSwaps = 1, gsOver = Nothing, gsBelts = [], gsUfos = [] }
+      gsC =
+        (newGame defaultConfig 8)
+          { gsBoard = bChain, gsFreeSwaps = 1, gsOver = Nothing, gsBelts = [], gsUfos = [] }
+  let (_, outS) = useFreeSwap (1, 1) (1, 3) gsS
+      (_, outC) = useFreeSwap (2, 2) (2, 4) gsC
+  assertEqual "stone blocks free-swap" NoMatch outS
+  assertEqual "chain blocks free-swap" NoMatch outC
+  assertEqual "charge kept (stone)" (1 :: Int) (gsFreeSwaps (fst (useFreeSwap (1, 1) (1, 3) gsS)))
+  assertEqual "charge kept (chain)" (1 :: Int) (gsFreeSwaps (fst (useFreeSwap (2, 2) (2, 4) gsC)))
+
+-- | Daily obstacle goals (li=0 bare décor) still spawn enough entities.
+daily_obstacle_goal_spawns_decor :: Assertion
+daily_obstacle_goal_spawns_decor = do
+  let check keep goal tag = do
+        let gs = newGame (GameConfig 26 goal) 20260903
+            n =
+              length
+                [ ()
+                | r <- [0 .. boardSize - 1]
+                , c <- [0 .. boardSize - 1]
+                , keep (getCell (gsBoard gs) (r, c))
+                ]
+        assertBool (tag ++ " decor count=" ++ show n) (n >= 4)
+  check isStone (GoalClearStone 6) "stone"
+  check isHoney (GoalHoney 6) "honey"
+  check isChest (GoalChest 5) "chest"
+  check isCake (GoalCake 5) "cake"
+  check isSafe (GoalSafe 4) "safe"
+  check isBalloon (GoalBalloon 6) "balloon"
+
+-- | Undo after a move restores leftover moves (carry bank is only on nextLevel).
+undo_restores_carry_moves :: Assertion
+undo_restores_carry_moves = do
+  let gs0 =
+        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 42)
+          { gsMoves = 7 }
+  case findMatchPair (gsBoard gs0) of
+    Nothing -> assertFailure "need match"
+    Just (p1, p2) -> do
+      let (gs1, _) = trySwap p1 p2 gs0
+      assertEqual "spent one" (6 :: Int) (gsMoves gs1)
+      case undoMove gs1 of
+        Nothing -> assertFailure "undo"
+        Just gsU -> do
+          assertEqual "moves restored" (7 :: Int) (gsMoves gsU)
+          -- nextLevel carry still caps at 3 from leftover
+          let gsClear = gsU { gsOver = Just (LevelClear 10 1), gsMoves = 7 }
+              gsNext = nextLevel gsClear 99
+              base = lvlMoves (allLevels !! 1)
+          assertEqual "carry cap 3" (base + 3) (gsMoves gsNext)
+
+-- | Shuffle / ensurePlayable must not wipe goal tallies.
+shuffle_preserves_goal_progress :: Assertion
+shuffle_preserves_goal_progress = do
+  let gs0 =
+        (newGameAtLevel 7 (GameConfig 20 (GoalClearStone 8)) 33)
+          { gsStonesCleared = 3
+          , gsCollected = 3
+          , gsScore = 120
+          , gsOver = Nothing
+          }
+      gs1 = shuffleGame gs0
+  assertEqual "stones tally kept" (3 :: Int) (gsStonesCleared gs1)
+  assertEqual "collected kept" (3 :: Int) (gsCollected gs1)
+  assertEqual "score kept" (120 :: Int) (gsScore gs1)
+  assertEqual "goal kept" (GoalClearStone 8) (gsGoal gs1)

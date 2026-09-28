@@ -395,11 +395,50 @@ overlayAt b ov = foldl step b
         Gem col kind ice _ -> setCell board p (Gem col kind ice (Just ov))
         _ -> board
 
+-- | Daily (and any bare board) must still be completable: if the goal needs
+-- board entities but level décor did not place enough, seed a minimal set.
+ensureGoalDecor :: LevelGoal -> Board -> Board
+ensureGoalDecor goal b =
+  case goal of
+    GoalClearStone n | countKind isStone b < n ->
+      place n mkStone
+        [(4, 1), (4, 3), (4, 5), (5, 2), (5, 4), (6, 1), (6, 3), (6, 5)]
+    GoalHoney n | countKind isHoney b < n ->
+      place n (mkHoneyLayers 1)
+        [(2, 2), (2, 5), (4, 1), (4, 3), (4, 5), (6, 2), (6, 5)]
+    GoalChest n | countKind isChest b < n ->
+      place n (mkChestLayers 1)
+        [(2, 2), (2, 5), (4, 1), (4, 3), (4, 5), (6, 2), (6, 5)]
+    GoalCake n | countKind isCake b < n ->
+      place n (mkCakeLayers 1)
+        [(2, 2), (2, 5), (4, 1), (4, 3), (4, 5), (6, 2), (6, 5)]
+    GoalSafe n | countKind isSafe b < n ->
+      place n (mkSafeLayers 1)
+        [(2, 2), (2, 5), (4, 1), (4, 3), (4, 5), (6, 2), (6, 5)]
+    GoalBalloon n | countKind isBalloon b < n ->
+      foldl
+        (\board (pos, col) -> setCell board pos (mkBalloon col))
+        b
+        (take (max n 6)
+           [ ((2, 2), C1), ((2, 5), C3), ((4, 1), C2), ((4, 3), C1)
+           , ((4, 5), C4), ((6, 2), C3), ((6, 5), C5) ])
+    _ -> b
+  where
+    countKind keep board =
+      length
+        [ ()
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , keep (getCell board (r, c))
+        ]
+    place n cell slots =
+      foldl (\board pos -> setCell board pos cell) b (take (max n 6) slots)
+
 newGameAtLevel :: Int -> GameConfig -> Int -> GameState
 newGameAtLevel li cfg seed =
   let g0 = mkStdGen seed
       (board0, g1) = randomPlayableBoard g0
-      board = decorateLevel li board0
+      board = ensureGoalDecor (cfgGoal cfg) (decorateLevel li board0)
       gs0 =
         GameState
           { gsBoard = board

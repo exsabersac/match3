@@ -49,6 +49,7 @@ tests =
     , testCase "ice_layer_chips_then_clears" ice_layer_chips_then_clears
     , testCase "daily_seed_stable" daily_seed_stable
     , testCase "star_rating_tiers" star_rating_tiers
+    , testCase "special_combo_rainbow_line" special_combo_rainbow_line
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -976,4 +977,29 @@ star_rating_tiers = do
   assertEqual "2 star" (2 :: Int) (starRating 30 8)
   assertEqual "1 star" (1 :: Int) (starRating 30 2)
   assertEqual "zero left" (1 :: Int) (starRating 30 0)
+
+-- | Rainbow × Line clears all gems of the line's color.
+special_combo_rainbow_line :: Assertion
+special_combo_rainbow_line = do
+  let board =
+        setCell
+          (setCell stableBoard (5, 2) (Gem C2 Rainbow 0))
+          (5, 3)
+          (Gem C4 LineV 0)
+  assertBool "rainbow+line" (isRainbowLineCombo board (5, 2) (5, 3))
+  assertBool "special" (isSpecialCombo board (5, 2) (5, 3))
+  let gs0 =
+        (newGame defaultConfig 4)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (5, 2) (5, 3) gs0
+  case out of
+    NoMatch -> assertFailure "must apply"
+    InvalidSwap -> assertFailure "must be valid"
+    MoveApplied g -> assertBool ("scored " ++ show g) (g >= 40)
+    _ -> pure ()
+  assertEqual "moves" (gsMoves gs0 - 1) (gsMoves gs1)
 

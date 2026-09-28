@@ -1,12 +1,13 @@
 -- | Special × special combos (开心消消乐 / Candy Crush style).
--- Line + Bomb: clear 3 full rows and 3 full columns centered on the bomb.
 module Match3.Combos
   ( isLineBombCombo
+  , isRainbowLineCombo
   , isSpecialCombo
   , comboClearSeeds
   ) where
 
 import Data.List (nub)
+import Match3.Rainbow (rainbowClearSeeds)
 import Match3.Types
 
 at :: Board -> Pos -> Cell
@@ -17,32 +18,51 @@ isLine LineH = True
 isLine LineV = True
 isLine _ = False
 
-isBomb :: GemKind -> Bool
-isBomb Bomb = True
-isBomb _ = False
+isBombK :: GemKind -> Bool
+isBombK Bomb = True
+isBombK _ = False
 
--- | Adjacent Line (H/V) + Bomb pair (order-independent), pre-swap board.
+isRainbowK :: GemKind -> Bool
+isRainbowK Rainbow = True
+isRainbowK _ = False
+
 isLineBombCombo :: Board -> Pos -> Pos -> Bool
 isLineBombCombo b p1 p2 =
   case (at b p1, at b p2) of
     (Gem _ k1 _, Gem _ k2 _) ->
-      (isLine k1 && isBomb k2) || (isBomb k1 && isLine k2)
+      (isLine k1 && isBombK k2) || (isBombK k1 && isLine k2)
     _ -> False
 
--- | Any special×special combo we currently support (extend later).
-isSpecialCombo :: Board -> Pos -> Pos -> Bool
-isSpecialCombo = isLineBombCombo
-
--- | On the *already swapped* board, seeds for a Line+Bomb combo.
--- Centers the 3×3 line cross on the Bomb's post-swap position.
-comboClearSeeds :: Board -> Pos -> Pos -> [Pos]
-comboClearSeeds b p1 p2 =
+-- | Rainbow + Line: clear all of line's color (rainbow effect using line color).
+isRainbowLineCombo :: Board -> Pos -> Pos -> Bool
+isRainbowLineCombo b p1 p2 =
   case (at b p1, at b p2) of
-    (Gem _ Bomb _, _) -> lineBombCross b p1
-    (_, Gem _ Bomb _) -> lineBombCross b p2
-    _ -> nub (lineBombCross b p1 ++ lineBombCross b p2)
+    (Gem _ k1 _, Gem _ k2 _) ->
+      (isRainbowK k1 && isLine k2) || (isLine k1 && isRainbowK k2)
+    _ -> False
 
--- | Three full rows and three full columns centered at (r,c).
+isSpecialCombo :: Board -> Pos -> Pos -> Bool
+isSpecialCombo b p1 p2 =
+  isLineBombCombo b p1 p2 || isRainbowLineCombo b p1 p2
+
+comboClearSeeds :: Board -> Pos -> Pos -> [Pos]
+comboClearSeeds b p1 p2
+  | isLineBombCombo b p1 p2 || bombAfter = lineBombSeeds
+  | isRainbowLineCombo b p1 p2 = rainbowClearSeeds b p1 p2
+  | otherwise = []
+  where
+    -- After swap detection uses pre-swap board in is*; seeds use post-swap board `b`.
+    bombAfter =
+      case (at b p1, at b p2) of
+        (Gem _ Bomb _, Gem _ k _) | isLine k -> True
+        (Gem _ k _, Gem _ Bomb _) | isLine k -> True
+        _ -> False
+    lineBombSeeds =
+      case (at b p1, at b p2) of
+        (Gem _ Bomb _, _) -> lineBombCross b p1
+        (_, Gem _ Bomb _) -> lineBombCross b p2
+        _ -> nub (lineBombCross b p1 ++ lineBombCross b p2)
+
 lineBombCross :: Board -> Pos -> [Pos]
 lineBombCross _ (r, c) =
   nub $

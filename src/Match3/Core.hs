@@ -1,0 +1,51 @@
+module Match3.Core
+  ( Color(..)
+  , GemKind(..)
+  , Cell(..)
+  , mkGem
+  , Pos
+  , Board
+  , boardSize
+  , numColors
+  , allColors
+  , Score
+  , MovesLeft
+  , TargetScore
+  , Outcome(..)
+  , GameConfig(..)
+  , defaultConfig
+  , Level(..)
+  , allLevels
+  , levelConfig
+  , getCell
+  , setCell
+  , swapCells
+  , inBounds
+  , adjacent
+  , findMatches
+  , findMatchRuns
+  , hasAnyMatch
+  , stepCascade
+  , runCascade
+  , runCascadeAt
+  , randomBoard
+  , randomStableBoard
+  , scoreForCleared
+  , findHint
+  , MatchRun(..)
+  , GameState(..)
+  , newGame
+  , newGameAtLevel
+  , trySwap
+  , runMove
+  , restart
+  , restartLevel
+  , checkOutcome
+  , undoMove
+  , applyHint
+  , nextLevel
+  ) where
+
+import Match3.Board
+import Match3.Game
+import Match3.Types

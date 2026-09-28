@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main (main) where
 
+import Control.Monad (when)
 import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Match3.Board (applyGravity, clearMatches, expandSpecials, refill)
@@ -204,6 +205,7 @@ tests =
     , testCase "cookie_immune_to_direct_clear" cookie_immune_to_direct_clear
     , testCase "belt_delivers_cookie_bottom_drains" belt_delivers_cookie_bottom_drains
     , testCase "portal_teleports_flip" portal_teleports_flip
+    , testCase "portal_endpoints_not_immortal_blocked" portal_endpoints_not_immortal_blocked
     , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
     , testCase "carpet_covers_on_cookie_vacate" carpet_covers_on_cookie_vacate
     , testCase "carpet_covers_on_safe_open" carpet_covers_on_safe_open
@@ -6488,6 +6490,62 @@ portal_teleports_flip = do
   case (mbC' !! 6) !! 6 of
     Just (Countdown C3 2) -> pure ()
     other -> assertFailure ("expected Countdown at exit, got " ++ show other)
+
+-- | Campaign portal endpoints must not host immortal blockers (Bottle / Maker /
+-- MagicHat / Snail). Those never become holes and are not portal-transferable,
+-- so a portal pair with either end occupied forever is dead décor (终章 regression:
+-- Bottle was seeded on portal A at (0,3)).
+portal_endpoints_not_immortal_blocked :: Assertion
+portal_endpoints_not_immortal_blocked = do
+  let portalLevels =
+        [ (li, gs)
+        | li <- [0 .. length allLevels - 1]
+        , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) 42
+        , not (null (gsPortals gs))
+        ]
+  assertBool "campaign has portal levels" (not (null portalLevels))
+  mapM_
+    ( \(li, gs) -> do
+        let endpoints = nub (concatMap (\(a, b) -> [a, b]) (gsPortals gs))
+            immortal c =
+              isBottle c || isMaker c || isMagicHat c || isSnail c
+        mapM_
+          ( \p -> do
+              let cell = getCell (gsBoard gs) p
+              assertBool
+                ( "L"
+                    ++ show li
+                    ++ " portal "
+                    ++ show p
+                    ++ " immortal blocker: "
+                    ++ show cell
+                )
+                (not (immortal cell))
+          )
+          endpoints
+        -- Finale: portal A must be able to teleport a gem into an empty B
+        when (li == 27) $ do
+          assertBool "finale bottle relocated off portal" (isBottle (getCell (gsBoard gs) (1, 7)))
+          assertBool "finale portal A not bottle" (not (isBottle (getCell (gsBoard gs) (0, 3))))
+          let portals = gsPortals gs
+              setMBoard b (r, c) v =
+                take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
+                where
+                  row = b !! r
+              fill = Just (mkGem C5)
+              mb0 = replicate boardSize (replicate boardSize fill)
+              mb1 = setMBoard mb0 (0, 3) (Just (mkGem C1))
+              mb2 = setMBoard mb1 (7, 4) Nothing
+              mb3 = applyPortalTeleports portals mb2
+          assertEqual "finale A emptied" Nothing ((mb3 !! 0) !! 3)
+          case (mb3 !! 7) !! 4 of
+            Just cell -> do
+              assertBool "finale B got gem" (isGem cell)
+              assertEqual "finale teleported C1" C1 (cellColor cell)
+            Nothing -> assertFailure "finale expected gem at portal B"
+    )
+    portalLevels
+
 
 -- | Bare GoalCarpet (no levelCarpets) still gets open floor tiles (UFO décor parity).
 goal_carpet_seeds_open_tiles :: Assertion

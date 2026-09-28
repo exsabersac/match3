@@ -301,7 +301,9 @@ decorateLevel 27 b =
               [(6, 4)]
       b3p = setCell b3s (7, 3) (mkFlip C1 C3)
       b3q = setCell b3p (5, 0) mkSurprise
-      b3r = setCell b3q (0, 3) (mkBottle C1)
+      -- Bottle off portal entrance (0,3): Bottle never clears and is not
+      -- portal-transferable, so sitting on a portal endpoint permanently kills the pair.
+      b3r = setCell b3q (1, 7) (mkBottle C1)
       b4 = overlayAt b3r Vine [(6, 3)]
       b5 =
         foldl (\board (p, dr, dc) -> setCell board p (mkSnail dr dc))

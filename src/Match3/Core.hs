@@ -73,6 +73,9 @@ module Match3.Core
   , isRainbowSwap
   , rainbowClearSeeds
   , runCascadeScoredFromSeeds
+  , isLineBombCombo
+  , isSpecialCombo
+  , comboClearSeeds
   ) where
 
 import Match3.Board
@@ -83,6 +86,11 @@ import Match3.Obstacles
   , stonesAdjacentTo
   , withAdjacentStones
   , chipAdjacentStones
+  )
+import Match3.Combos
+  ( isLineBombCombo
+  , isSpecialCombo
+  , comboClearSeeds
   )
 import Match3.Rainbow
   ( isRainbow

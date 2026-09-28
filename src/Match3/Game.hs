@@ -29,6 +29,7 @@ import Match3.Board
   , swapCells
   )
 import Match3.Obstacles (swapBlockedByStone)
+import Match3.Combos (isSpecialCombo, comboClearSeeds)
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
 import Match3.Types
 import System.Random (StdGen, mkStdGen)
@@ -136,7 +137,8 @@ trySwap p1 p2 gs
       let board0 = gsBoard gs
           swapped = swapCells board0 p1 p2
           rainbow = isRainbowSwap board0 p1 p2
-      in if not rainbow && not (hasAnyMatch swapped)
+          specialCombo = isSpecialCombo board0 p1 p2
+      in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
              let (board1, _cleared, gained, combo, tallies, g') =
@@ -144,7 +146,11 @@ trySwap p1 p2 gs
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
                        in runCascadeScoredFromSeeds (Just p2) seeds (gsGen gs) swapped
-                     else runCascadeScored (Just p2) (gsGen gs) swapped
+                     else if specialCombo
+                       then
+                         let seeds = comboClearSeeds swapped p1 p2
+                         in runCascadeScoredFromSeeds (Just p2) seeds (gsGen gs) swapped
+                       else runCascadeScored (Just p2) (gsGen gs) swapped
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
                    GoalScore _ -> 0

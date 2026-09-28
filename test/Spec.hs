@@ -42,6 +42,7 @@ tests =
     , testCase "stone_layer_clears_at_zero" stone_layer_clears_at_zero
     , testCase "rainbow_clears_color" rainbow_clears_color
     , testCase "rainbow_swap_without_match" rainbow_swap_without_match
+    , testCase "special_combo_line_bomb" special_combo_line_bomb
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -752,4 +753,41 @@ stone_layer_clears_at_zero = do
   let (bEnd, dead2) = chipAdjacentStones bMid [(3, 1)]
   assertEqual "second hit removes" [(2, 1)] dead2
   assertBool "board still has stone until clear applied" (isStone (getCell bEnd (2, 1)))
+
+--------------------------------------------------------------------------------
+-- Special combos (Line × Bomb)
+--------------------------------------------------------------------------------
+
+-- | Swapping Line + Bomb clears a 3-row × 3-col cross without needing a 3-match.
+special_combo_line_bomb :: Assertion
+special_combo_line_bomb = do
+  let board =
+        setCell
+          (setCell stableBoard (4, 3) (Gem C1 LineH))
+          (4, 4)
+          (Gem C2 Bomb)
+  assertBool "is line+bomb combo" (isLineBombCombo board (4, 3) (4, 4))
+  assertBool "special combo" (isSpecialCombo board (4, 3) (4, 4))
+  -- Seeds on post-swap board: bomb moves to (4,3)
+  let swapped = swapCells board (4, 3) (4, 4)
+      seeds = comboClearSeeds swapped (4, 3) (4, 4)
+  -- At least 3 full rows + 3 full cols = 3*8 + 3*8 - 9 overlap = 39
+  assertBool ("big clear seeds " ++ show (length seeds)) (length seeds >= 39)
+  let gs0 =
+        (newGame defaultConfig 2)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 10
+          , gsScore = 0
+          }
+      (gs1, out) = trySwap (4, 3) (4, 4) gs0
+  case out of
+    NoMatch -> assertFailure "combo must not roll back"
+    InvalidSwap -> assertFailure "combo must be valid adjacent swap"
+    MoveApplied g -> assertBool ("big score, got " ++ show g) (g >= 39 * 10)
+    LevelClear s _ -> assertBool "scored" (s >= 0)
+    Won s -> assertBool "scored" (s >= 0)
+    Lost _ -> pure ()
+  assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
+  assertBool "board stable" (not (hasAnyMatch (gsBoard gs1)))
 

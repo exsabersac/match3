@@ -36,6 +36,7 @@ library:
   - Match3.Game
   - Match3.Obstacles
   - Match3.Rainbow
+  - Match3.Combos
 
 executables:
   match3-sdl:

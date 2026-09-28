@@ -32,6 +32,7 @@ module Match3.Board
 
 import Data.List (foldl', nub)
 import Match3.Obstacles (chipAdjacentStones)
+import Match3.Combos (isSpecialCombo)
 import Match3.Rainbow (isRainbow, isRainbowSwap)
 import Match3.Types
 import System.Random (RandomGen, randomR)
@@ -374,7 +375,7 @@ shufflePlayable = randomPlayableBoard
 -- | First adjacent swap that would create a match or activate a rainbow (for hint).
 findHint :: Board -> Maybe (Pos, Pos)
 findHint b =
-  case matchHints ++ rainbowHints of
+  case matchHints ++ rainbowHints ++ comboHints of
     (x : _) -> Just x
     [] -> Nothing
   where
@@ -398,4 +399,13 @@ findHint b =
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
       , isRainbowSwap b p1 p2
+      ]
+    comboHints =
+      [ (p1, p2)
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , let p1 = (r, c)
+      , p2 <- [(r, c + 1), (r + 1, c)]
+      , inBounds p2
+      , isSpecialCombo b p1 p2
       ]

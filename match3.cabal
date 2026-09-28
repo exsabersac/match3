@@ -30,6 +30,7 @@ library
       Match3.Game
       Match3.Obstacles
       Match3.Rainbow
+      Match3.Combos
   other-modules:
       Paths_match3
   autogen-modules:

@@ -72,7 +72,9 @@ ortho :: Pos -> [Pos]
 ortho (r, c) =
   filter inBoard [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
 
--- | Strip Grass/Vine/Choco on seed cells (match-above clears; so they will not spread).
+-- | Strip Grass/Vine/Choco on *true clear* cells (so they will not spread).
+-- Callers must pass iceFree/trueClears — not raw expand seeds — so soft hits
+-- (ice>1 chip / Flip / Chain·Curtain peel) keep on-cell overlays.
 -- Does NOT strip peel-locks (Chain/Curtain/Fog/Freeze/Steam) — those peel via
 -- chipAdjacent* or direct-hit peel in chipIceOnClear (hammer/cross/line).
 clearOverlaysOn :: Board -> [Pos] -> Board

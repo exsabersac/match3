@@ -191,6 +191,7 @@ tests =
     , testCase "line_blast_no_double_peel" line_blast_no_double_peel
     , testCase "blast_chips_layered_obstacles_once" blast_chips_layered_obstacles_once
     , testCase "hat_immune_to_direct_clear" hat_immune_to_direct_clear
+    , testCase "soft_hit_preserves_oncell_overlays" soft_hit_preserves_oncell_overlays
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5692,3 +5693,52 @@ hat_immune_to_direct_clear = do
   assertBool "hat present" (isMagicHat (getCell boardAdj (1, 1)))
   let boardTrig = triggerAdjacentHats boardAdj ms
   assertBool "hat still after adj trigger" (isMagicHat (getCell boardTrig (1, 1)))
+
+--------------------------------------------------------------------------------
+-- Soft-hit must keep on-cell Grass/Vine/Choco (ice>1 hammer / Line path)
+--------------------------------------------------------------------------------
+
+-- | ice>1 soft chip must not strip Grass/Vine/Choco on the same cell.
+-- Regression: clearOverlaysOn ran on raw expand seeds before chipIce, so a
+-- hammer (or Line blast path) on ice=2+Choco wiped the overlay while the gem
+-- stayed — breaking soft-hit / Choco-adjacent-only discipline.
+soft_hit_preserves_oncell_overlays :: Assertion
+soft_hit_preserves_oncell_overlays = do
+  let mkGs board =
+        (newGame defaultConfig 11)
+          { gsBoard = board
+          , gsHammers = 2
+          , gsOver = Nothing
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          , gsMoves = 20
+          , gsScore = 0
+          }
+  -- Hammer ice=2 + Choco: chip ice, Choco stays (no true clear / no adj clear).
+  let boardCh = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just Choco))
+      (gsCh, outCh) = useHammer (4, 4) (mkGs boardCh)
+  case outCh of
+    InvalidSwap -> assertFailure "hammer charges present"
+    _ -> pure ()
+  let cCh = getCell (gsBoard gsCh) (4, 4)
+  assertEqual "choco ice 2→1" (1 :: Int) (iceLayers cCh)
+  assertBool "on-cell choco survives soft hammer" (hasChoco cCh)
+  assertEqual "hammer spent" (1 :: Int) (gsHammers gsCh)
+  -- Hammer ice=2 + Grass / Vine: same soft-hit keep.
+  let boardGr = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just Grass))
+      (gsGr, _) = useHammer (4, 4) (mkGs boardGr)
+      cGr = getCell (gsBoard gsGr) (4, 4)
+  assertEqual "grass ice 2→1" (1 :: Int) (iceLayers cGr)
+  assertBool "on-cell grass survives soft hammer" (hasGrass cGr)
+  let boardVi = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just Vine))
+      (gsVi, _) = useHammer (4, 4) (mkGs boardVi)
+      cVi = getCell (gsBoard gsVi) (4, 4)
+  assertEqual "vine ice 2→1" (1 :: Int) (iceLayers cVi)
+  assertBool "on-cell vine survives soft hammer" (hasVine cVi)
+  -- Control: last ice (ice==1) + Choco clears the gem (refill has no Choco).
+  let boardLast = setCell stableBoard (4, 4) (Gem C2 Normal 1 (Just Choco))
+      (gsLast, _) = useHammer (4, 4) (mkGs boardLast)
+  assertBool "last-ice choco gone" (not (hasChoco (getCell (gsBoard gsLast) (4, 4))))
+  assertBool "last-ice layer gone" (iceLayers (getCell (gsBoard gsLast) (4, 4)) == 0)

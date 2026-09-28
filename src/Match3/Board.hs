@@ -275,26 +275,27 @@ clearMatchesDetailed prefer b =
   let runs = findMatchRuns b
       base = nub (concatMap runPos runs)
       expanded = expandSpecials b base
-      -- Match/special hits strip Grass/Vine/Choco on-cell (cleared cannot spread)
-      bStripped = clearOverlaysOn b expanded
-      -- Ice chips first: iced gems stay, ice-free positions may clear
-      (bIced, iceFree) = chipIceOnClear bStripped expanded
+      -- Ice chips first: iced gems stay, ice-free positions may clear.
+      -- Do NOT strip Grass/Vine/Choco on raw expand seeds — soft hits (ice>1 /
+      -- Flip / Chain peel) keep on-cell overlays (same discipline as adjacent).
+      (bIced, iceFree) = chipIceOnClear b expanded
       -- Surprise opens against match/special clears *before* adjacent peels, so a
       -- 3×3 explode contributes to trueClears (Bomb-parity for stone/fog/chain/…).
       -- Specials placed on former seed cells must stay out of clear holes.
       (bSurp, surpExplode0, surpSaved) = openSurprises bIced iceFree
       surpExpanded = expandSpecials bSurp surpExplode0
-      bSurpStrip = clearOverlaysOn bSurp surpExpanded
-      (bSurp2, surpFree) = chipIceOnClear bSurpStrip surpExpanded
+      (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
       iceFree' = filter (`notElem` surpSaved) iceFree
       -- Soft hits (ice chip, Flip) stay out of iceFree/surpFree — not true holes.
       trueClears = nub (iceFree' ++ surpFree)
+      -- Strip Grass/Vine/Choco only on true clear holes (cannot spread from ghosts)
+      bClearedOv = clearOverlaysOn bSurp2 trueClears
       -- Cells that already took a direct-hit peel/chip (expand → chipIce) must not
       -- also receive an ortho adjacent peel this wave (Chain2/Stone2/Safe2 on a
       -- Line/Bomb path were double-chipped via neighbor clears).
       directHits = nub (expanded ++ surpExpanded)
       -- Adjacent obstacle peels / charges against *all* true clear holes (once)
-      (bChipped, deadStones) = chipAdjacentStonesExcept bSurp2 trueClears directHits
+      (bChipped, deadStones) = chipAdjacentStonesExcept bClearedOv trueClears directHits
       (bChest, deadChests) = chipAdjacentChestsExcept bChipped trueClears directHits
       (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
       (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
@@ -554,18 +555,18 @@ clearFromSeedsDetailed prefer b seeds0 =
   let runs = findMatchRuns b
       base = nub seeds0
       expanded = expandSpecials b base
-      bStripped = clearOverlaysOn b expanded
-      (bIced, iceFree) = chipIceOnClear bStripped expanded
+      -- Soft-hit safe: chipIce before overlay strip (same as clearMatchesDetailed)
+      (bIced, iceFree) = chipIceOnClear b expanded
       -- Surprise before adjacent peels (same as clearMatchesDetailed / Bomb parity)
       (bSurp, surpExplode0, surpSaved) = openSurprises bIced iceFree
       surpExpanded = expandSpecials bSurp surpExplode0
-      bSurpStrip = clearOverlaysOn bSurp surpExpanded
-      (bSurp2, surpFree) = chipIceOnClear bSurpStrip surpExpanded
+      (bSurp2, surpFree) = chipIceOnClear bSurp surpExpanded
       iceFree' = filter (`notElem` surpSaved) iceFree
       trueClears = nub (iceFree' ++ surpFree)
+      bClearedOv = clearOverlaysOn bSurp2 trueClears
       -- Exclude direct-hit cells from adjacent peels (same as clearMatchesDetailed).
       directHits = nub (expanded ++ surpExpanded)
-      (bChipped, deadStones) = chipAdjacentStonesExcept bSurp2 trueClears directHits
+      (bChipped, deadStones) = chipAdjacentStonesExcept bClearedOv trueClears directHits
       (bChest, deadChests) = chipAdjacentChestsExcept bChipped trueClears directHits
       (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
       (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits

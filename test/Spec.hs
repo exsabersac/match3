@@ -186,6 +186,7 @@ tests =
     , testCase "surprise_direct_seed_opens" surprise_direct_seed_opens
     , testCase "soft_hit_preserves_choco_steam" soft_hit_preserves_choco_steam
     , testCase "surprise_blast_peels_adjacent" surprise_blast_peels_adjacent
+    , testCase "shuffle_preserves_specials" shuffle_preserves_specials
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -5316,3 +5317,47 @@ surprise_blast_peels_adjacent = do
   case (mbB !! 2) !! 4 of
     Just s -> assertEqual "bomb still chips stone" (1 :: Int) (stoneLayers s)
     Nothing -> assertFailure "bomb stone must remain"
+
+--------------------------------------------------------------------------------
+-- Shuffle must keep Line / Bomb / Rainbow (extractDecor specials)
+--------------------------------------------------------------------------------
+
+-- | Bare Line/Bomb/Rainbow specials must survive shuffleGame / ensurePlayable
+-- décor restore. Regression: extractDecor only kept iced/overlaid gems, so
+-- shuffle wiped player-earned specials while countdown bombs stayed (comment
+-- claimed bombs were preserved).
+shuffle_preserves_specials :: Assertion
+shuffle_preserves_specials = do
+  let board =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (1, 1) (Gem C1 Bomb 0 Nothing))
+                (1, 2)
+                (Gem C2 LineH 0 Nothing))
+             (1, 3)
+             (Gem C3 LineV 0 Nothing))
+          (1, 4)
+          (Gem C4 Rainbow 0 Nothing)
+      gs0 =
+        (newGame defaultConfig 9)
+          { gsBoard = board
+          , gsOver = Nothing
+          , gsMoves = 20
+          , gsBelts = []
+          , gsUfos = []
+          , gsHint = Nothing
+          , gsGoal = GoalScore 99999
+          }
+      gs1 = shuffleGame gs0
+      b1 = gsBoard gs1
+  assertEqual "bomb kept" Bomb (cellKind (getCell b1 (1, 1)))
+  assertEqual "bomb color" C1 (cellColor (getCell b1 (1, 1)))
+  assertEqual "lineH kept" LineH (cellKind (getCell b1 (1, 2)))
+  assertEqual "lineV kept" LineV (cellKind (getCell b1 (1, 3)))
+  assertEqual "rainbow kept" Rainbow (cellKind (getCell b1 (1, 4)))
+  -- Countdown still kept (pre-existing decor path)
+  let boardCd = setCell board (2, 2) (mkCountdown C5 4)
+      gsCd = shuffleGame (gs0 { gsBoard = boardCd })
+  assertBool "countdown kept" (isCountdown (getCell (gsBoard gsCd) (2, 2)))
+  assertEqual "countdown turns" (4 :: Int) (countdownTurns (getCell (gsBoard gsCd) (2, 2)))

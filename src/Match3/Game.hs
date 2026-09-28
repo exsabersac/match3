@@ -563,8 +563,9 @@ extractDecor b =
     keep (Bottle _) = True
     keep TimeSpirit = True
     keep (Countdown _ _) = True
-    keep (Gem _ _ ice ov) = ice > 0 || ov /= Nothing
-    -- Normal bare gems are shuffled away
+    keep (Gem _ kind ice ov) =
+      kind /= Normal || ice > 0 || ov /= Nothing
+    -- Bare Normal gems are shuffled away; Line/Bomb/Rainbow specials stay
 
 restoreDecor :: Board -> [CellDecor] -> Board
 restoreDecor b = foldl (\board (CellDecor p cell) -> setCell board p cell) b
@@ -589,7 +590,8 @@ ensurePlayable gs
           g2 = g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
       in if hasValidMove board then g2 else go (n - 1) g2
 
--- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays / bombs; keeps UFOs.
+-- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays /
+-- specials (Line/Bomb/Rainbow) / countdown bombs; keeps UFOs.
 shuffleGame :: GameState -> GameState
 shuffleGame gs =
   let decor = extractDecor (gsBoard gs)

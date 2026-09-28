@@ -16,9 +16,14 @@ module Match3.Board
   , stepCascadeAt
   , runCascade
   , runCascadeAt
+  , runCascadeScored
   , randomBoard
   , randomStableBoard
+  , randomPlayableBoard
+  , shufflePlayable
+  , hasValidMove
   , scoreForCleared
+  , scoreForWave
   , findHint
   , MatchRun(..)
   ) where
@@ -198,6 +203,10 @@ refill g0 mb =
 scoreForCleared :: Int -> Score
 scoreForCleared n = n * 10
 
+-- | Wave 1 = 1x, wave 2 = 2x, ... (cells * 10 * wave).
+scoreForWave :: Int -> Int -> Score
+scoreForWave wave n = n * 10 * max 1 wave
+
 stepCascade :: RandomGen g => g -> Board -> Maybe (Board, Int, g)
 stepCascade = stepCascadeAt Nothing
 
@@ -221,6 +230,25 @@ runCascadeAt prefer g b = case stepCascadeAt prefer g b of
     let (b'', n', g'') = runCascadeAt Nothing g' b'
     in (b'', n + n', g'')
 
+-- | Cascade with per-wave combo scoring.
+-- Returns (board, cellsCleared, scoreGained, maxComboWave, gen).
+-- maxComboWave is 0 if nothing cleared, else highest 1-based wave index.
+runCascadeScored
+  :: RandomGen g
+  => Maybe Pos
+  -> g
+  -> Board
+  -> (Board, Int, Score, Int, g)
+runCascadeScored prefer g b = go prefer g b 0 0 0
+  where
+    go pref g' b' cells score maxW =
+      case stepCascadeAt pref g' b' of
+        Nothing -> (b', cells, score, maxW, g')
+        Just (b'', n, g'') ->
+          let wave = maxW + 1
+              score' = score + scoreForWave wave n
+          in go Nothing g'' b'' (cells + n) score' wave
+
 randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard g0 =
   let (cells, g') = go (boardSize * boardSize) g0
@@ -236,6 +264,20 @@ randomStableBoard :: RandomGen g => g -> (Board, g)
 randomStableBoard g =
   let (b, g') = randomBoard g
   in if hasAnyMatch b then randomStableBoard g' else (b, g')
+
+-- | True if some adjacent swap would create a match.
+hasValidMove :: Board -> Bool
+hasValidMove = maybe False (const True) . findHint
+
+-- | Stable board with at least one valid move (no initial three-in-a-row).
+randomPlayableBoard :: RandomGen g => g -> (Board, g)
+randomPlayableBoard g =
+  let (b, g') = randomStableBoard g
+  in if hasValidMove b then (b, g') else randomPlayableBoard g'
+
+-- | Reshuffle into a playable stable board (ignores previous layout).
+shufflePlayable :: RandomGen g => g -> (Board, g)
+shufflePlayable = randomPlayableBoard
 
 -- | First adjacent swap that would create a match (for hint).
 findHint :: Board -> Maybe (Pos, Pos)

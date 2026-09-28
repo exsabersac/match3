@@ -27,6 +27,9 @@ tests =
     , testCase "special_bomb_from_5" special_bomb_from_5
     , testCase "hint_finds_move" hint_finds_move
     , testCase "undo_restores" undo_restores
+    , testCase "shuffle_when_no_moves" shuffle_when_no_moves
+    , testCase "playable_board_stable_and_has_move" playable_board_stable_and_has_move
+    , testCase "combo_wave_scoring" combo_wave_scoring
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -84,6 +87,7 @@ inv_move_to_stable = do
           _ -> False
       assertBool "board stable" (not (hasAnyMatch (gsBoard gs1)))
 
+-- | Horizontal/vertical runs of length >= 3 match; length-2 and diagonal do not.
 match_line_ge3 :: Assertion
 match_line_ge3 = do
   let fill = mkGem C5
@@ -104,6 +108,45 @@ match_line_ge3 = do
   assertBool "vert (2,1)" ((2, 1) `elem` vs)
   assertBool "vert (3,1)" ((3, 1) `elem` vs)
   assertBool "vert (4,1)" ((4, 1) `elem` vs)
+
+  -- Negatives on an explicit stable board (no incidental 3-runs)
+  let stable =
+        [ map mkGem [C1, C2, C3, C4, C5, C1, C2, C3]
+        , map mkGem [C2, C3, C4, C5, C1, C2, C3, C4]
+        , map mkGem [C3, C4, C5, C1, C2, C3, C4, C5]
+        , map mkGem [C4, C5, C1, C2, C3, C4, C5, C1]
+        , map mkGem [C5, C1, C2, C3, C4, C5, C1, C2]
+        , map mkGem [C1, C2, C3, C4, C5, C1, C2, C3]
+        , map mkGem [C2, C3, C4, C5, C1, C2, C3, C4]
+        , map mkGem [C3, C4, C5, C1, C2, C3, C4, C5]
+        ]
+  assertBool "stable base" (not (hasAnyMatch stable))
+
+  -- Negative: only 2-in-a-row horizontally — not a match
+  -- Place C1 at (0,0)(0,1); (0,2) is C3, (1,0) is C2 — no 3-run
+  let b2 = setCell (setCell stable (0, 0) (mkGem C1)) (0, 1) (mkGem C1)
+  assertBool "2-in-a-row not a match" (null (findMatches b2))
+
+  -- Negative: only 2-in-a-row vertically — not a match
+  -- Place C5 at (3,0)(4,0); neighbors (2,0)=C3 (5,0)=C1 (3,1)=C5 careful!
+  -- stable (3,1)=C5 already — horizontal would be C5,C5 at (3,0)(3,1) only 2
+  -- (4,1)=C1 so OK. (2,0)=C3, (5,0)=C1 OK.
+  let bV = setCell (setCell stable (3, 0) (mkGem C5)) (4, 0) (mkGem C5)
+  assertBool "vert 2-in-a-row not a match" (null (findMatches bV))
+
+  -- Negative: diagonal same color does not count
+  let diag =
+        setCell
+          (setCell
+             (setCell stable (0, 0) (mkGem C1))
+             (1, 1)
+             (mkGem C1))
+          (2, 2)
+          (mkGem C1)
+  -- Check we did not accidentally create ortho 3-runs
+  assertBool "diagonal not a match" (null (findMatches diag))
+  assertBool "diag hasAnyMatch false" (not (hasAnyMatch diag))
+
 
 gravity_then_refill :: Assertion
 gravity_then_refill = do
@@ -204,7 +247,6 @@ special_line_from_4 :: Assertion
 special_line_from_4 = do
   let fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
-      -- Row 2: four C1 then others — but that's already a match of 4
       row2 = map mkGem [C1, C1, C1, C1, C2, C3, C4, C2]
       b = take 2 b0 ++ [row2] ++ drop 3 b0
       (mb, n) = clearMatches b
@@ -259,3 +301,64 @@ undo_restores = do
           gsBoard gsU @?= gsBoard gs0
           gsScore gsU @?= gsScore gs0
           gsMoves gsU @?= gsMoves gs0
+
+-- | Stuck board (no valid adjacent swap) is reshuffled to a playable stable board.
+shuffle_when_no_moves :: Assertion
+shuffle_when_no_moves = do
+  let stuck = stuckNoMoveBoard
+  assertBool "fixture has no match" (not (hasAnyMatch stuck))
+  assertBool "fixture has no valid move" (not (hasValidMove stuck))
+  let gs0 =
+        (newGame defaultConfig 1)
+          { gsBoard = stuck
+          , gsGen = mkStdGen 999
+          , gsOver = Nothing
+          , gsHint = Nothing
+          , gsShuffled = False
+          }
+      gs1 = ensurePlayable gs0
+  assertBool "did shuffle" (gsShuffled gs1)
+  assertBool "after: no initial match" (not (hasAnyMatch (gsBoard gs1)))
+  assertBool "after: has valid move" (hasValidMove (gsBoard gs1))
+  -- Force shuffleGame also yields playable
+  let gs2 = shuffleGame gs0
+  assertBool "shuffleGame playable" (hasValidMove (gsBoard gs2))
+  assertBool "shuffleGame stable" (not (hasAnyMatch (gsBoard gs2)))
+
+-- | Cyclic (r+c) mod 5 board: stable and no valid adjacent swap.
+stuckNoMoveBoard :: Board
+stuckNoMoveBoard =
+  -- Cyclic (r+c) mod 5: no 3-run and no adjacent swap creates a match.
+  [ [ mkGem (toEnum ((r + c) `mod` 5))
+    | c <- [0 .. boardSize - 1]
+    ]
+  | r <- [0 .. boardSize - 1]
+  ]
+
+playable_board_stable_and_has_move :: Assertion
+playable_board_stable_and_has_move = do
+  mapM_
+    ( \seed -> do
+        let (b, _) = randomPlayableBoard (mkStdGen seed)
+        assertBool ("stable " ++ show seed) (not (hasAnyMatch b))
+        assertBool ("has move " ++ show seed) (hasValidMove b)
+    )
+    [0 .. 30 :: Int]
+
+-- | Multi-wave cascade scores with increasing wave multiplier.
+combo_wave_scoring :: Assertion
+combo_wave_scoring = do
+  -- Wave-1 only: three-in-a-row of C1 on an otherwise C5 board that won't cascade
+  -- (clearing leaves holes refilled — may cascade). Check scoreForWave math +
+  -- runCascadeScored returns combo >= 1 when matches exist.
+  assertEqual "wave1" (30 :: Int) (scoreForWave 1 3)
+  assertEqual "wave2" (60 :: Int) (scoreForWave 2 3)
+  assertEqual "wave3" (90 :: Int) (scoreForWave 3 3)
+  let fill = mkGem C5
+      b0 = replicate boardSize (replicate boardSize fill)
+      row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
+      b = take 3 b0 ++ [row3] ++ drop 4 b0
+      (_, cells, scored, combo, _) = runCascadeScored Nothing (mkStdGen 3) b
+  assertBool "cleared some" (cells >= 3)
+  assertBool "combo >= 1" (combo >= 1)
+  assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)

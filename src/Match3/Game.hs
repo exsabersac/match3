@@ -11,16 +11,19 @@ module Match3.Game
   , undoMove
   , applyHint
   , nextLevel
+  , ensurePlayable
+  , shuffleGame
   ) where
 
 import Match3.Board
   ( findHint
   , hasAnyMatch
+  , hasValidMove
   , inBounds
   , adjacent
-  , randomStableBoard
-  , runCascadeAt
-  , scoreForCleared
+  , randomPlayableBoard
+  , runCascadeScored
+  , shufflePlayable
   , swapCells
   )
 import Match3.Types
@@ -36,6 +39,8 @@ data GameState = GameState
   , gsLevel   :: Int
   , gsHistory :: [GameState]
   , gsHint    :: Maybe (Pos, Pos)
+  , gsCombo   :: Int   -- last move max cascade wave (0 if none)
+  , gsShuffled :: Bool -- True if last ensurePlayable reshuffled
   } deriving (Show)
 
 instance Eq GameState where
@@ -48,7 +53,7 @@ instance Eq GameState where
       && gsLevel a == gsLevel b
 
 snapshot :: GameState -> GameState
-snapshot gs = gs { gsHistory = [], gsHint = Nothing }
+snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
 
 newGame :: GameConfig -> Int -> GameState
 newGame = newGameAtLevel 0
@@ -56,7 +61,7 @@ newGame = newGameAtLevel 0
 newGameAtLevel :: Int -> GameConfig -> Int -> GameState
 newGameAtLevel li cfg seed =
   let g0 = mkStdGen seed
-      (board, g1) = randomStableBoard g0
+      (board, g1) = randomPlayableBoard g0
   in GameState
        { gsBoard = board
        , gsScore = 0
@@ -67,6 +72,8 @@ newGameAtLevel li cfg seed =
        , gsLevel = li
        , gsHistory = []
        , gsHint = Nothing
+       , gsCombo = 0
+       , gsShuffled = False
        }
 
 restart :: GameConfig -> Int -> GameState
@@ -93,6 +100,21 @@ decideOutcome gs gained
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied gained
 
+-- | If board has no valid move (and game not over), reshuffle to a playable board.
+ensurePlayable :: GameState -> GameState
+ensurePlayable gs
+  | Just _ <- gsOver gs = gs { gsShuffled = False }
+  | hasValidMove (gsBoard gs) = gs { gsShuffled = False }
+  | otherwise =
+      let (board, g') = shufflePlayable (gsGen gs)
+      in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
+
+-- | Force reshuffle (e.g. player key S).
+shuffleGame :: GameState -> GameState
+shuffleGame gs =
+  let (board, g') = shufflePlayable (gsGen gs)
+  in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True, gsOver = Nothing }
+
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwap p1 p2 gs
   | Just o <- gsOver gs = (gs, o)
@@ -101,10 +123,10 @@ trySwap p1 p2 gs
   | otherwise =
       let swapped = swapCells (gsBoard gs) p1 p2
       in if not (hasAnyMatch swapped)
-           then (gs { gsHint = Nothing }, NoMatch)
+           then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (board1, cleared, g') = runCascadeAt (Just p2) (gsGen gs) swapped
-                 gained = scoreForCleared cleared
+             let (board1, _cleared, gained, combo, g') =
+                   runCascadeScored (Just p2) (gsGen gs) swapped
                  score' = gsScore gs + gained
                  moves' = gsMoves gs - 1
                  hist = take 20 (snapshot gs : gsHistory gs)
@@ -116,6 +138,8 @@ trySwap p1 p2 gs
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing
+                     , gsCombo = combo
+                     , gsShuffled = False
                      }
                  outcome = decideOutcome gs' gained
                  gs'' = case outcome of
@@ -123,14 +147,19 @@ trySwap p1 p2 gs
                    Lost s -> gs' { gsOver = Just (Lost s) }
                    LevelClear s n -> gs' { gsOver = Just (LevelClear s n) }
                    _ -> gs'
-             in (gs'', outcome)
+                 -- Auto-shuffle if stuck after a non-terminal move
+                 gs''' = case outcome of
+                   MoveApplied _ -> ensurePlayable gs''
+                   _ -> gs''
+             in (gs''', outcome)
 
 runMove :: Pos -> Pos -> GameState -> (GameState, Outcome)
 runMove = trySwap
 
 undoMove :: GameState -> Maybe GameState
 undoMove gs = case gsHistory gs of
-  (prev : rest) -> Just prev { gsHistory = rest, gsHint = Nothing, gsOver = Nothing }
+  (prev : rest) ->
+    Just prev { gsHistory = rest, gsHint = Nothing, gsOver = Nothing, gsShuffled = False }
   [] -> Nothing
 
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))

@@ -25,12 +25,17 @@ module Match3.Core
   , findMatches
   , findMatchRuns
   , hasAnyMatch
+  , hasValidMove
   , stepCascade
   , runCascade
   , runCascadeAt
+  , runCascadeScored
   , randomBoard
   , randomStableBoard
+  , randomPlayableBoard
+  , shufflePlayable
   , scoreForCleared
+  , scoreForWave
   , findHint
   , MatchRun(..)
   , GameState(..)
@@ -44,6 +49,8 @@ module Match3.Core
   , undoMove
   , applyHint
   , nextLevel
+  , ensurePlayable
+  , shuffleGame
   ) where
 
 import Match3.Board

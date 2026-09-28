@@ -216,6 +216,10 @@ updateTitle window app = do
           "score=" ++ show (gsScore gs) ++ "/" ++ show t
         GoalCollect col n ->
           "collect " ++ colorTag col ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
+        GoalCollectMulti reqs ->
+          "multi " ++ show (gsCollected gs) ++ "/" ++ show (sum [n | (_, n) <- reqs])
+        GoalClearStone n ->
+          "stones=" ++ show (gsStonesCleared gs) ++ "/" ++ show n
       title =
         T.pack $
           "L"
@@ -438,6 +442,18 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> T.pack (colorTag col)
                                       <> " "
                                       <> T.pack (show (gsCollected gs'))
+                                      <> "/"
+                                      <> T.pack (show n)
+                                      <> "]"
+                                  GoalCollectMulti reqs ->
+                                    " [multi "
+                                      <> T.pack (show (gsCollected gs'))
+                                      <> "/"
+                                      <> T.pack (show (sum [n | (_, n) <- reqs]))
+                                      <> "]"
+                                  GoalClearStone n ->
+                                    " [stones "
+                                      <> T.pack (show (gsStonesCleared gs'))
                                       <> "/"
                                       <> T.pack (show n)
                                       <> "]"
@@ -729,6 +745,8 @@ drawHud ren app = do
       targ = goalTarget (gsGoal gs)
       meterCol = case gsGoal gs of
         GoalScore _ -> V4 100 220 140 255
+        GoalCollectMulti _ -> V4 220 180 100 255
+        GoalClearStone _ -> V4 160 160 170 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
   drawMeter ren 10 36 prog targ meterCol
@@ -739,6 +757,8 @@ drawHud ren app = do
 
   -- Collect color swatch
   case gsGoal gs of
+    GoalCollectMulti _ -> pure ()
+    GoalClearStone _ -> pure ()
     GoalCollect col _ -> do
       let (r, g, b) = colorRGB col
       rendererDrawColor ren $= V4 r g b 255

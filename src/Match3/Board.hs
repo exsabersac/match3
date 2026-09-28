@@ -248,7 +248,7 @@ stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
 stepCascadeAt prefer g b =
   case stepCascadeDetailed prefer g b of
     Nothing -> Nothing
-    Just (b', n, _, g') -> Just (b', n, g')
+    Just (b', n, _, _, g') -> Just (b', n, g')
 
 -- | Cascade step returning cleared positions for color tallying.
 stepCascadeDetailed
@@ -256,14 +256,16 @@ stepCascadeDetailed
   => Maybe Pos
   -> g
   -> Board
-  -> Maybe (Board, Int, [Pos], g)
+  -> Maybe (Board, Int, [Pos], Int, g)
 stepCascadeDetailed prefer g b
   | not (hasAnyMatch b) = Nothing
   | otherwise =
       let (mb, n, pos) = clearMatchesDetailed prefer b
+          stonesHit =
+            length [p | p <- pos, isStone (getCell b p)]
           fallen = applyGravity mb
           (b', g') = refill g fallen
-      in Just (b', n, pos, g')
+      in Just (b', n, pos, stonesHit, g')
 
 runCascade :: RandomGen g => g -> Board -> (Board, Int, g)
 runCascade = runCascadeAt Nothing
@@ -283,20 +285,20 @@ runCascadeScored
   => Maybe Pos
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], g)
-runCascadeScored prefer g b = go prefer g b 0 0 0 (zip allColors (repeat 0))
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, g)
+runCascadeScored prefer g b = go prefer g b 0 0 0 (zip allColors (repeat 0)) 0
   where
-    go pref g' b' cells score maxW tallies =
+    go pref g' b' cells score maxW tallies stones =
       case stepCascadeDetailed pref g' b' of
-        Nothing -> (b', cells, score, maxW, tallies, g')
-        Just (b'', n, pos, g'') ->
+        Nothing -> (b', cells, score, maxW, tallies, stones, g')
+        Just (b'', n, pos, stn, g'') ->
           let wave = maxW + 1
               score' = score + scoreForWave wave n
               tallies' =
                 [ (col, cnt + countColor b' pos col)
                 | (col, cnt) <- tallies
                 ]
-          in go Nothing g'' b'' (cells + n) score' wave tallies'
+          in go Nothing g'' b'' (cells + n) score' wave tallies' (stones + stn)
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
 clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
@@ -325,22 +327,23 @@ runCascadeScoredFromSeeds
   -> [Pos]
   -> g
   -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], g)
+  -> (Board, Int, Score, Int, [(Color, Int)], Int, g)
 runCascadeScoredFromSeeds prefer seeds g b
   | null seeds = runCascadeScored prefer g b
   | otherwise =
       let (mb, n, pos) = clearFromSeedsDetailed prefer b seeds
+          stones0 = length [p | p <- pos, isStone (getCell b p)]
           fallen = applyGravity mb
           (b1, g1) = refill g fallen
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColor b pos col) | col <- allColors]
-          (b2, cells2, score2, maxW2, tallies2, g2) =
+          (b2, cells2, score2, maxW2, tallies2, stones2, g2) =
             runCascadeScored Nothing g1 b1
           mergeT a b' =
-            [ (col, lookupCount a col + lookupCount b' col) | col <- allColors ]
-          lookupCount xs col = maybe 0 id (lookup col xs)
+            [ (col, lc a col + lc b' col) | col <- allColors ]
+          lc xs col = maybe 0 id (lookup col xs)
           maxW = if n > 0 && cells2 > 0 then maxW2 + 1 else (if n > 0 then 1 else maxW2)
-      in (b2, n + cells2, score0 + score2, maxW, mergeT tallies0 tallies2, g2)
+      in (b2, n + cells2, score0 + score2, maxW, mergeT tallies0 tallies2, stones0 + stones2, g2)
 
 randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard g0 =

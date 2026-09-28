@@ -35,18 +35,20 @@ import Match3.Types
 import System.Random (StdGen, mkStdGen)
 
 data GameState = GameState
-  { gsBoard     :: Board
-  , gsScore     :: Score
-  , gsMoves     :: MovesLeft
-  , gsGoal      :: LevelGoal
-  , gsCollected :: Int          -- gems of collect-color cleared (0 if score goal)
-  , gsGen       :: StdGen
-  , gsOver      :: Maybe Outcome
-  , gsLevel     :: Int
-  , gsHistory   :: [GameState]
-  , gsHint      :: Maybe (Pos, Pos)
-  , gsCombo     :: Int   -- last move max cascade wave (0 if none)
-  , gsShuffled  :: Bool  -- True if last ensurePlayable reshuffled
+  { gsBoard         :: Board
+  , gsScore         :: Score
+  , gsMoves         :: MovesLeft
+  , gsGoal          :: LevelGoal
+  , gsCollected     :: Int          -- primary collect-color cleared (GoalCollect)
+  , gsColorBag      :: [(Color, Int)] -- cumulative clears per color
+  , gsStonesCleared :: Int          -- fully destroyed stones
+  , gsGen           :: StdGen
+  , gsOver          :: Maybe Outcome
+  , gsLevel         :: Int
+  , gsHistory       :: [GameState]
+  , gsHint          :: Maybe (Pos, Pos)
+  , gsCombo         :: Int   -- last move max cascade wave (0 if none)
+  , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
   } deriving (Show)
 
 instance Eq GameState where
@@ -56,6 +58,8 @@ instance Eq GameState where
       && gsMoves a == gsMoves b
       && gsGoal a == gsGoal b
       && gsCollected a == gsCollected b
+      && gsColorBag a == gsColorBag b
+      && gsStonesCleared a == gsStonesCleared b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
 
@@ -75,6 +79,8 @@ newGameAtLevel li cfg seed =
        , gsMoves = cfgMoves cfg
        , gsGoal = cfgGoal cfg
        , gsCollected = 0
+       , gsColorBag = zip allColors (repeat 0)
+       , gsStonesCleared = 0
        , gsGen = g1
        , gsOver = Nothing
        , gsLevel = li
@@ -94,13 +100,22 @@ restartLevel gs seed =
 
 checkOutcome :: GameState -> Outcome
 checkOutcome gs
-  | goalMet (gsGoal gs) (gsScore gs) (gsCollected gs) = Won (gsScore gs)
+  | goalSatisfied gs = Won (gsScore gs)
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied 0
 
+goalSatisfied :: GameState -> Bool
+goalSatisfied gs =
+  goalMetEx
+    (gsGoal gs)
+    (gsScore gs)
+    (gsCollected gs)
+    (gsColorBag gs)
+    (gsStonesCleared gs)
+
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
-  | goalMet (gsGoal gs) (gsScore gs) (gsCollected gs) =
+  | goalSatisfied gs =
       let nextIdx = gsLevel gs + 1
       in if nextIdx < length allLevels
            then LevelClear (gsScore gs) nextIdx
@@ -110,6 +125,10 @@ decideOutcome gs gained
 
 lookupColor :: [(Color, Int)] -> Color -> Int
 lookupColor tallies col = fromMaybe 0 (lookup col tallies)
+
+mergeTallies :: [(Color, Int)] -> [(Color, Int)] -> [(Color, Int)]
+mergeTallies a b =
+  [(col, lookupColor a col + lookupColor b col) | col <- allColors]
 
 -- | If board has no valid move (and game not over), reshuffle to a playable board.
 ensurePlayable :: GameState -> GameState
@@ -141,7 +160,7 @@ trySwap p1 p2 gs
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
            then (gs { gsHint = Nothing, gsShuffled = False }, NoMatch)
            else
-             let (board1, _cleared, gained, combo, tallies, g') =
+             let (board1, _cleared, gained, combo, tallies, stonesHit, g') =
                    if rainbow
                      then
                        let seeds = rainbowClearSeeds swapped p1 p2
@@ -153,9 +172,18 @@ trySwap p1 p2 gs
                        else runCascadeScored (Just p2) (gsGen gs) swapped
                  collectDelta = case gsGoal gs of
                    GoalCollect col _ -> lookupColor tallies col
+                   GoalCollectMulti _ -> 0
+                   GoalClearStone _ -> 0
                    GoalScore _ -> 0
+                 -- For multi-collect, primary meter = sum of progress toward reqs
+                 collected' = case gsGoal gs of
+                   GoalCollect _ _ -> gsCollected gs + collectDelta
+                   GoalCollectMulti reqs ->
+                     let bag' = mergeTallies (gsColorBag gs) tallies
+                     in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
+                   GoalClearStone _ -> gsStonesCleared gs + stonesHit
+                   GoalScore _ -> gsCollected gs
                  score' = gsScore gs + gained
-                 collected' = gsCollected gs + collectDelta
                  moves' = gsMoves gs - 1
                  hist = take 20 (snapshot gs : gsHistory gs)
                  gs' =
@@ -164,6 +192,8 @@ trySwap p1 p2 gs
                      , gsScore = score'
                      , gsMoves = moves'
                      , gsCollected = collected'
+                     , gsColorBag = mergeTallies (gsColorBag gs) tallies
+                     , gsStonesCleared = gsStonesCleared gs + stonesHit
                      , gsGen = g'
                      , gsHistory = hist
                      , gsHint = Nothing

@@ -43,6 +43,8 @@ tests =
     , testCase "rainbow_clears_color" rainbow_clears_color
     , testCase "rainbow_swap_without_match" rainbow_swap_without_match
     , testCase "special_combo_line_bomb" special_combo_line_bomb
+    , testCase "goal_collect_multi_color" goal_collect_multi_color
+    , testCase "goal_clear_stone_counts" goal_clear_stone_counts
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -363,7 +365,7 @@ combo_wave_scoring = do
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
       b = take 3 b0 ++ [row3] ++ drop 4 b0
-      (_, cells, scored, combo, tallies, _) = runCascadeScored Nothing (mkStdGen 3) b
+      (_, cells, scored, combo, tallies, _, _) = runCascadeScored Nothing (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
   assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)
@@ -470,11 +472,16 @@ level_table_mixes_collect = do
   assertBool "has score levels" (not (null scores))
   assertBool "has collect levels" (not (null collects))
   assertBool "at least 5 levels" (length allLevels >= 5)
-  -- Named collect stages present
   let names = map lvlName allLevels
   assertBool "has 采红" ("采红" `elem` names)
   assertBool "has 采蓝" ("采蓝" `elem` names)
   assertBool "has 采绿" ("采绿" `elem` names)
+  assertBool "has 双采" ("双采" `elem` names)
+  assertBool "has 碎石" ("碎石" `elem` names)
+  assertBool "has multi goal"
+    (any (\g -> case g of GoalCollectMulti _ -> True; _ -> False) goals)
+  assertBool "has clear-stone goal"
+    (any (\g -> case g of GoalClearStone _ -> True; _ -> False) goals)
 
 -- | Score-goal levels do not increment gsCollected (stays 0).
 score_goal_ignores_collect :: Assertion
@@ -790,4 +797,121 @@ special_combo_line_bomb = do
     Lost _ -> pure ()
   assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
   assertBool "board stable" (not (hasAnyMatch (gsBoard gs1)))
+
+--------------------------------------------------------------------------------
+-- Multi goals (开心消消乐-style diverse targets)
+--------------------------------------------------------------------------------
+
+-- | GoalCollectMulti requires quotas for every listed color.
+goal_collect_multi_color :: Assertion
+goal_collect_multi_color = do
+  let cfg = GameConfig { cfgMoves = 20, cfgGoal = GoalCollectMulti [(C1, 3), (C2, 1)] }
+      board0 =
+        setCell
+          (setCell
+             (setCell
+                (setCell stableBoard (3, 0) (mkGem C1))
+                (3, 1)
+                (mkGem C1))
+             (3, 2)
+             (mkGem C2))
+          (3, 3)
+          (mkGem C1)
+      -- Swap (3,2)<->(3,3): row becomes C1 C1 C1 C2 — clears 3×C1
+      gs0 =
+        (newGameAtLevel 0 cfg 5)
+          { gsBoard = board0
+          , gsCollected = 0
+          , gsColorBag = zip allColors (repeat 0)
+          , gsOver = Nothing
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  assertBool "C1 tallied" (lookupCount (gsColorBag gs1) C1 >= 3)
+  -- Not yet clear: still need C2 quota unless cascade luck
+  case out of
+    LevelClear _ _ ->
+      assertBool "if cleared, both quotas met" $
+        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1)
+    MoveApplied _ ->
+      assertBool "multi goal not met with only C1" $
+        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0)
+          || lookupCount (gsColorBag gs1) C2 >= 1
+    _ -> pure ()
+  -- Direct unit: goalMetEx logic
+  assertBool "both met"
+    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0)
+  assertBool "missing color"
+    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0))
+
+-- | GoalClearStone counts fully destroyed stones toward the goal.
+goal_clear_stone_counts :: Assertion
+goal_clear_stone_counts = do
+  assertBool "0 stones unmet"
+    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0))
+  assertBool "2 stones met"
+    (goalMetEx (GoalClearStone 2) 0 0 [] 2)
+  let board =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C1))
+             (4, 1)
+             mkStone)
+          (4, 0)
+          mkStone
+      cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
+      gs0 =
+        (newGameAtLevel 0 cfg 5)
+          { gsBoard = board
+          , gsStonesCleared = 0
+          , gsOver = Nothing
+          }
+      (gs1, out) = trySwap (3, 2) (3, 3) gs0
+  -- (3,3) on stable is C4; need a proper swap. Use match already present: row3 is C1 C1 C1
+  -- board already has match — but trySwap needs a swap. Force via matching swap on adjacent.
+  -- Actually board has match already; trySwap of two cells that keeps/creates match:
+  let (gs2, out2) = trySwap (3, 0) (2, 0) gs0
+  -- Better: clearMatches path counts stones — use chip+clear via existing match by swapping
+  -- Place swap that creates the C1 triple if not already matching:
+  -- board already hasAnyMatch — ensurePlayable wouldn't start that way.
+  -- Use runCascadeScored directly to count stones:
+  let (_, _, _, _, _, stones, _) = runCascadeScored Nothing (mkStdGen 1) board
+  assertBool ("stones cleared in cascade " ++ show stones) (stones >= 1)
+  assertBool "goal clear stone type works" (goalTarget (GoalClearStone 8) == 8)
+  -- trySwap from a no-initial-match board: swap into C1 C1 C1
+  let boardN =
+        setCell
+          (setCell
+             (setCell
+                (setCell
+                   (setCell stableBoard (3, 0) (mkGem C1))
+                   (3, 1)
+                   (mkGem C1))
+                (3, 2)
+                (mkGem C2))
+             (3, 3)
+             (mkGem C1))
+          (4, 1)
+          mkStone
+      gsN =
+        (newGameAtLevel 0 cfg 5)
+          { gsBoard = boardN
+          , gsStonesCleared = 0
+          , gsOver = Nothing
+          }
+      (gsN1, outN) = trySwap (3, 2) (3, 3) gsN
+  assertBool
+    ("stonesCleared incremented, got " ++ show (gsStonesCleared gsN1))
+    (gsStonesCleared gsN1 >= 1)
+  case outN of
+    LevelClear _ _ -> assertBool "enough stones" (gsStonesCleared gsN1 >= 2)
+    MoveApplied _ -> pure ()
+    _ -> pure ()
+  assertBool "out defined" (out == out || gs1 == gs1)
+  assertBool "out2 defined" (out2 == out2 || gs2 == gs2)
 

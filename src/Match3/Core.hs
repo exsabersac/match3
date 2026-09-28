@@ -22,8 +22,11 @@ module Match3.Core
   , Outcome(..)
   , LevelGoal(..)
   , goalMet
+  , goalMetEx
   , goalProgress
+  , goalProgressEx
   , goalTarget
+  , lookupCount
   , GameConfig(..)
   , defaultConfig
   , Level(..)

@@ -23,8 +23,11 @@ module Match3.Types
   , Outcome(..)
   , LevelGoal(..)
   , goalMet
+  , goalMetEx
   , goalProgress
+  , goalProgressEx
   , goalTarget
+  , lookupCount
   , GameConfig(..)
   , defaultConfig
   , Level(..)
@@ -108,26 +111,53 @@ data Outcome
   | LevelClear Score Int  -- score, next level index (0-based)
   deriving (Eq, Show, Generic)
 
--- | Level win condition: reach a score, or clear N gems of a color.
+-- | Level win condition (GoalCollect shape frozen; new goals are additive).
 data LevelGoal
   = GoalScore TargetScore
   | GoalCollect Color Int
+  | GoalCollectMulti [(Color, Int)]  -- all color quotas must be met
+  | GoalClearStone Int                 -- fully destroy N stone blockers
   deriving (Eq, Show, Generic)
 
--- | Whether the goal is satisfied given current score / collected count.
+-- | Whether the goal is satisfied given current score / primary collected count.
+-- For GoalCollectMulti / GoalClearStone prefer goalMetEx.
 goalMet :: LevelGoal -> Score -> Int -> Bool
 goalMet (GoalScore t) score _ = score >= t
 goalMet (GoalCollect _ n) _ collected = collected >= n
+goalMet (GoalCollectMulti _) _ _ = False  -- use goalMetEx
+goalMet (GoalClearStone _) _ _ = False
 
--- | Current progress toward the goal (score or collected count).
+-- | Full goal check with color bag + stones-cleared counters.
+goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Bool
+goalMetEx (GoalScore t) score _ _ _ = score >= t
+goalMetEx (GoalCollect _ n) _ collected _ _ = collected >= n
+goalMetEx (GoalCollectMulti reqs) _ _ bag _ =
+  all (\(col, n) -> lookupCount bag col >= n) reqs
+goalMetEx (GoalClearStone n) _ _ _ stones = stones >= n
+
+lookupCount :: [(Color, Int)] -> Color -> Int
+lookupCount xs col = maybe 0 id (lookup col xs)
+
+-- | Current progress toward the goal (primary meter).
 goalProgress :: LevelGoal -> Score -> Int -> Int
 goalProgress (GoalScore _) score _ = score
 goalProgress (GoalCollect _ _) _ collected = collected
+goalProgress (GoalCollectMulti _) _ collected = collected
+goalProgress (GoalClearStone _) _ collected = collected
 
--- | Target number shown in HUD (score target or collect count).
+goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int
+goalProgressEx (GoalScore _) score _ _ _ = score
+goalProgressEx (GoalCollect _ _) _ collected _ _ = collected
+goalProgressEx (GoalCollectMulti reqs) _ _ bag _ =
+  sum [min n (lookupCount bag c) | (c, n) <- reqs]
+goalProgressEx (GoalClearStone _) _ _ _ stones = stones
+
+-- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
 goalTarget (GoalScore t) = t
 goalTarget (GoalCollect _ n) = n
+goalTarget (GoalCollectMulti reqs) = sum [n | (_, n) <- reqs]
+goalTarget (GoalClearStone n) = n
 
 data GameConfig = GameConfig
   { cfgMoves :: MovesLeft
@@ -153,7 +183,9 @@ allLevels =
   , Level 3 "采蓝"   26 (GoalCollect C3 22)
   , Level 4 "进阶"   22 (GoalScore 700)
   , Level 5 "采绿"   24 (GoalCollect C2 26)
-  , Level 6 "大师"   18 (GoalScore 1100)
+  , Level 6 "双采"   28 (GoalCollectMulti [(C1, 12), (C3, 12)])
+  , Level 7 "碎石"   26 (GoalClearStone 8)
+  , Level 8 "大师"   18 (GoalScore 1100)
   ]
 
 levelConfig :: Level -> GameConfig

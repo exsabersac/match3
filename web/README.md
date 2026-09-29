@@ -128,7 +128,7 @@ dist 合计 2,196,011 B，逐文件 gzip 合计约 1.05 MB（WebP 已压缩，gz
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
-（1.2.1.1 / 0.1.0.5，最初取自 lts-21.25；后者放宽了 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**
+（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5，桌面版为 GHC 9.14.1：lts-24.60 + `compiler: ghc-9.14.1`；两边都只放宽 splitmix 的 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**
 （`test/Parity.hs` 与 `test/node-parity.mjs` 已验证）。
 
 ## 3. 本地试玩

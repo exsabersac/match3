@@ -581,6 +581,9 @@ clearUfoAbsorbed b absorbed =
 -- removes it (GoalUfo counts) but must not detonate (吸走 ≠ 引爆).
 -- portals: bidirectional pairs applied during settle (落入 A 从 B 出).
 -- Returns (... stones, chests, honey, balloons, cookies, cakes, ufoAbsorbed, ufos', clearedPos, gen).
+-- 同步约束：逐轮回放 traceCascade* 按相同步骤与随机数消耗顺序重算；改这里（及种子 / 倒计时 /
+-- 皮带后连锁）时必须同步改 trace 版本（护栏：trace_cascade_final_equals_stabilized 等，
+-- 见 docs/architecture.md「逐轮回放与规则的同步」）。
 runCascadeScoredWithUfos
   :: RandomGen g
   => Maybe Pos

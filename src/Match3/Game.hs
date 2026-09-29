@@ -740,6 +740,9 @@ moveFx before after out
 -- （若蜗牛成消）再连锁一次（不再重复步末效果）→ 结算目标/步数 → ensurePlayable。
 -- 无匹配或挡交换返回原盘 + NoMatch；同时清零 gsCombo / gsLastCleared（见 clearMoveFx），
 -- 避免前端把上一步的连击当成这一步再播一次。
+-- 同步约束：traceSwap 按同样顺序重算并记录 mtEnd；调整这里的步骤顺序、步末效果或蔓延 / 蜗牛
+-- 参数时必须同步 traceSwap / traceSpreads / traceSnails / beltMoves / applyEndEffect
+-- （护栏：trace_swap_final_equals_trySwap、trace_end_steps_replay_to_trySwap_final）。
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwap p1 p2 gs
   | Just o <- gsOver gs = (gs, o)
@@ -1016,7 +1019,8 @@ emptyTrace gs = MoveTrace (gsBoard gs) [] (gsBoard gs) []
 
 -- | trySwap 的逐轮回放。步骤顺序与 trySwap 完全一致：
 -- 主连锁 → 倒计时 → 皮带 → 藤/巧/蒸汽蔓延 + 蜗牛 →（蜗牛成消）再连锁。
--- 蔓延 / 蜗牛 / 倒计时减一这类「非消除」变化不单独成轮，体现在下一轮的 cwBefore 或 mtFinal 里。
+-- 倒计时减一 / 皮带移位 / 蔓延 / 蜗牛这类「非消除」变化不单独成轮，按发生位置记在 mtEnd
+-- （EndStep.esAfterWaves）里；自动洗牌不在 mtEnd 中，前端用 mtFinal 与结算后 gsBoard 的差异补播。
 traceSwap :: Pos -> Pos -> GameState -> MoveTrace
 traceSwap p1 p2 gs
   | isJust (gsOver gs) = emptyTrace gs

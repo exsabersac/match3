@@ -29,8 +29,10 @@
 若蜗牛后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
     │
     ▼
-汇总分数/收集/地毯/精灵+2步/−1步 → decideOutcome → 非终局则 ensurePlayable
+汇总分数/收集/地毯/精灵+2步/−1步 → decideOutcome → 非终局则 ensurePlayable（无可走步时自动洗牌）
 ```
+
+前端按同样顺序播放：主连锁各轮 → 倒计时减一 → 倒计时爆炸轮 → 皮带滑动 → 皮带后连锁轮 → 蔓延 → 蜗牛 → 蜗牛成消轮 → 自动洗牌（见 §8）。
 
 ## 1. 交换门禁（`trySwap` 前段）
 
@@ -98,9 +100,11 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 | API | 耗步 | 倒计时 tick | 皮带/蜗牛 |
 |-----|------|-------------|-----------|
-| `useHammer` | 否 | 否（实现为种子连锁后仅蔓延） | 不移位/不爬（见 Game 实现） |
-| `useFreeSwap` | 否 | 否 | 有（与自由交换成功路径一致，见源码） |
-| `useCrossClear` | 否 | 否 | 同锤子一类种子后处理 |
+| `useHammer` | 否 | 否（种子连锁后仅藤 / 巧 / 蒸汽蔓延） | 不移位 / 不爬 |
+| `useFreeSwap` | 否 | 否（交换后连锁，再仅蔓延） | 不移位 / 不爬 |
+| `useCrossClear` | 否 | 否（同锤子：种子连锁后仅蔓延） | 不移位 / 不爬 |
+
+三者成功（`MoveApplied`）后同样 `ensurePlayable`。回放脚本里道具的 `mtEnd` 只会出现 `EndSpread`（`trace_end_steps_boosters_replay` 锁定）。
 
 细节以 `Game.hs` 各 `use*` 为准；测试锁定「FreeSwap 不 tick」「锤免疫不扣次」等不变量。
 
@@ -110,6 +114,6 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 **特效是边沿触发**：前端用 `moveFx before after outcome` 取本次操作的 `MoveFx`（`fxCombo` 连击波数、`fxCleared` 清除格），只有这次调用真正结算了一步才非空；`NoMatch` / `InvalidSwap` / 操作前已终局一律为空。闪光、粒子、连击弹字和 HUD 总结都只看 `MoveFx` 和本次操作的 `MoveTrace`，不再直接读持久字段 `gsCombo`——旧实现里无匹配回滚后 `gsCombo` 仍是上一步的值，会把上一步的连击特效再播一遍。
 
-**逐轮回放用的纯函数**：`traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（Game）以及 `traceCascade` / `traceCascadeFromWave` / `traceCascadeFromSeeds` / `tracePostBeltCascade` / `traceCountdowns`（Board）按和 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 完全相同的顺序（包括随机数的消耗顺序）逐轮重算，返回 `MoveTrace`：每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮），`mtFinal` 就是 `trySwap` / 道具 API 的结果状态。它们只**新增**，不改已有函数的语义；`trace_*_final_equals_*` 系列测试保证两边完全一致。
+**逐轮回放用的纯函数**：`traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（Game）以及 `traceCascade` / `traceCascadeFromWave` / `traceCascadeFromSeeds` / `tracePostBeltCascade` / `traceCountdowns`（Board）按和 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 完全相同的顺序（包括随机数的消耗顺序）逐轮重算，返回 `MoveTrace`：每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮），`mtFinal` 是 `ensurePlayable` 之前的稳定盘：没有自动洗牌时就等于 `trySwap` / 道具 API 结果的 `gsBoard`。它们只**新增**，不改已有函数的语义；`trace_*_final_equals_*` 系列测试保证两边完全一致。
 
-`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EndCountdownTick`）→ 皮带移位（`EndBeltShift`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EndSpread`，带来源格）→ 蜗牛爬行（`EndSnail`，每只的起点、终点、朝向和被推的格子）。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，前端用 `mtFinal` 与结算后 `gsBoard` 的差异自己补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)。
+`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EndCountdownTick`）→ 皮带移位（`EndBeltShift`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EndSpread`，带来源格）→ 蜗牛爬行（`EndSnail`，每只的起点、终点、朝向和被推的格子）。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，前端用 `mtFinal` 与结算后 `gsBoard` 的差异自己补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。

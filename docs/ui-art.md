@@ -157,6 +157,10 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 
 每轮约 30～36 帧（0.5～0.6 s），实测 4 连锁全程约 2.2 s，5 连锁约 2.8 s（从松开鼠标到最后一轮落定，不含步末阶段）。
 
+![5 连锁逐轮回放：每行一轮，四列依次是高亮停留、消失、下落补子、本轮落定；左下角是时间戳](images/combo-strip.png)
+
+上图：第 5 关、种子 10、交换 (4,2)↔(5,2)（复现方法见下文「复现 / 截图」），第 2～5 轮依次出现 x2 浅金、x3 橙、x4 红、x5 紫的「连击」弹字和「+N」得分浮字。
+
 ### 步末阶段（`PhEnd`）
 
 一步里除了消除，还会发生一些「回合末」变化。规则层按 `trySwap` 的真实顺序把它们记在 `mtEnd` 里（`EndStep { esAfterWaves, esBefore, esAfter, esEffect }`，`esAfterWaves` 表示在第几轮之后发生），前端在对应的位置插入播放，播完才进入下一轮或结束：
@@ -167,14 +171,19 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 | 2 | 传送带移位 `EndBeltShift` | 倒计时之后（移位后的连锁 / 收饼干是随后的普通轮） | `StBelt` | 14（≈230 ms） | 相邻格沿皮带方向平滑滑动；环首尾相接的那一格在终点缩放淡入 |
 | 3 | 藤蔓 / 巧克力 / 蒸汽蔓延 `EndSpread` | 皮带连锁之后 | `StSpread`（三种合成一段同时播） | 18（≈300 ms） | 新格的覆盖层从来源格那一侧「长」过来：藤蔓分 4 节一节一节伸长，巧克力先快后慢涂抹铺开，蒸汽匀速漫开；生长前沿带同色柔光，长好时迸几粒同色碎屑 |
 | 4 | 蜗牛爬行 `EndSnail` | 蔓延之后（被推出匹配时，随后的普通轮再消） | `StSnail` | 18（≈300 ms） | 蜗牛沿朝向平滑挪一格并轻轻一拱，被推的宝石同时退到蜗牛原格（交错时侧让几像素）；碰壁的蜗牛原地横向压扁再展开，中点换朝向 |
-| 5 | 自动洗牌（`ensurePlayable`，无可走步） | 最后 | `StShuffle` | 22（≈370 ms） | 旧盘向中心收拢、暗幕和紫色光团盖住，换盘后新盘从中心散开 |
+| 5 | 自动洗牌（`ensurePlayable`，无可走步）——**不是** `EndEffect`，也不在 `mtEnd` 里：`ComboFx` 发现 `mtFinal` ≠ 结算后的 `gsBoard` 时自己追加 | 最后 | `StShuffle` | 22（≈370 ms） | 旧盘向中心收拢、暗幕和紫色光团盖住，换盘后新盘从中心散开 |
 
 - **时长控制**：同一时刻连续的步末段（1～4）合计不超过 `endBudgetFrames` = 36 帧（≈0.6 s），超出时按比例压缩，每段至少 8 帧。常见情况：只有巧克力或藤蔓一段 0.3 s；蔓延 + 蜗牛 0.6 s；终章那种倒计时 + 皮带 + 蔓延 + 蜗牛全都有时压成 8 + 8 + 10 + 10 帧 = 0.6 s。自动洗牌很少出现、又需要让玩家看清，所以不计入预算，单独 0.37 s。
 - 道具（锤子 / 十字 / 自由交换）按规则只有蔓延，没有倒计时 / 皮带 / 蜗牛；无效交换 / `NoMatch` / 被拒道具规则上什么都不发生，`mtEnd` 为空，不会播任何步末动画（`trace_rejected_move_is_empty` 锁定）。
 - 回放期间（包括步末阶段）HUD 的步数已经是结算后的值；倒计时数字在 `StTick` 段的中点从旧值变成新值，和盘面一致。「下一步可能蔓延到的格子」的呼吸光预告只在静止时画，避免跟正在长出来的格子混在一起。
+![步末阶段逐段截图：每行一种效果，四列依次是起始、1/3、2/3、落定](images/end-of-step-strip.png)
+
+上图从上到下：巧克力蔓延、藤蔓蔓延、蜗牛爬行、传送带移位、倒计时减一、蒸汽 + 自动洗牌、同一步里四种效果齐全（终章），每行左侧标了复现用的关卡 / 种子 / 交换，对应下文「复现 / 截图」的表。
+
 - 测试：`trace_end_steps_replay_to_trySwap_final` 对全部关卡 × 3 个种子的每个成功交换按时间线重放（轮 → 步末 → 轮……），要求每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，最后等于 `trySwap` 的终盘，并且抽样必须覆盖全部六种效果；`trace_end_steps_boosters_replay`、`trace_end_snail_push_and_turn`、`trace_end_spread_from_adjacent_source` 分别覆盖道具、蜗牛推 / 掉头、蔓延来源方向。
 
-- **点击加速**：回放期间点击鼠标，或按空格 / 回车 / `N`，阶段机改为每帧推进 `fastStep` = 3 帧（整体约快 3 倍），各轮和各步末段依旧逐个可见；标题栏提示 `Fast-forward combo`。回放期间（含步末阶段）不接受新的交换、道具、撤销或洗牌输入。
+- **点击加速**：回放期间点击鼠标，或按空格 / 回车 / `N`，阶段机改为每帧推进 `fastStep` = 3 帧（整体约快 3 倍，包括步末各段和自动洗牌段），各轮和各步末段依旧逐个可见；标题栏提示 `Fast-forward combo`。开头 10 帧的交换动画照常播放（在交换中按下，加速从第 1 轮开始生效）。
+- **播放锁定**：回放期间（含步末阶段）不接受新的交换、道具、撤销或洗牌输入，过关 / 失败叠层也等播完才画；提示、地图、重开、暂停仍可用。完整的键位表见 [`ui-controls.md` 播放锁定](ui-controls.md#播放锁定animbusy)。
 - **不会重播**：回放只由本次调用返回的 `MoveTrace` / `MoveFx` 驱动。`NoMatch` / `InvalidSwap` / 被拒的道具返回空脚本，此时会清掉旧的弹字和 HUD 总结，不播任何东西（`failed_swap_resets_combo_feedback`、`trace_rejected_move_is_empty`、`undo_shuffle_reset_combo_feedback` 锁定）。撤销 / 洗牌也会清空弹字、总结、粒子和震屏，并且不会重播任何步末动画。
 
 ### 连击等级样式（`comboStyle`）
@@ -223,6 +232,8 @@ xdotool mousemove 532 814 click 1; sleep 0.15; xdotool mousemove 532 926 click 1
 | 倒计时减一 | `MATCH3_LEVEL=12 MATCH3_SEED=1` | (3,1)↔(3,2) |
 | 蒸汽 + 巧克力 + 自动洗牌 | `MATCH3_LEVEL=36 MATCH3_SEED=1` | (5,3)↔(5,4) |
 | 同一步里倒计时 + 皮带 + 藤 / 巧 + 蜗牛 | `MATCH3_LEVEL=28 MATCH3_SEED=3` | (4,4)↔(4,5) |
+
+本节两张拼图 `docs/images/combo-strip.png`、`docs/images/end-of-step-strip.png` 是按上面的复现组合在 Xvfb 下（`MATCH3_SCALE=2`）逐帧截取后拼接的，缩放到宽 1100 px 并量化为 256 色（各约 0.7 MB），**不由** `gen_assets.py` 生成；回放表现改动后需要手工重拍。
 
 ## 高分屏 / Retina
 

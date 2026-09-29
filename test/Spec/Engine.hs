@@ -169,7 +169,7 @@ engine_undo_after_terminal_matches_legacy_play =
     g = M3E.match3Shell
     one (sc@(li, seed, mv, easy), over, rows) = do
       let base = (newGameAtLevel li (levelConfig (allLevels !! li)) seed) {gsMoves = mv}
-          s0 = startHistory (if easy then base {gsGoal = GoalScore 1} else base)
+          s0 = startHistory (if easy then base {gsGoal = goalScore 1} else base)
           go h
             | isJust (gsOver (histNow h)) = h
             | otherwise = case findHint (gsBoard (histNow h)) of

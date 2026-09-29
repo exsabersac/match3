@@ -139,12 +139,18 @@ module Match3.Core
   , TargetScore
   , Outcome(..)
   , LevelGoal(..)
+  , Meter(..)
+  , Quota(..)
+  , goalScore
+  , goalCollect
+  , goalColors
+  , goalCount
+  , GoalView(..)
+  , goalView
+  , meterValue
   , goalMet
-  , goalMetEx
   , goalProgress
-  , goalProgressEx
   , goalTarget
-  , lookupCount
   , GameConfig(..)
   , defaultConfig
   , Level(..)
@@ -171,11 +177,17 @@ module Match3.Core
   , countColor
   , GameState(..)
   , gsCount
+  , gsProgress
+  , gsGoalMet
+  , gsCollected
+  , gsColorBag
   , CounterKey(..)
   , Counts
   , countOf
+  , countsFromList
   , countsToList
   , namedCounts
+  , colorBag
   , newGame
   , newGameAtLevel
   , newDailyGame
@@ -263,7 +275,7 @@ import Match3.Board.Clear (scoreForCleared, scoreForWave)
 import Match3.Board.Grid (adjacent, getCell, inBounds, setCell, swapCells)
 import Match3.Board.Match (MatchRun(..))
 import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
-import Match3.Counts (CounterKey(..), Counts, countOf, countsToList, namedCounts)
+import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, countsFromList, countsToList, namedCounts)
 import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn

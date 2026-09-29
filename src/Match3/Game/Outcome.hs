@@ -26,22 +26,9 @@ checkOutcome gs
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied 0
 
--- | 当前计数是否满足关卡目标（各目标的判定统一在 Types.goalMetEx；第 4 刀起计数从 gsCounts 按键读）。
+-- | 当前计数是否满足关卡目标（第 5 刀：由目标数据统一判定，Match3.Goal.goalMet）。
 goalSatisfied :: GameState -> Bool
-goalSatisfied gs =
-  goalMetEx
-    (gsGoal gs)
-    (gsScore gs)
-    (gsCollected gs)
-    (gsColorBag gs)
-    (gsCount CountStones gs)
-    (gsCount CountUfo gs)
-    (gsCount CountChests gs)
-    (gsCount CountHoney gs)
-    (gsCount CountBalloons gs)
-    (gsCount CountCookies gs)
-    (gsCount CountCakes gs)
-    (gsCount CountSafes gs)
+goalSatisfied = gsGoalMet
 
 -- | 目标满足：每日 → Won（不推进战役）；否则 LevelClear 或终章 Won。
 -- 步数耗尽 → Lost；否则 MoveApplied。
@@ -80,17 +67,22 @@ mapClickJump curLevel reached clicked
 
 -- | Short tip shown after a Lost outcome (失败提示).
 loseHint :: LevelGoal -> String
-loseHint (GoalScore t) = "再冲冲分数吧，目标 " ++ show t
-loseHint (GoalCollect _ n) = "优先收集该色宝石，目标 " ++ show n ++ " 个"
-loseHint (GoalCollectMulti reqs) =
-  "兼顾多色收集：" ++ show (length reqs) ++ " 种配额"
-loseHint (GoalClearStone n) = "用邻消或特效砸箱子，目标 " ++ show n ++ " 个"
-loseHint (GoalChest n) = "邻消打开宝箱，目标 " ++ show n ++ " 个"
-loseHint (GoalHoney n) = "邻消砸开蜂蜜罐，目标 " ++ show n ++ " 个"
-loseHint (GoalBalloon n) = "用同色邻消戳破气球，目标 " ++ show n ++ " 个"
-loseHint (GoalCookie n) = "打通下方让饼干掉到底部，目标 " ++ show n ++ " 个"
-loseHint (GoalCake n) = "邻消削掉蛋糕层，目标 " ++ show n ++ " 个"
-loseHint (GoalSafe n) = "邻消打开保险箱掉出饼干，目标 " ++ show n ++ " 个"
-loseHint (GoalUfo n) = "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"
-loseHint (GoalCarpet n) = "在地毯格上消除宝石以铺地毯，目标 " ++ show n ++ " 格"
-loseHint (GoalNamed name n) = "消除目标元素 " ++ name ++ "，目标 " ++ show n ++ " 个"
+loseHint g = case goalView g of
+  ViewScore t -> "再冲冲分数吧，目标 " ++ show t
+  ViewCollect _ n -> "优先收集该色宝石，目标 " ++ show n ++ " 个"
+  ViewCollectMulti reqs -> "兼顾多色收集：" ++ show (length reqs) ++ " 种配额"
+  ViewCount k n -> case k of
+    CountStones -> "用邻消或特效砸箱子，目标 " ++ show n ++ " 个"
+    CountChests -> "邻消打开宝箱，目标 " ++ show n ++ " 个"
+    CountHoney -> "邻消砸开蜂蜜罐，目标 " ++ show n ++ " 个"
+    CountBalloons -> "用同色邻消戳破气球，目标 " ++ show n ++ " 个"
+    CountCookies -> "打通下方让饼干掉到底部，目标 " ++ show n ++ " 个"
+    CountCakes -> "邻消削掉蛋糕层，目标 " ++ show n ++ " 个"
+    CountSafes -> "邻消打开保险箱掉出饼干，目标 " ++ show n ++ " 个"
+    CountUfo -> "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"
+    CountCarpets -> "在地毯格上消除宝石以铺地毯，目标 " ++ show n ++ " 格"
+    CountNamed name -> "消除目标元素 " ++ name ++ "，目标 " ++ show n ++ " 个"
+    _ -> generic
+  ViewOther _ -> generic
+  where
+    generic = "完成关卡目标，目标 " ++ show (goalTarget g)

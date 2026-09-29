@@ -24,7 +24,7 @@ import Data.Char (ord)
 import Data.List (intercalate)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
-import Match3.Counts (CounterKey(..), countOf, namedCounts)
+import Match3.Counts (CounterKey(..), colorBag, countOf, namedCounts)
 import Match3.Board.Grid (getCell, inBounds, setCell, MBoard, mboardRows)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
@@ -132,20 +132,23 @@ pOutcome o = case o of
   LevelClear s n -> "C" ++ show s ++ ">" ++ show n
 
 pGoal :: LevelGoal -> String
-pGoal g = case g of
-  GoalScore t -> "score" ++ show t
-  GoalCollect c n -> "collect" ++ pColor c ++ ":" ++ show n
-  GoalCollectMulti rs -> "multi" ++ concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- rs]
-  GoalClearStone n -> "stone" ++ show n
-  GoalChest n -> "chest" ++ show n
-  GoalHoney n -> "honey" ++ show n
-  GoalBalloon n -> "balloon" ++ show n
-  GoalCookie n -> "cookie" ++ show n
-  GoalCake n -> "cake" ++ show n
-  GoalSafe n -> "safe" ++ show n
-  GoalUfo n -> "ufo" ++ show n
-  GoalCarpet n -> "carpet" ++ show n
-  GoalNamed name n -> "named" ++ name ++ ":" ++ show n
+pGoal g = case goalView g of
+  ViewScore t -> "score" ++ show t
+  ViewCollect c n -> "collect" ++ pColor c ++ ":" ++ show n
+  ViewCollectMulti rs -> "multi" ++ concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- rs]
+  ViewCount k n -> case k of
+    CountStones -> "stone" ++ show n
+    CountChests -> "chest" ++ show n
+    CountHoney -> "honey" ++ show n
+    CountBalloons -> "balloon" ++ show n
+    CountCookies -> "cookie" ++ show n
+    CountCakes -> "cake" ++ show n
+    CountSafes -> "safe" ++ show n
+    CountUfo -> "ufo" ++ show n
+    CountCarpets -> "carpet" ++ show n
+    CountNamed name -> "named" ++ name ++ ":" ++ show n
+    _ -> show g
+  ViewOther _ -> show g
 
 pBag :: [(Color, Int)] -> String
 pBag xs = concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- xs]
@@ -341,7 +344,7 @@ goldenLines =
     , seed <- [1, 2 :: Int]
     ]
     ++ concat
-      [ runGame ("D" ++ show seed) (newDailyGame (GameConfig 20 (GoalScore 900)) seed) 10
+      [ runGame ("D" ++ show seed) (newDailyGame (GameConfig 20 (goalScore 900)) seed) 10
       | seed <- [20260929, 20260101 :: Int]
       ]
     ++ handmade
@@ -396,13 +399,13 @@ cascadeLines =
   where
     -- 结算投影（原 15 元组的字段顺序）与回放投影（原 (轮次, 终盘, 飞碟, 生成器)）都从同一个 CascadeRun 取。
     pRun r =
-      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctColors = tallies, ctCounts = cnts, ctCleared = cleared} = crTally r
+      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctCounts = cnts, ctCleared = cleared} = crTally r
           c k = countOf k cnts
           (stones, chests, honey, balloons) = (c CountStones, c CountChests, c CountHoney, c CountBalloons)
           (cookies, cakes, uAbs) = (c CountCookies, c CountCakes, c CountUfo)
           (b, ufos', g) = (crBoard r, crUfos r, crGen r)
       in unwords
-        [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag tallies
+        [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag (colorBag cnts)
         , "stone=" ++ show stones, "chest=" ++ show chests, "honey=" ++ show honey, "balloon=" ++ show balloons
         , "cookie=" ++ show cookies, "cake=" ++ show cakes, "uabs=" ++ show uAbs, "ufos=" ++ pUfos ufos'
         , "cleared=" ++ pPosList cleared, "gen=" ++ show (g :: StdGen) ]
@@ -441,7 +444,7 @@ layered b p fallback ice ov = case getCell b p of
 
 -- | 长局：不因分数 / 步数提前结束。
 longRun :: GameState -> GameState
-longRun gs = gs {gsGoal = GoalScore 100000, gsMoves = 30}
+longRun gs = gs {gsGoal = goalScore 100000, gsMoves = 30}
 
 -- | H4：步末全阶段 + 蔓延紧贴本步消除留下的空洞（第 28 关：皮带、传送门、地毯；再放藤 / 巧 / 蒸汽、
 -- 蜗牛、将归零的倒计时和饼干）。锁住「步末之后是否还要补结算」这一处的现有行为。

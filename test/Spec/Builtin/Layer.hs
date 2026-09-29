@@ -137,7 +137,7 @@ vine_spreads_after_move = do
           (mkVineGem C4)
   assertBool "vine placed" (hasVine (getCell board0 (5, 5)))
   assertBool "neighbor bare" (cellOverlay (getCell board0 (5, 4)) == Nothing)
-  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 99999 }
       gs0 =
         (newGameAtLevel 0 cfg 12)
           { gsBoard = board0
@@ -236,7 +236,7 @@ choco_spreads_after_move = do
           (mkChocoGem C4)
   assertBool "choco placed" (hasChoco (getCell board0 (5, 5)))
   assertBool "neighbor bare" (cellOverlay (getCell board0 (5, 4)) == Nothing)
-  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 99999 }
       gs0 =
         (newGameAtLevel 0 cfg 12)
           { gsBoard = board0
@@ -866,7 +866,7 @@ soft_hit_preserves_oncell_overlays = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
           }
@@ -991,7 +991,7 @@ soft_hit_preserves_oncell_fog_steam = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
           }

@@ -3,7 +3,7 @@
 
 -- | HUD 与叠层的几何降级绘制：顶部信息栏、键位条、首关提示、暂停帮助、弹字、结算面板、进度条。
 --
--- 依赖：UI.Glyph、UI.Types、UI.Layout、ComboFx（弹字曲线）。
+-- 依赖：UI.Glyph、UI.GoalStyle（进度条颜色）、UI.Types、UI.Layout、ComboFx（弹字曲线）。
 -- 不变量：结算面板在回放播完（animBusy 为假）后才画，不挡住最后几轮。
 module UI.HudPrim
   ( drawKeyChip
@@ -24,6 +24,7 @@ import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import UI.Glyph
+import UI.GoalStyle (goalPip)
 import UI.Layout
 import UI.Types
 
@@ -142,23 +143,9 @@ drawHud ren app = do
     fillRect ren (Just (Rectangle (P (V2 xDot 10)) (V2 7 14)))
 
   -- Goal meter (score or collect)
-  let prog = goalProgress (gsGoal gs) (gsScore gs) (gsCollected gs)
+  let prog = gsProgress gs
       targ = goalTarget (gsGoal gs)
-      meterCol = case gsGoal gs of
-        GoalScore _ -> V4 100 220 140 255
-        GoalCollectMulti _ -> V4 220 180 100 255
-        GoalClearStone _ -> V4 160 160 170 255
-        GoalChest _ -> V4 220 170 60 255
-        GoalHoney _ -> V4 240 180 40 255
-        GoalBalloon _ -> V4 255 120 160 255
-        GoalCookie _ -> V4 210 160 90 255
-        GoalCake _ -> V4 255 140 180 255
-        GoalSafe _ -> V4 200 170 50 255
-        GoalUfo _ -> V4 180 120 255 255
-        GoalCarpet _ -> V4 180 100 160 255
-        GoalNamed name _ -> let (r, g, b) = namedRGB name in V4 r g b 255
-        GoalCollect col _ ->
-          let (r, g, b) = colorRGB col in V4 r g b 255
+      meterCol = goalPip (gsGoal gs)
   drawMeter ren 10 36 prog targ meterCol
   drawNumber ren 10 40 2 white prog
   rendererDrawColor ren $= dim
@@ -166,31 +153,29 @@ drawHud ren app = do
   drawNumber ren 90 40 2 dim targ
 
   -- Collect color swatch
-  case gsGoal gs of
-    GoalCollectMulti _ -> pure ()
-    GoalClearStone _ -> pure ()
-    GoalChest _ -> do
+  case goalView (gsGoal gs) of
+    ViewCount CountChests _ -> do
       rendererDrawColor ren $= V4 220 170 60 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
       rendererDrawColor ren $= V4 180 120 40 255
       fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 12 6)))
-    GoalHoney _ -> do
+    ViewCount CountHoney _ -> do
       rendererDrawColor ren $= V4 240 180 40 255
       fillRect ren (Just (Rectangle (P (V2 202 40)) (V2 16 18)))
       rendererDrawColor ren $= V4 200 140 20 255
       fillRect ren (Just (Rectangle (P (V2 206 36)) (V2 8 6)))
-    GoalBalloon _ -> do
+    ViewCount CountBalloons _ -> do
       rendererDrawColor ren $= V4 255 120 160 255
       fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 14 16)))
       rendererDrawColor ren $= V4 200 80 120 255
       fillRect ren (Just (Rectangle (P (V2 209 54)) (V2 4 6)))
-    GoalCookie _ -> do
+    ViewCount CountCookies _ -> do
       rendererDrawColor ren $= V4 210 160 90 255
       fillRect ren (Just (Rectangle (P (V2 202 40)) (V2 16 16)))
       rendererDrawColor ren $= V4 90 50 30 255
       fillRect ren (Just (Rectangle (P (V2 206 44)) (V2 3 3)))
       fillRect ren (Just (Rectangle (P (V2 212 48)) (V2 3 3)))
-    GoalCake _ -> do
+    ViewCount CountCakes _ -> do
       -- Pink frosted cake swatch (distinct from tan cookie)
       rendererDrawColor ren $= V4 255 140 180 255
       fillRect ren (Just (Rectangle (P (V2 202 44)) (V2 16 14)))
@@ -198,18 +183,18 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 204 38)) (V2 12 8)))
       rendererDrawColor ren $= V4 255 80 120 255
       fillRect ren (Just (Rectangle (P (V2 208 36)) (V2 4 4)))
-    GoalSafe _ -> do
+    ViewCount CountSafes _ -> do
       -- Brass vault door swatch
       rendererDrawColor ren $= V4 200 170 50 255
       fillRect ren (Just (Rectangle (P (V2 202 40)) (V2 16 18)))
       rendererDrawColor ren $= V4 80 80 90 255
       fillRect ren (Just (Rectangle (P (V2 208 46)) (V2 6 6)))
-    GoalUfo _ -> do
+    ViewCount CountUfo _ -> do
       rendererDrawColor ren $= V4 180 120 255 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
       rendererDrawColor ren $= V4 220 200 255 255
       fillRect ren (Just (Rectangle (P (V2 204 40)) (V2 12 6)))
-    GoalCarpet _ -> do
+    ViewCount CountCarpets _ -> do
       -- Magenta weave swatch (地毯)
       rendererDrawColor ren $= V4 180 100 160 255
       fillRect ren (Just (Rectangle (P (V2 200 40)) (V2 20 20)))
@@ -219,17 +204,17 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 208 50)) (V2 4 4)))
       fillRect ren (Just (Rectangle (P (V2 204 52)) (V2 4 4)))
       fillRect ren (Just (Rectangle (P (V2 212 52)) (V2 4 4)))
-    GoalNamed name _ -> do
+    ViewCount (CountNamed name) _ -> do
       let (r, g, b) = namedRGB name
       rendererDrawColor ren $= V4 r g b 255
       fillRect ren (Just (Rectangle (P (V2 200 40)) (V2 20 20)))
-    GoalCollect col _ -> do
+    ViewCollect col _ -> do
       let (r, g, b) = colorRGB col
       rendererDrawColor ren $= V4 r g b 255
       fillRect ren (Just (Rectangle (P (V2 200 40)) (V2 20 20)))
       rendererDrawColor ren $= white
       drawRect ren (Just (Rectangle (P (V2 200 40)) (V2 20 20)))
-    GoalScore _ -> pure ()
+    _ -> pure ()  -- 分数 / 多色 / 石块 / 其余：无色块
 
   -- Moves meter
   let moveCap = max (gsMoves gs) (lvlMoves lvl)

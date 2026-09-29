@@ -38,7 +38,7 @@ import Match3.Board.Cascade
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, beltShiftWith, coverWith, endRules, hitGroundWith, pushableWith)
-import Match3.Counts (CounterKey(..), countOf, countsFromList, singleCount)
+import Match3.Counts (CounterKey(..), countsFromList, singleCount)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Game.Outcome
@@ -85,7 +85,6 @@ resolveMoveWith reg kind start opening gs =
       ufosF = crUfos finalSeg
       gFinal = crGen finalSeg
       -- 计数
-      colors = let c0 :| cs = NE.map ctColors tallies1 in foldl mergeTallies c0 cs
       total f = sum (map f tallies)
       gained = total ctScore
       clearedAll = concatMap ctCleared tallies
@@ -103,30 +102,13 @@ resolveMoveWith reg kind start opening gs =
         in (gr', concat (reverse countsRev))
       (carpetOpen', carpetHit) =
         coverWith reg (gsCarpetOpen gs) (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter)
-      -- 计数（第 4 刀：统一进 gsCounts）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
+      -- 计数（第 4 刀：统一进 gsCounts；第 5 刀：颜色袋也在 ctCounts 里、目标进度由目标数据派生）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
       counts' =
         gsCounts gs
           <> mconcat (map ctCounts tallies)
           <> countsFromList [(dcCounter d, dcCount d) | d <- diffs]
           <> countsFromList [(CountNamed n, k) | (n, k) <- groundCounts]
           <> singleCount CountCarpets carpetHit
-      now k = countOf k counts'
-      collected' = case gsGoal gs of
-        GoalCollect col _ -> gsCollected gs + lookupColor colors col
-        GoalCollectMulti reqs ->
-          let bag' = mergeTallies (gsColorBag gs) colors
-          in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
-        GoalClearStone _ -> now CountStones
-        GoalChest _ -> now CountChests
-        GoalHoney _ -> now CountHoney
-        GoalBalloon _ -> now CountBalloons
-        GoalCookie _ -> now CountCookies
-        GoalCake _ -> now CountCakes
-        GoalSafe _ -> now CountSafes
-        GoalCarpet _ -> now CountCarpets
-        GoalNamed name _ -> now (CountNamed name)
-        GoalScore _ -> gsCollected gs
-        GoalUfo _ -> now CountUfo
       -- 步数与道具次数
       spend g = case kind of
         KindSwap -> g {gsMoves = gsMoves gs - 1 + bonusMoves}
@@ -138,8 +120,6 @@ resolveMoveWith reg kind start opening gs =
           gs
             { gsBoard = board1
             , gsScore = gsScore gs + gained
-            , gsCollected = collected'
-            , gsColorBag = mergeTallies (gsColorBag gs) colors
             , gsCounts = counts'
             , gsGen = gFinal
             , gsHint = Nothing

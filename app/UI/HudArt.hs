@@ -4,13 +4,10 @@
 -- | HUD 与叠层的贴图绘制：九宫格面板、目标图标与进度、道具次数、连击徽章与「N 连击！」总结、
 -- 提示 / 道具横幅、键位条、暂停帮助、结算面板、「连击 xN」弹字与得分浮字。
 --
--- 依赖：UI.TextArt、UI.BoardArt（宝石小图标）、Art、ComboFx（样式与浮字曲线）、UI.Types、UI.Layout。
+-- 依赖：UI.TextArt、UI.BoardArt（宝石小图标）、UI.GoalStyle（目标图标 / 色调）、Art、ComboFx（样式与浮字曲线）、UI.Types、UI.Layout。
 -- 不变量：结算面板在回放播完后才画；连击总结只在最高连击 ≥ 2 时显示。
 module UI.HudArt
-  ( goalIcon
-  , hudProgress
-  , goalTint
-  , drawHudArt
+  ( drawHudArt
   , drawComboSummaryArt
   , drawTipBannerArt
   , drawToolBannerArt
@@ -29,6 +26,7 @@ import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import UI.BoardArt
+import UI.GoalStyle (goalIcon, goalTint)
 import UI.Layout
 import UI.TextArt
 import UI.Types
@@ -36,56 +34,6 @@ import UI.Types
 --------------------------------------------------------------------------------
 -- 贴图版 HUD / 横幅 / 暂停 / 结算 / 地图
 --------------------------------------------------------------------------------
-
--- | 目标图标（复用棋子贴图）。
-goalIcon :: LevelGoal -> String
-goalIcon g = case g of
-  GoalScore _ -> "icon_score"
-  GoalCollect c _ -> gemSprite c
-  GoalCollectMulti _ -> "icon_multi"
-  GoalClearStone _ -> "stone_3"
-  GoalChest _ -> "chest"
-  GoalHoney _ -> "honey"
-  GoalBalloon _ -> "balloon_c1"
-  GoalCookie _ -> "cookie"
-  GoalCake _ -> "cake_1"
-  GoalSafe _ -> "safe"
-  GoalUfo _ -> "ufo_c3"
-  GoalCarpet _ -> "carpet_covered"
-  GoalNamed name _ -> name
-
--- | HUD 目标进度（与窗口标题使用同一组计数器）。
-hudProgress :: GameState -> Int
-hudProgress gs = case gsGoal gs of
-  GoalScore _ -> gsScore gs
-  GoalCollect _ _ -> gsCollected gs
-  GoalCollectMulti reqs -> sum [min n (lookupCount (gsColorBag gs) c) | (c, n) <- reqs]
-  GoalClearStone _ -> gsCount CountStones gs
-  GoalChest _ -> gsCount CountChests gs
-  GoalHoney _ -> gsCount CountHoney gs
-  GoalBalloon _ -> gsCount CountBalloons gs
-  GoalCookie _ -> gsCount CountCookies gs
-  GoalCake _ -> gsCount CountCakes gs
-  GoalSafe _ -> gsCount CountSafes gs
-  GoalUfo _ -> gsCount CountUfo gs
-  GoalCarpet _ -> gsCount CountCarpets gs
-  GoalNamed _ _ -> gsCollected gs
-
-goalTint :: LevelGoal -> V3 Word8
-goalTint g = case g of
-  GoalScore _ -> V3 110 230 150
-  GoalCollect c _ -> let (r, gg, b) = colorRGB c in V3 r gg b
-  GoalCollectMulti _ -> V3 240 190 100
-  GoalClearStone _ -> V3 180 184 200
-  GoalChest _ -> V3 230 170 70
-  GoalHoney _ -> V3 250 190 50
-  GoalBalloon _ -> V3 255 120 160
-  GoalCookie _ -> V3 220 160 90
-  GoalCake _ -> V3 255 140 190
-  GoalSafe _ -> V3 200 180 90
-  GoalUfo _ -> V3 170 130 255
-  GoalCarpet _ -> V3 220 90 150
-  GoalNamed name _ -> let (r, gg, b) = namedRGB name in V3 r gg b
 
 -- | 贴图版 HUD：关卡徽章、目标与进度条、步数、分数（回放中滚动）、道具次数、连击徽章 / 总结。
 drawHudArt :: Renderer -> Art -> App -> IO ()
@@ -128,7 +76,7 @@ drawHudArt ren art app = do
     textA ren art (cx + 30) 18 3 (if n > 0 then white else dim) (show n)
   -- 目标条
   let goal = gsGoal gs
-      prog = hudProgress gs
+      prog = gsProgress gs  -- 第 5 刀：与窗口标题 / 网页版同一个数（第 5 刀前是本模块的 hudProgress）
       targ = goalTarget goal
   _ <- drawSprite ren art (goalIcon goal) (rect 12 50 26 26)
   meterA ren art 42 53 332 prog targ (goalTint goal) (show prog ++ "/" ++ show targ)

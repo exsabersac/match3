@@ -98,11 +98,13 @@
 
 | 中文 | 类型 | 说明 |
 |------|------|------|
-| 分数目标 | `GoalScore` | `gsScore` |
-| 单色收集 | `GoalCollect` | `gsCollected` + 颜色袋 |
-| 多色收集 | `GoalCollectMulti` | `gsColorBag` |
-| 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | 对应 `Goal*` | `gsCounts` 里对应的键（第 4 刀前是 10 个专用字段）：`gsCount CountStones` / `CountChests` / `CountHoney` / `CountBalloons` / `CountCookies` / `CountCakes` / `CountSafes` / `CountUfo` / `CountCarpets` |
-| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsCount (CountNamed 名字)` 累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
+| 分数目标 | `goalScore t`（`Show`：`GoalScore t`） | `gsScore` |
+| 单色收集 | `goalCollect 色 n`（`GoalCollect`） | `gsCount (CountColor 色)` |
+| 多色收集 | `goalColors [(色, n)]`（`GoalCollectMulti`） | 每色 `gsCount (CountColor 色)` ≥ 配额；进度 = Σ min(配额, 该色数) |
+| 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | `goalCount 键 n`（`GoalClearStone` … `GoalCarpet`） | `gsCounts` 里对应的键（第 4 刀前是 10 个专用字段）：`gsCount CountStones` / `CountChests` / `CountHoney` / `CountBalloons` / `CountCookies` / `CountCakes` / `CountSafes` / `CountUfo` / `CountCarpets` |
+| 按名字计数 | `goalCount (CountNamed 名字) N`（`GoalNamed 名字 N`） | 段 2c：`gsCount (CountNamed 名字)` 累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
+
+目标是数据（第 5 刀，`Match3.Goal`）：`LevelGoal` = 一组配额，每项 = 度量（分数或一个计数键）+ 目标值。达成 ⟺ 每项度量 ≥ 目标值；进度（HUD / 标题 / 网页）单项 = 度量本身（不截断），多项 = Σ min(目标值, 度量)；目标值 = 各项之和。结算、HUD、标题栏、网页版都调同一组函数（`goalMet` / `goalProgress` / `goalTarget`，状态上的简写 `gsGoalMet` / `gsProgress`）。括号里是 `Show` 的写法：与第 5 刀前的构造器写法逐字相同（元素查询快照对 `show` 取散列、网页版按首词取目标种类）。`gsCollected` / `gsColorBag` 第 5 刀起不是字段，是由 `gsCounts` 派生的读数（旧字段的值，`Show` 仍在原位置打印）。
 | 步数 | `gsMoves` / `MovesLeft` | 成功步 −1；时间精灵可 +2 |
 | 步数银行 | `carryMovesBonus` | 战役过关最多带 3 步 |
 | 交换无效 | `InvalidSwap` | 越界/非邻/无次数等 |

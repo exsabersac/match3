@@ -474,7 +474,7 @@ safe_opens_to_cookie = do
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
-          , gsGoal = GoalSafe 1
+          , gsGoal = goalCount CountSafes 1
           , gsCounts = noCounts
           , gsOver = Nothing
           , gsHint = Nothing
@@ -762,7 +762,7 @@ honey_balloon_same_clear = do
           , gsBelts = []
           , gsUfos = []
           , gsCounts = noCounts
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
@@ -811,7 +811,7 @@ safe_bottom_cookie_collected = do
           , gsBelts = []
           , gsUfos = []
           , gsCounts = noCounts
-          , gsGoal = GoalSafe 1
+          , gsGoal = goalCount CountSafes 1
           }
       (gs1, out) = trySwap (6, 1) (6, 2) gs0
   case out of
@@ -859,7 +859,7 @@ surprise_direct_seed_opens = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gsB1, outB) = useHammer (3, 3) gsB0
   case outB of
@@ -1023,7 +1023,7 @@ blast_chips_layered_obstacles_once = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalHoney 8
+          , gsGoal = goalCount CountHoney 8
           , gsMoves = 20
           , gsScore = 0
           , gsCounts = noCounts

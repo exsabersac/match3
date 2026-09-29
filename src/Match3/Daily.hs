@@ -7,6 +7,7 @@ module Match3.Daily
   , starRating
   ) where
 
+import Match3.Counts (CounterKey(..))
 import Match3.Types
 
 -- | Deterministic seed from YYYY-MM-DD (local calendar ints).
@@ -20,16 +21,16 @@ dailyConfig year month day =
   let s = dailySeed year month day
       flavor = s `mod` 10
   in case flavor of
-       0 -> GameConfig 28 (GoalScore 600)
-       1 -> GameConfig 28 (GoalCollect C1 18)
-       2 -> GameConfig 28 (GoalCollectMulti [(C2, 10), (C4, 10)])
-       3 -> GameConfig 26 (GoalClearStone 6)
-       4 -> GameConfig 26 (GoalHoney 6)
-       5 -> GameConfig 26 (GoalUfo 8)
-       6 -> GameConfig 26 (GoalChest 5)
-       7 -> GameConfig 26 (GoalCake 5)
-       8 -> GameConfig 26 (GoalSafe 4)
-       _ -> GameConfig 26 (GoalBalloon 6)
+       0 -> GameConfig 28 (goalScore 600)
+       1 -> GameConfig 28 (goalCollect C1 18)
+       2 -> GameConfig 28 (goalColors [(C2, 10), (C4, 10)])
+       3 -> GameConfig 26 (goalCount CountStones 6)
+       4 -> GameConfig 26 (goalCount CountHoney 6)
+       5 -> GameConfig 26 (goalCount CountUfo 8)
+       6 -> GameConfig 26 (goalCount CountChests 5)
+       7 -> GameConfig 26 (goalCount CountCakes 5)
+       8 -> GameConfig 26 (goalCount CountSafes 4)
+       _ -> GameConfig 26 (goalCount CountBalloons 6)
 
 dailyLevel :: Int -> Int -> Int -> Level
 dailyLevel year month day =

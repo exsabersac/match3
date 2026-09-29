@@ -60,7 +60,7 @@ last_cleared_skips_belt_snail = do
           , gsOver = Nothing
           , gsHint = Nothing
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsLastCleared = []
           }
       (gs1, out) = trySwap (1, 2) (1, 3) gs0
@@ -101,7 +101,7 @@ last_cleared_includes_countdown_explode = do
           , gsPortals = []
           , gsLastCleared = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of

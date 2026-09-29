@@ -402,7 +402,7 @@ rainbow_swap_flip_partner = do
           , gsScore = 0
           , gsBelts = []
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (0, 0) (0, 1) gs0
   case out of
@@ -477,7 +477,7 @@ soft_lock_blocks_special_expand = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
           }
@@ -587,7 +587,7 @@ soft_lock_blocks_rainbow_swap = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       countC4 b =
         length
@@ -663,7 +663,7 @@ soft_lock_blocks_special_combo = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
   -- ice=2 LineH × Bomb: combo blocked.
   let boardIce =
@@ -729,7 +729,7 @@ soft_lock_blocks_freeswap_activation = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsFreeSwaps = 2
           }
   -- ice=2 Rainbow × C4 via free-swap (non-adjacent also OK for booster).
@@ -792,7 +792,7 @@ soft_lock_blocks_double_rainbow = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       countGems b =
         length

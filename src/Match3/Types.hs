@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 -- | 领域类型与关卡表：颜色、宝石种类、叠层、单元格内容、目标、结局、40 关配置（段 5 在 38 关之后追加果冻 / 气泡两关）。
--- 提供构造器 / 谓词 / goalMet*；不含交换、连锁或 IO。
+-- 提供构造器 / 谓词；颜色（Match3.Color）与目标（Match3.Goal，第 5 刀数据化）在这里再导出；不含交换、连锁或 IO。
 -- specialActivates 定义软锁：多冰 / 锁链 / 窗帘下特殊块不点火。
 module Match3.Types
   ( Ground
@@ -111,13 +111,19 @@ module Match3.Types
   , MovesLeft
   , TargetScore
   , Outcome(..)
+  , Meter(..)
+  , Quota(..)
   , LevelGoal(..)
-  , goalMet
-  , goalMetEx
+  , goalScore
+  , goalCollect
+  , goalColors
+  , goalCount
+  , GoalView(..)
+  , goalView
+  , meterValue
   , goalProgress
-  , goalProgressEx
+  , goalMet
   , goalTarget
-  , lookupCount
   , GameConfig(..)
   , defaultConfig
   , Level(..)
@@ -127,9 +133,9 @@ module Match3.Types
 
 import Data.Array (Array, assocs, bounds, elems, listArray, (!), (//))
 import GHC.Generics (Generic)
-
-data Color = C1 | C2 | C3 | C4 | C5
-  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
+import Match3.Color (Color(..), allColors)
+import Match3.Counts (CounterKey(..))
+import Match3.Goal
 
 -- | Normal gem, line clearers (4-match), bomb, rainbow (5-match color clear).
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
@@ -563,9 +569,6 @@ cellKind cell = case cell of
 numColors :: Int
 numColors = 5
 
-allColors :: [Color]
-allColors = [minBound .. maxBound]
-
 -- | 第 i 种颜色（按 allColors 顺序，下标对颜色数取模，负数也落在范围内）。
 -- 取代 toEnum 构造颜色：总函数，不会因越界报错。
 colorAt :: Int -> Color
@@ -653,115 +656,13 @@ data Outcome
 -- 内置关卡恒为 []。
 type Ground = [(Pos, (String, Int))]
 
--- | Level win condition (GoalCollect shape frozen; new goals are additive).
-data LevelGoal
-  = GoalScore TargetScore
-  | GoalCollect Color Int
-  | GoalCollectMulti [(Color, Int)]  -- all color quotas must be met
-  | GoalClearStone Int                 -- fully destroy N stone blockers
-  | GoalChest Int                      -- open N treasure chests (宝箱)
-  | GoalHoney Int                      -- smash N honey jars (蜂蜜罐)
-  | GoalBalloon Int                    -- pop N balloons (气球)
-  | GoalCookie Int                     -- collect N biscuits at bottom (饼干)
-  | GoalCake Int                       -- clear N cake layers fully (蛋糕)
-  | GoalSafe Int                       -- open N vaults / safes (保险箱)
-  | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
-  | GoalCarpet Int                     -- cover N carpet / floor tiles (地毯)
-  | GoalNamed String Int               -- 段 2c：按元素名计数的目标（gsCounts 里 CountNamed 该名字累计 ≥ N；扩展元素用）
-  deriving (Eq, Show, Generic)
-
--- | Whether the goal is satisfied given current score / primary collected count.
--- For GoalCollectMulti / GoalClearStone prefer goalMetEx.
-goalMet :: LevelGoal -> Score -> Int -> Bool
-goalMet (GoalScore t) score _ = score >= t
-goalMet (GoalCollect _ n) _ collected = collected >= n
-goalMet (GoalCollectMulti _) _ _ = False  -- use goalMetEx
-goalMet (GoalClearStone _) _ _ = False
-goalMet (GoalChest _) _ _ = False
-goalMet (GoalHoney _) _ _ = False
-goalMet (GoalBalloon _) _ _ = False
-goalMet (GoalCookie _) _ _ = False
-goalMet (GoalCake _) _ _ = False
-goalMet (GoalSafe _) _ _ = False
-goalMet (GoalUfo _) _ _ = False
-goalMet (GoalCarpet n) _ collected = collected >= n
-goalMet (GoalNamed _ n) _ collected = collected >= n
-
--- | Full goal check: bag + stones/UFO/chests/honey/balloon/cookie/cake/safe counters.
-goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
-goalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ _ _ = score >= t
-goalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
-goalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ _ =
-  all (\(col, n) -> lookupCount bag col >= n) reqs
-goalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ _ _ = stones >= n
-goalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ _ _ = ufos >= n
-goalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ _ _ = chests >= n
-goalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ _ _ = honey >= n
-goalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ _ _ = balloons >= n
-goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ _ = cookies >= n
-goalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes _ = cakes >= n
-goalMetEx (GoalSafe n) _ _ _ _ _ _ _ _ _ _ safes = safes >= n
-goalMetEx (GoalCarpet n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
-goalMetEx (GoalNamed _ n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
-
-lookupCount :: [(Color, Int)] -> Color -> Int
-lookupCount xs col = maybe 0 id (lookup col xs)
-
--- | Current progress toward the goal (primary meter).
-goalProgress :: LevelGoal -> Score -> Int -> Int
-goalProgress (GoalScore _) score _ = score
-goalProgress (GoalCollect _ _) _ collected = collected
-goalProgress (GoalCollectMulti _) _ collected = collected
-goalProgress (GoalClearStone _) _ collected = collected
-goalProgress (GoalChest _) _ collected = collected
-goalProgress (GoalHoney _) _ collected = collected
-goalProgress (GoalBalloon _) _ collected = collected
-goalProgress (GoalCookie _) _ collected = collected
-goalProgress (GoalCake _) _ collected = collected
-goalProgress (GoalSafe _) _ collected = collected
-goalProgress (GoalUfo _) _ collected = collected
-goalProgress (GoalCarpet _) _ collected = collected
-goalProgress (GoalNamed _ _) _ collected = collected
-
-goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
-goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ _ = score
-goalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ _ _ = collected
-goalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ _ =
-  sum [min n (lookupCount bag c) | (c, n) <- reqs]
-goalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ _ _ = stones
-goalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ _ _ = ufos
-goalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ _ _ = chests
-goalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ _ _ = honey
-goalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ _ _ = balloons
-goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ _ = cookies
-goalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes _ = cakes
-goalProgressEx (GoalSafe _) _ _ _ _ _ _ _ _ _ _ safes = safes
-goalProgressEx (GoalCarpet _) _ collected _ _ _ _ _ _ _ _ _ = collected
-goalProgressEx (GoalNamed _ _) _ collected _ _ _ _ _ _ _ _ _ = collected
-
--- | Target number shown in HUD.
-goalTarget :: LevelGoal -> Int
-goalTarget (GoalScore t) = t
-goalTarget (GoalCollect _ n) = n
-goalTarget (GoalCollectMulti reqs) = sum [n | (_, n) <- reqs]
-goalTarget (GoalClearStone n) = n
-goalTarget (GoalChest n) = n
-goalTarget (GoalHoney n) = n
-goalTarget (GoalBalloon n) = n
-goalTarget (GoalCookie n) = n
-goalTarget (GoalCake n) = n
-goalTarget (GoalSafe n) = n
-goalTarget (GoalUfo n) = n
-goalTarget (GoalCarpet n) = n
-goalTarget (GoalNamed _ n) = n
-
 data GameConfig = GameConfig
   { cfgMoves :: MovesLeft
   , cfgGoal  :: LevelGoal
   } deriving (Eq, Show)
 
 defaultConfig :: GameConfig
-defaultConfig = GameConfig { cfgMoves = 30, cfgGoal = GoalScore 500 }
+defaultConfig = GameConfig { cfgMoves = 30, cfgGoal = goalScore 500 }
 
 data Level = Level
   { lvlIndex :: Int
@@ -773,47 +674,47 @@ data Level = Level
 -- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / time-spirit / steam / carpet / hazards / jelly / bubble (段 5); difficulty ramps.
 allLevels :: [Level]
 allLevels =
-  [ Level 0  "入门"   30 (GoalScore 300)
-  , Level 1  "采红"   30 (GoalCollect C1 20)
-  , Level 2  "热身"   26 (GoalScore 500)
-  , Level 3  "采蓝"   26 (GoalCollect C3 22)
-  , Level 4  "进阶"   24 (GoalScore 700)
-  , Level 5  "冰绿"   24 (GoalCollect C2 26)
-  , Level 6  "双采"   28 (GoalCollectMulti [(C1, 12), (C3, 12)])
-  , Level 7  "碎石"   26 (GoalClearStone 8)
-  , Level 8  "草场"   24 (GoalScore 600)
-  , Level 9  "藤袭"   22 (GoalCollect C1 18)
-  , Level 10 "传送"   22 (GoalScore 800)
-  , Level 11 "轰炸"   20 (GoalScore 750)
-  , Level 12 "飞碟"   24 (GoalUfo 10)
-  , Level 13 "碟猎"   20 (GoalUfo 14)
-  , Level 14 "压力"   20 (GoalCollectMulti [(C1, 10), (C2, 10), (C3, 8)])
-  , Level 15 "大师"   22 (GoalScore 1000)
-  , Level 16 "宝箱"   24 (GoalChest 6)
-  , Level 17 "巧箱"   22 (GoalChest 5)
-  , Level 18 "蜂蜜"   24 (GoalHoney 6)
-  , Level 19 "蜜压"   22 (GoalHoney 5)
-  , Level 20 "气球"   24 (GoalBalloon 6)
-  , Level 21 "饼干"   24 (GoalCookie 6)
-  , Level 22 "巧饼"   22 (GoalCookie 5)
-  , Level 23 "蛋糕"   24 (GoalCake 6)
-  , Level 24 "帽宴"   22 (GoalCake 5)
-  , Level 25 "锁链"   22 (GoalScore 900)
-  , Level 26 "果汁"   24 (GoalCollect C1 18)
-  , Level 27 "终章"   24 (GoalScore 1400)
-  , Level 28 "蜗牛"   20 (GoalScore 850)
-  , Level 29 "冰冻"   20 (GoalCollect C2 16)
-  , Level 30 "窗帘"   22 (GoalCollect C1 16)
-  , Level 31 "金库"   22 (GoalSafe 5)
-  , Level 32 "惊喜"   22 (GoalScore 900)
-  , Level 33 "染色"   22 (GoalCollect C3 16)
-  , Level 34 "时灵"   22 (GoalScore 850)
-  , Level 35 "蒸汽"   22 (GoalCollect C2 16)
-  , Level 36 "地毯"   24 (GoalCarpet 8)
-  , Level 37 "织毯"   24 (GoalCarpet 12)
-    -- 段 5：追加在 38 关之后（前 38 关不变）；目标按元素名计数（GoalNamed）
-  , Level 38 "果冻"   24 (GoalNamed "jelly" 32)
-  , Level 39 "气泡"   22 (GoalNamed "bubble" 12)
+  [ Level 0  "入门"   30 (goalScore 300)
+  , Level 1  "采红"   30 (goalCollect C1 20)
+  , Level 2  "热身"   26 (goalScore 500)
+  , Level 3  "采蓝"   26 (goalCollect C3 22)
+  , Level 4  "进阶"   24 (goalScore 700)
+  , Level 5  "冰绿"   24 (goalCollect C2 26)
+  , Level 6  "双采"   28 (goalColors [(C1, 12), (C3, 12)])
+  , Level 7  "碎石"   26 (goalCount CountStones 8)
+  , Level 8  "草场"   24 (goalScore 600)
+  , Level 9  "藤袭"   22 (goalCollect C1 18)
+  , Level 10 "传送"   22 (goalScore 800)
+  , Level 11 "轰炸"   20 (goalScore 750)
+  , Level 12 "飞碟"   24 (goalCount CountUfo 10)
+  , Level 13 "碟猎"   20 (goalCount CountUfo 14)
+  , Level 14 "压力"   20 (goalColors [(C1, 10), (C2, 10), (C3, 8)])
+  , Level 15 "大师"   22 (goalScore 1000)
+  , Level 16 "宝箱"   24 (goalCount CountChests 6)
+  , Level 17 "巧箱"   22 (goalCount CountChests 5)
+  , Level 18 "蜂蜜"   24 (goalCount CountHoney 6)
+  , Level 19 "蜜压"   22 (goalCount CountHoney 5)
+  , Level 20 "气球"   24 (goalCount CountBalloons 6)
+  , Level 21 "饼干"   24 (goalCount CountCookies 6)
+  , Level 22 "巧饼"   22 (goalCount CountCookies 5)
+  , Level 23 "蛋糕"   24 (goalCount CountCakes 6)
+  , Level 24 "帽宴"   22 (goalCount CountCakes 5)
+  , Level 25 "锁链"   22 (goalScore 900)
+  , Level 26 "果汁"   24 (goalCollect C1 18)
+  , Level 27 "终章"   24 (goalScore 1400)
+  , Level 28 "蜗牛"   20 (goalScore 850)
+  , Level 29 "冰冻"   20 (goalCollect C2 16)
+  , Level 30 "窗帘"   22 (goalCollect C1 16)
+  , Level 31 "金库"   22 (goalCount CountSafes 5)
+  , Level 32 "惊喜"   22 (goalScore 900)
+  , Level 33 "染色"   22 (goalCollect C3 16)
+  , Level 34 "时灵"   22 (goalScore 850)
+  , Level 35 "蒸汽"   22 (goalCollect C2 16)
+  , Level 36 "地毯"   24 (goalCount CountCarpets 8)
+  , Level 37 "织毯"   24 (goalCount CountCarpets 12)
+    -- 段 5：追加在 38 关之后（前 38 关不变）；目标按元素名计数（CountNamed）
+  , Level 38 "果冻"   24 (goalCount (CountNamed "jelly") 32)
+  , Level 39 "气泡"   22 (goalCount (CountNamed "bubble") 12)
   ]
 
 levelConfig :: Level -> GameConfig

@@ -21,7 +21,7 @@ import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Board.Grid (MBoard, atM, mboardFromRows)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
-import Match3.Counts (bumpCount, countsFromList, noCounts, plusCounts)
+import Match3.Counts (bumpCount, noCounts, plusCounts)
 import Match3.Element
 import Match3.Element.Class (toCell)
 import qualified Match3.Engine as M3E
@@ -41,6 +41,9 @@ tests =
       , testProperty "qc_undo_redo_roundtrip" (withMaxSuccess 100 qc_undo_redo_roundtrip)
       , testProperty "qc_replay_same_seed_deterministic" (withMaxSuccess 60 qc_replay_same_seed_deterministic)
       , testProperty "qc_goal_progress_monotone" (withMaxSuccess 60 qc_goal_progress_monotone)
+      , testProperty "qc_goal_matches_legacy" (withMaxSuccess 2000 qc_goal_matches_legacy)
+      , testProperty "qc_goal_progress_laws" (withMaxSuccess 1000 qc_goal_progress_laws)
+      , testProperty "qc_goal_progress_bounded" (withMaxSuccess 60 qc_goal_progress_bounded)
       , testProperty "qc_registry_decode_roundtrip" (withMaxSuccess 1000 qc_registry_decode_roundtrip)
       , testProperty "qc_registry_names_slots_unique" (once qc_registry_names_slots_unique)
       , testProperty "qc_find_hint_local_matches_reference" (withMaxSuccess 400 qc_find_hint_local_matches_reference)
@@ -278,8 +281,8 @@ qc_replay_same_seed_deterministic =
       in classify (any stepAccepted steps1) "some move accepted" $
            counterexample (show acts) (summary steps1 === summary steps2)
 
--- | 目标进度单调：一局里每一步之后，分数、主进度（gsCollected）、goalProgressEx、各类计数字段、
--- 按名字的计数都不减；目标一旦满足就一直满足。
+-- | 目标进度单调：一局里每一步之后，分数、主进度（gsProgress 与派生的 gsCollected）、各类计数字段、
+-- 各色清除数、按名字的计数都不减；目标一旦满足就一直满足。
 qc_goal_progress_monotone :: Property
 qc_goal_progress_monotone =
   forAll genStart $ \start ->
@@ -291,23 +294,224 @@ qc_goal_progress_monotone =
           ok (a, b) =
             and (zipWith (<=) (meters a) (meters b))
               && and [lookupN n b >= v | (n, v) <- namedCounts (gsCounts a)]
-              && (not (satisfied a) || satisfied b)
+              && (not (gsGoalMet a) || gsGoalMet b)
       in classify (length (filter stepAccepted steps) >= 3) "3+ accepted steps" $
            classify (any (\st -> gsScore (stepState st) > gsScore s0) steps) "scored" $
            counterexample (show (map meters states)) (all ok pairs)
   where
     meters gs =
-      [ gsScore gs, gsCollected gs, progressOf gs
+      [ gsScore gs, gsCollected gs, gsProgress gs
       , gsCount CountStones gs, gsCount CountChests gs, gsCount CountHoney gs, gsCount CountBalloons gs
       , gsCount CountCookies gs, gsCount CountCakes gs, gsCount CountSafes gs, gsCount CountUfo gs, gsCount CountCarpets gs
       ]
+        ++ map snd (gsColorBag gs)
     lookupN n gs = maybe 0 id (lookup n (namedCounts (gsCounts gs)))
-    progressOf gs =
-      goalProgressEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsCount CountStones gs) (gsCount CountUfo gs)
-        (gsCount CountChests gs) (gsCount CountHoney gs) (gsCount CountBalloons gs) (gsCount CountCookies gs) (gsCount CountCakes gs) (gsCount CountSafes gs)
-    satisfied gs =
-      goalMetEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsCount CountStones gs) (gsCount CountUfo gs)
-        (gsCount CountChests gs) (gsCount CountHoney gs) (gsCount CountBalloons gs) (gsCount CountCookies gs) (gsCount CountCakes gs) (gsCount CountSafes gs)
+
+-- | 第 5 刀前的目标（13 个构造器，派生 Show）与它的判定 / 进度（逐字抄自旧 Types.goalMetEx / goalProgressEx /
+-- goalTarget，12 个位置参数按旧结算的口径从计数里取）：新目标数据必须与它处处一致。
+data OldGoal
+  = GoalScore Int
+  | GoalCollect Color Int
+  | GoalCollectMulti [(Color, Int)]
+  | GoalClearStone Int
+  | GoalChest Int
+  | GoalHoney Int
+  | GoalBalloon Int
+  | GoalCookie Int
+  | GoalCake Int
+  | GoalSafe Int
+  | GoalUfo Int
+  | GoalCarpet Int
+  | GoalNamed String Int
+  deriving (Show)
+
+toNewGoal :: OldGoal -> LevelGoal
+toNewGoal og = case og of
+  GoalScore t -> goalScore t
+  GoalCollect c n -> goalCollect c n
+  GoalCollectMulti rs -> goalColors rs
+  GoalClearStone n -> goalCount CountStones n
+  GoalChest n -> goalCount CountChests n
+  GoalHoney n -> goalCount CountHoney n
+  GoalBalloon n -> goalCount CountBalloons n
+  GoalCookie n -> goalCount CountCookies n
+  GoalCake n -> goalCount CountCakes n
+  GoalSafe n -> goalCount CountSafes n
+  GoalUfo n -> goalCount CountUfo n
+  GoalCarpet n -> goalCount CountCarpets n
+  GoalNamed name n -> goalCount (CountNamed name) n
+
+oldLookupCount :: [(Color, Int)] -> Color -> Int
+oldLookupCount xs col = maybe 0 id (lookup col xs)
+
+oldGoalMetEx :: OldGoal -> Int -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
+oldGoalMetEx (GoalScore t) score _ _ _ _ _ _ _ _ _ _ = score >= t
+oldGoalMetEx (GoalCollect _ n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
+oldGoalMetEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ _ =
+  all (\(col, n) -> oldLookupCount bag col >= n) reqs
+oldGoalMetEx (GoalClearStone n) _ _ _ stones _ _ _ _ _ _ _ = stones >= n
+oldGoalMetEx (GoalUfo n) _ _ _ _ ufos _ _ _ _ _ _ = ufos >= n
+oldGoalMetEx (GoalChest n) _ _ _ _ _ chests _ _ _ _ _ = chests >= n
+oldGoalMetEx (GoalHoney n) _ _ _ _ _ _ honey _ _ _ _ = honey >= n
+oldGoalMetEx (GoalBalloon n) _ _ _ _ _ _ _ balloons _ _ _ = balloons >= n
+oldGoalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ _ = cookies >= n
+oldGoalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes _ = cakes >= n
+oldGoalMetEx (GoalSafe n) _ _ _ _ _ _ _ _ _ _ safes = safes >= n
+oldGoalMetEx (GoalCarpet n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
+oldGoalMetEx (GoalNamed _ n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
+
+oldGoalProgressEx :: OldGoal -> Int -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
+oldGoalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ _ = score
+oldGoalProgressEx (GoalCollect _ _) _ collected _ _ _ _ _ _ _ _ _ = collected
+oldGoalProgressEx (GoalCollectMulti reqs) _ _ bag _ _ _ _ _ _ _ _ =
+  sum [min n (oldLookupCount bag c) | (c, n) <- reqs]
+oldGoalProgressEx (GoalClearStone _) _ _ _ stones _ _ _ _ _ _ _ = stones
+oldGoalProgressEx (GoalUfo _) _ _ _ _ ufos _ _ _ _ _ _ = ufos
+oldGoalProgressEx (GoalChest _) _ _ _ _ _ chests _ _ _ _ _ = chests
+oldGoalProgressEx (GoalHoney _) _ _ _ _ _ _ honey _ _ _ _ = honey
+oldGoalProgressEx (GoalBalloon _) _ _ _ _ _ _ _ balloons _ _ _ = balloons
+oldGoalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ _ = cookies
+oldGoalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes _ = cakes
+oldGoalProgressEx (GoalSafe _) _ _ _ _ _ _ _ _ _ _ safes = safes
+oldGoalProgressEx (GoalCarpet _) _ collected _ _ _ _ _ _ _ _ _ = collected
+oldGoalProgressEx (GoalNamed _ _) _ collected _ _ _ _ _ _ _ _ _ = collected
+
+oldGoalTarget :: OldGoal -> Int
+oldGoalTarget og = case og of
+  GoalScore t -> t
+  GoalCollect _ n -> n
+  GoalCollectMulti reqs -> sum [n | (_, n) <- reqs]
+  GoalClearStone n -> n
+  GoalChest n -> n
+  GoalHoney n -> n
+  GoalBalloon n -> n
+  GoalCookie n -> n
+  GoalCake n -> n
+  GoalSafe n -> n
+  GoalUfo n -> n
+  GoalCarpet n -> n
+  GoalNamed _ n -> n
+
+-- | 旧结算写进 gsCollected 的值（第 5 刀前 Resolve 的 collected'，从 0 累加）：单色 = 该色清除数，
+-- 多色 = Σ min 配额，石块 … 飞碟 / 地毯 / 名字 = 对应计数，分数目标恒 0。
+oldCollected :: OldGoal -> Counts -> Int
+oldCollected og cs = case og of
+  GoalScore _ -> 0
+  GoalCollect c _ -> countOf (CountColor c) cs
+  GoalCollectMulti reqs -> sum [min n (countOf (CountColor c) cs) | (c, n) <- reqs]
+  GoalClearStone _ -> countOf CountStones cs
+  GoalChest _ -> countOf CountChests cs
+  GoalHoney _ -> countOf CountHoney cs
+  GoalBalloon _ -> countOf CountBalloons cs
+  GoalCookie _ -> countOf CountCookies cs
+  GoalCake _ -> countOf CountCakes cs
+  GoalSafe _ -> countOf CountSafes cs
+  GoalUfo _ -> countOf CountUfo cs
+  GoalCarpet _ -> countOf CountCarpets cs
+  GoalNamed name _ -> countOf (CountNamed name) cs
+
+-- | 旧的 12 个位置参数，从计数按旧字段取。
+oldArgs :: OldGoal -> Int -> Counts -> (Int -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> r) -> r
+oldArgs og score cs f =
+  f score (oldCollected og cs) (colorBag cs)
+    (countOf CountStones cs) (countOf CountUfo cs) (countOf CountChests cs) (countOf CountHoney cs)
+    (countOf CountBalloons cs) (countOf CountCookies cs) (countOf CountCakes cs) (countOf CountSafes cs)
+
+genOldGoal :: Gen OldGoal
+genOldGoal =
+  oneof
+    [ GoalScore <$> choose (0, 1500)
+    , GoalCollect <$> genColor <*> tgt
+    , GoalCollectMulti <$> oneof [pure [], choose (2, 3) >>= \k -> vectorOf k ((,) <$> genColor <*> tgt)]
+    , GoalClearStone <$> tgt, GoalChest <$> tgt, GoalHoney <$> tgt, GoalBalloon <$> tgt, GoalCookie <$> tgt
+    , GoalCake <$> tgt, GoalSafe <$> tgt, GoalUfo <$> tgt, GoalCarpet <$> tgt
+    , GoalNamed <$> elements ["jelly", "bubble", "a b"] <*> tgt
+    ]
+  where
+    tgt = choose (0, 30)
+
+-- | 随机计数：内置各键、时间精灵、各色、两个名字，每键 0..40。
+genGoalCounts :: Gen Counts
+genGoalCounts = countsFromList <$> mapM (\k -> (,) k <$> frequency [(1, pure 0), (3, choose (0, 40))]) goalKeys
+  where
+    goalKeys =
+      [ CountStones, CountChests, CountHoney, CountBalloons, CountCookies, CountCakes, CountSafes, CountSpirits
+      , CountUfo, CountCarpets, CountNamed "jelly", CountNamed "bubble", CountNamed "a b" ]
+        ++ map CountColor allColors
+
+-- | 新旧对照：任意旧目标换成新目标数据后，Show（含加括号的上下文）、目标值、在任意分数 / 计数下的
+-- 达成判定与进度都与旧实现相同（旧的 gsCollected 按旧结算口径由计数给出）。
+qc_goal_matches_legacy :: Property
+qc_goal_matches_legacy =
+  forAll genOldGoal $ \og ->
+    forAll (choose (0, 2000)) $ \score ->
+      forAll genGoalCounts $ \cs ->
+        let g = toNewGoal og
+        in counterexample (show og ++ " " ++ show score ++ " " ++ show cs) $
+             show g === show og
+               .&&. show (Just g) === show (Just og)
+               .&&. goalTarget g === oldGoalTarget og
+               .&&. goalMet g score cs === oldArgs og score cs (oldGoalMetEx og)
+               .&&. goalProgress g score cs === oldArgs og score cs (oldGoalProgressEx og)
+
+-- | 进度的代数性质（任意 1..3 项配额，含分数与计数混合）：进度非负；达成 ⟺ 每项度量 ≥ 目标值；
+-- 单项：达成 ⟺ 进度 ≥ 目标值；多项：进度 ≤ 目标值，且达成 ⟺ 进度 = 目标值；
+-- 分数 / 计数只增时进度不减、达成保持。
+qc_goal_progress_laws :: Property
+qc_goal_progress_laws =
+  forAll (choose (1, 3) >>= \k -> vectorOf k genQuota) $ \qs ->
+    forAll ((,) <$> choose (0, 2000) <*> genGoalCounts) $ \(score, cs) ->
+      forAll ((,) <$> choose (0, 500) <*> genGoalCounts) $ \(dScore, extra) ->
+        let g = LevelGoal qs
+            p = goalProgress g score cs
+            t = goalTarget g
+            met = goalMet g score cs
+            each = all (\q -> meterValue (quotaMeter q) score cs >= quotaTarget q) qs
+            p' = goalProgress g (score + dScore) (cs <> extra)
+            met' = goalMet g (score + dScore) (cs <> extra)
+            shape
+              | length qs == 1 = met === (p >= t)
+              | otherwise = (p <= t) .&&. (met === (p == t))
+        in classify met "met" $
+             classify (length qs > 1) "multi" $
+               counterexample (show qs ++ " score=" ++ show score ++ " " ++ show cs) $
+                 (p >= 0) .&&. (met === each) .&&. shape .&&. (p' >= p) .&&. (not met || met')
+  where
+    genQuota =
+      Quota
+        <$> frequency
+              [ (1, pure MeterScore)
+              , (4, MeterCount <$> elements ([CountStones, CountUfo, CountCarpets, CountNamed "jelly"] ++ map CountColor allColors))
+              ]
+        <*> choose (0, 30)
+
+-- | 整局里的目标读数：进度非负；达成 ⟺ 各项配额都达到；单项目标 达成 ⟺ 进度 ≥ 目标值，
+-- 多色目标 进度 ≤ 目标值；过关 / 通关结局的那一步目标一定达成、失败结局一定没达成（多色关偏重抽样）。
+qc_goal_progress_bounded :: Property
+qc_goal_progress_bounded =
+  forAll (frequency [(2, genStart), (1, (,) <$> elements [6, 14] <*> choose (1, 100000))]) $ \start ->
+    forAll (choose (1, 10) >>= \k -> vectorOf k genPick) $ \picks ->
+      let s0 = startState start
+          (_, steps) = playPicks s0 picks
+          states = s0 : map stepState steps
+          qs gs = goalQuotas (gsGoal gs)
+          okState gs =
+            let p = gsProgress gs
+                t = goalTarget (gsGoal gs)
+                each = all (\q -> meterValue (quotaMeter q) (gsScore gs) (gsCounts gs) >= quotaTarget q) (qs gs)
+                shape
+                  | length (qs gs) == 1 = gsGoalMet gs == (p >= t)
+                  | otherwise = p <= t
+            in p >= 0 && gsGoalMet gs == each && shape
+          okOutcome gs = case gsOver gs of
+            Just (Won _) -> gsGoalMet gs
+            Just (LevelClear _ _) -> gsGoalMet gs
+            Just (Lost _) -> not (gsGoalMet gs)
+            _ -> True
+      in classify (length (qs s0) > 1) "multi" $
+           classify (any gsGoalMet states) "met" $
+             counterexample (show [(gsProgress gs, goalTarget (gsGoal gs), gsGoalMet gs) | gs <- states]) $
+               all okState states && all okOutcome states
 
 --------------------------------------------------------------------------------
 -- 元素注册表
@@ -401,17 +605,8 @@ qc_counts_monotone_legacy_view =
           pairs = zip states (drop 1 states)
           positive gs = all ((> 0) . snd) (countsToList (gsCounts gs))
           grows (a, b) = and [countOf k (gsCounts a) <= countOf k (gsCounts b) | (k, _) <- countsToList (gsCounts a)]
-          goalKey gs = case gsGoal gs of
-            GoalClearStone _ -> Just CountStones
-            GoalChest _ -> Just CountChests
-            GoalHoney _ -> Just CountHoney
-            GoalBalloon _ -> Just CountBalloons
-            GoalCookie _ -> Just CountCookies
-            GoalCake _ -> Just CountCakes
-            GoalSafe _ -> Just CountSafes
-            GoalUfo _ -> Just CountUfo
-            GoalCarpet _ -> Just CountCarpets
-            GoalNamed n _ -> Just (CountNamed n)
+          goalKey gs = case goalView (gsGoal gs) of
+            ViewCount k _ -> Just k
             _ -> Nothing
           collectedMatches gs = maybe True (\k -> gsCollected gs == gsCount k gs) (goalKey gs)
           legacyShow gs =

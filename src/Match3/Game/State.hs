@@ -9,6 +9,10 @@
 module Match3.Game.State
   ( GameState(..)
   , gsCount
+  , gsProgress
+  , gsGoalMet
+  , gsCollected
+  , gsColorBag
   , clearMoveFx
   , rejectMove
   , MoveFx(..)
@@ -18,7 +22,7 @@ module Match3.Game.State
   ) where
 
 import Data.Maybe (isJust)
-import Match3.Counts (CounterKey(..), Counts, countOf, namedCounts)
+import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry)
@@ -33,10 +37,9 @@ data GameState = GameState
   , gsScore         :: Score
   , gsMoves         :: MovesLeft
   , gsGoal          :: LevelGoal
-  , gsCollected     :: Int          -- primary collect-color cleared (GoalCollect)
-  , gsColorBag      :: [(Color, Int)] -- cumulative clears per color
-  , gsCounts        :: Counts         -- 第 4 刀：按计数键累计（石块 / 宝箱 / 蜂蜜罐 / 气球 / 饼干 / 蛋糕 / 保险箱 / 时间精灵 /
-                                      -- 飞碟吸收 CountUfo / 地毯覆盖 CountCarpets / 扩展元素 CountNamed 名字），读法见 gsCount
+  , gsCounts        :: Counts       -- 第 4 刀：按计数键累计（各色清除 CountColor / 石块 / 宝箱 / 蜂蜜罐 / 气球 / 饼干 / 蛋糕 /
+                                    -- 保险箱 / 时间精灵 / 飞碟吸收 CountUfo / 地毯覆盖 CountCarpets / 扩展元素 CountNamed 名字），
+                                    -- 读法见 gsCount；第 5 刀起颜色袋也在这里（gsColorBag / gsCollected 改为派生读数）
   , gsGen           :: StdGen
   , gsOver          :: Maybe Outcome
   , gsLevel         :: Int
@@ -107,8 +110,6 @@ instance Eq GameState where
       && gsScore a == gsScore b
       && gsMoves a == gsMoves b
       && gsGoal a == gsGoal b
-      && gsCollected a == gsCollected b
-      && gsColorBag a == gsColorBag b
       && gsCounts a == gsCounts b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
@@ -125,6 +126,23 @@ instance Eq GameState where
 -- | 某计数键的累计个数（缺省 0；第 4 刀前是各自的字段，如 gsStonesCleared = gsCount CountStones）。
 gsCount :: CounterKey -> GameState -> Int
 gsCount k = countOf k . gsCounts
+
+-- | 目标进度（HUD / 标题 / 网页的主进度，Match3.Goal.goalProgress）。
+gsProgress :: GameState -> Int
+gsProgress gs = goalProgress (gsGoal gs) (gsScore gs) (gsCounts gs)
+
+-- | 当前计数是否满足关卡目标。
+gsGoalMet :: GameState -> Bool
+gsGoalMet gs = goalMet (gsGoal gs) (gsScore gs) (gsCounts gs)
+
+-- | 第 5 刀前的 gsCollected 字段（派生读数）：不计分数的目标进度——分数目标恒 0，其余等于 gsProgress。
+-- 旧字段只在结算时按目标种类更新、开局为 0，数值与此处逐步相同（金标准 col= 锁定）。
+gsCollected :: GameState -> Int
+gsCollected gs = goalProgress (gsGoal gs) 0 (gsCounts gs)
+
+-- | 第 5 刀前的 gsColorBag 字段（派生读数）：各色累计清除数，按 allColors 顺序、含 0。
+gsColorBag :: GameState -> [(Color, Int)]
+gsColorBag = colorBag . gsCounts
 
 -- | 清空「上一步」的 UI 反馈字段（连击波数 / 本步清除格）。
 -- 这两个字段只描述最近一次**真正结算**的一步；任何没有结算的操作（无匹配回滚、

@@ -27,7 +27,9 @@ executable match3-web
     Match3.Core
     Match3.Engine
     Match3.Types
+    Match3.Color
     Match3.Counts
+    Match3.Goal
     Match3.Board.Grid
     Match3.Board.Match
     Match3.Board.Clear

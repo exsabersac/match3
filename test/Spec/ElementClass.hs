@@ -216,7 +216,7 @@ instance LevelElement Magnet where
 ec_level_elements_by_message :: Assertion
 ec_level_elements_by_message = do
   let reg = registerLevel (SomeLevel Magnet) (removeLevel "ufo" defaultRegistry)
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
       (p1, p2) = ((1, 2), (2, 2))
       (_, o, mt) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b1}
@@ -243,7 +243,7 @@ ec_custom_matchable_gem = do
   let reg = register (customEntry (Star C5) (Star . colorAt)) defaultRegistry
       star = Custom "star" (fromEnum C5)
       board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
-      gs0 = (newGame (GameConfig 5 (GoalNamed "star" 1)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "star") 1)) 1) {gsBoard = board0}
       (p1, p2) = ((1, 2), (2, 2))
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
   assertEqual "star matches as C5" (Just C5) (matchColorWith reg star)

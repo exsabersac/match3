@@ -176,7 +176,7 @@ hammer_chips_stone_layer = do
         (newGame defaultConfig 5)
           { gsBoard = board0
           , gsHammers = 2
-          , gsGoal = GoalClearStone 8
+          , gsGoal = goalCount CountStones 8
           , gsOver = Nothing
           , gsBelts = []
           , gsUfos = []
@@ -271,7 +271,7 @@ hammer_immune_no_spend = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       check tag cell = do
         let gs0 = mkGs cell
@@ -307,7 +307,7 @@ cross_keeps_maker_in_place = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 10
           }
       (gs1, out) = useCrossClear (3, 3) gs0
@@ -352,7 +352,7 @@ booster_freeswap_skips_countdown_tick = do
           , gsUfos = []
           , gsPortals = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gsFree, outFree) = useFreeSwap (0, 2) (0, 3) (mkGs 1)
       (gsMove, outMove) = trySwap (0, 2) (0, 3) (mkGs 0)

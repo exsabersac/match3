@@ -79,7 +79,7 @@ br_swap_rule_test_element :: Assertion
 br_swap_rule_test_element = do
   let reg = register leverDef defaultRegistry
       board0 = setCell stableBoard (4, 4) (Custom "lever" 1)
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (gs1, o1, mt1) = resolveSwapWith reg (4, 4) (4, 5) gs0
   assertBool "no ordinary match from this swap" (not (hasAnyMatch (swapCells board0 (4, 4) (4, 5))))
   assertBool "swap accepted through the pair rule" (moveApplied o1)
@@ -119,7 +119,7 @@ br_open_rule_test_element :: Assertion
 br_open_rule_test_element = do
   let reg = register podDef defaultRegistry
       board0 = setCell tripleBoard (0, 1) (Custom "pod" 1)
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (_, o1, mt1) = resolveSwapWith reg p1 p2 gs0
   w1 <- firstWave mt1
@@ -154,7 +154,7 @@ br_recolorable_from_registry :: Assertion
 br_recolorable_from_registry = do
   let noRecolor = register (tweakedGem False True) defaultRegistry
       board0 = setCell tripleBoard (0, 1) MagicHat
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       afterWave reg = let (_, _, mt) = resolveSwapWith reg p1 p2 gs0 in cwAfter <$> firstWave mt
   -- (0,0) C1 与 (0,2) C3 是帽子的两个未消除邻格。第 1 行实际是四连（(1,3) 也是 C5），(1,2) 生成直线坐住，
@@ -180,7 +180,7 @@ cartDef = customEntry (Cart 1) Cart
 br_pushable_from_registry :: Assertion
 br_pushable_from_registry = do
   let board0 = setCell (setCell tripleBoard (7, 1) (mkSnail 0 1)) (7, 2) (Custom "cart" 1)
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       final reg b = let (gs1, _, _) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b} in gsBoard gs1
       bCart = final (register cartDef defaultRegistry) board0

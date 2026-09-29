@@ -32,6 +32,7 @@ import Match3.Core
 import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
+import UI.GoalStyle (colorTag, countTag)
 import UI.Playback
 import UI.Types
 
@@ -51,33 +52,13 @@ updateTitle window app = do
         if combo > 1
           then "  combo x" ++ show combo
           else ""
-      goalBits = case gsGoal gs of
-        GoalScore t ->
-          "score=" ++ show (gsScore gs) ++ "/" ++ show t
-        GoalCollect col n ->
-          "collect " ++ colorTag col ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
-        GoalCollectMulti reqs ->
-          "multi " ++ show (gsCollected gs) ++ "/" ++ show (sum [n | (_, n) <- reqs])
-        GoalClearStone n ->
-          "stones=" ++ show (gsCount CountStones gs) ++ "/" ++ show n
-        GoalChest n ->
-          "chest=" ++ show (gsCount CountChests gs) ++ "/" ++ show n
-        GoalHoney n ->
-          "honey=" ++ show (gsCount CountHoney gs) ++ "/" ++ show n
-        GoalBalloon n ->
-          "balloon=" ++ show (gsCount CountBalloons gs) ++ "/" ++ show n
-        GoalCookie n ->
-          "cookie=" ++ show (gsCount CountCookies gs) ++ "/" ++ show n
-        GoalCake n ->
-          "cake=" ++ show (gsCount CountCakes gs) ++ "/" ++ show n
-        GoalSafe n ->
-          "safe=" ++ show (gsCount CountSafes gs) ++ "/" ++ show n
-        GoalUfo n ->
-          "ufo=" ++ show (gsCount CountUfo gs) ++ "/" ++ show n
-        GoalCarpet n ->
-          "carpet=" ++ show (gsCount CountCarpets gs) ++ "/" ++ show n
-        GoalNamed name n ->
-          name ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
+      prog = gsProgress gs
+      goalBits = case goalView (gsGoal gs) of
+        ViewScore t -> "score=" ++ show prog ++ "/" ++ show t
+        ViewCollect col n -> "collect " ++ colorTag col ++ "=" ++ show prog ++ "/" ++ show n
+        ViewCollectMulti _ -> "multi " ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
+        ViewCount k n -> countTag k ++ "=" ++ show prog ++ "/" ++ show n
+        ViewOther _ -> "goal=" ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
       title =
         T.pack $
           "L"
@@ -115,14 +96,6 @@ playMove act app =
 playbackOf :: GameState -> M3E.Played -> Maybe (Pos, Pos) -> App -> App
 playbackOf before pd =
   withMovePlayback before (M3E.pdState pd) (M3E.pdFx pd) (M3E.pdTrace pd) (M3E.pdEvents pd)
-
--- | 颜色的三字母标签（标题栏用）。
-colorTag :: Color -> String
-colorTag C1 = "RED"
-colorTag C2 = "GRN"
-colorTag C3 = "BLU"
-colorTag C4 = "YEL"
-colorTag C5 = "PRP"
 
 -- | Reset tip/help for a (re)started level; auto-hint on level 1 (index 0).
 freshLevelUi :: GameState -> App -> App

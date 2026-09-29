@@ -38,7 +38,7 @@ bubblesOn b = [p | p <- allPos, getCell b p == Custom "bubble" 1]
 jb_jelly_two_layers_counted_per_layer :: Assertion
 jb_jelly_two_layers_counted_per_layer = do
   let ground0 = [((1, 1), ("jelly", 2)), ((6, 6), ("jelly", 2))]
-      gs0 = (newGame (GameConfig 5 (GoalNamed "jelly" 4)) 1) {gsBoard = tripleBoard, gsGround = ground0}
+      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 4)) 1) {gsBoard = tripleBoard, gsGround = ground0}
       (p1, p2) = tripleMove
       (gs1, o1, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
@@ -56,7 +56,7 @@ jb_jelly_two_layers_counted_per_layer = do
 -- | 最后一层去掉即达成 GoalNamed "jelly"。
 jb_jelly_goal_wins_on_last_layer :: Assertion
 jb_jelly_goal_wins_on_last_layer = do
-  let gs0 = (newGame (GameConfig 5 (GoalNamed "jelly" 2)) 1) {gsBoard = tripleBoard, gsGround = [((1, 1), ("jelly", 2))]}
+  let gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 2)) 1) {gsBoard = tripleBoard, gsGround = [((1, 1), ("jelly", 2))]}
       (p1, p2) = tripleMove
       (gs1, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "not yet" (gsOver gs1 == Nothing)
@@ -80,7 +80,7 @@ jb_jelly_keeps_on_shuffle_and_undo = do
 jb_bubble_pops_on_adjacent_clear :: Assertion
 jb_bubble_pops_on_adjacent_clear = do
   let board0 = foldl (\b p -> setCell b p (Custom "bubble" 1)) tripleBoard [(0, 1), (6, 6)]
-      gs0 = (newGame (GameConfig 5 (GoalNamed "bubble" 1)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "bubble") 1)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
@@ -93,7 +93,7 @@ jb_bubble_pops_on_adjacent_clear = do
 -- | 直接命中（锤子）也破并计数。
 jb_bubble_pops_on_direct_hit :: Assertion
 jb_bubble_pops_on_direct_hit = do
-  let gs0 = (newGame (GameConfig 5 (GoalNamed "bubble" 5)) 1) {gsBoard = setCell stableBoard (4, 4) (Custom "bubble" 1), gsHammers = 1}
+  let gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "bubble") 5)) 1) {gsBoard = setCell stableBoard (4, 4) (Custom "bubble" 1), gsHammers = 1}
       (gs1, o1) = useHammer (4, 4) gs0
   assertBool "hammer applied" (moveApplied o1)
   assertEqual "bubble gone" [] (bubblesOn (gsBoard gs1))
@@ -110,14 +110,14 @@ jb_bubble_blocks_swap_falls_no_match = do
   -- 不相邻、下方也没被消除的气泡原地不动：(0,5) 所在的列 5 本轮不消
   let board1 = setCell tripleBoard (0, 5) (Custom "bubble" 1)
       board2 = setCell (setCell board1 (1, 5) (mkGem C1)) (2, 5) (mkGem C2)
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board2}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board2}
       (_, _, mt) = resolveSwapWith defaultRegistry (1, 2) (2, 2) gs0
   w <- firstWave mt
   assertEqual "untouched column: bubble stays" (Custom "bubble" 1) (getCell (cwAfter w) (0, 5))
   -- 下落：第 3 行 (3,0)(3,1)(3,2) 成三连被清；气泡放在 (1,0)（与清除格隔一格，不被波及），
   -- 清掉 (3,0) 后 (2,0)、(1,0) 各落一格，气泡到 (2,0)
   let bF0 = foldl (\b (p, c) -> setCell b p c) stableBoard [((3, 0), mkGem C2), ((3, 1), mkGem C2), ((1, 0), Custom "bubble" 1)]
-      gsF = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = bF0}
+      gsF = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = bF0}
   case [(a, b) | (a, b) <- [((3, 2), (2, 2)), ((3, 2), (4, 2))], moveApplied (snd (trySwap a b gsF))] of
     ((a, b) : _) -> do
       let (_, _, mtF) = resolveSwapWith defaultRegistry a b gsF
@@ -131,8 +131,8 @@ jb_levels_appended = do
   assertEqual "40 levels" 40 (length allLevels)
   let l39 = allLevels !! 38
       l40 = allLevels !! 39
-  assertEqual "L39 goal" (GoalNamed "jelly" 32) (lvlGoal l39)
-  assertEqual "L40 goal" (GoalNamed "bubble" 12) (lvlGoal l40)
+  assertEqual "L39 goal" (goalCount (CountNamed "jelly") 32) (lvlGoal l39)
+  assertEqual "L40 goal" (goalCount (CountNamed "bubble") 12) (lvlGoal l40)
   forM_ [1, 2, 3 :: Int] $ \seed -> do
     let g39 = newGameAtLevel 38 (levelConfig l39) seed
         g40 = newGameAtLevel 39 (levelConfig l40) seed

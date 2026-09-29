@@ -167,7 +167,7 @@ time_spirit_rescues_last_move = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
@@ -227,7 +227,7 @@ cookie_immune_to_direct_clear = do
           , gsUfos = []
           , gsPortals = []
           , gsCounts = noCounts
-          , gsGoal = GoalCookie 5
+          , gsGoal = goalCount CountCookies 5
           , gsHammers = 2
           }
       -- Force bomb activation via useHammer on bomb cell (cookie neighbor)

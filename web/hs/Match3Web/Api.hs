@@ -142,14 +142,9 @@ encodeState h =
       (n : _) -> n
       [] -> "?"
 
--- | 目标进度：参数顺序与核心 goalSatisfied 调用 goalMetEx 的顺序一致。
+-- | 目标进度（第 5 刀：即核心 gsProgress，与桌面 HUD / 标题同一个数；由目标数据统一算）。
 progress :: GameState -> Int
-progress gs =
-  goalProgressEx
-    (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs)
-    (gsCount CountStones gs) (gsCount CountUfo gs) (gsCount CountChests gs)
-    (gsCount CountHoney gs) (gsCount CountBalloons gs) (gsCount CountCookies gs)
-    (gsCount CountCakes gs) (gsCount CountSafes gs)
+progress = gsProgress
 
 encodeOutcome :: Outcome -> String
 encodeOutcome o = case o of
@@ -166,7 +161,7 @@ encodeGoal :: LevelGoal -> String
 encodeGoal g =
   obj $
     [("kind", str (goalKind g)), ("text", str (show g)), ("target", int (goalTarget g))]
-      ++ [("name", str n) | GoalNamed n _ <- [g]]   -- 段 5：按元素名计数的目标（jelly / bubble）
+      ++ [("name", str n) | ViewCount (CountNamed n) _ <- [goalView g]]   -- 段 5：按元素名计数的目标（jelly / bubble）
   where
     goalKind x = takeWhile (/= ' ') (show x)
 

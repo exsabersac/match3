@@ -254,7 +254,7 @@ maker_bomb_survives_wave = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
@@ -423,7 +423,7 @@ hat_immune_to_direct_clear = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
           }
@@ -527,7 +527,7 @@ countdown_bomb_ticks_after_move = do
           (3, 3)
           (mkGem C1)
       board = spawnCountdown board0 (5, 5) C5 5
-      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 1 }
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 1 }
       gs0 =
         (newGameAtLevel 0 cfg 11)
           { gsBoard = board
@@ -680,7 +680,7 @@ snail_moves_after_move = do
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsOver = Nothing
           , gsHint = Nothing
           , gsBelts = []
@@ -822,7 +822,7 @@ snail_belt_no_double_step = do
           , gsOver = Nothing
           , gsHint = Nothing
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
@@ -877,7 +877,7 @@ snail_crawl_resolves_match = do
   assertBool "snail at (3,3)" (isSnail (getCell afterCrawl (3, 3)))
   assertEqual "C1 pushed to (3,2)" (Just C1) (cellColor (getCell afterCrawl (3, 2)))
   let gs0 =
-        (newGame (GameConfig 20 (GoalScore 99999)) 7)
+        (newGame (GameConfig 20 (goalScore 99999)) 7)
           { gsBoard = board0
           , gsBelts = []
           , gsPortals = []
@@ -885,7 +885,7 @@ snail_crawl_resolves_match = do
           , gsOver = Nothing
           , gsMoves = 20
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsLastCleared = []
           }
       (gs1, out) = trySwap (1, 6) (1, 7) gs0
@@ -947,7 +947,7 @@ snail_reverses_at_portal_endpoint = do
       boardMove =
         setCell boardTrap (1, 3) (mkGem C1)
       gs0 =
-        (newGame (GameConfig 20 (GoalScore 99999)) 11)
+        (newGame (GameConfig 20 (goalScore 99999)) 11)
           { gsBoard = boardMove
           , gsBelts = []
           , gsPortals = [((0, 3), (7, 4))]
@@ -955,7 +955,7 @@ snail_reverses_at_portal_endpoint = do
           , gsOver = Nothing
           , gsMoves = 20
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsLastCleared = []
           }
       -- Two crawls: first reverses at Cookie, second would enter portal without walls

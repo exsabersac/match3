@@ -7,8 +7,8 @@ module Spec.Cascade
   ) where
 
 import Match3.Board.Default (cascadeMatches, cascadeSeeds)
-import Data.Maybe (fromMaybe, isNothing)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctColors, ctCells, ctScore))
+import Data.Maybe (isNothing)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctCounts, ctCells, ctScore))
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -52,11 +52,11 @@ combo_wave_scoring = do
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
       b = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
-      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = combo, ctColors = tallies}} = cascadeMatches Nothing [] [] (mkStdGen 3) b
+      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = combo, ctCounts = tallies}} = cascadeMatches Nothing [] [] (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
   assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)
-  let c1n = fromMaybe 0 (lookup C1 tallies)
+  let c1n = countOf (CountColor C1) tallies
   assertBool "tallied some C1" (c1n >= 3)
 
 -- | Successful match without TimeSpirit deducts exactly 1 move.
@@ -81,7 +81,7 @@ inv_move_costs_one_without_spirit = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
   case out of
@@ -138,7 +138,7 @@ inv_move_end_order_steam_before_snail = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
@@ -192,7 +192,7 @@ inv_move_end_order_belt_before_steam = do
           , gsOver = Nothing
           , gsHint = Nothing
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (1, 2) (1, 3) gs0
   case out of

@@ -84,7 +84,7 @@ shuffle_when_no_moves = do
 -- Also preserves Curtain / Freeze overlay positions and Carpet open-cell set.
 shuffle_preserves_decor :: Assertion
 shuffle_preserves_decor = do
-  let cfg = GameConfig 20 (GoalScore 999)
+  let cfg = GameConfig 20 (goalScore 999)
       gs0 = newGameAtLevel 7 cfg 33  -- stones + belt level
       stonesBefore =
         [ p
@@ -180,9 +180,8 @@ undo_restores_carry_moves = do
 shuffle_preserves_goal_progress :: Assertion
 shuffle_preserves_goal_progress = do
   let gs0 =
-        (newGameAtLevel 7 (GameConfig 20 (GoalClearStone 8)) 33)
+        (newGameAtLevel 7 (GameConfig 20 (goalCount CountStones 8)) 33)
           { gsCounts = singleCount CountStones 3
-          , gsCollected = 3
           , gsScore = 120
           , gsOver = Nothing
           }
@@ -190,7 +189,7 @@ shuffle_preserves_goal_progress = do
   assertEqual "stones tally kept" (3 :: Int) (gsCount CountStones gs1)
   assertEqual "collected kept" (3 :: Int) (gsCollected gs1)
   assertEqual "score kept" (120 :: Int) (gsScore gs1)
-  assertEqual "goal kept" (GoalClearStone 8) (gsGoal gs1)
+  assertEqual "goal kept" (goalCount CountStones 8) (gsGoal gs1)
 
 
 --------------------------------------------------------------------------------
@@ -222,7 +221,7 @@ shuffle_preserves_specials = do
           , gsBelts = []
           , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       gs1 = shuffleGame gs0
       b1 = gsBoard gs1

@@ -26,7 +26,7 @@ import Match3.Board.Random (randomPlayableBoard)
 import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Conveyor (Belt)
 import Match3.Carpet (levelCarpets)
-import Match3.Counts (noCounts)
+import Match3.Counts (CounterKey(..), noCounts)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, countElementWith, placeAllWith)
 import Match3.Element.Types (Arg(..), ElementName, Placement(..))
@@ -246,16 +246,16 @@ ensureGoalDecor goal b =
   where
     slots7 = [(2, 2), (2, 5), (4, 1), (4, 3), (4, 5), (6, 2), (6, 5)]
     layered name n = Just (name, n, [Place name [AInt 1] (take (max n 6) slots7)])
-    goalDecor g = case g of
-      GoalClearStone n -> Just ("stone", n, [Place "stone" [] (take (max n 6) [(4, 1), (4, 3), (4, 5), (5, 2), (5, 4), (6, 1), (6, 3), (6, 5)])])
-      GoalHoney n -> layered "honey" n
-      GoalChest n -> layered "chest" n
-      GoalCake n -> layered "cake" n
-      GoalSafe n -> layered "safe" n
-      GoalBalloon n ->
+    goalDecor g = case goalView g of
+      ViewCount CountStones n -> Just ("stone", n, [Place "stone" [] (take (max n 6) [(4, 1), (4, 3), (4, 5), (5, 2), (5, 4), (6, 1), (6, 3), (6, 5)])])
+      ViewCount CountHoney n -> layered "honey" n
+      ViewCount CountChests n -> layered "chest" n
+      ViewCount CountCakes n -> layered "cake" n
+      ViewCount CountSafes n -> layered "safe" n
+      ViewCount CountBalloons n ->
         Just ("balloon", n, each "balloon" (\c -> [AColor c]) (take (max n 6) (zip slots7 [C1, C3, C2, C1, C4, C3, C5])))
       -- Cookies high on board so clearing below can drop them to the exit row
-      GoalCookie n -> Just ("cookie", n, [Place "cookie" [] (take (max n 6) [(0, 1), (0, 3), (0, 5), (1, 2), (1, 4), (1, 6), (2, 1), (2, 3), (2, 5)])])
+      ViewCount CountCookies n -> Just ("cookie", n, [Place "cookie" [] (take (max n 6) [(0, 1), (0, 3), (0, 5), (1, 2), (1, 4), (1, 6), (2, 1), (2, 3), (2, 5)])])
       _ -> Nothing
 
 -- | 指定关卡（0 基下标）+ 配置 + 种子开局：可玩随机盘 → 关卡装饰 → 目标所需装饰，
@@ -271,8 +271,6 @@ newGameAtLevel li cfg seed =
           , gsScore = 0
           , gsMoves = cfgMoves cfg
           , gsGoal = cfgGoal cfg
-          , gsCollected = 0
-          , gsColorBag = zip allColors (repeat 0)
           , gsCounts = noCounts
           , gsGen = g1
           , gsOver = Nothing
@@ -288,15 +286,15 @@ newGameAtLevel li cfg seed =
           , gsUfos =
               let placed = levelUfos li
               in if null placed
-                   then case cfgGoal cfg of
-                          GoalUfo _ -> [mkUfo (1, 3) C1]
+                   then case goalView (cfgGoal cfg) of
+                          ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
                           _ -> []
                    else placed
           , gsCarpetOpen =
               let placed = levelCarpets li
               in if null placed
-                   then case cfgGoal cfg of
-                          GoalCarpet n ->
+                   then case goalView (cfgGoal cfg) of
+                          ViewCount CountCarpets n ->
                             take (max n 1)
                               [ (3, 2), (3, 3), (3, 4), (3, 5)
                               , (4, 2), (4, 3), (4, 4), (4, 5)

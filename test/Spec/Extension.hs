@@ -46,7 +46,7 @@ ext_board_modules_take_registry = do
 ext_goal_named_counts_crate :: Assertion
 ext_goal_named_counts_crate = do
   let reg = register crateDef defaultRegistry
-      gs0 d = (newGame (GameConfig 5 (GoalNamed "crate" 1)) 1) {gsBoard = crateBoard d}
+      gs0 d = (newGame (GameConfig 5 (goalCount (CountNamed "crate") 1)) 1) {gsBoard = crateBoard d}
       (gsA, oA, _) = resolveSwapWith reg (1, 2) (2, 2) (gs0 2)
   assertBool "durability 2: chipped, not counted, not over" (moveApplied oA && gsCollected gsA == 0 && gsOver gsA == Nothing)
   let (gsB, oB, _) = resolveSwapWith reg (1, 2) (2, 2) (gs0 1)
@@ -77,7 +77,7 @@ ext_ground_layer_test_element :: Assertion
 ext_ground_layer_test_element = do
   let reg = register mossDef defaultRegistry
       ground0 = [((1, 1), ("moss", 2)), ((6, 6), ("moss", 1))]
-      gs0 = (newGame (GameConfig 5 (GoalNamed "moss" 3)) 1) {gsBoard = tripleBoard, gsGround = ground0}
+      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "moss") 3)) 1) {gsBoard = tripleBoard, gsGround = ground0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
       hitsAt p = length [() | w <- mtWaves mt1, p `elem` (cwCleared w ++ cwDrained w)]
@@ -119,7 +119,7 @@ ext_edge_drain_side_collectible :: Assertion
 ext_edge_drain_side_collectible = do
   let reg = register kiteDef defaultRegistry
       board0 = foldl (\b p -> setCell b p (Custom "kite" 1)) tripleBoard [(4, 0), (4, 3), (7, 5)]
-      gs0 = (newGame (GameConfig 5 (GoalNamed "kite" 1)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "kite") 1)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
@@ -151,7 +151,7 @@ ext_post_end_settle_hole_element :: Assertion
 ext_post_end_settle_hole_element = do
   let reg = register sinkholeDef defaultRegistry
       board0 = setCell tripleBoard (5, 5) (Custom "sinkhole" 1)
-      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
       settleWaves = [w | w <- mtWaves mt1, null (cwCleared w), atM (cwHoles w) (5, 5) == Nothing]

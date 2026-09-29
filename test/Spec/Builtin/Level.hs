@@ -92,7 +92,7 @@ conveyor_shifts_after_move = do
              (mkGem C2))
           (5, 2)
           (mkGem C3)
-      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 1 }  -- terminal => no shuffle
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 1 }  -- terminal => no shuffle
       gs0 =
         (newGameAtLevel 0 cfg 3)
           { gsBoard = board1
@@ -154,7 +154,7 @@ conveyor_can_create_match = do
              (mkGem C5))
           (0, 3)
           (mkGem C4)
-      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 99999 }
       gs0 =
         (newGameAtLevel 0 cfg 9)
           { gsBoard = boardM
@@ -230,7 +230,7 @@ ufo_moves_each_cascade = do
   assertEqual "no absorb when no C1 neighbor" ([] :: [Pos]) abs1
   assertBool "first step moves" (ufoCell u1 /= ufoCell u0)
   assertBool "second step moves again" (ufoCell u2 /= ufoCell u1)
-  let cfg = GameConfig 20 (GoalUfo 99)
+  let cfg = GameConfig 20 (goalCount CountUfo 99)
       gs0 = (newGameAtLevel 12 cfg 91) { gsBoard = b1, gsUfos = [u0], gsCounts = noCounts }
   case findHint (gsBoard gs0) of
     Nothing -> assertFailure "board should be playable"
@@ -250,10 +250,10 @@ ufo_moves_each_cascade = do
 -- | GoalUfo progress increments with UFO absorbs.
 ufo_goal_counts :: Assertion
 ufo_goal_counts = do
-  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2 0 0 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2 0 0 0 0 0 0)
-  assertEqual "target" (5 :: Int) (goalTarget (GoalUfo 5))
+  assertBool "goal unmet at 0" (not (goalMet (goalCount CountUfo 2) 0 noCounts))
+  assertBool "goal met at 2" (goalMet (goalCount CountUfo 2) 0 (singleCount CountUfo 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountUfo 5) 0 (singleCount CountUfo 2))
+  assertEqual "target" (5 :: Int) (goalTarget (goalCount CountUfo 5))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       b1 = setCell b0 (3, 3) (mkGem C5)
       b2 = setCell b1 (3, 2) (mkGem C1)
@@ -263,40 +263,26 @@ ufo_goal_counts = do
       targets = ufoAbsorbTargets b4 ufo
       n = length targets
   assertBool "has absorb targets" (n >= 2)
-  let cfg = GameConfig 15 (GoalUfo n)
+  let cfg = GameConfig 15 (goalCount CountUfo n)
       gs0 =
         (newGameAtLevel 12 cfg 55)
           { gsBoard = b4
           , gsUfos = [ufo]
           , gsCounts = noCounts
-          , gsCollected = 0
           }
       (_, ufo') = stepUfo b4 ufo
       gsSim =
         gs0
           { gsCounts = singleCount CountUfo n
-          , gsCollected = n
           , gsUfos = [ufo']
           }
   assertBool
     "simulated goal met"
-    (goalMetEx
-       (gsGoal gsSim)
-       (gsScore gsSim)
-       (gsCollected gsSim)
-       (gsColorBag gsSim)
-       (gsCount CountStones gsSim)
-       (gsCount CountUfo gsSim)
-       (gsCount CountChests gsSim)
-       (gsCount CountHoney gsSim)
-       (gsCount CountBalloons gsSim)
-       (gsCount CountCookies gsSim)
-       (gsCount CountCakes gsSim)
-       (gsCount CountSafes gsSim))
+    (gsGoalMet gsSim)
   -- Level table includes GoalUfo stages
   assertBool
     "campaign has GoalUfo"
-    (any (\g -> case g of GoalUfo _ -> True; _ -> False) (map lvlGoal allLevels))
+    (any (\g -> case goalView g of ViewCount CountUfo _ -> True; _ -> False) (map lvlGoal allLevels))
 
 --------------------------------------------------------------------------------
 -- Carpet / 地毯 (floor tiles covered when gems on them clear)
@@ -313,7 +299,7 @@ carpet_covers_on_clear = do
              (mkGem C1))
           (3, 2)
           (mkGem C1)
-      cfg = GameConfig 20 (GoalCarpet 8)
+      cfg = GameConfig 20 (goalCount CountCarpets 8)
       gs0 =
         (newGameAtLevel 0 cfg 7)
           { gsBoard = board0
@@ -323,8 +309,7 @@ carpet_covers_on_clear = do
           , gsScore = 0
           , gsCarpetOpen = [(3, 0), (3, 1), (3, 2), (4, 4)]
           , gsCounts = noCounts
-          , gsGoal = GoalCarpet 8
-          , gsCollected = 0
+          , gsGoal = goalCount CountCarpets 8
           }
   assertBool "match ready" (hasAnyMatch board0)
   -- Force cascade via trySwap of a neighboring pair that creates/uses the match
@@ -359,13 +344,12 @@ carpet_already_covered_noop = do
   assertEqual "empty open stays empty" ([] :: [Pos]) open3
   assertEqual "no spurious covers" (0 :: Int) n3
   -- Game path: cover once, then clear same cell again with empty open → count unchanged
-  let cfg = GameConfig 15 (GoalCarpet 3)
+  let cfg = GameConfig 15 (goalCount CountCarpets 3)
       gs0 =
         (newGameAtLevel 0 cfg 3)
           { gsCarpetOpen = [(5, 5)]
           , gsCounts = noCounts
-          , gsCollected = 0
-          , gsGoal = GoalCarpet 3
+          , gsGoal = goalCount CountCarpets 3
           , gsHammers = 3
           , gsBoard = setCell stableBoard (5, 5) (mkGem C2)
           , gsBelts = []
@@ -423,7 +407,7 @@ carpet_ice_partial_no_cover = do
           , gsUfos = []
           , gsCarpetOpen = [(3, 0)]
           , gsCounts = noCounts
-          , gsGoal = GoalCarpet 1
+          , gsGoal = goalCount CountCarpets 1
           }
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
   case out of
@@ -467,7 +451,7 @@ carpet_ice_last_layer_covers = do
           , gsUfos = []
           , gsCarpetOpen = [(5, 0)]
           , gsCounts = noCounts
-          , gsGoal = GoalCarpet 1
+          , gsGoal = goalCount CountCarpets 1
           }
       (gs1, out) = trySwap (5, 2) (5, 3) gs0
   case out of
@@ -545,7 +529,7 @@ portal_after_belt_match_teleports = do
           , gsBelts = [belt]
           , gsPortals = portals
           , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           }
       (gs1, out) = trySwap (2, 2) (2, 3) gs0
   case out of
@@ -603,7 +587,7 @@ cookie_bottom_portal_collects = do
           , gsUfos = []
           , gsPortals = portals
           , gsCounts = noCounts
-          , gsGoal = GoalCookie 1
+          , gsGoal = goalCount CountCookies 1
           }
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
@@ -670,7 +654,7 @@ belt_delivers_cookie_bottom_drains = do
           , gsUfos = []
           , gsPortals = []
           , gsCounts = noCounts
-          , gsGoal = GoalCookie 1
+          , gsGoal = goalCount CountCookies 1
           }
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
@@ -907,7 +891,7 @@ carpet_covers_on_cookie_vacate :: Assertion
 carpet_covers_on_cookie_vacate = do
   let board = setCell stableBoard (3, 3) Cookie
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 1)
+        (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 1)
           { gsBoard = board
           , gsCarpetOpen = [(3, 3)]
           , gsCounts = noCounts
@@ -917,8 +901,7 @@ carpet_covers_on_cookie_vacate = do
           , gsUfos = []
           , gsCrossClears = 1
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           }
       (gs1, out) = useCrossClear (5, 3) gs0
   case out of
@@ -937,7 +920,7 @@ carpet_covers_on_safe_open :: Assertion
 carpet_covers_on_safe_open = do
   let board = setCell stableBoard (3, 3) (mkSafeLayers 1)
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 2)
+        (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 2)
           { gsBoard = board
           , gsCarpetOpen = [(3, 3)]
           , gsCounts = noCounts
@@ -947,8 +930,7 @@ carpet_covers_on_safe_open = do
           , gsUfos = []
           , gsHammers = 2
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           }
       -- Hammer an orthogonal neighbor: adj peel opens Safe → Cookie
       (gs1, out) = useHammer (3, 2) gs0
@@ -1005,7 +987,7 @@ carpet_covers_on_cookie_bottom_drain = do
   assertBool "belt alone forms no match" $
     not (hasAnyMatch (shiftBelts board [belt]))
   let gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 3)
+        (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 3)
           { gsBoard = board
           , gsCarpetOpen = [(bottom, 4)]
           , gsCounts = noCounts
@@ -1014,8 +996,7 @@ carpet_covers_on_cookie_bottom_drain = do
           , gsPortals = []
           , gsUfos = []
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           , gsLastCleared = []
           }
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
@@ -1058,7 +1039,7 @@ carpet_covers_on_portal_cookie_drain = do
   -- Live: Cookie at A; cross-clear empties exit column so settle can teleport+drain
   let board = setCell stableBoard (5, 3) Cookie
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 4)
+        (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 4)
           { gsBoard = board
           , gsCarpetOpen = [(bottom, 6)]
           , gsCounts = noCounts
@@ -1068,8 +1049,7 @@ carpet_covers_on_portal_cookie_drain = do
           , gsUfos = []
           , gsCrossClears = 2
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           , gsLastCleared = []
           }
       (gs1, out) = useCrossClear (3, 6) gs0
@@ -1105,7 +1085,7 @@ carpet_covers_on_surprise_safe_bottom = do
           (bottom, 3)
           (mkSafeLayers 1)
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 5)
+        (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 5)
           { gsBoard = board
           , gsCarpetOpen = [(bottom, 3)]
           , gsCounts = noCounts
@@ -1115,8 +1095,7 @@ carpet_covers_on_surprise_safe_bottom = do
           , gsUfos = []
           , gsHammers = 2
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           , gsLastCleared = []
           }
       (gs1, out) = useHammer (6, 3) gs0

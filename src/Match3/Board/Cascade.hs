@@ -14,7 +14,7 @@
 -- 计数口径（逐字保持旧实现，由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
 --   * 障碍计数按清除格在消除前盘面上的格子种类计；饼干 = 被清除的饼干 + 沉降时底行收走的饼干；
---     第 4 刀起这些个数（含飞碟吸收 CountUfo、扩展元素 CountNamed）统一在 ctCounts :: Counts；
+--     第 4 刀起这些个数（含飞碟吸收 CountUfo、扩展元素 CountNamed）统一在 ctCounts :: Counts，第 5 刀起颜色袋也在（CountColor）；
 --   * 种子起手的最大波次：续连锁有清除时取续连锁的最大波次，否则取「已完成的起手轮数」。
 module Match3.Board.Cascade
   ( -- * 记录版（单一实现）
@@ -40,7 +40,7 @@ module Match3.Board.Cascade
 import Data.List (nub)
 import Match3.Element.Registry (Registry, absorbWith, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
-import Match3.Counts (CounterKey(..), Counts, bumpCount, noCounts, singleCount)
+import Match3.Counts (CounterKey(..), Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Ufo (Ufo)
@@ -82,15 +82,14 @@ data CascadeTally = CascadeTally
   { ctCells   :: Int            -- ^ 清除格数（含打碎的障碍）
   , ctScore   :: Score          -- ^ 波次计分之和
   , ctMaxWave :: Int            -- ^ 最大波次（连击数）
-  , ctColors  :: [(Color, Int)] -- ^ 颜色袋（按 allColors 顺序）
-  , ctCounts  :: Counts         -- ^ 清除格按本体 counter 计（CountStones … / CountNamed 名字）；
+  , ctCounts  :: Counts         -- ^ 清除格按本体 counter 计（CountStones … / CountNamed 名字）；各色 CountColor（第 5 刀前的 ctColors）；
                                 --   CountCookies 另含沉降时底行收走的饼干；CountUfo = 飞碟吸走的格数（GoalUfo）
   , ctCleared :: [Pos]          -- ^ 清除格 + 收饼干位（GoalCarpet / 前端粒子）
   } deriving (Eq, Show)
 
--- | 什么都没发生的计数（颜色袋按 allColors 全 0）。
+-- | 什么都没发生的计数。
 zeroTally :: CascadeTally
-zeroTally = CascadeTally 0 0 0 zeroColors noCounts []
+zeroTally = CascadeTally 0 0 0 noCounts []
 
 -- | 一段连锁的完整结果：终盘、计数、飞碟、逐轮回放、生成器。
 data CascadeRun g = CascadeRun
@@ -125,16 +124,9 @@ bumpHit (Just CountSafes) h = h
 bumpHit (Just CountSpirits) h = h
 bumpHit (Just k) h = bumpCount k 1 h
 
-addColors :: Registry -> [(Color, Int)] -> Board -> [Pos] -> [(Color, Int)]
-addColors reg tallies b pos = [(col, cnt + countColorWith reg b pos col) | (col, cnt) <- tallies]
-
-mergeColors :: [(Color, Int)] -> [(Color, Int)] -> [(Color, Int)]
-mergeColors a b = [(col, lc a col + lc b col) | col <- allColors]
-  where
-    lc xs col = maybe 0 id (lookup col xs)
-
-zeroColors :: [(Color, Int)]
-zeroColors = zip allColors (repeat 0)
+-- | 一组格在盘面 b 上按颜色计数（CountColor；第 5 刀前是按 allColors 排的颜色袋列表）。
+colorsOn :: Registry -> Board -> [Pos] -> Counts
+colorsOn reg b pos = countsFromList [(CountColor col, countColorWith reg b pos col) | col <- allColors]
 
 --------------------------------------------------------------------------------
 -- 公共的一轮：沉降 + 补子、整轮吸收
@@ -184,12 +176,12 @@ cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
 -- 每轮：clearMatchesDetailed → settleRound → absorbRound（若飞碟吸到格子，吸收单独算下一轮）。没有匹配时最大波次 = startW。
 cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
-  go prefer0 g0 b0 0 0 startW zeroColors noCounts ufos0 [] []
+  go prefer0 g0 b0 0 0 startW noCounts ufos0 [] []
   where
     -- clearedRev / wavesRev：反向累积（按块 / 按轮），收尾时再反转
-    go pref g b cells score maxW tallies hits ufos clearedRev wavesRev
+    go pref g b cells score maxW hits ufos clearedRev wavesRev
       | not (hasAnyMatchWith reg b) =
-          CascadeRun b (CascadeTally cells score maxW tallies hits (nub (concat (reverse clearedRev)))) ufos (reverse wavesRev) g
+          CascadeRun b (CascadeTally cells score maxW hits (nub (concat (reverse clearedRev)))) ufos (reverse wavesRev) g
       | otherwise =
           let wave = maxW + 1
               cr@(_, n, pos) = clearMatchesDetailedWith reg pref b
@@ -197,18 +189,17 @@ cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
               b1 = rdAfter r1
               posD = nub (pos ++ rdSites r1)
               score1 = score + cwScore (rdWave r1)
-              tallies1 = addColors reg tallies b posD
-              hits1 = hits <> rdHits r1
+              hits1 = hits <> rdHits r1 <> colorsOn reg b posD
               (ufos', absorbed, g2) = absorbRound reg portals ufos g1 b1 (wave + 1)
           in case absorbed of
                Nothing ->
-                 go Nothing g2 b1 (cells + n) score1 wave tallies1 hits1
+                 go Nothing g2 b1 (cells + n) score1 wave hits1
                    ufos' (posD : clearedRev) (rdWave r1 : wavesRev)
                Just (r2, nAbs) ->
                  -- 飞碟吸收单独算一轮（波次 wave + 1）
                  let pos2 = cwCleared (rdWave r2)
                  in go Nothing g2 (rdAfter r2) (cells + n + rdCells r2) (score1 + cwScore (rdWave r2)) (wave + 1)
-                      (addColors reg tallies1 b1 pos2) (hits1 <> rdHits r2 <> singleCount CountUfo nAbs)
+                      (hits1 <> rdHits r2 <> colorsOn reg b1 pos2 <> singleCount CountUfo nAbs)
                       ufos' (rdSites r2 : pos2 : posD : clearedRev) (rdWave r2 : rdWave r1 : wavesRev)
 
 --------------------------------------------------------------------------------
@@ -222,14 +213,13 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
       let cr@(_, n, pos) = clearFromSeedsDetailedWith reg prefer b seeds
           (r0, g1) = settleRound reg portals g b cr 1
           b1 = rdAfter r0
-          tallies0 = addColors reg zeroColors b pos
           (ufos1, absorbed, g1') = absorbRound reg portals ufos0 g1 b1 2
-          (wU, b1', nU, scoreU, hitsU, talliesU, posU) = case absorbed of
-            Nothing -> ([], b1, 0, 0, noCounts, zeroColors, [])
+          (wU, b1', nU, scoreU, hitsU, posU) = case absorbed of
+            Nothing -> ([], b1, 0, 0, noCounts, [])
             Just (rU, nAbs) ->
               let pos2 = cwCleared (rdWave rU)
-              in ( [rdWave rU], rdAfter rU, rdCells rU, cwScore (rdWave rU), rdHits rU <> singleCount CountUfo nAbs
-                 , addColors reg zeroColors b1 pos2, nub (pos2 ++ rdSites rU) )
+              in ( [rdWave rU], rdAfter rU, rdCells rU, cwScore (rdWave rU)
+                 , rdHits rU <> colorsOn reg b1 pos2 <> singleCount CountUfo nAbs, nub (pos2 ++ rdSites rU) )
           wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
           -- 续连锁：波次倍数接在起手轮之后
           rest = cascadeMatchesFromWith reg wavesDone Nothing ufos1 portals g1' b1'
@@ -240,8 +230,7 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
               (n + nU + ctCells t2r)
               (cwScore (rdWave r0) + scoreU + ctScore t2r)
               maxW
-              (mergeColors (mergeColors tallies0 talliesU) (ctColors t2r))
-              (rdHits r0 <> hitsU <> ctCounts t2r)
+              (rdHits r0 <> colorsOn reg b pos <> hitsU <> ctCounts t2r)
               (nub (pos ++ rdSites r0 ++ posU ++ ctCleared t2r))
       in CascadeRun (crBoard rest) tally (crUfos rest) (rdWave r0 : wU ++ crWaves rest) (crGen rest)
 

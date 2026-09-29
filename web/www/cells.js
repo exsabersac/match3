@@ -1,0 +1,231 @@
+// 单格与棋盘底层绘制（网页版）：对应桌面 app/UI/CellTable.hs（元素 → 渲染器查表）、UI/Cell/Art.hs（各元素贴图画法）、
+// UI/Ground.hs（地面层）与 UI/BoardArt.hs 的棋盘底层。格子 JSON 见 Match3Web.Api.encodeCell（t = 元素种类）。
+// 主贴图缺失时逐格退回几何画法（纯色块），不会因为缺图而崩。
+
+// 坐标约定：棋盘层一律用「设计单位」——格 = 56、棋盘外框留白 PAD = 16（与桌面逻辑像素相同），
+// 由 layout.js 的变换把设计单位映射到屏幕（按可用空间算出的格子大小 × devicePixelRatio）。
+// 行列数按关卡盘面设置（setDims）；当前 40 关都是 8×8，但绘制不假设正方形。
+export const CELL = 56, PAD = 16;
+export let ROWS = 8, COLS = 8;
+export function setDims(rows, cols) { ROWS = rows; COLS = cols; }
+export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
+
+// 五色主色（与 tools/gen_assets.py 调色板、UI.Layout.colorRGB 一致）
+export const COLOR_RGB = { 1: [236, 62, 78], 2: [52, 196, 96], 3: [56, 128, 246], 4: [255, 194, 36], 5: [172, 88, 236] };
+// 按元素名取色（UI.Layout.elementRGBTable）：蔓延碎屑 / 生长前沿光 / 自定义格
+export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250] };
+
+export const clamp = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
+export const breathe = (pulse, period) => 0.5 + 0.5 * Math.sin((pulse * 2 * Math.PI) / period);
+export const origin = ([r, c]) => [PAD + c * CELL, PAD + r * CELL];
+const gemSprite = (c) => `gem_c${c}`;
+
+// 粒子 / 退回画法颜色（UI.Layout.cellRGB）
+export function cellRGB(cell) {
+  if (!cell) return [160, 160, 170];
+  switch (cell.t) {
+    case "G": case "balloon": case "maker": case "flip": case "bottle": case "countdown": return COLOR_RGB[cell.c] || [200, 200, 200];
+    case "stone": return [120, 120, 130];
+    case "chest": return [220, 170, 60];
+    case "honey": return [240, 180, 40];
+    case "cookie": return [210, 160, 90];
+    case "cake": return [255, 140, 180];
+    case "hat": return [140, 90, 200];
+    case "snail": return [90, 160, 70];
+    case "safe": return [180, 150, 40];
+    case "surprise": return [255, 100, 160];
+    case "spirit": return [80, 220, 255];
+    case "custom": return ELEMENT_RGB[cell.name] || [160, 160, 170];
+    default: return [160, 160, 170];
+  }
+}
+
+// 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
+export function primarySprite(cell) {
+  switch (cell.t) {
+    case "G": return cell.k === "R" ? "rainbow" : gemSprite(cell.c);
+    case "stone": return "stone_3";
+    case "chest": return "chest";
+    case "honey": return "honey";
+    case "balloon": return `balloon_c${cell.c}`;
+    case "cookie": return "cookie";
+    case "cake": return "cake_1";
+    case "hat": return "magic_hat";
+    case "maker": return `maker_c${cell.c}`;
+    case "snail": return "snail";
+    case "safe": return "safe";
+    case "flip": return gemSprite(cell.c);
+    case "surprise": return "surprise";
+    case "bottle": return `bottle_c${cell.c}`;
+    case "spirit": return "time_spirit";
+    case "countdown": return gemSprite(cell.c);
+    case "custom": return cell.name;
+    default: return "";
+  }
+}
+
+// 蜗牛朝向 → (角度, 水平翻转)；贴图朝右
+export function snailPose(dr, dc) {
+  if (Math.abs(dc) >= Math.abs(dr) && dc >= 0) return [0, false];
+  if (Math.abs(dc) >= Math.abs(dr)) return [0, true];
+  return dr > 0 ? [90, false] : [-90, false];
+}
+
+function badgeAt(ctx, art, x, y, n) { art.draw(ctx, `badge_${clamp(1, 9, n)}`, x + CELL - 23, y + CELL - 23, 23, 23); }
+function layerBadge(ctx, art, x, y, n) { if (n >= 2) badgeAt(ctx, art, x, y, n); }
+
+// 元素 → 贴图画法（UI.Cell.Art 的 artGem / artStone / …）。参数：画布、贴图集、呼吸计数、格左上角、格子。
+const OVERLAY_SPRITE = {
+  grass: () => "grass", vine: () => "vine", choco: () => "choco", steam: () => "steam",
+  fog: (n) => `fog_${clamp(1, 2, n)}`, chain: (n) => `chain_${clamp(1, 2, n)}`,
+  freeze: (n) => `freeze_${clamp(1, 2, n)}`, curtain: (n) => `curtain_${clamp(1, 2, n)}`,
+};
+const bobY = (pulse) => Math.round(2 * Math.sin(pulse / 9));
+const CELL_ART = {
+  G(ctx, art, pulse, x, y, cell) {
+    const spr = (n) => art.draw(ctx, n, x, y, CELL, CELL);
+    if (cell.k === "B") art.mod(ctx, "bomb_glow", x, y, CELL, CELL, null, Math.round(140 + 110 * breathe(pulse, 50)));
+    if (cell.k === "R") art.ex(ctx, "rainbow", x, y, CELL, CELL, (pulse * 2) % 360);
+    else spr(gemSprite(cell.c));
+    if (cell.k === "H") spr("line_h");
+    else if (cell.k === "V") spr("line_v");
+    else if (cell.k === "B") spr("bomb_mark");
+    if (cell.i > 0) spr(`ice_${clamp(1, 3, cell.i)}`);
+    let layers = 0;
+    if (cell.o && OVERLAY_SPRITE[cell.o]) { spr(OVERLAY_SPRITE[cell.o](cell.n)); layers = cell.n || 0; }
+    layerBadge(ctx, art, x, y, layers > 0 ? layers : cell.i);
+  },
+  stone(ctx, art, p, x, y, c) { art.draw(ctx, `stone_${clamp(1, 3, c.n)}`, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.n); },
+  chest(ctx, art, p, x, y, c) { art.draw(ctx, "chest", x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.n); },
+  honey(ctx, art, p, x, y, c) { art.draw(ctx, "honey", x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.n); },
+  balloon(ctx, art, p, x, y, c) { art.draw(ctx, `balloon_c${c.c}`, x, y + bobY(p), CELL, CELL); },
+  cookie(ctx, art, p, x, y) { art.draw(ctx, "cookie", x, y, CELL, CELL); },
+  cake(ctx, art, p, x, y, c) { art.draw(ctx, `cake_${clamp(1, 3, c.n)}`, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.n); },
+  hat(ctx, art, p, x, y) { art.draw(ctx, "magic_hat", x, y, CELL, CELL); },
+  maker(ctx, art, p, x, y, c) { art.draw(ctx, `maker_c${c.c}`, x, y, CELL, CELL); badgeAt(ctx, art, x, y, Math.max(1, c.n)); },
+  snail(ctx, art, p, x, y, c) { const [a, f] = snailPose(c.dr, c.dc); art.ex(ctx, "snail", x, y, CELL, CELL, a, f); },
+  safe(ctx, art, p, x, y, c) { art.draw(ctx, "safe", x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.n); },
+  flip(ctx, art, p, x, y, c) {
+    art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL);
+    art.draw(ctx, gemSprite(c.b), x + CELL - 25, y + 1, 24, 24);   // 右上角 = 翻面后的颜色
+    art.draw(ctx, "flip_mark", x, y, CELL, CELL);
+  },
+  surprise(ctx, art, p, x, y) { art.draw(ctx, "surprise", x, y, CELL, CELL); },
+  bottle(ctx, art, p, x, y, c) { art.draw(ctx, `bottle_c${c.c}`, x, y, CELL, CELL); },
+  spirit(ctx, art, p, x, y) { art.draw(ctx, "time_spirit", x, y + bobY(p), CELL, CELL); },
+  countdown(ctx, art, p, x, y, c) { art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL); art.draw(ctx, `countdown_${clamp(1, 9, c.n)}`, x, y, CELL, CELL); },
+  custom(ctx, art, p, x, y, c) {
+    // 段 5 的气泡有专门画法（轻微浮动、无角标）；其它自定义元素：贴图名 = 元素名 + 层数角标
+    if (c.name === "bubble") art.draw(ctx, "bubble", x, y + bobY(p), CELL, CELL);
+    else { art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
+  },
+};
+
+// 几何降级：纯色圆角块 + 元素缩写
+function drawCellPrim(ctx, x, y, cell) {
+  const [r, g, b] = cellRGB(cell);
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
+  ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(cell.t === "G" ? cell.k : cell.t.slice(0, 6), x + CELL / 2, y + CELL / 2);
+}
+
+// 单格：按元素查表画贴图；闪白统一叠一层柔光（UI.BoardArt.drawCellArt）
+export function drawCell(ctx, art, pulse, x, y, cell, flashing = false) {
+  if (!cell) return;
+  const f = CELL_ART[cell.t];
+  if (!f || !art.has(primarySprite(cell))) drawCellPrim(ctx, x, y, cell);
+  else f(ctx, art, pulse, x, y, cell);
+  if (flashing) art.add(ctx, "spark", x - 10, y - 10, CELL + 20, CELL + 20, [255, 255, 230], 210);
+}
+
+// 以中心 (cx,cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记；UI.BoardArt.drawCellScaled）
+export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
+  if (!cell || s <= 0.03 || a <= 0) return;
+  const sz = Math.max(1, Math.round(CELL * s)), x = cx - sz / 2, y = cy - sz / 2, name = primarySprite(cell);
+  if (art.has(name)) {
+    art.mod(ctx, name, x, y, sz, sz, null, a);
+    const mark = cell.t === "G" && { H: "line_h", V: "line_v", B: "bomb_mark" }[cell.k];
+    if (mark) art.mod(ctx, mark, x, y, sz, sz, null, a);
+  } else {
+    const [r, g, b] = cellRGB(cell);
+    ctx.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
+    ctx.fillRect(x, y, sz, sz);
+  }
+}
+
+// 传送带每格的朝向角度（右 0 / 下 90 / 左 180 / 上 270；UI.BoardArt.beltAngles）
+export function beltAngles(belt) {
+  const out = [];
+  let prev = null;
+  for (let i = 0; i < belt.length; i++) {
+    const [r1, c1] = belt[i], [r2, c2] = belt[(i + 1) % belt.length];
+    let ang = null;
+    if (r1 === r2 && c2 === c1 + 1) ang = 0;
+    else if (r1 === r2 && c2 === c1 - 1) ang = 180;
+    else if (c1 === c2 && r2 === r1 + 1) ang = 90;
+    else if (c1 === c2 && r2 === r1 - 1) ang = 270;
+    if (ang === null) ang = prev ?? 0;
+    out.push([belt[i], ang]);
+    prev = ang;
+  }
+  return out;
+}
+
+const key = ([r, c]) => r * 64 + c;
+
+// 地面层（UI.Ground.groundTable）：名字 → 贴图名(层数)；表里没有的名字画淡灰框
+const GROUND = { jelly: (n) => (n >= 2 ? "jelly_2" : "jelly") };
+function drawGround(ctx, art, x, y, g) {
+  const f = GROUND[g.name];
+  if (f && art.draw(ctx, f(g.layers), x, y, CELL, CELL)) return;
+  ctx.strokeStyle = "rgba(170,170,180,.8)"; ctx.lineWidth = 1; ctx.strokeRect(x + 2.5, y + 2.5, CELL - 5, CELL - 5);
+}
+
+// 棋盘底层：圆角框 → 棋盘格 → 地毯 → 地面层（果冻）→ 传送带 → 传送门（都在棋子下面；UI.BoardArt.drawBoardBgArt）
+// 整屏背景图由 main.js 在屏幕坐标里按 cover 铺满，不在这里画。
+export function drawBoardBase(ctx, art, st, pulse) {
+  art.panel(ctx, "panel_dark", PAD - 8, PAD - 8, boardW() + 16, boardH() + 16, 16);
+  const open = new Set((st.carpetOpen || []).map(key));
+  const carpets = new Set((st.carpets || []).map(key));
+  const ground = new Map((st.ground || []).map((g) => [key(g.p), g]));
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const [x, y] = origin([r, c]), k = r * 64 + c;
+    art.draw(ctx, (r + c) % 2 === 0 ? "tile_a" : "tile_b", x, y, CELL, CELL);
+    if (open.has(k)) art.draw(ctx, "carpet_open", x, y, CELL, CELL);
+    else if (carpets.has(k)) art.draw(ctx, "carpet_covered", x, y, CELL, CELL);
+    if (ground.has(k)) drawGround(ctx, art, x, y, ground.get(k));
+  }
+  for (const belt of st.belts || []) for (const [p, ang] of beltAngles(belt)) {
+    const [x, y] = origin(p);
+    art.ex(ctx, "belt", x, y, CELL, CELL, ang);
+  }
+  for (const pair of st.portals || []) for (const p of pair) {
+    const [x, y] = origin(p);
+    art.ex(ctx, "portal", x, y, CELL, CELL, (pulse * 3) % 360);
+  }
+}
+
+// 飞碟（轻微上下浮动）
+export function drawUfos(ctx, art, st, pulse, yOff = 0) {
+  const bob = Math.round(3 * Math.sin(pulse / 10));
+  for (const u of st.ufos || []) {
+    const [x, y] = origin(u.p);
+    art.draw(ctx, `ufo_c${u.c}`, x, y + yOff - 12 + bob, CELL, CELL);
+  }
+}
+
+// 藤蔓 / 巧克力下一步可能蔓延到的格（与 UI.BoardArt.spreadTargets 相同的判定）
+export function spreadTargets(board, overlay) {
+  const out = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const cell = board[r][c];
+    if (!(cell.t === "G" && cell.o === overlay)) continue;
+    for (const [qr, qc] of [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]) {
+      if (qr < 0 || qr >= ROWS || qc < 0 || qc >= COLS) continue;
+      const q = board[qr][qc];
+      if (q.t === "G" && !q.o) out.push([qr, qc]);
+    }
+  }
+  return out;
+}

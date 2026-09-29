@@ -1,0 +1,84 @@
+cabal-version:      3.0
+-- 网页版技术验证（spike）：用 GHC wasm 后端把纯核心 src/Engine/* + src/Match3/* 编成浏览器可用的 wasm。
+-- 注意：本包直接引用仓库根目录 ../src 的源码（不复制、不改动），
+-- 因此核心模块列表要与 package.yaml 的 library.exposed-modules 保持一致（build.sh 会检查）。
+name:               match3-web
+version:            0.1.0.0
+synopsis:           Match-3 core compiled to WebAssembly (spike)
+license:            BSD-3-Clause
+author:             yu binbin
+build-type:         Simple
+
+executable match3-web
+  main-is:          WebMain.hs
+  -- ../app 只取纯模块 ComboFx（逐轮回放阶段机，不依赖 SDL）；其余 app/ 模块不参与编译
+  hs-source-dirs:   hs ../src ../app
+  other-modules:
+    Match3Web.Api
+    Match3Web.Anim
+    Match3Web.Json
+    -- 桌面前端的纯表现逻辑（../app/ComboFx.hs）：网页与桌面共用同一条回放时间线
+    ComboFx
+    -- 以下为核心模块（../src），与 package.yaml 的 library.exposed-modules 一致（通用层 Engine.* + 三消 Match3.*）
+    Engine.Game
+    Engine.Effect
+    Engine.Playback
+    Engine.History
+    Match3.Core
+    Match3.Engine
+    Match3.Types
+    Match3.Board.Grid
+    Match3.Board.Match
+    Match3.Board.Clear
+    Match3.Board.Gravity
+    Match3.Board.Cascade
+    Match3.Board.Random
+    Match3.Board.Default
+    Match3.Game.State
+    Match3.Game.Tally
+    Match3.Game.Outcome
+    Match3.Game.Shuffle
+    Match3.Game.Level
+    Match3.Game.Trace
+    Match3.Game.Resolve
+    Match3.Game.Move
+    Match3.Game.Boosters
+    Match3.Obstacles
+    Match3.Rainbow
+    Match3.Combos
+    Match3.Ice
+    Match3.Daily
+    Match3.Countdown
+    Match3.Conveyor
+    Match3.Boosters
+    Match3.Grass
+    Match3.Ufo
+    Match3.Snail
+    Match3.Carpet
+    Match3.Element
+    Match3.Element.Types
+    Match3.Element.Registry
+    Match3.Element.Builtin
+    Match3.Element.Builtin.Common
+    Match3.Element.Builtin.Gem
+    Match3.Element.Builtin.Layer
+    Match3.Element.Builtin.Obstacle
+    Match3.Element.Builtin.Collectible
+    Match3.Element.Builtin.Actor
+    Match3.Element.Builtin.Ground
+    Match3.Element.Builtin.Level
+    Match3.Element.Event
+    Match3.Element.Class
+    Match3.Element.Message
+  default-language: Haskell2010
+  -- random / splitmix 钉在与桌面版 lts-21.25 相同的版本，保证同种子同盘面
+  build-depends:
+      base
+    , array
+    , random ==1.2.1.1
+    , ghc-experimental
+  ghc-options:
+    -Wall -O2
+    -no-hs-main
+    -optl-mexec-model=reactor
+    "-optl-Wl,--export=m3New,--export=m3Swap,--export=m3Undo,--export=m3State,--export=m3AnimStart,--export=m3AnimTick,--export=m3Levels"

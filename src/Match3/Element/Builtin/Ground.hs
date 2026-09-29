@@ -9,7 +9,7 @@ module Match3.Element.Builtin.Ground
   , jellyEntry
   ) where
 
-import Match3.Element.Class
+import Match3.Element.Caps
 import Match3.Element.Registry
 import Match3.Element.Types
 import Match3.Types
@@ -23,8 +23,7 @@ newtype Jelly = Jelly Int
 instance Element Jelly where
   name _ = "jelly"
   toCell (Jelly n) = Custom "jelly" (CustomState n)
-  groundRule _ = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
-  counter _ = Just (CountNamed "jelly")
+  caps _ = piece [ground (\n -> if n > 1 then Just (n - 1) else Nothing), counts (CountNamed "jelly")]
 
 -- | 条目：地面层（关卡的地面层在关卡记录 lvlGround 里，开局时由关卡级元素 GroundLayer 的 levelStart 取进 gsLevelElems（读数 gsGround），不经放置表）。
 jellyEntry :: Entry

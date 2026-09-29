@@ -22,7 +22,7 @@ module Match3.Element.Builtin.Actor
 import Match3.Board.Grid (getCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
 import Match3.Element.Builtin.Common (colorPlace)
-import Match3.Element.Class
+import Match3.Element.Caps
 import Match3.Element.Event
 import Match3.Element.Registry
 import Match3.Element.Types
@@ -38,8 +38,7 @@ data MagicHatE = MagicHatE
 instance Element MagicHatE where
   name _ = "magic_hat"
   toCell _ = MagicHat
-  archetype _ = Fixed
-  adjacentRule _ = Just (AdjacentRule 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] []))
+  caps _ = fixed [onAdjacent 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
@@ -48,8 +47,7 @@ data MakerE = MakerE Color Int
 instance Element MakerE where
   name _ = "maker"
   toCell (MakerE c n) = Maker c n
-  archetype _ = Fixed
-  adjacentRule _ = Just (AdjacentRule 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit))
+  caps _ = fixed [onAdjacent 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit)]
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
@@ -58,8 +56,7 @@ data SnailE = SnailE Int Int
 instance Element SnailE where
   name _ = "snail"
   toCell (SnailE dr dc) = Snail dr dc
-  archetype _ = Fixed
-  endRule _ = Just (EndRule PhaseMove 10 snailRun (const []) (const []))
+  caps _ = fixed [atEnd (EndRule PhaseMove 10 snailRun (const []) (const []))]
 
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
 newtype BottleE = BottleE Color
@@ -68,8 +65,7 @@ newtype BottleE = BottleE Color
 instance Element BottleE where
   name _ = "bottle"
   toCell (BottleE c) = Bottle c
-  archetype _ = Fixed
-  adjacentRule _ = Just (AdjacentRule 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] []))
+  caps _ = fixed [onAdjacent 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
@@ -78,14 +74,7 @@ data CountdownE = CountdownE Color Int
 instance Element CountdownE where
   name _ = "countdown"
   toCell (CountdownE c n) = Countdown c n
-  archetype _ = Blocker
-  color (CountdownE c _) = Just c
-  blocksSwap _ = False
-  portal _ = True
-  pushable _ = True
-  recolorable _ = True
-  onHit _ = Destroy
-  endRule _ = Just (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))
+  caps (CountdownE c _) = blocker [colorIs c, swappable, teleports, pushes, recolors, breaks, atEnd (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))]
 
 -- | 倒计时减一；列出数值真的变了的格。
 tickRun :: EndCtx -> Board -> (Maybe EndEffect, Board)

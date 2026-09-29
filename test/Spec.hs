@@ -27,6 +27,7 @@ import qualified Spec.ReplayUndo
 import qualified Spec.Golden
 import qualified Spec.Properties
 import qualified Spec.SourceScan
+import qualified Spec.Caps
 
 main :: IO ()
 main = defaultMain tests
@@ -58,6 +59,7 @@ tests =
         , Spec.ReplayUndo.tests
         , Spec.Golden.tests
         , Spec.Properties.tests
+        , Spec.Caps.tests
         , Spec.SourceScan.tests
         ]
     )

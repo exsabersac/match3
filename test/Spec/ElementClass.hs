@@ -32,7 +32,9 @@ import Match3.Element.Class
   , levelNameOf
   , modify
   , sendMessage
+  , activates, archetype, blocksSwap, color, falls, hintable, keepOnShuffle, matchColor, onHit, portal, pushable, recolorable
   )
+import Match3.Element.Caps (blocker, colorIs, counts, hit, onMessage, piece)
 import qualified Match3.Element.Class as C
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Element.Message (Refilled(..))
@@ -132,12 +134,12 @@ newtype TwinB = TwinB Int
 instance Element TwinA where
   name _ = "twin"
   toCell (TwinA k) = Custom "twin" (CustomState k)
-  archetype _ = Blocker
+  caps _ = blocker []
 
 instance Element TwinB where
   name _ = "twin"
   toCell (TwinB k) = Custom "twin" (CustomState k)
-  archetype _ = Blocker
+  caps _ = blocker []
 
 -- | 冰层修饰器：包在宝石外面，组合结果与逐层询问一致，写回格子带冰层数。
 ec_ice_modifier_composes :: Assertion
@@ -167,24 +169,24 @@ newtype Nest = Nest Int
 instance Element Nest where
   name _ = "nest"
   toCell (Nest k) = Custom "nest" (CustomState k)
-  archetype _ = Blocker
-  onHit (Nest k)
-    | k > 1 = Absorb (SomeElement (Nest (k - 1)))
-    | otherwise = Destroy
-  counter _ = Just (CountNamed "nest")
-  handleMessage (Nest k) msg = case fromMessage msg of
-    Just (Warm d) -> Just (SomeElement (Nest (k + d)))
-    Nothing -> Nothing
+  caps (Nest k) =
+    blocker
+      [ hit (if k > 1 then Absorb (SomeElement (Nest (k - 1))) else Destroy)
+      , counts (CountNamed "nest")
+      , onMessage (\msg -> case fromMessage msg of
+          Just (Warm d) -> Just (SomeElement (Nest (k + d)))
+          Nothing -> Nothing)
+      ]
 
 ec_state_lives_in_element_value :: Assertion
 ec_state_lives_in_element_value = do
   let reg = register (customEntry (Nest 1) (Nest . unCustomState)) defaultRegistry
       p = (3, 3)
       gs0 = (newGame defaultConfig 7) {gsBoard = setCell stableBoard p (Custom "nest" (CustomState 3)), gsHammers = 5}
-      hit gs = let (gs', _, _) = resolveHammerWith reg p gs in gs'
-      gs1 = hit gs0
-      gs2 = hit gs1
-      gs3 = hit gs2
+      hammer gs = let (gs', _, _) = resolveHammerWith reg p gs in gs'
+      gs1 = hammer gs0
+      gs2 = hammer gs1
+      gs3 = hammer gs2
   assertEqual "onHit returns the new value" (Absorb (SomeElement (Nest 2))) (onHit (Nest 3))
   assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf reg (Custom "nest" (CustomState 3)))
   assertEqual "first hit" (Custom "nest" (CustomState 2)) (getCell (gsBoard gs1) p)
@@ -338,8 +340,7 @@ newtype Star = Star Color
 instance Element Star where
   name _ = "star"
   toCell (Star c) = Custom "star" (CustomState (fromEnum c))
-  color (Star c) = Just c
-  counter _ = Just (CountNamed "star")
+  caps (Star c) = piece [colorIs c, counts (CountNamed "star")]
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do

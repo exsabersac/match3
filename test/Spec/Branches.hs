@@ -21,7 +21,7 @@ import Match3.Board.Match (findHintWith)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
-import Match3.Element.Class (Archetype(..), Element(..), Hit(..), SomeLevelElement(..), levelNameOf)
+import Match3.Element.Caps (Element(..), SomeLevelElement(..), blocker, breaks, levelNameOf, noPush, noRecolor, onSwap, opens, piece, pushes, swappable)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Move (resolveSwapWith)
@@ -59,8 +59,7 @@ data TweakedGem = TweakedGem Bool Bool Color
 instance Element TweakedGem where
   name _ = "gem"
   toCell (TweakedGem _ _ c) = Gem c Normal 0 Nothing
-  recolorable (TweakedGem r _ _) = r
-  pushable (TweakedGem _ p _) = p
+  caps (TweakedGem r p _) = piece ([noRecolor | not r] ++ [noPush | not p])
 
 tweakedGem :: Bool -> Bool -> Entry
 tweakedGem r p = bodyEntry (TweakedGem r p C1) (\cell -> case cell of Gem c _ _ _ -> Just (TweakedGem r p c); _ -> Nothing) (\_ _ -> Nothing)
@@ -72,10 +71,7 @@ newtype Lever = Lever Int
 instance Element Lever where
   name _ = "lever"
   toCell (Lever k) = Custom "lever" (CustomState k)
-  archetype _ = Blocker
-  blocksSwap _ = False
-  onHit _ = Destroy
-  swapRule _ = Just (SwapRule 5 fires (\_ p1 p2 -> [p1, p2]))
+  caps _ = blocker [swappable, breaks, onSwap (SwapRule 5 fires (\_ p1 p2 -> [p1, p2]))]
     where
       fires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
 
@@ -109,8 +105,7 @@ newtype Pod = Pod Int
 instance Element Pod where
   name _ = "pod"
   toCell (Pod k) = Custom "pod" (CustomState k)
-  archetype _ = Blocker
-  openRule _ = Just (OpenRule openPods)
+  caps _ = blocker [opens openPods]
 
 podDef :: Entry
 podDef = customEntry (Pod 1) (Pod . unCustomState)
@@ -159,7 +154,7 @@ br_builtin_predicates_match_legacy = do
 -- | 魔法帽只给注册表里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
 br_recolorable_from_registry :: Assertion
 br_recolorable_from_registry = do
-  let noRecolor = register (tweakedGem False True) defaultRegistry
+  let regNoRecolor = register (tweakedGem False True) defaultRegistry
       board0 = setCell tripleBoard (0, 1) MagicHat
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
@@ -167,7 +162,7 @@ br_recolorable_from_registry = do
   -- (0,0) C1 与 (0,2) C3 是帽子的两个未消除邻格。第 1 行实际是四连（(1,3) 也是 C5），(1,2) 生成直线坐住，
   -- 所以 (0,0) 落到 (1,0)、(0,2) 留在原处
   bDef <- afterWave defaultRegistry
-  bNo <- afterWave noRecolor
+  bNo <- afterWave regNoRecolor
   assertEqual "default: hat swapped the two colors" (mkGem C3, mkGem C1) (getCell bDef (1, 0), getCell bDef (0, 2))
   assertEqual "not recolorable: colors kept" (mkGem C1, mkGem C3) (getCell bNo (1, 0), getCell bNo (0, 2))
 
@@ -178,8 +173,7 @@ newtype Cart = Cart Int
 instance Element Cart where
   name _ = "cart"
   toCell (Cart k) = Custom "cart" (CustomState k)
-  archetype _ = Blocker
-  pushable _ = True
+  caps _ = blocker [pushes]
 
 cartDef :: Entry
 cartDef = customEntry (Cart 1) (Cart . unCustomState)

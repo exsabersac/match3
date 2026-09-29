@@ -64,7 +64,7 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 307 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 312 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -112,7 +112,7 @@ make size            # 事后单独看体积
 `web/build.sh` 会：
 1. 检查 `match3-web.cabal` 里的核心模块清单（`Engine.*` + `Match3.*`）与 `package.yaml` 的 `library.exposed-modules` 是否一致
    （核心新增模块时要同步到 cabal 文件，否则会打印警告；例如 main 2121bf8 新增的 `Match3.Element.Class` / `Message` /
-   `Builtin.{Common,Gem,Layer,Obstacle,Collectible,Actor,Ground,Level}` 已同步）；
+   `Builtin.{Common,Gem,Layer,Obstacle,Collectible,Actor,Ground,Level}`、第 9 刀的 `Match3.Element.Caps` 已同步）；
 2. `wasm32-wasi-cabal build exe:match3-web`，链接为 WASI **reactor** 模块；
 3. `wasm-opt -Oz` 压体积；用 GHC 自带的 `post-link.mjs` 生成 JSFFI 胶水 `ghc_wasm_jsffi.js`；
 4. 下载并缓存浏览器 WASI 垫片 `@bjorn3/browser_wasi_shim@0.4.2`（MIT/Apache-2.0，约 96 KB）；

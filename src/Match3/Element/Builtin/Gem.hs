@@ -15,14 +15,14 @@ module Match3.Element.Builtin.Gem
   ) where
 
 import Match3.Board.Grid (inBounds)
-import Match3.Element.Class
+import Match3.Element.Caps
 import Match3.Element.Registry
 import Match3.Element.Special (runShape)
 import Match3.Element.Types
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
 import Match3.Types
 
--- | 普通宝石：除名字和写回格子外全用默认方法（原型 Piece：可交换、能点火、命中即消、洗牌重排……；
+-- | 普通宝石：除名字和写回格子外全用缺省能力（原型 Piece：可交换、能点火、命中即消、洗牌重排……；
 -- 颜色缺省取自写回的格子）。
 newtype PlainGem = PlainGem Color
   deriving (Eq, Show)
@@ -43,14 +43,10 @@ instance Element SpecialGem where
     Rainbow -> "rainbow"
     Normal -> "gem"
   toCell (SpecialGem c k) = Gem c k 0 Nothing
-  keepOnShuffle (SpecialGem _ k) = k /= Normal
-  blast (SpecialGem _ k) = specialBlast k
-  -- 彩虹不进普通匹配提示（只经成对交换规则给提示）
-  hintable (SpecialGem _ k) = k /= Rainbow
-  swapRule (SpecialGem _ k) = case k of
-    -- 彩虹取色：由交换对象决定清哪种颜色；先于特殊合成（组合表，次序 20）判定
-    Rainbow -> Just (SwapRule 10 isRainbowSwap rainbowClearSeeds)
-    _ -> Nothing
+  -- 洗牌保留；直线 / 炸弹有爆炸范围；彩虹不进普通匹配提示，挂彩虹取色（先于特殊合成 = 组合表的次序 20）
+  caps (SpecialGem _ k) =
+    piece $ [keepsOnShuffle | k /= Normal] ++ map explodes (maybe [] pure (specialBlast k))
+      ++ [c | k == Rainbow, c <- [notHintable, onSwap (SwapRule 10 isRainbowSwap rainbowClearSeeds)]]
 
 -- | 内置特殊块形状规则表（第 8 刀；顺序即优先级，与旧 spawnSpecials 相同）：每条连线取第一条认领它的规则——
 -- 长度 ≥ 5 → 彩虹；长度 4 横连 → 横消；长度 4 竖连 → 竖消；长度 3 不生成。落点见 Match3.Element.Special.shapeAnchor。

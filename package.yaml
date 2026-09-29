@@ -96,6 +96,7 @@ library:
   - Match3.Element.Builtin.Level
   - Match3.Element.Event
   - Match3.Element.Class
+  - Match3.Element.Caps
   - Match3.Element.Message
   - Match3.Element.Level
 

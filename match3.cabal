@@ -88,6 +88,7 @@ library
       Match3.Element.Builtin.Level
       Match3.Element.Event
       Match3.Element.Class
+      Match3.Element.Caps
       Match3.Element.Message
       Match3.Element.Level
   other-modules:
@@ -161,6 +162,7 @@ test-suite match3-test
       Spec.Builtin.Layer
       Spec.Builtin.Level
       Spec.Builtin.Obstacle
+      Spec.Caps
       Spec.Cascade
       Spec.Element
       Spec.ElementClass
@@ -177,6 +179,7 @@ test-suite match3-test
       Spec.SourceScan
       Spec.Specials
       Spec.Support
+      Spec.Support.LegacyElement
       Spec.Support.Source
       Spec.UIEvents
       Toy

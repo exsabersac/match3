@@ -45,8 +45,8 @@ import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
 import Match3.Board.Grid (mboardRows)
-import Match3.Element (Entry, AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
-import Match3.Element.Class (Archetype(Fixed), Element(..), Hit(..), SomeElement(..))
+import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
+import Match3.Element.Caps (Element(..), Hit(..), SomeElement(..), counts, fixed, hit, onAdjacent)
 import Match3.Types (isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
@@ -308,25 +308,23 @@ newtype Crate = Crate Int
 instance Element Crate where
   name _ = "crate"
   toCell (Crate n) = Custom "crate" (CustomState n)
-  archetype _ = Fixed
-  onHit (Crate n)
-    | n <= 1 = Destroy
-    | otherwise = Absorb (SomeElement (Crate (n - 1)))
-  adjacentRule _ = Just (AdjacentRule 200 crateAdjacent)
-    where
-      isCrate c = case c of
+  caps (Crate n) =
+    fixed [hit (if n <= 1 then Destroy else Absorb (SomeElement (Crate (n - 1)))), onAdjacent 200 crateAdjacent, counts (CountNamed "crate")]
+
+-- | 木箱的邻格规则：真消除格的正交邻格里的木箱（直接命中格除外）耐久 -1，耐久 1 的碎掉。
+crateAdjacent :: AdjCtx -> Board -> AdjOut
+crateAdjacent ctx b =
+  let isCrate c = case c of
         Custom "crate" _ -> True
         _ -> False
-      crateAdjacent ctx b =
-        let targets =
-              nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
-            hit (bd, dead) q = case getCell bd q of
-              Custom _ (CustomState n) | n <= 1 -> (bd, dead ++ [q])
-                         | otherwise -> (setCell bd q (Custom "crate" (CustomState (n - 1))), dead)
-              _ -> (bd, dead)
-            (b', dead') = foldl hit (b, []) targets
-        in AdjOut b' dead' []
-  counter _ = Just (CountNamed "crate")
+      targets =
+        nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
+      bump (bd, dead) q = case getCell bd q of
+        Custom _ (CustomState n) | n <= 1 -> (bd, dead ++ [q])
+                   | otherwise -> (setCell bd q (Custom "crate" (CustomState (n - 1))), dead)
+        _ -> (bd, dead)
+      (b', dead') = foldl bump (b, []) targets
+  in AdjOut b' dead' []
 
 crateDef :: Entry
 crateDef = customEntry (Crate 1) (Crate . unCustomState)

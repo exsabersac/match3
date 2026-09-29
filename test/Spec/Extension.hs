@@ -13,7 +13,7 @@ import Engine.Game (Game(..), Step(..))
 import Match3.Core
 import Match3.Board.Grid (atM)
 import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
-import Match3.Element.Class (Archetype(..), Element(..))
+import Match3.Element.Caps (Element(..), atEnd, blocker, counts, drainsAt, fixed, ground, piece, reshuffles)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Game.Trace (traceEventsWith)
 import Match3.Game.Shuffle (shuffleGameWith)
@@ -87,8 +87,7 @@ newtype Moss = Moss Int
 instance Element Moss where
   name _ = "moss"
   toCell (Moss n) = Custom "moss" (CustomState n)
-  groundRule _ = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
-  counter _ = Just (CountNamed "moss")
+  caps _ = piece [ground (\n -> if n > 1 then Just (n - 1) else Nothing), counts (CountNamed "moss")]
 
 mossDef :: Entry
 mossDef = groundEntry (Moss 2)
@@ -128,9 +127,7 @@ newtype Kite = Kite Int
 instance Element Kite where
   name _ = "kite"
   toCell (Kite k) = Custom "kite" (CustomState k)
-  archetype _ = Blocker
-  drains _ = [EdgeLeft]
-  counter _ = Just (CountNamed "kite")
+  caps _ = blocker [drainsAt [EdgeLeft], counts (CountNamed "kite")]
 
 kiteDef :: Entry
 kiteDef = customEntry (Kite 1) (Kite . unCustomState)
@@ -161,8 +158,7 @@ newtype Sinkhole = Sinkhole Int
 instance Element Sinkhole where
   name _ = "sinkhole"
   toCell (Sinkhole k) = Custom "sinkhole" (CustomState k)
-  archetype _ = Fixed
-  endRule _ = Just (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))
+  caps _ = fixed [atEnd (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))]
 
 sinkholeDef :: Entry
 sinkholeDef = customEntry (Sinkhole 1) (Sinkhole . unCustomState)
@@ -199,8 +195,7 @@ newtype Dust = Dust Int
 instance Element Dust where
   name _ = "dust"
   toCell (Dust k) = Custom "dust" (CustomState k)
-  archetype _ = Blocker
-  keepOnShuffle _ = False
+  caps _ = blocker [reshuffles]
 
 dustDef :: Entry
 dustDef = customEntry (Dust 1) (Dust . unCustomState)
@@ -227,8 +222,7 @@ newtype Hopper = Hopper Int
 instance Element Hopper where
   name _ = "hopper"
   toCell (Hopper k) = Custom "hopper" (CustomState k)
-  archetype _ = Fixed
-  endRule _ = Just (EndRule PhaseMove 80 hop (const []) (const []))
+  caps _ = fixed [atEnd (EndRule PhaseMove 80 hop (const []) (const []))]
     where
       hop _ b0 =
         let step (items, b) p =

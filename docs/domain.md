@@ -102,7 +102,7 @@
 | 单色收集 | `goalCollect 色 n`（`GoalCollect`） | `gsCount (CountColor 色)` |
 | 多色收集 | `goalColors [(色, n)]`（`GoalCollectMulti`） | 每色 `gsCount (CountColor 色)` ≥ 配额；进度 = Σ min(配额, 该色数) |
 | 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | `goalCount 键 n`（`GoalClearStone` … `GoalCarpet`） | `gsCounts` 里对应的键（第 4 刀前是 10 个专用字段）：`gsCount CountStones` / `CountChests` / `CountHoney` / `CountBalloons` / `CountCookies` / `CountCakes` / `CountSafes` / `CountUfo` / `CountCarpets` |
-| 按名字计数 | `goalCount (CountNamed 名字) N`（`GoalNamed 名字 N`） | 段 2c：`gsCount (CountNamed 名字)` 累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
+| 按名字计数 | `goalCount (CountNamed 名字) N`（`GoalNamed 名字 N`） | 段 2c：`gsCount (CountNamed 名字)` 累计 ≥ N（扩展元素经能力 `counts` / `countsDiff (CountNamed 名字)`，即查询 `counter` / `diffCounter`，计数） |
 
 目标是数据（第 5 刀，`Match3.Goal`）：`LevelGoal` = 一组配额，每项 = 度量（分数或一个计数键）+ 目标值。达成 ⟺ 每项度量 ≥ 目标值；进度（HUD / 标题 / 网页）单项 = 度量本身（不截断），多项 = Σ min(目标值, 度量)；目标值 = 各项之和。结算、HUD、标题栏、网页版都调同一组函数（`goalMet` / `goalProgress` / `goalTarget`，状态上的简写 `gsGoalMet` / `gsProgress`）。括号里是 `Show` 的写法：与第 5 刀前的构造器写法逐字相同（元素查询快照对 `show` 取散列、网页版按首词取目标种类）。`gsCollected` / `gsColorBag` 第 5 刀起不是字段，是由 `gsCounts` 派生的读数（旧字段的值，`Show` 仍在原位置打印）。
 | 步数 | `gsMoves` / `MovesLeft` | 成功步 −1；时间精灵可 +2 |
@@ -146,7 +146,7 @@
 | 步末效果 | `EndEffect { endEffectKind, endEffectElement, endEffectItems }`（第 7 刀 7b 起的通用形状） | 事件类型 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` + 元素名 countdown / belt / vine·choco·steam / snail；`applyEndEffect` 逐项重放回盘面 |
 | 步末一项 | `EndItem { eiFrom, eiTo, eiCell, eiBack }` | 目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它；蜗牛 `eiFrom == eiTo` 表示碰壁掉头，新朝向 = `endItemDir` |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
+| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance；第 9 刀起类只有 `name` / `toCell` / `caps`）、能力记录 `Caps`（五组：匹配与交换 `MatchCaps` / 消除与受击 `HitCaps` / 重力与移动 `MoveCaps` / 计数与目标 `CountCaps` / 步末与变化 `StepCaps`，带按原型的缺省值，元素用 `Match3.Element.Caps` 的简写只声明用到的几项）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
 | 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
 | 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
 | 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消 |

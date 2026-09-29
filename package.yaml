@@ -33,6 +33,7 @@ library:
   - Engine.Game
   - Engine.Effect
   - Engine.Playback
+  - Engine.History
   - Match3.Core
   - Match3.Engine
   - Match3.Types
@@ -102,3 +103,4 @@ tests:
     - tasty
     - tasty-hunit
     - tasty-quickcheck
+    - directory

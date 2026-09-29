@@ -191,7 +191,6 @@ module Match3.Core
   , restart
   , restartLevel
   , checkOutcome
-  , undoMove
   , applyHint
   , nextLevel
   , ensurePlayable

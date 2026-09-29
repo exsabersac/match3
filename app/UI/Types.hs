@@ -13,6 +13,7 @@ module UI.Types
   , Particle(..)
   , ToolMode(..)
   , App(..)
+  , appGame
   , helpKeysMsg
   , animBusy
   , playingCascade
@@ -23,6 +24,7 @@ import Art
 import ComboFx
 import Data.Text (Text)
 import Data.Word (Word8)
+import Engine.History (History (..))
 import Engine.Playback (Player (..))
 import Foreign.C.Types (CInt)
 import Match3.Core
@@ -70,9 +72,10 @@ data ToolMode
   | ToolCross           -- next cell click cross-clears row+col
   deriving (Eq, Show)
 
--- | 整个前端的可变状态（放在 IORef 里）；规则状态只在 appGame，其余字段都是表现。
+-- | 整个前端的可变状态（放在 IORef 里）；规则状态只在 appHist（当前局面 + 撤销历史，
+-- 由通用层 Engine.History 维护，段 3），其余字段都是表现。
 data App = App
-  { appGame      :: GameState
+  { appHist      :: History GameState
   , appSel       :: Maybe Pos
   , appMsg       :: Text
   , appFlash     :: [(Pos, Int)]
@@ -100,6 +103,10 @@ data App = App
 -- | 标题栏 / 键位条的默认提示。
 helpKeysMsg :: Text
 helpKeysMsg = "H hint | 1 hammer | 2 free-swap | 3 cross | U undo | S shuffle | D daily | M map | R restart | N next | P pause | Esc"
+
+-- | 当前局面（appHist 的当前状态）。
+appGame :: App -> GameState
+appGame = histNow . appHist
 
 -- | Ignore input while a tween is playing (rules already committed).
 animBusy :: App -> Bool

@@ -11,6 +11,10 @@
 -- 随机数与种子约定：
 --   * 随机数状态放在游戏状态 s 里（三消是 StdGen），step 是纯函数：同一状态 + 同一动作 ⇒ 同一结果；
 --   * 只有开局 gameNew 接受外部种子（Seed = Int），UI / 测试决定种子，规则层从不读时钟或 IO。
+--
+-- 报告（段 3）：Step 多一个 stepReport :: Maybe r，放「本游戏自己的前端才需要」的整步数据
+-- （三消：回放脚本、边沿特效、Outcome、提示）。通用层只把它原样带出，不解释；
+-- 这样外壳执行动作只调 gameStep，不必再绕过接口直接调游戏自己的入口。撤销历史见 "Engine.History"。
 module Engine.Game
   ( Seed
   , Step(..)
@@ -27,18 +31,19 @@ import Engine.Effect (Effect)
 type Seed = Int
 
 -- | 一次 step 的结果。
-data Step s e o = Step
+data Step s e o r = Step
   { stepState    :: s        -- ^ 新状态（被拒时 = 原状态）
   , stepEvents   :: [e]      -- ^ 本步的效果事件（纯数据，按时间顺序；给播放层用，不参与结算）
   , stepOutcome  :: Maybe o  -- ^ 本步之后的结局（Nothing = 未结束）
   , stepAccepted :: Bool     -- ^ 动作是否被接受（False：非法 / 无效动作，状态不变、没有事件）
+  , stepReport   :: Maybe r  -- ^ 本游戏前端用的整步报告（通用层不解释；没有时 Nothing）
   }
 
--- | 一种游戏。类型参数：cfg 开局配置、s 状态、a 动作、e 效果事件、o 结局。
-data Game cfg s a e o = Game
+-- | 一种游戏。类型参数：cfg 开局配置、s 状态、a 动作、e 效果事件、o 结局、r 整步报告（见 stepReport）。
+data Game cfg s a e o r = Game
   { gameName    :: String                -- ^ 名字（日志 / 标题用）
   , gameNew     :: cfg -> Seed -> s      -- ^ 开局：配置 + 种子 → 初始状态（纯函数）
-  , gameStep    :: s -> a -> Step s e o  -- ^ 推进一步（纯函数；随机数只来自 s）
+  , gameStep    :: s -> a -> Step s e o r  -- ^ 推进一步（纯函数；随机数只来自 s）
   , gameOutcome :: s -> Maybe o          -- ^ 结局判定：Nothing = 仍可继续
   , gameActions :: s -> [a]              -- ^ 当前可被接受的动作（供测试 / 自动演示；可以是有限枚举的子集）
   , gameStatus  :: s -> [(String, Int)]  -- ^ 给外壳看的具名数值（标题栏 / HUD：分数、步数、连击……）
@@ -46,11 +51,11 @@ data Game cfg s a e o = Game
   }
 
 -- | 被拒的一步：状态原样返回、没有事件、结局沿用当前判定。
-rejectedStep :: Game cfg s a e o -> s -> Step s e o
-rejectedStep g s = Step s [] (gameOutcome g s) False
+rejectedStep :: Game cfg s a e o r -> s -> Step s e o r
+rejectedStep g s = Step s [] (gameOutcome g s) False Nothing
 
 -- | 依次执行动作，遇到结局即停（其后的动作不再执行）。返回每一步的结果。
-runActions :: Game cfg s a e o -> s -> [a] -> [Step s e o]
+runActions :: Game cfg s a e o r -> s -> [a] -> [Step s e o r]
 runActions g = go
   where
     go _ [] = []
@@ -63,11 +68,11 @@ runActions g = go
                Nothing -> go (stepState st) as
 
 -- | runActions 之后的最终状态。
-finalState :: Game cfg s a e o -> s -> [a] -> s
+finalState :: Game cfg s a e o r -> s -> [a] -> s
 finalState g s0 as = case reverse (runActions g s0 as) of
   (st : _) -> stepState st
   [] -> s0
 
 -- | 一步的效果事件映射成通用效果。
-stepEffects :: Game cfg s a e o -> Step s e o -> [Effect]
+stepEffects :: Game cfg s a e o r -> Step s e o r -> [Effect]
 stepEffects g = map (gameEffect g) . stepEvents

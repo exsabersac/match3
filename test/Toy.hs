@@ -33,7 +33,7 @@ data ToyEvent = Bumped Int | Zeroed | Finished ToyEnd
 data ToyEnd = ToyWon | ToyLost
   deriving (Eq, Show)
 
-toyGame :: Game Int ToyState ToyAction ToyEvent ToyEnd
+toyGame :: Game Int ToyState ToyAction ToyEvent ToyEnd ()
 toyGame =
   Game
     { gameName = "toy-counter"
@@ -50,15 +50,15 @@ toyGame =
       | tsCount s > tsTarget s || tsTurns s <= 0 = Just ToyLost
       | otherwise = Nothing
     step s a
-      | outcome s /= Nothing = Step s [] (outcome s) False
+      | outcome s /= Nothing = Step s [] (outcome s) False Nothing
       | otherwise = case a of
           Inc n
-            | n < 1 || n > 3 -> Step s [] Nothing False
+            | n < 1 || n > 3 -> Step s [] Nothing False Nothing
             | otherwise -> finish (s {tsCount = tsCount s + n, tsTurns = tsTurns s - 1}) [Bumped n]
           Reset -> finish (s {tsCount = 0, tsTurns = tsTurns s - 1}) [Zeroed]
     finish s' evs =
       let o = outcome s'
-      in Step s' (evs ++ [Finished e | Just e <- [o]]) o True
+      in Step s' (evs ++ [Finished e | Just e <- [o]]) o True Nothing
     effect ev = case ev of
       Bumped n -> Effect 0 "bump" "counter" [] n
       Zeroed -> Effect 0 "zero" "counter" [] 0

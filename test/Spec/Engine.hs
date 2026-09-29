@@ -6,7 +6,14 @@ module Spec.Engine
   ( tests
   ) where
 
+import Data.Bits (xor)
+import Data.Char (isAlphaNum, ord)
+import Data.List (foldl', isPrefixOf, isSuffixOf)
 import Data.Maybe (isJust)
+import Data.Word (Word64)
+import Engine.History (History(..), Undoable(..), historyDepth, startHistory)
+import Numeric (showHex)
+import System.Directory (doesDirectoryExist, listDirectory)
 import Match3.Core
 import Match3.Game.Trace (traceEvents)
 import Engine.Effect (Effect(..))
@@ -23,6 +30,8 @@ tests =
   [ testCase "engine_toy_counter_game" engine_toy_counter_game
   , testCase "engine_layer_is_game_agnostic" engine_layer_is_game_agnostic
   , testCase "engine_match3_instance_matches_direct_api" engine_match3_instance_matches_direct_api
+  , testCase "engine_undo_after_terminal_matches_legacy_play" engine_undo_after_terminal_matches_legacy_play
+  , testCase "engine_frontend_steps_only_via_gameStep" engine_frontend_steps_only_via_gameStep
   ]
 
 --------------------------------------------------------------------------------
@@ -75,7 +84,7 @@ engine_toy_counter_game = do
 engine_layer_is_game_agnostic :: Assertion
 engine_layer_is_game_agnostic = do
   let files =
-        [ "src/Engine/Game.hs", "src/Engine/Effect.hs", "src/Engine/Playback.hs"
+        [ "src/Engine/Game.hs", "src/Engine/Effect.hs", "src/Engine/Playback.hs", "src/Engine/History.hs"
         , "app/Shell/Loop.hs", "test/Toy.hs" ]
   srcs <- mapM readFile files
   let bad =
@@ -88,8 +97,8 @@ engine_layer_is_game_agnostic = do
       hasMatch3 l = any (\w -> take 6 w == "Match3") (words l)
   assertEqual "no Match3 imports in the generic layer" [] bad
 
--- | 三消实例（Match3.Engine）：经通用接口 step 的结果与直接调用旧入口（trySwap / use* / trace* / undoMove /
--- shuffleGame / applyHint）逐位相同；runActions 在结局处停下；候选动作都会被接受；效果映射不丢事件。
+-- | 三消实例（Match3.Engine）：经通用接口 step 的结果与直接调用旧入口（trySwap / use* / trace* /
+-- shuffleGame / applyHint）逐位相同；撤销（段 3 起在 Engine.History，经 match3Shell）回到走步前的快照；runActions 在结局处停下；候选动作都会被接受；效果映射不丢事件。
 engine_match3_instance_matches_direct_api :: Assertion
 engine_match3_instance_matches_direct_api = do
   let g = M3E.match3Game
@@ -115,9 +124,13 @@ engine_match3_instance_matches_direct_api = do
         let pd = M3E.play a s0
         assertEqual (tag ++ " fx") (moveFx s0 gs' out) (M3E.pdFx pd)
         assertEqual (tag ++ " outcome value") (Just out) (M3E.pdOutcome pd)
-        -- 撤销
-        let su = gameStep g (stepState st) M3E.Undo
-        assertBool (tag ++ " undo") (maybe False (sameGs (stepState su)) (undoMove gs'))
+        -- 撤销（通用历史层）：回到走步前的快照，清掉本步特效字段 / 提示 / 洗牌标记
+        let sh = M3E.match3Shell
+            h1 = stepState (gameStep sh (startHistory s0) (Act a))
+            su = gameStep sh h1 Undo
+        assertBool (tag ++ " swap via shell") (sameGs (histNow h1) gs')
+        assertEqual (tag ++ " history depth") 1 (historyDepth h1)
+        assertBool (tag ++ " undo") (stepAccepted su && sameGs (histNow (stepState su)) ((clearMoveFx s0) {gsHint = Nothing, gsShuffled = False}))
       _ -> assertFailure "gameActions should only list swaps"
     -- 道具与被拒的动作
     let hm = gameStep g s0 (M3E.Hammer (4, 4))
@@ -128,7 +141,7 @@ engine_match3_instance_matches_direct_api = do
     let bad = gameStep g s0 (M3E.Swap (0, 0) (5, 5))
     assertEqual (tag ++ " rejected") (False, []) (stepAccepted bad, stepEvents bad)
     assertEqual (tag ++ " rejected outcome") (Just InvalidSwap) (M3E.pdOutcome (M3E.play (M3E.Swap (0, 0) (5, 5)) s0))
-    assertEqual (tag ++ " undo at start rejected") False (stepAccepted (gameStep g s0 M3E.Undo))
+    assertEqual (tag ++ " undo at start rejected") False (stepAccepted (gameStep M3E.match3Shell (startHistory s0) Undo))
     let sh = gameStep g s0 M3E.Shuffle
     assertBool (tag ++ " shuffle") (sameGs (stepState sh) (shuffleGame s0))
     assertEqual (tag ++ " shuffle event") ["shuffle"] (map efKind (stepEffects g sh))
@@ -144,3 +157,106 @@ engine_match3_instance_matches_direct_api = do
   assertEqual "terminal: step rejected" False (stepAccepted (gameStep g (stepState (last run1)) (head acts1)))
   where
     forM_' xs f = mapM_ f xs
+
+--------------------------------------------------------------------------------
+-- 段 3：撤销走通用接口（历史在 Engine.History）
+
+-- | 终局后撤销：经 match3Shell 的 gameStep 走到终局再连撤三次，每一步的状态投影与 13094d1 上直接调
+-- Match3.Engine.play（当时的 Undo 动作 + GameState.gsHistory）逐位相同。期望值由 13094d1 上的同一段投影生成
+-- （生成程序与本测试的 legacyProj 逐字相同，只把历史深度换成 length gsHistory）。
+-- 场景：(关卡下标, 种子, 步数, 是否把目标改成 1 分)——前四个判负、后两个过关；走法取 findHint。
+engine_undo_after_terminal_matches_legacy_play :: Assertion
+engine_undo_after_terminal_matches_legacy_play =
+  mapM_ one expected
+  where
+    g = M3E.match3Shell
+    one (sc@(li, seed, mv, easy), over, rows) = do
+      let base = (newGameAtLevel li (levelConfig (allLevels !! li)) seed) {gsMoves = mv}
+          s0 = startHistory (if easy then base {gsGoal = GoalScore 1} else base)
+          go h
+            | isJust (gsOver (histNow h)) = h
+            | otherwise = case findHint (gsBoard (histNow h)) of
+                Just (p, q) ->
+                  let st = gameStep g h (Act (M3E.Swap p q))
+                  in if stepAccepted st then go (stepState st) else h
+                Nothing -> h
+          hT = go s0
+          u1 = gameStep g hT Undo
+          u2 = gameStep g (stepState u1) Undo
+          u3 = gameStep g (stepState u2) Undo
+          got = (True, legacyProj hT) : [(stepAccepted u, legacyProj (stepState u)) | u <- [u1, u2, u3]]
+          tag = show sc
+      assertEqual (tag ++ " terminal outcome") over (gsOver (histNow hT))
+      assertEqual (tag ++ " undo after terminal accepted") True (stepAccepted u1)
+      assertEqual (tag ++ " undo clears outcome") Nothing (gsOver (histNow (stepState u1)))
+      assertEqual (tag ++ " matches 13094d1 play") rows got
+    expected :: [((Int, Int, Int, Bool), Maybe Outcome, [(Bool, String)])]
+    expected =
+      [ ((0,3,2,False), Just (Lost 60), [(True,"40356bf74a743c8a"),(True,"d268eecfca70bd1d"),(True,"5ab25fef8fe39d36"),(False,"5ab25fef8fe39d36")])
+      , ((6,1,3,False), Just (Lost 150), [(True,"58c5c9b29d6dc90e"),(True,"f4821e13f8413159"),(True,"8fd1ffda3978ffd"),(True,"163a90e589b8877a")])
+      , ((12,2,2,False), Just (Lost 100), [(True,"444f5e63d84b1509"),(True,"509df4883823f965"),(True,"d4df5580278e281"),(False,"d4df5580278e281")])
+      , ((27,1,2,False), Just (Lost 190), [(True,"ef3584929c694a4c"),(True,"d7ecea137581da25"),(True,"7a2c7232ad3e8763"),(False,"7a2c7232ad3e8763")])
+      , ((4,1,1,True), Just (LevelClear 30 5), [(True,"6c3fab5bd2d46e0c"),(True,"5acbcdbf9831cb2"),(False,"5acbcdbf9831cb2"),(False,"5acbcdbf9831cb2")])
+      , ((20,2,3,True), Just (LevelClear 30 21), [(True,"b9020797ba2d56c2"),(True,"3af9cee4e045dd8d"),(False,"3af9cee4e045dd8d"),(False,"3af9cee4e045dd8d")])
+      ]
+
+-- | 与 13094d1 共有字段的状态投影（FNV-1a 64）；最后一项是历史深度（旧：length gsHistory，新：historyDepth）。
+legacyProj :: History GameState -> String
+legacyProj h =
+  let gs = histNow h
+  in fnv (unlines
+       [ show (gsBoard gs), show (gsScore gs), show (gsMoves gs), show (gsGoal gs), show (gsCollected gs), show (gsColorBag gs)
+       , show (gsStonesCleared gs, gsChestsCleared gs, gsHoneyCleared gs, gsBalloonsPopped gs, gsCookiesCollected gs, gsCakesCleared gs, gsSafesOpened gs)
+       , show (gsGen gs), show (gsOver gs), show (gsLevel gs), show (gsHint gs), show (gsCombo gs), show (gsShuffled gs)
+       , show (gsBelts gs), show (gsPortals gs), show (gsHammers gs, gsFreeSwaps gs, gsCrossClears gs), show (gsUfos gs), show (gsUfoCollected gs)
+       , show (gsCarpetOpen gs), show (gsCarpetsCovered gs), show (gsLastCleared gs), show (gsDaily gs), show (gsElementCounts gs), show (historyDepth h) ])
+  where
+    fnv s = showHex (foldl' (\acc c -> (acc `xor` fromIntegral (ord c)) * 1099511628211) (14695981039346656037 :: Word64) s) ""
+
+-- | 前端（app/ 下全部 .hs）不再直接调用三消的 play / playWith，也没有 undoMove：动作一律经通用接口
+-- gameStep（UI.Actions.stepShell → Match3.Engine.match3Shell），撤销由 Engine.History 处理。
+-- 扫描去掉注释与字符串后的标识符（含限定名 M3E.play）；同时确认前端确实经 match3Shell 的 gameStep。
+engine_frontend_steps_only_via_gameStep :: Assertion
+engine_frontend_steps_only_via_gameStep = do
+  files <- hsFiles "app"
+  assertBool "scanned the whole front end" (length files >= 20)
+  srcs <- mapM readFile files
+  let banned = ["play", "playWith", "undoMove"]
+      bad =
+        [ f ++ ": " ++ t
+        | (f, src) <- zip files srcs
+        , t <- concatMap (idents . stripComment) (stripBlock src)
+        , let base = reverse (takeWhile (/= '.') (reverse t))
+        , base `elem` banned
+        ]
+      uses = [f | (f, src) <- zip files srcs, any ("gameStep M3E.match3Shell" `isPrefixOf`) (tailsS src)]
+  assertEqual "no direct play / playWith / undoMove in app/" [] bad
+  assertBool "front end steps through match3Shell's gameStep" (not (null uses))
+  where
+    hsFiles dir = do
+      names <- listDirectory dir
+      fmap concat $ mapM (\n -> do
+        let p = dir ++ "/" ++ n
+        isDir <- doesDirectoryExist p
+        if isDir then hsFiles p else pure [p | ".hs" `isSuffixOf` n]) names
+    stripComment = go
+      where
+        go ('-' : '-' : _) = []
+        go ('"' : rest) = let (_, r) = break (== '"') rest in ' ' : go (drop 1 r)
+        go (c : cs) = c : go cs
+        go [] = []
+    stripBlock s = lines (goB (0 :: Int) s)
+      where
+        goB n ('{' : '-' : r) = goB (n + 1) r
+        goB n ('-' : '}' : r) | n > 0 = goB (n - 1) r
+        goB n (c : r)
+          | n > 0 = (if c == '\n' then '\n' else ' ') : goB n r
+          | otherwise = c : goB n r
+        goB _ [] = []
+    idents l = case dropWhile (not . identStart) l of
+      [] -> []
+      s -> let (w, rest) = span identChar s in w : idents rest
+    identStart c = isAlphaNum c || c == '_'
+    identChar c = isAlphaNum c || c == '_' || c == '\'' || c == '.'
+    tailsS [] = [[]]
+    tailsS xs@(_ : r) = xs : tailsS r

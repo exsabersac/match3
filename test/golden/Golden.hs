@@ -27,6 +27,7 @@ import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
+import Engine.History (History(..), Undoable(..), historyDepth, pushHistory, replaceNow, startHistory, undoHistory)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, register)
 import Match3.Element.Types (baseDef)
@@ -150,10 +151,12 @@ pMaybePair :: Maybe (Pos, Pos) -> String
 pMaybePair Nothing = "-"
 pMaybePair (Just (a, b)) = pPos a ++ "-" ++ pPos b
 
--- | 状态里除盘面外的全部规则字段（具名）。
-pCounters :: GameState -> String
-pCounters gs =
-  unwords
+-- | 状态里除盘面外的全部规则字段（具名）。段 3 起撤销历史不在 GameState 里，
+-- hist= 取自同一局面在 Engine.History 里的历史深度（数值与原 length gsHistory 相同）。
+pCounters :: History GameState -> String
+pCounters h =
+  let gs = histNow h
+  in unwords
     [ "sc=" ++ show (gsScore gs)
     , "mv=" ++ show (gsMoves gs)
     , "goal=" ++ pGoal (gsGoal gs)
@@ -180,17 +183,28 @@ pCounters gs =
     , "ufos=" ++ pUfos (gsUfos gs)
     , "belts=" ++ concatMap pPosList (gsBelts gs)
     , "portals=" ++ concat [pPos a ++ "~" ++ pPos b ++ ";" | (a, b) <- gsPortals gs]
-    , "hist=" ++ show (length (gsHistory gs))
+    , "hist=" ++ show (historyDepth h)
     , "gen=" ++ show (gsGen gs)
     ]
 
 -- | 完整状态（盘面压缩成哈希，计数明文）。
-pState :: GameState -> String
-pState gs = "{b#" ++ fnv1a (pBoard (gsBoard gs)) ++ " " ++ pCounters gs ++ "}"
+pState :: History GameState -> String
+pState h = "{b#" ++ fnv1a (pBoard (gsBoard (histNow h))) ++ " " ++ pCounters h ++ "}"
 
 -- | 状态整体压缩成一个哈希（辅助列用）。
-hState :: GameState -> String
-hState gs = fnv1a (pBoard (gsBoard gs) ++ "|" ++ pCounters gs)
+hState :: History GameState -> String
+hState h = fnv1a (pBoard (gsBoard (histNow h)) ++ "|" ++ pCounters h)
+
+-- | 规则层一次走步的结果写进历史（段 3）：与 Engine.History.withHistory 同一规则——未终局时被接受的
+-- 走步（交换 / 道具，resolveMove 真正结算）记快照，其余（被拒 / 已结束）只换当前状态。
+recH :: History GameState -> (GameState, Outcome) -> History GameState
+recH h (g, o)
+  | applied o && gsOver (histNow h) == Nothing = pushHistory M3E.match3History h g
+  | otherwise = replaceNow h g
+
+-- | 同一历史换一个当前状态（提示 / 洗牌 / 自动洗牌 / 结局判定这类不记快照的操作）。
+nowH :: History GameState -> GameState -> History GameState
+nowH = replaceNow
 
 pWave :: CascadeWave -> String
 pWave w =
@@ -244,20 +258,22 @@ applied o = o /= NoMatch && o /= InvalidSwap
 
 -- | 一步：从全部可成交的相邻交换里按固定公式挑一手；没有可走步时强制洗牌。
 -- 每 3 步额外记三种道具（有次数 / 无次数），每步都记撤销 / 提示 / 洗牌 / 自动洗牌 / 被拒交换。
-stepLines :: String -> Int -> GameState -> ([String], Maybe GameState)
-stepLines tag i gs0 =
-  let valid = [ (p1, p2, r) | (p1, p2) <- allPairs, let r@(_, o) = trySwap p1 p2 gs0, applied o ]
+stepLines :: String -> Int -> History GameState -> ([String], Maybe (History GameState))
+stepLines tag i h0 =
+  let gs0 = histNow h0
+      valid = [ (p1, p2, r) | (p1, p2) <- allPairs, let r@(_, o) = trySwap p1 p2 gs0, applied o ]
       pre = tag ++ " #" ++ pad2 i
   in case valid of
        [] ->
-         let gs1 = shuffleGame gs0
-         in ([pre ++ " shuffle " ++ pState gs1], if gsOver gs1 == Nothing then Just gs1 else Nothing)
+         let h1 = nowH h0 (shuffleGame gs0)
+         in ([pre ++ " shuffle " ++ pState h1], if gsOver (histNow h1) == Nothing then Just h1 else Nothing)
        _ ->
          let (p1, p2, (gs1, o)) = valid !! ((i * 7 + 3) `mod` length valid)
+             h1 = recH h0 (gs1, o)
              mainL =
                unwords
                  [ pre, "swap", pPos p1 ++ "-" ++ pPos p2, "out=" ++ pOutcome o
-                 , "st=" ++ pState gs1
+                 , "st=" ++ pState h1
                  , "fx=" ++ pFx (moveFx gs0 gs1 o)
                  , "tr=" ++ pTrace (traceSwap p1 p2 gs0)
                  , "nvalid=" ++ show (length valid)
@@ -265,12 +281,12 @@ stepLines tag i gs0 =
              auxL =
                unwords
                  [ pre, "aux"
-                 , "undo=" ++ maybe "-" hState (undoMove gs1)
-                 , "hint=" ++ (let (g, h) = applyHint gs1 in hState g ++ ":" ++ pMaybePair h)
-                 , "shuf=" ++ hState (shuffleGame gs1)
-                 , "ens=" ++ hState (ensurePlayable gs1)
+                 , "undo=" ++ maybe "-" hState (undoHistory M3E.match3History h1)
+                 , "hint=" ++ (let (g, h) = applyHint gs1 in hState (nowH h1 g) ++ ":" ++ pMaybePair h)
+                 , "shuf=" ++ hState (nowH h1 (shuffleGame gs1))
+                 , "ens=" ++ hState (nowH h1 (ensurePlayable gs1))
                  , "chk=" ++ pOutcome (checkOutcome gs1)
-                 , "rej=" ++ (let (g, o') = trySwap (0, 0) (5, 5) gs1 in hState g ++ pOutcome o')
+                 , "rej=" ++ (let r@(_, o') = trySwap (0, 0) (5, 5) gs1 in hState (recH h1 r) ++ pOutcome o')
                  , "trej=" ++ pTrace (traceSwap (0, 0) (0, 0) gs1)
                  ]
              boostL
@@ -280,8 +296,9 @@ stepLines tag i gs0 =
                        fp1 = (i `mod` boardSize, 0)
                        fp2 = ((i + 3) `mod` boardSize, 5)
                        gsB = gs0 {gsHammers = 3, gsCrossClears = 3, gsFreeSwaps = 3}
-                       one name (g, oo) mt = name ++ "=" ++ pOutcome oo ++ ":" ++ hState g ++ ":" ++ pFx (moveFx gsB g oo) ++ ":" ++ pTrace mt
-                       none name (g, oo) = name ++ "0=" ++ pOutcome oo ++ ":" ++ hState g
+                       hB = nowH h0 gsB
+                       one name r@(g, oo) mt = name ++ "=" ++ pOutcome oo ++ ":" ++ hState (recH hB r) ++ ":" ++ pFx (moveFx gsB g oo) ++ ":" ++ pTrace mt
+                       none name r@(_, oo) = name ++ "0=" ++ pOutcome oo ++ ":" ++ hState (recH h0 r)
                    in [ unwords
                           [ pre, "boost"
                           , none "ham" (useHammer hp gs0), none "crs" (useCrossClear hp gs0), none "fsw" (useFreeSwap fp1 fp2 gs0)
@@ -290,13 +307,13 @@ stepLines tag i gs0 =
                           , one "fsw" (useFreeSwap fp1 fp2 gsB) (traceFreeSwap fp1 fp2 gsB)
                           ]
                       ]
-         in (mainL : auxL : boostL, if gsOver gs1 == Nothing then Just gs1 else Nothing)
+         in (mainL : auxL : boostL, if gsOver gs1 == Nothing then Just h1 else Nothing)
 
 pad2 :: Int -> String
 pad2 n = if n < 10 then '0' : show n else show n
 
 runGame :: String -> GameState -> Int -> [String]
-runGame tag gs0 n = (tag ++ " start " ++ pState gs0 ++ " board=" ++ pBoard (gsBoard gs0)) : go 0 gs0
+runGame tag gs0 n = (tag ++ " start " ++ pState (startHistory gs0) ++ " board=" ++ pBoard (gsBoard gs0)) : go 0 (startHistory gs0)
   where
     go i gs
       | i >= n = []
@@ -340,9 +357,9 @@ handmade =
 -- | 某局面的全部可成交交换（每个一行：结局、状态、回放）。
 allSwapsOf :: String -> GameState -> [String]
 allSwapsOf tag gs =
-  [ unwords [tag, "pair", pPos p1 ++ "-" ++ pPos p2, "out=" ++ pOutcome o, "st=" ++ pState g, "tr=" ++ pTrace (traceSwap p1 p2 gs)]
+  [ unwords [tag, "pair", pPos p1 ++ "-" ++ pPos p2, "out=" ++ pOutcome o, "st=" ++ pState (recH (startHistory gs) r), "tr=" ++ pTrace (traceSwap p1 p2 gs)]
   | (p1, p2) <- allPairs
-  , let (g, o) = trySwap p1 p2 gs
+  , let r@(_, o) = trySwap p1 p2 gs
   , applied o
   ]
 
@@ -384,14 +401,14 @@ cascadeLines =
 -- | 开局 / 重开 / 下一关（关卡装饰与随机数消费顺序）。
 levelLines :: [String]
 levelLines =
-  [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState gs ++ " board=" ++ pBoard (gsBoard gs)
+  [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
   | li <- [0 .. length allLevels - 1]
   , s <- [0, 5, 99 :: Int]
   , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
   ]
-    ++ [ "R" ++ pad2 (li + 1) ++ " s" ++ show s ++ " restart " ++ pState (restartLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) s)
+    ++ [ "R" ++ pad2 (li + 1) ++ " s" ++ show s ++ " restart " ++ pState (startHistory (restartLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) s))
        | li <- [0, 10, 27, 35], s <- [4, 8 :: Int] ]
-    ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (nextLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) 4)
+    ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (startHistory (nextLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) 4))
        | li <- [0, 10, 27] ]
 
 --------------------------------------------------------------------------------
@@ -472,36 +489,38 @@ h6Reg = register (baseDef "golden_probe") defaultRegistry
 -- 最后记死局的自动洗牌与手动洗牌。
 h6Lines :: [String]
 h6Lines =
-  let g = M3E.match3GameWith h6Reg
-      shuf s = stepState (gameStep g s M3E.Shuffle)
+  let g = M3E.match3ShellWith h6Reg
+      shuf s = stepState (gameStep g s (Act M3E.Shuffle))
       swapTo s p1 p2 =
-        let st = gameStep g s (M3E.Swap p1 p2)
+        let st = gameStep g s (Act (M3E.Swap p1 p2))
         in if stepAccepted st then Just (stepState st) else Nothing
-  in h6Run shuf swapTo (ensurePlayableWith h6Reg)
+  in h6Run shuf swapTo (\h -> nowH h (ensurePlayableWith h6Reg (histNow h)))
 
 -- | H6 的推进与投影（两边共用的部分；只有三种操作的取数入口不同）。
-h6Run :: (GameState -> GameState) -> (GameState -> Pos -> Pos -> Maybe GameState) -> (GameState -> GameState) -> [String]
+-- 段 3 起状态是 History GameState（经 match3ShellWith 的通用历史层；洗牌不记快照、交换记快照）。
+h6Run :: (History GameState -> History GameState) -> (History GameState -> Pos -> Pos -> Maybe (History GameState)) -> (History GameState -> History GameState) -> [String]
 h6Run shuf swapTo ens =
-  ("H6-shuffle start " ++ pState h6Gs ++ " board=" ++ pBoard (gsBoard h6Gs)) : go 0 h6Gs ++ deadLines
+  ("H6-shuffle start " ++ pState (startHistory h6Gs) ++ " board=" ++ pBoard (gsBoard h6Gs)) : go 0 (startHistory h6Gs) ++ deadLines
   where
     tag = "H6-shuffle"
+    dead = startHistory h6Dead
     go i gs
       | i >= (8 :: Int) = []
       | otherwise =
           let pre = tag ++ " #" ++ pad2 i
               s1 = shuf gs
-              l1 = pre ++ " shuf st=" ++ pState s1 ++ " board=" ++ pBoard (gsBoard s1)
+              l1 = pre ++ " shuf st=" ++ pState s1 ++ " board=" ++ pBoard (gsBoard (histNow s1))
               valid = [(p1, p2, g) | (p1, p2) <- allPairs, Just g <- [swapTo s1 p1 p2]]
           in case valid of
                [] -> [l1, pre ++ " stuck"]
                _ ->
                  let (p1, p2, g) = valid !! ((i * 7 + 3) `mod` length valid)
                      l2 = unwords [pre, "swap", pPos p1 ++ "-" ++ pPos p2, "st=" ++ pState g, "nvalid=" ++ show (length valid)]
-                 in l1 : l2 : (if gsOver g == Nothing then go (i + 1) g else [pre ++ " end"])
+                 in l1 : l2 : (if gsOver (histNow g) == Nothing then go (i + 1) g else [pre ++ " end"])
     deadLines =
-      [ tag ++ " dead " ++ pState h6Dead ++ " board=" ++ pBoard (gsBoard h6Dead)
-      , tag ++ " ens " ++ pState (ens h6Dead) ++ " board=" ++ pBoard (gsBoard (ens h6Dead))
-      , tag ++ " dshuf " ++ pState (shuf h6Dead) ++ " board=" ++ pBoard (gsBoard (shuf h6Dead))
+      [ tag ++ " dead " ++ pState dead ++ " board=" ++ pBoard (gsBoard h6Dead)
+      , tag ++ " ens " ++ pState (ens dead) ++ " board=" ++ pBoard (gsBoard (histNow (ens dead)))
+      , tag ++ " dshuf " ++ pState (shuf dead) ++ " board=" ++ pBoard (gsBoard (histNow (shuf dead)))
       ]
 
 -- | 第二批全部行。

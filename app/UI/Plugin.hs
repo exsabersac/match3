@@ -5,7 +5,7 @@
 -- 世界状态是 IORef App；各钩子：
 --   * 初始化：加载贴图、建立初始 App（开局提示 / 展示模式）、写窗口标题；
 --   * 帧首：同步渲染倍率（UI.Env.syncScale）；
---   * 事件：输入映射 UI.Input.foldEvents（规则经 Match3.Engine.play）；
+--   * 事件：输入映射 UI.Input.foldEvents（规则经通用接口 gameStep：Match3.Engine.match3Shell，撤销在 Engine.History）；
 --   * 推进：UI.Playback.tickAnim（逐轮回放用通用播放器 Engine.Playback）；
 --   * 绘制：UI.Draw.draw。
 module UI.Plugin
@@ -14,6 +14,7 @@ module UI.Plugin
   , match3ShellConfig
   ) where
 
+import Engine.History (startHistory)
 import Art
 import Data.IORef
 import Foreign.C.Types (CInt)
@@ -72,7 +73,7 @@ initialApp o art =
       (gsHinted0, _) = applyHint gs0
       gsHinted = if showcase then showcaseState gsHinted0 else gsHinted0
   in App
-       { appGame = gsHinted
+       { appHist = startHistory gsHinted
        , appSel = Nothing
        , appMsg = helpKeysMsg
        , appFlash = []

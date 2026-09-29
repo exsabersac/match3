@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**234** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
+- 期望：**236** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 234）：
+- 目录（用例数合计 236）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -47,12 +47,12 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/GoalsLevels.hs` | 31 | 目标、结局、星级、关卡表、每日、地图与步数结转 |
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 6 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌（样例元素苔藓 / 风筝 / 陷坑 / 浮尘只定义在该模块里） |
-| `test/Spec/Engine.hs` | 3 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例） |
+| `test/Spec/Engine.hs` | 5 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描） |
 | `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`） |
 | `test/Spec/Properties.hs` | 1 | QuickCheck 性质 |
-| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `crateDef` 等 |
+| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `crateDef` 等 |
 | `test/Toy.hs` | — | 通用接口的玩具实现（只 import `Engine.*`） |
 | `test/golden/` | — | 金标准投影 `Golden.hs` 与 `golden.txt` |
 
@@ -149,8 +149,10 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | 用例 | 断言 |
 |------|------|
 | `engine_toy_counter_game` | 玩具实现 `test/Toy.hs`（一维计数器，**只 import `Engine.*`**）：种子决定目标；`runActions` 遇到胜局即停（其后动作不执行）；非法 `Inc 9` 被拒、状态不变、没有事件；超出目标 / 步数用完判负；结局后 `gameActions` 为空、`gameStep` 拒绝；`gameStatus`；效果按节拍排成两个提示（6 帧 / 20 帧），通用播放器总帧数 26、只在进入第二个提示时触发其事件，加速后 9 帧，3 帧后进度 0.5；自定义阶段机（倒数 3 → 0）事件与帧数 |
-| `engine_layer_is_game_agnostic` | `src/Engine/*.hs`、`app/Shell/Loop.hs`、`test/Toy.hs` 没有任何 `import Match3…` 行（依赖方向单向） |
-| `engine_match3_instance_matches_direct_api` | 4 关 × 2 种子：`gameNew` = `newGameAtLevel`；前 3 个候选交换经 `gameStep` 的状态 / 结局 / 事件与 `trySwap` / `traceEvents (traceSwap …)` 逐位相同，`toEffect` 不丢事件、score 效果之和 = 得分增量，`play` 的 `MoveFx` / `Outcome` 与 `moveFx` 相同，撤销 = `undoMove`；锤子 / 十字 = `useHammer` / `useCrossClear`；非相邻交换被拒且无事件；开局撤销被拒；洗牌 = `shuffleGame` 且只有一个 shuffle 效果；提示 = `applyHint`；`gameStatus` 的 combo = `gsCombo`；只剩 1 步时 `runActions` 在第一步之后停下、终局后没有候选动作且拒绝一切 |
+| `engine_layer_is_game_agnostic` | `src/Engine/*.hs`（含段 3 的 `History.hs`）、`app/Shell/Loop.hs`、`test/Toy.hs` 没有任何 `import Match3…` 行（依赖方向单向） |
+| `engine_match3_instance_matches_direct_api` | 4 关 × 2 种子：`gameNew` = `newGameAtLevel`；前 3 个候选交换经 `gameStep` 的状态 / 结局 / 事件与 `trySwap` / `traceEvents (traceSwap …)` 逐位相同，`toEffect` 不丢事件、score 效果之和 = 得分增量，`play` 的 `MoveFx` / `Outcome` 与 `moveFx` 相同；经 `match3Shell` 走同一步、历史深度 1，`Undo` 回到走步前快照（清本步特效 / 提示 / 洗牌标记）；锤子 / 十字 = `useHammer` / `useCrossClear`；非相邻交换被拒且无事件；开局撤销（`match3Shell` 无历史）被拒；洗牌 = `shuffleGame` 且只有一个 shuffle 效果；提示 = `applyHint`；`gameStatus` 的 combo = `gsCombo`；只剩 1 步时 `runActions` 在第一步之后停下、终局后没有候选动作且拒绝一切 |
+| `engine_undo_after_terminal_matches_legacy_play` | 段 3：6 个场景（第 1 / 7 / 13 / 28 关判负，第 5 / 21 关把目标改成 1 分后过关），经 `match3Shell` 的 `gameStep` 按 `findHint` 走到终局，再连撤三次：终局后第一次撤销被接受、清掉终局标记；终局态与三次撤销后的状态投影（与 `13094d1` 共有的全部字段 + 历史深度，FNV-1a）及是否被接受，与 `13094d1` 上直接调 `Match3.Engine.play Undo`（当时的 `gsHistory`）逐位相同。期望值由 `13094d1` 上同一段投影程序生成后写进测试 |
+| `engine_frontend_steps_only_via_gameStep` | 段 3：递归扫描 `app/` 下全部 `.hs`（去掉注释与字符串），没有标识符 `play` / `playWith` / `undoMove`（含限定名 `M3E.play`）；且前端确有 `gameStep M3E.match3Shell` 调用 |
 
 ## 编写约定
 
@@ -160,7 +162,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 234，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 236，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

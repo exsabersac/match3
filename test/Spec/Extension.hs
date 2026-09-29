@@ -104,7 +104,7 @@ ext_ground_layer_test_element = do
   assertEqual "second clear removes the tile" [((6, 6), ("moss", 1))] (gsGround gs2)
   assertEqual "count accumulates by layer" [("moss", 2)] (gsElementCounts gs2)
   -- 撤销恢复、洗牌不动
-  assertEqual "undo restores ground" (Just (gsGround gs1)) (gsGround <$> undoMove gs2)
+  assertEqual "undo restores ground" (Just (gsGround gs1)) (gsGround <$> stepThenUndo reg gs1' (M3E.Swap p1 p2))
   assertEqual "shuffle keeps ground" (gsGround gs1) (gsGround (shuffleGameWith reg gs1))
   -- 未注册：地面层原样
   let (gsD, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0

@@ -27,6 +27,7 @@ library
       Engine.Game
       Engine.Effect
       Engine.Playback
+      Engine.History
       Match3.Core
       Match3.Engine
       Match3.Types
@@ -153,6 +154,7 @@ test-suite match3-test
   build-depends:
       array
     , base >=4.7 && <5
+    , directory
     , match3
     , random
     , tasty

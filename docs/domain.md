@@ -131,10 +131,11 @@
 
 | 中文 | 类型 / API | 说明 |
 |------|------------|------|
-| 游戏 | `Engine.Game.Game cfg s a e o` | 一条函数记录：开局 / 推进一步 / 结局判定 / 候选动作 / 状态摘要 / 效果映射 |
+| 游戏 | `Engine.Game.Game cfg s a e o r` | 一条函数记录：开局 / 推进一步 / 结局判定 / 候选动作 / 状态摘要 / 效果映射；`r` 是整步报告（`stepReport`） |
+| 撤销历史 | `Engine.History.History s` / `Undoable a`（`Act a` / `Undo`）/ `withHistory` | 段 3：历史只存在这里（`GameState` 不再带历史）；终局后仍可撤销 |
 | 一步结果 | `Step { stepState, stepEvents, stepOutcome, stepAccepted }` | 被拒时状态不变、没有事件 |
 | 种子 | `Seed = Int` | 只在开局 `gameNew` 用；之后随机数只来自状态 |
 | 通用效果 | `Engine.Effect.Effect { efBeat, efKind, efSubject, efSpots, efAmount }` | 播放层只认它；同一节拍的效果同时播 |
 | 阶段机 / 播放器 | `Engine.Playback.Stages`、`Player { plStage, plFrame, plFast }` | 游戏给出阶段长度与后继，播放器管帧号与加速 |
 | 外壳 / 插件 | `Shell.Loop.runShell`、`Plugin` | SDL 窗口与固定步长主循环；具体游戏的输入映射与绘制作为插件接入 |
-| 三消动作 | `Match3.Engine.Action` = `Swap` / `Hammer` / `FreeSwap` / `CrossClear` / `Undo` / `Hint` / `Shuffle` | `play` 一次结算得到状态、`Outcome`、回放脚本、`MoveFx`、事件 |
+| 三消动作 | `Match3.Engine.Action` = `Swap` / `Hammer` / `FreeSwap` / `CrossClear` / `Hint` / `Shuffle`（撤销是通用层的 `Undo`） | 一次结算得到 `Played`（状态、`Outcome`、回放脚本、`MoveFx`、事件），经 `gameStep` 的 `stepReport` 带回；外壳用 `match3Shell` |

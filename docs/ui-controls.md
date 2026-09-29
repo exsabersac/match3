@@ -1,6 +1,6 @@
 # SDL 键位与操作（match3-sdl）
 
-前端：`app/UI/Input.hs`（三消插件的输入映射：`handleKey` 按键表每键一个函数，`handleMouseUp` 拖拽交换，`handleMouseDown` 地图 / 加速 / 结束浮层 / 点格）与 `app/UI/Actions.hs`（道具 / 过关等动作）；规则一律经 `Match3.Engine.play`。规则侧不读键盘；此处仅描述 UI 绑定。
+前端：`app/UI/Input.hs`（三消插件的输入映射：`handleKey` 按键表每键一个函数，`handleMouseUp` 拖拽交换，`handleMouseDown` 地图 / 加速 / 结束浮层 / 点格）与 `app/UI/Actions.hs`（道具 / 过关等动作）；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell` → `Match3.Engine.match3Shell`；撤销历史在 `Engine.History`）。规则侧不读键盘；此处仅描述 UI 绑定。
 
 ## 基本操作
 
@@ -43,9 +43,9 @@
 
 | 键 | 行为 |
 |----|------|
-| `H` | `applyHint`（经 `Match3.Engine.play Hint`），高亮一手 |
-| `U` | `undoMove`（经 `play Undo`） |
-| `S` | `shuffleGame`（经 `play Shuffle`） |
+| `H` | `applyHint`（经 `gameStep`：`Act Hint`），高亮一手（终局后仍可用） |
+| `U` | 撤销一步（经 `gameStep`：`Undo`，由 `Engine.History` 处理；终局后仍可撤销） |
+| `S` | `shuffleGame`（经 `gameStep`：`Act Shuffle`） |
 | `D` | `newDailyGame`（日期种子） |
 | `M` | 开关选关地图；点击已解锁节点 `mapClickJump` |
 | `N` / 空格 / 回车 | 过关叠层后下一关 / 失败后重试等；动画播放中＝加速（见上） |

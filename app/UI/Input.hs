@@ -5,8 +5,8 @@
 -- 洗牌被锁，点击 / 空格 / 回车 / N 变为加速（键位表见 docs/ui-controls.md）。
 --
 -- 第三刀：原来约 512 行的 handleEvent 拆成 handleKey / handleMouseUp / handleMouseDown，
--- 每个键、每条鼠标路径各一个函数；规则调用一律经 Match3.Engine.play（UI.Actions.playMove），
--- 结果与原来直接调用 trySwap / use* / undoMove / applyHint / shuffleGame 逐位相同。
+-- 每个键、每条鼠标路径各一个函数；规则调用一律经通用接口 gameStep（UI.Actions.stepShell / playMove，实例 Match3.Engine.match3Shell），
+-- 结果与原来直接调用 trySwap / use* / applyHint / shuffleGame 逐位相同；撤销由 Engine.History 处理（终局后同样可撤销）。
 --
 -- 依赖：UI.Actions、UI.Playback、UI.LevelMap（地图点选）、UI.Env（鼠标坐标换算）、UI.Types、UI.Layout、Match3.Engine。
 module UI.Input
@@ -21,6 +21,8 @@ import Control.Monad (unless)
 import Data.IORef
 import Data.Int (Int32)
 import Data.Maybe (isJust)
+import Engine.Game (Step (..))
+import Engine.History (Undoable (..), histNow)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Match3.Core
@@ -153,10 +155,11 @@ keyShuffle :: IORef App -> Window -> IO ()
 keyShuffle ref window = do
   app <- readIORef ref
   unless (animBusy app || isJust (gsOver (appGame app))) $ do
-    let gs = M3E.pdState (M3E.play M3E.Shuffle (appGame app))
+    let st = stepShell (Act M3E.Shuffle) app
+        gs = histNow (stepState st)
         app' =
           app
-            { appGame = gs
+            { appHist = stepState st
             , appSel = Nothing
             , appMsg = "Shuffled"
             , appFlash = []
@@ -181,13 +184,13 @@ keyUndo :: IORef App -> Window -> IO ()
 keyUndo ref window = do
   app <- readIORef ref
   unless (animBusy app) $ do
-    let pd = M3E.play M3E.Undo (appGame app)
-    if not (M3E.pdAccepted pd)
+    let st = stepShell Undo app
+    if not (stepAccepted st)
       then commit ref window app { appMsg = "Nothing to undo" }
       else
         commit ref window
           app
-            { appGame = M3E.pdState pd
+            { appHist = stepState st
             , appSel = Nothing
             , appMsg = "Undone"
             , appFlash = []
@@ -272,12 +275,12 @@ keyCross ref window = do
 keyHint :: IORef App -> Window -> IO ()
 keyHint ref window = do
   app <- readIORef ref
-  let pd = M3E.play M3E.Hint (appGame app)
-      msg = case M3E.pdHint pd of
+  let st = stepShell (Act M3E.Hint) app
+      msg = case M3E.pdHint =<< stepReport st of
         Just (p1, p2) ->
           "Hint: " <> T.pack (show p1) <> " <-> " <> T.pack (show p2)
         Nothing -> "No moves — press S to shuffle"
-  commit ref window app { appGame = M3E.pdState pd, appMsg = msg }
+  commit ref window app { appHist = stepState st, appMsg = msg }
 
 -- | D：固定演示日期的每日挑战。
 keyDaily :: IORef App -> Window -> IO ()
@@ -411,14 +414,14 @@ cellClick ref window pos = do
 swapTo :: (GameState -> GameState -> MoveFx -> Outcome -> Text) -> App -> Pos -> Pos -> App
 swapTo msgOf app p1 p2 =
   let before = appGame app
-      (pd, out) = playMove (M3E.Swap p1 p2) before
+      (pd, out, h') = playMove (M3E.Swap p1 p2) app
       gs' = M3E.pdState pd
       -- Combo SFX placeholder: when audio lands, play a rising
       -- pitched blip on each EvHighlight k >= 2 (cascade wave cheer).
   in withUnlock
        ( playbackOf before pd (Just (p1, p2))
            app
-             { appGame = gs'
+             { appHist = h'
              , appSel = Nothing
              , appDragFrom = Nothing
              , appMsg = msgOf before gs' (M3E.pdFx pd) out

@@ -151,7 +151,6 @@ resolveMoveWith reg kind start opening gs =
             , gsCakesCleared = cakes'
             , gsSafesOpened = safes'
             , gsGen = gFinal
-            , gsHistory = take 20 (snapshot gs : gsHistory gs)
             , gsHint = Nothing
             , gsCombo = combo
             , gsShuffled = False

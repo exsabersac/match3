@@ -66,7 +66,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Board.Cascade` | 连锁的**单一实现**：`cascadeMatches` / `cascadeMatchesFrom` / `cascadeSeeds` / `cascadeAfterBelt` / `cascadeCountdowns` 返回 `CascadeRun`（终盘 + `CascadeTally` 计数记录 + `[CascadeWave]` + 飞碟 + 生成器），调用方直接读字段（第三刀删掉了元组兼容层 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 与 `traceCascade*`）；`stepCascade` 保留为「恰好一轮」的小工具；段 2c 起另有 `cascadeAfterEndWith`（步末补结算：挖 `erHoles` 空洞 → 边缘收集 + 补子 → 再连锁） | 步数 / 目标结算、道具扣次 |
 | `Match3.Board.Default` | 段 2c：不带 `With` 的旧名（`cascadeMatches` / `clearMatches` / `applyGravity` / `findHint` …）= `*With defaultRegistry`。`Board.{Match,Clear,Gravity,Cascade}` 自身不再 import `Element.Builtin`，只收 `Registry` 参数；主流程一律把 `reg` 往下传，不经本模块 | 规则 |
 | `Match3.Board.Random` | 随机盘、稳定盘、可玩盘、`shufflePlayable` | 保留装饰（见 `Game.Shuffle`） |
-| `Match3.Game.State` | `GameState`、撤销快照、`MoveFx` / `moveFx` / `clearMoveFx`（边沿触发）、`undoMove`、`applyHint` | 结算 |
+| `Match3.Game.State` | `GameState`（段 3 起不含撤销历史）、`MoveFx` / `moveFx` / `clearMoveFx`（边沿触发）、`applyHint` / `applyHintWith` | 结算、撤销历史（在 `Engine.History`） |
 | `Match3.Game.Tally` | 结算计数辅助：颜色袋、保险箱 / 时间精灵计数、地毯腾空格 | 结局判定 |
 | `Match3.Game.Outcome` | 目标满足、`decideOutcome`、`checkOutcome`、选关解锁、地图跳转、失败提示 | 盘面 |
 | `Match3.Game.Shuffle` | 保装饰洗牌 `shuffleGame`、自动洗牌 `ensurePlayable` | 回放（洗牌不在 `mtEnd`） |
@@ -87,13 +87,14 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Conveyor` | 传送带移位的**单一实现**：`beltMoves`（「原格 → 新格」描述）→ `applyBeltMoves`（按描述移位）；`shiftBelts = applyBeltMoves b (beltMoves belts)`，结算、回放描述与 `applyEndEffect` 重放共用 | 移位后再连锁（`Game.Resolve`） |
 | `Match3.Boosters` | 锤子/十字**种子位置**（纯几何） | 扣次数与连锁（`Game.Boosters`） |
 | `Match3.Daily` | 日期种子、每日配置、三星公式 | 每日盘面装饰（`Game.Level`） |
-| `Match3.Engine` | 三消作为通用接口的实现：`Action`（交换 / 锤子 / 自由交换 / 十字 / 撤销 / 提示 / 洗牌）、`Setup`、`play`（一次结算得到状态 / `Outcome` / `MoveTrace` / `MoveFx` / 事件）、`match3Game`、`toEffect` | 帧与绘制 |
+| `Match3.Engine` | 三消作为通用接口的实现：`Action`（交换 / 锤子 / 自由交换 / 十字 / 提示 / 洗牌）、`Setup`、`play`（一次结算得到 `Played`：状态 / `Outcome` / `MoveTrace` / `MoveFx` / 事件 / 提示，作为 `gameStep` 的 `stepReport`）、`match3Game`、撤销规则 `match3History`、外壳实例 `match3Shell = withHistory match3History match3Game`、`toEffect` | 帧与绘制、撤销历史的存放 |
 
 ### 通用层（`src/Engine/`）
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
-| `Engine.Game` | 通用游戏接口 `Game cfg s a e o`（record-of-functions）、`Step`、`runActions` / `finalState` / `stepEffects` / `rejectedStep`、种子约定 | 任何具体规则 |
+| `Engine.Game` | 通用游戏接口 `Game cfg s a e o r`（record-of-functions；`r` 是整步报告）、`Step`（含 `stepReport :: Maybe r`）、`runActions` / `finalState` / `stepEffects` / `rejectedStep`、种子约定 | 任何具体规则 |
+| `Engine.History` | 段 3：通用撤销历史 `History{histNow, histPast}`、`Undoable a = Act a \| Undo`、`HistoryPolicy{hpLimit, hpRecord, hpSnapshot, hpRestore}`、`withHistory`（给任意 `Game` 套一层撤销；终局后仍可撤销）、`pushHistory` / `replaceNow` / `undoHistory` / `commitStep` | 哪些动作算走步（由游戏的 policy 给出） |
 | `Engine.Effect` | 通用效果事件 `Effect{efBeat, efKind, efSubject, efSpots, efAmount}`、按节拍分组 `beats` | 帧数与样式 |
 | `Engine.Playback` | 纯播放层：阶段机 `Stages`、播放器 `Player`（帧号 / 加速）、`stepPlayer` / `playerProgress` / `runPlayer`；固定队列 `Cue` / `cueStages` / `effectCues` | 阶段内容（由游戏给出）、SDL |
 
@@ -107,8 +108,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `UI.Types` | `App`、`Anim`（`AnimCascade` 持有 `Player Cascade`）、`Particle`、`ToolMode`，帧数常量，`animBusy` / `playingPlayer` / `playingCascade` |
 | `UI.Layout` | 逻辑像素布局常量、格子坐标换算、矩形 / 插值工具、调色板 |
 | `UI.Env` | 环境变量（`MATCH3_LEVEL` / `SEED` / `SCALE` / `SHOWCASE`）、展示盘、高分屏倍率与鼠标坐标换算 |
-| `UI.Input` | 输入映射：`handleEvent` 分派到 `handleKey`（每键一个函数）/ `handleMouseUp`（拖拽交换）/ `handleMouseDown`（地图 / 加速 / 结束浮层 / 点格）；规则经 `Match3.Engine.play`；播放锁定（见 [ui-controls.md](ui-controls.md#播放锁定animbusy)） |
-| `UI.Actions` | 标题栏（连击数经 `gameStatus` 取）、`playMove` / `playbackOf`（一次 `play` 的结果 → 表现编排）、关卡重置、三种道具执行、回放加速、过关前进 / 重试 |
+| `UI.Input` | 输入映射：`handleEvent` 分派到 `handleKey`（每键一个函数）/ `handleMouseUp`（拖拽交换）/ `handleMouseDown`（地图 / 加速 / 结束浮层 / 点格）；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell`，实例 `Match3.Engine.match3Shell`；撤销是 `Undo`，由 `Engine.History` 处理）；播放锁定（见 [ui-controls.md](ui-controls.md#播放锁定animbusy)） |
+| `UI.Actions` | 标题栏（连击数经 `gameStatus` 取）、`stepShell`（外壳执行动作的唯一入口：`gameStep M3E.match3Shell`）、`playMove` / `playbackOf`（一次 `gameStep` 的整步报告 → 表现编排）、关卡重置、三种道具执行、回放加速、过关前进 / 重试 |
 | `UI.Playback` | 纯函数：每帧推进动画；按本次 `MoveFx` / `MoveTrace` 编排回放，阶段事件产生弹字 / 浮字 / 震屏 / 粒子 |
 | `UI.Draw` | 一帧的层次与贴图 / 几何分派 |
 | `UI.Cascade` | 静止盘、交换补间、轻落、逐轮回放（高亮 / 消失 / 下落）、震屏视口 |
@@ -142,8 +143,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 - **规则已结算**：`trySwap` / `useHammer` / `useFreeSwap` / `useCrossClear` 返回的 `GameState` 已是稳定盘（或终局），前端只做展示与补间。
 - **随机**：`StdGen` 存在 `gsGen`；洗牌 / 补子推进生成器，测试用固定种子。
-- **历史**：`gsHistory` 最多保留约 20 步快照供撤销；UI 粒子用 `gsLastCleared`，不参与规则；前端经 `moveFx` 边沿触发特效，失败操作不会重播上一步连击。
-- **回放脚本**：`MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep], mtGen, mtShuffle }` 是纯数据，与结算结果由同一次 `resolveMove` 计算产出，不写回 `GameState`。`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器：没有自动洗牌时等于结算后的 `gsBoard` / `gsGen`；发生洗牌时 `mtShuffle = Just 洗牌后盘面`，从 `(mtFinal, mtGen)` 重放 `ensurePlayable` 可逐帧复现（`ComboFx` 在最后追加 `StShuffle` 阶段；洗牌**不在** `mtEnd` 里）。前端调用 `Match3.Engine.play`：一次结算同时拿到结算结果、脚本、`MoveFx` 与效果事件（与分别调 `trySwap` / `use*` 和 `trace*` 逐位相同，测试 `engine_match3_instance_matches_direct_api`），`MoveFx` 为空时直接丢弃脚本。
+- **历史**：段 3 起撤销历史只有一份，放在通用层 `Engine.History.History GameState`（前端 `App.appHist`，当前局面 `appGame = histNow . appHist`），`GameState` 不再带 `gsHistory`。规则 `match3History`：交换 / 三种道具被接受时记走步前的快照（去掉提示与洗牌标记），最多 20 份；提示 / 洗牌 / 被拒动作不记；撤销回到快照并清掉本步特效字段与终局标记——终局后同样可以撤销（`Undo` 先于三消的终局拒绝处理）。这是原 `snapshot` / `undoMove` 的逐字搬迁（测试 `engine_undo_after_terminal_matches_legacy_play` 与 `13094d1` 上直接调 `play` 的结果逐位比对；金标准 `hist=` / `undo=` 两列改从 `History` 取数，2344 行全等）；UI 粒子用 `gsLastCleared`，不参与规则；前端经 `moveFx` 边沿触发特效，失败操作不会重播上一步连击。
+- **回放脚本**：`MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep], mtGen, mtShuffle }` 是纯数据，与结算结果由同一次 `resolveMove` 计算产出，不写回 `GameState`。`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器：没有自动洗牌时等于结算后的 `gsBoard` / `gsGen`；发生洗牌时 `mtShuffle = Just 洗牌后盘面`，从 `(mtFinal, mtGen)` 重放 `ensurePlayable` 可逐帧复现（`ComboFx` 在最后追加 `StShuffle` 阶段；洗牌**不在** `mtEnd` 里）。前端只调通用接口 `gameStep`（`match3Shell`），整步报告 `stepReport = Just Played` 里一次拿到结算结果、脚本、`MoveFx` 与效果事件（与分别调 `trySwap` / `use*` 和 `trace*` 逐位相同，测试 `engine_match3_instance_matches_direct_api`；`app/` 不再直接调 `play`，测试 `engine_frontend_steps_only_via_gameStep`），`MoveFx` 为空时直接丢弃脚本。
 
 ## 逐轮回放与规则的同步
 
@@ -271,7 +272,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ```
 ┌─ 通用层（不 import 任何 Match3 模块；engine_layer_is_game_agnostic 检查）────────────────┐
-│ src/Engine/Game.hs      Game cfg s a e o、Step、runActions / finalState / stepEffects       │
+│ src/Engine/Game.hs      Game cfg s a e o r、Step、runActions / finalState / stepEffects     │
+│ src/Engine/History.hs   History / Undoable / withHistory：通用撤销历史（段 3）              │
 │ src/Engine/Effect.hs    Effect（节拍 / 种类 / 主体 / 格 / 数量）、beats                      │
 │ src/Engine/Playback.hs  Stages / Player / Tick：帧节拍、分段推进、加速、进度；Cue 队列        │
 │ app/Shell/Loop.hs       SDL 外壳：初始化 / HiDPI 窗口 / 渲染器 / 固定 16 ms 主循环；Plugin   │
@@ -280,7 +282,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 ┌──────────────┴─────────────┐  ┌──────────────┴──────────────┐  ┌────────┴──────────────────┐
 │ 三消实现（库）              │  │ 三消回放（app/ComboFx）       │  │ 三消插件（app/UI.*）        │
 │ Match3.Engine：match3Game、│  │ cascadeStages：高亮→消失→下落 │  │ UI.Plugin 钩子、UI.Input   │
-│ Action、play、toEffect      │  │ →落定 / 步末阶段；WaveView    │  │ 输入映射、UI.Draw /        │
+│ Action、match3Shell、toEffect│  │ →落定 / 步末阶段；WaveView    │  │ 输入映射、UI.Draw /        │
 │   ▲ Match3.Game.* / Board.* │  │                              │  │ UI.CellTable 绘制          │
 │   │ / Element.*（规则）      │  │                              │  │                            │
 └────────────────────────────┘  └──────────────────────────────┘  └────────────────────────────┘
@@ -289,19 +291,21 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ### 接口字段
 
-`Engine.Game.Game cfg s a e o`（cfg 开局配置、s 状态、a 动作、e 本游戏的效果事件、o 结局）：
+`Engine.Game.Game cfg s a e o r`（cfg 开局配置、s 状态、a 动作、e 本游戏的效果事件、o 结局、r 整步报告）：
 
 | 字段 | 类型 | 说明 | 三消（`Match3.Engine.match3Game`） |
 |------|------|------|------------------------------------|
 | `gameName` | `String` | 名字 | `"match3"` |
 | `gameNew` | `cfg -> Seed -> s` | 开局；**唯一**接受外部种子的地方 | `Setup`：`Campaign 关卡下标` / `CustomLevel 配置` / `Daily 年 月 日`（每日的种子由日期决定） |
-| `gameStep` | `s -> a -> Step s e o` | 纯函数推进一步，随机数只来自 `s` | 终局时拒绝一切动作；否则 `playWith reg` |
+| `gameStep` | `s -> a -> Step s e o r` | 纯函数推进一步，随机数只来自 `s` | 终局时拒绝走步与洗牌（提示除外：只写 `gsHint`，与原前端终局后按 H 的行为一致）；否则 `playWith reg`，`stepReport = Just Played` |
 | `gameOutcome` | `s -> Maybe o` | 结局判定 | `gsOver`（`Won` / `Lost` / `LevelClear`） |
 | `gameActions` | `s -> [a]` | 当前会被接受的动作（测试 / 自动演示） | 所有会成交的相邻交换 |
 | `gameStatus` | `s -> [(String, Int)]` | 给外壳的具名数值 | level / score / moves / combo / hammers / freeSwaps / crossClears（标题栏的连击数从这里取） |
 | `gameEffect` | `e -> Effect` | 本游戏事件 → 通用效果 | `toEffect`：节拍 = `evWave`，种类 = 事件种类标签，主体 = `evElement`，格 = 每对的目标格，数量 = `evAmount` |
 
-`Step{stepState, stepEvents, stepOutcome, stepAccepted}`：被拒时状态不变、没有事件。组合子：`runActions`（依次执行，遇到结局即停）、`finalState`、`stepEffects`、`rejectedStep`。
+`Step{stepState, stepEvents, stepOutcome, stepAccepted, stepReport}`：被拒时状态不变、没有事件。`stepReport :: Maybe r`（段 3）放本游戏自己的前端才需要的整步数据（三消：`Played`），通用层原样带出、不解释——有了它，外壳执行动作只调 `gameStep`，不必绕过接口调游戏自己的入口。
+
+**撤销历史（`Engine.History`，段 3）**：`withHistory policy game` 把 `Game cfg s a e o r` 变成 `Game cfg (History s) (Undoable a) e o r`。`Act a` 交给原游戏，被接受且 `hpRecord a` 时先记 `hpSnapshot` 过的旧状态（最多 `hpLimit` 份）；`Undo` 由本层处理，有历史就回到最近一份快照（经 `hpRestore`），**不经原游戏的终局拒绝**，所以终局后仍可撤销；`gameActions` 在有历史时多一个 `Undo`，`gameStatus` 多一项 `undo`（可撤销步数）。组合子：`runActions`（依次执行，遇到结局即停）、`finalState`、`stepEffects`、`rejectedStep`。
 
 `Engine.Effect.Effect{efBeat, efKind, efSubject, efSpots, efAmount}`：节拍相同的效果同时播放（`beats` 按连续节拍分组）。
 
@@ -319,11 +323,12 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 |------------------------|--------------------------------|----------|------|
 | `Swap p q` | `resolveSwapWith` | `NoMatch` / `InvalidSwap` | `traceEventsWith reg`（回放脚本展开） |
 | `Hammer p` / `FreeSwap p q` / `CrossClear p` | `resolveHammerWith` / `resolveFreeSwapWith` / `resolveCrossClearWith` | 同上 | 同上 |
-| `Undo` | `undoMove` | 没有历史 | 无 |
 | `Hint` | `applyHint`（写 `gsHint`，`pdHint` 带回提示） | 从不 | 无 |
 | `Shuffle` | `shuffleGame` | 已结束 | `EvShuffle` |
 
-前端用 `play`（返回 `Played{pdState, pdOutcome, pdTrace, pdFx, pdEvents, pdHint, pdAccepted}`），不经 `gameStep` 的终局拦截，因此界面行为（例如终局后仍可撤销）与原来完全相同；测试 `engine_match3_instance_matches_direct_api` 断言 `gameStep` / `play` 与直接调用旧入口逐位相同。
+撤销不是三消的动作：外壳用 `match3Shell`（`withHistory match3History match3Game`），动作是 `Act (Swap p q)` / … / `Undo`。整步报告 `Played{pdState, pdOutcome, pdTrace, pdFx, pdEvents, pdHint, pdAccepted}` 经 `stepReport` 带回；界面行为（终局后仍可撤销、终局后按 H 仍给提示）与原来直接调 `play` 完全相同。测试：`engine_match3_instance_matches_direct_api`（`gameStep` 与直接调旧入口逐位相同）、`engine_undo_after_terminal_matches_legacy_play`（终局后撤销 = `13094d1` 的 `play Undo`）、`engine_frontend_steps_only_via_gameStep`（`app/` 源码扫描）。
+
+**段 3 对 `Engine.*` 的改动**：`Engine.Game` 的 `Game` / `Step` 多一个类型参数 `r` 与字段 `stepReport`（原因：前端要的回放脚本 / 特效 / 提示原来只能从 `play` 拿，要让外壳只调 `gameStep`，接口必须能带出整步报告）；新增 `Engine.History`。玩具 `test/Toy.hs` 的 `r = ()`，其余不变。
 
 ### 接入一个新游戏的步骤清单
 
@@ -331,6 +336,6 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 2. **写 `Game` 值**：`gameNew`（只在这里用种子）、`gameStep`（纯；非法动作返回 `rejectedStep` 式的结果）、`gameOutcome`、`gameActions`、`gameStatus`、`gameEffect`。
 3. **纯测试**：参照 `test/Toy.hs` 与 `engine_toy_counter_game`——`runActions` 走到胜 / 负、非法动作被拒且不改状态、结局后拒绝一切、`gameActions` 全部被接受、效果按节拍播放的帧数（含加速）。
 4. **回放**：时间线简单就用 `effectCues` + `cueStages`；复杂时间线自己写 `Stages`（参照 `ComboFx.cascadeStages`），交给 `Player`，绘制时用 `playerProgress` 取进度。
-5. **外壳**：写一个 `Plugin`（`plugInit` 加载资源、建世界状态；`plugEvents` 把 SDL 事件映射成动作并调 `gameStep` / 自己的执行函数；`plugTick` 推进 `Player`；`plugDraw` 绘制），`main = runShell cfg plugin`。
+5. **外壳**：写一个 `Plugin`（`plugInit` 加载资源、建世界状态；`plugEvents` 把 SDL 事件映射成动作并调 `gameStep`（要撤销就用 `withHistory` 套一层，历史不要放进游戏状态；前端要的额外数据放进 `stepReport`）；`plugTick` 推进 `Player`；`plugDraw` 绘制），`main = runShell cfg plugin`。
 6. **依赖检查**：新游戏与通用层之间只允许「新游戏 → Engine.* / Shell.Loop」；需要时把新的通用文件加入 `engine_layer_is_game_agnostic` 的检查列表。
 7. **文档**：在本节的分层图与模块地图里登记新模块。

@@ -8,12 +8,10 @@
 -- 前端因此不会重播上一步的连击（护栏 failed_swap_resets_combo_feedback 等）。
 module Match3.Game.State
   ( GameState(..)
-  , snapshot
   , clearMoveFx
   , rejectMove
   , MoveFx(..)
   , moveFx
-  , undoMove
   , applyHint
   , applyHintWith
   ) where
@@ -27,7 +25,7 @@ import Match3.Conveyor (Belt)
 import Match3.Types
 import System.Random (StdGen)
 
--- | 一局的全部规则状态。前端只读；所有修改都经 trySwap / use* / undoMove / shuffleGame 等纯函数返回新值。
+-- | 一局的全部规则状态。前端只读；所有修改都经 trySwap / use* / shuffleGame 等纯函数返回新值；撤销历史不在这里（段 3 起由 Engine.History 持有）。
 data GameState = GameState
   { gsBoard         :: Board
   , gsScore         :: Score
@@ -45,7 +43,6 @@ data GameState = GameState
   , gsGen           :: StdGen
   , gsOver          :: Maybe Outcome
   , gsLevel         :: Int
-  , gsHistory       :: [GameState]
   , gsHint          :: Maybe (Pos, Pos)
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
   , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
@@ -94,10 +91,6 @@ instance Eq GameState where
       && gsElementCounts a == gsElementCounts b
       && gsGround a == gsGround b
 
--- | 写入撤销历史的快照：去掉嵌套历史、提示与洗牌标记，避免历史无限嵌套。
-snapshot :: GameState -> GameState
-snapshot gs = gs { gsHistory = [], gsHint = Nothing, gsShuffled = False }
-
 -- | 清空「上一步」的 UI 反馈字段（连击波数 / 本步清除格）。
 -- 这两个字段只描述最近一次**真正结算**的一步；任何没有结算的操作（无匹配回滚、
 -- 挡交换、非相邻、道具无效、洗牌、撤销）都必须把它们归零，否则前端会把旧值
@@ -128,14 +121,6 @@ moveFx before after out
       _ -> MoveFx (gsCombo after) (gsLastCleared after)
   where
     noFx = MoveFx 0 []
-
--- | 撤销一步：回到上一个快照，清掉本步特效字段与终局标记；无历史时 Nothing。
-undoMove :: GameState -> Maybe GameState
-undoMove gs = case gsHistory gs of
-  (prev : rest) ->
-    -- 快照里的 gsCombo / gsLastCleared 属于更早那一步，撤销后不应再当作「本步反馈」
-    Just (clearMoveFx prev) { gsHistory = rest, gsHint = Nothing, gsOver = Nothing, gsShuffled = False }
-  [] -> Nothing
 
 -- | 计算一手可走的交换并记在 gsHint（不改盘面）。
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))

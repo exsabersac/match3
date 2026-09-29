@@ -278,7 +278,6 @@ newGameAtLevel li cfg seed =
           , gsGen = g1
           , gsOver = Nothing
           , gsLevel = li
-          , gsHistory = []
           , gsHint = Nothing
           , gsCombo = 0
           , gsShuffled = False

@@ -19,6 +19,7 @@ module Spec.Support
   , crateBoard
   , moveApplied
   , cratesOn
+  , stepThenUndo
   ) where
 
 import Control.Monad (foldM)
@@ -26,6 +27,10 @@ import Data.List (nub)
 import Match3.Core
 import Match3.Element (ElementDef(edCounter, edFalls, edOnHit, edAdjacent), Counter(CountNamed), AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), HitResult(HitImmune, HitDestroy, HitAbsorb), baseDef)
 import Match3.Types (isCustom)
+import Engine.Game (Game(..), Step(..))
+import Engine.History (History(..), Undoable(..), startHistory)
+import Match3.Element.Registry (Registry)
+import qualified Match3.Engine as M3E
 import Test.Tasty.HUnit
 
 
@@ -261,3 +266,12 @@ moveApplied o = o /= NoMatch && o /= InvalidSwap
 
 cratesOn :: Board -> [(Pos, Cell)]
 cratesOn b = [((r, c), cell) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let cell = getCell b (r, c), isCustom cell]
+
+-- | 段 3：撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith reg 执行一个动作，
+-- 再执行 Undo，返回撤销后的状态；走步或撤销被拒时 Nothing。
+stepThenUndo :: Registry -> GameState -> M3E.Action -> Maybe GameState
+stepThenUndo reg gs act =
+  let g = M3E.match3ShellWith reg
+      s1 = gameStep g (startHistory gs) (Act act)
+      s2 = gameStep g (stepState s1) Undo
+  in if stepAccepted s1 && stepAccepted s2 then Just (histNow (stepState s2)) else Nothing

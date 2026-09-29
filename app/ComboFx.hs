@@ -1,6 +1,6 @@
 -- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式、浮字曲线。
 -- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 UI.Cascade / UI.HudArt / UI.HudPrim），
--- 也不改规则：回放脚本与效果事件来自 Match3.Engine.play，结算结果仍以规则层为准。
+-- 也不改规则：回放脚本与效果事件来自通用接口 gameStep 的整步报告（Match3.Engine.match3Shell），结算结果仍以规则层为准。
 --
 -- 第三刀：时钟（帧号、加速、进度）交给通用播放层 Engine.Playback——本模块只给出阶段机
 -- cascadeStages（每个阶段多长、播完去哪、进入时触发什么）；回放器是 Player Cascade。

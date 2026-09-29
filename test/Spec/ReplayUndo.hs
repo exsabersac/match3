@@ -12,6 +12,8 @@ import Data.List (nub, sort)
 import Data.Maybe (isJust)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crUfos), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
+import Match3.Element (defaultRegistry)
+import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -45,8 +47,7 @@ undo_restores = do
   case findMatchPair (gsBoard gs0) of
     Nothing -> assertFailure "need move"
     Just (p1, p2) -> do
-      let (gs1, _) = trySwap p1 p2 gs0
-      case undoMove gs1 of
+      case stepThenUndo defaultRegistry gs0 (M3E.Swap p1 p2) of
         Nothing -> assertFailure "undo should work"
         Just gsU -> do
           gsBoard gsU @?= gsBoard gs0
@@ -163,7 +164,7 @@ undo_restores_carry_moves = do
     Just (p1, p2) -> do
       let (gs1, _) = trySwap p1 p2 gs0
       assertEqual "spent one" (6 :: Int) (gsMoves gs1)
-      case undoMove gs1 of
+      case stepThenUndo defaultRegistry gs0 (M3E.Swap p1 p2) of
         Nothing -> assertFailure "undo"
         Just gsU -> do
           assertEqual "moves restored" (7 :: Int) (gsMoves gsU)

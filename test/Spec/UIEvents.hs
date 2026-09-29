@@ -13,6 +13,7 @@ import Match3.Element (defaultRegistry)
 import Match3.Element.Event (EventKind(..), Event(..))
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (traceEvents)
+import qualified Match3.Engine as M3E
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
@@ -193,7 +194,7 @@ undo_shuffle_reset_combo_feedback = withComboState $ \_ gs1 -> do
     Nothing -> assertFailure "need a follow-up move"
     Just (p1, p2) -> do
       let (gs2, _) = trySwap p1 p2 gs1
-      case undoMove gs2 of
+      case stepThenUndo defaultRegistry gs1 (M3E.Swap p1 p2) of
         Nothing -> assertFailure "undo should succeed"
         Just gsU -> do
           gsBoard gsU @?= gsBoard gs1

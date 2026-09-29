@@ -63,7 +63,7 @@ levelPortals 27 = [((0, 3), (7, 4))]
 levelPortals _ = []
 
 -- | Place stones / grass / vines / countdown décor (preserves gem color for overlays).
--- 第二刀 2b：各关装饰改为按元素名引用的放置表（levelPlacements），由元素定义的 edPlace 解释。
+-- 第二刀 2b：各关装饰改为按元素名引用的放置表（levelPlacements），由元素条目的放置函数解释。
 decorateLevel :: Int -> Board -> Board
 decorateLevel = decorateLevelWith defaultRegistry
 

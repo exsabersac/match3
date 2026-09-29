@@ -1,12 +1,17 @@
--- | 元素类原型（阶段 1）：宝石 / 彩蛋 / 冰层走新机制（Match3.Element.Class），经适配层桥接成旧记录，
--- 与其余旧记录并存。这里证明新旧两条路径的结果一致，并锁定类本身的约定（Eq / Show、修饰器组合、
--- 状态在元素值里、开放消息）。
+-- | 元素类（xmonad LayoutClass 风格，Match3.Element.Class）。
+--
+-- 阶段 2 删掉了扁平 ElementDef 记录，新旧两条路径不能再在同一进程里并排跑；等价性改由阶段 1（9ae6a7b，
+-- 新旧记录并存且逐手相等）上生成的元素查询快照 test/golden/element-queries.txt 锁定：全部 *With 查询 ×
+-- 样本格、放置、规则表、规则在样例盘上的输出、40 关逐手对局（见 test/golden/ElementQueries.hs）。
+-- 另锁定类本身的约定（Eq / Show、修饰器组合、状态在元素值里、开放消息）与阶段 2 消掉的遗留项。
 module Spec.ElementClass
   ( tests
   ) where
 
 import Control.Monad (forM_)
+import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (isJust)
+import qualified ElementQueries
 import Match3.Board.Match (findHintWith)
 import Match3.Core
 import Match3.Element
@@ -14,18 +19,21 @@ import Match3.Element.Class
   ( Archetype(..)
   , Element(..)
   , Hit(..)
+  , LevelElement(..)
   , Message
   , ModHit(..)
   , Modifier(..)
   , SomeElement(..)
+  , SomeLevel(..)
   , SomeMessage(..)
   , fromElement
   , fromMessage
+  , levelNameOf
   , modify
   , sendMessage
   )
 import qualified Match3.Element.Class as C
-import Match3.Element.Prototype
+import Match3.Element.Message (Absorbed(..), Refilled(..))
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
 import Test.Tasty
@@ -34,120 +42,41 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "ec_bridge_fields_match_legacy" ec_bridge_fields_match_legacy
-  , testCase "ec_bridge_rules_match_legacy" ec_bridge_rules_match_legacy
-  , testCase "ec_registry_paths_agree_in_play" ec_registry_paths_agree_in_play
+  [ testCase "ec_queries_match_stage1_snapshot" ec_queries_match_stage1_snapshot
+  , testCase "ec_rules_match_stage1_snapshot" ec_rules_match_stage1_snapshot
+  , testCase "ec_play_matches_stage1_snapshot" ec_play_matches_stage1_snapshot
   , testCase "ec_some_element_eq_show" ec_some_element_eq_show
   , testCase "ec_ice_modifier_composes" ec_ice_modifier_composes
   , testCase "ec_state_lives_in_element_value" ec_state_lives_in_element_value
   , testCase "ec_open_messages" ec_open_messages
+  , testCase "ec_flat_record_removed" ec_flat_record_removed
+  , testCase "ec_level_elements_by_message" ec_level_elements_by_message
+  , testCase "ec_custom_matchable_gem" ec_custom_matchable_gem
   ]
 
-protoNames :: [ElementName]
-protoNames = ["gem", "line_h", "line_v", "bomb", "rainbow", "ice", "surprise"]
+-- | 快照里以给定前缀开头的行，两边逐行比；报告第一处分叉。
+snapshotPart :: [String] -> Assertion
+snapshotPart prefixes = do
+  expected <- lines <$> readFile "test/golden/element-queries.txt"
+  let pick = filter (\l -> any (`isPrefixOf` l) prefixes)
+      e = pick expected
+      a = pick ElementQueries.queryLines
+  assertBool "snapshot part not empty" (not (null e))
+  case [(i, x, y) | (i, x, y) <- zip3 [1 :: Int ..] e a, x /= y] of
+    ((i, x, y) : _) -> assertFailure ("line " ++ show i ++ " differs\nexpected: " ++ take 400 x ++ "\nactual:   " ++ take 400 y)
+    [] -> assertEqual "line count" (length e) (length a)
 
-defIn :: [ElementDef] -> ElementName -> ElementDef
-defIn ds n = case [d | d <- ds, edName d == n] of
-  (d : _) -> d
-  [] -> error ("no def " ++ n)
+-- | 逐格查询（Q）、放置（P）、规则表与条目 / 关卡级元素清单（R）与阶段 1 全等。
+ec_queries_match_stage1_snapshot :: Assertion
+ec_queries_match_stage1_snapshot = snapshotPart ["Q ", "P ", "R "]
 
--- | 样本格：全部颜色 × 种类 × 冰 0..3 × 若干叠层，加彩蛋和几种障碍。
-sampleCells :: [Cell]
-sampleCells =
-  [ Gem c k i ov
-  | c <- [minBound .. maxBound]
-  , k <- [Normal, LineH, LineV, Bomb, Rainbow]
-  , i <- [0 .. 3]
-  , ov <- [Nothing, Just Grass, Just (Chain 2), Just (Freeze 1), Just (Curtain 1), Just Steam]
-  ]
-    ++ [Surprise, Stone 2, Cookie, Custom "x" 1]
+-- | 邻格 / 步末 / 成对交换 / 开启规则、直接命中、地面层在样例盘上的输出（A / E / S / O / C / G）与阶段 1 全等。
+ec_rules_match_stage1_snapshot :: Assertion
+ec_rules_match_stage1_snapshot = snapshotPart ["A ", "E ", "S ", "O ", "C ", "G "]
 
--- | 这个定义在注册表里负责的格（本体按槽位；冰层 = 带冰的宝石）。
-cellsOf :: ElementDef -> [Cell]
-cellsOf d = case edSlot d of
-  SlotCell i -> [cell | cell <- sampleCells, cellSlot cell == i]
-  SlotIce -> [cell | cell@(Gem _ _ i _) <- sampleCells, i > 0]
-  _ -> []
-
-sampleArgs :: [[Arg]]
-sampleArgs = [[], [AInt 1], [AInt 3], [AColor C2], [AColor C1, AColor C4], [AInt 1, AInt 0]]
-
--- | 逐字段比对：类型级字段直接比，逐格字段在该定义负责的全部样本格上比，放置在全部样本格 × 参数上比。
-ec_bridge_fields_match_legacy :: Assertion
-ec_bridge_fields_match_legacy = forM_ protoNames $ \n -> do
-  let old = defIn legacyBuiltinDefs n
-      new = defIn builtinDefs n
-      lbl f = n ++ "." ++ f
-      cells = cellsOf old
-  assertEqual (lbl "bridged def is the prototype one") (map edName prototypeDefs) (filter (`elem` map edName prototypeDefs) (map edName builtinDefs))
-  assertBool (lbl "has cells") (not (null cells))
-  assertEqual (lbl "slot") (edSlot old) (edSlot new)
-  assertEqual (lbl "static") (static old) (static new)
-  forM_ cells $ \cell -> do
-    let at f = lbl f ++ " @ " ++ show cell
-    assertEqual (at "color") (edColor old cell) (edColor new cell)
-    assertEqual (at "activates") (edActivates old cell) (edActivates new cell)
-    assertEqual (at "onHit") (edOnHit old cell) (edOnHit new cell)
-    assertEqual (at "keepOnShuffle") (edKeepOnShuffle old cell) (edKeepOnShuffle new cell)
-  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \p ->
-    assertEqual (lbl "blast " ++ show p) (fmap ($ p) (edBlast old)) (fmap ($ p) (edBlast new))
-  forM_ sampleCells $ \cell -> forM_ sampleArgs $ \args ->
-    assertEqual (lbl "place " ++ show args ++ " " ++ show cell) (edPlace old args cell) (edPlace new args cell)
-  where
-    static d =
-      ( (edBlocksMatch d, edBlocksSwap d, edFalls d, edPortal d, edDrains d, edStripOnClear d)
-      , (edCounter d, edDiffCounter d, edBonusMoves d, edVacatesCarpet d, edRecolorable d, edPushable d)
-      , (fmap arOrder (edAdjacent d), fmap (\r -> (erPhase r, erOrder r)) (edEnd d), isJust (edGround d))
-      , (fmap srOrder (edSwap d), isJust (edOpen d))
-      )
-
--- | 规则类字段：成对交换规则在含各种特殊块的盘面上逐对比 srFires / srSeeds；彩蛋的开启规则逐前沿比。
-ec_bridge_rules_match_legacy :: Assertion
-ec_bridge_rules_match_legacy = do
-  let specials = [((2, 2), Gem C1 Rainbow 0 Nothing), ((2, 3), Gem C2 LineH 0 Nothing), ((3, 3), Gem C3 LineV 0 Nothing), ((3, 4), Gem C4 Bomb 0 Nothing), ((4, 4), Gem C5 Rainbow 0 Nothing), ((5, 4), Gem C1 Bomb 1 Nothing)]
-      board = foldl (\b (p, c) -> setCell b p c) stableBoard specials
-      pairs = [((r, c), q) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], q <- [(r, c + 1), (r + 1, c)], inBounds q]
-  forM_ ["line_h", "rainbow"] $ \n -> do
-    let Just ro = edSwap (defIn legacyBuiltinDefs n)
-        Just rn = edSwap (defIn builtinDefs n)
-    assertEqual (n ++ " order") (srOrder ro) (srOrder rn)
-    forM_ pairs $ \(p1, p2) -> do
-      assertEqual (n ++ " fires " ++ show (p1, p2)) (srFires ro board p1 p2) (srFires rn board p1 p2)
-      assertEqual (n ++ " seeds " ++ show (p1, p2)) (srSeeds ro board p1 p2) (srSeeds rn board p1 p2)
-  let eggs = foldl (\b p -> setCell b p Surprise) board [(0, 0), (1, 5), (6, 6), (7, 1)]
-      Just oo = edOpen (defIn legacyBuiltinDefs "surprise")
-      Just on = edOpen (defIn builtinDefs "surprise")
-  forM_ [[], [(0, 1)], [(1, 4), (6, 5)], [(7, 0), (7, 2), (0, 0)], [(r, c) | r <- [0 .. 7], c <- [0 .. 7]]] $ \front ->
-    assertEqual ("open " ++ show front) (showOpen (orOpen oo eggs front)) (showOpen (orOpen on eggs front))
-  where
-    showOpen (b, e, s) = (boardRowsText b, e, s)
-    boardRowsText b = show [getCell b (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
-
--- | 新旧两份注册表（旧 = 全部旧记录；新 = 内置表，宝石 / 冰 / 彩蛋走新机制）在全部 40 关 × 种子 1–2 ×
--- 12 手（走提示）上逐手相等：提示、交换后的对局状态与整步记录；每手前再试一次锤子。
-ec_registry_paths_agree_in_play :: Assertion
-ec_registry_paths_agree_in_play = do
-  let legacy = foldl (flip registerLevel) (mkRegistry legacyBuiltinDefs) builtinLevelDefs
-  forM_ [0 .. length allLevels - 1] $ \li -> forM_ [1, 2] $ \seed -> do
-    let go :: Int -> GameState -> Assertion
-        go 0 _ = pure ()
-        go k gs
-          | gsOver gs /= Nothing = pure ()
-          | otherwise = do
-              let hint = findHintWith defaultRegistry (gsBoard gs)
-                  tag = "L" ++ show (li + 1) ++ " seed " ++ show seed ++ " step " ++ show (12 - k)
-              assertEqual (tag ++ " hint") (findHintWith legacy (gsBoard gs)) hint
-              let hp = (k `mod` boardSize, (k * 3) `mod` boardSize)
-              assertEqual (tag ++ " hammer") (show (resolveHammerWith legacy hp gs)) (show (resolveHammerWith defaultRegistry hp gs))
-              case hint of
-                Nothing -> pure ()
-                Just (a, b) -> do
-                  let new = resolveSwapWith defaultRegistry a b gs
-                      old = resolveSwapWith legacy a b gs
-                  assertEqual (tag ++ " swap") (show old) (show new)
-                  let (gs', _, _) = new
-                  go (k - 1) gs'
-    go 12 (newGameAtLevel li (levelConfig (allLevels !! li)) seed)
+-- | 40 关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列（M）与阶段 1 全等。
+ec_play_matches_stage1_snapshot :: Assertion
+ec_play_matches_stage1_snapshot = snapshotPart ["M "]
 
 -- | SomeElement 的 Eq 先比元素名再比状态，Show 稳定（元素名 + 状态值）。
 ec_some_element_eq_show :: Assertion
@@ -167,8 +96,11 @@ ec_some_element_eq_show = do
   assertEqual "gem defaults" (False, Just True, True, True, Destroy, True, True, False, True) (blocksSwap g, activates g, falls g, portal g, onHit g, recolorable g, pushable g, keepOnShuffle g, hintable g)
   assertBool "rainbow not hintable" (not (hintable (SpecialGem C1 Rainbow)))
   assertEqual "egg is a blocker" (True, Just False, Nothing, True) (blocksSwap SurpriseEgg, activates SurpriseEgg, color SurpriseEgg, keepOnShuffle SurpriseEgg)
+  -- 注册表把格子解码成元素值
+  assertEqual "decode gem" (SomeElement (PlainGem C5)) (bodyOf defaultRegistry (mkGem C5))
+  assertEqual "decode iced line" (modify (Ice 2) (SomeElement (SpecialGem C1 LineV))) (elementOf defaultRegistry (Gem C1 LineV 2 Nothing))
 
--- | 冰层修饰器：包在宝石外面，组合结果与旧注册表的逐层询问一致，写回格子带冰层数。
+-- | 冰层修饰器：包在宝石外面，组合结果与逐层询问一致，写回格子带冰层数。
 ec_ice_modifier_composes :: Assertion
 ec_ice_modifier_composes = do
   let iced n k = modify (Ice n) (SomeElement (SpecialGem C3 k))
@@ -184,12 +116,12 @@ ec_ice_modifier_composes = do
   assertEqual "last ice shatters with the gem" Destroy (onHit (plain 1))
   assertBool "iced normal gem kept on shuffle" (keepOnShuffle (plain 1))
   assertEqual "modifier hit" (Keep (Ice 1)) (modOnHit (Ice 2))
-  let reg = defaultRegistry
-  forM_ [Gem c k i ov | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \cell ->
-    assertEqual ("registry directHit " ++ show cell) (directHitWith (foldl (flip registerLevel) (mkRegistry legacyBuiltinDefs) builtinLevelDefs) cell) (directHitWith reg cell)
+  forM_ [(c, k, i, ov) | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \(c, k, i, ov) -> do
+    let cell = Gem c k i ov
+    assertEqual ("registry directHit " ++ show cell) (if i > 1 then HitAbsorb (Gem c k (i - 1) ov) else HitDestroy) (directHitWith defaultRegistry cell)
 
 -- | 测试专用「鸟窝」：状态（剩余命中数）放在元素值里；受击返回新的元素值，写回 Custom "nest" k；
--- 经适配层注册进注册表后，锤子每敲一次减一，最后一下才碎并计数。
+-- 注册进注册表后，锤子每敲一次减一，最后一下才碎并计数。
 newtype Nest = Nest Int
   deriving (Eq, Show)
 
@@ -205,15 +137,9 @@ instance Element Nest where
     Just (Warm d) -> Just (SomeElement (Nest (k + d)))
     Nothing -> Nothing
 
-decodeNest :: Cell -> Maybe Nest
-decodeNest cell = case cell of
-  Custom "nest" k -> Just (Nest k)
-  _ -> Nothing
-
 ec_state_lives_in_element_value :: Assertion
 ec_state_lives_in_element_value = do
-  let nestDef = bridgeBody SlotCustom (Nest 1) decodeNest (\args _ -> Just (Custom "nest" (case args of (AInt k : _) -> k; _ -> 1)))
-      reg = register nestDef defaultRegistry
+  let reg = register (customEntry (Nest 1) Nest) defaultRegistry
       p = (3, 3)
       gs0 = (newGame defaultConfig 7) {gsBoard = setCell stableBoard p (Custom "nest" 3), gsHammers = 5}
       hit gs = let (gs', _, _) = resolveHammerWith reg p gs in gs'
@@ -221,9 +147,10 @@ ec_state_lives_in_element_value = do
       gs2 = hit gs1
       gs3 = hit gs2
   assertEqual "onHit returns the new value" (Absorb (SomeElement (Nest 2))) (onHit (Nest 3))
+  assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf reg (Custom "nest" 3))
   assertEqual "first hit" (Custom "nest" 2) (getCell (gsBoard gs1) p)
   assertEqual "second hit" (Custom "nest" 1) (getCell (gsBoard gs2) p)
-  assertBool "third hit breaks it" (getCell (gsBoard gs3) p /= Custom "nest" 1 && not (isNest (getCell (gsBoard gs3) p)))
+  assertBool "third hit breaks it" (not (isNest (getCell (gsBoard gs3) p)))
   assertEqual "counted once" [("nest", 1)] (gsElementCounts gs3)
   assertEqual "placed via the constructor" (Custom "nest" 2) (getCell (placeWith reg "nest" [AInt 2] stableBoard [p]) p)
   where
@@ -248,3 +175,92 @@ ec_open_messages = do
   assertEqual "through the ice modifier" (modify (Ice 2) (SomeElement (Nest 4))) (sendMessage (Warm 1) (modify (Ice 2) (SomeElement (Nest 3))))
   assertBool "fromMessage type check" (isJust (fromMessage (SomeMessage (Warm 1)) :: Maybe Warm))
   assertBool "fromMessage wrong type" (not (isJust (fromMessage (SomeMessage (Other ())) :: Maybe Warm)))
+
+-- | 阶段 2 消掉的遗留项：源码里没有扁平记录 / 封闭钩子；findHint 不再点名彩虹；
+-- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 31 个，名字与阶段 1 相同由快照锁定）。
+ec_flat_record_removed :: Assertion
+ec_flat_record_removed = do
+  let srcFiles =
+        [ "src/Match3/Element/" ++ m ++ ".hs" | m <- ["Types", "Registry", "Builtin", "Class", "Message", "Event"] ]
+          ++ [ "src/Match3/Board/" ++ m ++ ".hs" | m <- ["Match", "Clear", "Gravity", "Cascade"] ]
+          ++ [ "src/Match3/Game/" ++ m ++ ".hs" | m <- ["Resolve", "Move", "Boosters", "Tally", "Shuffle", "Trace"] ]
+  srcs <- mapM (fmap stripComments . readFile) srcFiles
+  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover"], w `isInfixOf` s]
+  assertEqual "no flat record / closed hooks" [] bad
+  match <- stripComments <$> readFile "src/Match3/Board/Match.hs"
+  assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` match) && not ("Match3.Rainbow" `isInfixOf` match))
+  flow <- mapM (fmap stripComments . readFile) ["src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs", "src/Match3/Board/Gravity.hs"]
+  assertBool "main flow does not call level element implementations" (not (any (\s -> any (`isInfixOf` s) ["stepUfos", "beltMoves", "coverCarpets"]) flow))
+  assertEqual "31 builtin entries" 31 (length builtinDefs)
+  assertEqual "level elements" ["ufo", "belt", "portal", "carpet"] (map levelNameOf builtinLevelDefs)
+  where
+    stripComments = unlines . map dropComment . lines
+    dropComment l
+      | take 2 (dropWhile (== ' ') l) == "--" = ""
+      | otherwise = cut l
+    cut s = case s of
+      [] -> []
+      (' ' : '-' : '-' : ' ' : _) -> []
+      (x : xs) -> x : cut xs
+
+-- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；
+-- 不改主流程，只 registerLevel。新消息类型（Ping）也能经 askLevel 发给关卡级元素。
+data Magnet = Magnet
+
+newtype Ping = Ping Int
+
+newtype Pong = Pong Int
+
+instance Message Ping
+instance Message Pong
+
+instance LevelElement Magnet where
+  levelName _ = "magnet"
+  levelReply _ msg
+    | Just (Refilled us b) <- fromMessage msg =
+        Just (SomeMessage (Absorbed (take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1]) us))
+    | Just (Ping n) <- fromMessage msg = Just (SomeMessage (Pong (n + 1)))
+    | otherwise = Nothing
+
+ec_level_elements_by_message :: Assertion
+ec_level_elements_by_message = do
+  let reg = registerLevel (SomeLevel Magnet) (removeLevel "ufo" defaultRegistry)
+      gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
+      b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
+      (p1, p2) = ((1, 2), (2, 2))
+      (_, o, mt) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b1}
+      (_, oD, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0 {gsBoard = b1}
+  assertBool "applied" (moveApplied o && moveApplied oD)
+  assertBool "magnet adds an absorb wave" (length (mtWaves mt) > length (mtWaves mtD))
+  assertEqual "ping / pong" (Just 8) (fmap (\(Pong n) -> n) (askLevel reg (Ping 7)))
+  assertEqual "nobody answers ping by default" Nothing (fmap (\(Pong n) -> n) (askLevel defaultRegistry (Ping 7)))
+  assertEqual "registered after the builtins" ["belt", "portal", "carpet", "magnet"] (map levelNameOf (levelDefs reg))
+
+-- | 自定义元素可以当可匹配的有色宝石：测试专用「星星」（Custom "star" 颜色号，原型 Piece、按颜色匹配）
+-- 与同色宝石成三连被消除并按名字计数、进提示；未注册时是惰性占格（打断连线）。
+newtype Star = Star Color
+  deriving (Eq, Show)
+
+instance Element Star where
+  name _ = "star"
+  toCell (Star c) = Custom "star" (fromEnum c)
+  color (Star c) = Just c
+  counter _ = Just (CountNamed "star")
+
+ec_custom_matchable_gem :: Assertion
+ec_custom_matchable_gem = do
+  let reg = register (customEntry (Star C5) (Star . toEnum)) defaultRegistry
+      star = Custom "star" (fromEnum C5)
+      board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
+      gs0 = (newGame (GameConfig 5 (GoalNamed "star" 1)) 1) {gsBoard = board0}
+      (p1, p2) = ((1, 2), (2, 2))
+      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
+  assertEqual "star matches as C5" (Just C5) (matchColorWith reg star)
+  assertBool "star can be swapped" (not (blocksSwapWith reg star))
+  assertBool "move applied" (moveApplied o1)
+  assertBool "star cleared in the first wave" ((1, 1) `elem` cwCleared (head (mtWaves mt1)))
+  assertEqual "counted by name" [("star", 1)] (gsElementCounts gs1)
+  assertBool "hint sees the star" (isJust (findHintWith reg board0))
+  let (_, oD) = trySwap p1 p2 gs0
+  assertEqual "unregistered star is inert" Nothing (matchColorWith defaultRegistry star)
+  assertBool "unregistered: no match through it" (not (moveApplied oD) || gsElementCounts (fst (trySwap p1 p2 gs0)) == [])

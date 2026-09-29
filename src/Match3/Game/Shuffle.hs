@@ -34,7 +34,7 @@ data CellDecor = CellDecor
 extractDecor :: Board -> [CellDecor]
 extractDecor = extractDecorWith defaultRegistry
 
--- | extractDecor（指定注册表）：保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 edKeepOnShuffle）。
+-- | extractDecor（指定注册表）：保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 keepOnShuffle）。
 -- 只有普通宝石会被洗走；直线 / 炸弹 / 彩虹特殊块与所有障碍原样放回。
 extractDecorWith :: Registry -> Board -> [CellDecor]
 extractDecorWith reg b =
@@ -79,7 +79,7 @@ shuffleGame :: GameState -> GameState
 shuffleGame = shuffleGameWith defaultRegistry
 
 -- | 手动洗牌（指定注册表，段 2c）：保留判定 keepOnShuffleWith 用这张表——自定义元素
--- （如测试专用元素）按它自己的 edKeepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
+-- （如测试专用元素）按它自己的 keepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
 shuffleGameWith :: Registry -> GameState -> GameState
 shuffleGameWith reg gs =
   let decor = extractDecorWith reg (gsBoard gs)

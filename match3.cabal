@@ -65,7 +65,7 @@ library
       Match3.Element.Builtin
       Match3.Element.Event
       Match3.Element.Class
-      Match3.Element.Prototype
+      Match3.Element.Message
   other-modules:
       Paths_match3
   autogen-modules:
@@ -149,6 +149,7 @@ test-suite match3-test
       Spec.Support
       Spec.UIEvents
       Toy
+      ElementQueries
       Golden
       Paths_match3
   autogen-modules:

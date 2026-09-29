@@ -202,10 +202,10 @@ runPhase reg ph ctx k b0 = foldl one ([], b0) (endRules reg ph)
 swapEnd :: Registry -> GameState -> CascadeRun StdGen -> ([CascadeRun StdGen], [EndStep], Board, Board)
 swapEnd reg gs seg0 =
   let portals = gsPortals gs
-      -- 皮带是关卡级元素（段 4）：经注册表的 HookShift 取移位；未注册时当作没有皮带
-      (belts, shiftOf) = case beltShiftWith reg of
-        Just f -> (gsBelts gs, f)
-        Nothing -> ([], const [])
+      -- 皮带是关卡级元素：在「倒计时之后」这一节拍发 EndTicked 消息取移位；没人回复时当作没有皮带
+      (belts, mvBelt) = case beltShiftWith reg (gsBelts gs) of
+        Just mv -> (gsBelts gs, mv)
+        Nothing -> ([], [])
       ws0 = crWaves seg0
       board0' = crBoard seg0
       -- 倒计时 tick / 归零爆炸（带飞碟与传送门）
@@ -213,7 +213,6 @@ swapEnd reg gs seg0 =
       (endTick, _) = runPhase reg PhaseTick (EndCtx [] [] (pushableWith reg)) (length ws0) board0'
       -- 皮带：移位后连锁 / 沉降（收皮带送到底行的饼干）
       boardCd = crBoard seg1
-      mvBelt = shiftOf belts
       boardBelt = applyBeltMoves boardCd mvBelt
       nBelt = length ws0 + length (crWaves seg1)
       endBelt =

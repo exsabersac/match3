@@ -57,7 +57,7 @@ data GameState = GameState
   , gsCarpetsCovered :: Int   -- carpet tiles covered this level
   , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
   , gsDaily         :: Bool   -- True for date-seeded daily challenge (通关≠战役推进)
-  , gsElementCounts :: [(String, Int)] -- 自定义元素计数（edCounter / edDiffCounter = CountNamed 名字），内置关卡恒为 []
+  , gsElementCounts :: [(String, Int)] -- 自定义元素计数（counter / diffCounter = CountNamed 名字），内置关卡恒为 []
   , gsGround        :: Ground -- 地面层（段 2c，元素名 + 层数；内置关卡恒为 []）
   } deriving (Show)
 

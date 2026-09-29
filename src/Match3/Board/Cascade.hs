@@ -8,7 +8,7 @@
 -- 第三刀删除了旧元组兼容层（runCascade* / resolveCountdowns / runPostBeltCascade / traceCascade*），
 -- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 保留为「恰好一轮」的小工具。段 2c 起本模块不依赖内置注册表（便捷旧名在 Match3.Board.Default）。
 --
--- 依赖：Grid、Match、Clear、Gravity、Ufo、元素注册表（计数键 edCounter、倒计时 = PhaseTick 步末规则）。
+-- 依赖：Grid、Match、Clear、Gravity、Ufo、元素注册表（计数键 counter、倒计时 = PhaseTick 步末规则）。
 -- 不变量：每轮 = clear → settleBoardPortals → refill → 整轮吸收（飞碟，段 4 起经注册表的关卡级元素 absorbWith；→ 吸收单独一轮），随机数按此顺序消耗；
 -- 计数口径（逐字保持旧实现，由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
@@ -72,7 +72,7 @@ data CascadeTally = CascadeTally
   , ctCakes       :: Int
   , ctUfoAbsorbed :: Int            -- ^ 飞碟吸走的格数（GoalUfo）
   , ctCleared     :: [Pos]          -- ^ 清除格 + 收饼干位（GoalCarpet / 前端粒子）
-  , ctNamed       :: [(String, Int)] -- ^ 自定义计数（元素定义的 edCounter = CountNamed 名字），按首次出现排序
+  , ctNamed       :: [(String, Int)] -- ^ 自定义计数（元素定义的 counter = CountNamed 名字），按首次出现排序
   } deriving (Eq, Show)
 
 -- | 什么都没发生的计数（颜色袋按 allColors 全 0）。
@@ -92,7 +92,7 @@ data CascadeRun g = CascadeRun
 stillRun :: Board -> [Ufo] -> g -> CascadeRun g
 stillRun b ufos g = CascadeRun b zeroTally ufos [] g
 
--- | 清除格在消除前盘面上的计数（按本体定义的 edCounter）。
+-- | 清除格在消除前盘面上的计数（按本体定义的 counter）。
 data Hits = Hits
   { hStones, hChests, hHoney, hBalloons, hCookies, hCakes :: !Int
   , hNamed :: [(String, Int)]
@@ -108,7 +108,7 @@ plusHits a b =
     (hBalloons a + hBalloons b) (hCookies a + hCookies b) (hCakes a + hCakes b)
     (addNamed (hNamed a) (hNamed b))
 
--- | 沉降时被边缘收走的格按各自的 edCounter 计数（内置只有饼干 → CountCookies，与旧「底行收饼干计入饼干数」相同）。
+-- | 沉降时被边缘收走的格按各自的 counter 计数（内置只有饼干 → CountCookies，与旧「底行收饼干计入饼干数」相同）。
 withDrained :: Registry -> [(Pos, Cell)] -> Hits -> Hits
 withDrained reg drained h = foldl (\hh (_, cell) -> bumpHit (counterWith reg cell) hh) h drained
 
@@ -168,7 +168,7 @@ cascadeMatchesWith :: RandomGen g => Registry -> Maybe Pos -> [Ufo] -> [(Pos, Po
 cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
 
 -- | cascadeMatchesFrom（指定注册表）。
--- 每轮：clearMatchesDetailed → settleBoardPortals → refill → 飞碟吸收（段 4：注册表的 HookAbsorb，内置 = stepUfos）；若飞碟吸到格子，
+-- 每轮：clearMatchesDetailed → settleBoardPortals → refill → 飞碟吸收（注册表的关卡级元素回复 Refilled 消息，内置 = stepUfos）；若飞碟吸到格子，
 -- 吸收单独算下一轮（clearUfoAbsorbed → settle → refill）。没有匹配时最大波次 = startW。
 cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =

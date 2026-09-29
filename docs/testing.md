@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**259** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
+- 期望：**262** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 259）：
+- 目录（用例数合计 262）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -45,19 +45,19 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Obstacles/Features.hs` | 34 | 会动的元素与关卡特性（按元素）：倒计时、皮带、传送门、飞碟、蜗牛、地毯 |
 | `test/Spec/Boosters.hs` | 12 | 道具：锤子 / 自由交换 / 十字 |
 | `test/Spec/GoalsLevels.hs` | 31 | 目标、结局、星级、关卡表、每日、地图与步数结转 |
-| `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `crateDef` 在 Support 里） |
+| `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `Crate` / 条目 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 6 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌（样例元素苔藓 / 风筝 / 陷坑 / 浮尘只定义在该模块里） |
 | `test/Spec/Branches.hs` | 8 | 段 4 专门分支收编护栏：测试专用成对交换规则（拉杆）/ 开启规则（豆荚）/ 可推动（小车）只经注册表生效；内置改色 / 推动谓词与原写死谓词相同；关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）去掉后不生效（含 38 关实测）；主流程源码扫描 |
-| `test/Spec/ElementClass.hs` | 7 | 元素类原型（阶段 1）：宝石 / 冰层 / 彩蛋经适配层桥接的记录与旧记录逐字段、逐规则相等；新旧两份注册表在 40 关 × 种子 1–2 × 12 手上逐手相等；`SomeElement` 的 Eq / Show、冰层修饰器组合、状态在元素值里、开放消息 |
+| `test/Spec/ElementClass.hs` | 10 | 元素类（阶段 1 原型 → 阶段 2 迁移）：逐格查询 / 规则 / 逐手结果与阶段 1 的元素查询快照全等；`SomeElement` 的 Eq / Show、冰层修饰器组合、状态在元素值里、开放消息；扁平记录已删（源码扫描）、关卡级元素经消息、自定义可匹配宝石 |
 | `test/Spec/JellyBubble.hs` | 8 | 段 5 双层果冻 / 气泡：按层计数与目标、洗牌 / 撤销、气泡邻消 / 直接命中即破、挡交换 / 无色 / 下落、第 39 / 40 关、主流程源码扫描 |
 | `test/Spec/Engine.hs` | 5 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描） |
 | `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`） |
 | `test/Spec/Properties.hs` | 1 | QuickCheck 性质 |
-| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `crateDef` 等 |
+| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）等 |
 | `test/Toy.hs` | — | 通用接口的玩具实现（只 import `Engine.*`） |
-| `test/golden/` | — | 金标准投影 `Golden.hs` 与 `golden.txt` |
+| `test/golden/` | — | 金标准投影 `Golden.hs` 与 `golden.txt`；元素查询快照 `ElementQueries.hs` 与 `element-queries.txt`（元素类迁移） |
 
 - 拆分验收：拆分前后 `--list-tests` 排序后 diff 为空（228 = 228），每个测试函数逐字搬运（原文件每一行都能在新模块里找到），`golden.txt` 全等。
 
@@ -127,7 +127,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 | 用例 | 断言 |
 |------|------|
-| `element_registry_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在测试里：`test/Spec/Support.hs` 的 `crateDef`**：以 `baseDef` 为底，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：注册表多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`gsElementCounts == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultRegistry` 下它是惰性占格（不被波及、锤子免疫、不计数）；核心 16 个源文件里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
+| `element_registry_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在测试里：`test/Spec/Support.hs` 的 `Crate` instance + `customEntry`**：原型 `Blocker`，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：注册表多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`gsElementCounts == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultRegistry` 下它是惰性占格（不被波及、锤子免疫、不计数）；核心 16 个源文件里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
 | `element_registry_matches_legacy_predicates` | 全部内置本体 × 宝石种类 × 冰层 × 叠层：注册表的挡交换 / 锤子免疫 / 固定格 / 点火 / 匹配色 / 洗牌保留与第二刀之前按构造器写死的谓词逐格相等；直接命中的几条代表（冰、锁链、保险箱、翻转、石头）与旧口径一致 |
 | `trace_events_consistent_with_trace` | 全部关卡（段 5 起 40 关）× 种子 1–2 × 前 3 个成交交换：`EvScore` 之和 = 本步得分；`EvClear` 的格 = 各轮清除格并集；步末事件数 = `mtEnd` 长度；`EvShuffle` ⇔ `mtShuffle`；`EvBlast` 只来自直线 / 炸弹；**逐轮严格相等**（第三刀，前端波次界面改读事件后加）：该轮 EvClear 的格按事件顺序拼接 = `cwCleared`（顺序也相同），该轮 EvScore 之和 = `cwScore` |
 
@@ -140,9 +140,9 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `ext_board_modules_take_registry` | 源码扫描：`src/Match3/Board/{Match,Clear,Gravity,Cascade}.hs` 里没有 `defaultRegistry` 字样、没有 `import Match3.Element.Builtin`（不带 With 的旧名集中在 `Board.Default`） |
 | `ext_goal_named_counts_crate` | 木箱经 `CountNamed "crate"` 计数，`GoalNamed "crate" N` 达成即判胜；`resolve` 与 `gameStep` 两条入口结果相同；内置表下木箱是惰性占格、不计数 |
 | `ext_ground_layer_test_element` | 测试专用苔藓（`SlotGround`，2 层）：上方每消一次去一层并按层计数，不占格、不挡匹配；撤销恢复、洗牌不动；未注册时毫无反应 |
-| `ext_edge_drain_side_collectible` | 测试专用风筝（`edDrains = [EdgeLeft]`）：到左边被收走并计数，内部 / 底边的留在原处；同盘饼干照常底收、计数不受影响；未注册时是惰性占格 |
+| `ext_edge_drain_side_collectible` | 测试专用风筝（`drains = [EdgeLeft]`）：到左边被收走并计数，内部 / 底边的留在原处；同盘饼干照常底收、计数不受影响；未注册时是惰性占格 |
 | `ext_post_end_settle_hole_element` | 测试专用陷坑（`PhaseMove` 规则，只声明 `erHoles`）：步末之后被挖空、上方下落、补子，回放恰好多一个只含沉降的轮次且首尾相接；`Engine` 入口结果一致；内置表下原地不动 |
-| `ext_manual_shuffle_keeps_crate_via_engine` | 走 `match3GameWith reg` 的 `Shuffle` 动作：木箱原位保留；`edKeepOnShuffle = False` 的浮尘只在自定义表下被洗走（修的是 `playWith` 洗牌分支原先用内置表的问题） |
+| `ext_manual_shuffle_keeps_crate_via_engine` | 走 `match3GameWith reg` 的 `Shuffle` 动作：木箱原位保留；`keepOnShuffle = False` 的浮尘只在自定义表下被洗走（修的是 `playWith` 洗牌分支原先用内置表的问题） |
 
 **补结算统一路径的扫描**：`cascadeAfterEndWith` 对内置元素恒为空操作的实测依据——38 关 × 种子 1..100 × 15 步，每步检查主交换、三种道具与全部可成交交换对的步末终盘（`esAfter`）有无待挖空洞 / 待收边缘 / 沉降变化，共 **610,751** 手，pending = 0；金标准 2344 行全等（扫描程序不入库，结论写在这里）。
 
@@ -152,12 +152,12 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 | 用例 | 断言 |
 |------|------|
-| `br_swap_rule_test_element` | 拉杆（`edSwap`，`srOrder` 5，种子 = 交换两端）：无普通匹配的交换被接受、两端在首轮清除；无路可走的盘上提示经同一条规则给出拉杆；内置表下拉杆挡交换、被拒 |
-| `br_open_rule_test_element` | 豆荚（`edOpen`）：邻格真消除时开成直线，本轮不清除（坐住）、落定后仍在；与内置彩蛋同盘时两条开启规则都跑；内置表下原样下落 |
+| `br_swap_rule_test_element` | 拉杆（`swapRule`，`srOrder` 5，种子 = 交换两端）：无普通匹配的交换被接受、两端在首轮清除；无路可走的盘上提示经同一条规则给出拉杆；内置表下拉杆挡交换、被拒 |
+| `br_open_rule_test_element` | 豆荚（`openRule`）：邻格真消除时开成直线，本轮不清除（坐住）、落定后仍在；与内置彩蛋同盘时两条开启规则都跑；内置表下原样下落 |
 | `br_builtin_predicates_match_legacy` | 21 种样例格上 `recolorableWith defaultRegistry` = `isGem`、`pushableWith defaultRegistry` = `Snail.pushable` |
-| `br_recolorable_from_registry` | 魔法帽：内置表下给两个邻格换色；把 gem 定义改成 `edRecolorable = False` 后颜色不变 |
-| `br_pushable_from_registry` | 蜗牛：`edPushable` 的小车被推回、蜗牛前进；内置表下小车挡住、蜗牛掉头；gem 改成不可推后蜗牛不推宝石 |
-| `br_level_hooks_builtin_and_removable` | 内置表的四个 `LevelDef` 依次为 ufo / belt / portal / carpet，钩子与原实现（`stepUfos` / `beltMoves` / `portalTeleport` / `coverCarpets`）结果相同；`removeLevel` 后各自退化为不吸收 / 不移位 / 不传送 / 不覆盖 |
+| `br_recolorable_from_registry` | 魔法帽：内置表下给两个邻格换色；把 gem 定义改成 `recolorable = False` 后颜色不变 |
+| `br_pushable_from_registry` | 蜗牛：`pushable` 的小车被推回、蜗牛前进；内置表下小车挡住、蜗牛掉头；gem 改成不可推后蜗牛不推宝石 |
+| `br_level_hooks_builtin_and_removable` | 内置表的四个关卡级元素依次为 ufo / belt / portal / carpet，经消息回复的结果与原实现（`stepUfos` / `beltMoves` / `portalTeleport` / `coverCarpets`）结果相同；`removeLevel` 后各自退化为不吸收 / 不移位 / 不传送 / 不覆盖 |
 | `br_level_hooks_removed_in_play` | 38 关、种子 1、按提示走 6 手：四个关卡级元素都去掉后，飞碟关飞碟不动不吸、皮带关没有 `EndBeltShift`、地毯关不覆盖；内置表下同样的对局里三者都发生过 |
 | `br_main_flow_no_special_branches` | 源码扫描（去掉注释）：`Game.Move` / `Game.Boosters` 不 import `Combos` / `Rainbow`、不点名 `isRainbowSwap` / `isSpecialCombo` / `rainbowClearSeeds` / `comboClearSeeds`；`Board.Match` 不 import `Combos`、不点名前两者；`Board.Clear` 不 import `Obstacles`、不用 `openSurprises`；`Board.Cascade` 不用 `stepUfos`；`Game.Resolve` 不用 `coverCarpets` / `beltMoves`；`Board.Gravity` 不用 `portalWith` |
 
@@ -180,6 +180,27 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 改动了的旧测试（名字不变）：7 个用例里的「关卡数 = 38」断言改为 40（`surprise_opens_to_special`、`chain_layer_decrement`、`freeze_layer_decrement`、`curtain_layer_decrement`、`steam_spreads_after_move`、`goal_carpet_counts`、`campaign_levels_batch_ok`）。
 
+## 元素类验收（阶段 1 原型 → 阶段 2 迁移）
+
+`test/Spec/ElementClass.hs`；框架见 [architecture.md](architecture.md#元素类阶段-1-原型--阶段-2-迁移)。样例元素鸟窝 / 磁铁 / 星星只定义在该模块里。
+
+**元素查询快照**（`test/golden/element-queries.txt`，1648 行，生成器 `test/golden/ElementQueries.hs`）：阶段 2 删掉旧记录后，新旧两条路径不能再在同一进程里并排比对，所以在阶段 1（`9ae6a7b`）的代码上先生成快照（用阶段 1 的旧记录注册表生成的结果与之逐字相同，旧快照存档 md5 相同），阶段 2 一字不改地比对。行前缀：`Q` 逐格查询（全部格子组合 × 各 `*With` 查询）、`P` 放置、`R` 规则表 / 条目名 / 个数差计数 / 关卡级元素清单、`A` / `E` / `S` / `O` / `C` / `G` 邻格 / 步末 / 成对交换 / 开启规则、直接命中、地面层在样例盘上的输出、`M` 40 关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列。维护纪律同金标准：内部表示变了只改投影，快照文件不许改。
+
+| 用例 | 断言 |
+|------|------|
+| `ec_queries_match_stage1_snapshot` | 快照 Q / P / R 行逐行相等（取代阶段 1 的 `ec_bridge_fields_match_legacy`） |
+| `ec_rules_match_stage1_snapshot` | 快照 A / E / S / O / C / G 行逐行相等（取代阶段 1 的 `ec_bridge_rules_match_legacy`） |
+| `ec_play_matches_stage1_snapshot` | 快照 M 行逐行相等（取代阶段 1 的 `ec_registry_paths_agree_in_play`） |
+| `ec_some_element_eq_show` | `SomeElement` 的 Eq 先比名字再比状态、Show 稳定；宝石全用默认方法（原型 `Piece`、颜色取自写回的格子）；彩虹 `hintable = False`；注册表把格子解码成（带冰的）元素值 |
+| `ec_ice_modifier_composes` | 冰层修饰器：写回格子带冰层数、匹配色透过、名字取本体、多冰不点火 / 末层点火、命中削一层 / 末层随宝石碎、洗牌保留；与注册表 `directHitWith` 逐格一致 |
+| `ec_state_lives_in_element_value` | 测试专用「鸟窝」：剩余命中数在元素值里，锤子每敲一次减一、最后一下才碎并计数；放置经构造器 |
+| `ec_open_messages` | 开放消息：自定义消息被处理 / 不认识的原样返回 / 修饰器把消息转给里面 / `fromMessage` 按类型认领 |
+| `ec_flat_record_removed` | 源码扫描（去掉注释）：元素框架与主流程里没有 `ElementDef` / `baseDef` / `LevelHook` / `Hook*`；`Board.Match` 不点名彩虹；`Cascade` / `Resolve` / `Gravity` 不调关卡级元素的实现；内置条目 31 个、关卡级元素 ufo / belt / portal / carpet |
+| `ec_level_elements_by_message` | 测试专用「磁铁」只经 `registerLevel` 在补子节拍（`Refilled`）多吸走一颗宝石；新消息 `Ping` 经 `askLevel` 得到 `Pong`，内置表下没人回复 |
+| `ec_custom_matchable_gem` | 测试专用「星星」（`Custom "star"`，原型 `Piece`、带颜色）：可交换、与同色宝石成三连被清除并按名字计数、进提示；未注册时是惰性占格 |
+
+元素类迁移的等价性依据：上述快照全等；金标准 2534 行全等；showcase / l28 / l1map 三场景截图与 `25db84a` 基线 AE=0。
+
 ## 多游戏接口验收（第三刀）
 
 接口见 [architecture.md](architecture.md#多游戏接口)。
@@ -200,7 +221,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 259，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 262，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

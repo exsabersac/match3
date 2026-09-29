@@ -25,7 +25,8 @@ module Spec.Support
 import Control.Monad (foldM)
 import Data.List (nub)
 import Match3.Core
-import Match3.Element (ElementDef(edCounter, edFalls, edOnHit, edAdjacent), Counter(CountNamed), AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), HitResult(HitImmune, HitDestroy, HitAbsorb), baseDef)
+import Match3.Element (Entry, Counter(CountNamed), AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
+import Match3.Element.Class (Archetype(Fixed), Element(..), Hit(..), SomeElement(..))
 import Match3.Types (isCustom)
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), startHistory)
@@ -227,32 +228,36 @@ checkEffectDetail tag e = case esEffect e of
 -- 第二刀 2b：元素框架
 
 -- | 测试专用元素「木箱」（只在测试里定义，主流程源码里没有它）：Custom "crate" n，n = 剩余耐久。
--- 定义：挡交换（baseDef 缺省）、不随重力下落、被邻格真消除波及一次耐久 -1、耐久 1 时再被波及就碎
--- （并入清除格，计数 CountNamed "crate"）；直接命中（锤子 / 爆炸）同样 -1 / 碎。
-crateDef :: ElementDef
-crateDef =
-  (baseDef "crate")
-    { edFalls = False
-    , edOnHit = \cell -> case cell of
-        Custom _ n | n <= 1 -> HitDestroy
-                   | otherwise -> HitAbsorb (Custom "crate" (n - 1))
-        _ -> HitImmune
-    , edAdjacent = Just (AdjacentRule 200 crateAdjacent)
-    , edCounter = Just (CountNamed "crate")
-    }
-  where
-    isCrate c = case c of
-      Custom "crate" _ -> True
-      _ -> False
-    crateAdjacent ctx b =
-      let targets =
-            nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
-          hit (bd, dead) q = case getCell bd q of
-            Custom _ n | n <= 1 -> (bd, dead ++ [q])
-                       | otherwise -> (setCell bd q (Custom "crate" (n - 1)), dead)
-            _ -> (bd, dead)
-          (b', dead') = foldl hit (b, []) targets
-      in AdjOut b' dead' []
+-- 定义：固定格（挡交换、不随重力下落）、被邻格真消除波及一次耐久 -1、耐久 1 时再被波及就碎
+-- （并入清除格，计数 CountNamed "crate"）；直接命中（锤子 / 爆炸）同样 -1 / 碎。状态（耐久）在元素值里。
+newtype Crate = Crate Int
+  deriving (Eq, Show)
+
+instance Element Crate where
+  name _ = "crate"
+  toCell (Crate n) = Custom "crate" n
+  archetype _ = Fixed
+  onHit (Crate n)
+    | n <= 1 = Destroy
+    | otherwise = Absorb (SomeElement (Crate (n - 1)))
+  adjacentRule _ = Just (AdjacentRule 200 crateAdjacent)
+    where
+      isCrate c = case c of
+        Custom "crate" _ -> True
+        _ -> False
+      crateAdjacent ctx b =
+        let targets =
+              nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
+            hit (bd, dead) q = case getCell bd q of
+              Custom _ n | n <= 1 -> (bd, dead ++ [q])
+                         | otherwise -> (setCell bd q (Custom "crate" (n - 1)), dead)
+              _ -> (bd, dead)
+            (b', dead') = foldl hit (b, []) targets
+        in AdjOut b' dead' []
+  counter _ = Just (CountNamed "crate")
+
+crateDef :: Entry
+crateDef = customEntry (Crate 1) Crate
 
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
 crateBoard :: Int -> Board

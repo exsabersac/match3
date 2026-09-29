@@ -352,7 +352,7 @@ fallTable w = transpose [colInfo c | c <- [0 .. boardSize - 1]]
             ]
       in if ok then byRow else fallback
     sortRows ps = [p | r <- rows, p@(rt, _, _, _) <- ps, rt == r]
-    -- 固定格 = 规则层的重力定义（元素 edFalls = False），不在表现层另列
+    -- 固定格 = 规则层的重力定义（元素 falls = False），不在表现层另列
     isFixed (Just cell) = gravityFixedCell cell
     isFixed Nothing = False
     segments [] = []

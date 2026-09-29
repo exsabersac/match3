@@ -31,7 +31,7 @@ import Match3.Game.State
 import Match3.Game.Trace
 
 -- | 直接种子打不动的格（chipIceOnClear 原样保留）：果汁机 / 蜗牛 / 染色瓶 / 魔法帽 / 饼干。
--- 第二刀 2b：= 直接命中结果为 HitImmune（元素定义的 edOnHit），不再单独列举。
+-- 第二刀 2b：= 直接命中结果为 HitImmune（元素定义的 onHit），不再单独列举。
 hammerImmune :: Cell -> Bool
 hammerImmune = hitImmuneWith defaultRegistry
 

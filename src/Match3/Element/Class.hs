@@ -9,6 +9,8 @@
 --   'Modified' 把修饰器和被修饰的元素合成一个元素，各方法按「修饰器先说，没意见再问里面」组合。
 -- * 开放消息：'SomeMessage' + 'fromMessage'（Typeable），任何模块都能定义新消息类型。
 --
+-- * 关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）是 'LevelElement'：不在格子里，按消息回复流水线节拍。
+--
 -- 盘面仍以 'Cell' 存储（稳定的编码：金标准、前端、机制模块都按它读写）；'toCell' 把元素值写回格子，
 -- 注册表的构造器负责从格子解码出元素值（见 Match3.Element.Registry）。
 module Match3.Element.Class
@@ -25,7 +27,12 @@ module Match3.Element.Class
   , fromModifier
   , Modified(..)
   , modify
-    -- * 消息
+  , Inert(..)
+    -- * 关卡级元素
+  , LevelElement(..)
+  , SomeLevel(..)
+  , levelNameOf
+    -- * 消息（再导出自 Match3.Element.Message）
   , Message
   , SomeMessage(..)
   , fromMessage
@@ -33,6 +40,7 @@ module Match3.Element.Class
   ) where
 
 import Data.Typeable (Typeable, cast)
+import Match3.Element.Message (Message, SomeMessage(..), fromMessage)
 import Match3.Element.Types
   ( AdjacentRule
   , Counter
@@ -43,19 +51,6 @@ import Match3.Element.Types
   , SwapRule
   )
 import Match3.Types
-
---------------------------------------------------------------------------------
--- 消息
-
--- | 消息：任何 Typeable 类型声明一个空 instance 即可当消息发（同 xmonad 的 Message）。
-class Typeable m => Message m
-
--- | 装箱的消息。
-data SomeMessage = forall m. Message m => SomeMessage m
-
--- | 拆箱：类型对得上就是 Just。
-fromMessage :: Message m => SomeMessage -> Maybe m
-fromMessage (SomeMessage m) = cast m
 
 --------------------------------------------------------------------------------
 -- 元素
@@ -75,7 +70,7 @@ data Hit
   deriving (Eq, Show)
 
 -- | 一种元素的全部能力。只有 'name' 和 'toCell' 必须写，其余都有默认实现。
--- 规则类能力（'adjacent' / 'end' / 'swap' / 'open' / 'ground'）描述「这类元素」在一轮里怎么作用于盘面，
+-- 规则类能力（'adjacentRule' / 'endRule' / 'swapRule' / 'openRule' / 'groundRule'）描述「这类元素」在一轮里怎么作用于盘面，
 -- 注册表在注册时从构造器给出的原型值上取一次。
 class (Show e, Eq e, Typeable e) => Element e where
   -- | 元素名：注册表的键，也是关卡放置表、计数键、前端贴图的键。
@@ -135,17 +130,17 @@ class (Show e, Eq e, Typeable e) => Element e where
   hintable _ = True
 
   -- 规则类能力（在原型值上取）
-  adjacent :: e -> Maybe AdjacentRule
-  adjacent _ = Nothing
-  end :: e -> Maybe EndRule
-  end _ = Nothing
-  swap :: e -> Maybe SwapRule
-  swap _ = Nothing
-  open :: e -> Maybe OpenRule
-  open _ = Nothing
+  adjacentRule :: e -> Maybe AdjacentRule
+  adjacentRule _ = Nothing
+  endRule :: e -> Maybe EndRule
+  endRule _ = Nothing
+  swapRule :: e -> Maybe SwapRule
+  swapRule _ = Nothing
+  openRule :: e -> Maybe OpenRule
+  openRule _ = Nothing
   -- | 地面层：上方格子被消除一次时，层数 → 新层数（Nothing = 清掉）。
-  ground :: e -> Maybe (Int -> Maybe Int)
-  ground _ = Nothing
+  groundRule :: e -> Maybe (Int -> Maybe Int)
+  groundRule _ = Nothing
 
   -- | 处理一条消息：Nothing = 不关心；Just = 新的元素值。
   handleMessage :: e -> SomeMessage -> Maybe SomeElement
@@ -185,11 +180,11 @@ instance Element SomeElement where
   recolorable (SomeElement e) = recolorable e
   pushable (SomeElement e) = pushable e
   hintable (SomeElement e) = hintable e
-  adjacent (SomeElement e) = adjacent e
-  end (SomeElement e) = end e
-  swap (SomeElement e) = swap e
-  open (SomeElement e) = open e
-  ground (SomeElement e) = ground e
+  adjacentRule (SomeElement e) = adjacentRule e
+  endRule (SomeElement e) = endRule e
+  swapRule (SomeElement e) = swapRule e
+  openRule (SomeElement e) = openRule e
+  groundRule (SomeElement e) = groundRule e
   handleMessage (SomeElement e) = handleMessage e
 
 -- | 拆箱。
@@ -295,3 +290,35 @@ instance Element Modified where
     Just Nothing -> Just e
     Just (Just m') -> Just (modify m' e)
     Nothing -> fmap (SomeElement . Modified sm) (handleMessage e msg)
+
+--------------------------------------------------------------------------------
+-- 惰性占格
+
+-- | 惰性占格：挡交换、无色、会下落、打不动、洗牌保留，写回原来的格子。注册表用它兜底
+-- （未注册的 Custom 名字、内置槽位没有注册定义），测试 / 扩展也可以直接注册它（旧 baseDef 的等价物）。
+data Inert = Inert ElementName Cell
+  deriving (Eq, Show)
+
+instance Element Inert where
+  name (Inert n _) = n
+  toCell (Inert _ cell) = cell
+  archetype _ = Blocker
+  color _ = Nothing
+
+--------------------------------------------------------------------------------
+-- 关卡级元素
+
+-- | 关卡级元素：不在格子里、状态在 GameState 专用字段的机制（飞碟 / 皮带 / 传送门 / 地毯）。
+-- 主流程在流水线节拍上发消息（Match3.Element.Message 的 Refilled / EndTicked / Settling / Covering，
+-- 也可以是任何新消息类型），元素自己决定回复哪些：回复 = 装箱的回复消息，Nothing = 不关心。
+class Typeable l => LevelElement l where
+  levelName :: l -> ElementName
+  levelReply :: l -> SomeMessage -> Maybe SomeMessage
+  levelReply _ _ = Nothing
+
+-- | 装箱的关卡级元素。
+data SomeLevel = forall l. LevelElement l => SomeLevel l
+
+-- | 关卡级元素的名字。
+levelNameOf :: SomeLevel -> ElementName
+levelNameOf (SomeLevel l) = levelName l

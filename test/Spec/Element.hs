@@ -35,7 +35,7 @@ element_registry_custom_crate_extensibility = do
   -- 注册表里有它，内置定义一个不少
   assertBool "registered" (isJust (lookupElement reg "crate"))
   assertEqual "builtins kept" (length (registryDefs defaultRegistry) + 1) (length (registryDefs reg))
-  -- 挡交换（baseDef 缺省），不可匹配
+  -- 挡交换（固定格原型），不可匹配
   let (gsB, oB) = trySwapWith reg (0, 1) (0, 2) gs0
   assertEqual "crate blocks swap" NoMatch oB
   assertEqual "blocked swap leaves board" (gsBoard gs0) (gsBoard gsB)

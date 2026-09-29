@@ -40,7 +40,7 @@ resolveSwapWith reg p1 p2 gs
   where
     board0 = gsBoard gs
     swapped = swapCells board0 p1 p2
-    -- 成对交换规则（段 4：彩虹取色 / 特殊合成经注册表的 edSwap，按 srOrder 取第一条成立的）
+    -- 成对交换规则（段 4：彩虹取色 / 特殊合成经注册表的 swapRule，按 srOrder 取第一条成立的）
     pairRule = swapOpeningWith reg board0 swapped p1 p2
     opening = maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
 

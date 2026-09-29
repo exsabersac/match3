@@ -8,6 +8,7 @@
 
 ```
 web/
+├── Makefile              常用任务入口（make help 列出全部目标）
 ├── build.sh              构建脚本（→ web/dist/），--serve 构建后用 serve.py 起服务器
 ├── serve.py              本地静态服务器（Python 3 标准库；正确 MIME、开发期 no-cache、打印局域网地址）
 ├── serve.sh              serve.py 的薄包装
@@ -19,7 +20,10 @@ web/
 │   ├── Match3Web/Anim.hs 动画接口：Played → ComboFx 播放器（与桌面 withMovePlayback 同条件），逐帧 JSON
 │   ├── Match3Web/Json.hs 极简 JSON 拼接（只输出整数，保证原生与 wasm 逐字节一致）
 │   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels / m3AnimStart / m3AnimTick
-├── tools/gen_web_atlas.py  由 assets/ 打网页图集（只读 assets/，不改 tools/gen_assets.py）
+├── tools/
+│   ├── gen_web_atlas.py  由 assets/ 打网页图集（只读 assets/，不改 tools/gen_assets.py）
+│   ├── doctor.sh         环境自检（make doctor）
+│   └── size.sh           体积报告（make size）
 ├── www/
 │   ├── index.html        只有一张全屏画布（viewport-fit=cover、禁缩放、touch-action:none）
 │   ├── main.js           加载 wasm + 图集、rAF 固定步长、输入、交换 / 连锁流程、m3debug 调试钩子
@@ -29,12 +33,46 @@ web/
 │   ├── render.js         盘面与动画：交换、逐轮 flash/pop/fall/rest、步末 tick/belt/spread/snail/shuffle、粒子、浮字、震屏
 │   └── hud.js            HUD 面板、目标进度条、消息折行、按钮、结局遮罩（字号随格子缩放）
 └── test/
+    ├── parity.sh         批量跑两组一致性对比（make parity / make anim-parity）
     ├── e2e.mjs           无头 Chrome：真实指针交换、7 种视口、动画中途改尺寸、截图 + report.json
     ├── node-parity.mjs   node 里跑 wasm，按提示连走 N 步打印 JSON
     ├── Parity.hs         原生 GHC 跑同样的步骤（最后撤销一步）；两边输出应逐字节相同
     ├── node-anim-parity.mjs  wasm 侧：每步 m3AnimStart + 逐帧 m3AnimTick，打印全部帧 JSON
     └── AnimParity.hs     原生侧同一流程（每第 3 步从第 5 帧起加速），并与 ComboFx runPlayer 核对帧数
 ```
+
+## 0. 常用命令（make）
+
+`web/Makefile` 把下面各节的命令收成目标；在 `web/` 下 `make <目标>`，或在仓库根目录 `make -C web <目标>`
+（放在 `web/` 而不是仓库根目录，避免与 main 上的游戏本体改动冲突；仓库根目录目前没有 Makefile）。
+
+```sh
+make doctor          # 先看缺什么
+make build           # 构建到 web/dist
+make serve PORT=9000 # 本地 / 局域网试玩
+make test            # stack test + 状态一致性 + 动画一致性 + e2e
+make check           # CI：构建 + 全部测试 + 体积
+```
+
+| 目标 | 作用 |
+| --- | --- |
+| `make` / `make help` | 列出全部目标与当前变量（默认目标） |
+| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
+| `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
+| `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
+| `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
+| `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
+| `make test-native` | 仓库根目录 `stack test` |
+| `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
+| `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
+| `make test` | 以上四组测试依次跑 |
+| `make check` | CI 用：`build` → `test` → `size` |
+| `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |
+| `make pack [TGZ=…]` | 打包 dist + serve.py + 部署脚本 |
+| `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |
+| `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
+| `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
+| `make clean` | 删 `web/dist`、`web/dist-newstyle`、`web/.cache` 和 `web/*.tgz`；不碰 `~/.ghc-wasm` |
 
 ## 1. 安装工具链（一次性，约 6.4 GB，装在 ~/.ghc-wasm）
 
@@ -147,6 +185,8 @@ bash deploy-mac.sh run                             # 前台运行；或 start �
 `application/wasm`（python http.server 默认如此），否则 `instantiateStreaming` 会失败。
 
 ## 4. 测试
+
+一般直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；下面是各自的底层命令。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json

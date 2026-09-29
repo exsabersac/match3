@@ -112,6 +112,32 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
 - 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。部署到 Mac 不需要工具链，只拷 `dist/`。
 
+### 3.1 make 目标
+
+`web/Makefile` 是日常入口（放在 `web/`，不与 main 上的游戏本体冲突；根目录用 `make -C web <目标>`）。
+第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；CI 用 `make check`。
+在 box 上从 `make clean` 开始跑 `make check`（完整重编 wasm + 四组测试 + 体积）约 2 分 45 秒。
+
+| 目标 | 作用 |
+| --- | --- |
+| `make` / `make help` | 列出全部目标与当前变量（默认目标） |
+| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
+| `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
+| `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
+| `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
+| `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
+| `make test-native` | 仓库根目录 `stack test` |
+| `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
+| `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
+| `make test` | 以上四组测试依次跑 |
+| `make check` | CI 用：`build` → `test` → `size` |
+| `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |
+| `make pack [TGZ=…]` | 打包 dist + serve.py + 部署脚本 |
+| `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |
+| `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
+| `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
+| `make clean` | 删 `web/dist`、`web/dist-newstyle`、`web/.cache` 和 `web/*.tgz`；不碰 `~/.ghc-wasm` |
+
 ## 4. 本地运行
 
 ```sh
@@ -183,12 +209,12 @@ bash deploy-mac.sh stop [--remove]                # 停止（--remove 同时删 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（252 个） | 仓库根目录 `stack test` |
-| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `web/README.md` §4 |
-| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `web/README.md` §4 |
-| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules ~/.ghc-wasm/nodejs/bin/node web/test/e2e.mjs` |
+| `stack test` | 核心规则（252 个） | `make test-native` |
+| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（12 组） |
+| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（10 组） |
+| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `make e2e` |
 
-当前结果（2026-09-29）：`stack test` 252 通过；状态一致性 12 组、动画一致性 10 组全部一致；e2e 33 项全过。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-29）：`stack test` 252 通过；状态一致性 12 组、动画一致性 10 组全部一致；e2e 33 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32，外加 `report.json`）。
 
 ## 8. 已知限制

@@ -101,8 +101,14 @@ PL
     fi
     if command -v lsof >/dev/null; then
       lsof -nP -iTCP:"$PORT" -sTCP:LISTEN || echo "端口 $PORT 没有进程在监听"
+    else
+      echo "（没有 lsof，跳过端口监听检查）"
     fi
-    curl -fsS -o /dev/null -w "本机 http://127.0.0.1:$PORT/ → HTTP %{http_code}\n" "http://127.0.0.1:$PORT/" || true
+    if code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/")"; then
+      echo "本机 http://127.0.0.1:$PORT/ → HTTP $code"
+    else
+      echo "本机 http://127.0.0.1:$PORT/ 无响应（服务器没在跑？用 run 或 start 启动）"
+    fi
     ;;
   *) die "未知子命令 $cmd（pack / install / run / start / stop / status）" ;;
 esac

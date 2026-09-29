@@ -11,6 +11,7 @@ import Data.List (nub)
 import Match3.Core
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (noCounts)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -246,7 +247,7 @@ goal_collect_multi_color = do
   case out of
     LevelClear _ _ ->
       assertBool "if cleared, both quotas met" $
-        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1) (gsChestsCleared gs1) (gsHoneyCleared gs1) (gsBalloonsPopped gs1) (gsCookiesCollected gs1) (gsCakesCleared gs1) (gsSafesOpened gs1)
+        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsCount CountStones gs1) (gsCount CountUfo gs1) (gsCount CountChests gs1) (gsCount CountHoney gs1) (gsCount CountBalloons gs1) (gsCount CountCookies gs1) (gsCount CountCakes gs1) (gsCount CountSafes gs1)
     MoveApplied _ ->
       assertBool "multi goal not met with only C1" $
         not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0 0 0 0 0 0 0)
@@ -284,15 +285,15 @@ goal_clear_stone_counts = do
       gsN =
         (newGameAtLevel 0 cfg 5)
           { gsBoard = boardN
-          , gsStonesCleared = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
           }
       (gsN1, outN) = trySwap (3, 2) (3, 3) gsN
   assertBool
-    ("stonesCleared incremented, got " ++ show (gsStonesCleared gsN1))
-    (gsStonesCleared gsN1 >= 1)
+    ("stonesCleared incremented, got " ++ show (gsCount CountStones gsN1))
+    (gsCount CountStones gsN1 >= 1)
   case outN of
-    LevelClear _ _ -> assertBool "enough stones" (gsStonesCleared gsN1 >= 2)
+    LevelClear _ _ -> assertBool "enough stones" (gsCount CountStones gsN1 >= 2)
     MoveApplied _ -> pure ()
     Won _ -> pure ()
     Lost _ -> pure ()
@@ -710,7 +711,7 @@ goal_carpet_seeds_open_tiles = do
   assertBool
     ("open carpets >= 8, got " ++ show (length (gsCarpetOpen gs)))
     (length (gsCarpetOpen gs) >= 8)
-  assertEqual "covered start" (0 :: Int) (gsCarpetsCovered gs)
+  assertEqual "covered start" (0 :: Int) (gsCount CountCarpets gs)
   -- GoalCookie bare newGame must seed high biscuits (ensureGoalDecor)
   let gsCk = newGame (GameConfig 26 (GoalCookie 6)) 20260929
       nCk =

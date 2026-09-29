@@ -238,15 +238,15 @@ br_level_hooks_removed_in_play = do
     let (gsE, steps) = play bare li
         gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) 1
     assertEqual ("L" ++ show li ++ " bare: ufos unchanged") (gsUfos gs0) (gsUfos gsE)
-    assertEqual ("L" ++ show li ++ " bare: no ufo absorb") 0 (gsUfoCollected gsE)
+    assertEqual ("L" ++ show li ++ " bare: no ufo absorb") 0 (gsCount CountUfo gsE)
     assertBool ("L" ++ show li ++ " bare: played") (not (null steps))
   assertBool "default: some ufo moved" (or [gsUfos gsE /= gsUfos (newGameAtLevel li (levelConfig (allLevels !! li)) 1) | li <- ufoLv, let gsE = fst (play defaultRegistry li)])
   forM_ beltLv $ \li ->
     assertEqual ("L" ++ show li ++ " bare: no belt shift") 0 (length (beltShifts (snd (play bare li))))
   assertBool "default: belts shifted" (sum [length (beltShifts (snd (play defaultRegistry li))) | li <- beltLv] > 0)
   forM_ carpetLv $ \li ->
-    assertEqual ("L" ++ show li ++ " bare: nothing covered") 0 (gsCarpetsCovered (fst (play bare li)))
-  assertBool "default: carpets covered" (sum [gsCarpetsCovered (fst (play defaultRegistry li)) | li <- carpetLv] > 0)
+    assertEqual ("L" ++ show li ++ " bare: nothing covered") 0 (gsCount CountCarpets (fst (play bare li)))
+  assertBool "default: carpets covered" (sum [gsCount CountCarpets (fst (play defaultRegistry li)) | li <- carpetLv] > 0)
 
 -- | 主流程不再点名这些元素的专门函数：结算流水线（Board/*、Game/*，不含关卡数据与回放记录层，见
 -- Spec.Support.Source.pipelineSources）不 import 彩虹 / 特殊合成 / 障碍 / 地毯的实现模块，

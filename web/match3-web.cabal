@@ -27,6 +27,7 @@ executable match3-web
     Match3.Core
     Match3.Engine
     Match3.Types
+    Match3.Counts
     Match3.Board.Grid
     Match3.Board.Match
     Match3.Board.Clear
@@ -76,6 +77,7 @@ executable match3-web
   build-depends:
       base
     , array
+    , containers
     , random ==1.2.1.1
     , ghc-experimental
   ghc-options:

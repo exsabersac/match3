@@ -14,6 +14,7 @@
 -- 计数口径（逐字保持旧实现，由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
 --   * 障碍计数按清除格在消除前盘面上的格子种类计；饼干 = 被清除的饼干 + 沉降时底行收走的饼干；
+--     第 4 刀起这些个数（含飞碟吸收 CountUfo、扩展元素 CountNamed）统一在 ctCounts :: Counts；
 --   * 种子起手的最大波次：续连锁有清除时取续连锁的最大波次，否则取「已完成的起手轮数」。
 module Match3.Board.Cascade
   ( -- * 记录版（单一实现）
@@ -39,7 +40,8 @@ module Match3.Board.Cascade
 import Data.List (nub)
 import Match3.Element.Registry (Registry, absorbWith, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
-import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
+import Match3.Counts (CounterKey(..), Counts, bumpCount, noCounts, singleCount)
+import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Ufo (Ufo)
 import System.Random (RandomGen)
@@ -75,26 +77,20 @@ instance Show CascadeWave where
         . showChar '}'
 
 
--- | 一段连锁的累计计数（替代旧的 15 元元组）。
+-- | 一段连锁的累计计数（替代旧的 15 元元组；第 4 刀起各元素 / 飞碟的个数统一在 ctCounts）。
 data CascadeTally = CascadeTally
-  { ctCells       :: Int            -- ^ 清除格数（含打碎的障碍）
-  , ctScore       :: Score          -- ^ 波次计分之和
-  , ctMaxWave     :: Int            -- ^ 最大波次（连击数）
-  , ctColors      :: [(Color, Int)] -- ^ 颜色袋（按 allColors 顺序）
-  , ctStones      :: Int
-  , ctChests      :: Int
-  , ctHoney       :: Int
-  , ctBalloons    :: Int
-  , ctCookies     :: Int            -- ^ 被清除的饼干 + 底行收走的饼干
-  , ctCakes       :: Int
-  , ctUfoAbsorbed :: Int            -- ^ 飞碟吸走的格数（GoalUfo）
-  , ctCleared     :: [Pos]          -- ^ 清除格 + 收饼干位（GoalCarpet / 前端粒子）
-  , ctNamed       :: [(String, Int)] -- ^ 自定义计数（元素定义的 counter = CountNamed 名字），按首次出现排序
+  { ctCells   :: Int            -- ^ 清除格数（含打碎的障碍）
+  , ctScore   :: Score          -- ^ 波次计分之和
+  , ctMaxWave :: Int            -- ^ 最大波次（连击数）
+  , ctColors  :: [(Color, Int)] -- ^ 颜色袋（按 allColors 顺序）
+  , ctCounts  :: Counts         -- ^ 清除格按本体 counter 计（CountStones … / CountNamed 名字）；
+                                --   CountCookies 另含沉降时底行收走的饼干；CountUfo = 飞碟吸走的格数（GoalUfo）
+  , ctCleared :: [Pos]          -- ^ 清除格 + 收饼干位（GoalCarpet / 前端粒子）
   } deriving (Eq, Show)
 
 -- | 什么都没发生的计数（颜色袋按 allColors 全 0）。
 zeroTally :: CascadeTally
-zeroTally = CascadeTally 0 0 0 zeroColors 0 0 0 0 0 0 0 [] []
+zeroTally = CascadeTally 0 0 0 zeroColors noCounts []
 
 -- | 一段连锁的完整结果：终盘、计数、飞碟、逐轮回放、生成器。
 data CascadeRun g = CascadeRun
@@ -109,65 +105,25 @@ data CascadeRun g = CascadeRun
 stillRun :: Board -> [Ufo] -> g -> CascadeRun g
 stillRun b ufos g = CascadeRun b zeroTally ufos [] g
 
--- | 清除格在消除前盘面上的计数（按本体定义的 counter）。
-data Hits = Hits
-  { hStones, hChests, hHoney, hBalloons, hCookies, hCakes :: !Int
-  , hNamed :: [(String, Int)]
-  }
-
-noHits :: Hits
-noHits = Hits 0 0 0 0 0 0 []
-
-plusHits :: Hits -> Hits -> Hits
-plusHits a b =
-  Hits
-    (hStones a + hStones b) (hChests a + hChests b) (hHoney a + hHoney b)
-    (hBalloons a + hBalloons b) (hCookies a + hCookies b) (hCakes a + hCakes b)
-    (addNamed (hNamed a) (hNamed b))
-
 -- | 沉降时被边缘收走的格按各自的 counter 计数（内置只有饼干 → CountCookies，与旧「底行收饼干计入饼干数」相同）。
-withDrained :: Registry -> [(Pos, Cell)] -> Hits -> Hits
+withDrained :: Registry -> [(Pos, Cell)] -> Counts -> Counts
 withDrained reg drained h = foldl (\hh (_, cell) -> bumpHit (counterWith reg cell) hh) h drained
 
--- | 把一组命中加进已有计数（皮带后沉降收走的格）。
-addHits :: Hits -> CascadeTally -> CascadeTally
-addHits h t =
-  t { ctStones = ctStones t + hStones h, ctChests = ctChests t + hChests h, ctHoney = ctHoney t + hHoney h
-    , ctBalloons = ctBalloons t + hBalloons h, ctCookies = ctCookies t + hCookies h, ctCakes = ctCakes t + hCakes h
-    , ctNamed = addNamed (ctNamed t) (hNamed h) }
+-- | 把一组计数加进已有计数（皮带后沉降收走的格）。
+addHits :: Counts -> CascadeTally -> CascadeTally
+addHits h t = t {ctCounts = ctCounts t <> h}
 
-bumpNamed :: String -> Int -> [(String, Int)] -> [(String, Int)]
-bumpNamed k v [] = [(k, v)]
-bumpNamed k v ((k', v') : rest)
-  | k == k' = (k', v' + v) : rest
-  | otherwise = (k', v') : bumpNamed k v rest
+-- | 清除格在消除前盘面上的计数（按本体定义的 counter）。
+hitsOn :: Registry -> Board -> [Pos] -> Counts
+hitsOn reg b = foldl (\h p -> bumpHit (counterWith reg (getCell b p)) h) noCounts
 
-addNamed :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
-addNamed = foldl (\acc (k, v) -> bumpNamed k v acc)
-
-hitsOn :: Registry -> Board -> [Pos] -> Hits
-hitsOn reg b = foldl (\h p -> bumpHit (counterWith reg (getCell b p)) h) noHits
-
--- | 一个格子的计数键加进命中。
-bumpHit :: Maybe Counter -> Hits -> Hits
+-- | 一个格子的计数键加 1。保险箱 / 时间精灵的键按前后盘面差计（Game.Tally，元素的 diffCounter），
+-- 不在清除格里计（与第 4 刀前的 Hits 相同；内置元素没有把这两个键当 counter 的）。
+bumpHit :: Maybe CounterKey -> Counts -> Counts
 bumpHit Nothing h = h
-bumpHit (Just k) h = case k of
-  CountStones -> h {hStones = hStones h + 1}
-  CountChests -> h {hChests = hChests h + 1}
-  CountHoney -> h {hHoney = hHoney h + 1}
-  CountBalloons -> h {hBalloons = hBalloons h + 1}
-  CountCookies -> h {hCookies = hCookies h + 1}
-  CountCakes -> h {hCakes = hCakes h + 1}
-  CountSafes -> h   -- 保险箱 / 时间精灵按前后盘面差计（Game.Tally），不在清除格里计
-  CountSpirits -> h
-  CountNamed n -> h {hNamed = bumpNamed n 1 (hNamed h)}
-
-tallyHits :: CascadeTally -> Hits
-tallyHits t = Hits (ctStones t) (ctChests t) (ctHoney t) (ctBalloons t) (ctCookies t) (ctCakes t) (ctNamed t)
-
-mkTally :: Int -> Score -> Int -> [(Color, Int)] -> Hits -> Int -> [Pos] -> CascadeTally
-mkTally cells score maxW colors h uAbs cleared =
-  CascadeTally cells score maxW colors (hStones h) (hChests h) (hHoney h) (hBalloons h) (hCookies h) (hCakes h) uAbs cleared (hNamed h)
+bumpHit (Just CountSafes) h = h
+bumpHit (Just CountSpirits) h = h
+bumpHit (Just k) h = bumpCount k 1 h
 
 addColors :: Registry -> [(Color, Int)] -> Board -> [Pos] -> [(Color, Int)]
 addColors reg tallies b pos = [(col, cnt + countColorWith reg b pos col) | (col, cnt) <- tallies]
@@ -187,7 +143,7 @@ zeroColors = zip allColors (repeat 0)
 data Round = Round
   { rdWave  :: CascadeWave  -- ^ 本轮回放（含本轮得分）
   , rdCells :: Int          -- ^ 清除格数
-  , rdHits  :: Hits         -- ^ 清除格在消除前盘面上的计数 + 沉降时被边缘收走的格的计数
+  , rdHits  :: Counts       -- ^ 清除格在消除前盘面上的计数 + 沉降时被边缘收走的格的计数
   , rdSites :: [Pos]        -- ^ 沉降时被边缘收走的格
   }
 
@@ -228,12 +184,12 @@ cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
 -- 每轮：clearMatchesDetailed → settleRound → absorbRound（若飞碟吸到格子，吸收单独算下一轮）。没有匹配时最大波次 = startW。
 cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
-  go prefer0 g0 b0 0 0 startW zeroColors noHits 0 ufos0 [] []
+  go prefer0 g0 b0 0 0 startW zeroColors noCounts ufos0 [] []
   where
     -- clearedRev / wavesRev：反向累积（按块 / 按轮），收尾时再反转
-    go pref g b cells score maxW tallies hits uAbs ufos clearedRev wavesRev
+    go pref g b cells score maxW tallies hits ufos clearedRev wavesRev
       | not (hasAnyMatchWith reg b) =
-          CascadeRun b (mkTally cells score maxW tallies hits uAbs (nub (concat (reverse clearedRev)))) ufos (reverse wavesRev) g
+          CascadeRun b (CascadeTally cells score maxW tallies hits (nub (concat (reverse clearedRev)))) ufos (reverse wavesRev) g
       | otherwise =
           let wave = maxW + 1
               cr@(_, n, pos) = clearMatchesDetailedWith reg pref b
@@ -242,18 +198,18 @@ cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
               posD = nub (pos ++ rdSites r1)
               score1 = score + cwScore (rdWave r1)
               tallies1 = addColors reg tallies b posD
-              hits1 = hits `plusHits` rdHits r1
+              hits1 = hits <> rdHits r1
               (ufos', absorbed, g2) = absorbRound reg portals ufos g1 b1 (wave + 1)
           in case absorbed of
                Nothing ->
                  go Nothing g2 b1 (cells + n) score1 wave tallies1 hits1
-                   uAbs ufos' (posD : clearedRev) (rdWave r1 : wavesRev)
+                   ufos' (posD : clearedRev) (rdWave r1 : wavesRev)
                Just (r2, nAbs) ->
                  -- 飞碟吸收单独算一轮（波次 wave + 1）
                  let pos2 = cwCleared (rdWave r2)
                  in go Nothing g2 (rdAfter r2) (cells + n + rdCells r2) (score1 + cwScore (rdWave r2)) (wave + 1)
-                      (addColors reg tallies1 b1 pos2) (hits1 `plusHits` rdHits r2)
-                      (uAbs + nAbs) ufos' (rdSites r2 : pos2 : posD : clearedRev) (rdWave r2 : rdWave r1 : wavesRev)
+                      (addColors reg tallies1 b1 pos2) (hits1 <> rdHits r2 <> singleCount CountUfo nAbs)
+                      ufos' (rdSites r2 : pos2 : posD : clearedRev) (rdWave r2 : rdWave r1 : wavesRev)
 
 --------------------------------------------------------------------------------
 -- 核心：种子起手
@@ -268,25 +224,24 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
           b1 = rdAfter r0
           tallies0 = addColors reg zeroColors b pos
           (ufos1, absorbed, g1') = absorbRound reg portals ufos0 g1 b1 2
-          (wU, b1', nU, scoreU, hitsU, talliesU, uAbs0, posU) = case absorbed of
-            Nothing -> ([], b1, 0, 0, noHits, zeroColors, 0, [])
+          (wU, b1', nU, scoreU, hitsU, talliesU, posU) = case absorbed of
+            Nothing -> ([], b1, 0, 0, noCounts, zeroColors, [])
             Just (rU, nAbs) ->
               let pos2 = cwCleared (rdWave rU)
-              in ( [rdWave rU], rdAfter rU, rdCells rU, cwScore (rdWave rU), rdHits rU
-                 , addColors reg zeroColors b1 pos2, nAbs, nub (pos2 ++ rdSites rU) )
+              in ( [rdWave rU], rdAfter rU, rdCells rU, cwScore (rdWave rU), rdHits rU <> singleCount CountUfo nAbs
+                 , addColors reg zeroColors b1 pos2, nub (pos2 ++ rdSites rU) )
           wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
           -- 续连锁：波次倍数接在起手轮之后
           rest = cascadeMatchesFromWith reg wavesDone Nothing ufos1 portals g1' b1'
           t2r = crTally rest
           maxW = if ctCells t2r > 0 then ctMaxWave t2r else wavesDone
           tally =
-            mkTally
+            CascadeTally
               (n + nU + ctCells t2r)
               (cwScore (rdWave r0) + scoreU + ctScore t2r)
               maxW
               (mergeColors (mergeColors tallies0 talliesU) (ctColors t2r))
-              (rdHits r0 `plusHits` hitsU `plusHits` tallyHits t2r)
-              (uAbs0 + ctUfoAbsorbed t2r)
+              (rdHits r0 <> hitsU <> ctCounts t2r)
               (nub (pos ++ rdSites r0 ++ posU ++ ctCleared t2r))
       in CascadeRun (crBoard rest) tally (crUfos rest) (rdWave r0 : wU ++ crWaves rest) (crGen rest)
 

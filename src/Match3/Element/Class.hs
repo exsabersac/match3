@@ -43,7 +43,7 @@ import Data.Typeable (Typeable, cast)
 import Match3.Element.Message (Message, SomeMessage(..), fromMessage)
 import Match3.Element.Types
   ( AdjacentRule
-  , Counter
+  , CounterKey
   , Edge
   , ElementName
   , EndRule
@@ -106,10 +106,10 @@ class (Show e, Eq e, Typeable e) => Element e where
   -- | 真消除时随格清掉的上层（修饰器用；本体恒 False）。
   stripOnClear :: e -> Bool
   stripOnClear _ = False
-  counter :: e -> Maybe Counter
+  counter :: e -> Maybe CounterKey
   counter _ = Nothing
   -- | 按步前 / 步后盘面上的个数差计数（保险箱开启、时间精灵）。
-  diffCounter :: e -> Maybe Counter
+  diffCounter :: e -> Maybe CounterKey
   diffCounter _ = Nothing
   bonusMoves :: e -> Int
   bonusMoves _ = 0

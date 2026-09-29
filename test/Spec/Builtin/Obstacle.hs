@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 本体障碍（对应 Element/Builtin/Obstacle）：石头、宝箱、蜂蜜、气球、蛋糕、保险箱、双面、彩蛋。
@@ -7,7 +8,7 @@ module Spec.Builtin.Obstacle
   ) where
 
 import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctChests, ctBalloons, ctCakes, ctCells, ctHoney))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts, ctCells))
 import Match3.Core
 import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
@@ -15,6 +16,7 @@ import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (noCounts)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -251,7 +253,7 @@ chest_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isChest (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctChests = chests}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountChests -> chests)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "chest opened" (chests >= 1)
   assertBool "chest gone" (not (isChest (getCell board1 (2, 1))))
 
@@ -303,7 +305,7 @@ honey_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isHoney (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctHoney = honey}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honey)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "honey smashed" (honey >= 1)
   assertBool "honey gone" (not (isHoney (getCell board1 (2, 1))))
 
@@ -355,7 +357,7 @@ balloon_popped_by_same_color = do
       (_b1, dead) = chipAdjacentBalloons board0 ms
   assertEqual "same color pops" [(2, 1)] dead
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctBalloons = balloons}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountBalloons -> balloons)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "balloon counted" (balloons >= 1)
   assertBool "balloon gone" (not (isBalloon (getCell board1 (2, 1))))
 
@@ -422,7 +424,7 @@ cake_clears_at_zero = do
           mkCake
   assertBool "cake present" (isCake (getCell board0 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCakes = cakes}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCakes -> cakes)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "cake cleared count" (cakes >= 1)
   assertBool "cake gone" (not (isCake (getCell board1 (2, 1))))
 
@@ -473,7 +475,7 @@ safe_opens_to_cookie = do
           , gsScore = 0
           , gsMoves = 20
           , gsGoal = GoalSafe 1
-          , gsSafesOpened = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
           , gsHint = Nothing
           , gsBelts = []
@@ -484,7 +486,7 @@ safe_opens_to_cookie = do
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "goal progress" (gsSafesOpened gs1 >= 1)
+  assertBool "goal progress" (gsCount CountSafes gs1 >= 1)
   assertBool "safe gone from board" $
     not (any (\r -> any (\c -> isSafe (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
 
@@ -759,8 +761,7 @@ honey_balloon_same_clear = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsHoneyCleared = 0
-          , gsBalloonsPopped = 0
+          , gsCounts = noCounts
           , gsGoal = GoalScore 99999
           }
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
@@ -768,8 +769,8 @@ honey_balloon_same_clear = do
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "honey counted" (gsHoneyCleared gs1 >= 1)
-  assertBool "balloon counted" (gsBalloonsPopped gs1 >= 1)
+  assertBool "honey counted" (gsCount CountHoney gs1 >= 1)
+  assertBool "balloon counted" (gsCount CountBalloons gs1 >= 1)
   assertBool "no honey left" $
     not (any (\r -> any (\c -> isHoney (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
   assertBool "no balloon left" $
@@ -809,8 +810,7 @@ safe_bottom_cookie_collected = do
           , gsHint = Nothing
           , gsBelts = []
           , gsUfos = []
-          , gsSafesOpened = 0
-          , gsCookiesCollected = 0
+          , gsCounts = noCounts
           , gsGoal = GoalSafe 1
           }
       (gs1, out) = trySwap (6, 1) (6, 2) gs0
@@ -818,8 +818,8 @@ safe_bottom_cookie_collected = do
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "safe opened" (gsSafesOpened gs1 >= 1)
-  assertBool "cookie collected" (gsCookiesCollected gs1 >= 1)
+  assertBool "safe opened" (gsCount CountSafes gs1 >= 1)
+  assertBool "cookie collected" (gsCount CountCookies gs1 >= 1)
 
 --------------------------------------------------------------------------------
 -- Surprise direct-seed open (hammer / cross): special survives; explode blasts
@@ -1010,7 +1010,7 @@ blast_chips_layered_obstacles_once = do
   assertBool "cake survives" (isCake cellK)
   assertEqual "cake chipped once 2→1" (1 :: Int) (cakeLayers cellK)
   -- Control: Honey 1 on path fully clears (last layer).
-  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctHoney = honeyHit}} = cascadeMatches Nothing [] [] (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
+  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honeyHit)}} = cascadeMatches Nothing [] [] (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
   assertBool "honey1 cleared" (not (isHoney (getCell bH1 (3, 5))))
   assertBool "honey1 counted" (honeyHit >= 1)
   -- Hammer on Honey 3: chip 3→2, charge spent, not goal-counted yet.
@@ -1026,7 +1026,7 @@ blast_chips_layered_obstacles_once = do
           , gsGoal = GoalHoney 8
           , gsMoves = 20
           , gsScore = 0
-          , gsHoneyCleared = 0
+          , gsCounts = noCounts
           }
       (gs1, outH) = useHammer (5, 5) gs0
   case outH of
@@ -1036,7 +1036,7 @@ blast_chips_layered_obstacles_once = do
   let cellHam = getCell (gsBoard gs1) (5, 5)
   assertBool "honey remains after hammer" (isHoney cellHam)
   assertEqual "hammer chips 3→2" (2 :: Int) (honeyLayers cellHam)
-  assertEqual "not counted until last" (0 :: Int) (gsHoneyCleared gs1)
+  assertEqual "not counted until last" (0 :: Int) (gsCount CountHoney gs1)
   assertEqual "hammer spent" (1 :: Int) (gsHammers gs1)
   -- chipIceOnClear unit: Chest2/Cake2 not clearable; layers decremented.
   let (bChest, freeChest) = chipIceOnClear (setCell stableBoard (1, 1) (mkChestLayers 2)) [(1, 1)]

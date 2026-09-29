@@ -30,7 +30,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
                                             ▼
  Match3.Element（元素框架：Types / Registry / Builtin / Event；默认注册表 defaultRegistry）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
- Match3.Types（类型 / 关卡表；Board = Array 盘面）
+ Match3.Types（类型 / 关卡表；Board = Array 盘面）  Match3.Counts（计数键与 Counts，第 4 刀）
  （纯函数机制模块；无 IO）
 
  Engine.Game / Engine.Effect / Engine.Playback（通用层：不 import 任何 Match3 模块）
@@ -53,8 +53,9 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
 | `Match3.Types` | `Color` / `GemKind` / `CellOverlay` / `CellContents`（含 `Custom 名字 值`，供注册表扩展元素）、构造器与谓词、`LevelGoal` / `Outcome` / `allLevels`；`Board = Board (Array (Int,Int) Cell)`（O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard` 等；`Show` 按行列表打印，与旧列表盘输出相同） | 连锁、交换、IO |
+| `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它 | 哪个键算哪个目标（第 5 刀） |
 | `Match3.Element` | 门面：再导出 `Types` / `Registry` / `Builtin` / `Event`（元素类 `Class` 与 `Message` 单独 import，方法名 `name` / `color` / `pushable` 等较通用，避免与使用方撞名） | 自身无实现 |
-| `Match3.Element.Types` | 规则与查询结果的数据类型：`Slot`、`HitResult`、`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、`Counter`、`Arg` / `Placement`、`cellSlot` | 调用顺序 |
+| `Match3.Element.Types` | 规则与查询结果的数据类型：`Slot`、`HitResult`、`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、`CounterKey`（再导出自 `Match3.Counts`，第 4 刀前叫 `Counter`）、`Arg` / `Placement`、`cellSlot` | 调用顺序 |
 | `Match3.Element.Registry` | `Registry`（名字 → 构造器 `Entry`；按层数组 O(1) 取解码器 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、解码 `elementOf`、各能力的查询函数 `*With`、关卡级元素 `registerLevel` / `askLevel` | 具体元素 |
 | `Match3.Element.Builtin` | 汇总：条目表 `builtinDefs`（注册顺序固定，快照锁定）、`builtinLevelDefs` 与 `defaultRegistry`；再导出测试 / 扩展用的元素类型 | 具体元素的定义 |
 | `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色与特殊合成的成对交换规则、`specialBlast` | 障碍与叠层 |
@@ -148,7 +149,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 可执行文件 | `match3-sdl` |
 | 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck） |
 
-库依赖：`base`、`array`、`random`。可执行文件额外：`sdl2`、`text`，以及 GHC 自带的 `containers`、`directory`、`filepath`（贴图加载）。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
+库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（第 4 刀起 `Match3.Counts` 用 `Data.Map.Strict`；网页版 `web/match3-web.cabal` 同步加了这一项）。可执行文件额外：`sdl2`、`text`，以及 GHC 自带的 `directory`、`filepath`（贴图加载）与 `containers`。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
 
 ## 网页版（技术验证）
 
@@ -205,7 +206,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `openRule` | 开启规则 `OpenRule{orOpen}`：一轮内可多次开启，开出的格本轮坐住。内置：彩蛋 | `Clear.surpriseClearPassWith`（经 `Registry.openWith`） |
 | `recolorable` / `pushable` | 可被魔法帽 / 染色瓶改色、可被蜗牛推动（内置 = 宝石各种类 + 倒计时 + 双面块） | `AdjCtx.acRecolor`、`EndCtx.ecPushable` |
 | `stripOnClear` | 本格真消除时上层随格清掉（修饰器 `modStripOnClear`） | `Clear` |
-| `counter` / `diffCounter` / `bonusMoves` | 进入清除格计数 / 按步前步后个数差计数 / 每少一个奖励步数 | `Board.Cascade`（`ctNamed`）、`Game.Resolve`、`Game.Tally`（`diffCountersWith`） |
+| `counter` / `diffCounter` / `bonusMoves` | 进入清除格计数 / 按步前步后个数差计数 / 每少一个奖励步数 | `Board.Cascade`（`ctCounts`）、`Game.Resolve`、`Game.Tally`（`diffCountersWith`） |
 | `vacatesCarpet` | 离开格子也算覆盖地毯 | `Game.Tally.carpetVacateSeedsWith` |
 | `keepOnShuffle` | 洗牌时原样放回 | `Game.Shuffle.extractDecorWith` / `ensurePlayableWith` |
 | `blast` | 被消除且能点火时的爆炸范围 | `Clear.expandSpecials` |
@@ -272,7 +273,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 钩子 | 类型 / 入口 | 用途 | 护栏测试（`test/Spec/Extension.hs`，样例元素只在测试里） |
 |------|-------------|------|------|
 | 注册表下传到底 | `Board.*With reg`；旧名在 `Board.Default` | Board 层不依赖内置表 | `ext_board_modules_take_registry`（源码扫描） |
-| 按名字的目标 | `LevelGoal` 新增 `GoalNamed 名字 N`（读 `gsElementCounts`，由 `counter` / `diffCounter = CountNamed 名字` 累加）；HUD / 标题 / 失败提示 / 选关已接 | 自定义元素当关卡目标 | `ext_goal_named_counts_crate` |
+| 按名字的目标 | `LevelGoal` 新增 `GoalNamed 名字 N`（读 `gsCount (CountNamed 名字)`，由 `counter` / `diffCounter = CountNamed 名字` 累加）；HUD / 标题 / 失败提示 / 选关已接 | 自定义元素当关卡目标 | `ext_goal_named_counts_crate` |
 | 地面层 | `SlotGround` + `groundRule` + `gsGround`（`Level.levelGround`） | 果冻类「格子下面的层」 | `ext_ground_layer_test_element` |
 | 边缘收集 | `drains :: e -> [Edge]` | 任意方向的收集物 | `ext_edge_drain_side_collectible` |
 | 步末补结算 | `EndRule.erHoles` + `Cascade.cascadeAfterWith (AfterEnd …)` | 步末阶段挖掉格子后的沉降 / 补子 / 再连锁 | `ext_post_end_settle_hole_element` |
@@ -321,7 +322,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `LevelHook` 封闭和类型 | **已消掉**（元素类迁移） | 换成 `LevelElement` + 开放消息；新关卡级元素只要 `registerLevel`（`ec_level_elements_by_message`） |
 | 自定义元素不能是可匹配的有色宝石 | **已消掉**（元素类迁移） | `Custom` 本体的颜色来自元素的 `color` 方法，注册 `Piece` 原型 + 颜色即参与匹配 / 提示 / 计数（`ec_custom_matchable_gem`）；补子仍只生成普通宝石 |
 | 钩子调用时机写死在主流程（吸收在补子后、移位在 Tick 与 Spread 之间……） | 部分消掉 | 发消息的节拍仍是流水线的固定位置（改节拍 = 改规则流水线）；但哪个元素在哪个节拍反应、回复什么，由元素自己决定，新消息类型也能随时定义 |
-| 关卡级元素的状态仍在 `GameState` 专用字段（`gsUfos` / `gsBelts` / `gsPortals` / `gsCarpetOpen` 与 `gsUfoCollected` / `gsCarpetsCovered`）；关卡搭建（`Game.Level`）直接构造这些字段 | 保留 | 字段参与撤销快照、存档、HUD、目标判定与金标准投影，测试里有 200 多处读取与记录更新；移进元素值要改所有这些读点，却不带来新行为。节拍消息把状态作为参数带给元素、回复里带回新状态 |
+| 关卡级元素的状态仍在 `GameState` 专用字段（`gsUfos` / `gsBelts` / `gsPortals` / `gsCarpetOpen` ；飞碟吸收 / 地毯覆盖的个数第 4 刀起在 `gsCounts` 的 `CountUfo` / `CountCarpets`）；关卡搭建（`Game.Level`）直接构造这些字段 | 保留 | 字段参与撤销快照、存档、HUD、目标判定与金标准投影，测试里有 200 多处读取与记录更新；移进元素值要改所有这些读点，却不带来新行为。节拍消息把状态作为参数带给元素、回复里带回新状态 |
 | 自定义元素的存储编码仍是 `Custom 名字 Int` | 保留 | 盘面以 `Cell` 存储（金标准、前端、机制模块都按它读写）；元素值由构造器从这个 `Int` 解码，所以自定义元素的状态只能编码成一个整数 |
 | 地面层元素的 `toCell` 只用于显示 | 保留 | 地面层在 `gsGround` 里、不进盘面，`toCell` 写回的格子不会落到 `Board` 上 |
 | 冰层 / 叠层槽位没有注册条目时的兜底 | 行为略有不同 | 新版直接跳过这一层（不当修饰器询问）；旧版按 `baseDef` 缺省把它当一层惰性层（挡交换、打不动）。内置注册表恒含全部冰层 / 叠层条目，不影响内置元素与金标准 |

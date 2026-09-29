@@ -667,7 +667,7 @@ data LevelGoal
   | GoalSafe Int                       -- open N vaults / safes (保险箱)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   | GoalCarpet Int                     -- cover N carpet / floor tiles (地毯)
-  | GoalNamed String Int               -- 段 2c：按元素名计数的目标（gsElementCounts 里该名字累计 ≥ N；扩展元素用）
+  | GoalNamed String Int               -- 段 2c：按元素名计数的目标（gsCounts 里 CountNamed 该名字累计 ≥ N；扩展元素用）
   deriving (Eq, Show, Generic)
 
 -- | Whether the goal is satisfied given current score / primary collected count.

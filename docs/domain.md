@@ -66,7 +66,7 @@
 | 传送带 | `Belt` = `[Pos]`，`gsBelts` | 步末沿环移位；可再连锁 |
 | 传送门 | `gsPortals :: [(Pos,Pos)]` | 双向；沉降时 A 有子 B 空则传送 |
 | 飞碟 | `Ufo{ufoCell,ufoColor}`，`gsUfos` | 波末吸正交同色再移格；吸走≠引爆 |
-| 地毯 | `gsCarpetOpen` / `gsCarpetsCovered` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
+| 地毯 | `gsCarpetOpen` / `gsCount CountCarpets` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
 | 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(名字, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
 | 边缘收集 | `drains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
 | 步末补结算 | `EndRule.erHoles`、`cascadeAfterWith (AfterEnd …)` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
@@ -101,8 +101,8 @@
 | 分数目标 | `GoalScore` | `gsScore` |
 | 单色收集 | `GoalCollect` | `gsCollected` + 颜色袋 |
 | 多色收集 | `GoalCollectMulti` | `gsColorBag` |
-| 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | 对应 `Goal*` | 各 `gs*Cleared` / `gsUfoCollected` / `gsCarpetsCovered` 等 |
-| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsElementCounts` 里该名字累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
+| 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | 对应 `Goal*` | `gsCounts` 里对应的键（第 4 刀前是 10 个专用字段）：`gsCount CountStones` / `CountChests` / `CountHoney` / `CountBalloons` / `CountCookies` / `CountCakes` / `CountSafes` / `CountUfo` / `CountCarpets` |
+| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsCount (CountNamed 名字)` 累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
 | 步数 | `gsMoves` / `MovesLeft` | 成功步 −1；时间精灵可 +2 |
 | 步数银行 | `carryMovesBonus` | 战役过关最多带 3 步 |
 | 交换无效 | `InvalidSwap` | 越界/非邻/无次数等 |
@@ -143,7 +143,7 @@
 | 步末效果种类 | `EndEffect` = `EndCountdownTick` / `EndBeltShift` / `EndSpread SpreadKind` / `EndSnail [SnailMove]` | 倒计时减一 / 皮带移位 / 藤·巧·蒸汽蔓延 / 蜗牛爬行；`applyEndEffect` 可重放回盘面 |
 | 蜗牛一步 | `SnailMove { smFrom, smTo, smDir, smPushed }` | `smFrom == smTo` 表示碰壁掉头 |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsElementCounts` 记注册表元素的具名计数 |
+| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
 | 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
 | 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |

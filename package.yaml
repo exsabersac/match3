@@ -29,6 +29,8 @@ ghc-options:
 
 library:
   source-dirs: src
+  dependencies:
+  - containers
   exposed-modules:
   - Engine.Game
   - Engine.Effect
@@ -37,6 +39,7 @@ library:
   - Match3.Core
   - Match3.Engine
   - Match3.Types
+  - Match3.Counts
   - Match3.Board.Grid
   - Match3.Board.Match
   - Match3.Board.Clear

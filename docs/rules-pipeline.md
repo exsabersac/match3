@@ -98,7 +98,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 ## 6. 结算
 
-- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。
+- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`，按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；色袋 `gsColorBag` 与主进度 `gsCollected` 仍是单独字段。
 - 步数：`gsMoves - 1 + 2 * spiritHit`。
 - `decideOutcome`：目标满足 → 每日则 `Won`，否则战役 `LevelClear` 或终章 `Won`；步数用尽 → `Lost`；否则 `MoveApplied`。
 - `MoveApplied` 时 `ensurePlayable`：无合法手则洗牌并 `restoreDecor`（保留障碍/特殊/叠层等装饰）。

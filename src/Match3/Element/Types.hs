@@ -1,4 +1,4 @@
--- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键、放置参数。
+-- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数。
 -- 元素本身是类型类（Match3.Element.Class 的 Element / Modifier / LevelElement），主流程（匹配、挡交换、
 -- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经注册表
 -- （Match3.Element.Registry）问它们，不按构造器写死分支。
@@ -15,7 +15,7 @@ module Match3.Element.Types
   , AdjCtx(..)
   , AdjOut(..)
   , AdjacentRule(..)
-  , Counter(..)
+  , CounterKey(..)
   , EndPhase(..)
   , EndCtx(..)
   , EndRule(..)
@@ -29,6 +29,7 @@ module Match3.Element.Types
   , kindSlot
   ) where
 
+import Match3.Counts (CounterKey(..))
 import Match3.Element.Event (EndEffect)
 import Match3.Types
 
@@ -76,12 +77,7 @@ data AdjacentRule = AdjacentRule
   , arRun   :: AdjCtx -> Board -> AdjOut
   }
 
--- | 计数键：内置目标用前 8 个；CountNamed 进 GameState.gsElementCounts（按名字累计）。
-data Counter
-  = CountStones | CountChests | CountHoney | CountBalloons | CountCookies | CountCakes
-  | CountSafes | CountSpirits
-  | CountNamed String
-  deriving (Eq, Ord, Show)
+-- 计数键 CounterKey 定义在 Match3.Counts（第 4 刀前是这里的 Counter），这里再导出给元素定义用。
 
 -- | 步末阶段（交换之后；道具只有 PhaseSpread）。皮带是关卡特性，固定夹在 Tick 与 Spread 之间。
 data EndPhase = PhaseTick | PhaseSpread | PhaseMove

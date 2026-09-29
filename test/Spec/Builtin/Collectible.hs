@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 收集物（对应 Element/Builtin/Collectible）：饼干、时间精灵（气泡见 Spec.JellyBubble）。
@@ -7,13 +8,14 @@ module Spec.Builtin.Collectible
   ) where
 
 import Match3.Board.Default (cascadeSeeds)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (noCounts)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -55,7 +57,7 @@ cookie_falls_with_gravity = do
   assertBool "cookie at top" (isCookie (getCell board0 (0, 1)))
   let seeds = findMatches board0
   assertBool "match under cookie col" ((3, 1) `elem` seeds)
-  let CascadeRun {crBoard = board1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
       cookiePos =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -82,7 +84,7 @@ cookie_collected_at_bottom = do
           (mkGem C1)
   assertBool "cookie on bottom" (isCookie (getCell board0 (boardSize - 1, 4)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool ("cookie collected, got " ++ show cookies) (cookies >= 1)
   assertBool "cookie gone" (not (isCookie (getCell board1 (boardSize - 1, 4))))
 
@@ -194,7 +196,7 @@ cookie_immune_to_direct_clear = do
           (3, 4)
           (Gem C1 Bomb 0 Nothing)
       seeds = [(3, 4)]
-      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) boardBomb
+      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) boardBomb
       cookieLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -209,7 +211,7 @@ cookie_immune_to_direct_clear = do
           (setCell stableBoard (4, 2) mkCookie)
           (4, 4)
           (Gem C2 LineH 0 Nothing)
-      CascadeRun {crBoard = bL, crTally = CascadeTally {ctCookies = cookiesL}} = cascadeSeeds Nothing [(4, 4)] [] [] (mkStdGen 2) boardLine
+      CascadeRun {crBoard = bL, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookiesL)}} = cascadeSeeds Nothing [(4, 4)] [] [] (mkStdGen 2) boardLine
   assertEqual "line must not count mid-board cookie" (0 :: Int) cookiesL
   assertBool "cookie survives line" $
     any (\(r, c) -> isCookie (getCell bL (r, c)))
@@ -224,7 +226,7 @@ cookie_immune_to_direct_clear = do
           , gsBelts = []
           , gsUfos = []
           , gsPortals = []
-          , gsCookiesCollected = 0
+          , gsCounts = noCounts
           , gsGoal = GoalCookie 5
           , gsHammers = 2
           }
@@ -234,7 +236,7 @@ cookie_immune_to_direct_clear = do
     NoMatch -> assertFailure "hammer on bomb should apply"
     InvalidSwap -> assertFailure "hammer on bomb should apply"
     _ -> pure ()
-  assertEqual "bomb hammer must not collect mid cookie" (0 :: Int) (gsCookiesCollected gsH)
+  assertEqual "bomb hammer must not collect mid cookie" (0 :: Int) (gsCount CountCookies gsH)
   assertBool "cookie still present after bomb hammer" $
     any (\(r, c) -> isCookie (getCell (gsBoard gsH) (r, c)))
       [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
@@ -252,5 +254,5 @@ cookie_immune_to_direct_clear = do
           (2, 2)
           (mkGem C1)
       seedsBot = findMatches boardBot
-      CascadeRun {crTally = CascadeTally {ctCookies = cookiesBot}} = cascadeSeeds Nothing seedsBot [] [] (mkStdGen 3) boardBot
+      CascadeRun {crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookiesBot)}} = cascadeSeeds Nothing seedsBot [] [] (mkStdGen 3) boardBot
   assertBool ("bottom cookie still drains, got " ++ show cookiesBot) (cookiesBot >= 1)

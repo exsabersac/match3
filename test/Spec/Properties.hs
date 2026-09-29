@@ -11,7 +11,7 @@ module Spec.Properties
   ) where
 
 import Data.Array (bounds)
-import Data.List (nub, sort)
+import Data.List (isInfixOf, nub, sort)
 import Data.Maybe (isJust, isNothing)
 import Engine.Game (Game(..), Step(..), runActions)
 import Engine.History (History(..), HistoryPolicy(..), Undoable(..), historyDepth, startHistory)
@@ -21,6 +21,7 @@ import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Board.Grid (MBoard, atM, mboardFromRows)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
+import Match3.Counts (bumpCount, countsFromList, noCounts, plusCounts)
 import Match3.Element
 import Match3.Element.Class (toCell)
 import qualified Match3.Engine as M3E
@@ -43,6 +44,8 @@ tests =
       , testProperty "qc_registry_decode_roundtrip" (withMaxSuccess 1000 qc_registry_decode_roundtrip)
       , testProperty "qc_registry_names_slots_unique" (once qc_registry_names_slots_unique)
       , testProperty "qc_find_hint_local_matches_reference" (withMaxSuccess 400 qc_find_hint_local_matches_reference)
+      , testProperty "qc_counts_algebra" (withMaxSuccess 1000 qc_counts_algebra)
+      , testProperty "qc_counts_monotone_legacy_view" (withMaxSuccess 60 qc_counts_monotone_legacy_view)
       ]
   where
     -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
@@ -287,7 +290,7 @@ qc_goal_progress_monotone =
           pairs = zip states (drop 1 states)
           ok (a, b) =
             and (zipWith (<=) (meters a) (meters b))
-              && and [lookupN n b >= v | (n, v) <- gsElementCounts a]
+              && and [lookupN n b >= v | (n, v) <- namedCounts (gsCounts a)]
               && (not (satisfied a) || satisfied b)
       in classify (length (filter stepAccepted steps) >= 3) "3+ accepted steps" $
            classify (any (\st -> gsScore (stepState st) > gsScore s0) steps) "scored" $
@@ -295,16 +298,16 @@ qc_goal_progress_monotone =
   where
     meters gs =
       [ gsScore gs, gsCollected gs, progressOf gs
-      , gsStonesCleared gs, gsChestsCleared gs, gsHoneyCleared gs, gsBalloonsPopped gs
-      , gsCookiesCollected gs, gsCakesCleared gs, gsSafesOpened gs, gsUfoCollected gs, gsCarpetsCovered gs
+      , gsCount CountStones gs, gsCount CountChests gs, gsCount CountHoney gs, gsCount CountBalloons gs
+      , gsCount CountCookies gs, gsCount CountCakes gs, gsCount CountSafes gs, gsCount CountUfo gs, gsCount CountCarpets gs
       ]
-    lookupN n gs = maybe 0 id (lookup n (gsElementCounts gs))
+    lookupN n gs = maybe 0 id (lookup n (namedCounts (gsCounts gs)))
     progressOf gs =
-      goalProgressEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsStonesCleared gs) (gsUfoCollected gs)
-        (gsChestsCleared gs) (gsHoneyCleared gs) (gsBalloonsPopped gs) (gsCookiesCollected gs) (gsCakesCleared gs) (gsSafesOpened gs)
+      goalProgressEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsCount CountStones gs) (gsCount CountUfo gs)
+        (gsCount CountChests gs) (gsCount CountHoney gs) (gsCount CountBalloons gs) (gsCount CountCookies gs) (gsCount CountCakes gs) (gsCount CountSafes gs)
     satisfied gs =
-      goalMetEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsStonesCleared gs) (gsUfoCollected gs)
-        (gsChestsCleared gs) (gsHoneyCleared gs) (gsBalloonsPopped gs) (gsCookiesCollected gs) (gsCakesCleared gs) (gsSafesOpened gs)
+      goalMetEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsCount CountStones gs) (gsCount CountUfo gs)
+        (gsCount CountChests gs) (gsCount CountHoney gs) (gsCount CountBalloons gs) (gsCount CountCookies gs) (gsCount CountCakes gs) (gsCount CountSafes gs)
 
 --------------------------------------------------------------------------------
 -- 元素注册表
@@ -347,6 +350,84 @@ qc_registry_names_slots_unique =
        , counterexample "overlay slots unique and complete" (ovs === [0 .. 7])
        , counterexample "one ice entry" (length ices === 1)
        ]
+
+--------------------------------------------------------------------------------
+-- 计数（第 4 刀）
+
+genCounterKey :: Gen CounterKey
+genCounterKey =
+  frequency
+    [ (8, elements [CountStones, CountChests, CountHoney, CountBalloons, CountCookies, CountCakes, CountSafes, CountSpirits, CountUfo, CountCarpets])
+    , (2, CountNamed <$> elements ["jelly", "bubble", "crate"])
+    ]
+
+genCountList :: Gen [(CounterKey, Int)]
+genCountList = listOf ((,) <$> genCounterKey <*> choose (0, 5))
+
+allKeysOf :: [[(CounterKey, Int)]] -> [CounterKey]
+allKeysOf xss = nub (map fst (concat xss)) ++ [CountStones, CountNamed "absent"]
+
+-- | Counts 的代数：按键求和、稀疏（不存 0，键升序）、加法交换 / 结合、noCounts 为单位元、bumpCount = 加一个单键。
+qc_counts_algebra :: Property
+qc_counts_algebra =
+  forAll genCountList $ \xs ->
+    forAll genCountList $ \ys ->
+      forAll genCountList $ \zs ->
+        let a = countsFromList xs
+            b = countsFromList ys
+            c = countsFromList zs
+            ks = allKeysOf [xs, ys, zs]
+            sumFor k l = sum [n | (k', n) <- l, k' == k]
+            listed = countsToList a
+        in conjoin
+             [ counterexample "countOf = 按键求和" (and [countOf k a == sumFor k xs | k <- ks])
+             , counterexample "稀疏且键升序" (all ((> 0) . snd) listed && map fst listed == sort (nub (map fst listed)))
+             , counterexample "加法逐键" (and [countOf k (a `plusCounts` b) == countOf k a + countOf k b | k <- ks])
+             , counterexample "交换 / 结合 / 单位元" ((a <> b) == (b <> a) && ((a <> b) <> c) == (a <> (b <> c)) && (a <> noCounts) == a)
+             , counterexample "bumpCount" (and [bumpCount k n a == a <> countsFromList [(k, n)] | (k, n) <- ys])
+             , counterexample "namedCounts" (namedCounts a == sort [(n, v) | (CountNamed n, v) <- listed])
+             ]
+
+-- | 整局里的计数：每步之后存的个数都 > 0（非负、稀疏），每个键不减；与第 4 刀前字段的对照——
+-- 主进度 gsCollected 在「按某个计数键」的目标下等于该键的个数（旧实现直接取对应字段），
+-- Show 仍按旧字段名打印同一个数（元素查询快照对 show 取散列）。
+qc_counts_monotone_legacy_view :: Property
+qc_counts_monotone_legacy_view =
+  forAll genStart $ \start ->
+    forAll (choose (1, 8) >>= \k -> vectorOf k genPick) $ \picks ->
+      let s0 = startState start
+          (_, steps) = playPicks s0 picks
+          states = s0 : map stepState steps
+          pairs = zip states (drop 1 states)
+          positive gs = all ((> 0) . snd) (countsToList (gsCounts gs))
+          grows (a, b) = and [countOf k (gsCounts a) <= countOf k (gsCounts b) | (k, _) <- countsToList (gsCounts a)]
+          goalKey gs = case gsGoal gs of
+            GoalClearStone _ -> Just CountStones
+            GoalChest _ -> Just CountChests
+            GoalHoney _ -> Just CountHoney
+            GoalBalloon _ -> Just CountBalloons
+            GoalCookie _ -> Just CountCookies
+            GoalCake _ -> Just CountCakes
+            GoalSafe _ -> Just CountSafes
+            GoalUfo _ -> Just CountUfo
+            GoalCarpet _ -> Just CountCarpets
+            GoalNamed n _ -> Just (CountNamed n)
+            _ -> Nothing
+          collectedMatches gs = maybe True (\k -> gsCollected gs == gsCount k gs) (goalKey gs)
+          legacyShow gs =
+            let txt = show gs
+            in and
+                 [ (name ++ " = " ++ show (gsCount k gs) ++ ",") `isInfixOf` txt
+                 | (name, k) <-
+                     [ ("gsStonesCleared", CountStones), ("gsChestsCleared", CountChests), ("gsHoneyCleared", CountHoney)
+                     , ("gsBalloonsPopped", CountBalloons), ("gsCookiesCollected", CountCookies), ("gsCakesCleared", CountCakes)
+                     , ("gsSafesOpened", CountSafes), ("gsUfoCollected", CountUfo), ("gsCarpetsCovered", CountCarpets) ]
+                 ]
+                 && ("gsElementCounts = " ++ show (namedCounts (gsCounts gs)) ++ ",") `isInfixOf` txt
+      in classify (any (\gs -> not (null (countsToList (gsCounts gs)))) states) "counted something" $
+           classify (any (isJust . goalKey) states) "counter goal" $
+           counterexample (show (map (countsToList . gsCounts) states)) $
+             all positive states && all grows pairs && all collectedMatches states && all legacyShow states
 
 --------------------------------------------------------------------------------
 -- 提示

@@ -24,6 +24,7 @@ import Data.Char (ord)
 import Data.List (intercalate)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
+import Match3.Counts (CounterKey(..), countOf, namedCounts)
 import Match3.Board.Grid (getCell, inBounds, setCell, MBoard, mboardRows)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
@@ -167,15 +168,15 @@ pCounters h =
     , "goal=" ++ pGoal (gsGoal gs)
     , "col=" ++ show (gsCollected gs)
     , "bag=" ++ pBag (gsColorBag gs)
-    , "stone=" ++ show (gsStonesCleared gs)
-    , "chest=" ++ show (gsChestsCleared gs)
-    , "honey=" ++ show (gsHoneyCleared gs)
-    , "balloon=" ++ show (gsBalloonsPopped gs)
-    , "cookie=" ++ show (gsCookiesCollected gs)
-    , "cake=" ++ show (gsCakesCleared gs)
-    , "safe=" ++ show (gsSafesOpened gs)
-    , "ufoc=" ++ show (gsUfoCollected gs)
-    , "carpet=" ++ show (gsCarpetsCovered gs)
+    , "stone=" ++ show (gsCount CountStones gs)
+    , "chest=" ++ show (gsCount CountChests gs)
+    , "honey=" ++ show (gsCount CountHoney gs)
+    , "balloon=" ++ show (gsCount CountBalloons gs)
+    , "cookie=" ++ show (gsCount CountCookies gs)
+    , "cake=" ++ show (gsCount CountCakes gs)
+    , "safe=" ++ show (gsCount CountSafes gs)
+    , "ufoc=" ++ show (gsCount CountUfo gs)
+    , "carpet=" ++ show (gsCount CountCarpets gs)
     , "copen=" ++ pPosList (gsCarpetOpen gs)
     , "over=" ++ maybe "-" pOutcome (gsOver gs)
     , "lv=" ++ show (gsLevel gs)
@@ -395,9 +396,10 @@ cascadeLines =
   where
     -- 结算投影（原 15 元组的字段顺序）与回放投影（原 (轮次, 终盘, 飞碟, 生成器)）都从同一个 CascadeRun 取。
     pRun r =
-      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctColors = tallies, ctStones = stones
-                       , ctChests = chests, ctHoney = honey, ctBalloons = balloons, ctCookies = cookies, ctCakes = cakes
-                       , ctUfoAbsorbed = uAbs, ctCleared = cleared} = crTally r
+      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctColors = tallies, ctCounts = cnts, ctCleared = cleared} = crTally r
+          c k = countOf k cnts
+          (stones, chests, honey, balloons) = (c CountStones, c CountChests, c CountHoney, c CountBalloons)
+          (cookies, cakes, uAbs) = (c CountCookies, c CountCakes, c CountUfo)
           (b, ufos', g) = (crBoard r, crUfos r, crGen r)
       in unwords
         [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag tallies
@@ -547,7 +549,7 @@ handmade2 =
 -- （pState 不含这两个字段，为了不改旧行，只在新行里补）。再加开局行（同 levelLines 的 G 行格式）。
 
 pExt :: History GameState -> String
-pExt h = "gnd=" ++ show (gsGround (histNow h)) ++ " named=" ++ show (gsElementCounts (histNow h))
+pExt h = "gnd=" ++ show (gsGround (histNow h)) ++ " named=" ++ show (namedCounts (gsCounts (histNow h)))
 
 runGame5 :: String -> GameState -> Int -> [String]
 runGame5 tag gs0 n =

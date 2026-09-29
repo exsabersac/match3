@@ -15,6 +15,7 @@ module Match3.Game.Outcome
   , loseHint
   ) where
 
+import Match3.Counts (CounterKey(..))
 import Match3.Types
 import Match3.Game.State
 
@@ -25,7 +26,7 @@ checkOutcome gs
   | gsMoves gs <= 0 = Lost (gsScore gs)
   | otherwise = MoveApplied 0
 
--- | 当前计数是否满足关卡目标（各目标的判定统一在 Types.goalMetEx）。
+-- | 当前计数是否满足关卡目标（各目标的判定统一在 Types.goalMetEx；第 4 刀起计数从 gsCounts 按键读）。
 goalSatisfied :: GameState -> Bool
 goalSatisfied gs =
   goalMetEx
@@ -33,14 +34,14 @@ goalSatisfied gs =
     (gsScore gs)
     (gsCollected gs)
     (gsColorBag gs)
-    (gsStonesCleared gs)
-    (gsUfoCollected gs)
-    (gsChestsCleared gs)
-    (gsHoneyCleared gs)
-    (gsBalloonsPopped gs)
-    (gsCookiesCollected gs)
-    (gsCakesCleared gs)
-    (gsSafesOpened gs)
+    (gsCount CountStones gs)
+    (gsCount CountUfo gs)
+    (gsCount CountChests gs)
+    (gsCount CountHoney gs)
+    (gsCount CountBalloons gs)
+    (gsCount CountCookies gs)
+    (gsCount CountCakes gs)
+    (gsCount CountSafes gs)
 
 -- | 目标满足：每日 → Won（不推进战役）；否则 LevelClear 或终章 Won。
 -- 步数耗尽 → Lost；否则 MoveApplied。

@@ -45,7 +45,7 @@ element_registry_custom_crate_extensibility = do
   let (gs1, o1, mt1) = resolveSwapWith reg (1, 2) (2, 2) gs0
   assertBool "move 1 applied" (moveApplied o1)
   assertEqual "move 1: crate chipped once, stays put" [((0, 1), Custom "crate" 1)] (cratesOn (gsBoard gs1))
-  assertEqual "move 1: not counted yet" [] (gsElementCounts gs1)
+  assertEqual "move 1: not counted yet" [] (namedCounts (gsCounts gs1))
   w1 <- firstWave mt1
   assertBool "move 1: crate absent from first-wave clears" ((0, 1) `notElem` cwCleared w1)
   assertBool "move 1: EvHit on crate"
@@ -57,7 +57,7 @@ element_registry_custom_crate_extensibility = do
   assertEqual "move 2: crate broken" [] (cratesOn (gsBoard gs2))
   w2 <- firstWave mt2
   assertBool "move 2: crate in first-wave clears" ((0, 1) `elem` cwCleared w2)
-  assertEqual "move 2: counted by name" [("crate", 1)] (gsElementCounts gs2)
+  assertEqual "move 2: counted by name" [("crate", 1)] (namedCounts (gsCounts gs2))
   assertBool "move 2: EvClear of crate"
     (any (\e -> evKind e == EvClear && evElement e == "crate") (traceEventsWith reg mt2))
   -- 直接命中（锤子）：耐久 -1；洗牌保留
@@ -70,7 +70,7 @@ element_registry_custom_crate_extensibility = do
   assertBool "default applied" (moveApplied oD)
   assertEqual "unregistered: inert, untouched" [Custom "crate" 2] (map snd (cratesOn (gsBoard gsD)))
   assertBool "unregistered: hammer immune" (hitImmuneWith defaultRegistry (Custom "crate" 2))
-  assertEqual "unregistered: not counted" [] (gsElementCounts gsD)
+  assertEqual "unregistered: not counted" [] (namedCounts (gsCounts gsD))
   -- 主流程没有为它改动：src/ 与 app/ 下全部源码（含注释）里都没有这个元素名的字面量 "crate" 或「木箱」
   coreFiles <- sourcesUnderAll ["src", "app"]
   assertBool "scanned the core sources" ("src/Match3/Board/Cascade.hs" `elem` coreFiles && "src/Match3/Element/Builtin.hs" `elem` coreFiles)

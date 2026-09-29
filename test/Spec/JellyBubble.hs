@@ -43,12 +43,12 @@ jb_jelly_two_layers_counted_per_layer = do
       (gs1, o1, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
   assertEqual "one layer peeled at (1,1)" [((1, 1), ("jelly", 1)), ((6, 6), ("jelly", 2))] (gsGround gs1)
-  assertEqual "counted per layer" [("jelly", 1)] (gsElementCounts gs1)
+  assertEqual "counted per layer" [("jelly", 1)] (namedCounts (gsCounts gs1))
   assertEqual "goal progress" 1 (gsCollected gs1)
   assertEqual "jelly does not occupy the board" (gsBoard (fst (trySwap p1 p2 gs0 {gsGround = []}))) (gsBoard gs1)
   let (gs2, _, _) = resolveSwapWith defaultRegistry p1 p2 gs1 {gsBoard = tripleBoard}
   assertEqual "second clear removes the tile" [((6, 6), ("jelly", 2))] (gsGround gs2)
-  assertEqual "count accumulates" [("jelly", 2)] (gsElementCounts gs2)
+  assertEqual "count accumulates" [("jelly", 2)] (namedCounts (gsCounts gs2))
   -- 通用接口入口一样
   let st = gameStep M3E.match3Game gs0 (M3E.Swap p1 p2)
   assertEqual "engine path same ground" (gsGround gs1) (gsGround (stepState st))
@@ -87,7 +87,7 @@ jb_bubble_pops_on_adjacent_clear = do
   w1 <- firstWave mt1
   assertBool "adjacent bubble cleared in the first wave" ((0, 1) `elem` cwCleared w1)
   assertEqual "far bubble stays" [(6, 6)] (bubblesOn (gsBoard gs1))
-  assertEqual "counted" [("bubble", 1)] (gsElementCounts gs1)
+  assertEqual "counted" [("bubble", 1)] (namedCounts (gsCounts gs1))
   assertBool "goal reached" (isWin (gsOver gs1))
 
 -- | 直接命中（锤子）也破并计数。
@@ -97,7 +97,7 @@ jb_bubble_pops_on_direct_hit = do
       (gs1, o1) = useHammer (4, 4) gs0
   assertBool "hammer applied" (moveApplied o1)
   assertEqual "bubble gone" [] (bubblesOn (gsBoard gs1))
-  assertEqual "counted" [("bubble", 1)] (gsElementCounts gs1)
+  assertEqual "counted" [("bubble", 1)] (namedCounts (gsCounts gs1))
 
 -- | 挡交换；无色不成三连；随重力下落（下方格被消除后落一格）。
 jb_bubble_blocks_swap_falls_no_match :: Assertion

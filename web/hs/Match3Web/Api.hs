@@ -147,9 +147,9 @@ progress :: GameState -> Int
 progress gs =
   goalProgressEx
     (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs)
-    (gsStonesCleared gs) (gsUfoCollected gs) (gsChestsCleared gs)
-    (gsHoneyCleared gs) (gsBalloonsPopped gs) (gsCookiesCollected gs)
-    (gsCakesCleared gs) (gsSafesOpened gs)
+    (gsCount CountStones gs) (gsCount CountUfo gs) (gsCount CountChests gs)
+    (gsCount CountHoney gs) (gsCount CountBalloons gs) (gsCount CountCookies gs)
+    (gsCount CountCakes gs) (gsCount CountSafes gs)
 
 encodeOutcome :: Outcome -> String
 encodeOutcome o = case o of

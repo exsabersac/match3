@@ -38,7 +38,8 @@ import Match3.Board.Cascade
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, beltShiftWith, coverWith, endRules, hitGroundWith, pushableWith)
-import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
+import Match3.Counts (CounterKey(..), countOf, countsFromList, singleCount)
+import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Game.Outcome
 import Match3.Game.Shuffle
@@ -86,19 +87,11 @@ resolveMoveWith reg kind start opening gs =
       -- 计数
       colors = let c0 :| cs = NE.map ctColors tallies1 in foldl mergeTallies c0 cs
       total f = sum (map f tallies)
-      stonesHit = total ctStones
-      chestsHit = total ctChests
-      honeyHit = total ctHoney
-      balloonHit = total ctBalloons
-      cookieHit = total ctCookies
-      cakeHit = total ctCakes
-      uAbs = total ctUfoAbsorbed
       gained = total ctScore
       clearedAll = concatMap ctCleared tallies
       combo = combineCombo tallies
       -- 按前后盘面差计数（保险箱开启、时间精灵 +2 步、自定义）
       diffs = diffCountsWith reg (gsBoard gs) board1
-      safesHit = sum [dcCount d | d <- diffs, dcCounter d == CountSafes]
       bonusMoves = sum (map dcBonus diffs)
       -- 地面层（段 2c）：逐轮被上方消除命中（每轮每格一次）；段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
       (ground', groundCounts) =
@@ -108,32 +101,32 @@ resolveMoveWith reg kind start opening gs =
                 (gsGround gs, [])
                 (concatMap crWaves (NE.toList segs))
         in (gr', concat (reverse countsRev))
-      namedCounts =
-        foldl addNamed (gsElementCounts gs)
-          (concatMap ctNamed tallies ++ [(n, dcCount d) | d <- diffs, CountNamed n <- [dcCounter d], dcCount d > 0] ++ groundCounts)
       (carpetOpen', carpetHit) =
         coverWith reg (gsCarpetOpen gs) (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter)
-      ufoCollected' = gsUfoCollected gs + uAbs
-      cookies' = gsCookiesCollected gs + cookieHit
-      cakes' = gsCakesCleared gs + cakeHit
-      safes' = gsSafesOpened gs + safesHit
-      carpets' = gsCarpetsCovered gs + carpetHit
+      -- 计数（第 4 刀：统一进 gsCounts）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
+      counts' =
+        gsCounts gs
+          <> mconcat (map ctCounts tallies)
+          <> countsFromList [(dcCounter d, dcCount d) | d <- diffs]
+          <> countsFromList [(CountNamed n, k) | (n, k) <- groundCounts]
+          <> singleCount CountCarpets carpetHit
+      now k = countOf k counts'
       collected' = case gsGoal gs of
         GoalCollect col _ -> gsCollected gs + lookupColor colors col
         GoalCollectMulti reqs ->
           let bag' = mergeTallies (gsColorBag gs) colors
           in sum [min n (lookupColor bag' c) | (c, n) <- reqs]
-        GoalClearStone _ -> gsStonesCleared gs + stonesHit
-        GoalChest _ -> gsChestsCleared gs + chestsHit
-        GoalHoney _ -> gsHoneyCleared gs + honeyHit
-        GoalBalloon _ -> gsBalloonsPopped gs + balloonHit
-        GoalCookie _ -> cookies'
-        GoalCake _ -> cakes'
-        GoalSafe _ -> safes'
-        GoalCarpet _ -> carpets'
-        GoalNamed name _ -> maybe 0 id (lookup name namedCounts)
+        GoalClearStone _ -> now CountStones
+        GoalChest _ -> now CountChests
+        GoalHoney _ -> now CountHoney
+        GoalBalloon _ -> now CountBalloons
+        GoalCookie _ -> now CountCookies
+        GoalCake _ -> now CountCakes
+        GoalSafe _ -> now CountSafes
+        GoalCarpet _ -> now CountCarpets
+        GoalNamed name _ -> now (CountNamed name)
         GoalScore _ -> gsCollected gs
-        GoalUfo _ -> ufoCollected'
+        GoalUfo _ -> now CountUfo
       -- 步数与道具次数
       spend g = case kind of
         KindSwap -> g {gsMoves = gsMoves gs - 1 + bonusMoves}
@@ -147,23 +140,14 @@ resolveMoveWith reg kind start opening gs =
             , gsScore = gsScore gs + gained
             , gsCollected = collected'
             , gsColorBag = mergeTallies (gsColorBag gs) colors
-            , gsStonesCleared = gsStonesCleared gs + stonesHit
-            , gsChestsCleared = gsChestsCleared gs + chestsHit
-            , gsHoneyCleared = gsHoneyCleared gs + honeyHit
-            , gsBalloonsPopped = gsBalloonsPopped gs + balloonHit
-            , gsCookiesCollected = cookies'
-            , gsCakesCleared = cakes'
-            , gsSafesOpened = safes'
+            , gsCounts = counts'
             , gsGen = gFinal
             , gsHint = Nothing
             , gsCombo = combo
             , gsShuffled = False
             , gsUfos = ufosF
-            , gsUfoCollected = ufoCollected'
             , gsCarpetOpen = carpetOpen'
-            , gsCarpetsCovered = carpets'
             , gsLastCleared = nub clearedAll
-            , gsElementCounts = namedCounts
             , gsGround = ground'
             }
       outcome = decideOutcome gs' gained
@@ -186,13 +170,6 @@ resolveMoveWith reg kind start opening gs =
           , mtShuffle = if gsShuffled gs''' then Just (gsBoard gs''') else Nothing
           }
   in (gs''', outcome, trace)
-
--- | 自定义计数累加（按名字，保持首次出现顺序）。
-addNamed :: [(String, Int)] -> (String, Int) -> [(String, Int)]
-addNamed [] kv = [kv]
-addNamed ((k', v') : rest) (k, v)
-  | k == k' = (k', v' + v) : rest
-  | otherwise = (k', v') : addNamed rest (k, v)
 
 -- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
 runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)

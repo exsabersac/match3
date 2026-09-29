@@ -170,6 +170,12 @@ module Match3.Core
   , MatchRun(..)
   , countColor
   , GameState(..)
+  , gsCount
+  , CounterKey(..)
+  , Counts
+  , countOf
+  , countsToList
+  , namedCounts
   , newGame
   , newGameAtLevel
   , newDailyGame
@@ -257,6 +263,7 @@ import Match3.Board.Clear (scoreForCleared, scoreForWave)
 import Match3.Board.Grid (adjacent, getCell, inBounds, setCell, swapCells)
 import Match3.Board.Match (MatchRun(..))
 import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
+import Match3.Counts (CounterKey(..), Counts, countOf, countsToList, namedCounts)
 import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn

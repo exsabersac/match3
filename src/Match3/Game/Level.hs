@@ -26,6 +26,7 @@ import Match3.Board.Random (randomPlayableBoard)
 import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Conveyor (Belt)
 import Match3.Carpet (levelCarpets)
+import Match3.Counts (noCounts)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, countElementWith, placeAllWith)
 import Match3.Element.Types (Arg(..), ElementName, Placement(..))
@@ -272,13 +273,7 @@ newGameAtLevel li cfg seed =
           , gsGoal = cfgGoal cfg
           , gsCollected = 0
           , gsColorBag = zip allColors (repeat 0)
-          , gsStonesCleared = 0
-          , gsChestsCleared = 0
-          , gsHoneyCleared = 0
-          , gsBalloonsPopped = 0
-          , gsCookiesCollected = 0
-          , gsCakesCleared = 0
-          , gsSafesOpened = 0
+          , gsCounts = noCounts
           , gsGen = g1
           , gsOver = Nothing
           , gsLevel = li
@@ -297,7 +292,6 @@ newGameAtLevel li cfg seed =
                           GoalUfo _ -> [mkUfo (1, 3) C1]
                           _ -> []
                    else placed
-          , gsUfoCollected = 0
           , gsCarpetOpen =
               let placed = levelCarpets li
               in if null placed
@@ -310,10 +304,8 @@ newGameAtLevel li cfg seed =
                               ]
                           _ -> []
                    else placed
-          , gsCarpetsCovered = 0
           , gsLastCleared = []
           , gsDaily = False
-          , gsElementCounts = []
           , gsGround = levelGround li
           }
   -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.

@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 会动或会生成东西的元素（对应 Element/Builtin/Actor）：魔法帽、果汁机、染色瓶、倒计时、蜗牛。
@@ -8,7 +9,7 @@ module Spec.Builtin.Actor
 
 import Data.List (nub)
 import Match3.Board.Default (cascadeCountdowns, cascadeMatches, clearMatches)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crUfos, crBoard), CascadeTally(CascadeTally, ctCookies, ctScore, ctMaxWave, ctCells))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crUfos, crBoard), CascadeTally(CascadeTally, ctCounts, ctScore, ctMaxWave, ctCells))
 import Match3.Core
 import Match3.Board.Grid (atM, setM, mboardFromRows)
 import Match3.Element (defaultRegistry)
@@ -742,7 +743,7 @@ countdown_explode_keeps_ufo_portals = do
       board0 =
         spawnCountdown (setCell stableBoard (bottom, 6) mkCookie) (4, 4) C5 1
       u0 = mkUfo (2, 2) C1
-      CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCookies = cookies}, crUfos = ufos'} = cascadeCountdowns [u0] portals (mkStdGen 5) board0
+      CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}, crUfos = ufos'} = cascadeCountdowns [u0] portals (mkStdGen 5) board0
   assertBool ("explode settle collected bottom cookie, got " ++ show cookies) (cookies >= 1)
   assertBool "cookie not left on bottom portal" (not (isCookie (getCell bRes (bottom, 6))))
   assertEqual "UFO list preserved through resolve" (1 :: Int) (length ufos')

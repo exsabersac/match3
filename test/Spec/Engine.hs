@@ -203,10 +203,10 @@ legacyProj h =
   let gs = histNow h
   in fnv (unlines
        [ show (gsBoard gs), show (gsScore gs), show (gsMoves gs), show (gsGoal gs), show (gsCollected gs), show (gsColorBag gs)
-       , show (gsStonesCleared gs, gsChestsCleared gs, gsHoneyCleared gs, gsBalloonsPopped gs, gsCookiesCollected gs, gsCakesCleared gs, gsSafesOpened gs)
+       , show (gsCount CountStones gs, gsCount CountChests gs, gsCount CountHoney gs, gsCount CountBalloons gs, gsCount CountCookies gs, gsCount CountCakes gs, gsCount CountSafes gs)
        , show (gsGen gs), show (gsOver gs), show (gsLevel gs), show (gsHint gs), show (gsCombo gs), show (gsShuffled gs)
-       , show (gsBelts gs), show (gsPortals gs), show (gsHammers gs, gsFreeSwaps gs, gsCrossClears gs), show (gsUfos gs), show (gsUfoCollected gs)
-       , show (gsCarpetOpen gs), show (gsCarpetsCovered gs), show (gsLastCleared gs), show (gsDaily gs), show (gsElementCounts gs), show (historyDepth h) ])
+       , show (gsBelts gs), show (gsPortals gs), show (gsHammers gs, gsFreeSwaps gs, gsCrossClears gs), show (gsUfos gs), show (gsCount CountUfo gs)
+       , show (gsCarpetOpen gs), show (gsCount CountCarpets gs), show (gsLastCleared gs), show (gsDaily gs), show (namedCounts (gsCounts gs)), show (historyDepth h) ])
   where
     fnv s = showHex (foldl' (\acc c -> (acc `xor` fromIntegral (ord c)) * 1099511628211) (14695981039346656037 :: Word64) s) ""
 

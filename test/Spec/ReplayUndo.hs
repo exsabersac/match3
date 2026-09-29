@@ -18,6 +18,7 @@ import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (singleCount)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -180,13 +181,13 @@ shuffle_preserves_goal_progress :: Assertion
 shuffle_preserves_goal_progress = do
   let gs0 =
         (newGameAtLevel 7 (GameConfig 20 (GoalClearStone 8)) 33)
-          { gsStonesCleared = 3
+          { gsCounts = singleCount CountStones 3
           , gsCollected = 3
           , gsScore = 120
           , gsOver = Nothing
           }
       gs1 = shuffleGame gs0
-  assertEqual "stones tally kept" (3 :: Int) (gsStonesCleared gs1)
+  assertEqual "stones tally kept" (3 :: Int) (gsCount CountStones gs1)
   assertEqual "collected kept" (3 :: Int) (gsCollected gs1)
   assertEqual "score kept" (120 :: Int) (gsScore gs1)
   assertEqual "goal kept" (GoalClearStone 8) (gsGoal gs1)

@@ -487,55 +487,55 @@ collectMsg gs' = case gsGoal gs' of
       <> "]"
   GoalClearStone n ->
     " [stones "
-      <> T.pack (show (gsStonesCleared gs'))
+      <> T.pack (show (gsCount CountStones gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalChest n ->
     " [chest "
-      <> T.pack (show (gsChestsCleared gs'))
+      <> T.pack (show (gsCount CountChests gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalHoney n ->
     " [honey "
-      <> T.pack (show (gsHoneyCleared gs'))
+      <> T.pack (show (gsCount CountHoney gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalBalloon n ->
     " [balloon "
-      <> T.pack (show (gsBalloonsPopped gs'))
+      <> T.pack (show (gsCount CountBalloons gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalCookie n ->
     " [cookie "
-      <> T.pack (show (gsCookiesCollected gs'))
+      <> T.pack (show (gsCount CountCookies gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalCake n ->
     " [cake "
-      <> T.pack (show (gsCakesCleared gs'))
+      <> T.pack (show (gsCount CountCakes gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalSafe n ->
     " [safe "
-      <> T.pack (show (gsSafesOpened gs'))
+      <> T.pack (show (gsCount CountSafes gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalUfo n ->
     " [ufo "
-      <> T.pack (show (gsUfoCollected gs'))
+      <> T.pack (show (gsCount CountUfo gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"
   GoalCarpet n ->
     " [carpet "
-      <> T.pack (show (gsCarpetsCovered gs'))
+      <> T.pack (show (gsCount CountCarpets gs'))
       <> "/"
       <> T.pack (show n)
       <> "]"

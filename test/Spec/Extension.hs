@@ -10,7 +10,7 @@ import Data.List (isPrefixOf)
 import Engine.Game (Game(..), Step(..))
 import Match3.Core
 import Match3.Board.Grid (atM)
-import Match3.Element (Counter(..), EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
+import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
 import Match3.Element.Class (Archetype(..), Element(..))
 import Match3.Game.Shuffle (shuffleGameWith)
 import Match3.Game.Move (resolveSwapWith)
@@ -52,7 +52,7 @@ ext_goal_named_counts_crate = do
   let (gsB, oB, _) = resolveSwapWith reg (1, 2) (2, 2) (gs0 1)
   assertBool "durability 1: broken, goal reached" (moveApplied oB && isWin (gsOver gsB))
   assertEqual "collected by name" 1 (gsCollected gsB)
-  assertEqual "named counter" [("crate", 1)] (gsElementCounts gsB)
+  assertEqual "named counter" [("crate", 1)] (namedCounts (gsCounts gsB))
   let st = gameStep (M3E.match3GameWith reg) (gs0 1) (M3E.Swap (1, 2) (2, 2))
   assertBool "engine: accepted and won" (stepAccepted st && isWin (stepOutcome st))
   -- 内置表下木箱是惰性占格：不计数、不过关
@@ -85,14 +85,14 @@ ext_ground_layer_test_element = do
   assertEqual "(1,1) cleared exactly once this move" 1 (hitsAt (1, 1))
   assertEqual "(6,6) untouched this move" 0 (hitsAt (6, 6))
   assertEqual "one layer peeled, other tile untouched" [((1, 1), ("moss", 1)), ((6, 6), ("moss", 1))] (gsGround gs1)
-  assertEqual "counted per layer" [("moss", 1)] (gsElementCounts gs1)
+  assertEqual "counted per layer" [("moss", 1)] (namedCounts (gsCounts gs1))
   assertEqual "goal progress by name" 1 (gsCollected gs1)
   assertEqual "ground does not occupy the board" (gsBoard (fst (trySwap p1 p2 gs0 {gsGround = []}))) (gsBoard gs1)
   -- 第二次消除同一格：清掉，累计 2
   let gs1' = gs1 {gsBoard = tripleBoard}
       (gs2, _, _) = resolveSwapWith reg p1 p2 gs1'
   assertEqual "second clear removes the tile" [((6, 6), ("moss", 1))] (gsGround gs2)
-  assertEqual "count accumulates by layer" [("moss", 2)] (gsElementCounts gs2)
+  assertEqual "count accumulates by layer" [("moss", 2)] (namedCounts (gsCounts gs2))
   -- 撤销恢复、洗牌不动
   assertEqual "undo restores ground" (Just (gsGround gs1)) (gsGround <$> stepThenUndo reg gs1' (M3E.Swap p1 p2))
   assertEqual "shuffle keeps ground" (gsGround gs1) (gsGround (shuffleGameWith reg gs1))
@@ -126,9 +126,9 @@ ext_edge_drain_side_collectible = do
   w1 <- firstWave mt1
   assertBool "left-edge kite drained in the first settle" ((4, 0) `elem` cwDrained w1)
   assertEqual "inner and bottom-edge kites stay" [(4, 3), (7, 5)] (customsOn "kite" (gsBoard gs1))
-  assertEqual "counted by name" [("kite", 1)] (gsElementCounts gs1)
+  assertEqual "counted by name" [("kite", 1)] (namedCounts (gsCounts gs1))
   assertBool "goal reached" (isWin (gsOver gs1))
-  assertEqual "cookie counter untouched" 0 (gsCookiesCollected gs1)
+  assertEqual "cookie counter untouched" 0 (gsCount CountCookies gs1)
   let (gsD, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertEqual "unregistered: nothing drained" [(4, 0), (4, 3), (7, 5)] (customsOn "kite" (gsBoard gsD))
 

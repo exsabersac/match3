@@ -41,7 +41,7 @@ import Control.Monad (foldM)
 import Data.List (nub)
 import Match3.Core
 import Match3.Board.Grid (mboardRows)
-import Match3.Element (Entry, Counter(CountNamed), AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
+import Match3.Element (Entry, AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
 import Match3.Element.Class (Archetype(Fixed), Element(..), Hit(..), SomeElement(..))
 import Match3.Types (isCustom)
 import Engine.Game (Game(..), Step(..))

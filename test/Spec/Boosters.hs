@@ -185,13 +185,13 @@ hammer_chips_stone_layer = do
       cell = getCell (gsBoard gs1) (5, 5)
   assertBool "still stone" (isStone cell)
   assertEqual "3 -> 2" (2 :: Int) (stoneLayers cell)
-  assertEqual "not counted until last layer" (0 :: Int) (gsStonesCleared gs1)
+  assertEqual "not counted until last layer" (0 :: Int) (gsCount CountStones gs1)
   -- chip down to 1 then clear
   let (gs2, _) = useHammer (5, 5) gs1 { gsHammers = 2, gsOver = Nothing }
   assertEqual "2 -> 1" (1 :: Int) (stoneLayers (getCell (gsBoard gs2) (5, 5)))
   let (gs3, _) = useHammer (5, 5) gs2 { gsHammers = 2, gsOver = Nothing }
   assertBool "removed" (not (isStone (getCell (gsBoard gs3) (5, 5))))
-  assertEqual "cleared counted" (1 :: Int) (gsStonesCleared gs3)
+  assertEqual "cleared counted" (1 :: Int) (gsCount CountStones gs3)
 
 -- | Cross clear seed on a chain cell peels (does not clear gem).
 cross_peels_chain_on_seed :: Assertion

@@ -59,23 +59,23 @@ updateTitle window app = do
         GoalCollectMulti reqs ->
           "multi " ++ show (gsCollected gs) ++ "/" ++ show (sum [n | (_, n) <- reqs])
         GoalClearStone n ->
-          "stones=" ++ show (gsStonesCleared gs) ++ "/" ++ show n
+          "stones=" ++ show (gsCount CountStones gs) ++ "/" ++ show n
         GoalChest n ->
-          "chest=" ++ show (gsChestsCleared gs) ++ "/" ++ show n
+          "chest=" ++ show (gsCount CountChests gs) ++ "/" ++ show n
         GoalHoney n ->
-          "honey=" ++ show (gsHoneyCleared gs) ++ "/" ++ show n
+          "honey=" ++ show (gsCount CountHoney gs) ++ "/" ++ show n
         GoalBalloon n ->
-          "balloon=" ++ show (gsBalloonsPopped gs) ++ "/" ++ show n
+          "balloon=" ++ show (gsCount CountBalloons gs) ++ "/" ++ show n
         GoalCookie n ->
-          "cookie=" ++ show (gsCookiesCollected gs) ++ "/" ++ show n
+          "cookie=" ++ show (gsCount CountCookies gs) ++ "/" ++ show n
         GoalCake n ->
-          "cake=" ++ show (gsCakesCleared gs) ++ "/" ++ show n
+          "cake=" ++ show (gsCount CountCakes gs) ++ "/" ++ show n
         GoalSafe n ->
-          "safe=" ++ show (gsSafesOpened gs) ++ "/" ++ show n
+          "safe=" ++ show (gsCount CountSafes gs) ++ "/" ++ show n
         GoalUfo n ->
-          "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
+          "ufo=" ++ show (gsCount CountUfo gs) ++ "/" ++ show n
         GoalCarpet n ->
-          "carpet=" ++ show (gsCarpetsCovered gs) ++ "/" ++ show n
+          "carpet=" ++ show (gsCount CountCarpets gs) ++ "/" ++ show n
         GoalNamed name n ->
           name ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
       title =

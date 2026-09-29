@@ -157,7 +157,7 @@ data Registry = Registry
   , regGround   :: [(ElementName, SomeElement)]
   , regAdjacent :: [AdjacentRule]                   -- 按 arOrder 排好（稳定）
   , regEnd      :: [EndRule]                        -- 按 (阶段, erOrder) 排好（稳定）
-  , regDiff     :: [(ElementName, Counter, Int)]    -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
+  , regDiff     :: [(ElementName, CounterKey, Int)]    -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
   , regSwap     :: [SwapRule]                       -- 成对交换规则，按 srOrder 排好（稳定）
   , regOpen     :: [OpenRule]                       -- 开启规则（注册顺序）
   , regLevel    :: [SomeLevel]                      -- 关卡级元素（注册顺序；同名以后注册的为准）
@@ -387,11 +387,11 @@ runAdjacentWith reg trueClears direct protect0 b0 =
       in (aoBoard out, aoDead out : deadRev, new : sitsRev, protect ++ [p | p <- nub new, p `notElem` protect])
 
 -- | 本体进入清除格时的计数键。
-counterWith :: Registry -> Cell -> Maybe Counter
+counterWith :: Registry -> Cell -> Maybe CounterKey
 counterWith reg = counter . bodyOf reg
 
 -- | 按前后个数差计数的元素：(名字, 计数键, 每个的奖励步数)（保险箱、时间精灵、自定义）。
-diffCountersWith :: Registry -> [(ElementName, Counter, Int)]
+diffCountersWith :: Registry -> [(ElementName, CounterKey, Int)]
 diffCountersWith = regDiff
 
 -- | 盘上本体为该元素的格数。
@@ -432,7 +432,7 @@ placeAllWith reg = foldl (\b (Place n args ps) -> placeWith reg n args b ps)
 
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
 -- 返回（新地面层，按计数名的去层数）。只有注册为地面层、且原型值有 'ground' 的名字会反应；
--- 计数键取原型值的 'counter'，只有 CountNamed 进 gsElementCounts（其余键忽略）。
+-- 计数键取原型值的 'counter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
 hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(String, Int)])
 hitGroundWith reg hits = foldr one ([], [])
   where

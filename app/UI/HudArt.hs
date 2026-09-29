@@ -60,15 +60,15 @@ hudProgress gs = case gsGoal gs of
   GoalScore _ -> gsScore gs
   GoalCollect _ _ -> gsCollected gs
   GoalCollectMulti reqs -> sum [min n (lookupCount (gsColorBag gs) c) | (c, n) <- reqs]
-  GoalClearStone _ -> gsStonesCleared gs
-  GoalChest _ -> gsChestsCleared gs
-  GoalHoney _ -> gsHoneyCleared gs
-  GoalBalloon _ -> gsBalloonsPopped gs
-  GoalCookie _ -> gsCookiesCollected gs
-  GoalCake _ -> gsCakesCleared gs
-  GoalSafe _ -> gsSafesOpened gs
-  GoalUfo _ -> gsUfoCollected gs
-  GoalCarpet _ -> gsCarpetsCovered gs
+  GoalClearStone _ -> gsCount CountStones gs
+  GoalChest _ -> gsCount CountChests gs
+  GoalHoney _ -> gsCount CountHoney gs
+  GoalBalloon _ -> gsCount CountBalloons gs
+  GoalCookie _ -> gsCount CountCookies gs
+  GoalCake _ -> gsCount CountCakes gs
+  GoalSafe _ -> gsCount CountSafes gs
+  GoalUfo _ -> gsCount CountUfo gs
+  GoalCarpet _ -> gsCount CountCarpets gs
   GoalNamed _ _ -> gsCollected gs
 
 goalTint :: LevelGoal -> V3 Word8

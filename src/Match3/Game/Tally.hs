@@ -21,7 +21,7 @@ import Data.Maybe (fromMaybe)
 import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, countElementWith, diffCountersWith, elementName, vacatesCarpetWith)
-import Match3.Element.Types (Counter, ElementName)
+import Match3.Element.Types (CounterKey, ElementName)
 import Match3.Types
 
 -- | 颜色袋里某色的计数（缺省 0）。
@@ -44,7 +44,7 @@ countTimeSpirits = countElementWith defaultRegistry "time_spirit"
 -- | 一个「按前后差计数」元素本步的结果。
 data DiffCount = DiffCount
   { dcElement :: ElementName
-  , dcCounter :: Counter
+  , dcCounter :: CounterKey
   , dcCount   :: Int  -- ^ max 0 (步前个数 - 步后个数)
   , dcBonus   :: Int  -- ^ 奖励步数 = dcCount * bonusMoves
   } deriving (Eq, Show)

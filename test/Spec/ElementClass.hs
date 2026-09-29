@@ -152,7 +152,7 @@ ec_state_lives_in_element_value = do
   assertEqual "first hit" (Custom "nest" 2) (getCell (gsBoard gs1) p)
   assertEqual "second hit" (Custom "nest" 1) (getCell (gsBoard gs2) p)
   assertBool "third hit breaks it" (not (isNest (getCell (gsBoard gs3) p)))
-  assertEqual "counted once" [("nest", 1)] (gsElementCounts gs3)
+  assertEqual "counted once" [("nest", 1)] (namedCounts (gsCounts gs3))
   assertEqual "placed via the constructor" (Custom "nest" 2) (getCell (placeWith reg "nest" [AInt 2] stableBoard [p]) p)
   where
     isNest cell = case cell of
@@ -251,11 +251,11 @@ ec_custom_matchable_gem = do
   assertBool "move applied" (moveApplied o1)
   w1 <- firstWave mt1
   assertBool "star cleared in the first wave" ((1, 1) `elem` cwCleared w1)
-  assertEqual "counted by name" [("star", 1)] (gsElementCounts gs1)
+  assertEqual "counted by name" [("star", 1)] (namedCounts (gsCounts gs1))
   assertBool "hint sees the star" (isJust (findHintWith reg board0))
   let (_, oD) = trySwap p1 p2 gs0
   assertEqual "unregistered star is inert" Nothing (matchColorWith defaultRegistry star)
-  assertBool "unregistered: no match through it" (not (moveApplied oD) || gsElementCounts (fst (trySwap p1 p2 gs0)) == [])
+  assertBool "unregistered: no match through it" (not (moveApplied oD) || namedCounts (gsCounts (fst (trySwap p1 p2 gs0))) == [])
 
 -- | 注册表条目的槽位由原型推导；mkRegistryChecked 把重名 / 槽位冲突 / 推不出槽位暴露成值，
 -- 内置条目表通过检查；mkRegistry 是总函数（空表也能解码，查不到的槽位退回惰性占格）。

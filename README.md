@@ -185,8 +185,9 @@ app/UI/Cell/  Prim Art（每种元素一个几何 / 贴图渲染函数，经 Cel
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
 app/ComboFx.hs 连锁逐轮回放 / 步末动画的纯阶段机与时间线常量
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
-tools/        gen_assets.py（Pillow 程序化生成贴图与图例）
-test/Spec.hs  tasty（228 命名用例）
+tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
+test/Spec.hs  测试入口（只汇总；228 命名用例）
+test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Obstacles.* / Boosters / GoalsLevels / Element / Engine / UIEvents / ReplayUndo / Golden / Properties）与共用辅助 Support
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）

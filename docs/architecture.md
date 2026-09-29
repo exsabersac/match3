@@ -133,7 +133,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | GHC | **9.4.8**（`stack.yaml`：`system-ghc: true`） |
 | 库名 | `match3` |
 | 可执行文件 | `match3-sdl` |
-| 测试套件 | `match3-test`（`test/Spec.hs`，tasty + HUnit + QuickCheck） |
+| 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck） |
 
 库依赖：`base`、`array`、`random`。可执行文件额外：`sdl2`、`text`，以及 GHC 自带的 `containers`、`directory`、`filepath`（贴图加载）。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
 
@@ -227,7 +227,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 3. 注册：`register def defaultRegistry`，把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `decorateLevelWith` / `traceEventsWith`）。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 `edPlace` 落格。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；步末有新效果时在前端各查找表里加一行。
-6. 测试：参照 `element_registry_custom_crate_extensibility`（测试专用「木箱」只定义在 `test/Spec.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
+6. 测试：参照 `element_registry_custom_crate_extensibility`（测试专用「木箱」只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
 ### 仍保留专门分支的元素
 

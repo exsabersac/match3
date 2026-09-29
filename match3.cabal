@@ -123,6 +123,22 @@ test-suite match3-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Spec.Boosters
+      Spec.Cascade
+      Spec.Element
+      Spec.Engine
+      Spec.GoalsLevels
+      Spec.Golden
+      Spec.Gravity
+      Spec.GridMatch
+      Spec.Obstacles.Body
+      Spec.Obstacles.Features
+      Spec.Obstacles.Layers
+      Spec.Properties
+      Spec.ReplayUndo
+      Spec.Specials
+      Spec.Support
+      Spec.UIEvents
       Toy
       Golden
       Paths_match3

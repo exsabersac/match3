@@ -28,9 +28,34 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 套件结构
 
-- 入口：`test/Spec.hs` → `defaultMain tests`
+- 入口：`test/Spec.hs` 只汇总各功能模块：每个模块导出平铺的 `tests :: [TestTree]`，入口把它们拼进同一个顶层组 `"match3"`，所以 `stack test --ta '--list-tests'` 的完整路径（`match3.<测试名>`）与拆分前（`bf16a49`，单文件 8406 行）逐字相同。
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
+- 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
+- 目录（用例数合计 228）：
+
+| 文件 | 用例数 | 内容 |
+|------|-------:|------|
+| `test/Spec/GridMatch.hs` | 5 | 盘面与匹配：交换回滚、稳定盘面、三连、提示、可玩开局 |
+| `test/Spec/Gravity.hs` | 2 | 重力与补子、固定格不下落 |
+| `test/Spec/Cascade.hs` | 8 | 连锁 / 公共结算：连锁到稳定、连击计分、种子续波、步耗与步末顺序、`release_core_invariants_green`（复用 GridMatch / Gravity / GoalsLevels 的用例） |
+| `test/Spec/Specials.hs` | 18 | 特殊块生成与引爆、特殊 × 特殊、彩虹取色、软锁 |
+| `test/Spec/Obstacles/Body.hs` | 55 | 本体障碍（按元素）：石头、宝箱、蜂蜜、气球、饼干、蛋糕、魔法帽、果汁机、保险箱、双面、彩蛋、染色瓶、时间精灵 |
+| `test/Spec/Obstacles/Layers.hs` | 31 | 冰层与叠层（按元素）：冰、草、藤、巧、迷雾、锁链、冰冻、窗帘、蒸汽、软命中 |
+| `test/Spec/Obstacles/Features.hs` | 34 | 会动的元素与关卡特性（按元素）：倒计时、皮带、传送门、飞碟、蜗牛、地毯 |
+| `test/Spec/Boosters.hs` | 12 | 道具：锤子 / 自由交换 / 十字 |
+| `test/Spec/GoalsLevels.hs` | 31 | 目标、结局、星级、关卡表、每日、地图与步数结转 |
+| `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `crateDef` 在 Support 里） |
+| `test/Spec/Engine.hs` | 3 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例） |
+| `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
+| `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
+| `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`） |
+| `test/Spec/Properties.hs` | 1 | QuickCheck 性质 |
+| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `crateDef` 等 |
+| `test/Toy.hs` | — | 通用接口的玩具实现（只 import `Engine.*`） |
+| `test/golden/` | — | 金标准投影 `Golden.hs` 与 `golden.txt` |
+
+- 拆分验收：拆分前后 `--list-tests` 排序后 diff 为空（228 = 228），每个测试函数逐字搬运（原文件每一行都能在新模块里找到），`golden.txt` 全等。
 
 覆盖类型（按主题，非穷尽）：
 
@@ -97,7 +122,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 | 用例 | 断言 |
 |------|------|
-| `element_registry_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在 `test/Spec.hs`**：以 `baseDef` 为底，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：注册表多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`gsElementCounts == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultRegistry` 下它是惰性占格（不被波及、锤子免疫、不计数）；核心 16 个源文件里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
+| `element_registry_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在测试里：`test/Spec/Support.hs` 的 `crateDef`**：以 `baseDef` 为底，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：注册表多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`gsElementCounts == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultRegistry` 下它是惰性占格（不被波及、锤子免疫、不计数）；核心 16 个源文件里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
 | `element_registry_matches_legacy_predicates` | 全部内置本体 × 宝石种类 × 冰层 × 叠层：注册表的挡交换 / 锤子免疫 / 固定格 / 点火 / 匹配色 / 洗牌保留与第二刀之前按构造器写死的谓词逐格相等；直接命中的几条代表（冰、锁链、保险箱、翻转、石头）与旧口径一致 |
 | `trace_events_consistent_with_trace` | 38 关 × 种子 1–2 × 前 3 个成交交换：`EvScore` 之和 = 本步得分；`EvClear` 的格 = 各轮清除格并集；步末事件数 = `mtEnd` 长度；`EvShuffle` ⇔ `mtShuffle`；`EvBlast` 只来自直线 / 炸弹；**逐轮严格相等**（第三刀，前端波次界面改读事件后加）：该轮 EvClear 的格按事件顺序拼接 = `cwCleared`（顺序也相同），该轮 EvScore 之和 = `cwScore` |
 

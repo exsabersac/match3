@@ -219,7 +219,7 @@ ffmpeg -f x11grab -framerate 60 -video_size 960x1176 -i :98.0+220,62 -t 6 rec.mk
 xdotool mousemove 532 814 click 1; sleep 0.15; xdotool mousemove 532 926 click 1
 ```
 
-其他候选（第 1 关）：`MATCH3_SEED=4` 交换 (1,4)↔(1,5) 是 4 连锁（但会直接达成 300 分目标，弹出过关面板）；可以用 `test/Spec.hs` 里 `trace_multi_wave_each_round_visible` 的查找方式换关卡或种子。
+其他候选（第 1 关）：`MATCH3_SEED=4` 交换 (1,4)↔(1,5) 是 4 连锁（但会直接达成 300 分目标，弹出过关面板）；可以用 `test/Spec/ReplayUndo.hs` 里 `trace_multi_wave_each_round_visible` 的查找方式换关卡或种子。
 
 步末效果的复现组合（`MATCH3_SCALE=2` 下截图，交换的两格用上面的坐标公式换算）：
 

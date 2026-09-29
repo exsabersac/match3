@@ -7,46 +7,31 @@
 -- 第二刀 2b：直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
 -- （Match3.Element.Registry）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
 -- 仍是专门分支：彩蛋开启（surpriseClearPass，多轮开启 + 保存开出的特殊块）、彩虹（由交换对象取色）。
--- 不带 With 的旧名 = 内置注册表。
+-- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 --
 -- 依赖：Grid、Match、元素注册表、Obstacles（彩蛋）。
 -- 同步：这里的函数只被 Match3.Board.Cascade 的单一连锁实现调用（结算与回放同一次计算），
 -- 返回 (挖空后盘面, 清除数, 清除格)；Cascade 再按清除格在消除前盘面上统计障碍计数。
 module Match3.Board.Clear
-  ( expandSpecials
-  , expandSpecialsWith
+  ( expandSpecialsWith
   , spawnSpecials
-  , countColor
+  , clearMatchesAtWith
   , countColorWith
-  , clearMatches
-  , clearMatchesAt
-  , surpriseClearPass
   , surpriseClearPassWith
-  , clearMatchesDetailed
   , clearMatchesDetailedWith
   , scoreForCleared
   , scoreForWave
   , maskUfoAbsorbSpecials
-  , clearUfoAbsorbed
   , clearUfoAbsorbedWith
-  , clearFromSeedsDetailed
   , clearFromSeedsDetailedWith
   ) where
 
 import Data.List (foldl', nub)
-import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, runAdjacentWith, stripOnClearWith)
 import Match3.Obstacles (openSurprises)
 import Match3.Types
 import Match3.Board.Grid
 import Match3.Board.Match
-
--- | Expand clears: LineH/LineV/Bomb effects when those gem cells are in the seed set.
--- Soft-locked specials do not fire: ice>1 only chips; Chain/Curtain peel without
--- clearing (same discipline as chipIceOnClear). Last ice (ice==1) clears + activates.
--- Rainbow is a no-op here (partner color comes from rainbowClearSeeds only).
-expandSpecials :: Board -> [Pos] -> [Pos]
-expandSpecials = expandSpecialsWith defaultRegistry
 
 -- | expandSpecials（指定注册表）：爆炸范围 = 本体定义的 edBlast，能否点火 = 各层 edActivates（软锁纪律）。
 -- 彩虹没有 edBlast（只经 rainbowClearSeeds 按交换对象取色，否则彩虹 × 宝石会重复清两色）。
@@ -80,36 +65,9 @@ spawnSpecials prefer runs clearable =
           _ -> slots !! (length slots `div` 2)
   ]
 
--- | Count how many cleared positions have a given color (pre-clear board; stones skip).
-countColor :: Board -> [Pos] -> Color -> Int
-countColor = countColorWith defaultRegistry
-
 -- | countColor（指定注册表）：按本体颜色 edColor 计（不看叠层）。
 countColorWith :: Registry -> Board -> [Pos] -> Color -> Int
 countColorWith reg b ps col = length [p | p <- ps, colorOfWith reg (getCell b p) == Just col]
-
--- | Clear matches (+ special expansions + adjacent stones), place new specials.
-clearMatches :: Board -> (MBoard, Int)
-clearMatches b = clearMatchesAt Nothing b
-
--- | 只要「挖空后的盘面 + 清除数」的 clearMatchesDetailed 简化版；prefer 为新特殊块的优先生成位（交换目标格）。
-clearMatchesAt :: Maybe Pos -> Board -> (MBoard, Int)
-clearMatchesAt prefer b =
-  let (mb, n, _) = clearMatchesDetailed prefer b
-  in (mb, n)
-
--- | Open Surprises against clear seeds; explode blasts expand specials + chip ice
--- and re-open nested Surprises until the frontier is quiet.
--- Bomb parity: Bomb→Surprise opens to special/explode; Surprise explode must
--- likewise open nested boxes instead of hole-deleting them via chipIce alone.
--- Saved specials (Bomb/Line from Surprise) must not activate in this pass — mask
--- them as Normal before expandSpecials. Same-pass placement and later re-explode
--- of an unconsumed Surprise center would otherwise fire-and-survive the special.
--- Pre-existing specials (not in saved) still expand. chipIce runs on bOpen so
--- saved specials remain on the board while explode centers clear.
--- Returns (board, trueClears, surpriseDirectHits, savedSpecialPositions).
-surpriseClearPass :: Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
-surpriseClearPass = surpriseClearPassWith defaultRegistry
 
 -- | surpriseClearPass（指定注册表；爆炸范围与直接命中查注册表，开启规则本身是彩蛋的专门分支）。
 surpriseClearPassWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
@@ -138,10 +96,6 @@ surpriseClearPassWith reg b0 seeds0 =
                      processed = nub (front ++ trueAcc)
                      front' = filter (`notElem` processed) free1
                  in go bChip front' (trueAcc ++ kept ++ free1) (directAcc ++ expanded) saved'
-
--- | Like clearMatchesAt but also returns the cleared positions (pre-spawn).
-clearMatchesDetailed :: Maybe Pos -> Board -> (MBoard, Int, [Pos])
-clearMatchesDetailed = clearMatchesDetailedWith defaultRegistry
 
 -- | 匹配清除一轮（指定注册表）：种子 = 全部匹配格。
 clearMatchesDetailedWith :: Registry -> Maybe Pos -> Board -> (MBoard, Int, [Pos])
@@ -206,21 +160,20 @@ maskUfoAbsorbSpecials b ps =
               setCell board p (Gem c Normal ice ov)
         _ -> board
 
--- | Clear UFO-absorbed cells: mask specials first, then normal seed clear.
-clearUfoAbsorbed :: Board -> [Pos] -> (MBoard, Int, [Pos])
-clearUfoAbsorbed = clearUfoAbsorbedWith defaultRegistry
-
 -- | clearUfoAbsorbed（指定注册表）。
 clearUfoAbsorbedWith :: Registry -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearUfoAbsorbedWith reg b absorbed =
   clearFromSeedsDetailedWith reg Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
-
--- | Clear an explicit seed set (expand specials + adjacent stones).
-clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
-clearFromSeedsDetailed = clearFromSeedsDetailedWith defaultRegistry
 
 -- | 种子清除一轮（指定注册表）：流水线同 clearMatchesDetailedWith，种子由调用方给出；
 -- 新特殊块仍按本盘的匹配段生成。
 clearFromSeedsDetailedWith :: Registry -> Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearFromSeedsDetailedWith reg prefer b seeds0 =
   clearWaveWith reg prefer (findMatchRunsWith reg b) b (nub seeds0)
+
+-- | 只要「挖空后的盘面 + 清除数」的 clearMatchesDetailedWith 简化版（指定注册表）；
+-- prefer 为新特殊块的优先生成位（交换目标格）。
+clearMatchesAtWith :: Registry -> Maybe Pos -> Board -> (MBoard, Int)
+clearMatchesAtWith reg prefer b =
+  let (mb, n, _) = clearMatchesDetailedWith reg prefer b
+  in (mb, n)

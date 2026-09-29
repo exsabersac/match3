@@ -14,7 +14,7 @@ module Match3.Board.Random
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
-import Match3.Board.Match
+import Match3.Board.Default (hasAnyMatch, hasValidMove)
 
 -- | 整盘随机普通宝石（逐格 randomColor，行优先）。
 randomBoard :: RandomGen g => g -> (Board, g)

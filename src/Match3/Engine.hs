@@ -36,8 +36,8 @@ import Match3.Element.Registry (Registry)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveFreeSwapWith, resolveHammerWith)
 import Match3.Game.Level (newDailyGame, newGame, newGameAtLevel)
 import Match3.Game.Move (resolveSwapWith)
-import Match3.Game.Shuffle (shuffleGame)
-import Match3.Game.State (GameState(..), MoveFx(..), applyHint, moveFx, undoMove)
+import Match3.Game.Shuffle (shuffleGameWith)
+import Match3.Game.State (GameState(..), MoveFx(..), applyHintWith, moveFx, undoMove)
 import Match3.Game.Trace (MoveTrace, emptyTrace, traceEventsWith)
 import Match3.Types
 
@@ -85,11 +85,11 @@ playWith reg act gs = case act of
     Just gs' -> other gs' [] True
     Nothing -> other gs [] False
   Hint ->
-    let (gs', h) = applyHint gs
+    let (gs', h) = applyHintWith reg gs
     in (other gs' [] True) {pdHint = h}
   Shuffle
     | isJust (gsOver gs) -> other gs [] False
-    | otherwise -> other (shuffleGame gs) [Event EvShuffle 0 "shuffle" [] 0] True
+    | otherwise -> other (shuffleGameWith reg gs) [Event EvShuffle 0 "shuffle" [] 0] True
   where
     move (gs', out, mt) =
       let fx = moveFx gs gs' out

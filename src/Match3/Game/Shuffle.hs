@@ -13,6 +13,7 @@ module Match3.Game.Shuffle
   , ensurePlayable
   , ensurePlayableWith
   , shuffleGame
+  , shuffleGameWith
   ) where
 
 import Match3.Board.Grid (setCell, getCell)
@@ -75,8 +76,13 @@ ensurePlayableWith reg gs
 -- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays /
 -- specials (Line/Bomb/Rainbow) / countdown bombs; keeps UFOs.
 shuffleGame :: GameState -> GameState
-shuffleGame gs =
-  let decor = extractDecor (gsBoard gs)
+shuffleGame = shuffleGameWith defaultRegistry
+
+-- | 手动洗牌（指定注册表，段 2c）：保留判定 keepOnShuffleWith 用这张表——自定义元素
+-- （如测试专用元素）按它自己的 edKeepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
+shuffleGameWith :: Registry -> GameState -> GameState
+shuffleGameWith reg gs =
+  let decor = extractDecorWith reg (gsBoard gs)
       (board0, g') = shufflePlayable (gsGen gs)
       board = restoreDecor board0 decor
   -- 洗牌不是一步消除：清掉上一步的连击 / 清除格反馈

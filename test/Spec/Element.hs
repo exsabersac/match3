@@ -6,8 +6,8 @@ module Spec.Element
   ( tests
   ) where
 
+import Match3.Board.Default (gravityFixedCell)
 import Data.Maybe (isJust)
-import Match3.Board.Gravity (gravityFixedCell)
 import Match3.Core
 import Match3.Element (defaultRegistry, HitResult(HitAbsorb, HitDestroy), activatesWith, blocksSwapWith, directHitWith, hitImmuneWith, keepOnShuffleWith, lookupElement, matchColorWith, register, registryDefs)
 import Match3.Element.Event (EventKind(..), Event(..))

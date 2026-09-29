@@ -6,8 +6,8 @@ module Spec.Obstacles.Layers
   ( tests
   ) where
 
-import Match3.Board.Cascade (cascadeMatches, cascadeSeeds, CascadeRun(CascadeRun, crBoard))
-import Match3.Board.Clear (clearMatches)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard))
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)

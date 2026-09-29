@@ -6,10 +6,10 @@ module Spec.Obstacles.Features
   ( tests
   ) where
 
+import Match3.Board.Default (cascadeCountdowns, cascadeMatches, clearMatches)
 import Control.Monad (when)
 import Data.List (nub, sort)
-import Match3.Board.Cascade (cascadeCountdowns, cascadeMatches, CascadeRun(CascadeRun, crTally, crUfos, crBoard), CascadeTally(CascadeTally, ctUfoAbsorbed, ctCells, ctCookies))
-import Match3.Board.Clear (clearMatches)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crUfos, crBoard), CascadeTally(CascadeTally, ctUfoAbsorbed, ctCells, ctCookies))
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)

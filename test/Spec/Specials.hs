@@ -6,9 +6,9 @@ module Spec.Specials
   ( tests
   ) where
 
+import Match3.Board.Default (cascadeMatches, clearMatches)
 import Data.List (sort)
-import Match3.Board.Cascade (cascadeMatches, CascadeRun(CascadeRun, crBoard, crTally), CascadeTally(CascadeTally, ctCells))
-import Match3.Board.Clear (clearMatches)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard, crTally), CascadeTally(CascadeTally, ctCells))
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty

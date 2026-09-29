@@ -57,10 +57,10 @@ module ComboFx
   , clearedAnchor
   ) where
 
+import Match3.Board.Default (gravityFixedCell)
 import Data.List (transpose)
 import Data.Word (Word8)
 import Match3.Core
-import Match3.Board.Gravity (gravityFixedCell)
 import Match3.Element.Event (Event (..), EventKind (..), endEffectKind, endEffectPairs)
 import Engine.Playback (Player (..), Stages (..), Tick (..), playerProgress, stepPlayer)
 

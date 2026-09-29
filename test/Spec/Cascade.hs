@@ -6,8 +6,9 @@ module Spec.Cascade
   ( tests
   ) where
 
+import Match3.Board.Default (cascadeMatches, cascadeSeeds)
 import Data.Maybe (fromMaybe, isNothing)
-import Match3.Board.Cascade (cascadeMatches, cascadeSeeds, CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctColors, ctCells, ctScore))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctColors, ctCells, ctScore))
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty

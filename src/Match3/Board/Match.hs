@@ -4,26 +4,20 @@
 --
 -- 依赖：Grid、元素注册表（哪些格参与匹配 / 能交换）、Rainbow / Combos（彩虹与特殊合成也算可走）。只读盘面。
 -- 第二刀 2b：「哪些格打断连线」不再按构造器列举，改为查注册表 matchColorWith
--- （本体颜色 + 挡匹配的叠层）；新增元素只需在它的 ElementDef 里声明。不带 With 的旧名 = 内置注册表。
+-- （本体颜色 + 挡匹配的叠层）；新增元素只需在它的 ElementDef 里声明。段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 module Match3.Board.Match
   ( MatchRun(..)
-  , findMatchRuns
   , findMatchRunsWith
-  , groupGemRuns
   , groupGemRunsWith
-  , findMatches
-  , hasAnyMatch
+  , findMatchesWith
   , hasAnyMatchWith
-  , hasValidMove
   , hasValidMoveWith
-  , findHint
   , findHintWith
   ) where
 
 import Data.List (nub)
 import Data.Maybe (isJust)
 import Match3.Combos (isSpecialCombo)
-import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, matchColorWith, upperBlocksSwapWith)
 import Match3.Rainbow (isRainbow, isRainbowSwap)
 import Match3.Types
@@ -35,10 +29,6 @@ data MatchRun = MatchRun
   , runPos   :: [Pos]
   , runIsH   :: Bool  -- True = horizontal
   } deriving (Eq, Show)
-
--- | 全部横、竖 ≥3 同色连线（先横后竖，行 / 列优先）；被障碍 / 叠层打断的不算。
-findMatchRuns :: Board -> [MatchRun]
-findMatchRuns = findMatchRunsWith defaultRegistry
 
 -- | findMatchRuns（指定注册表）。
 findMatchRunsWith :: Registry -> Board -> [MatchRun]
@@ -57,10 +47,6 @@ findMatchRunsWith reg b = filter ((>= 3) . length . runPos) (hRuns ++ vRuns)
       , (col, ps) <- groupGemRunsWith reg b colPs
       ]
 
--- | Group contiguous same-color *gems*; stones and color changes break runs.
-groupGemRuns :: Board -> [Pos] -> [(Color, [Pos])]
-groupGemRuns = groupGemRunsWith defaultRegistry
-
 -- | 连续同色段：matchColorWith 为 Nothing 的格（障碍、被迷雾 / 锁链 / 窗帘 / 蒸汽盖住的宝石等）打断连线。
 -- 火箭冰冻不挡匹配（冻住的宝石照样成消）。
 groupGemRunsWith :: Registry -> Board -> [Pos] -> [(Color, [Pos])]
@@ -74,29 +60,13 @@ groupGemRunsWith reg b (p : ps) = case matchColorWith reg (getCell b p) of
       Just col' | col' == col -> go (q : run) col qs
       _ -> (col, reverse run) : groupGemRunsWith reg b (q : qs)
 
--- | 所有匹配格：各连线位置的去重并集。
-findMatches :: Board -> [Pos]
-findMatches b = nub (concatMap runPos (findMatchRuns b))
-
--- | 盘面上是否存在任意 ≥3 连。
-hasAnyMatch :: Board -> Bool
-hasAnyMatch = hasAnyMatchWith defaultRegistry
-
 -- | hasAnyMatch（指定注册表）。
 hasAnyMatchWith :: Registry -> Board -> Bool
 hasAnyMatchWith reg = not . null . findMatchRunsWith reg
 
--- | True if some adjacent gem-gem swap would create a match.
-hasValidMove :: Board -> Bool
-hasValidMove = hasValidMoveWith defaultRegistry
-
 -- | hasValidMove（指定注册表）。
 hasValidMoveWith :: Registry -> Board -> Bool
 hasValidMoveWith reg = maybe False (const True) . findHintWith reg
-
--- | First adjacent swap that would create a match or activate a rainbow (for hint).
-findHint :: Board -> Maybe (Pos, Pos)
-findHint = findHintWith defaultRegistry
 
 -- | findHint（指定注册表）。普通匹配提示只试「有色且能交换」的格；彩虹 / 特殊合成提示只排除
 -- 上层（锁链 / 火箭冰冻）挡交换的格，本体由 isRainbowSwap / isSpecialCombo 自己判定。
@@ -140,3 +110,7 @@ findHintWith reg b =
       ]
     hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
     upperLocked = upperBlocksSwapWith reg
+
+-- | 所有匹配格（指定注册表）：各连线位置的去重并集。
+findMatchesWith :: Registry -> Board -> [Pos]
+findMatchesWith reg b = nub (concatMap runPos (findMatchRunsWith reg b))

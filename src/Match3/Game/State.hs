@@ -15,10 +15,13 @@ module Match3.Game.State
   , moveFx
   , undoMove
   , applyHint
+  , applyHintWith
   ) where
 
 import Data.Maybe (isJust)
-import Match3.Board.Match (findHint)
+import Match3.Board.Match (findHintWith)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Registry (Registry)
 import Match3.Ufo (Ufo(..))
 import Match3.Conveyor (Belt)
 import Match3.Types
@@ -134,6 +137,10 @@ undoMove gs = case gsHistory gs of
 
 -- | 计算一手可走的交换并记在 gsHint（不改盘面）。
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))
-applyHint gs =
-  let h = findHint (gsBoard gs)
+applyHint = applyHintWith defaultRegistry
+
+-- | applyHint（指定注册表）：可走判定用这张表里的挡交换 / 匹配色定义。
+applyHintWith :: Registry -> GameState -> (GameState, Maybe (Pos, Pos))
+applyHintWith reg gs =
+  let h = findHintWith reg (gsBoard gs)
   in (gs { gsHint = h }, h)

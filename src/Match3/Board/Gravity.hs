@@ -4,50 +4,29 @@
 -- 随机补子（refill）以及回放用的 settleRefill。
 --
 -- 依赖：Grid（randomColor）、元素注册表（固定格 edFalls、传送门 edPortal、底收 edDrains）。
--- 不带 With 的旧名 = 内置注册表。
+-- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 -- 不变量：refill 按行优先顺序逐个空洞消耗随机数；settleRefill 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
 module Match3.Board.Gravity
-  ( gravityFixedCell
-  , gravityFixedCellWith
-  , colGravity
+  ( gravityFixedCellWith
   , colGravityWith
-  , applyGravity
   , applyGravityWith
-  , drainBottomCookies
   , drainBottomCookiesWith
-  , applyPortalTeleports
   , applyPortalTeleportsWith
-  , settleBoardPortals
   , settleBoardPortalsWith
   , refill
-  , settleRefill
   , settleRefillWith
   ) where
 
 import Data.List (nub)
-import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, drainsWith, fallsWith, portalWith)
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
 
--- | Immortal décor that must not fall with gravity. Same class as portal/belt
--- stuck blockers (Bottle / Maker / MagicHat / Snail): they never clear and are
--- not portal-transferable, so gravity-packing them into a portal/belt slot (or
--- off a décor seed via Cross column wipe) permanently soft-locks the layout.
-gravityFixedCell :: Cell -> Bool
-gravityFixedCell = gravityFixedCellWith defaultRegistry
-
 -- | 固定格（指定注册表）：本体 edFalls = False。
 gravityFixedCellWith :: Registry -> Cell -> Bool
 gravityFixedCellWith reg = not . fallsWith reg
-
--- | Column gravity: fixed immortals stay put and split the column into segments;
--- fallable cells (gems / Cookie / Countdown / Flip / clearable obstacles) pack
--- down within each segment.
-colGravity :: [Maybe Cell] -> [Maybe Cell]
-colGravity = colGravityWith defaultRegistry
 
 -- | colGravity（指定注册表）。
 colGravityWith :: Registry -> [Maybe Cell] -> [Maybe Cell]
@@ -66,21 +45,9 @@ colGravityWith reg = concatMap packSegment . splitFixed
           holes = length seg - length solids
       in replicate holes Nothing ++ map Just solids
 
--- | 整盘按列下落：固定格（染色瓶 / 果汁机 / 魔法帽 / 蜗牛）原地不动并把列分段，段内可下落的格压到段底。
-applyGravity :: MBoard -> MBoard
-applyGravity = applyGravityWith defaultRegistry
-
 -- | applyGravity（指定注册表）。
 applyGravityWith :: Registry -> MBoard -> MBoard
 applyGravityWith reg mb = transposeM (map (colGravityWith reg) (transposeM mb))
-
--- | Collect cookies that sit on the bottom row after gravity (开心消消乐饼干掉落收集).
--- Removes them, re-applies gravity, repeats until no bottom-row cookies remain.
--- Returns drained bottom positions so GoalCarpet can cover tiles Cookie only
--- occupied mid-settle (gravity/portal/belt → bottom → drain) — before/after
--- board compare cannot see that intermediate occupancy.
-drainBottomCookies :: MBoard -> (MBoard, Int, [Pos])
-drainBottomCookies = drainBottomCookiesWith defaultRegistry
 
 -- | drainBottomCookies（指定注册表）：底行本体 edDrains 的格被收走。
 drainBottomCookiesWith :: Registry -> MBoard -> (MBoard, Int, [Pos])
@@ -107,12 +74,6 @@ drainBottomCookiesWith reg mb =
              (mb2, n2, sites2) = drainBottomCookiesWith reg fallen
          in (mb2, n + n2, sites ++ sites2)
 
--- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
--- moves A -> B (and reverse). Used after gravity + bottom-cookie drain so clears can
--- open exits without snatching cookies that already touched the bottom row.
-applyPortalTeleports :: [(Pos, Pos)] -> MBoard -> MBoard
-applyPortalTeleports = applyPortalTeleportsWith defaultRegistry
-
 -- | applyPortalTeleports（指定注册表）：本体 edPortal 的格可传送。
 applyPortalTeleportsWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
 applyPortalTeleportsWith reg portals mb =
@@ -129,13 +90,6 @@ applyPortalTeleportsWith reg portals mb =
         (Nothing, cb)
           | transferable cb -> setM (setM m b Nothing) a cb
         _ -> m
-
--- | Gravity, drain bottom cookies, portal teleports (optional), gravity, drain again.
--- Cookies that reach the bottom must collect before a portal can snatch them
--- (触底优先于传送门); cookies that teleport onto a bottom exit still drain after.
--- Third component: bottom cells cookies drained from (Carpet / particle seeds).
-settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
-settleBoardPortals = settleBoardPortalsWith defaultRegistry
 
 -- | settleBoardPortals（指定注册表）。
 settleBoardPortalsWith :: Registry -> [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
@@ -161,10 +115,6 @@ refill g0 mb =
     fillList g (Just x : xs) =
       let (rest, g1) = fillList g xs
       in (Just x : rest, g1)
-
--- | 一轮沉降：settle + refill（与 stepCascadeDetailed / 种子清除用的完全相同）。
-settleRefill :: RandomGen g => [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)
-settleRefill = settleRefillWith defaultRegistry
 
 -- | settleRefill（指定注册表）。
 settleRefillWith :: RandomGen g => Registry -> [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)

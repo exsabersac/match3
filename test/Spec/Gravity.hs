@@ -7,9 +7,9 @@ module Spec.Gravity
   , gravity_then_refill
   ) where
 
-import Match3.Board.Cascade (cascadeSeeds, CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies))
-import Match3.Board.Clear (clearMatches)
-import Match3.Board.Gravity (applyGravity, refill)
+import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies))
+import Match3.Board.Gravity (refill)
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty

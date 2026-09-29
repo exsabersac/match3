@@ -36,6 +36,7 @@ library
       Match3.Board.Gravity
       Match3.Board.Cascade
       Match3.Board.Random
+      Match3.Board.Default
       Match3.Game.State
       Match3.Game.Tally
       Match3.Game.Outcome

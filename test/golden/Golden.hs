@@ -18,13 +18,13 @@ module Golden
   , main
   ) where
 
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint)
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (foldl', intercalate)
 import Data.Word (Word64)
-import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..), cascadeMatches, cascadeSeeds)
+import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
-import Match3.Board.Match (findHint)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
 import Match3.Element.Builtin (defaultRegistry)

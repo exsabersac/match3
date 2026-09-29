@@ -251,11 +251,11 @@ module Match3.Core
   , starRating
   ) where
 
-import Match3.Board.Cascade (CascadeWave(..), stepCascade)
-import Match3.Board.Clear (countColor, expandSpecials, scoreForCleared, scoreForWave)
-import Match3.Board.Gravity (applyPortalTeleports, settleBoardPortals)
+import Match3.Board.Default (applyPortalTeleports, countColor, expandSpecials, findHint, findMatchRuns, findMatches, hasAnyMatch, hasValidMove, settleBoardPortals, stepCascade)
+import Match3.Board.Cascade (CascadeWave(..))
+import Match3.Board.Clear (scoreForCleared, scoreForWave)
 import Match3.Board.Grid (adjacent, getCell, inBounds, setCell, swapCells)
-import Match3.Board.Match (MatchRun(..), findHint, findMatchRuns, findMatches, hasAnyMatch, hasValidMove)
+import Match3.Board.Match (MatchRun(..))
 import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
 import Match3.Ice (chipIceOnClear)
 import Match3.Grass

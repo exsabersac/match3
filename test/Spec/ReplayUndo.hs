@@ -6,10 +6,11 @@ module Spec.ReplayUndo
   ( tests
   ) where
 
+import Match3.Board.Default (cascadeMatches, cascadeSeeds)
 import Control.Monad (when)
 import Data.List (nub, sort)
 import Data.Maybe (isJust)
-import Match3.Board.Cascade (cascadeMatches, cascadeSeeds, CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crUfos), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crUfos), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty

@@ -4,9 +4,9 @@
 -- 同时产出「结算计数」（CascadeTally）和「逐轮回放」（[CascadeWave]），两者来自同一次计算，
 -- 结算与回放因此天然一致（第二刀之前是 runCascade* 与 traceCascade* 两份平行实现）。
 --
--- 核心：cascadeMatchesFrom / cascadeSeeds / cascadeAfterBelt / cascadeCountdowns，返回 CascadeRun。
+-- 核心：cascadeMatchesFromWith / cascadeSeedsWith / cascadeAfterBeltWith / cascadeCountdownsWith（全部收 Registry），返回 CascadeRun。
 -- 第三刀删除了旧元组兼容层（runCascade* / resolveCountdowns / runPostBeltCascade / traceCascade*），
--- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascade 保留为「恰好一轮」的小工具。
+-- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 保留为「恰好一轮」的小工具。段 2c 起本模块不依赖内置注册表（便捷旧名在 Match3.Board.Default）。
 --
 -- 依赖：Grid、Match、Clear、Gravity、Ufo、元素注册表（计数键 edCounter、倒计时 = PhaseTick 步末规则）。
 -- 不变量：每轮 = clear → settleBoardPortals → refill → stepUfos（→ 飞碟吸收单独一轮），随机数按此顺序消耗；
@@ -19,13 +19,8 @@ module Match3.Board.Cascade
     CascadeTally(..)
   , zeroTally
   , CascadeRun(..)
-  , cascadeMatches
-  , cascadeMatchesFrom
-  , cascadeSeeds
-  , cascadeAfterBelt
-  , cascadeCountdowns
   , stillRun
-    -- * 指定注册表（元素框架；不带 With 的 = 内置注册表）
+    -- * 指定注册表（元素框架；内置注册表的便捷入口见 Match3.Board.Default）
   , cascadeMatchesWith
   , cascadeMatchesFromWith
   , cascadeSeedsWith
@@ -34,12 +29,10 @@ module Match3.Board.Cascade
     -- * 回放数据
   , CascadeWave(..)
     -- * 单轮
-  , stepCascade
-  , stepCascadeAt
+  , stepCascadeAtWith
   ) where
 
 import Data.List (nub)
-import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, counterWith, endRules)
 import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
@@ -159,17 +152,9 @@ mergeColors a b = [(col, lc a col + lc b col) | col <- allColors]
 --------------------------------------------------------------------------------
 -- 核心：普通匹配连锁
 
--- | 普通匹配连锁到稳定（波次从 1 开始）。prefer 只作用于第一轮的特殊块生成位。
-cascadeMatches :: RandomGen g => Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeMatches = cascadeMatchesWith defaultRegistry
-
 -- | cascadeMatches（指定注册表）。
 cascadeMatchesWith :: RandomGen g => Registry -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
-
--- | 普通匹配连锁，波次编号从 startW 之后继续（种子起手 / 飞碟吸收已占用的轮数）。
-cascadeMatchesFrom :: RandomGen g => Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeMatchesFrom = cascadeMatchesFromWith defaultRegistry
 
 -- | cascadeMatchesFrom（指定注册表）。
 -- 每轮：clearMatchesDetailed → settleBoardPortals → refill → stepUfos；若飞碟吸到格子，
@@ -213,12 +198,6 @@ cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
 
 --------------------------------------------------------------------------------
 -- 核心：种子起手
-
--- | 种子起手的连锁（彩虹 / 特殊合成 / 道具 / 倒计时爆炸）：第一轮清种子（波次 1）并沉降补子，
--- 跑一次飞碟（吸到则单独一轮，波次 2），再接普通匹配连锁（波次编号衔接「已完成的起手轮数」）。
--- 种子为空时等同 cascadeMatches。
-cascadeSeeds :: RandomGen g => Maybe Pos -> [Pos] -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeSeeds = cascadeSeedsWith defaultRegistry
 
 -- | cascadeSeeds（指定注册表）。
 cascadeSeedsWith :: RandomGen g => Registry -> Maybe Pos -> [Pos] -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
@@ -264,11 +243,6 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
 --------------------------------------------------------------------------------
 -- 核心：皮带移位之后
 
--- | 皮带移位之后：成消则整段连锁；否则仍沉降一次（收皮带送到底行的饼干，回放记为一个
--- 只有沉降的轮次，盘面没变且没收饼干时不记），沉降后成消再接连锁并补上饼干数与收饼干位。
-cascadeAfterBelt :: RandomGen g => [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeAfterBelt = cascadeAfterBeltWith defaultRegistry
-
 -- | cascadeAfterBelt（指定注册表）。
 cascadeAfterBeltWith :: RandomGen g => Registry -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeAfterBeltWith reg ufos portals g boardBelt
@@ -293,11 +267,6 @@ cascadeAfterBeltWith reg ufos portals g boardBelt
 --------------------------------------------------------------------------------
 -- 核心：倒计时
 
--- | 一步之后倒计时 -1；归零的 3×3 爆炸走种子连锁（带飞碟与传送门）。
--- 没有归零时终盘就是 tick 之后的盘面（数字减一），不产生回放轮次。
-cascadeCountdowns :: RandomGen g => [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeCountdowns = cascadeCountdownsWith defaultRegistry
-
 -- | cascadeCountdowns（指定注册表）：依次跑 PhaseTick 阶段的步末规则，再合并各规则的引爆种子。
 cascadeCountdownsWith :: RandomGen g => Registry -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeCountdownsWith reg ufos0 portals g b =
@@ -311,17 +280,14 @@ cascadeCountdownsWith reg ufos0 portals g b =
 --------------------------------------------------------------------------------
 -- 单轮
 
--- | 恰好一轮匹配消除 + 沉降补子（不跑飞碟、无传送门）；无匹配时返回 Nothing。
--- 与 cascadeMatchesFrom 的单轮是同一组调用：clear → settleBoardPortals → refill。
-stepCascade :: RandomGen g => g -> Board -> Maybe (Board, Int, g)
-stepCascade = stepCascadeAt Nothing
-
--- | 第一轮在 prefer 处优先生成特殊块的 stepCascade。
-stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
-stepCascadeAt prefer g b
-  | not (hasAnyMatch b) = Nothing
+-- | 恰好一轮匹配消除 + 沉降补子（指定注册表；不跑飞碟、无传送门）；无匹配时返回 Nothing。
+-- 与 cascadeMatchesFromWith 的单轮是同一组调用：clear → settleBoardPortals → refill；
+-- prefer 为第一轮新特殊块的优先生成位。
+stepCascadeAtWith :: RandomGen g => Registry -> Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
+stepCascadeAtWith reg prefer g b
+  | not (hasAnyMatchWith reg b) = Nothing
   | otherwise =
-      let (mb, n, _) = clearMatchesDetailed prefer b
-          (settled, _, _) = settleBoardPortals [] mb
+      let (mb, n, _) = clearMatchesDetailedWith reg prefer b
+          (settled, _, _) = settleBoardPortalsWith reg [] mb
           (b', g') = refill g settled
       in Just (b', n, g')

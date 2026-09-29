@@ -6,8 +6,8 @@ module Spec.Obstacles.Body
   ( tests
   ) where
 
-import Match3.Board.Cascade (cascadeMatches, cascadeSeeds, CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies, ctChests, ctBalloons, ctCakes, ctScore, ctMaxWave, ctCells, ctHoney))
-import Match3.Board.Clear (clearMatches)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies, ctChests, ctBalloons, ctCakes, ctScore, ctMaxWave, ctCells, ctHoney))
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)

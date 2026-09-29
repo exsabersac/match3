@@ -1,5 +1,4 @@
--- | Conveyor belts (开心消消乐传送带): cyclic paths that shift cells one step
--- after each successful move, possibly creating new matches.
+-- | 传送带：环路径上格内容循环前移一格。移位后的连锁/收饼由 Game + Board.runPostBeltCascade 处理。
 module Match3.Conveyor
   ( Belt
   , shiftBelt

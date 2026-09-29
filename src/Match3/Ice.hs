@@ -1,5 +1,5 @@
--- | Ice layers on gems (开心消消乐冰层): a match chips one layer;
--- when the last layer breaks the gem clears in the same wave.
+-- | 宝石冰层（Int）：匹配/清除种子时削一层；末层同波清除宝石。
+-- 与 overlay 火箭冰冻 Freeze（只挡交换）不同。
 module Match3.Ice
   ( chipIceOnClear
   , iceLayers

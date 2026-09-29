@@ -1,187 +1,167 @@
 # Match-3 消消乐（Haskell + SDL2）
 
-8×8、5 色可玩 Match-3，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、五色可玩三消，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
-Playable 8×8 / 5-color match-3 inspired by Happy Match (开心消消乐). Pure rules in `Match3.Core`; SDL2 frontend is `match3-sdl`.
-
-## 30 秒上手 / 30-second start
+## 30 秒上手
 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
-sudo apt-get install -y libsdl2-dev   # once (headers); runtime: libsdl2-2.0-0
-stack test                            # 173 green — optional but recommended
+# Linux 一次安装 SDL2 头文件；运行期依赖 libsdl2-2.0-0
+sudo apt-get install -y libsdl2-dev
+
+# macOS Apple Silicon（Homebrew SDL2）额外需要：
+# export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
+
+stack test                            # 库测，无需显示器；期望 205 通过
 stack build && stack exec match3-sdl
 ```
 
-1. **左键**点两格相邻交换，或**拖拽**到相邻格；无三连会回滚  
-2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / **3** 十字清除 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）  
-3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续  
+1. **左键**点两格相邻交换，或**拖拽**到相邻格；无三连会回滚
+2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / **3** 十字清除 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）
+3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续
 
-Headless smoke: `xvfb-run -a stack exec match3-sdl`. No display needed for `stack test`.
+无显示器冒烟：`xvfb-run -a stack exec match3-sdl`。`stack test` 不需要显示。
 
-## Features / 功能
+更细的设计说明见 [`docs/`](docs/README.md)；键位表见 [`docs/ui-controls.md`](docs/ui-controls.md)。itch.io 文案见 [`ITCH.md`](ITCH.md)。
 
-- Adjacent swaps (click or drag); horizontal/vertical ≥3 clear
-- **Specials**: 4-match → Line; 5-match → Rainbow (swap clears partner color only — Gem/Countdown/Flip front; own-color expand is a no-op); Bomb exists for combos
-- **Line×Bomb (3×3 cross), Rainbow×Line / Rainbow×Bomb (partner color + Line/Bomb expand), Bomb×Bomb (5×5), Line×Line (row+col)
-- **Stone crates**: layered blockers (`Stone n`); adjacent clears chip; last layer removes
-- **Treasure chests** (`Chest n` / 宝箱): layered gold chests; adjacent / Line·Bomb·Hammer chip one layer; `GoalChest`
-- **Honey jars** (`Honey n` / 蜂蜜罐): amber jars; adjacent / Line·Bomb·Hammer chip one layer; `GoalHoney`
-- **Balloons** (`Balloon c` / 气球): colored; adjacent **same-color** clear pops; `GoalBalloon`
-- **Cookies** (`Cookie` / 饼干): fall with gravity; collected on the **bottom row** only (immune to Line/Bomb/Hammer mid-board wipe); `GoalCookie`
-- **Cakes** (`Cake n` / 蛋糕): layered obstacles (≠ Cookie); adjacent / Line·Bomb·Hammer chip one layer; `GoalCake`
-- **Magic hats** (`MagicHat` / 魔法帽): adjacent clear swaps/recolors neighbor gem colors
-- **Chains** (`Chain n` / 锁链): lock gems; adjacent clears peel; chained gems cannot swap or match
-- **Rocket freeze** (`Freeze n` / 火箭冰冻): blocks **swap only** (gems still match); adjacent clears peel; ≠ Ice (Ice chips when the gem itself matches)
-- **Snails** (`Snail dr dc` / 蜗牛): block swap; after each successful move crawl one step (push gems; reverse at edges/blockers)
-- **Curtains** (`Curtain n` / 窗帘): column/region shade overlay; adjacent clears peel; curtained gems do not match
-- **Safes** (`Safe n` / 保险箱): layered vault; adjacent clears chip; last layer opens into a Cookie; `GoalSafe`
-- **Dual-face gems** (`Flip front back` / 双面块): matches as front; a clear hit flips to Normal gem of back color
-- **Surprise boxes** (`Surprise` / 彩蛋): adjacent *or* direct-seed (hammer/cross/line) opens → Line/Bomb special or 3×3 pop
-- **Dye bottles** (`Bottle c` / 染色瓶): adjacent clear dyes ortho gems to bottle color
-- **Time spirits** (`TimeSpirit` / 时间精灵): adjacent clear awards **+2 moves** this level
-- **Steam** (`Steam` overlay / 蒸汽): blocks match; adjacent clear extinguishes; surviving steam spreads each move
-- **Carpet** (地毯 / 目标地砖): floor tiles under gems; clearing a gem on the tile covers it; `GoalCarpet`
-- **Move bank**: clearing a campaign level carries up to **3 leftover moves** into the next
-- **Juice makers** (`Maker c n` / 果汁机): same-color adjacent clears charge; at 0 produce a Bomb of color c
-- **Portals** (传送门 pairs): after gravity, gem on A with hole at B teleports A→B (bidirectional)
-- **Ice**: layers on gems; match chips ice; last layer clears the gem; crack lines in UI (distinct from Freeze overlay)
-- **Grass / Vine / Chocolate / Fog** (`CellOverlay`): Grass clears on match; Vine spreads at end of move; **Choco** clears when adjacent to a match and surviving chocolate spreads; **Fog n** peels by adjacent clear (fogged gems do not match until clear)
-- **Boosters**: `1` → hammer; `2` → free-swap any two cells; `3` → cross clear (row+col); limited charges; select-then-1/3 still works; hammer/cross **peel** Chain/Curtain one layer and **chip** Stone one layer (≠ nuke)
-- **Conveyor belts** (传送带): cyclic `Belt` paths; shift after move; may trigger cascades
-- **Countdown bombs** (倒计时炸弹): colored timers; tick −1 after each move; at 0 explode 3×3; match/special disarms
-- **Goals**: score / single collect / multi-color collect / clear stones / open chests / smash honey jars / pop balloons / collect cookies / clear cakes / open safes / UFO absorb / cover carpet
-- **UFO / 飞碟**: overlay `Ufo{cell,color}`; each cascade wave `stepUfo` absorbs ortho same-color gems then relocates
-- **Daily challenge** (`D`): date-seeded board + **10 rotating goals** (score/collect/multi/stone/honey/UFO/chest/cake/safe/balloon); obstacle goals auto-seed décor when level index has none; clear is **Won** (not campaign LevelClear/unlock); **star rating** on clear (3★ ≥40% of **printed** level moves left; carry does not inflate the denominator)
-- Combo scoring (seed clears continue wave multipliers), hint, undo, auto-shuffle, **38 campaign levels** with map **chapter separators** (CH1–CH7)
-- HUD meters, booster charges, particles, swap/fall tweens, vine-spread pulse hints, UFO overlays, pause help, CLEAR/WIN/LOSE overlays
+## 功能一览
 
-## Levels / 关卡
+- 相邻交换（点击或拖拽）；横/竖 ≥3 消除
+- **特殊块**：四消 → 直线（Line）；五消 → 彩虹（Rainbow，与搭档交换只清搭档色；同色扩展为空操作）；炸弹（Bomb）供合成
+- **特殊合成**：Line×Bomb（3×3 十字）、Rainbow×Line / Rainbow×Bomb（搭档色 + 直线/炸弹扩展）、Bomb×Bomb（5×5）、Line×Line（整行+整列）
+- **石头箱**（`Stone n`）：多层障碍；邻消削层；末层移除
+- **宝箱**（`Chest n`）：邻消 / 直线·炸弹·锤子削一层；目标 `GoalChest`
+- **蜂蜜罐**（`Honey n`）：同上削层；目标 `GoalHoney`
+- **气球**（`Balloon c`）：邻格**同色**消除才爆；目标 `GoalBalloon`
+- **饼干**（`Cookie`）：随重力下落，仅**底行**收集（中盘直线/炸弹/锤子无效）；目标 `GoalCookie`
+- **蛋糕**（`Cake n`）：分层障碍（≠ Cookie）；邻消/直线·炸弹·锤子削层；目标 `GoalCake`
+- **魔法帽**（`MagicHat`）：邻消触发，交换/重染邻格宝石色
+- **锁链**（`Chain n`）：邻消揭层；锁住不可交换也不可匹配
+- **火箭冰冻**（`Freeze n`）：只挡交换（仍可匹配）；邻消揭层；≠ 冰层 Ice（Ice 在宝石本身匹配时削层）
+- **蜗牛**（`Snail dr dc`）：挡交换；成功步末爬一格（推宝石；碰边/障碍/传送门端点掉头）
+- **窗帘**（`Curtain n`）：邻消揭层；帘下宝石不参与匹配
+- **保险箱**（`Safe n`）：邻消削层；开出 Cookie；目标 `GoalSafe`
+- **双面块**（`Flip front back`）：正面参与匹配；命中翻成背面 Normal 宝石
+- **彩蛋**（`Surprise`）：邻消或直接种子（锤/十字/直线）打开 → 直线/炸弹或 3×3 小爆
+- **染色瓶**（`Bottle c`）：邻消把正交邻格宝石染成瓶色
+- **时间精灵**（`TimeSpirit`）：邻消清除，本关 **+2 步**
+- **蒸汽**（`Steam`）：挡匹配；邻消扑灭；存活蒸汽步末蔓延
+- **地毯**（地毯目标地砖）：该格宝石消除则铺地毯；目标 `GoalCarpet`
+- **步数银行**：战役过关最多携带 **3** 步入下一关
+- **果汁机**（`Maker c n`）：同色邻消充能；归零产出该色 Bomb
+- **传送门**（成对 Portal）：重力后 A 有子且 B 为空则 A→B（双向）
+- **冰层**：宝石上 ice；匹配削层；末层同波清除；UI 裂纹（≠ 火箭冰冻 overlay）
+- **草 / 藤蔓 / 巧克力 / 迷雾**（`CellOverlay`）：草匹配清除；藤步末蔓延；巧克力邻消清除且存活蔓延；迷雾 `Fog n` 邻消揭层（雾下不匹配）
+- **道具**：`1` 锤子；`2` 任意两格交换；`3` 十字清除（行+列）；有限次数；先选格再按 1/3 仍可用；锤/十字对锁链/窗帘揭一层、对石头削一层（≠ 一击清空）
+- **传送带**（`Belt`）：循环移位；步末移位后可再触发连锁
+- **倒计时炸弹**（`Countdown`）：步末 −1；归零 3×3；匹配/特殊可解除
+- **目标**：分数 / 单色收集 / 多色收集 / 碎石 / 开宝箱 / 砸蜂蜜 / 爆气球 / 收饼干 / 清蛋糕 / 开保险箱 / 飞碟吸收 / 铺地毯
+- **飞碟**（`Ufo`）：每波连锁末 `stepUfo` 吸正交同色再移格；目标 `GoalUfo`
+- **每日挑战**（`D`）：日期种子盘面 + **10** 种轮换目标；障碍类目标会自动补装饰；通关为 **Won**（不进战役 `LevelClear`/解锁）；三星按**关卡印制步数**剩余比例（携带不抬高分母）
+- 连击波次计分、提示、撤销、自动洗牌、**38** 关战役地图（CH1–CH7 章节分隔）
+- HUD、道具次数、粒子、交换/下落补间、藤蔓蔓延提示、飞碟叠层、暂停帮助、过关/胜利/失败叠层
 
-| # | Name | Moves | Goal | Décor |
-|---|------|-------|------|-------|
-| 1 | 入门 | 30 | Score 300 | — |
-| 2 | 采红 | 30 | Collect 20× RED | — |
-| 3 | 热身 | 26 | Score 500 | — |
-| 4 | 采蓝 | 26 | Collect 22× BLUE | — |
-| 5 | 进阶 | 24 | Score 700 | choco |
-| 6 | 冰绿 | 24 | Collect 26× GREEN | ice |
-| 7 | 双采 | 28 | Collect RED 12 + BLUE 12 | — |
-| 8 | 碎石 | 26 | Destroy 8 stones | stones + belt |
-| 9 | 草场 | 24 | Score 600 | grass |
-| 10 | 藤袭 | 22 | Collect 18× RED | vines |
-| 11 | 传送 | 22 | Score 800 | grass + belt |
-| 12 | 轰炸 | 20 | Score 750 | countdown bombs |
-| 13 | 飞碟 | 24 | UFO absorb 10 | UFO C1 |
-| 14 | 碟猎 | 20 | UFO absorb 14 | 2 UFOs + belt |
-| 15 | 压力 | 20 | Multi RED/GRN/BLU | grass + choco |
-| 16 | 大师 | 22 | Score 1000 | stone+grass+vine+choco+bomb+belts+UFO |
-| 17 | 宝箱 | 24 | Open 6 chests | chests |
-| 18 | 巧箱 | 22 | Open 5 chests | chests + choco |
-| 19 | 蜂蜜 | 24 | Smash 6 honey jars | honey jars |
-| 20 | 蜜压 | 22 | Smash 5 honey jars | honey + choco |
-| 21 | 气球 | 24 | Pop 6 balloons | colored balloons |
-| 22 | 饼干 | 24 | Collect 6 cookies | cookies high on board |
-| 23 | 巧饼 | 22 | Collect 5 cookies | cookies + choco + fog |
-| 24 | 蛋糕 | 24 | Clear 6 cakes | layered cakes |
-| 25 | 帽宴 | 22 | Clear 5 cakes | cakes + magic hats + choco |
-| 26 | 锁链 | 22 | Score 900 | iron chains + stone + choco |
-| 27 | 果汁 | 24 | Collect 18× RED | juice makers + fog + portals |
-| 28 | 终章 | 24 | Score 1400 | stone+chest+honey+balloon+cookie+cake+hat+maker+chain+freeze+curtain+safe+flip+surprise+bottle+snail+choco+fog+vine+bomb+belt+portal+UFO+carpet |
-| 29 | 蜗牛 | 20 | Score 850 | crawling snails |
-| 30 | 冰冻 | 20 | Collect 16× GREEN | rocket freeze + choco |
-| 31 | 窗帘 | 22 | Collect 16× RED | curtain columns + choco |
-| 32 | 金库 | 22 | Open 5 safes | safes→cookie + dual-face + choco |
-| 33 | 惊喜 | 22 | Score 900 | surprise boxes + choco |
-| 34 | 染色 | 22 | Collect 16× BLUE | dye bottles + fog |
-| 35 | 时灵 | 22 | Score 850 | time spirits (+2 moves) |
-| 36 | 蒸汽 | 22 | Collect 16× GREEN | steam clouds + choco |
-| 37 | 地毯 | 24 | Cover 8 carpet tiles | carpet floor + choco |
-| 38 | 织毯 | 24 | Cover 12 carpet tiles | carpet + choco + fog |
+## 关卡表
 
-Press `D` for a **每日** daily run (seed from calendar date).
+| # | 名称 | 步数 | 目标 | 装饰 |
+|---|------|------|------|------|
+| 1 | 入门 | 30 | 分数 300 | — |
+| 2 | 采红 | 30 | 收集 20× 红 | — |
+| 3 | 热身 | 26 | 分数 500 | — |
+| 4 | 采蓝 | 26 | 收集 22× 蓝 | — |
+| 5 | 进阶 | 24 | 分数 700 | 巧克力 |
+| 6 | 冰绿 | 24 | 收集 26× 绿 | 冰层 |
+| 7 | 双采 | 28 | 红 12 + 蓝 12 | — |
+| 8 | 碎石 | 26 | 毁 8 石头 | 石头 + 传送带 |
+| 9 | 草场 | 24 | 分数 600 | 草 |
+| 10 | 藤袭 | 22 | 收集 18× 红 | 藤蔓 |
+| 11 | 传送 | 22 | 分数 800 | 草 + 传送带 |
+| 12 | 轰炸 | 20 | 分数 750 | 倒计时炸弹 |
+| 13 | 飞碟 | 24 | 飞碟吸收 10 | UFO C1 |
+| 14 | 碟猎 | 20 | 飞碟吸收 14 | 双 UFO + 传送带 |
+| 15 | 压力 | 20 | 多色红/绿/蓝 | 草 + 巧克力 |
+| 16 | 大师 | 22 | 分数 1000 | 石+草+藤+巧+炸+带+UFO |
+| 17 | 宝箱 | 24 | 开 6 宝箱 | 宝箱 |
+| 18 | 巧箱 | 22 | 开 5 宝箱 | 宝箱 + 巧克力 |
+| 19 | 蜂蜜 | 24 | 砸 6 蜂蜜罐 | 蜂蜜罐 |
+| 20 | 蜜压 | 22 | 砸 5 蜂蜜罐 | 蜂蜜 + 巧克力 |
+| 21 | 气球 | 24 | 爆 6 气球 | 彩色气球 |
+| 22 | 饼干 | 24 | 收 6 饼干 | 高位饼干 |
+| 23 | 巧饼 | 22 | 收 5 饼干 | 饼干 + 巧克力 + 迷雾 |
+| 24 | 蛋糕 | 24 | 清 6 蛋糕 | 分层蛋糕 |
+| 25 | 帽宴 | 22 | 清 5 蛋糕 | 蛋糕 + 魔法帽 + 巧克力 |
+| 26 | 锁链 | 22 | 分数 900 | 锁链 + 石头 + 巧克力 |
+| 27 | 果汁 | 24 | 收集 18× 红 | 果汁机 + 迷雾 + 传送门 |
+| 28 | 终章 | 24 | 分数 1400 | 终章混合装饰 |
+| 29 | 蜗牛 | 20 | 分数 850 | 爬行蜗牛 |
+| 30 | 冰冻 | 20 | 收集 16× 绿 | 火箭冰冻 + 巧克力 |
+| 31 | 窗帘 | 22 | 收集 16× 红 | 窗帘列 + 巧克力 |
+| 32 | 金库 | 22 | 开 5 保险箱 | 保险箱→饼干 + 双面 + 巧克力 |
+| 33 | 惊喜 | 22 | 分数 900 | 彩蛋 + 巧克力 |
+| 34 | 染色 | 22 | 收集 16× 蓝 | 染色瓶 + 迷雾 |
+| 35 | 时灵 | 22 | 分数 850 | 时间精灵（+2 步） |
+| 36 | 蒸汽 | 22 | 收集 16× 绿 | 蒸汽 + 巧克力 |
+| 37 | 地毯 | 24 | 铺 8 地毯 | 地毯 + 巧克力 |
+| 38 | 织毯 | 24 | 铺 12 地毯 | 地毯 + 巧克力 + 迷雾 |
 
-## Controls / 操作
+按 `D` 进入**每日**挑战（日历日期作种子）。
 
-| Key / Input | Action |
-|-------------|--------|
-| Left click / drag | Adjacent swap |
-| `1` then click | Hammer mode (clear one cell); `1` again cancels |
-| `2` then two clicks | Free-swap any two cells; `2` again cancels |
-| `3` then click | Cross clear (row+col); `3` again cancels |
-| Select cell then `1`/`3` | Hammer / cross that cell (legacy shortcut) |
-| `H` | Hint |
-| `U` | Undo |
-| `S` | Shuffle |
-| `D` | Daily challenge |
-| `M` | Level map (选关); click unlocked node |
-| `N` / Space / Enter | Next / retry after overlay |
-| `R` | Restart level (also works while paused) |
-| `P` | Pause + key help (freezes anim; clears in-flight drag) |
-| `Esc` / `Q` | Quit |
+## 操作
 
-Special look: white+gold bar = line; multi-color ring = rainbow; black/yellow+red ring = bomb; gray rock = stone (layer pips); gold chest = 宝箱 (layer pips); amber jar = 蜂蜜罐; pink frosted cake = 蛋糕 (layer pips, ≠ cookie); purple brim hat = 魔法帽; metal spout = 果汁机 (color + charge pips); gray cross links = 锁链 (layer pips); deep-blue snowflake glaze = 火箭冰冻 (≠ cyan ice cracks); wine vertical stripes + rod = 窗帘; steel vault + gold dial = 保险箱; split two-tone gem = 双面块; pink gift + gold bow = 彩蛋; tinted bottle + neck = 染色瓶; cyan orb + hourglass = 时间精灵; gray steam wisps = 蒸汽; magenta weave floor = 地毯 (target / covered); olive shell + dir tick = 蜗牛; violet rings = 传送门 pair; colored balloon = 气球; tan biscuit + chips = 饼干; soft white cloud = 迷雾 (layer pips); cyan frame + cracks = ice; green tufts = grass; green frame + vines = vine (pulse = next spread); brown slab = chocolate (pulse = next spread); dark fuse + turn pips = countdown bomb; silver dome + color rim = UFO.
+| 输入 | 作用 |
+|------|------|
+| 左键 / 拖拽 | 相邻交换 |
+| `1` 再点格 | 锤子清一格；再按 `1` 取消 |
+| `2` 再点两格 | 任意两格交换；再按 `2` 取消 |
+| `3` 再点格 | 十字清除（行+列）；再按 `3` 取消 |
+| 先选格再 `1`/`3` | 对该格锤/十字（旧快捷） |
+| `H` | 提示 |
+| `U` | 撤销 |
+| `S` | 洗牌 |
+| `D` | 每日挑战 |
+| `M` | 选关地图；点已解锁节点 |
+| `N` / 空格 / 回车 | 叠层后下一关 / 重试 |
+| `R` | 重开关（暂停中也可用） |
+| `P` | 暂停 + 键位帮助（冻结动画；清掉进行中的拖拽） |
+| `Esc` / `Q` | 退出 |
 
-## 对标开心消消乐 / Feature map
+外观速查：白金条=直线；多色环=彩虹；黑黄+红环=炸弹；灰岩=石头；金箱=宝箱；琥珀罐=蜂蜜；粉霜蛋糕=蛋糕（≠饼干）；紫檐帽=魔法帽；金属嘴=果汁机；灰叉链=锁链；深蓝雪花釉=火箭冰冻（≠青色冰裂纹）；酒红竖纹=窗帘；钢库+金钮=保险箱；双色对半=双面块；粉礼+金结=彩蛋；有色瓶=染色瓶；青球+沙漏=时间精灵；灰蒸汽=蒸汽；品红编织地砖=地毯；橄榄壳+方向点=蜗牛；紫环对=传送门；气球/饼干/迷雾/冰/草/藤/巧克力/倒计时/飞碟见盘面。
+
+## 对标开心消消乐（机制对照）
 
 | 开心消消乐 | 本项目 |
 |-----------|--------|
 | 三消 / 四消横竖线 / 五消彩色精灵 | ✅ Normal / LineH·V / Rainbow |
 | 炸弹与特殊合成 | ✅ Bomb；Line×Bomb / Rainbow×Line / Bomb×Bomb / Line×Line |
-| 箱子 / 多层障碍 | ✅ `Stone n`（邻消削层） |
-| 宝箱 | ✅ `Chest n` + `GoalChest`（邻消/直线·炸弹·锤子削层打开） |
-| 饼干 / 掉落收集 | ✅ `Cookie` + `GoalCookie`（重力掉落，底行收集） |
-| 蛋糕（分层障碍） | ✅ `Cake n` + `GoalCake`（邻消/直线·炸弹·锤子削层） |
-| 魔法帽 | ✅ `MagicHat`（邻消触发，交换/重染邻格颜色） |
-| 锁链 / 铁链 | ✅ `Chain n` overlay（邻消揭层；锁住不可交换/匹配） |
-| 火箭冰冻 | ✅ `Freeze n` overlay（只挡交换不挡匹配；邻消揭层；≠ Ice 自消削层） |
-| 窗帘 / 卷帘 | ✅ `Curtain n` overlay（邻消揭层；帘下宝石不可匹配；≠ 迷雾） |
-| 保险箱 / 金库 | ✅ `Safe n` + `GoalSafe`（邻消削层，开出 Cookie） |
-| 双面块 | ✅ `Flip front back`（正面参与匹配；命中翻成背面 Normal 宝石） |
-| 彩蛋 / 惊喜盒 | ✅ `Surprise`（邻消/直接命中打开 → 特殊块或 3×3 小爆炸） |
-| 染色瓶 | ✅ `Bottle c`（邻消把邻格宝石染成瓶色） |
-| 时间精灵 | ✅ `TimeSpirit`（邻消清除，本关 +2 步）；过关剩余步最多携带 3 步入下一关 |
-| 蒸汽 | ✅ `Steam` overlay（挡匹配；邻消扑灭；步末蔓延） |
-| 地毯 / 目标地砖 | ✅ `gsCarpetOpen` + `GoalCarpet`（该格宝石消除则铺地毯） |
-| 蜗牛 | ✅ `Snail dr dc`（挡交换；步末爬一格推宝石，碰壁掉头） |
-| 果汁机 / 制造机 | ✅ `Maker c n`（同色邻消充能，满则产出 Bomb） |
-| 传送门 | ✅ 双向 `Portal` 对（重力后 A 有子且 B 为空则传送） |
-| 云朵 / 迷雾 | ✅ `Fog n` overlay（邻消揭层；雾下宝石不可匹配） |
-| 冰层 | ✅ gem 上 ice；匹配削层；裂纹绘制（≠ 火箭冰冻 overlay） |
-| 草 / 藤蔓 | ✅ `CellOverlay` Grass（匹配清除）/ Vine（步末蔓延，清则不蔓） |
-| 巧克力 | ✅ `CellOverlay` Choco（邻消清除 + 步末蔓延，清则不蔓） |
-| 倒计时炸弹 | ✅ `Countdown`：步末−1、归零 3×3、匹配解除 |
-| 收集动物 / 多目标 | ✅ GoalCollect / GoalCollectMulti / GoalClearStone |
-| 飞碟吸色 | ✅ `Ufo{cell,color}` + `stepUfo` 波末吸同色邻格并移格；`GoalUfo` |
-| 每日挑战 / 三星 | ✅ Daily（10 目标轮换）+ starRating |
-| 选关章节 | ✅ 地图 CH1–CH7 分隔 |
-| 传送带 | ✅ `Belt` 步末循环移位，可触发新消 |
-| 道具（锤子等） | ✅ 锤子 / 任意交换 / 十字清除：按键进模式 + 点选完整流 |
+| 箱子 / 多层障碍 | ✅ `Stone n` |
+| 宝箱 / 饼干 / 蛋糕 / 魔法帽 / 锁链 / 火箭冰冻 / 窗帘 / 保险箱 / 双面 / 彩蛋 / 染色瓶 / 时间精灵 / 蒸汽 / 地毯 / 蜗牛 / 果汁机 / 传送门 / 迷雾 / 冰层 / 草藤巧 / 倒计时 / 飞碟 / 每日三星 / 选关 / 传送带 / 道具 | ✅ 见上文与 [`docs/domain.md`](docs/domain.md) |
 
-## itch.io
-
-See [`ITCH.md`](ITCH.md) for packaging / page checklist.
-
-## Build & test
+## 构建与测试
 
 ```bash
+export PATH="$HOME/.ghcup/bin:$PATH"
+# macOS Apple Silicon：
+# export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
+
 stack build && stack test && stack exec match3-sdl
 ```
 
-## Layout
+Stackage：**lts-21.25** / GHC **9.4.8**（`stack.yaml` 已 `system-ghc: true`）。
+
+## 目录结构
 
 ```
-src/Match3/  Types Board Game Core Obstacles Rainbow Combos Ice Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet (+ Steam / TimeSpirit)
-app/Main.hs  SDL2 frontend
-test/Spec.hs tasty (201 named cases)
+src/Match3/   Types Board Game Core Obstacles Rainbow Combos Ice
+              Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
+app/Main.hs   SDL2 前端
+test/Spec.hs  tasty（205 命名用例）
+docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位）
 ```
 
-Frozen rule API shapes: `trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`.
+冻结规则 API 形态：`trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`。
 
-## Release status / 发布状态
+## 发布状态
 
-- Campaign: **38** levels (CH1–CH7 on map), batch-tested constructible / playable / décor-vs-goal
-- Tests: `stack test` **205** (Tasty + QuickCheck); core move invariants include spirit +2, carry cap 3, belt→steam→snail end-of-move order; booster peel locks + daily décor; snail×belt / maker charge / map unlock+resume / clear-only particles; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles; shuffle preserves Line/Bomb/Rainbow; soft-lock blocks Line/Bomb expand; Line blast no double-peel Chain/Curtain/Stone/Safe; Line/Bomb/Hammer single-chip Chest/Honey/Cake; MagicHat immune to Line/Bomb/Hammer direct clear; soft-hit preserves on-cell Grass/Vine/Choco; soft-hit no adj Fog/Chain/Freeze/Curtain/Maker/Bottle/Balloon; soft-hit keeps on-cell Fog/Steam; Surprise explode opens nested Surprises (Bomb parity); nested Surprise special sits (no fire-and-survive); soft-lock blocks Rainbow swap + special combos (ice>1/Chain/Curtain); soft-lock FreeSwap activation + asymmetric double-Rainbow gates; belt→bottom Cookie drains without follow-up match; bare GoalCookie/GoalCarpet décor seed (ensureGoalDecor / UFO-parity carpets); portal Flip+Countdown teleport; Carpet covers Cookie vacate / Safe→Cookie open; snail crawl follow-up cascade (move ends stable); finale portal endpoints not immortal-blocked; snail reverses at portal endpoints; UFO absorb no special expand (吸走≠引爆) (终章 snail→(2,0), stepSnailsAvoidingBlocked walls); Portal/Surprise→Safe bottom Cookie drain covers Carpet (boundary); Surprise-opened special sits through same-wave Hat/Bottle; Maker-produced Bomb sits through same-wave Bottle dye; immortal décor no gravity fall (Maker/Bottle/Hat/Snail); FreeSwap skips countdown tick (no move cost); countdown explode sites in gsLastCleared; daily clear → Won (not LevelClear into campaign) + unlockAfterOutcome no map bump
-- Stackage: **lts-21.25** / GHC **9.4.8**; binary: `stack build && stack exec match3-sdl`
-- itch checklist: see `ITCH.md`
-
+- 战役：**38** 关（地图 CH1–CH7），批量可构造 / 可玩 / 装饰与目标对齐
+- 测试：`stack test` **205**（Tasty + QuickCheck）
+- 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

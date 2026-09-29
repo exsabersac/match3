@@ -1,8 +1,5 @@
--- | Flying saucers (开心消消乐飞碟感): overlay entities that absorb adjacent
--- same-color gems and relocate after each cascade wave.
--- Skips peel-locks (Chain/Curtain/Fog/Steam), multi-ice, and Flip so GoalUfo
--- only counts true clears (no phantom progress). Absorbing Line/Bomb/Rainbow
--- removes them without expandSpecials detonation (吸走 ≠ 引爆).
+-- | 飞碟：覆盖实体，每波连锁末吸正交同色可吸收格并移格。
+-- 跳过锁链/窗帘/雾/蒸汽、多冰、双面以免虚计 GoalUfo；吸走特殊块不引爆（由 Board 掩码）。
 module Match3.Ufo
   ( Ufo(..)
   , mkUfo

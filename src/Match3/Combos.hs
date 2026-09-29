@@ -1,4 +1,5 @@
--- | Special × special combos (开心消消乐 / Candy Crush style).
+-- | 特殊×特殊合成：Line×Bomb、Rainbow×Line/Bomb、Bomb×Bomb、Line×Line 的判定与清种子。
+-- 两端须 specialActivates（软锁不发火）。普通三消与彩虹单端交换见 Board / Rainbow。
 module Match3.Combos
   ( isLineBombCombo
   , isRainbowLineCombo

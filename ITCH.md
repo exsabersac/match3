@@ -1,46 +1,52 @@
-# itch.io upload checklist
+# itch.io 上传清单
 
-## Build (Linux)
+## 构建（Linux）
 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
 sudo apt-get install -y libsdl2-dev
 stack build
-stack exec match3-sdl   # smoke-test
+stack exec match3-sdl   # 冒烟
 ```
 
-Runtime needs `libsdl2-2.0-0`. Headless: `xvfb-run -a stack exec match3-sdl`.
+运行期需要 `libsdl2-2.0-0`。无显示器：`xvfb-run -a stack exec match3-sdl`。
 
-## Package
+macOS Apple Silicon 额外：
 
-- [ ] Ship `match3-sdl` binary + note SDL2 system dependency
-- [x] Include `README.md` and `LICENSE` (BSD-3-Clause) — in repo root
-- [ ] Short GIF / screenshots: swap, cascade combo, chocolate, chest, safe, honey jar, cake, magic hat, chain, freeze, curtain, flip, surprise, bottle, time spirit, steam, carpet, snail, juice maker, portal, balloon, cookie, UFO, map (`M`)
-- [ ] Cover image 630×500 (itch) with gem board + title
-- [x] Description draft ready (see **Page copy** below): 8×8 / 5-color Match-3 inspired by 开心消消乐; Haskell + SDL2
+```bash
+export PATH="$HOME/.ghcup/bin:$PATH"
+export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
+stack build && stack exec match3-sdl
+```
 
-## Page copy (short)
+## 打包
 
-**Match-3 消消乐** — adjacent swaps, lines / rainbow / bombs, stone crates, ice, rocket freeze (火箭冰冻), curtains (窗帘), snails (蜗牛), grass / vine / chocolate, conveyor belts, portals (传送门), countdown bombs, treasure chests, safes (保险箱→cookie), dual-face gems (双面块), surprise boxes (彩蛋), dye bottles (染色瓶), honey jars (蜂蜜罐), cakes (蛋糕 layered), magic hats (魔法帽), chains (锁链), juice makers (果汁机), balloons (气球), cookies (饼干 drop-collect), fog/clouds (迷雾), UFO absorb, daily challenge, boosters (hammer / free-swap / cross), campaign map (38 levels, chapter separators), time spirits (+2 moves), steam clouds, carpet floor tiles (地毯), leftover-move bank.
+- [ ] 附带 `match3-sdl` 二进制，并注明依赖系统 SDL2
+- [x] 包含仓库根目录的 `README.md` 与 `LICENSE`（BSD-3-Clause）
+- [ ] 短 GIF / 截图：交换、连锁连击、巧克力、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、锁链、火箭冰冻、窗帘、双面块、彩蛋、染色瓶、时间精灵、蒸汽、地毯、蜗牛、果汁机、传送门、气球、饼干、飞碟、选关（`M`）
+- [ ] 封面图 630×500（itch）：棋盘 + 标题
+- [x] 页面文案草稿就绪（见下方 **页面文案**）：8×8 / 五色三消，灵感来自开心消消乐；Haskell + SDL2
 
-Controls: click/drag swap · `1` hammer · `2` free-swap · `3` cross · `H` hint · `M` map · `D` daily · `P` pause
+## 页面文案（短）
 
-## Tags
+**Match-3 消消乐** — 相邻交换，直线 / 彩虹 / 炸弹，石头箱，冰层，火箭冰冻，窗帘，蜗牛，草 / 藤蔓 / 巧克力，传送带，传送门，倒计时炸弹，宝箱，保险箱（开出饼干），双面块，彩蛋惊喜盒，染色瓶，蜂蜜罐，分层蛋糕，魔法帽，锁链，果汁机，气球，饼干掉落收集，迷雾，飞碟吸色，每日挑战，道具（锤子 / 任意交换 / 十字），战役地图（38 关，章节分隔），时间精灵（+2 步），蒸汽，地毯，过关剩余步携带。
+
+操作：点击/拖拽交换 · `1` 锤子 · `2` 任意交换 · `3` 十字 · `H` 提示 · `M` 地图 · `D` 每日 · `P` 暂停
+
+## 标签
 
 `puzzle` `match-3` `casual` `sdl2` `haskell` `indie`
 
-## After upload
+## 上传后
 
-- [ ] Test download on clean machine / container
-- [ ] Set price / donation as preferred
-- [x] GitHub link ready: https://github.com/exsabersac/match3
+- [ ] 在干净机器 / 容器上下载试玩
+- [ ] 按需设置价格 / 捐赠
+- [x] GitHub 链接就绪：https://github.com/exsabersac/match3
 
-## Status (repo)
+## 仓库状态
 
-Stability cruise: daily clear is Won (not campaign LevelClear/unlock); 38 levels / 205 tests green.
+稳定性巡航：每日通关为 Won（不是战役 LevelClear/解锁）；38 关 / 205 测试通过。
 
-- 38 campaign levels + daily challenge; `stack test` **205** green on lts-21.25 / GHC 9.4.8
-- Finale (终章) 24 moves / Score 1400; Master (大师) 22 moves / Score 1000; Steam 22 / Carpet weave 24; map shows CH1–CH7 for all 38 nodes
-- Controls match in-game help strip and pause overlay (H / 1 / 2 / 3 / U / S / D / M / R / N / P)
-- Fragile locks: Carpet↔Ice cover; TimeSpirit last-move rescue (−1+2); Portal after Belt match teleport; Steam→Snail / Belt→Steam; Flip 4-match spawn; Surprise blast expands Bomb; Maker→Bomb same-wave sit; Chain+Freeze co-peel; Honey+Balloon same clear; Safe bottom→Cookie collect; Cookie bottom before Portal teleport; Countdown explode keeps UFO+portals; Hammer/Cross peel Chain·Curtain + chip Stone; Daily obstacle-goal décor seed; Rainbow expand noop (partner-only); Rainbow×Bomb 3×3; star vs printed moves; map/restart no carry; curtain allows swap / blocks match; Freeze blocks trySwap+free-swap; Hammer clears Grass/Vine; snail×belt no double-step; maker multi-adj once; gsLastCleared particles; map unlock+resume; UFO skip peel-locks/Flip; hammer immune no-spend; Rainbow×Flip partner; Surprise direct-seed opens; soft-hit preserves Choco/Steam; Surprise blast peels adj obstacles; shuffle preserves Line/Bomb/Rainbow; soft-lock (ice>1/Chain/Curtain) blocks Line/Bomb expand; Line/Bomb blast no double-peel Chain/Curtain/Stone/Safe; Line/Bomb/Hammer single-chip Chest/Honey/Cake; MagicHat immune to Line/Bomb/Hammer direct clear; soft-hit preserves on-cell Grass/Vine/Choco; soft-hit no adj Fog/Chain/Freeze/Curtain/Maker/Bottle/Balloon; soft-hit keeps on-cell Fog/Steam; nested Surprise special sits (no fire-and-survive); soft-lock (ice>1/Chain/Curtain) blocks Rainbow swap + Line/Bomb/Rainbow combos (isRainbowSwap/isSpecialCombo via specialActivates); FreeSwap soft-lock parity; asymmetric double-Rainbow conjunction gate; Cookie immune to Line/Bomb/Hammer (触底收集 only); belt→bottom Cookie drains without match; bare GoalCookie/GoalCarpet décor seed; portal Flip (+Countdown) teleport; Carpet covers Cookie vacate / Safe open; snail crawl follow-up cascade; finale portal endpoints not immortal-blocked (Bottle off (0,3)); snail reverses at portal endpoints; UFO absorb Line/Bomb/Rainbow no expandSpecials detonation (吸走≠引爆) (终章 snail off row 0 → (2,0)); Cookie mid-settle bottom-drain covers Carpet (drain sites→clear lists); Portal-delivered / Surprise→Safe bottom Cookie drain covers Carpet (boundary); L27 Bottle off belt (stuck immortal on conveyor, portal-class layout); Surprise-opened special sits through same-wave Hat/Bottle mutate; Maker-produced Bomb sits through same-wave Bottle dye; immortal décor no gravity fall (Maker/Bottle/Hat/Snail; Cross keeps Maker); FreeSwap skips countdown tick (no move); countdown explode in gsLastCleared; daily clear → Won (not LevelClear into campaign) + unlockAfterOutcome no map bump
-
+- 38 关战役 + 每日挑战；`stack test` **205** 绿于 lts-21.25 / GHC 9.4.8
+- 终章 24 步 / 分数 1400；大师 22 步 / 分数 1000；蒸汽 22 / 织毯 24；地图 CH1–CH7 覆盖全部 38 节点
+- 键位与游戏内帮助条、暂停叠层一致（H / 1 / 2 / 3 / U / S / D / M / R / N / P）

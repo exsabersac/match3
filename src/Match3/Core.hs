@@ -1,3 +1,6 @@
+-- | 库门面：再导出 Types / Board / Game 与各机制模块的稳定公开 API。
+-- 自身几乎无业务逻辑；前端与测试应优先 import Match3.Core。
+-- 不拥有：SDL、关卡装饰布局细节（在 Game）、连锁波次实现（在 Board）。
 module Match3.Core
   ( Color(..)
   , GemKind(..)

@@ -1,4 +1,5 @@
--- | Simplified boosters (开心消消乐道具简版): hammer / free-swap / cross clear.
+-- | 道具种子几何（简版）：锤子单格、十字整行+整列。
+-- 只返回清除种子位置；扣次数与连锁由 Game.use* 完成。
 module Match3.Boosters
   ( clearCellSeeds
   , hammerClearSeeds

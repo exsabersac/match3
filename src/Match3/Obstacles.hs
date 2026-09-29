@@ -1,8 +1,5 @@
--- | Stone / chest / honey / cake / maker / surprise / bottle blockers + magic hat trigger.
--- Never match, block swaps; adjacent gem clears chip one layer; removed at 0
--- (开心消消乐箱子 / 宝箱 / 蜂蜜罐 / 蛋糕 / 果汁机 / 彩蛋 / 染色瓶). MagicHat: adjacent clear swaps neighbor colors.
--- Maker: same-color adjacent clear charges; at 0 produces Bomb in place.
--- Surprise: adjacent clear opens → special gem or 3×3 pop. Bottle: dyes ortho gems.
+-- | 占格障碍与邻消触发：石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/染色瓶/时间精灵/魔法帽/果汁机。
+-- 一般不可匹配、挡交换；邻消削一层或触发效果。不负责连锁循环本身。
 module Match3.Obstacles
   ( swapBlockedByStone
   , orthoNeighbors
@@ -94,6 +91,7 @@ setAt b (r, c) v =
     row = b !! r
 
 -- | True if either swap endpoint is a blocker, chained, frozen, or snail.
+-- | 交换是否被占格障碍 / 锁链 / 火箭冰冻等挡住（名称历史遗留，范围已超出纯石头）。
 swapBlockedByStone :: Board -> Pos -> Pos -> Bool
 swapBlockedByStone b p1 p2 =
   let block c =

@@ -1,4 +1,5 @@
--- | Daily challenge: date-derived seed + fixed goal mix (开心消消乐每日关感).
+-- | 每日挑战：YYYY-MM-DD 种子、10 种目标轮换、三星（相对印制步数剩余比例）。
+-- 不生成盘面装饰（由 Game.newDailyGame / ensureGoalDecor）；通关结局由 Game 标为 Won。
 module Match3.Daily
   ( dailySeed
   , dailyConfig

@@ -1,12 +1,6 @@
--- | Grass / vine / chocolate / fog / freeze overlays on gems.
--- Grass: cleared when the cell is part of a match / special clear.
--- Vine: spreads to adjacent bare gems after a successful move; cleared vines do not spread.
--- Choco: cleared by adjacent match/special; surviving chocolate spreads like vine.
--- Fog: layered cloud; adjacent clears peel one layer; fogged gems do not match.
--- Chain: iron chains; adjacent clears peel; chained gems cannot swap or match.
--- Freeze: rocket freeze (火箭冰冻); blocks swap only; adjacent clears peel; gems still match.
--- Curtain: roller shade (窗帘); adjacent clears peel; curtained gems do not match.
--- Steam: steam cloud (蒸汽); blocks match; adjacent clear extinguishes; surviving steam spreads.
+-- | 宝石叠层：草/藤/巧克力/迷雾/锁链/火箭冰冻/窗帘/蒸汽的清除、揭层与步末蔓延。
+-- 草随本格真清除；藤/巧/蒸汽步末蔓延（已清则不蔓）；雾/链/冻/帘邻消揭层。
+-- 不拥有蜗牛、冰层 Int、或 Game 步末编排顺序。
 module Match3.Grass
   ( clearOverlaysOn
   , clearChocoAdjacent

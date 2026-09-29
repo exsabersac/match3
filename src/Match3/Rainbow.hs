@@ -1,4 +1,5 @@
--- | Rainbow (color-bomb) special: 5-match spawn; swap with a color clears all of that color.
+-- | 彩虹特殊块：五消生成；与搭档色（含 Countdown / Flip 正面）交换清该色。
+-- 软锁彩虹不激活。双彩虹清全盘可匹配宝石。合成几何见 Combos。
 module Match3.Rainbow
   ( isRainbow
   , isRainbowSwap

@@ -1,5 +1,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+
+-- | SDL2 前端：窗口、输入、道具点选模式、选关地图、交换/下落动画与粒子。
+-- 规则一律经 Match3.Core；本模块不改写 trySwap 结果，只展示。
 module Main (main) where
 
 import Control.Concurrent (threadDelay)

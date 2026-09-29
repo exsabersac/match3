@@ -1,4 +1,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
+
+-- | 对局状态机：GameState、trySwap/道具、结局、洗牌保装饰、关卡装饰与皮带/门布局。
+-- 编排「主连锁 → 倒计时 → 皮带 → 蔓延 → 蜗牛 → 可选再连锁」；不绘制像素。
+-- runMove 是 trySwap 的别名。每日通关为 Won，不推进战役解锁。
 module Match3.Game
   ( GameState(..)
   , newGame
@@ -547,6 +551,8 @@ goalSatisfied gs =
     (gsCakesCleared gs)
     (gsSafesOpened gs)
 
+-- | 目标满足：每日 → Won（不推进战役）；否则 LevelClear 或终章 Won。
+-- 步数耗尽 → Lost；否则 MoveApplied。
 decideOutcome :: GameState -> Score -> Outcome
 decideOutcome gs gained
   | goalSatisfied gs =
@@ -653,6 +659,8 @@ countTimeSpirits b =
     ]
 
 
+-- | 地毯补充种子：饼干腾空或保险箱开启离开格子时，即使未进 clear-holes 也要计入覆盖。
+-- 沉降中途才落到地毯再底收的饼干由 Board drain 位并入清除列表。
 -- | Carpet seeds when Cookie / Safe leave a cell without entering clear-holes.
 -- Cookie is immune to mid-board wipe (only gravity + bottom drain); Safe opens
 -- in place to Cookie. Start-of-move Cookie occupancy / Safe→Cookie would miss
@@ -671,11 +679,16 @@ carpetVacateSeeds before after =
       || (isSafe cell0 && not (isSafe cell1))
   ]
 
+-- | 战役过关剩余步携带入下一关，上限 3；与三星分母（印制步数）无关。
 -- | Leftover moves carried into the next campaign level (cap 3).
 carryMovesBonus :: MovesLeft -> MovesLeft
 carryMovesBonus left = min 3 (max 0 left)
 
 
+-- | 玩家相邻交换入口。成功路径固定顺序：
+-- 主连锁 → 倒计时 tick/爆炸 → 皮带移位+settle → 藤/巧/蒸汽蔓延 → 蜗牛 →
+-- （若蜗牛成消）再连锁一次（不再重复步末效果）→ 结算目标/步数 → ensurePlayable。
+-- 无匹配或挡交换返回原盘 + NoMatch；不修改规则字段以外的 UI 状态。
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwap p1 p2 gs
   | Just o <- gsOver gs = (gs, o)

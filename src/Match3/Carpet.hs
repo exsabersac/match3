@@ -1,11 +1,6 @@
--- | Carpet / floor tiles (地毯 / 目标地砖).
--- Uncovered carpet targets sit under gems; when a gem on that cell is fully
--- cleared (match / special / booster), the tile becomes covered. Cookie vacate
--- (start-of-move occupancy) and Safe→Cookie open also cover (via Game
--- carpetVacateSeeds). Cookies that only touch a carpet mid-settle (fall/portal/
--- belt onto bottom then drain) cover via Board drain positions threaded into
--- cascade clear lists — otherwise bottom-row GoalCarpet soft-locks.
--- GoalCarpet counts newly covered tiles. Re-clearing an already-covered cell is a no-op.
+-- | 地毯 / 目标地砖：未铺格在 gsCarpetOpen；清除命中则覆盖并计数。
+-- 饼干腾空与保险箱开启的覆盖种子由 Game.carpetVacateSeeds 补充；
+-- 沉降中途底行收饼由 Board 把 drain 位并入清除列表。不拥有重力逻辑。
 module Match3.Carpet
   ( coverCarpets
   , levelCarpets

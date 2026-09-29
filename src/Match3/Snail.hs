@@ -1,7 +1,5 @@
--- | Snails (开心消消乐蜗牛): mobile blockers that crawl one step after each
--- successful player move. Push gems ahead; reverse at edges / solid blockers /
--- portal endpoints (immortal on a portal permanently kills the pair).
--- trySwap runs a follow-up cascade if the crawl assembles a match (no re-crawl).
+-- | 蜗牛：移动障碍，成功玩家步后爬一格；推宝石/倒计时/双面；碰边/硬障/墙列表则掉头。
+-- Game 传入皮带格与传送门端点为墙。爬后若成匹配由 trySwap 再跑一轮连锁（不重爬）。
 module Match3.Snail
   ( stepSnailAt
   , stepSnailAtBlocked

@@ -1,4 +1,8 @@
 {-# LANGUAGE DeriveGeneric #-}
+
+-- | 领域类型与关卡表：颜色、宝石种类、叠层、单元格内容、目标、结局、38 关配置。
+-- 提供构造器 / 谓词 / goalMet*；不含交换、连锁或 IO。
+-- specialActivates 定义软锁：多冰 / 锁链 / 窗帘下特殊块不点火。
 module Match3.Types
   ( Color(..)
   , GemKind(..)
@@ -209,6 +213,8 @@ snailDir (Snail dr dc) = (dr, dc)
 snailDir _ = (0, 0)
 
 
+-- | 软锁纪律：ice>1 只削冰；Chain/Curtain 揭层但不激活特殊；
+-- 末层冰（ice==1）清除并激活；Fog/Steam/Freeze 不构成软锁。
 -- | True when a Line/Bomb/Rainbow gem would fire on a clear/activation seed.
 -- Matches expandSpecials soft-lock discipline: ice>1 chips only; Chain/Curtain
 -- peel without activating. Last ice (ice==1) clears and activates. Fog/Steam/

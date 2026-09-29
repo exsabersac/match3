@@ -1,4 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+
+-- | 棋盘纯规则：读写格、匹配、清除与特殊扩展、重力/补子、传送门沉降、UFO 波次连锁。
+-- 拥有 runCascade* / clearFromSeeds* / settleBoardPortals / expandSpecials。
+-- 不拥有：步数与目标结算、道具扣次、战役装饰（见 Game）。
 module Match3.Board
   ( getCell
   , setCell
@@ -546,6 +550,7 @@ runCascadeScored prefer g b =
   in (b', cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, g')
 
 
+-- | UFO 吸收前把特殊降为 Normal，清除时不走 expandSpecials（吸走 ≠ 引爆）。
 -- | Demote Line/Bomb/Rainbow at UFO absorb seeds to Normal so clearFromSeedsDetailed
 -- removes them without expandSpecials detonation (吸走 ≠ 引爆). Ice / overlays kept.
 maskUfoAbsorbSpecials :: Board -> [Pos] -> Board
@@ -777,6 +782,7 @@ shufflePlayable = randomPlayableBoard
 
 
 
+-- | 皮带后：有匹配则全连锁；无匹配仍 settle（收皮带送到底行的饼干）；settle 后再匹配则续连锁。
 -- | After conveyor shift: cascade when the shift formed a match (settle inside
 -- as usual). When it did *not*, still settle (gravity→drain→portal→gravity→drain)
 -- so cookies belt-delivered onto the bottom row collect toward GoalCookie —

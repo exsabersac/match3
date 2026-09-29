@@ -62,8 +62,9 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Board.Grid` | 坐标边界、读写格（`getCell` = `boardAt`，O(1)）、交换、相邻、可空盘面 `MBoard`（仍是行列表，只在一轮消除 / 沉降内部使用）、`randomColor` | 任何规则 |
 | `Match3.Board.Match` | `MatchRun` / `findMatchRuns` / `hasAnyMatch`、`findHint` / `hasValidMove` | 修改盘面 |
 | `Match3.Board.Clear` | 一轮消除（匹配 / 种子）、特殊扩展与生成、彩蛋、邻格削层与触发、飞碟吸收（吸走 ≠ 引爆）、计分公式 | 沉降、连锁循环 |
-| `Match3.Board.Gravity` | 重力（固定格分段）、底行饼干、传送门沉降、补子、`settleRefill` | 消除 |
-| `Match3.Board.Cascade` | 连锁的**单一实现**：`cascadeMatches` / `cascadeMatchesFrom` / `cascadeSeeds` / `cascadeAfterBelt` / `cascadeCountdowns` 返回 `CascadeRun`（终盘 + `CascadeTally` 计数记录 + `[CascadeWave]` + 飞碟 + 生成器），调用方直接读字段（第三刀删掉了元组兼容层 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 与 `traceCascade*`）；`stepCascade` 保留为「恰好一轮」的小工具 | 步数 / 目标结算、道具扣次 |
+| `Match3.Board.Gravity` | 重力（固定格分段）、边缘收集（`drainEdgesMWith`：按元素的 `edDrains` 方向，底 → 左 → 右 → 上，收完再落，内置只有饼干 = 底边）、传送门沉降、补子、`settleRefill` / `settleDrainWith` | 消除 |
+| `Match3.Board.Cascade` | 连锁的**单一实现**：`cascadeMatches` / `cascadeMatchesFrom` / `cascadeSeeds` / `cascadeAfterBelt` / `cascadeCountdowns` 返回 `CascadeRun`（终盘 + `CascadeTally` 计数记录 + `[CascadeWave]` + 飞碟 + 生成器），调用方直接读字段（第三刀删掉了元组兼容层 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 与 `traceCascade*`）；`stepCascade` 保留为「恰好一轮」的小工具；段 2c 起另有 `cascadeAfterEndWith`（步末补结算：挖 `erHoles` 空洞 → 边缘收集 + 补子 → 再连锁） | 步数 / 目标结算、道具扣次 |
+| `Match3.Board.Default` | 段 2c：不带 `With` 的旧名（`cascadeMatches` / `clearMatches` / `applyGravity` / `findHint` …）= `*With defaultRegistry`。`Board.{Match,Clear,Gravity,Cascade}` 自身不再 import `Element.Builtin`，只收 `Registry` 参数；主流程一律把 `reg` 往下传，不经本模块 | 规则 |
 | `Match3.Board.Random` | 随机盘、稳定盘、可玩盘、`shufflePlayable` | 保留装饰（见 `Game.Shuffle`） |
 | `Match3.Game.State` | `GameState`、撤销快照、`MoveFx` / `moveFx` / `clearMoveFx`（边沿触发）、`undoMove`、`applyHint` | 结算 |
 | `Match3.Game.Tally` | 结算计数辅助：颜色袋、保险箱 / 时间精灵计数、地毯腾空格 | 结局判定 |
@@ -162,7 +163,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ### 一个格子的层
 
-一格自上而下是：叠层（`CellOverlay`，草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）→ 冰层（`iceLayers`）→ 本体（宝石各种类、石头、宝箱……、`Custom 名字 值`）。`Slot` 标出一个定义占哪一层：`SlotCell i` / `SlotOverlay i`（内置，数组下标）、`SlotIce`、`SlotCustom`（按 `Custom` 的名字查表）。查询时按层合成：挡交换 = 任一层挡；点火 = 自上而下第一个 `Just`；直接命中 = 最上面一个非穿透层先吸收。
+一格自上而下是：叠层（`CellOverlay`，草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）→ 冰层（`iceLayers`）→ 本体（宝石各种类、石头、宝箱……、`Custom 名字 值`）→ 地面层（段 2c，`GameState.gsGround :: [(Pos,(名字, 层数))]`，不在 `Cell` 里、不占格、不随重力 / 洗牌移动；内置关卡恒为空）。`Slot` 标出一个定义占哪一层：`SlotCell i` / `SlotOverlay i`（内置，数组下标）、`SlotIce`、`SlotCustom`（按 `Custom` 的名字查表）、`SlotGround`（按 `gsGround` 里的名字查表）。查询时按层合成：挡交换 = 任一层挡；点火 = 自上而下第一个 `Just`；直接命中 = 最上面一个非穿透层先吸收。
 
 ### `ElementDef` 字段与调用时机
 
@@ -173,7 +174,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `edBlocksMatch` | 冰 / 叠层盖住的宝石不参与匹配 | `matchColorWith` |
 | `edBlocksSwap` | 本格不能被交换 | `Move` / `Boosters` 校验、`findHint` |
 | `edActivates` | 特殊块能否点火（软锁纪律） | `Clear.expandSpecials` |
-| `edFalls` / `edPortal` / `edDrains` | 随重力下落（否则把列分段）/ 可穿传送门 / 落到底行被收走 | `Board.Gravity` |
+| `edFalls` / `edPortal` / `edDrains` | 随重力下落（否则把列分段）/ 可穿传送门 / 到达哪些边时被收走（`[Edge]`，`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`；内置饼干 = `[EdgeBottom]`，段 2c 起方向可配） | `Board.Gravity.drainEdgesMWith` |
 | `edOnHit` | 直接命中（锤子、爆炸、十字）：`HitPierce` 穿过 / `HitAbsorb 新格` 吸收 / `HitDestroy` 打碎 / `HitImmune` 免疫 | `Clear.clearWaveWith`、`Ice.chipIceOnClear`、`hammerImmune` |
 | `edAdjacent` | 邻格真消除时的反应（`AdjacentRule 顺序 规则`，规则拿到 `AdjCtx{真消除格, 直接命中格, 保护格}`，返回 `AdjOut{新盘, 打碎格, 生成格}`） | `Clear.clearWaveWith`（按 `arOrder` 依次跑） |
 | `edStripOnClear` | 本格真消除时叠层随格清掉 | `Clear` |
@@ -181,7 +182,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `edVacatesCarpet` | 离开格子也算覆盖地毯 | `Game.Tally.carpetVacateSeedsWith` |
 | `edKeepOnShuffle` | 洗牌时原样放回 | `Game.Shuffle.extractDecorWith` / `ensurePlayableWith` |
 | `edBlast` | 被消除且能点火时的爆炸范围 | `Clear.expandSpecials` |
-| `edEnd` | 步末规则 `EndRule{erPhase, erOrder, erRun}`：`PhaseTick`（倒计时）→ 皮带（关卡特性）→ `PhaseSpread`（蔓延）→ `PhaseMove`（蜗牛）→ 再连锁 | `Game.Resolve.runPhase`、`Cascade.cascadeCountdownsWith`、`Trace.traceSpreadsWith` |
+| `edGround` | 地面层（`SlotGround`）：上方格子每被消除 / 收走一次，层数 → 新层数（`Nothing` = 清掉）；每去掉一层按 `edCounter` 计 1 | `Registry.hitGroundWith`（`Game.Resolve` 逐轮调用） |
+| `edEnd` | 步末规则 `EndRule{erPhase, erOrder, erRun, erHoles}`：`PhaseTick`（倒计时）→ 皮带（关卡特性）→ `PhaseSpread`（蔓延）→ `PhaseMove`（蜗牛）→ 再连锁；`erHoles`（段 2c）在全部步末阶段之后给出要挖空的格，由 `cascadeAfterEndWith` 补结算（内置三处都是 `const []`） | `Game.Resolve.runPhase`、`Cascade.cascadeCountdownsWith`、`Trace.traceSpreadsWith` |
 | `edPlace` | 关卡放置：`Place 名字 参数 坐标` 经它落到格子上 | `Game.Level.decorateLevelWith`（`levelPlacements` 放置表） |
 
 `baseDef name` 是自定义元素的缺省：挡交换、会下落、直接命中免疫、洗牌保留、无邻格 / 步末规则、放置结果为 `Custom name n`——即「注册了但什么都不做」的惰性占格。未注册的 `Custom` 也按它处理。
@@ -220,14 +222,31 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 前端步末阶段按事件种类查表分派：`ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.endStageDrawers`（阶段 → 绘制）、`UI.Layout.elementRGBTable`（元素名 → 颜色）。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
 
+### 扩展钩子（段 2c）
+
+段 2c 把「新增元素只经注册表接入」补齐到下列类别，主流程（`Game.Resolve` / `Board.*`）不再需要为新元素改代码。`Engine.*` 在 2c 中**没有改动**。
+
+| 钩子 | 类型 / 入口 | 用途 | 护栏测试（`test/Spec/Extension.hs`，样例元素只在测试里） |
+|------|-------------|------|------|
+| 注册表下传到底 | `Board.*With reg`；旧名在 `Board.Default` | Board 层不依赖内置表 | `ext_board_modules_take_registry`（源码扫描） |
+| 按名字的目标 | `LevelGoal` 新增 `GoalNamed 名字 N`（读 `gsElementCounts`，由 `edCounter` / `edDiffCounter = CountNamed 名字` 累加）；HUD / 标题 / 失败提示 / 选关已接 | 自定义元素当关卡目标 | `ext_goal_named_counts_crate` |
+| 地面层 | `SlotGround` + `edGround` + `gsGround`（`Level.levelGround`） | 果冻类「格子下面的层」 | `ext_ground_layer_test_element` |
+| 边缘收集 | `edDrains :: [Edge]` | 任意方向的收集物 | `ext_edge_drain_side_collectible` |
+| 步末补结算 | `EndRule.erHoles` + `Cascade.cascadeAfterEndWith` | 步末阶段挖掉格子后的沉降 / 补子 / 再连锁 | `ext_post_end_settle_hole_element` |
+| 洗牌走注册表 | `Game.Shuffle.shuffleGameWith reg`、`Game.State.applyHintWith reg`（`Engine.playWith` 的 Shuffle / Hint 分支） | 自定义元素的洗牌保留 / 提示 | `ext_manual_shuffle_keeps_crate_via_engine` |
+
+**步末补结算选统一路径（无开关）**：交换与道具的步末之后一律经 `cascadeAfterEndWith`：先挖 `erHoles` 的空洞，再做边缘收集 + 补子；盘面有变化或有格被收走时记一个只含沉降的轮次，之后成消再接普通连锁；什么都没发生时原样返回、**不消耗随机数、不加轮次**。对内置元素它恒为空操作，依据：① 类型层面——`Board` 不能表示空洞，内置 `erHoles` 全是 `const []`；步末阶段（倒计时 / 皮带 / 蔓延 / 蜗牛）不移动饼干（蜗牛把饼干当障碍），皮带后的再连锁本身已含沉降；`refill` 在没有空洞时不取随机数。② 实测——38 关 × 种子 1..100 × 15 步，每步检查主交换、三种道具与全部可成交的交换对，共 **610,751** 手，步末终盘上待挖空洞 / 待收边缘 / 沉降变化全部为 0；金标准 2344 行全等。
+
 ### 新增一种元素的步骤
 
-1. 选层：本体用 `Custom "名字" 值`（值自定义，例如耐久）；需要新的内置层时才动 `Types`。
-2. 写定义：从 `baseDef "名字"` 起，只改需要的字段（例如 `edOnHit`、`edAdjacent`、`edCounter`、`edFalls`）。邻格规则选一个不和现有顺序冲突的 `arOrder`。
-3. 注册：`register def defaultRegistry`，把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `decorateLevelWith` / `traceEventsWith`）。
+1. 选层：本体用 `Custom "名字" 值`（值自定义，例如耐久）；格子下面的层用 `SlotGround`（放进 `gsGround`）；需要新的内置层时才动 `Types`。
+2. 写定义：从 `baseDef "名字"` 起，只改需要的字段（例如 `edOnHit`、`edAdjacent`、`edCounter`、`edFalls`、`edDrains`、`edGround`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。
+   - 只经注册表即可接入的类别（白名单）：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留）、叠层与冰的命中规则、地面层 `SlotGround`、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素。
+   - 仍需改主流程的：可匹配的有色宝石、跨轮状态、成对组合规则、关卡级特性（见下节）。
+3. 注册：`register def defaultRegistry`，把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 `edPlace` 落格。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；步末有新效果时在前端各查找表里加一行。
-6. 测试：参照 `element_registry_custom_crate_extensibility`（测试专用「木箱」只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
+6. 测试：参照 `element_registry_custom_crate_extensibility` 与 `test/Spec/Extension.hs`（测试专用「木箱」只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
 ### 仍保留专门分支的元素
 
@@ -240,7 +259,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 特殊 × 特殊合成 | 两个格子之间的组合规则（`Combos`），单元素钩子表达不了成对关系 |
 | 飞碟 | 不在格子里（`gsUfos`），按整轮吸收同色，时机在一轮清除之后 |
 | 皮带 / 传送门 / 地毯 | 关卡特性，存在 `GameState`（`gsBelts` / `gsPortals` / `gsCarpet*`）而不在格子里 |
-| `LevelGoal` / `SpreadKind` | 封闭 ADT，被关卡表、目标判定、HUD / 标题文案穷举匹配；改成开放表示要改所有穷举点，却不带来新行为 |
+| `LevelGoal` / `SpreadKind` | 封闭 ADT，被关卡表、目标判定、HUD / 标题文案穷举匹配；改成开放表示要改所有穷举点，却不带来新行为。段 2c 起新元素用 `GoalNamed 名字 N` 作目标，不必再加构造器 |
 | 魔法帽 / 染色瓶 / 蜗牛内部的 `isGem` / 可推判断 | 「对任意宝石生效」的语义谓词；换成注册表查询（如 `edColor`）会把双面块 / 倒计时等带色格的边界情况一起改掉，属于规则变化 |
 | 自定义元素不能是可匹配的有色宝石 | 需要让 `Custom` 参与匹配与补子生成，是新玩法，机制刀停期间不做 |
 

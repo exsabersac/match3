@@ -31,6 +31,9 @@
 若蜗牛后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
     │
     ▼
+步末补结算 cascadeAfterEndWith（段 2c：挖 erHoles 空洞 → 边缘收集 + 补子 → 成消再连锁；内置元素下恒为空操作）
+    │
+    ▼
 汇总分数/收集/地毯/精灵+2步/−1步 → decideOutcome → 非终局则 ensurePlayable（无可走步时自动洗牌）
 ```
 
@@ -54,7 +57,7 @@
 每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
 1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay，邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵，触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
-2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送 → 再重力/收集（循环至稳）。
+2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送 → 再重力/收集（循环至稳）。段 2c 起收集按元素的 `edDrains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `edCounter` 计数；地面层（`gsGround`）在每轮的真清除格 + 收集格上各削一层。
 3. `refill` 补随机普通宝石。
 4. `stepUfos`：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 

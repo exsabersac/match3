@@ -66,6 +66,9 @@
 | 传送门 | `gsPortals :: [(Pos,Pos)]` | 双向；沉降时 A 有子 B 空则传送 |
 | 飞碟 | `Ufo{ufoCell,ufoColor}`，`gsUfos` | 波末吸正交同色再移格；吸走≠引爆 |
 | 地毯 | `gsCarpetOpen` / `gsCarpetsCovered` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
+| 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(名字, 层数))]`），`SlotGround` / `edGround` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
+| 边缘收集 | `edDrains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
+| 步末补结算 | `EndRule.erHoles`、`cascadeAfterEndWith` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
 
 ## 目标与结局
 
@@ -75,6 +78,7 @@
 | 单色收集 | `GoalCollect` | `gsCollected` + 颜色袋 |
 | 多色收集 | `GoalCollectMulti` | `gsColorBag` |
 | 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | 对应 `Goal*` | 各 `gs*Cleared` / `gsUfoCollected` / `gsCarpetsCovered` 等 |
+| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsElementCounts` 里该名字累计 ≥ N（扩展元素经 `edCounter` / `edDiffCounter = CountNamed 名字` 计数） |
 | 步数 | `gsMoves` / `MovesLeft` | 成功步 −1；时间精灵可 +2 |
 | 步数银行 | `carryMovesBonus` | 战役过关最多带 3 步 |
 | 交换无效 | `InvalidSwap` | 越界/非邻/无次数等 |

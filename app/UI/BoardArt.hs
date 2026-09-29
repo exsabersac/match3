@@ -132,6 +132,7 @@ primarySprite cell = case cell of
   Bottle c -> "bottle_" ++ colorKey c
   TimeSpirit -> "time_spirit"
   Countdown c _ -> gemSprite c
+  Custom n _ -> n  -- 自定义元素：贴图名 = 元素名（缺图时逐格回退到几何画法）
 
 -- | 精灵版单格：底层宝石 / 障碍 → 特殊标记 → 冰 → 覆盖层 → 层数角标 → 闪白。
 drawCellArt :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> Bool -> IO ()
@@ -201,6 +202,7 @@ drawCellArt ren art pulse x y cell flashing
         Countdown c n -> do
           spr (gemSprite c)
           spr ("countdown_" ++ show (clampI 1 9 n))
+        Custom n k -> spr n >> badge k
       when flashing $
         void (drawSpriteAdd ren art "spark" (rect (x - 10) (y - 10) (cellPx + 20) (cellPx + 20)) (V3 255 255 230) 210)
 

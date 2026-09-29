@@ -2,6 +2,8 @@
 
 本文描述 **当前代码** 中一次成功玩家步的编排顺序，入口为 `Match3.Game.trySwap`（校验与起手选择在 `Match3.Game.Move.resolveSwap`，其后的步骤由交换与三种道具共用的 `Match3.Game.Resolve.resolveMove` 完成；`runMove` 为其别名）。不发明源码中不存在的机制。
 
+第二刀 2b 起，下文每一步里「某个格子怎么反应」（能否交换、是否挡匹配、被命中 / 被邻格波及时削层还是打碎、是否下落、计数、洗牌是否保留、步末规则）都由元素注册表分派（`Match3.Element`，见 [architecture.md](architecture.md#元素框架与事件)）；流水线顺序本身不变，邻格规则按固定顺序表执行。
+
 ## 总览
 
 ```

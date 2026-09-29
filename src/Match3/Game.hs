@@ -8,7 +8,7 @@
 -- * "Match3.Game.Outcome"  —— 目标满足、结局判定、选关解锁、失败提示
 -- * "Match3.Game.Shuffle"  —— 保装饰洗牌、自动洗牌 ensurePlayable
 -- * "Match3.Game.Level"    —— 开局、战役装饰、每日、重开 / 下一关、步数携带
--- * "Match3.Game.Trace"    —— 回放脚本类型 MoveTrace / EndStep、applyEndEffect、步末记录
+-- * "Match3.Game.Trace"    —— 回放脚本类型 MoveTrace / EndStep、applyEndEffect、步末记录、效果事件 traceEvents
 -- * "Match3.Game.Resolve"  —— 交换与三种道具共用的结算 resolveMove（同时产出 MoveTrace）
 -- * "Match3.Game.Move"     —— trySwap（= runMove）与 traceSwap（resolveSwap 的两个投影）
 -- * "Match3.Game.Boosters" —— 锤子 / 自由交换 / 十字清除及其回放（resolve* 的投影）
@@ -50,6 +50,21 @@ module Match3.Game
   , unlockAfterClear
   , unlockAfterOutcome
   , mapClickJump
+    -- * 指定注册表的入口（元素框架；不带 With 的 = 内置注册表）
+  , trySwapWith
+  , resolveSwapWith
+  , resolveHammerWith
+  , resolveFreeSwapWith
+  , resolveCrossClearWith
+  , ensurePlayableWith
+  , extractDecorWith
+  , decorateLevelWith
+  , levelPlacements
+    -- * 效果事件
+  , EventKind(..)
+  , Event(..)
+  , traceEvents
+  , traceEventsWith
   ) where
 
 import Match3.Game.Boosters

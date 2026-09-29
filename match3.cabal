@@ -55,6 +55,11 @@ library
       Match3.Ufo
       Match3.Snail
       Match3.Carpet
+      Match3.Element
+      Match3.Element.Types
+      Match3.Element.Registry
+      Match3.Element.Builtin
+      Match3.Element.Event
   other-modules:
       Paths_match3
   autogen-modules:

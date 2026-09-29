@@ -88,4 +88,5 @@ colorPositions b col =
       Bottle _ -> False
       TimeSpirit -> False
       Flip col' _ -> col' == col
+      Custom _ _ -> False
   ]

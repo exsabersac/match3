@@ -28,6 +28,7 @@ module UI.Playback
 import ComboFx
 import Data.Word (Word8)
 import Match3.Core
+import Match3.Element.Event (endEffectElement, endEffectPairs)
 import System.Random (StdGen, mkStdGen, randomR)
 import UI.Layout
 import UI.Types
@@ -87,18 +88,25 @@ applyCascadeEvent app ev = case ev of
          , appShakeAmp = if k >= 2 then csShake st else appShakeAmp app
          }
   EvEndStage st ->
-    -- 步末：新长出的藤 / 巧 / 蒸汽格迸几粒同色碎屑，倒计时减一冒红色火星；皮带 / 蜗牛 / 洗牌只靠位移动画
-    let crumbs = case stKind st of
-          StSpread ->
-            concat
-              [ crumbParticles (appPulse app + i) (spreadRGB kind) [q]
-              | (i, e) <- zip [0 :: Int ..] (stSteps st)
-              , EndSpread kind pairs <- [esEffect e]
-              , (_, q) <- pairs
-              ]
-          StTick -> crumbParticles (appPulse app) (255, 110, 70) [p | (p, _) <- stageMoves st]
-          _ -> []
+    -- 步末：按表现段种类查 endCrumbTable（藤 / 巧 / 蒸汽迸同色碎屑，倒计时冒红色火星；皮带 / 蜗牛 / 洗牌只靠位移动画）
+    let crumbs = maybe [] (\f -> f (appPulse app) st) (lookup (stKind st) endCrumbTable)
     in app {appParticles = crumbs ++ appParticles app}
+
+-- | 步末碎屑播放表：表现段种类 → 粒子生成。颜色按步末效果的元素名查 UI.Layout.elementRGBTable。
+endCrumbTable :: [(StageKind, Int -> EndStage -> [Particle])]
+endCrumbTable =
+  [ ( StSpread
+    , \pulse st ->
+        concat
+          [ crumbParticles (pulse + i) rgb [q]
+          | (i, e) <- zip [0 :: Int ..] (stSteps st)
+          , let eff = esEffect e
+          , Just rgb <- [lookup (endEffectElement eff) elementRGBTable]
+          , (_, q) <- endEffectPairs eff
+          ]
+    )
+  , (StTick, \pulse st -> crumbParticles pulse (255, 110, 70) [p | (p, _) <- stageMoves st])
+  ]
 
 -- | 小颗碎屑（比消除粒子少、慢、小），用于步末效果。
 crumbParticles :: Int -> (Word8, Word8, Word8) -> [Pos] -> [Particle]

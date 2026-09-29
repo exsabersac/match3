@@ -3,21 +3,31 @@
 -- | 沉降与补子：重力（固定格不动）、底行饼干收集、传送门传送（settleBoardPortals 循环至稳定）、
 -- 随机补子（refill）以及回放用的 settleRefill。
 --
--- 依赖：Grid（randomColor）。
+-- 依赖：Grid（randomColor）、元素注册表（固定格 edFalls、传送门 edPortal、底收 edDrains）。
+-- 不带 With 的旧名 = 内置注册表。
 -- 不变量：refill 按行优先顺序逐个空洞消耗随机数；settleRefill 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
 module Match3.Board.Gravity
   ( gravityFixedCell
+  , gravityFixedCellWith
   , colGravity
+  , colGravityWith
   , applyGravity
+  , applyGravityWith
   , drainBottomCookies
+  , drainBottomCookiesWith
   , applyPortalTeleports
+  , applyPortalTeleportsWith
   , settleBoardPortals
+  , settleBoardPortalsWith
   , refill
   , settleRefill
+  , settleRefillWith
   ) where
 
 import Data.List (nub)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Registry (Registry, drainsWith, fallsWith, portalWith)
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
@@ -27,16 +37,23 @@ import Match3.Board.Grid
 -- not portal-transferable, so gravity-packing them into a portal/belt slot (or
 -- off a décor seed via Cross column wipe) permanently soft-locks the layout.
 gravityFixedCell :: Cell -> Bool
-gravityFixedCell c =
-  isBottle c || isMaker c || isMagicHat c || isSnail c
+gravityFixedCell = gravityFixedCellWith defaultRegistry
+
+-- | 固定格（指定注册表）：本体 edFalls = False。
+gravityFixedCellWith :: Registry -> Cell -> Bool
+gravityFixedCellWith reg = not . fallsWith reg
 
 -- | Column gravity: fixed immortals stay put and split the column into segments;
 -- fallable cells (gems / Cookie / Countdown / Flip / clearable obstacles) pack
 -- down within each segment.
 colGravity :: [Maybe Cell] -> [Maybe Cell]
-colGravity = concatMap packSegment . splitFixed
+colGravity = colGravityWith defaultRegistry
+
+-- | colGravity（指定注册表）。
+colGravityWith :: Registry -> [Maybe Cell] -> [Maybe Cell]
+colGravityWith reg = concatMap packSegment . splitFixed
   where
-    isFixed (Just c) = gravityFixedCell c
+    isFixed (Just c) = gravityFixedCellWith reg c
     isFixed Nothing = False
     splitFixed [] = []
     splitFixed xs =
@@ -51,7 +68,11 @@ colGravity = concatMap packSegment . splitFixed
 
 -- | 整盘按列下落：固定格（染色瓶 / 果汁机 / 魔法帽 / 蜗牛）原地不动并把列分段，段内可下落的格压到段底。
 applyGravity :: MBoard -> MBoard
-applyGravity mb = transposeM (map colGravity (transposeM mb))
+applyGravity = applyGravityWith defaultRegistry
+
+-- | applyGravity（指定注册表）。
+applyGravityWith :: Registry -> MBoard -> MBoard
+applyGravityWith reg mb = transposeM (map (colGravityWith reg) (transposeM mb))
 
 -- | Collect cookies that sit on the bottom row after gravity (开心消消乐饼干掉落收集).
 -- Removes them, re-applies gravity, repeats until no bottom-row cookies remain.
@@ -59,14 +80,18 @@ applyGravity mb = transposeM (map colGravity (transposeM mb))
 -- occupied mid-settle (gravity/portal/belt → bottom → drain) — before/after
 -- board compare cannot see that intermediate occupancy.
 drainBottomCookies :: MBoard -> (MBoard, Int, [Pos])
-drainBottomCookies mb =
+drainBottomCookies = drainBottomCookiesWith defaultRegistry
+
+-- | drainBottomCookies（指定注册表）：底行本体 edDrains 的格被收走。
+drainBottomCookiesWith :: Registry -> MBoard -> (MBoard, Int, [Pos])
+drainBottomCookiesWith reg mb =
   let bottom = boardSize - 1
       cols =
         [ c
         | c <- [0 .. boardSize - 1]
         , case (mb !! bottom) !! c of
-            Just Cookie -> True
-            _ -> False
+            Just cell -> drainsWith reg cell
+            Nothing -> False
         ]
       sites = [(bottom, c) | c <- cols]
       n = length cols
@@ -78,24 +103,25 @@ drainBottomCookies mb =
                  (\m c -> setM m (bottom, c) Nothing)
                  mb
                  cols
-             fallen = applyGravity mb1
-             (mb2, n2, sites2) = drainBottomCookies fallen
+             fallen = applyGravityWith reg mb1
+             (mb2, n2, sites2) = drainBottomCookiesWith reg fallen
          in (mb2, n + n2, sites ++ sites2)
 
 -- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
 -- moves A -> B (and reverse). Used after gravity + bottom-cookie drain so clears can
 -- open exits without snatching cookies that already touched the bottom row.
 applyPortalTeleports :: [(Pos, Pos)] -> MBoard -> MBoard
-applyPortalTeleports portals mb =
+applyPortalTeleports = applyPortalTeleportsWith defaultRegistry
+
+-- | applyPortalTeleports（指定注册表）：本体 edPortal 的格可传送。
+applyPortalTeleportsWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
+applyPortalTeleportsWith reg portals mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
   foldl tryPair mb (nub portals)
   where
     atM m (r, c) = (m !! r) !! c
-    transferable (Just (Gem _ _ _ _)) = True
-    transferable (Just (Countdown _ _)) = True
-    transferable (Just Cookie) = True
-    transferable (Just (Flip _ _)) = True
-    transferable _ = False
+    transferable (Just cell) = portalWith reg cell
+    transferable Nothing = False
     tryPair m (a, b) =
       case (atM m a, atM m b) of
         (ca, Nothing)
@@ -109,12 +135,16 @@ applyPortalTeleports portals mb =
 -- (触底优先于传送门); cookies that teleport onto a bottom exit still drain after.
 -- Third component: bottom cells cookies drained from (Carpet / particle seeds).
 settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
-settleBoardPortals portals mb =
-  let fallen = applyGravity mb
-      (drained1, n1, sites1) = drainBottomCookies fallen
-      ported = applyPortalTeleports portals drained1
-      fallen2 = if ported == drained1 then ported else applyGravity ported
-      (drained2, n2, sites2) = drainBottomCookies fallen2
+settleBoardPortals = settleBoardPortalsWith defaultRegistry
+
+-- | settleBoardPortals（指定注册表）。
+settleBoardPortalsWith :: Registry -> [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
+settleBoardPortalsWith reg portals mb =
+  let fallen = applyGravityWith reg mb
+      (drained1, n1, sites1) = drainBottomCookiesWith reg fallen
+      ported = applyPortalTeleportsWith reg portals drained1
+      fallen2 = if ported == drained1 then ported else applyGravityWith reg ported
+      (drained2, n2, sites2) = drainBottomCookiesWith reg fallen2
   in (drained2, n1 + n2, sites1 ++ sites2)
 
 -- | 按行优先顺序把每个空洞补成随机普通宝石；每个洞消耗一次 randomColor。
@@ -134,7 +164,11 @@ refill g0 mb =
 
 -- | 一轮沉降：settle + refill（与 stepCascadeDetailed / 种子清除用的完全相同）。
 settleRefill :: RandomGen g => [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)
-settleRefill portals g mb =
-  let (settled, _cookies, cookSites) = settleBoardPortals portals mb
+settleRefill = settleRefillWith defaultRegistry
+
+-- | settleRefill（指定注册表）。
+settleRefillWith :: RandomGen g => Registry -> [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)
+settleRefillWith reg portals g mb =
+  let (settled, _cookies, cookSites) = settleBoardPortalsWith reg portals mb
       (b', g') = refill g settled
   in (b', cookSites, g')

@@ -45,6 +45,12 @@ drawParticles ren = mapM_ drawOne
 -- | 几何降级版的单格绘制：按格子内容画宝石 / 特殊块 / 障碍 / 叠层 / 层数（约 540 行的大 case，第二刀拆分）。
 drawGemAt :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
 drawGemAt ren x y cell flashing = case cell of
+  Custom _ _ -> do
+    -- 自定义元素（元素框架开放槽，内置关卡不出现）：灰色方块
+    let gap = 4 :: CInt
+        v = if flashing then 230 else 150
+    rendererDrawColor ren $= V4 v v (v + 10) 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
   Stone layers -> do
     let gap = 3 :: CInt
         (cr, cg, cb) = if flashing then (200, 200, 200) else (90, 90, 100)

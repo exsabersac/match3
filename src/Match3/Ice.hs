@@ -1,12 +1,16 @@
 -- | 宝石冰层（Int）：匹配/清除种子时削一层；末层同波清除宝石。
 -- 与 overlay 火箭冰冻 Freeze（只挡交换）不同。
+--
+-- 第二刀 2b：直接命中改由元素框架按层结算（冰层 → 叠层 → 本体，见 Match3.Element.Registry.directHitWith，
+-- 各层反应在 Match3.Element.Builtin）；chipIceOnClear 保留为内置注册表上的同名入口。
 module Match3.Ice
   ( chipIceOnClear
   , iceLayers
   , mkIceGem
   ) where
 
-import Data.List (nub)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Registry (chipOnHitWith)
 import Match3.Types
 
 -- | Chip one ice layer on each seed / handle direct-hit peel locks.
@@ -17,83 +21,4 @@ import Match3.Types
 -- (Safe opens to Cookie). MagicHat/Maker/Snail/Bottle/Cookie are immune (persist);
 -- cookies only collect via bottom-row drain, never mid-board blast wipe.
 chipIceOnClear :: Board -> [Pos] -> (Board, [Pos])
-chipIceOnClear b seeds = foldl step (b, []) (nub seeds)
-  where
-    step (board, clearable) p =
-      case get board p of
-        Gem col kind n o
-          | n > 1 ->
-              (set board p (Gem col kind (n - 1) o), clearable)
-          | n == 1 ->
-              -- last ice: gem clears (overlays go with the cell)
-              (board, p : clearable)
-          | Just (Chain layers) <- o ->
-              if layers <= 1
-                then (set board p (Gem col kind 0 Nothing), clearable)
-                else (set board p (Gem col kind 0 (Just (Chain (layers - 1)))), clearable)
-          | Just (Curtain layers) <- o ->
-              if layers <= 1
-                then (set board p (Gem col kind 0 Nothing), clearable)
-                else (set board p (Gem col kind 0 (Just (Curtain (layers - 1)))), clearable)
-          | otherwise ->
-              -- bare gem / Freeze / Fog / Steam / Grass…: clear
-              (board, p : clearable)
-        Stone n ->
-          -- Direct hit chips one stone layer (hammer/cross); last layer removes
-          if n <= 1
-            then (board, p : clearable)
-            else (set board p (mkStoneLayers (n - 1)), clearable)
-        Chest n ->
-          -- Same single-layer chip as Stone (not full wipe on Line/Bomb/Hammer)
-          if n <= 1
-            then (board, p : clearable)
-            else (set board p (mkChestLayers (n - 1)), clearable)
-        Honey n ->
-          if n <= 1
-            then (board, p : clearable)
-            else (set board p (mkHoneyLayers (n - 1)), clearable)
-        Balloon _ ->
-          (board, p : clearable)
-        Cookie ->
-          -- Cookies only fall+drain at bottom (GoalCookie); immune to direct seeds
-          (board, clearable)
-        Cake n ->
-          if n <= 1
-            then (board, p : clearable)
-            else (set board p (mkCakeLayers (n - 1)), clearable)
-        MagicHat ->
-          -- Hats only trigger via adjacent clear; immune to direct seeds (Maker parity)
-          (board, clearable)
-        Maker _ _ ->
-          -- Makers only charge via adjacent same-color; immune to direct clear seeds
-          (board, clearable)
-        Snail _ _ ->
-          -- Snails crawl; immune to direct clear seeds (persist as mobile blockers)
-          (board, clearable)
-        Safe n ->
-          -- Direct hit chips safe; last layer opens into Cookie (stays on board)
-          if n <= 1
-            then (set board p mkCookie, clearable)
-            else (set board p (mkSafeLayers (n - 1)), clearable)
-        Flip _ back ->
-          -- Dual-face: first hit flips to Normal gem of back color (does not clear)
-          (set board p (mkGem back), clearable)
-        Surprise ->
-          -- Direct seed: listed clearable so openSurprises sees the hit;
-          -- special outcomes are saved from holes there; explode expands 3×3.
-          (board, p : clearable)
-        Bottle _ ->
-          -- Dye bottle immune to direct clear (like Maker); stays
-          (board, clearable)
-        TimeSpirit ->
-          -- Time spirit clears on direct hit (hammer / blast)
-          (board, p : clearable)
-        Countdown _ _ ->
-          (board, p : clearable)
-    get board (r, c) = (board !! r) !! c
-    set board (r, c) v =
-      take r board
-        ++ [take c row ++ [v] ++ drop (c + 1) row]
-        ++ drop (r + 1) board
-      where
-        row = board !! r
+chipIceOnClear = chipOnHitWith defaultRegistry

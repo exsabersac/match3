@@ -85,6 +85,8 @@ module Match3.Types
   , mkCountdown
   , isCountdown
   , countdownTurns
+  , mkCustom
+  , isCustom
   , isGem
   , cellColor
   , cellKind
@@ -157,6 +159,8 @@ data CellContents
   | Bottle Color  -- dye bottle (染色瓶): adjacent clear dyes ortho gems to bottle color
   | TimeSpirit   -- time spirit (时间精灵): adjacent clear awards +2 moves
   | Countdown Color Int
+  | Custom String Int  -- ^ 元素框架的开放槽：注册表里按名字查定义的自定义元素（名字, 状态值）。
+                       -- 只放在末尾，已有构造器的 Show / Ord 不变；内置关卡不使用。
   deriving (Eq, Ord, Show, Generic)
 
 type Cell = CellContents
@@ -245,6 +249,7 @@ iceLayers Surprise = 0
 iceLayers (Bottle _) = 0
 iceLayers TimeSpirit = 0
 iceLayers (Countdown _ _) = 0
+iceLayers (Custom _ _) = 0
 
 cellOverlay :: Cell -> Maybe CellOverlay
 cellOverlay (Gem _ _ _ o) = o
@@ -497,6 +502,14 @@ countdownTurns :: Cell -> Int
 countdownTurns (Countdown _ n) = n
 countdownTurns _ = 0
 
+-- | 自定义元素（元素框架开放槽）：名字 + 状态值（如剩余耐久）。
+mkCustom :: String -> Int -> Cell
+mkCustom = Custom
+
+isCustom :: Cell -> Bool
+isCustom (Custom _ _) = True
+isCustom _ = False
+
 -- | True for ordinary gems and countdown bombs (both match by color).
 isGem :: Cell -> Bool
 isGem (Gem _ _ _ _) = True
@@ -515,6 +528,7 @@ isGem (Flip _ _) = True
 isGem Surprise = False
 isGem (Bottle _) = False
 isGem TimeSpirit = False
+isGem (Custom _ _) = False
 
 -- | Color of a gem / countdown cell. Partial on Stone.
 cellColor :: Cell -> Color
@@ -534,6 +548,7 @@ cellColor (Flip f _) = f
 cellColor Surprise = error "cellColor: Surprise has no color"
 cellColor (Bottle _) = error "cellColor: Bottle has no color (use bottleColor)"
 cellColor TimeSpirit = error "cellColor: TimeSpirit has no color"
+cellColor (Custom n _) = error ("cellColor: custom element " ++ n ++ " has no color")
 
 -- | Kind of a gem cell. Countdown acts as Normal for combo checks.
 cellKind :: Cell -> GemKind
@@ -553,6 +568,7 @@ cellKind (Flip _ _) = Normal
 cellKind Surprise = error "cellKind: Surprise has no kind"
 cellKind (Bottle _) = error "cellKind: Bottle has no kind"
 cellKind TimeSpirit = error "cellKind: TimeSpirit has no kind"
+cellKind (Custom n _) = error ("cellKind: custom element " ++ n ++ " has no kind")
 
 numColors :: Int
 numColors = 5

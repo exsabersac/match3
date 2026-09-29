@@ -10,6 +10,9 @@
 -- * "Match3.Board.Cascade" —— 连锁的单一实现（记录版 cascade* 同时产出计数与逐轮回放；runCascade* / traceCascade* 为兼容投影）
 -- * "Match3.Board.Random"  —— 随机 / 稳定 / 可玩盘面与洗牌
 --
+-- 元素行为（哪些格参与匹配、挡交换、命中反应、邻格波及、重力、计数……）查 "Match3.Element" 的注册表；
+-- 带 With 的函数接受任意注册表，旧名 = 内置注册表 defaultRegistry。
+--
 -- 不拥有：步数与目标结算、道具扣次、战役装饰（见 Match3.Game）。
 module Match3.Board
   ( getCell
@@ -57,6 +60,23 @@ module Match3.Board
   , cascadeAfterBelt
   , cascadeCountdowns
   , stillRun
+    -- * 指定注册表的版本（元素框架；不带 With 的旧名 = 内置注册表）
+  , findMatchRunsWith
+  , hasAnyMatchWith
+  , hasValidMoveWith
+  , findHintWith
+  , expandSpecialsWith
+  , countColorWith
+  , clearMatchesDetailedWith
+  , clearFromSeedsDetailedWith
+  , gravityFixedCell
+  , gravityFixedCellWith
+  , settleBoardPortalsWith
+  , cascadeMatchesWith
+  , cascadeMatchesFromWith
+  , cascadeSeedsWith
+  , cascadeAfterBeltWith
+  , cascadeCountdownsWith
     -- * 逐轮回放（兼容投影）
   , CascadeWave(..)
   , traceCascade

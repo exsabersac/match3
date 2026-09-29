@@ -110,10 +110,12 @@
 | 连击 xN | `gsCombo`、`MoveFx.fxCombo` | 本步有清除的轮数；第 2 轮起弹「连击 xN」，x2 / x3 / x4 / x5+ 分级样式与震屏 |
 | 连击总结 | HUD「N 连击！」 | 全部播完后最高连击 ≥ 2 才显示，约 1.6 s |
 | 得分浮字 | 「+N」 | 每轮 `cwScore`，从本轮消除格中心飘起 |
-| 回放脚本 | `MoveTrace { mtStart, mtWaves, mtFinal, mtEnd }` | `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear` 生成；`mtFinal` 为洗牌前的稳定盘 |
+| 回放脚本 | `MoveTrace { mtStart, mtWaves, mtFinal, mtEnd, mtGen, mtShuffle }` | `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear` 生成；`mtFinal` / `mtGen` 为洗牌前的稳定盘与生成器，`mtShuffle` 为洗牌后盘面 |
 | 步末效果 | `EndStep { esAfterWaves, esBefore, esAfter, esEffect }` | 插在第 `esAfterWaves` 轮之后的非消除变化 |
 | 步末效果种类 | `EndEffect` = `EndCountdownTick` / `EndBeltShift` / `EndSpread SpreadKind` / `EndSnail [SnailMove]` | 倒计时减一 / 皮带移位 / 藤·巧·蒸汽蔓延 / 蜗牛爬行；`applyEndEffect` 可重放回盘面 |
 | 蜗牛一步 | `SnailMove { smFrom, smTo, smDir, smPushed }` | `smFrom == smTo` 表示碰壁掉头 |
+| 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
+| 元素（定义 / 注册表） | `ElementDef`、`Registry`、`defaultRegistry` | 一种格子内容在各时机的反应（见 [architecture.md](architecture.md#元素框架与事件)）；`gsElementCounts` 记注册表元素的具名计数 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |
 | 回放加速 | 点击 / 空格 / 回车 / `N` | 每帧推进 3 帧（`fastStep`）；播放期间锁定交换、道具、撤销、洗牌 |

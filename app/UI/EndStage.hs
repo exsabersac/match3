@@ -21,6 +21,7 @@ import Control.Monad (forM_, void)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
+import Match3.Element.Event (endEffectElement, endEffectPairs)
 import SDL hiding (Normal)
 import UI.BoardArt
 import UI.BoardPrim
@@ -32,12 +33,31 @@ import UI.Types
 --------------------------------------------------------------------------------
 
 drawEndStage :: Renderer -> App -> Double -> EndStage -> IO ()
-drawEndStage ren app t st = case stKind st of
-  StTick -> drawEndTick ren app t st
-  StBelt -> drawEndBelt ren app t st
-  StSpread -> drawEndSpread ren app t st
-  StSnail -> drawEndSnail ren app t st
-  StShuffle -> drawEndShuffle ren app t st
+drawEndStage ren app t st =
+  maybe (drawStatic ren app (stAfter st) 0) (\f -> f ren app t st) (lookup (stKind st) endStageDrawers)
+
+-- | 步末绘制表：表现段种类（由事件类型经 ComboFx.endStageTable 得到）→ 绘制函数。
+endStageDrawers :: [(StageKind, Renderer -> App -> Double -> EndStage -> IO ())]
+endStageDrawers =
+  [ (StTick, drawEndTick)
+  , (StBelt, drawEndBelt)
+  , (StSpread, drawEndSpread)
+  , (StSnail, drawEndSnail)
+  , (StShuffle, drawEndShuffle)
+  ]
+
+-- | 蔓延的生长曲线（按元素名）：藤蔓分 4 段一节一节伸长；巧克力先快后慢；蒸汽匀速。
+spreadProgress :: [(String, Double -> Double)]
+spreadProgress =
+  [ ( "vine"
+    , \t ->
+        let u = t * 4
+            seg = fromIntegral (floor u :: Int)
+        in min 1 ((seg + smoothT (u - seg)) / 4)
+    )
+  , ("choco", easeOutT)
+  , ("steam", id)
+  ]
 
 -- | 倒计时减一：前半段旧数字、后半段新数字，炸弹格红光脉冲 + 数字放大回弹。
 drawEndTick :: Renderer -> App -> Double -> EndStage -> IO ()
@@ -80,15 +100,9 @@ drawEndBelt ren app t st = do
 drawEndSpread :: Renderer -> App -> Double -> EndStage -> IO ()
 drawEndSpread ren app t st = do
   drawStatic ren app (stBefore st) 0
-  forM_ [(kind, pr) | e <- stSteps st, EndSpread kind prs <- [esEffect e], pr <- prs] $ \(kind, (src, q)) -> do
+  forM_ [(endEffectElement (esEffect e), pr) | e <- stSteps st, pr <- endEffectPairs (esEffect e)] $ \(name, (src, q)) -> do
     let (x, y) = cellOrigin q
-        prog = case kind of
-          SpreadVine ->
-            let u = t * 4
-                seg = fromIntegral (floor u :: Int)
-            in min 1 ((seg + smoothT (u - seg)) / 4)
-          SpreadChoco -> easeOutT t
-          SpreadSteam -> t
+        prog = maybe t ($ t) (lookup name spreadProgress)
         w = max 1 (round (fromIntegral cellPx * prog)) :: CInt
         (dr, dc) = (fst q - fst src, snd q - snd src)
         (clip, front)
@@ -101,7 +115,7 @@ drawEndSpread ren app t st = do
                   cx = x + cellPx `div` 2
                   cy = y + cellPx `div` 2
               in (rect (cx - h) (cy - h) (2 * h) (2 * h), rect (cx - h) (cy - h) (2 * h) (2 * h))
-        (cr, cg, cb) = spreadRGB kind
+        (cr, cg, cb) = maybe (255, 255, 255) id (lookup name elementRGBTable)
     rendererClipRect ren $= Just clip
     drawCellAny ren app x y (getCell (stAfter st) q) False
     rendererClipRect ren $= Nothing

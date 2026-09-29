@@ -1,43 +1,42 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 一轮消除：匹配清除（clearMatchesDetailed）与种子清除（clearFromSeedsDetailed），
--- 特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecials）、彩蛋、邻格障碍削层 / 触发，
--- 飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbed：吸走 ≠ 引爆）以及计分公式。
+-- | 一轮消除：匹配清除（clearMatchesDetailed）与种子清除（clearFromSeedsDetailed），两者共用同一个
+-- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecials）、彩蛋、
+-- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbed：吸走 ≠ 引爆）以及计分公式。
 --
--- 依赖：Grid、Match、Ice、Grass、Obstacles。
+-- 第二刀 2b：直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
+-- （Match3.Element.Registry）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
+-- 仍是专门分支：彩蛋开启（surpriseClearPass，多轮开启 + 保存开出的特殊块）、彩虹（由交换对象取色）。
+-- 不带 With 的旧名 = 内置注册表。
+--
+-- 依赖：Grid、Match、元素注册表、Obstacles（彩蛋）。
 -- 同步：这里的函数只被 Match3.Board.Cascade 的单一连锁实现调用（结算与回放同一次计算），
 -- 返回 (挖空后盘面, 清除数, 清除格)；Cascade 再按清除格在消除前盘面上统计障碍计数。
 module Match3.Board.Clear
   ( expandSpecials
+  , expandSpecialsWith
   , spawnSpecials
   , countColor
+  , countColorWith
   , clearMatches
   , clearMatchesAt
   , surpriseClearPass
+  , surpriseClearPassWith
   , clearMatchesDetailed
+  , clearMatchesDetailedWith
   , scoreForCleared
   , scoreForWave
   , maskUfoAbsorbSpecials
   , clearUfoAbsorbed
+  , clearUfoAbsorbedWith
   , clearFromSeedsDetailed
+  , clearFromSeedsDetailedWith
   ) where
 
 import Data.List (foldl', nub)
-import Match3.Ice (chipIceOnClear)
-import Match3.Grass (clearOverlaysOn, clearChocoAdjacent, clearSteamAdjacent, chipAdjacentFogExcept, chipAdjacentChainExcept, chipAdjacentFreezeExcept, chipAdjacentCurtainExcept)
-import Match3.Obstacles
-  ( chipAdjacentStonesExcept
-  , chipAdjacentChestsExcept
-  , chipAdjacentHoneyExcept
-  , chipAdjacentCakesExcept
-  , chipAdjacentSafesExcept
-  , chipAdjacentBalloonsExcept
-  , chipAdjacentTimeSpiritsExcept
-  , triggerAdjacentHatsExcept
-  , chargeAdjacentMakersSit
-  , openSurprises
-  , triggerAdjacentBottlesExcept
-  )
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, runAdjacentWith, stripOnClearWith)
+import Match3.Obstacles (openSurprises)
 import Match3.Types
 import Match3.Board.Grid
 import Match3.Board.Match
@@ -47,44 +46,16 @@ import Match3.Board.Match
 -- clearing (same discipline as chipIceOnClear). Last ice (ice==1) clears + activates.
 -- Rainbow is a no-op here (partner color comes from rainbowClearSeeds only).
 expandSpecials :: Board -> [Pos] -> [Pos]
-expandSpecials b seeds = go (nub seeds) (nub seeds)
+expandSpecials = expandSpecialsWith defaultRegistry
+
+-- | expandSpecials（指定注册表）：爆炸范围 = 本体定义的 edBlast，能否点火 = 各层 edActivates（软锁纪律）。
+-- 彩虹没有 edBlast（只经 rainbowClearSeeds 按交换对象取色，否则彩虹 × 宝石会重复清两色）。
+expandSpecialsWith :: Registry -> Board -> [Pos] -> [Pos]
+expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
   where
     go acc [] = acc
     go acc (p : ps) =
-      let cell = getCell b p
-          extra = case cell of
-            Gem _ LineH _ _ | specialActivates cell ->
-              [(fst p, c) | c <- [0 .. boardSize - 1]]
-            Gem _ LineV _ _ | specialActivates cell ->
-              [(r, snd p) | r <- [0 .. boardSize - 1]]
-            Gem _ Bomb _ _ | specialActivates cell ->
-              [ (r, c)
-              | r <- [fst p - 1 .. fst p + 1]
-              , c <- [snd p - 1 .. snd p + 1]
-              , inBounds (r, c)
-              ]
-            Gem _ LineH _ _ -> []
-            Gem _ LineV _ _ -> []
-            Gem _ Bomb _ _ -> []
-            -- Rainbow activation is only via rainbowClearSeeds (swap partner color).
-            -- Expanding own color here double-cleared partner+own on every Rainbow×gem swap.
-            Gem _ Rainbow _ _ -> []
-            Gem _ Normal _ _ -> []
-            Stone _ -> []
-            Chest _ -> []
-            Honey _ -> []
-            Balloon _ -> []
-            Cookie -> []
-            Cake _ -> []
-            MagicHat -> []
-            Maker _ _ -> []
-            Snail _ _ -> []
-            Safe _ -> []
-            Flip _ _ -> []
-            Surprise -> []
-            Bottle _ -> []
-            TimeSpirit -> []
-            Countdown _ _ -> []
+      let extra = blastWith reg (getCell b p) p
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
@@ -111,28 +82,11 @@ spawnSpecials prefer runs clearable =
 
 -- | Count how many cleared positions have a given color (pre-clear board; stones skip).
 countColor :: Board -> [Pos] -> Color -> Int
-countColor b ps col =
-  length
-    [ p
-    | p <- ps
-    , case getCell b p of
-        Gem c _ _ _ -> c == col
-        Flip c _ -> c == col
-        Countdown c _ -> c == col
-        Stone _ -> False
-        Chest _ -> False
-        Honey _ -> False
-        Balloon _ -> False
-        Cookie -> False
-        Cake _ -> False
-        MagicHat -> False
-        Maker _ _ -> False
-        Snail _ _ -> False
-        Safe _ -> False
-        Surprise -> False
-        Bottle _ -> False
-        TimeSpirit -> False
-    ]
+countColor = countColorWith defaultRegistry
+
+-- | countColor（指定注册表）：按本体颜色 edColor 计（不看叠层）。
+countColorWith :: Registry -> Board -> [Pos] -> Color -> Int
+countColorWith reg b ps col = length [p | p <- ps, colorOfWith reg (getCell b p) == Just col]
 
 -- | Clear matches (+ special expansions + adjacent stones), place new specials.
 clearMatches :: Board -> (MBoard, Int)
@@ -155,7 +109,11 @@ clearMatchesAt prefer b =
 -- saved specials remain on the board while explode centers clear.
 -- Returns (board, trueClears, surpriseDirectHits, savedSpecialPositions).
 surpriseClearPass :: Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
-surpriseClearPass b0 seeds0 =
+surpriseClearPass = surpriseClearPassWith defaultRegistry
+
+-- | surpriseClearPass（指定注册表；爆炸范围与直接命中查注册表，开启规则本身是彩蛋的专门分支）。
+surpriseClearPassWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
+surpriseClearPassWith reg b0 seeds0 =
   go b0 (nub seeds0) [] [] []
   where
     -- Mask saved Surprise-specials so expandSpecials cannot activate them.
@@ -175,55 +133,47 @@ surpriseClearPass b0 seeds0 =
           in if null expl
                then go bOpen [] (trueAcc ++ kept) directAcc saved'
                else
-                 let expanded = expandSpecials (maskSaved board saved') expl
-                     (bChip, free1) = chipIceOnClear bOpen expanded
+                 let expanded = expandSpecialsWith reg (maskSaved board saved') expl
+                     (bChip, free1) = chipOnHitWith reg bOpen expanded
                      processed = nub (front ++ trueAcc)
                      front' = filter (`notElem` processed) free1
                  in go bChip front' (trueAcc ++ kept ++ free1) (directAcc ++ expanded) saved'
 
 -- | Like clearMatchesAt but also returns the cleared positions (pre-spawn).
 clearMatchesDetailed :: Maybe Pos -> Board -> (MBoard, Int, [Pos])
-clearMatchesDetailed prefer b =
-  let runs = findMatchRuns b
-      base = nub (concatMap runPos runs)
-      expanded = expandSpecials b base
+clearMatchesDetailed = clearMatchesDetailedWith defaultRegistry
+
+-- | 匹配清除一轮（指定注册表）：种子 = 全部匹配格。
+clearMatchesDetailedWith :: Registry -> Maybe Pos -> Board -> (MBoard, Int, [Pos])
+clearMatchesDetailedWith reg prefer b =
+  let runs = findMatchRunsWith reg b
+  in clearWaveWith reg prefer runs b (nub (concatMap runPos runs))
+
+-- | 一轮消除的**唯一流水线**（匹配清除与种子清除共用；第二刀之前是两份逐行相同的代码）：
+--
+--   1. expandSpecials：种子里能点火的特殊块展开爆炸范围（= 直接命中格）；
+--   2. chipOnHitWith：直接命中按层结算（冰 → 叠层 → 本体：削层 / 揭层 / 消除 / 免疫）；
+--   3. surpriseClearPass：彩蛋在邻格波及之前开启（3×3 爆炸计入真消除，与炸弹同口径）；
+--   4. stripOnClearWith：真消除格上的草 / 藤 / 巧随格清掉（空洞不能再蔓延）；
+--   5. runAdjacentWith：按 arOrder 跑各元素的邻格波及（已被直接命中的格不再重复波及；
+--      彩蛋开出的特殊块与果汁机刚产出的炸弹本轮坐住，不被魔法帽 / 染色瓶改色）；
+--   6. 清除格 = 真消除 ∪ 波及打碎的格（按规则顺序）；挖空后在清除格上放新特殊块。
+clearWaveWith :: Registry -> Maybe Pos -> [MatchRun] -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearWaveWith reg prefer runs b base =
+  let expanded = expandSpecialsWith reg b base
       -- Ice chips first: iced gems stay, ice-free positions may clear.
       -- Do NOT strip Grass/Vine/Choco on raw expand seeds — soft hits (ice>1 /
       -- Flip / Chain peel) keep on-cell overlays (same discipline as adjacent).
-      (bIced, iceFree) = chipIceOnClear b expanded
-      -- Surprise opens against match/special clears *before* adjacent peels, so a
-      -- 3×3 explode contributes to trueClears (Bomb-parity for stone/fog/chain/…).
-      -- Nested Surprises inside an explode footprint also open (Bomb parity).
-      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPass bIced iceFree
-      -- Strip Grass/Vine/Choco only on true clear holes (cannot spread from ghosts)
-      bClearedOv = clearOverlaysOn bSurp2 trueClears
-      -- Cells that already took a direct-hit peel/chip (expand → chipIce) must not
-      -- also receive an ortho adjacent peel this wave (Chain2/Stone2/Safe2 on a
-      -- Line/Bomb path were double-chipped via neighbor clears).
+      (bIced, iceFree) = chipOnHitWith reg b expanded
+      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPassWith reg bIced iceFree
+      bClearedOv = stripOnClearWith reg bSurp2 trueClears
+      -- Cells that already took a direct-hit peel/chip must not also receive an
+      -- ortho adjacent peel this wave (Chain2/Stone2/Safe2 on a Line/Bomb path).
       directHits = nub (expanded ++ surpDirect)
-      -- Adjacent obstacle peels / charges against *all* true clear holes (once)
-      (bChipped, deadStones) = chipAdjacentStonesExcept bClearedOv trueClears directHits
-      (bChest, deadChests) = chipAdjacentChestsExcept bChipped trueClears directHits
-      (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
-      (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
-      (bBal, deadBalloons) = chipAdjacentBalloonsExcept bCake trueClears directHits
-      -- Protect Surprise-opened specials from same-wave Hat/Bottle mutate
-      bHat = triggerAdjacentHatsExcept bBal trueClears surpSaved
-      (bFog, _fogCleared) = chipAdjacentFogExcept bHat trueClears directHits
-      (bChain, _chainCleared) = chipAdjacentChainExcept bFog trueClears directHits
-      (bFreeze, _freezeCleared) = chipAdjacentFreezeExcept bChain trueClears directHits
-      (bCurtain, _curtainCleared) = chipAdjacentCurtainExcept bFreeze trueClears directHits
-      (bSafe, _openedSafes) = chipAdjacentSafesExcept bCurtain trueClears directHits
-      (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
-      (bMaker, makerSaved) = chargeAdjacentMakersSit bSpirit trueClears
-      -- Protect Surprise specials + Maker-produced Bombs from same-wave Bottle dye
-      bBottle = triggerAdjacentBottlesExcept bMaker trueClears (nub (surpSaved ++ makerSaved))
-      -- Chocolate / steam: only true clears extinguish (not soft hits)
-      bNoChoco = clearChocoAdjacent bBottle trueClears
-      bNoSteam = clearSteamAdjacent bNoChoco trueClears
-      allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)
+      (bAdj, dead, _sits) = runAdjacentWith reg trueClears directHits surpSaved bClearedOv
+      allPos = nub (trueClears ++ dead)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
+      mb0 = foldl' (\m p -> setM m p Nothing) (toM bAdj) allPos
       spawns = spawnSpecials prefer runs allPos
       mb1 =
         foldl'
@@ -258,48 +208,19 @@ maskUfoAbsorbSpecials b ps =
 
 -- | Clear UFO-absorbed cells: mask specials first, then normal seed clear.
 clearUfoAbsorbed :: Board -> [Pos] -> (MBoard, Int, [Pos])
-clearUfoAbsorbed b absorbed =
-  clearFromSeedsDetailed Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
+clearUfoAbsorbed = clearUfoAbsorbedWith defaultRegistry
+
+-- | clearUfoAbsorbed（指定注册表）。
+clearUfoAbsorbedWith :: Registry -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearUfoAbsorbedWith reg b absorbed =
+  clearFromSeedsDetailedWith reg Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
 
 -- | Clear an explicit seed set (expand specials + adjacent stones).
 clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
-clearFromSeedsDetailed prefer b seeds0 =
-  let runs = findMatchRuns b
-      base = nub seeds0
-      expanded = expandSpecials b base
-      -- Soft-hit safe: chipIce before overlay strip (same as clearMatchesDetailed)
-      (bIced, iceFree) = chipIceOnClear b expanded
-      -- Surprise before adjacent peels (same as clearMatchesDetailed / Bomb parity),
-      -- including nested Surprises inside explode footprints.
-      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPass bIced iceFree
-      bClearedOv = clearOverlaysOn bSurp2 trueClears
-      -- Exclude direct-hit cells from adjacent peels (same as clearMatchesDetailed).
-      directHits = nub (expanded ++ surpDirect)
-      (bChipped, deadStones) = chipAdjacentStonesExcept bClearedOv trueClears directHits
-      (bChest, deadChests) = chipAdjacentChestsExcept bChipped trueClears directHits
-      (bHoney, deadHoney) = chipAdjacentHoneyExcept bChest trueClears directHits
-      (bCake, deadCakes) = chipAdjacentCakesExcept bHoney trueClears directHits
-      (bBal, deadBalloons) = chipAdjacentBalloonsExcept bCake trueClears directHits
-      bHat = triggerAdjacentHatsExcept bBal trueClears surpSaved
-      (bFog, _) = chipAdjacentFogExcept bHat trueClears directHits
-      (bChain, _) = chipAdjacentChainExcept bFog trueClears directHits
-      (bFreeze, _) = chipAdjacentFreezeExcept bChain trueClears directHits
-      (bCurtain, _) = chipAdjacentCurtainExcept bFreeze trueClears directHits
-      (bSafe, _) = chipAdjacentSafesExcept bCurtain trueClears directHits
-      (bSpirit, deadSpirits) = chipAdjacentTimeSpiritsExcept bSafe trueClears directHits
-      (bMaker, makerSaved) = chargeAdjacentMakersSit bSpirit trueClears
-      bBottle = triggerAdjacentBottlesExcept bMaker trueClears (nub (surpSaved ++ makerSaved))
-      bNoChoco = clearChocoAdjacent bBottle trueClears
-      bNoSteam = clearSteamAdjacent bNoChoco trueClears
-      allPos = nub (trueClears ++ deadStones ++ deadChests ++ deadHoney ++ deadCakes ++ deadBalloons ++ deadSpirits)
-      n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bNoSteam) allPos
-      spawns = spawnSpecials prefer runs allPos
-      mb1 =
-        foldl'
-          ( \m (p, cell) ->
-              if p `elem` allPos then setM m p (Just cell) else m
-          )
-          mb0
-          spawns
-  in (mb1, n, allPos)
+clearFromSeedsDetailed = clearFromSeedsDetailedWith defaultRegistry
+
+-- | 种子清除一轮（指定注册表）：流水线同 clearMatchesDetailedWith，种子由调用方给出；
+-- 新特殊块仍按本盘的匹配段生成。
+clearFromSeedsDetailedWith :: Registry -> Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearFromSeedsDetailedWith reg prefer b seeds0 =
+  clearWaveWith reg prefer (findMatchRunsWith reg b) b (nub seeds0)

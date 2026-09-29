@@ -16,6 +16,7 @@ module UI.Layout
   , winH
   , colorRGB
   , spreadRGB
+  , elementRGBTable
   , cellRGB
   , pixelToCell
   , cellOrigin
@@ -35,6 +36,7 @@ import Data.Int (Int32)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
+import Match3.Element.Event (endEffectElement)
 import SDL hiding (Normal)
 
 -- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口 = 棋盘 + 两侧边距 + HUD。
@@ -56,10 +58,15 @@ colorRGB C5 = (172, 88, 236)  -- 紫·三角
 
 -- | 蔓延覆盖层的主色（碎屑 / 生长前沿光）。
 spreadRGB :: SpreadKind -> (Word8, Word8, Word8)
-spreadRGB k = case k of
-  SpreadVine -> (110, 220, 90)
-  SpreadChoco -> (150, 90, 45)
-  SpreadSteam -> (225, 225, 235)
+spreadRGB k = maybe (255, 255, 255) id (lookup (endEffectElement (EndSpread k [])) elementRGBTable)
+
+-- | 步末效果按元素名取色（事件 evElement / endEffectElement 的键）：藤 / 巧 / 蒸汽的蔓延色。
+elementRGBTable :: [(String, (Word8, Word8, Word8))]
+elementRGBTable =
+  [ ("vine", (110, 220, 90))
+  , ("choco", (150, 90, 45))
+  , ("steam", (225, 225, 235))
+  ]
 
 -- | 格子对应的粒子 / 退回画法颜色。
 cellRGB :: Cell -> (Word8, Word8, Word8)
@@ -80,6 +87,7 @@ cellRGB cell = case cell of
   TimeSpirit -> (80, 220, 255)
   Countdown _ _ -> colorRGB (cellColor cell)
   Gem _ _ _ _ -> colorRGB (cellColor cell)
+  Custom _ _ -> (160, 160, 170)
 
 -- | 逻辑坐标 → 棋盘格；棋盘外返回 Nothing。
 pixelToCell :: Int32 -> Int32 -> Maybe Pos

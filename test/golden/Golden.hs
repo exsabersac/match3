@@ -96,6 +96,7 @@ pCell cell = case cell of
   Bottle c -> "D" ++ pColor c
   TimeSpirit -> "T"
   Countdown c n -> "@" ++ pColor c ++ ":" ++ show n
+  Custom n v -> "E" ++ n ++ ":" ++ show v
 
 pBoard :: Board -> String
 pBoard = intercalate "/" . map (intercalate "," . map pCell)

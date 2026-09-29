@@ -1,9 +1,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
--- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep / EndEffect / SnailMove，
--- 把步末效果重放回盘面的 applyEndEffect，以及生成步末记录的 traceSpreads / traceSnails / beltMoves。
+-- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreads / beltMoves，
+-- 以及从回放脚本派生效果事件的 traceEvents。
 --
--- 依赖：Match3.Board、Grass（蔓延）、Snail（逐只爬行）、Conveyor（皮带）。只描述「变了什么」，不结算。
+-- 第二刀 2b：EndEffect / SpreadKind / SnailMove / applyEndEffect / spreadPairs 搬到 Match3.Element.Event，
+-- traceSnails 搬到 Match3.Element.Builtin（蜗牛的步末规则），这里原样再导出。蔓延改为依次执行注册表里
+-- PhaseSpread 阶段的步末规则。
+--
+-- 依赖：Match3.Board、元素框架（事件词汇 / 注册表）、Conveyor（皮带）。只描述「变了什么」，不结算。
 -- 结算直接使用 traceSpreads / traceSnails 返回的盘面（Match3.Game.Resolve），不再另算一遍；
 -- traceSnails 与 stepSnailsAvoidingBlocked 逐只调用同一个 stepSnailAtBlocked，结果恒等。
 -- 护栏 trace_end_steps_replay_to_trySwap_final、trace_end_snail_push_and_turn、trace_end_spread_from_adjacent_source。
@@ -17,16 +21,24 @@ module Match3.Game.Trace
   , spreadOverlay
   , spreadPairs
   , traceSpreads
+  , traceSpreadsWith
   , traceSnails
   , beltMoves
   , emptyTrace
+    -- * 效果事件
+  , EventKind(..)
+  , Event(..)
+  , traceEvents
+  , traceEventsWith
   ) where
 
-import Match3.Board (inBounds, CascadeWave(..), setCell, getCell)
+import Match3.Board (CascadeWave(..), getCell)
 import Match3.Conveyor (Belt)
-import Match3.Grass (spreadVines, spreadChoco, spreadSteam)
 import Data.List (nub)
-import Match3.Snail (stepSnailAtBlocked, snailPositions)
+import Match3.Element.Builtin (defaultRegistry, traceSnails)
+import Match3.Element.Event
+import Match3.Element.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName)
+import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Game.State
 import System.Random (StdGen)
@@ -65,95 +77,18 @@ data EndStep = EndStep
   , esEffect     :: EndEffect
   } deriving (Eq, Show)
 
--- | 步末效果的种类与播放所需的细节（只描述「变了什么」，规则仍由原函数计算）。
-data EndEffect
-  = EndCountdownTick [Pos]            -- ^ 倒计时炸弹减一（列出数值真的变了的格）
-  | EndBeltShift [(Pos, Pos)]         -- ^ 传送带移位：(原格, 新格)；多条皮带已按顺序合成
-  | EndSpread SpreadKind [(Pos, Pos)] -- ^ 藤蔓 / 巧克力 / 蒸汽蔓延：(来源格, 新占的格)
-  | EndSnail [SnailMove]              -- ^ 蜗牛爬行（按规则的逐只顺序）
-  deriving (Eq, Show)
-
--- | 会在步末蔓延的叠层种类。
-data SpreadKind = SpreadVine | SpreadChoco | SpreadSteam
-  deriving (Eq, Show)
-
--- | 一只蜗牛的一步：smFrom == smTo 表示碰壁掉头；否则爬到 smTo，被推的格子
--- （smPushed，爬之前在 smTo 的内容）换到 smFrom。smDir 是这一步之后的朝向。
-data SnailMove = SnailMove
-  { smFrom   :: Pos
-  , smTo     :: Pos
-  , smDir    :: (Int, Int)
-  , smPushed :: Maybe Cell
-  } deriving (Eq, Show)
-
--- | 把步末效果的描述重放到盘面上（纯函数，供测试证明描述完整、前端必要时直接用）。
-applyEndEffect :: EndEffect -> Board -> Board
-applyEndEffect eff b0 = case eff of
-  EndCountdownTick ps -> foldl tick b0 ps
-  EndBeltShift moves -> foldl (\b (o, d) -> setCell b d (getCell b0 o)) b0 moves
-  EndSpread kind pairs -> foldl (\b (_, q) -> plant (spreadOverlay kind) b q) b0 pairs
-  EndSnail moves -> foldl snail b0 moves
-  where
-    tick b p = case getCell b p of
-      Countdown col n -> setCell b p (Countdown col (max 0 (n - 1)))
-      _ -> b
-    plant ov b q = case getCell b q of
-      Gem col kind ice Nothing -> setCell b q (Gem col kind ice (Just ov))
-      _ -> b
-    snail b (SnailMove from to (dr, dc) pushed)
-      | from == to = setCell b from (Snail dr dc)
-      | otherwise = case pushed of
-          Just cell -> setCell (setCell b to (Snail dr dc)) from cell
-          Nothing -> setCell b to (Snail dr dc)
-
--- | SpreadKind 对应的叠层构造器。
-spreadOverlay :: SpreadKind -> CellOverlay
-spreadOverlay SpreadVine = Vine
-spreadOverlay SpreadChoco = Choco
-spreadOverlay SpreadSteam = Steam
-
--- | 蔓延的 (来源, 新格)：新格 = 之前无覆盖层、之后带该覆盖层的格；来源取之前盘面上
--- 与新格正交相邻的第一个同类格（按行优先：上、左、右、下），只用于表现层决定「从哪边长出来」。
-spreadPairs :: SpreadKind -> Board -> Board -> [(Pos, Pos)]
-spreadPairs kind before after =
-  [ (src, q)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
-  , let q = (r, c)
-  , cellOverlay (getCell before q) == Nothing
-  , cellOverlay (getCell after q) == Just ov
-  , let srcs = [n | n <- [(r - 1, c), (r, c - 1), (r, c + 1), (r + 1, c)], inBounds n, cellOverlay (getCell before n) == Just ov]
-  , let src = case srcs of
-          (n : _) -> n
-          [] -> q
-  ]
-  where
-    ov = spreadOverlay kind
-
--- | 藤 → 巧 → 蒸汽 → 蜗牛 的逐步快照（与 trySwap / 道具里的组合完全相同），空效果不记录。
+-- | 蔓延（藤 → 巧 → 蒸汽）的逐步快照（与 trySwap / 道具里的组合完全相同），空效果不记录。
 traceSpreads :: Int -> Board -> ([EndStep], Board)
-traceSpreads k b0 =
-  let bV = spreadVines b0
-      bC = spreadChoco bV
-      bS = spreadSteam bC
-      step kind before after =
-        [EndStep k before after (EndSpread kind ps) | let ps = spreadPairs kind before after, not (null ps)]
-  in (step SpreadVine b0 bV ++ step SpreadChoco bV bC ++ step SpreadSteam bC bS, bS)
+traceSpreads = traceSpreadsWith defaultRegistry
 
--- | stepSnailsAvoidingBlocked 的逐只记录版：对同一快照顺序逐只调用 stepSnailAtBlocked，
--- 结果盘面与原函数完全一致（测试锁定）。
-traceSnails :: [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
-traceSnails avoid walls b0 = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
+-- | traceSpreads（指定注册表）：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
+-- 每条规则产出的效果记成一个 EndStep（esAfterWaves = k）。
+traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
+traceSpreadsWith reg k b0 = foldl one ([], b0) (endRules reg PhaseSpread)
   where
-    one (acc, board) pos = case getCell board pos of
-      Snail dr dc ->
-        let board' = stepSnailAtBlocked walls board pos
-            next = (fst pos + dr, snd pos + dc)
-            mv = case getCell board' pos of
-              Snail dr' dc' -> SnailMove pos pos (dr', dc') Nothing
-              pushed -> SnailMove pos next (dr, dc) (Just pushed)
-        in (acc ++ [mv], board')
-      _ -> (acc, board)
+    one (acc, before) rule =
+      let (eff, after) = erRun rule (EndCtx [] []) before
+      in (acc ++ [EndStep k before after e | Just e <- [eff]], after)
 
 -- | 多条皮带按顺序移位后的 (原格, 新格) 映射（只列位置变了的格）。
 beltMoves :: [Belt] -> [(Pos, Pos)]
@@ -173,3 +108,64 @@ beltMoves belts =
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。
 emptyTrace :: GameState -> MoveTrace
 emptyTrace gs = MoveTrace (gsBoard gs) [] (gsBoard gs) [] (gsGen gs) Nothing
+
+--------------------------------------------------------------------------------
+-- 效果事件
+
+-- | 回放脚本 → 效果事件（内置注册表）。
+traceEvents :: MoveTrace -> [Event]
+traceEvents = traceEventsWith defaultRegistry
+
+-- | 回放脚本 → 按时间顺序的效果事件（纯数据，不参与结算）。时间线与 MoveTrace 相同：
+-- 插入点 k 的步末事件（esAfterWaves == k）在第 k 轮之前；自动洗牌在最后。
+-- 轮内事件顺序：特殊块爆炸 → 消除（按被消格本体的元素名分组）→ 波及（按最上层元素名分组）→
+-- 底收 → 得分 → 连击（本步第 2 次起有消除的轮）。
+traceEventsWith :: Registry -> MoveTrace -> [Event]
+traceEventsWith reg t =
+  concat [endsAt k ++ waveEvents k w | (k, w) <- zip [0 ..] waves]
+    ++ endsAt (length waves)
+    ++ [Event EvShuffle (length waves) "shuffle" [] 0 | Just _ <- [mtShuffle t]]
+  where
+    waves = mtWaves t
+    endsAt k =
+      [ Event (endEffectKind e) k (endEffectElement e) ps (length ps)
+      | es <- mtEnd t
+      , esAfterWaves es == k
+      , let e = esEffect es
+            ps = endEffectPairs e
+      ]
+    clearedWaves = [i | (i, w) <- zip [0 :: Int ..] waves, not (null (cwCleared w))]
+    comboRank k = length (takeWhile (<= k) clearedWaves)
+    waveEvents k w =
+      let before = cwBefore w
+          cleared = cwCleared w
+          holes = cwHoles w
+          hit =
+            [ p
+            | (r, row) <- zip [0 ..] holes
+            , (c, mc) <- zip [0 ..] row
+            , let p = (r, c)
+            , p `notElem` cleared
+            , mc /= Just (getCell before p)
+            ]
+          touched = cleared ++ hit
+          blasts =
+            [ Event EvBlast k (elementName reg cell) [(p, q) | q <- fp] (length fp)
+            | p <- cleared
+            , let cell = getCell before p
+            , activatesWith reg cell
+            , let fp = [q | q <- blastWith reg cell p, q `elem` touched]
+            , not (null fp)
+            ]
+          grouped kind nameOf ps =
+            [ Event kind k n [(p, p) | p <- mine] (length mine)
+            | n <- nub (map nameOf ps)
+            , let mine = [p | p <- ps, nameOf p == n]
+            ]
+          rank = comboRank k
+      in blasts
+           ++ grouped EvClear (elementName reg . getCell before) cleared
+           ++ grouped EvHit (topLayerName reg . getCell before) hit
+           ++ [Event EvDrain k "cookie" [(p, p) | p <- cwDrained w] (length (cwDrained w)) | not (null (cwDrained w))]
+           ++ [Event EvScore k "" [] (cwScore w) | cwScore w > 0]
+           ++ [Event EvCombo k "" [] rank | not (null cleared), rank >= 2]

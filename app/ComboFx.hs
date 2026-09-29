@@ -13,6 +13,8 @@ module ComboFx
   , comboSummaryFrames
   , shakeFrames
   , endStageBase
+  , endStageTable
+  , stageKindFor
   , endBudgetFrames
     -- * 逐轮回放阶段机
   , WavePhase (..)
@@ -47,6 +49,8 @@ module ComboFx
 import Data.List (transpose)
 import Data.Word (Word8)
 import Match3.Core
+import Match3.Board (gravityFixedCell)
+import Match3.Element.Event (EventKind (..), endEffectKind, endEffectPairs)
 
 --------------------------------------------------------------------------------
 -- 时间线
@@ -88,15 +92,25 @@ comboSummaryFrames = 96
 shakeFrames :: Int
 shakeFrames = 10
 
--- | 步末阶段的基础帧数（1 帧 ≈ 16.7 ms）：倒计时减一 10（≈ 170 ms）、皮带移位 14（≈ 230 ms）、
--- 蔓延 18（≈ 300 ms，藤 / 巧 / 蒸汽同时长出）、蜗牛 18（≈ 300 ms）、自动洗牌 22（≈ 370 ms）。
+-- | 步末播放表：规则层的事件类型（Match3.Element.Event.EventKind）→ (表现段种类, 基础帧数)。
+-- 1 帧 ≈ 16.7 ms：倒计时减一 10（≈ 170 ms）、皮带移位 14（≈ 230 ms）、蔓延 18（≈ 300 ms，藤 / 巧 / 蒸汽
+-- 同时长出）、会走的元素（蜗牛）18（≈ 300 ms）、自动洗牌 22（≈ 370 ms）。新增步末事件只需在这里加一行。
+endStageTable :: [(EventKind, (StageKind, Int))]
+endStageTable =
+  [ (EvTick, (StTick, 10))
+  , (EvBelt, (StBelt, 14))
+  , (EvSpread, (StSpread, 18))
+  , (EvMove, (StSnail, 18))
+  , (EvShuffle, (StShuffle, 22))
+  ]
+
+-- | 步末阶段的基础帧数（查 endStageTable）。
 endStageBase :: StageKind -> Int
-endStageBase k = case k of
-  StTick -> 10
-  StBelt -> 14
-  StSpread -> 18
-  StSnail -> 18
-  StShuffle -> 22
+endStageBase k = head ([n | (_, (k', n)) <- endStageTable, k' == k] ++ [18])
+
+-- | 事件类型对应的表现段种类（查 endStageTable）。
+stageKindFor :: EventKind -> StageKind
+stageKindFor ev = maybe StSpread fst (lookup ev endStageTable)
 
 -- | 同一时刻连续发生的步末阶段（不含自动洗牌）合计不超过 36 帧（≈ 0.6 s），超出时按比例压缩，
 -- 每段至少 8 帧，保证仍能看清。
@@ -245,11 +259,7 @@ groupStages steps@(e : _) =
         | otherwise = ([e], drop 1 steps)
   in EndStage k same (esBefore (head same)) (esAfter (last same)) (endStageBase k) : groupStages rest
   where
-    kindOf st = case esEffect st of
-      EndCountdownTick _ -> StTick
-      EndBeltShift _ -> StBelt
-      EndSpread _ _ -> StSpread
-      EndSnail _ -> StSnail
+    kindOf = stageKindFor . endEffectKind . esEffect
 
 -- | 按 endBudgetFrames 压缩同一时刻的多段步末动画。
 budget :: [EndStage] -> [EndStage]
@@ -261,13 +271,7 @@ budget ss =
 
 -- | 本段的「(来源, 目标)」格对：皮带 / 蔓延 / 蜗牛各自的移动或生长方向（倒计时 / 洗牌为空）。
 stageMoves :: EndStage -> [(Pos, Pos)]
-stageMoves s = concatMap (one . esEffect) (stSteps s)
-  where
-    one eff = case eff of
-      EndBeltShift mv -> mv
-      EndSpread _ ps -> ps
-      EndSnail ms -> [(smFrom m, smTo m) | m <- ms]
-      EndCountdownTick ps -> [(p, p) | p <- ps]
+stageMoves s = concatMap (endEffectPairs . esEffect) (stSteps s)
 
 -- | 进入 head 轮：没有被消格的轮（皮带沉降收饼干等）直接下落，不计连击。
 enterWave :: Cascade -> (StepResult, [CascadeEvent])
@@ -309,12 +313,8 @@ fallTable w = transpose [colInfo c | c <- [0 .. boardSize - 1]]
             ]
       in if ok then byRow else fallback
     sortRows ps = [p | r <- rows, p@(rt, _, _, _) <- ps, rt == r]
-    isFixed (Just cell) = case cell of
-      Bottle _ -> True
-      Maker _ _ -> True
-      MagicHat -> True
-      Snail _ _ -> True
-      _ -> False
+    -- 固定格 = 规则层的重力定义（元素 edFalls = False），不在表现层另列
+    isFixed (Just cell) = gravityFixedCell cell
     isFixed Nothing = False
     segments [] = []
     segments xs =

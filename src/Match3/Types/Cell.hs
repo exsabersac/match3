@@ -4,12 +4,14 @@
 -- 以及对任意格都有定义的通用读数（颜色 / 种类 / 冰层 / 叠层 / 是否宝石 / 软锁）。
 -- 叠层的构造与谓词在 Match3.Types.Overlay，各本体的构造与谓词在 Match3.Types.Body。
 --
--- 依赖：Match3.Color。不变量：构造器顺序与派生的 Show / Ord 与拆分前逐字相同（金标准与元素查询快照锁定）。
+-- 依赖：Match3.Color、Match3.Types.Name。不变量：构造器顺序与派生的 Show / Ord 与拆分前逐字相同（金标准与元素查询快照锁定）。
 module Match3.Types.Cell
   ( GemKind(..)
   , CellOverlay(..)
   , CellContents(..)
   , Cell
+  , ElementName(..)
+  , CustomState(..)
   , mkGem
   , mkIceGem
   , specialActivates
@@ -24,6 +26,7 @@ module Match3.Types.Cell
 
 import GHC.Generics (Generic)
 import Match3.Color (Color(..))
+import Match3.Types.Name (CustomState(..), ElementName(..))
 
 -- | Normal gem, line clearers (4-match), bomb, rainbow (5-match color clear).
 data GemKind = Normal | LineH | LineV | Bomb | Rainbow
@@ -66,7 +69,7 @@ data CellContents
   | Bottle Color  -- dye bottle (染色瓶): adjacent clear dyes ortho gems to bottle color
   | TimeSpirit   -- time spirit (时间精灵): adjacent clear awards +2 moves
   | Countdown Color Int
-  | Custom String Int  -- ^ 元素框架的开放槽：注册表里按名字查定义的自定义元素（名字, 状态值）。
+  | Custom ElementName CustomState  -- ^ 元素框架的开放槽：注册表里按名字查定义的自定义元素（名字, 状态值；第 6b 刀起都是 newtype，Show 不变）。
                        -- 只放在末尾，已有构造器的 Show / Ord 不变；内置关卡不使用。
   deriving (Eq, Ord, Show, Generic)
 
@@ -118,8 +121,8 @@ cellOverlay (Gem _ _ _ o) = o
 cellOverlay _ = Nothing
 
 -- | 自定义元素（元素框架开放槽）：名字 + 状态值（如剩余耐久）。
-mkCustom :: String -> Int -> Cell
-mkCustom = Custom
+mkCustom :: ElementName -> Int -> Cell
+mkCustom n = Custom n . CustomState
 
 isCustom :: Cell -> Bool
 isCustom (Custom _ _) = True

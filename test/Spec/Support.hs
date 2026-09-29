@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（原 test/Spec.hs 的非测试顶层定义，逐字搬运），
@@ -63,11 +64,11 @@ setCells :: Board -> [(Pos, Cell)] -> Board
 setCells = foldl (\b (p, c) -> setCell b p c)
 
 -- | 盘上名字为 n 的自定义格位置（行优先）。
-customsOn :: String -> Board -> [Pos]
+customsOn :: ElementName -> Board -> [Pos]
 customsOn n b = [p | p <- allPos, isCustomNamed n (getCell b p)]
 
 -- | 是否是名字为 n 的自定义格。
-isCustomNamed :: String -> Cell -> Bool
+isCustomNamed :: ElementName -> Cell -> Bool
 isCustomNamed n cell = case cell of
   Custom m _ -> m == n
   _ -> False
@@ -305,7 +306,7 @@ newtype Crate = Crate Int
 
 instance Element Crate where
   name _ = "crate"
-  toCell (Crate n) = Custom "crate" n
+  toCell (Crate n) = Custom "crate" (CustomState n)
   archetype _ = Fixed
   onHit (Crate n)
     | n <= 1 = Destroy
@@ -319,20 +320,20 @@ instance Element Crate where
         let targets =
               nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
             hit (bd, dead) q = case getCell bd q of
-              Custom _ n | n <= 1 -> (bd, dead ++ [q])
-                         | otherwise -> (setCell bd q (Custom "crate" (n - 1)), dead)
+              Custom _ (CustomState n) | n <= 1 -> (bd, dead ++ [q])
+                         | otherwise -> (setCell bd q (Custom "crate" (CustomState (n - 1))), dead)
               _ -> (bd, dead)
             (b', dead') = foldl hit (b, []) targets
         in AdjOut b' dead' []
   counter _ = Just (CountNamed "crate")
 
 crateDef :: Entry
-crateDef = customEntry (Crate 1) Crate
+crateDef = customEntry (Crate 1) (Crate . unCustomState)
 
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
 crateBoard :: Int -> Board
 crateBoard durability =
-  setCells stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5), ((0, 1), Custom "crate" durability)]
+  setCells stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5), ((0, 1), Custom "crate" (CustomState durability))]
 
 -- | 这一手是否真正结算（不是 NoMatch / InvalidSwap）。
 moveApplied :: Outcome -> Bool

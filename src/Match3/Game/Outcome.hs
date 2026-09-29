@@ -82,7 +82,7 @@ loseHint g = case goalView g of
     CountSafes -> "邻消打开保险箱掉出饼干，目标 " ++ show n ++ " 个"
     CountUfo -> "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"
     CountCarpets -> "在地毯格上消除宝石以铺地毯，目标 " ++ show n ++ " 格"
-    CountNamed name -> "消除目标元素 " ++ name ++ "，目标 " ++ show n ++ " 个"
+    CountNamed name -> "消除目标元素 " ++ unElementName name ++ "，目标 " ++ show n ++ " 个"
     _ -> generic
   ViewOther _ -> generic
   where

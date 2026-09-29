@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 前端反馈与效果事件：失败 / 无效 / 道具空操作 / 撤销洗牌清掉连击反馈，MoveFx 与 gsLastCleared，事件与回放一致。

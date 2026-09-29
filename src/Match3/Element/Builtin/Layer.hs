@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 冰层与叠层：盖在宝石上的修饰器（Modifier，对应 xmonad 的 LayoutModifier）。
 --
 -- 共同特征：不占格，只在 Gem 格的冰层数 / overlay 字段里；由 Modified 包在本体外面，各方法「修饰器先说，

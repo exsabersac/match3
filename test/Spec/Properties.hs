@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | QuickCheck 性质测试。
@@ -50,6 +51,7 @@ tests =
       , testProperty "qc_find_hint_local_matches_reference" (withMaxSuccess 400 qc_find_hint_local_matches_reference)
       , testProperty "qc_counts_algebra" (withMaxSuccess 1000 qc_counts_algebra)
       , testProperty "qc_counts_monotone_legacy_view" (withMaxSuccess 60 qc_counts_monotone_legacy_view)
+      , testProperty "qc_name_newtypes_show_ord" (withMaxSuccess 1000 qc_name_newtypes_show_ord)
       ]
   where
     -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
@@ -116,7 +118,7 @@ genCell =
     , (1, Bottle <$> genColor)
     , (1, pure TimeSpirit)
     , (1, Countdown <$> genColor <*> choose (1, 5))
-    , (1, Custom <$> elements ["bubble", "qc_unregistered"] <*> choose (1, 3))
+    , (1, Custom <$> elements ["bubble", "qc_unregistered"] <*> (CustomState <$> choose (1, 3)))
     ]
 
 -- | 可空盘面（行优先），约 1/4 是空洞。
@@ -340,7 +342,7 @@ toNewGoal og = case og of
   GoalSafe n -> goalCount CountSafes n
   GoalUfo n -> goalCount CountUfo n
   GoalCarpet n -> goalCount CountCarpets n
-  GoalNamed name n -> goalCount (CountNamed name) n
+  GoalNamed name n -> goalCount (CountNamed (ElementName name)) n
 
 oldLookupCount :: [(Color, Int)] -> Color -> Int
 oldLookupCount xs col = maybe 0 id (lookup col xs)
@@ -409,7 +411,7 @@ oldCollected og cs = case og of
   GoalSafe _ -> countOf CountSafes cs
   GoalUfo _ -> countOf CountUfo cs
   GoalCarpet _ -> countOf CountCarpets cs
-  GoalNamed name _ -> countOf (CountNamed name) cs
+  GoalNamed name _ -> countOf (CountNamed (ElementName name)) cs
 
 -- | 旧的 12 个位置参数，从计数按旧字段取。
 oldArgs :: OldGoal -> Int -> Counts -> (Int -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> r) -> r
@@ -679,3 +681,29 @@ qc_find_hint_local_matches_reference =
             pure (gsBoard (newGame defaultConfig seed))
         , boardFromRows <$> vectorOf boardSize (vectorOf boardSize genCell)
         ]
+
+-- | 第 6b 刀：ElementName / CustomState 是 newtype，但 Show（任意优先级）与 Ord 和底层 String / Int 相同，
+-- 所以 Custom 格（以及含它的 Cell / GameState）的 Show 与改前逐字相同、排序不变。
+qc_name_newtypes_show_ord :: Property
+qc_name_newtypes_show_ord =
+  forAll ((,,,) <$> nameGen <*> nameGen <*> arbitrary <*> arbitrary) $ \(a, b, m, n) ->
+    let ea = ElementName a
+        eb = ElementName b
+        cm = CustomState m
+        cn = CustomState n
+    in conjoin
+         [ show ea === show a
+         , showsPrec 11 ea "" === showsPrec 11 a ""
+         , showsPrec 11 cm "" === showsPrec 11 (m :: Int) ""
+         , show cm === show m
+         , compare ea eb === compare a b
+         , compare cm cn === compare m n
+         , (ea == eb) === (a == b)
+         , show (Custom ea cm) === ("Custom " ++ showsPrec 11 a " " ++ showsPrec 11 m "")
+         , showsPrec 11 (Custom ea cm) "" === ("(Custom " ++ showsPrec 11 a " " ++ showsPrec 11 m ")")
+         , compare (Custom ea cm) (Custom eb cn) === compare (a, m) (b, n)
+         , unElementName ea === a
+         , unCustomState cm === m
+         ]
+  where
+    nameGen = oneof [elements ["bubble", "jelly", "nest", "a\"b", "中文", ""], arbitrary]

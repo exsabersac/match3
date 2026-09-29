@@ -45,7 +45,6 @@ import Match3.Element.Types
   ( AdjacentRule
   , CounterKey
   , Edge
-  , ElementName
   , EndRule
   , OpenRule
   , SwapRule
@@ -149,9 +148,11 @@ class (Show e, Eq e, Typeable e) => Element e where
 -- | 装箱的元素（同 xmonad 的 Layout）。
 data SomeElement = forall e. Element e => SomeElement e
 
--- | 先比元素名，再比状态（同类型时用该类型的 Eq；名字相同类型不同视为不等）。
+-- | 按具体类型比较（第 6b 刀起不再比较名字字符串）：两边的元素类型不同即不等（Typeable 的 cast 失败），
+-- 类型相同再用该类型的 Eq 比状态。名字是元素值的函数（name :: e -> ElementName），同类型同值必然同名，
+-- 所以这比「名字相同且状态相同」更强：名字相同而类型不同的两个元素仍然不等。
 instance Eq SomeElement where
-  SomeElement a == SomeElement b = name a == name b && maybe False (== b) (cast a)
+  SomeElement a == SomeElement b = maybe False (== b) (cast a)
 
 -- | 稳定的显示：元素名 + 状态值的 Show。
 instance Show SomeElement where
@@ -236,7 +237,7 @@ class (Show m, Eq m, Typeable m) => Modifier m where
 data SomeModifier = forall m. Modifier m => SomeModifier m
 
 instance Eq SomeModifier where
-  SomeModifier a == SomeModifier b = modName a == modName b && maybe False (== b) (cast a)
+  SomeModifier a == SomeModifier b = maybe False (== b) (cast a)
 
 instance Show SomeModifier where
   showsPrec d (SomeModifier m) =

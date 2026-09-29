@@ -1,6 +1,7 @@
 -- | 领域类型的门面（第 6 刀按职责拆成小模块，这里原名再导出，调用方不用改 import）：
 --
 --   * Match3.Color —— 颜色、colorAt；
+--   * Match3.Types.Name —— 元素名 ElementName 与自定义状态 CustomState（第 6b 刀 newtype）；
 --   * Match3.Types.Cell —— 宝石种类、叠层、单元格内容与通用读数；
 --   * Match3.Types.Overlay / Match3.Types.Body —— 叠层 / 各本体的构造与谓词；
 --   * Match3.Types.Board —— 坐标与盘面；
@@ -17,6 +18,8 @@ module Match3.Types
   , CellOverlay(..)
   , CellContents(..)
   , Cell
+  , ElementName(..)
+  , CustomState(..)
   , mkGem
   , mkIceGem
   , mkGrassGem

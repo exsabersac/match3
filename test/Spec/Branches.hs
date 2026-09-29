@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 段 4：原先写死在主流程里的专门分支收进元素框架后的行为锁定。
 --
 -- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
@@ -64,7 +65,7 @@ newtype Lever = Lever Int
 
 instance Element Lever where
   name _ = "lever"
-  toCell (Lever k) = Custom "lever" k
+  toCell (Lever k) = Custom "lever" (CustomState k)
   archetype _ = Blocker
   blocksSwap _ = False
   onHit _ = Destroy
@@ -73,12 +74,12 @@ instance Element Lever where
       fires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
 
 leverDef :: Entry
-leverDef = customEntry (Lever 1) Lever
+leverDef = customEntry (Lever 1) (Lever . unCustomState)
 
 br_swap_rule_test_element :: Assertion
 br_swap_rule_test_element = do
   let reg = register leverDef defaultRegistry
-      board0 = setCell stableBoard (4, 4) (Custom "lever" 1)
+      board0 = setCell stableBoard (4, 4) (Custom "lever" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (gs1, o1, mt1) = resolveSwapWith reg (4, 4) (4, 5) gs0
   assertBool "no ordinary match from this swap" (not (hasAnyMatch (swapCells board0 (4, 4) (4, 5))))
@@ -88,7 +89,7 @@ br_swap_rule_test_element = do
   assertBool "lever gone" (not (any (isCustomNamed "lever") (allCells (gsBoard gs1))))
   assertBool "rule is listed by the registry" (swapFiresWith reg board0 (4, 4) (4, 5))
   -- 提示也经同一条规则：无普通匹配的盘上只有拉杆能走
-  let stuck = setCell stuckNoMoveBoard (0, 0) (Custom "lever" 1)
+  let stuck = setCell stuckNoMoveBoard (0, 0) (Custom "lever" (CustomState 1))
   assertEqual "no hint without the rule" Nothing (findHintWith defaultRegistry stuck)
   assertBool "hint via the rule" (maybe False (\(a, b) -> (0, 0) `elem` [a, b]) (findHintWith reg stuck))
   -- 内置表：拉杆是惰性占格，挡交换
@@ -101,12 +102,12 @@ newtype Pod = Pod Int
 
 instance Element Pod where
   name _ = "pod"
-  toCell (Pod k) = Custom "pod" k
+  toCell (Pod k) = Custom "pod" (CustomState k)
   archetype _ = Blocker
   openRule _ = Just (OpenRule openPods)
 
 podDef :: Entry
-podDef = customEntry (Pod 1) Pod
+podDef = customEntry (Pod 1) (Pod . unCustomState)
 
 openPods :: Board -> [Pos] -> (Board, [Pos], [Pos])
 openPods b front =
@@ -118,7 +119,7 @@ openPods b front =
 br_open_rule_test_element :: Assertion
 br_open_rule_test_element = do
   let reg = register podDef defaultRegistry
-      board0 = setCell tripleBoard (0, 1) (Custom "pod" 1)
+      board0 = setCell tripleBoard (0, 1) (Custom "pod" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (_, o1, mt1) = resolveSwapWith reg p1 p2 gs0
@@ -143,7 +144,7 @@ br_builtin_predicates_match_legacy = do
   let samples =
         [ mkGem C1, Gem C2 LineH 0 Nothing, Gem C3 LineV 1 Nothing, Gem C4 Bomb 0 (Just Grass), Gem C5 Rainbow 0 Nothing
         , Countdown C1 3, Flip C2 C3, Stone 2, Chest 1, Honey 1, Balloon C1, Cookie, Cake 2, MagicHat, Maker C1 0
-        , mkSnail 0 1, Safe 1, Surprise, Bottle C4, TimeSpirit, Custom "x" 1
+        , mkSnail 0 1, Safe 1, Surprise, Bottle C4, TimeSpirit, Custom "x" (CustomState 1)
         ]
   forM_ samples $ \cell -> do
     assertEqual ("recolorable " ++ show cell) (isGem cell) (recolorableWith defaultRegistry cell)
@@ -170,16 +171,16 @@ newtype Cart = Cart Int
 
 instance Element Cart where
   name _ = "cart"
-  toCell (Cart k) = Custom "cart" k
+  toCell (Cart k) = Custom "cart" (CustomState k)
   archetype _ = Blocker
   pushable _ = True
 
 cartDef :: Entry
-cartDef = customEntry (Cart 1) Cart
+cartDef = customEntry (Cart 1) (Cart . unCustomState)
 
 br_pushable_from_registry :: Assertion
 br_pushable_from_registry = do
-  let board0 = setCell (setCell tripleBoard (7, 1) (mkSnail 0 1)) (7, 2) (Custom "cart" 1)
+  let board0 = setCell (setCell tripleBoard (7, 1) (mkSnail 0 1)) (7, 2) (Custom "cart" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       final reg b = let (gs1, _, _) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b} in gsBoard gs1

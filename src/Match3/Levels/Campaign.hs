@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 战役关卡表（第 6 刀从 Match3.Types 移来，并把各关的装饰 / 皮带 / 传送门 / 飞碟 / 地毯 / 地面层并进每关的记录）。
 -- 按下标取关一律经 lookupLevel（返回 Maybe；第 6 刀前各处写 allLevels !! i）。
 --

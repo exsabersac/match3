@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 地面层元素：格子下面的层（SlotGround，在 GameState.gsGround 里）。
 --
 -- 共同特征：不占格、不挡交换 / 匹配、不随重力 / 洗牌 / 皮带移动；上方格子每被消除（或被边缘收走）一次
@@ -21,7 +22,7 @@ newtype Jelly = Jelly Int
 
 instance Element Jelly where
   name _ = "jelly"
-  toCell (Jelly n) = Custom "jelly" n
+  toCell (Jelly n) = Custom "jelly" (CustomState n)
   groundRule _ = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
   counter _ = Just (CountNamed "jelly")
 

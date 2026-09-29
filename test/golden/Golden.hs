@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 行为金标准（golden）：固定种子下「关卡 × 种子 × 逐步推进」以及道具、撤销、洗牌和几个手工局面的
 -- 规则结果，投影成稳定的文本，一个用例一行，行首是「关卡 / 种子 / 第几步」。
 --
@@ -113,7 +114,7 @@ pCell cell = case cell of
   Bottle c -> "D" ++ pColor c
   TimeSpirit -> "T"
   Countdown c n -> "@" ++ pColor c ++ ":" ++ show n
-  Custom n v -> "E" ++ n ++ ":" ++ show v
+  Custom n v -> "E" ++ unElementName n ++ ":" ++ show v
 
 pBoard :: Board -> String
 pBoard = intercalate "/" . map (intercalate "," . map pCell) . boardRows
@@ -151,7 +152,7 @@ pGoal g = case goalView g of
     CountSafes -> "safe" ++ show n
     CountUfo -> "ufo" ++ show n
     CountCarpets -> "carpet" ++ show n
-    CountNamed name -> "named" ++ name ++ ":" ++ show n
+    CountNamed name -> "named" ++ unElementName name ++ ":" ++ show n
     _ -> show g
   ViewOther _ -> show g
 

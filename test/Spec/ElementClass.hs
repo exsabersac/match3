@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 元素类（xmonad LayoutClass 风格，Match3.Element.Class）。
 --
 -- 阶段 2 删掉了扁平 ElementDef 记录，新旧两条路径不能再在同一进程里并排跑；等价性改由阶段 1（9ae6a7b，
@@ -46,6 +47,7 @@ tests =
   , testCase "ec_rules_match_stage1_snapshot" ec_rules_match_stage1_snapshot
   , testCase "ec_play_matches_stage1_snapshot" ec_play_matches_stage1_snapshot
   , testCase "ec_some_element_eq_show" ec_some_element_eq_show
+  , testCase "ec_some_element_eq_by_type" ec_some_element_eq_by_type
   , testCase "ec_ice_modifier_composes" ec_ice_modifier_composes
   , testCase "ec_state_lives_in_element_value" ec_state_lives_in_element_value
   , testCase "ec_open_messages" ec_open_messages
@@ -101,6 +103,39 @@ ec_some_element_eq_show = do
   assertEqual "decode gem" (SomeElement (PlainGem C5)) (bodyOf defaultRegistry (mkGem C5))
   assertEqual "decode iced line" (modify (Ice 2) (SomeElement (SpecialGem C1 LineV))) (elementOf defaultRegistry (Gem C1 LineV 2 Nothing))
 
+-- | 第 6b 刀：SomeElement / SomeModifier 的相等按具体类型（Typeable cast）+ 该类型的 Eq，不再比较名字字符串。
+-- 两个同名（"twin"）而类型不同的测试元素不相等；同类型同状态相等、不同状态不等；名字是 ElementName（newtype）。
+ec_some_element_eq_by_type :: Assertion
+ec_some_element_eq_by_type = do
+  assertEqual "same type same state" (SomeElement (TwinA 1)) (SomeElement (TwinA 1))
+  assertBool "same type other state" (SomeElement (TwinA 1) /= SomeElement (TwinA 2))
+  assertEqual "names collide" (name (TwinA 1)) (name (TwinB 1))
+  assertBool "same name, other type" (SomeElement (TwinA 1) /= SomeElement (TwinB 1))
+  assertBool "same name, other type (flipped)" (SomeElement (TwinB 1) /= SomeElement (TwinA 1))
+  assertEqual "same cell, still other type" (toCell (TwinA 1)) (toCell (TwinB 1))
+  assertEqual "boxed twice" (SomeElement (SomeElement (TwinA 3))) (SomeElement (SomeElement (TwinA 3)))
+  assertEqual "modifier same" (C.SomeModifier (Ice 2)) (C.SomeModifier (Ice 2))
+  assertBool "modifier other state" (C.SomeModifier (Ice 1) /= C.SomeModifier (Ice 2))
+  assertEqual "name is a newtype with String's Show" "\"twin\"" (show (name (TwinA 1)))
+  assertEqual "unElementName" "twin" (unElementName (name (TwinB 1)))
+
+-- | 测试专用的两个同名元素类型（只用来检查 SomeElement 的相等不看名字字符串）。
+newtype TwinA = TwinA Int
+  deriving (Eq, Show)
+
+newtype TwinB = TwinB Int
+  deriving (Eq, Show)
+
+instance Element TwinA where
+  name _ = "twin"
+  toCell (TwinA k) = Custom "twin" (CustomState k)
+  archetype _ = Blocker
+
+instance Element TwinB where
+  name _ = "twin"
+  toCell (TwinB k) = Custom "twin" (CustomState k)
+  archetype _ = Blocker
+
 -- | 冰层修饰器：包在宝石外面，组合结果与逐层询问一致，写回格子带冰层数。
 ec_ice_modifier_composes :: Assertion
 ec_ice_modifier_composes = do
@@ -128,7 +163,7 @@ newtype Nest = Nest Int
 
 instance Element Nest where
   name _ = "nest"
-  toCell (Nest k) = Custom "nest" k
+  toCell (Nest k) = Custom "nest" (CustomState k)
   archetype _ = Blocker
   onHit (Nest k)
     | k > 1 = Absorb (SomeElement (Nest (k - 1)))
@@ -140,20 +175,20 @@ instance Element Nest where
 
 ec_state_lives_in_element_value :: Assertion
 ec_state_lives_in_element_value = do
-  let reg = register (customEntry (Nest 1) Nest) defaultRegistry
+  let reg = register (customEntry (Nest 1) (Nest . unCustomState)) defaultRegistry
       p = (3, 3)
-      gs0 = (newGame defaultConfig 7) {gsBoard = setCell stableBoard p (Custom "nest" 3), gsHammers = 5}
+      gs0 = (newGame defaultConfig 7) {gsBoard = setCell stableBoard p (Custom "nest" (CustomState 3)), gsHammers = 5}
       hit gs = let (gs', _, _) = resolveHammerWith reg p gs in gs'
       gs1 = hit gs0
       gs2 = hit gs1
       gs3 = hit gs2
   assertEqual "onHit returns the new value" (Absorb (SomeElement (Nest 2))) (onHit (Nest 3))
-  assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf reg (Custom "nest" 3))
-  assertEqual "first hit" (Custom "nest" 2) (getCell (gsBoard gs1) p)
-  assertEqual "second hit" (Custom "nest" 1) (getCell (gsBoard gs2) p)
+  assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf reg (Custom "nest" (CustomState 3)))
+  assertEqual "first hit" (Custom "nest" (CustomState 2)) (getCell (gsBoard gs1) p)
+  assertEqual "second hit" (Custom "nest" (CustomState 1)) (getCell (gsBoard gs2) p)
   assertBool "third hit breaks it" (not (isNest (getCell (gsBoard gs3) p)))
   assertEqual "counted once" [("nest", 1)] (namedCounts (gsCounts gs3))
-  assertEqual "placed via the constructor" (Right (Custom "nest" 2)) (getCell <$> placeWith reg "nest" [AInt 2] stableBoard [p] <*> pure p)
+  assertEqual "placed via the constructor" (Right (Custom "nest" (CustomState 2))) (getCell <$> placeWith reg "nest" [AInt 2] stableBoard [p] <*> pure p)
   where
     isNest cell = case cell of
       Custom "nest" _ -> True
@@ -234,14 +269,14 @@ newtype Star = Star Color
 
 instance Element Star where
   name _ = "star"
-  toCell (Star c) = Custom "star" (fromEnum c)
+  toCell (Star c) = Custom "star" (CustomState (fromEnum c))
   color (Star c) = Just c
   counter _ = Just (CountNamed "star")
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do
-  let reg = register (customEntry (Star C5) (Star . colorAt)) defaultRegistry
-      star = Custom "star" (fromEnum C5)
+  let reg = register (customEntry (Star C5) (Star . colorAt . unCustomState)) defaultRegistry
+      star = Custom "star" (CustomState (fromEnum C5))
       board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "star") 1)) 1) {gsBoard = board0}
       (p1, p2) = ((1, 2), (2, 2))
@@ -270,7 +305,7 @@ ec_registry_checked_slots :: Assertion
 ec_registry_checked_slots = do
   let errsOf = either Just (const Nothing) . mkRegistryChecked
       otherGem = bodyEntry (OtherGem C1) (const Nothing) (\_ _ -> Nothing)
-      stray = bodyEntry (C.Inert "stray" (Custom "stray" 1)) (const Nothing) (\_ _ -> Nothing)
+      stray = bodyEntry (C.Inert "stray" (Custom "stray" (CustomState 1))) (const Nothing) (\_ _ -> Nothing)
       slotOf n = [entrySlot e | e <- builtinDefs, entryName e == n]
   assertEqual "builtin defs pass the check" Nothing (errsOf builtinDefs)
   assertEqual "gem slot derived from prototype" [SlotCell 0] (slotOf "gem")

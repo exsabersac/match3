@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | 开局与关卡装饰：新局 / 指定关 / 每日 / 重开 / 下一关，按关卡记录铺装饰（decorateLevel）、

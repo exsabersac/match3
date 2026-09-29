@@ -97,7 +97,7 @@ type Placer = [Arg] -> Cell -> Maybe Cell
 -- | 构造器的原型值与解码器。
 data Proto
   = PBody SomeElement (Cell -> Maybe SomeElement)   -- 内置本体槽位
-  | PCustom SomeElement (Int -> SomeElement)        -- Custom 名字 状态值
+  | PCustom SomeElement (CustomState -> SomeElement)  -- Custom 名字 状态值
   | PMod SomeModifier (Cell -> Maybe SomeModifier)  -- 冰层 / 叠层
   | PGround SomeElement                             -- 地面层（gsGround 里按名字）
 
@@ -121,13 +121,14 @@ bodySlot cell = case cell of
   _ -> SlotCell (cellSlot cell)
 
 -- | 自定义本体（格子 = Custom 名字 状态值）：原型值、状态值 → 元素值；放置 = Custom 名字 参数（缺省 1）。
-customEntry :: Element e => e -> (Int -> e) -> Entry
-customEntry proto mk = customEntryWith proto mk (\args _ -> Just (Custom n (case args of (AInt k : _) -> k; _ -> 1)))
+-- 第 6b 刀：状态值是 CustomState（newtype），解码函数收 CustomState。
+customEntry :: Element e => e -> (CustomState -> e) -> Entry
+customEntry proto mk = customEntryWith proto mk (\args _ -> Just (Custom n (CustomState (case args of (AInt k : _) -> k; _ -> 1))))
   where
     n = name proto
 
 -- | 自定义本体，放置自定。
-customEntryWith :: Element e => e -> (Int -> e) -> Placer -> Entry
+customEntryWith :: Element e => e -> (CustomState -> e) -> Placer -> Entry
 customEntryWith proto mk = Entry (name proto) SlotCustom (PCustom (SomeElement proto) (SomeElement . mk))
 
 -- | 修饰器（冰层 / 叠层）的构造器：原型值、解码器、放置。槽位由原型写到一颗裸宝石上的结果推导：
@@ -147,7 +148,7 @@ groundEntry proto = Entry (name proto) SlotGround (PGround (SomeElement proto)) 
 
 -- | 惰性占格（旧 baseDef 的等价物）：挡交换、无色、会下落、打不动、洗牌保留。
 inertEntry :: ElementName -> Entry
-inertEntry n = customEntry (Inert n (Custom n 1)) (Inert n . Custom n)
+inertEntry n = customEntry (Inert n (Custom n (CustomState 1))) (Inert n . Custom n)
 
 -- | 注册表。用 mkRegistry / register 构造；字段不导出（分派数组由条目列表派生）。
 data Registry = Registry
@@ -155,7 +156,7 @@ data Registry = Registry
   , regCells    :: Array Int (Cell -> SomeElement)  -- 内置本体的解码器（按 cellSlot；边界由条目算出）
   , regOverlays :: Array Int (Cell -> Maybe SomeModifier)  -- 叠层（按 overlaySlot；边界由条目算出）
   , regIce      :: Cell -> Maybe SomeModifier
-  , regCustom   :: [(ElementName, Int -> SomeElement)]
+  , regCustom   :: [(ElementName, CustomState -> SomeElement)]
   , regGround   :: [(ElementName, SomeElement)]
   , regAdjacent :: [AdjacentRule]                   -- 按 arOrder 排好（稳定）
   , regEnd      :: [EndRule]                        -- 按 (阶段, erOrder) 排好（稳定）
@@ -201,7 +202,7 @@ mkRegistryChecked defs =
 mkRegistry :: [Entry] -> Registry
 mkRegistry defs0 =
   let defs = dedupe defs0
-      opaque cell = SomeElement (Inert "?" cell)
+      opaque cell = SomeElement (Inert (ElementName "?") cell)
       cellDecs = [(i, \cell -> fromMaybe (opaque cell) (dec cell)) | Entry {entrySlot = SlotCell i, entryProto = PBody _ dec} <- defs]
       ovDecs = [(i, dec) | Entry {entrySlot = SlotOverlay i, entryProto = PMod _ dec} <- defs]
       cells = accumArray (\_ d -> d) opaque (slotBounds (map fst cellDecs)) cellDecs
@@ -262,7 +263,7 @@ lookupElement reg n = listToMaybe [d | d <- regDefs reg, entryName d == n]
 bodyOf :: Registry -> Cell -> SomeElement
 bodyOf reg cell = case cell of
   Custom n k -> maybe (SomeElement (Inert n cell)) ($ k) (lookup n (regCustom reg))
-  _ -> slotAt (regCells reg) (cellSlot cell) (\c -> SomeElement (Inert "?" c)) cell
+  _ -> slotAt (regCells reg) (cellSlot cell) (\c -> SomeElement (Inert (ElementName "?") c)) cell
 
 -- | 按槽号取分派数组里的解码器；越界（注册表里没有该槽位的条目）取缺省。
 slotAt :: Array Int a -> Int -> a -> a
@@ -446,7 +447,7 @@ placeAllWith reg = foldM (\b (Place n args ps) -> placeWith reg n args b ps)
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
 -- 返回（新地面层，按计数名的去层数）。只有注册为地面层、且原型值有 'ground' 的名字会反应；
 -- 计数键取原型值的 'counter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
-hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(String, Int)])
+hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(ElementName, Int)])
 hitGroundWith reg hits = foldr one ([], [])
   where
     one (p, (n, layers)) (acc, counts)

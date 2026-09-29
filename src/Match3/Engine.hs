@@ -99,7 +99,7 @@ playWith reg act gs = case act of
     in (other gs' [] True) {pdHint = h}
   Shuffle
     | isJust (gsOver gs) -> other gs [] False
-    | otherwise -> other (shuffleGameWith reg gs) [Event EvShuffle 0 "shuffle" [] 0] True
+    | otherwise -> other (shuffleGameWith reg gs) [Event EvShuffle 0 (ElementName "shuffle") [] 0] True
   where
     move (gs', out, mt) =
       let fx = moveFx gs gs' out
@@ -187,7 +187,7 @@ match3Status gs =
 
 -- | 规则层事件 → 通用效果：节拍 = 轮次（evWave），格 = 每对的目标格。
 toEffect :: Event -> Effect
-toEffect e = Effect (evWave e) (eventKindTag (evKind e)) (evElement e) (map snd (evCells e)) (evAmount e)
+toEffect e = Effect (evWave e) (eventKindTag (evKind e)) (unElementName (evElement e)) (map snd (evCells e)) (evAmount e)
 
 -- | 事件种类的字符串标签。
 eventKindTag :: EventKind -> String

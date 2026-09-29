@@ -47,7 +47,7 @@ endStageDrawers =
   ]
 
 -- | 蔓延的生长曲线（按元素名）：藤蔓分 4 段一节一节伸长；巧克力先快后慢；蒸汽匀速。
-spreadProgress :: [(String, Double -> Double)]
+spreadProgress :: [(ElementName, Double -> Double)]
 spreadProgress =
   [ ( "vine"
     , \t ->

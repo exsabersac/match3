@@ -6,6 +6,8 @@ module Match3.Core
   , GemKind(..)
   , CellContents(..)
   , Cell
+  , ElementName(..)
+  , CustomState(..)
   , mkGem
   , mkIceGem
   , iceLayers

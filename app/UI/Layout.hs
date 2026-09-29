@@ -62,12 +62,12 @@ spreadRGB :: SpreadKind -> (Word8, Word8, Word8)
 spreadRGB k = maybe (255, 255, 255) id (lookup (endEffectElement (EndSpread k [])) elementRGBTable)
 
 -- | 名字目标（goalCount (CountNamed …)） / 自定义元素按名字取色；表里没有的名字为灰蓝。
-namedRGB :: String -> (Word8, Word8, Word8)
+namedRGB :: ElementName -> (Word8, Word8, Word8)
 namedRGB n = maybe (200, 200, 220) id (lookup n elementRGBTable)
 
 -- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色；
 -- 段 5 起也给 名字目标与自定义格取色（果冻 / 气泡，见 namedRGB）。
-elementRGBTable :: [(String, (Word8, Word8, Word8))]
+elementRGBTable :: [(ElementName, (Word8, Word8, Word8))]
 elementRGBTable =
   [ ("vine", (110, 220, 90))
   , ("choco", (150, 90, 45))

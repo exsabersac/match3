@@ -21,6 +21,7 @@ module Match3.Counts
 
 import qualified Data.Map.Strict as M
 import Match3.Color (Color, allColors)
+import Match3.Types.Name (ElementName)
 
 -- | 计数键。前 8 个是内置元素（counter / diffCounter），CountUfo / CountCarpets 是关卡特性
 -- （飞碟吸走的格 / 地毯覆盖的格），CountNamed 是扩展元素按名字计数，CountColor 是各色被清除的格数
@@ -29,7 +30,7 @@ import Match3.Color (Color, allColors)
 data CounterKey
   = CountStones | CountChests | CountHoney | CountBalloons | CountCookies | CountCakes
   | CountSafes | CountSpirits
-  | CountNamed String
+  | CountNamed ElementName
   | CountUfo
   | CountCarpets
   | CountColor Color
@@ -83,7 +84,7 @@ countsToList (Counts m) = M.toAscList m
 
 -- | 扩展元素的按名字计数（CountNamed），按名字升序（第 4 刀前的 gsElementCounts 按首次出现排序；
 -- 内置与测试关卡同一局最多出现一个名字，两种排序一致）。
-namedCounts :: Counts -> [(String, Int)]
+namedCounts :: Counts -> [(ElementName, Int)]
 namedCounts c = [(n, v) | (CountNamed n, v) <- countsToList c]
 
 -- | 各色清除数（CountColor），按 allColors 顺序、含 0（第 5 刀前的颜色袋 gsColorBag / ctColors 的形状）。

@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**288** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质）。
+- 期望：**290** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 288）：
+- 目录（用例数合计 290）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -51,13 +51,13 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `Crate` / 条目 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 6 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌（样例元素苔藓 / 风筝 / 陷坑 / 浮尘只定义在该模块里） |
 | `test/Spec/Branches.hs` | 8 | 段 4 专门分支收编护栏：测试专用成对交换规则（拉杆）/ 开启规则（豆荚）/ 可推动（小车）只经注册表生效；内置改色 / 推动谓词与原写死谓词相同；关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）去掉后不生效（含 38 关实测）；主流程源码扫描 |
-| `test/Spec/ElementClass.hs` | 11 | 元素类（阶段 1 原型 → 阶段 2 迁移）：逐格查询 / 规则 / 逐手结果与阶段 1 的元素查询快照全等；`SomeElement` 的 Eq / Show、冰层修饰器组合、状态在元素值里、开放消息；扁平记录已删（源码扫描）、关卡级元素经消息、自定义可匹配宝石；注册表槽位由原型推导、`mkRegistryChecked` 报重名 / 槽位冲突 / 推不出槽位 |
+| `test/Spec/ElementClass.hs` | 12 | 元素类（阶段 1 原型 → 阶段 2 迁移）：逐格查询 / 规则 / 逐手结果与阶段 1 的元素查询快照全等；`SomeElement` 的 Eq / Show（第 6b 刀：按类型比较，同名不同类型不等）、冰层修饰器组合、状态在元素值里、开放消息；扁平记录已删（源码扫描）、关卡级元素经消息、自定义可匹配宝石；注册表槽位由原型推导、`mkRegistryChecked` 报重名 / 槽位冲突 / 推不出槽位 |
 | `test/Spec/JellyBubble.hs` | 8 | 段 5 双层果冻 / 气泡：按层计数与目标、洗牌 / 撤销、气泡邻消 / 直接命中即破、挡交换 / 无色 / 下落、第 39 / 40 关、主流程源码扫描 |
 | `test/Spec/Engine.hs` | 5 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描） |
 | `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`） |
-| `test/Spec/Properties.hs` | 15 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条，见「性质测试」） |
+| `test/Spec/Properties.hs` | 16 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条，见「性质测试」） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
 | `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）等；并重新导出 `Spec.Support.Source` |
 | `test/Spec/Support/Source.hs` | — | 源码扫描工具（见「源码扫描约定」） |
@@ -111,6 +111,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `qc_counts_monotone_legacy_view` | 60 | 第 4 刀：一局 1–8 步里 `gsCounts` 每个存下的个数都 > 0、每个键不减；与旧字段对照——「按某个计数键」的目标（石块 … 地毯、名字；第 5 刀起用 `goalView` 取键）下 `gsCollected == gsCount 该键`（旧实现直接取对应字段），`show` 仍按旧字段名（`gsStonesCleared = …` … `gsElementCounts = …`）打印同一个数。另在仓库外做过一次对照：40 关 × 25 个种子 × 最多 25 手（提示交换 + 锤子 + 十字）共 17866 个局面，新旧（4b83dc9）`show` 全等；第 5 刀对 47485c3 重做（另加 30 天每日挑战，每行再打印目标值、`checkOutcome`、失败提示）共 18383 行全等 |
 | `qc_lookup_level_in_range` | 500 | 第 6a 刀（在 `test/Spec/Levels.hs`，同样固定种子）：下标取 −20 … 关卡数 + 20，`lookupLevel i` 为 `Just` ⟺ 0 ≤ i < `levelCount`，取到的关 `lvlIndex = i` |
 | `qc_clamp_level_index_found` | 500 | 第 6a 刀：任意 `Int`（含 ±1000 内与极端值），`clampLevelIndex` 的结果总能被 `lookupLevel` 找到、幂等、范围内不变 |
+| `qc_name_newtypes_show_ord` | 1000 | 第 6b 刀：任意名字（含引号 / 中文 / 空串）与整数：`ElementName` / `CustomState` 的 `show` 与 `showsPrec 11` 和底层 `String` / `Int` 相同，`compare` / `==` 相同；`Custom` 格的 `show` / `showsPrec 11` 逐字等于改前的派生输出、`Ord` 与按 (名字, 状态) 比较相同 |
 
 条目的原型值（`Proto`）不导出，所以「解码往返」从格子一侧做：对每种格子验证解码再编码得到原格、并且解码落到槽位一致的条目上；再用 `qc_registry_names_slots_unique` 保证每个槽位恰好一个条目。第 1 刀跑这些性质时没有发现规则 bug。
 
@@ -234,7 +235,8 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `ec_queries_match_stage1_snapshot` | 快照 Q / P / R 行逐行相等（取代阶段 1 的 `ec_bridge_fields_match_legacy`） |
 | `ec_rules_match_stage1_snapshot` | 快照 A / E / S / O / C / G 行逐行相等（取代阶段 1 的 `ec_bridge_rules_match_legacy`） |
 | `ec_play_matches_stage1_snapshot` | 快照 M 行逐行相等（取代阶段 1 的 `ec_registry_paths_agree_in_play`） |
-| `ec_some_element_eq_show` | `SomeElement` 的 Eq 先比名字再比状态、Show 稳定；宝石全用默认方法（原型 `Piece`、颜色取自写回的格子）；彩虹 `hintable = False`；注册表把格子解码成（带冰的）元素值 |
+| `ec_some_element_eq_show` | `SomeElement` 的 Eq（第 6b 刀起按具体类型 + 该类型的 Eq，不再比名字字符串）、Show 稳定；宝石全用默认方法（原型 `Piece`、颜色取自写回的格子）；彩虹 `hintable = False`；注册表把格子解码成（带冰的）元素值 |
+| `ec_some_element_eq_by_type` | 第 6b 刀：两个同名（`"twin"`）、写回同一个格子的测试元素类型装箱后不相等；同类型同状态相等、不同状态不等；`SomeModifier` 同理；名字是 `ElementName`（Show 与 String 相同） |
 | `ec_ice_modifier_composes` | 冰层修饰器：写回格子带冰层数、匹配色透过、名字取本体、多冰不点火 / 末层点火、命中削一层 / 末层随宝石碎、洗牌保留；与注册表 `directHitWith` 逐格一致 |
 | `ec_state_lives_in_element_value` | 测试专用「鸟窝」：剩余命中数在元素值里，锤子每敲一次减一、最后一下才碎并计数；放置经构造器 |
 | `ec_open_messages` | 开放消息：自定义消息被处理 / 不认识的原样返回 / 修饰器把消息转给里面 / `fromMessage` 按类型认领 |
@@ -264,7 +266,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 288，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 290，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

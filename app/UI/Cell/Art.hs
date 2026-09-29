@@ -257,10 +257,10 @@ artBubble ren art pulse x y cell = case cell of
   where
     Kit {..} = cellKit ren art pulse x y
 
--- | 贴图版：自定义元素（贴图名 = 元素名）。
+-- | 贴图版：自定义元素（贴图名 = 元素名；角标 = 状态值）。
 artCustom :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
 artCustom ren art pulse x y cell = case cell of
-  Custom n k -> spr n >> badge k
+  Custom n (CustomState k) -> spr (unElementName n) >> badge k
   _ -> pure ()
   where
     Kit {..} = cellKit ren art pulse x y

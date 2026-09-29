@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 关卡记录与关卡表（第 6 刀）：lookupLevel / clampLevelIndex / campaignGame 的性质，
 -- placeWith 的 Either 失败分支，以及「全部内置关卡与每日挑战的放置表都能放成功（Right）」。
 module Spec.Levels

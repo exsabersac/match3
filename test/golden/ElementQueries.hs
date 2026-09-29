@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 元素查询快照：主流程经注册表问「这个格子怎么反应」的全部入口（*With 查询、规则表、规则在样例盘上的输出、
 -- 放置、逐手对局），在一大批样本格 / 盘面上投影成稳定文本，入库为 test/golden/element-queries.txt。
 --
@@ -73,7 +74,7 @@ sampleCells =
       , [Bottle c | c <- colors]
       , [TimeSpirit]
       , [Countdown c n | c <- [C1, C5], n <- [1, 5]]
-      , [Custom "bubble" 1, Custom "bubble" 2, Custom "unregistered" 3]
+      , [Custom "bubble" (CustomState 1), Custom "bubble" (CustomState 2), Custom "unregistered" (CustomState 3)]
       ]
 
 cellLine :: Cell -> String
@@ -126,10 +127,10 @@ placeNames =
 
 placeLines :: [String]
 placeLines =
-  [ "P " ++ n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ show (getCell (either (error . show) id (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])) (4, 4))
+  [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ show (getCell (either (error . show) id (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])) (4, 4))
   | n <- placeNames
   , args <- [[], [AInt 1], [AInt 3], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 0, AInt (-1)]]
-  , cell <- [mkGem C2, Gem C3 LineH 1 (Just Grass), Stone 1, Countdown C4 2, Custom "bubble" 1]
+  , cell <- [mkGem C2, Gem C3 LineH 1 (Just Grass), Stone 1, Countdown C4 2, Custom "bubble" (CustomState 1)]
   ]
 
 ruleLines :: [String]

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 关卡级元素：不在格子里、状态在 GameState 专用字段（gsUfos / gsBelts / gsPortals / gsCarpetOpen）的机制。
 --
 -- 共同特征：都是 LevelElement，主流程在固定的流水线节拍上发消息（Match3.Element.Message），各自只回复

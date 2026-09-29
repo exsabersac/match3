@@ -39,6 +39,7 @@ library:
   - Match3.Core
   - Match3.Engine
   - Match3.Types
+  - Match3.Types.Name
   - Match3.Types.Cell
   - Match3.Types.Overlay
   - Match3.Types.Body

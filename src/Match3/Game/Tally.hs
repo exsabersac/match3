@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | 结算计数辅助：「按前后盘面差计数」（保险箱开启 / 时间精灵 / 自定义）、地毯可覆盖的腾空格。
@@ -19,7 +20,7 @@ module Match3.Game.Tally
 import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, countElementWith, diffCountersWith, elementName, vacatesCarpetWith)
-import Match3.Element.Types (CounterKey, ElementName)
+import Match3.Element.Types (CounterKey)
 import Match3.Types
 
 -- | 盘上保险箱个数（结算时用前后差计「开启数」）。

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 收集与计数类：离开盘面（被收走 / 打破）时按计数键记一笔，常作关卡目标。
 --
 -- 共同特征：原型 Blocker 的占格本体，本身不削层、不变形；饼干打不动、落到底边被收走（离格也算覆盖地毯）；
@@ -53,7 +54,7 @@ newtype Bubble = Bubble Int
 
 instance Element Bubble where
   name _ = "bubble"
-  toCell (Bubble k) = Custom "bubble" k
+  toCell (Bubble k) = Custom "bubble" (CustomState k)
   archetype _ = Blocker
   onHit _ = Destroy
   adjacentRule _ = Just (AdjacentRule 170 bubbleAdjacent)
@@ -82,4 +83,4 @@ cookieEntry, timeSpiritEntry, bubbleEntry :: Entry
 cookieEntry = bodyEntry CookieE (\cell -> case cell of Cookie -> Just CookieE; _ -> Nothing) (\_ _ -> Just Cookie)
 timeSpiritEntry = bodyEntry TimeSpiritE (\cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing) (\_ _ -> Just TimeSpirit)
 -- 气泡：Custom 本体，放置参数 = 值（缺省 1）。
-bubbleEntry = customEntry (Bubble 1) Bubble
+bubbleEntry = customEntry (Bubble 1) (Bubble . unCustomState)

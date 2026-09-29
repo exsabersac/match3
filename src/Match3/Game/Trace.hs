@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreads（beltMoves 再导出自 Conveyor），

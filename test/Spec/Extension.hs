@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 扩展钩子（段 2c）：按元素名计数的目标 GoalNamed、地面层元素槽、方向可配的边缘收集、
 -- 步末之后的补结算、自定义注册表下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
 -- **只定义在测试里**，主流程源码里没有它们的名字；这组测试证明双层果冻、气泡这类元素今后
@@ -66,7 +67,7 @@ newtype Moss = Moss Int
 
 instance Element Moss where
   name _ = "moss"
-  toCell (Moss n) = Custom "moss" n
+  toCell (Moss n) = Custom "moss" (CustomState n)
   groundRule _ = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
   counter _ = Just (CountNamed "moss")
 
@@ -107,18 +108,18 @@ newtype Kite = Kite Int
 
 instance Element Kite where
   name _ = "kite"
-  toCell (Kite k) = Custom "kite" k
+  toCell (Kite k) = Custom "kite" (CustomState k)
   archetype _ = Blocker
   drains _ = [EdgeLeft]
   counter _ = Just (CountNamed "kite")
 
 kiteDef :: Entry
-kiteDef = customEntry (Kite 1) Kite
+kiteDef = customEntry (Kite 1) (Kite . unCustomState)
 
 ext_edge_drain_side_collectible :: Assertion
 ext_edge_drain_side_collectible = do
   let reg = register kiteDef defaultRegistry
-      board0 = foldl (\b p -> setCell b p (Custom "kite" 1)) tripleBoard [(4, 0), (4, 3), (7, 5)]
+      board0 = foldl (\b p -> setCell b p (Custom "kite" (CustomState 1))) tripleBoard [(4, 0), (4, 3), (7, 5)]
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "kite") 1)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
@@ -140,17 +141,17 @@ newtype Sinkhole = Sinkhole Int
 
 instance Element Sinkhole where
   name _ = "sinkhole"
-  toCell (Sinkhole k) = Custom "sinkhole" k
+  toCell (Sinkhole k) = Custom "sinkhole" (CustomState k)
   archetype _ = Fixed
   endRule _ = Just (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))
 
 sinkholeDef :: Entry
-sinkholeDef = customEntry (Sinkhole 1) Sinkhole
+sinkholeDef = customEntry (Sinkhole 1) (Sinkhole . unCustomState)
 
 ext_post_end_settle_hole_element :: Assertion
 ext_post_end_settle_hole_element = do
   let reg = register sinkholeDef defaultRegistry
-      board0 = setCell tripleBoard (5, 5) (Custom "sinkhole" 1)
+      board0 = setCell tripleBoard (5, 5) (Custom "sinkhole" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
@@ -178,22 +179,22 @@ newtype Dust = Dust Int
 
 instance Element Dust where
   name _ = "dust"
-  toCell (Dust k) = Custom "dust" k
+  toCell (Dust k) = Custom "dust" (CustomState k)
   archetype _ = Blocker
   keepOnShuffle _ = False
 
 dustDef :: Entry
-dustDef = customEntry (Dust 1) Dust
+dustDef = customEntry (Dust 1) (Dust . unCustomState)
 
 ext_manual_shuffle_keeps_crate_via_engine :: Assertion
 ext_manual_shuffle_keeps_crate_via_engine = do
   let reg = register dustDef (register crateDef defaultRegistry)
-      gs0 = (newGame defaultConfig 1) {gsBoard = setCell (crateBoard 2) (5, 5) (Custom "dust" 1)}
+      gs0 = (newGame defaultConfig 1) {gsBoard = setCell (crateBoard 2) (5, 5) (Custom "dust" (CustomState 1))}
       st = gameStep (M3E.match3GameWith reg) gs0 M3E.Shuffle
       b1 = gsBoard (stepState st)
   assertBool "shuffle accepted" (stepAccepted st)
   assertBool "board reshuffled" (b1 /= gsBoard gs0 && gsShuffled (stepState st))
-  assertEqual "crate kept in place" [((0, 1), Custom "crate" 2)] (cratesOn b1)
+  assertEqual "crate kept in place" [((0, 1), Custom "crate" (CustomState 2))] (cratesOn b1)
   assertEqual "dust washed away under the custom registry" [] (customsOn "dust" b1)
   let stD = gameStep M3E.match3Game gs0 M3E.Shuffle
   assertEqual "built-in registry keeps unknown dust (inert default)" [(5, 5)] (customsOn "dust" (gsBoard (stepState stD)))

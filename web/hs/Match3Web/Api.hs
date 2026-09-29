@@ -127,7 +127,7 @@ encodeState h =
     , ("undo", int (historyDepth h))
     , ("hint", maybe "null" encodePair (findHint (gsBoard gs)))
     , ("lastCleared", arr (map encodePos (gsLastCleared gs)))
-    , ("ground", arr [obj [("p", encodePos p), ("name", str n), ("layers", int k)] | (p, (n, k)) <- gsGround gs])
+    , ("ground", arr [obj [("p", encodePos p), ("name", str (unElementName n)), ("layers", int k)] | (p, (n, k)) <- gsGround gs])
       -- 关卡级元素（棋盘底层 / 飞碟），渲染层按它们画传送带、传送门、地毯与飞碟
     , ("belts", arr [arr (map encodePos b) | b <- gsBelts gs])
     , ("portals", arr (map encodePair (gsPortals gs)))
@@ -159,7 +159,7 @@ encodeGoal :: LevelGoal -> String
 encodeGoal g =
   obj $
     [("kind", str (goalKind g)), ("text", str (show g)), ("target", int (goalTarget g))]
-      ++ [("name", str n) | ViewCount (CountNamed n) _ <- [goalView g]]   -- 段 5：按元素名计数的目标（jelly / bubble）
+      ++ [("name", str (unElementName n)) | ViewCount (CountNamed n) _ <- [goalView g]]   -- 段 5：按元素名计数的目标（jelly / bubble）
   where
     goalKind x = takeWhile (/= ' ') (show x)
 
@@ -227,7 +227,7 @@ encodeEvent e =
   obj
     [ ("kind", str (eventKindTag (evKind e)))
     , ("beat", int (evWave e))
-    , ("subject", str (evElement e))
+    , ("subject", str (unElementName (evElement e)))
     , ("pairs", arr (map encodePair (evCells e)))
     , ("amount", int (evAmount e))
     ]
@@ -268,7 +268,7 @@ encodeCell cell = obj (fields ++ [("s", str (show cell))])
       Bottle c -> [t "bottle", col c]
       TimeSpirit -> [t "spirit"]
       Countdown c k -> [t "countdown", col c, n k]
-      Custom name v -> [t "custom", ("name", str name), ("v", int v)]
+      Custom name v -> [t "custom", ("name", str (unElementName name)), ("v", int (unCustomState v))]
 
 overlayName :: CellOverlay -> String
 overlayName ov = case ov of

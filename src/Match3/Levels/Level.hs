@@ -12,7 +12,7 @@ module Match3.Levels.Level
   ) where
 
 import Match3.Conveyor (Belt)
-import Match3.Element.Types (Arg(..), ElementName, Placement(..))
+import Match3.Element.Types (Arg(..), Placement(..))
 import Match3.Types
 import Match3.Ufo (Ufo)
 

@@ -33,7 +33,7 @@ goalIcon g = case goalView g of
     CountSafes -> "safe"
     CountUfo -> "ufo_c3"
     CountCarpets -> "carpet_covered"
-    CountNamed name -> name
+    CountNamed name -> unElementName name
     _ -> "icon_multi"
   _ -> "icon_multi"
 
@@ -93,7 +93,7 @@ countTag k = case k of
   CountCarpets -> "carpet"
   CountSpirits -> "spirit"
   CountColor c -> colorTag c
-  CountNamed name -> name
+  CountNamed name -> unElementName name
 
 -- | 颜色的三字母标签。
 colorTag :: Color -> String

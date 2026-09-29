@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 元素框架的事件词汇：规则层产出的**纯数据**效果描述，前端按事件类型查表播放。
 --
 -- 两类：
@@ -115,7 +116,7 @@ data EventKind
 data Event = Event
   { evKind    :: EventKind
   , evWave    :: Int
-  , evElement :: String
+  , evElement :: ElementName
   , evCells   :: [(Pos, Pos)]
   , evAmount  :: Int
   } deriving (Eq, Show)
@@ -129,7 +130,7 @@ endEffectKind eff = case eff of
   EndSnail _ -> EvMove
 
 -- | 步末效果相关的元素名（注册表的键；皮带是关卡特性，记为 "belt"）。
-endEffectElement :: EndEffect -> String
+endEffectElement :: EndEffect -> ElementName
 endEffectElement eff = case eff of
   EndCountdownTick _ -> "countdown"
   EndBeltShift _ -> "belt"

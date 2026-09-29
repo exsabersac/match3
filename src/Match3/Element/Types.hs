@@ -9,7 +9,8 @@
 -- 宝石种类 / Custom 名字）。冰层与叠层是修饰器（Modifier），本体是元素（Element）；命中与挡匹配等
 -- 按层自上而下组合（见 Class 的 Modified 与 Registry）。
 module Match3.Element.Types
-  ( ElementName
+  ( ElementName(..)
+  , CustomState(..)
   , Slot(..)
   , HitResult(..)
   , AdjCtx(..)
@@ -32,9 +33,6 @@ module Match3.Element.Types
 import Match3.Counts (CounterKey(..))
 import Match3.Element.Event (EndEffect)
 import Match3.Types
-
--- | 元素名：注册表的键，也是关卡放置表、计数键、前端贴图 / 播放表的键。
-type ElementName = String
 
 -- | 注册表条目接管格子的哪一层。
 data Slot

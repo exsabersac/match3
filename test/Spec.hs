@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main (main) where
 
-import Control.Monad (when)
+import Control.Monad (foldM, when)
 import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Match3.Board (applyGravity, clearMatches, refill, runCascadeScoredWithUfos, runCascadeScoredFromSeedsWithUfos)
@@ -234,6 +234,10 @@ tests =
     , testCase "trace_boosters_final_equal_result" trace_boosters_final_equal_result
     , testCase "trace_rejected_move_is_empty" trace_rejected_move_is_empty
     , testCase "trace_multi_wave_each_round_visible" trace_multi_wave_each_round_visible
+    , testCase "trace_end_steps_replay_to_trySwap_final" trace_end_steps_replay_to_trySwap_final
+    , testCase "trace_end_steps_boosters_replay" trace_end_steps_boosters_replay
+    , testCase "trace_end_snail_push_and_turn" trace_end_snail_push_and_turn
+    , testCase "trace_end_spread_from_adjacent_source" trace_end_spread_from_adjacent_source
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -7750,7 +7754,7 @@ trace_swap_final_equals_trySwap = do
         , inBounds p2
         , let (gs1, out) = trySwap p1 p2 gs0
         ]
-  applied <- fmap sum $ mapM
+  counts <- mapM
     ( \(li, seed, (p1, p2), gs0, gs1, out) -> do
         let mt = traceSwap p1 p2 gs0
             ws = mtWaves mt
@@ -7758,21 +7762,26 @@ trace_swap_final_equals_trySwap = do
         case out of
           NoMatch -> do
             assertBool (tag ++ ": rejected swap has no waves") (null ws)
-            pure (0 :: Int)
+            pure (0 :: Int, 0 :: Int)
           InvalidSwap -> do
             assertBool (tag ++ ": invalid swap has no waves") (null ws)
-            pure 0
+            pure (0, 0)
           _ -> do
             assertEqual (tag ++ ": start = swapped board") (swapCells (gsBoard gs0) p1 p2) (mtStart mt)
+            -- 自动洗牌会换掉整盘，只能跳过终盘对比；跳过数单独统计（见下方底线断言）
             when (not (gsShuffled gs1)) $
               assertEqual (tag ++ ": final board") (gsBoard gs1) (mtFinal mt)
             assertEqual (tag ++ ": score") (gsScore gs1 - gsScore gs0) (sum (map cwScore ws))
             assertEqual (tag ++ ": cleared union") (sort (nub (gsLastCleared gs1))) (sort (nub (concatMap (\w -> cwCleared w ++ cwDrained w) ws)))
             assertEqual (tag ++ ": combo") (gsCombo gs1) (nonEmptyWaves ws)
-            pure 1
+            pure (if gsShuffled gs1 then (0, 1) else (1, 0))
     )
     results
-  assertBool "enough applied swaps sampled" (applied > 200)
+  let compared = sum (map fst counts)
+      skipped = sum (map snd counts)
+  assertBool
+    ("enough non-shuffled applied swaps compared on final board (compared " ++ show compared ++ ", skipped for auto-shuffle " ++ show skipped ++ ")")
+    (compared > 400)
 
 -- | 道具（锤子 / 十字 / 自由交换）的回放终局与结算结果一致。
 trace_boosters_final_equal_result :: Assertion
@@ -7788,7 +7797,11 @@ trace_boosters_final_equal_result =
                 assertEqual (tag ++ ": combo") (gsCombo gs1) (nonEmptyWaves (mtWaves mt))
               NoMatch -> assertBool (tag ++ ": no waves") (null (mtWaves mt))
               InvalidSwap -> assertBool (tag ++ ": no waves") (null (mtWaves mt))
-              _ -> assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
+              _ -> do
+                -- 道具直接终局（过关 / 胜 / 负）：盘面、得分、连击都要与回放一致
+                assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
+                assertEqual (tag ++ ": score (terminal)") (gsScore gs1 - gsScore gs0) (sum (map cwScore (mtWaves mt)))
+                assertEqual (tag ++ ": combo (terminal)") (gsCombo gs1) (nonEmptyWaves (mtWaves mt))
             tag0 = "L" ++ show (li + 1) ++ " seed " ++ show seed
         sequence_
           [ do
@@ -7820,6 +7833,19 @@ trace_rejected_move_is_empty = withComboState $ \_ gs1 -> do
     Just (p1, p2) -> assertBool "finished game has no waves" (null (mtWaves (traceSwap p1 p2 gsOverSt)))
   assertBool "no hammer charges -> no waves" (null (mtWaves (traceHammer (3, 3) gs1 { gsHammers = 0 })))
   assertBool "no cross charges -> no waves" (null (mtWaves (traceCrossClear (3, 3) gs1 { gsCrossClears = 0 })))
+  -- 被拒的操作也没有步末效果（不播蔓延 / 蜗牛）
+  assertBool "non-adjacent has no end steps" (null (mtEnd (traceSwap (0, 0) (2, 2) gs1)))
+  assertBool "no hammer charges -> no end steps" (null (mtEnd (traceHammer (3, 3) gs1 { gsHammers = 0 })))
+  case noMatchSwap gs1 of
+    Nothing -> assertFailure "need a no-match swap"
+    Just (p1, p2) -> assertBool "no-match swap has no end steps" (null (mtEnd (traceSwap p1 p2 gs1)))
+  -- 带巧克力的关卡里无匹配交换同样不蔓延
+  let gsC = newGameAtLevel 4 (levelConfig (allLevels !! 4)) 1
+  case findNoMatchPair (gsBoard gsC) of
+    Nothing -> assertFailure "need a no-match pair on choco level"
+    Just (p1, p2) -> do
+      snd (trySwap p1 p2 gsC) @?= NoMatch
+      mtEnd (traceSwap p1 p2 gsC) @?= []
 
 -- | 3 连及以上的一步：每一轮都有自己的被消格，且被消格在该轮之前的盘面上确实存在。
 trace_multi_wave_each_round_visible :: Assertion
@@ -7852,3 +7878,166 @@ trace_multi_wave_each_round_visible =
                                 Just cell -> isGem cell) (cwCleared w))
         | w <- ws
         ]
+
+-- | 按时间线重放一步：轮 0..k-1 → esAfterWaves == k 的步末效果 → 轮 k …，逐段首尾相接，
+-- 每个步末效果用 applyEndEffect 重放得到 esAfter，最后到达 mtFinal。返回各类步末效果的名字。
+replayTimeline :: String -> MoveTrace -> IO [String]
+replayTimeline tag mt = go 0 (mtStart mt) (mtWaves mt) (mtEnd mt) []
+  where
+    go i cur ws ends acc = do
+      let (now, later) = span ((== i) . esAfterWaves) ends
+      cur' <-
+        foldM
+          ( \b e -> do
+              assertEqual (tag ++ ": end step after wave " ++ show i ++ " starts from current board") b (esBefore e)
+              assertEqual (tag ++ ": applyEndEffect reproduces esAfter") (esAfter e) (applyEndEffect (esEffect e) (esBefore e))
+              assertBool (tag ++ ": end step changes the board") (esBefore e /= esAfter e)
+              checkEffectDetail tag e
+              pure (esAfter e)
+          )
+          cur
+          now
+      let acc' = acc ++ map (effectName . esEffect) now
+      case ws of
+        [] -> do
+          assertBool (tag ++ ": no end step left after last wave") (null later)
+          assertEqual (tag ++ ": timeline reaches mtFinal") (mtFinal mt) cur'
+          pure acc'
+        (w : rest) -> do
+          assertEqual (tag ++ ": wave " ++ show i ++ " starts from current board") cur' (cwBefore w)
+          go (i + 1) (cwAfter w) rest later acc'
+
+effectName :: EndEffect -> String
+effectName e = case e of
+  EndCountdownTick _ -> "tick"
+  EndBeltShift _ -> "belt"
+  EndSpread k _ -> show k
+  EndSnail _ -> "snail"
+
+-- | 细节自洽：蔓延来源正交相邻且之前就带该覆盖层；蜗牛只走一格或原地掉头；皮带 / 倒计时格真的变了。
+checkEffectDetail :: String -> EndStep -> Assertion
+checkEffectDetail tag e = case esEffect e of
+  EndSpread k pairs -> do
+    let ov = case k of
+          SpreadVine -> Vine
+          SpreadChoco -> Choco
+          SpreadSteam -> Steam
+    sequence_
+      [ do
+          assertBool (tag ++ ": spread source adjacent " ++ show (src, q)) (adjacent src q)
+          assertEqual (tag ++ ": spread source had overlay") (Just ov) (cellOverlay (getCell (esBefore e) src))
+          assertEqual (tag ++ ": spread target was bare") Nothing (cellOverlay (getCell (esBefore e) q))
+      | (src, q) <- pairs
+      ]
+  EndSnail ms ->
+    sequence_
+      [ assertBool (tag ++ ": snail moves at most one cell " ++ show m) (smFrom m == smTo m || adjacent (smFrom m) (smTo m))
+      | m <- ms
+      ]
+  EndBeltShift mv -> assertBool (tag ++ ": belt moves listed") (not (null mv))
+  EndCountdownTick ps ->
+    sequence_
+      [ assertBool (tag ++ ": countdown ticked at " ++ show p) (getCell (esBefore e) p /= getCell (esAfter e) p) | p <- ps ]
+
+-- | 步末效果（倒计时减一 / 皮带移位 / 藤巧蒸汽蔓延 / 蜗牛爬行）按时间线重放后与 trySwap 的终盘一致；
+-- 抽样必须覆盖所有种类，保证测试有效。
+trace_end_steps_replay_to_trySwap_final :: Assertion
+trace_end_steps_replay_to_trySwap_final = do
+  names <- fmap concat $ sequence
+    [ do
+        let tag = "L" ++ show (li + 1) ++ " seed " ++ show seed ++ " " ++ show (p1, p2)
+            mt = traceSwap p1 p2 gs0
+        ks <- replayTimeline tag mt
+        when (not (gsShuffled gs1)) $ assertEqual (tag ++ ": replayed final = trySwap board") (gsBoard gs1) (mtFinal mt)
+        pure ks
+    | li <- [0 .. length allLevels - 1]
+    , seed <- [1 .. 3 :: Int]
+    , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+    , r <- [0 .. boardSize - 1]
+    , c <- [0 .. boardSize - 1]
+    , let p1 = (r, c)
+    , p2 <- [(r, c + 1), (r + 1, c)]
+    , inBounds p2
+    , let (gs1, out) = trySwap p1 p2 gs0
+    , out /= NoMatch && out /= InvalidSwap
+    ]
+  sequence_
+    [ assertBool ("sample covers end effect " ++ k ++ " (seen " ++ show (length (filter (== k) names)) ++ ")") (k `elem` names)
+    | k <- ["tick", "belt", "SpreadVine", "SpreadChoco", "SpreadSteam", "snail"]
+    ]
+
+-- | 道具（锤子 / 十字 / 自由交换）只有蔓延类步末效果，重放后同样到达终盘。
+trace_end_steps_boosters_replay :: Assertion
+trace_end_steps_boosters_replay = do
+  names <- fmap concat $ sequence
+    [ do
+        let tag = "L" ++ show (li + 1) ++ " seed " ++ show seed ++ " " ++ name
+        ks <- replayTimeline tag mt
+        case out of
+          MoveApplied _ | not (gsShuffled gs1) -> assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
+          _ -> pure ()
+        assertBool (tag ++ ": boosters only spread") (all (`elem` ["SpreadVine", "SpreadChoco", "SpreadSteam"]) ks)
+        pure ks
+    | li <- [4, 9, 15, 27, 35]
+    , seed <- [1 .. 2 :: Int]
+    , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+    , (name, (gs1, out), mt) <-
+        [ ("hammer " ++ show p, useHammer p gs0, traceHammer p gs0) | p <- [(0, 0), (3, 4), (5, 2)] ]
+          ++ [ ("cross " ++ show p, useCrossClear p gs0, traceCrossClear p gs0) | p <- [(2, 2), (6, 5)] ]
+          ++ [ ("free " ++ show pq, useFreeSwap (fst pq) (snd pq) gs0, traceFreeSwap (fst pq) (snd pq) gs0) | pq <- [((0, 0), (7, 7)), ((4, 4), (4, 5))] ]
+    ]
+  assertBool "booster sample includes a spread" (not (null names))
+
+-- | 蜗牛：碰壁原地掉头（smFrom == smTo，朝向反转），前方是宝石则爬过去、宝石换到原格。
+trace_end_snail_push_and_turn :: Assertion
+trace_end_snail_push_and_turn = do
+  let base = newGame defaultConfig 7
+      b0 = setCell (setCell (gsBoard base) (0, 0) (mkSnail 0 (-1))) (3, 3) (mkSnail 0 1)
+      gs0 = base { gsBoard = b0 }
+      applied =
+        [ (p1, p2, gs1)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p1 = (r, c)
+        , p2 <- [(r, c + 1), (r + 1, c)]
+        , inBounds p2
+        , all (`notElem` [(0, 0), (3, 3), (3, 4)]) [p1, p2]
+        , let (gs1, out) = trySwap p1 p2 gs0
+        , isMoveApplied out
+        ]
+  case applied of
+    [] -> assertFailure "need an applied swap away from the snails"
+    ((p1, p2, gs1) : _) -> do
+      let mt = traceSwap p1 p2 gs0
+      _ <- replayTimeline "snail" mt
+      case [(e, ms) | e <- mtEnd mt, EndSnail ms <- [esEffect e]] of
+        [(e, ms)] -> do
+          assertBool "wall snail turns in place" (SnailMove (0, 0) (0, 0) (0, 1) Nothing `elem` ms)
+          case [m | m <- ms, smFrom m == (3, 3)] of
+            [m] -> do
+              smTo m @?= (3, 4)
+              smDir m @?= (0, 1)
+              smPushed m @?= Just (getCell (esBefore e) (3, 4))
+            other -> assertFailure ("expected one move for snail at (3,3), got " ++ show other)
+        other -> assertFailure ("expected exactly one snail end step, got " ++ show (length other))
+      when (not (gsShuffled gs1)) $ gsBoard gs1 @?= mtFinal mt
+  where
+    isMoveApplied o = case o of
+      MoveApplied _ -> True
+      _ -> False
+
+-- | 巧克力 / 藤蔓：新占格都能在之前的盘面找到正交相邻的来源（前端从来源方向「长出」）。
+trace_end_spread_from_adjacent_source :: Assertion
+trace_end_spread_from_adjacent_source = do
+  let found =
+        [ (kind, pairs)
+        | li <- [4, 9]
+        , seed <- [1 .. 3 :: Int]
+        , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+        , Just (p1, p2) <- [findHint (gsBoard gs0)]
+        , e <- mtEnd (traceSwap p1 p2 gs0)
+        , EndSpread kind pairs <- [esEffect e]
+        ]
+  assertBool "choco spread seen" (SpreadChoco `elem` map fst found)
+  assertBool "vine spread seen" (SpreadVine `elem` map fst found)
+  assertBool "every spread has targets" (all (not . null . snd) found)

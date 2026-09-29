@@ -241,6 +241,54 @@ applyCascadeEvent app ev = case ev of
          , appShake = if k >= 2 then shakeFrames else appShake app
          , appShakeAmp = if k >= 2 then csShake st else appShakeAmp app
          }
+  EvEndStage st ->
+    -- 步末：新长出的藤 / 巧 / 蒸汽格迸几粒同色碎屑，倒计时减一冒红色火星；皮带 / 蜗牛 / 洗牌只靠位移动画
+    let crumbs = case stKind st of
+          StSpread ->
+            concat
+              [ crumbParticles (appPulse app + i) (spreadRGB kind) [q]
+              | (i, e) <- zip [0 :: Int ..] (stSteps st)
+              , EndSpread kind pairs <- [esEffect e]
+              , (_, q) <- pairs
+              ]
+          StTick -> crumbParticles (appPulse app) (255, 110, 70) [p | (p, _) <- stageMoves st]
+          _ -> []
+    in app {appParticles = crumbs ++ appParticles app}
+
+-- | 蔓延覆盖层的主色（碎屑 / 生长前沿光）。
+spreadRGB :: SpreadKind -> (Word8, Word8, Word8)
+spreadRGB k = case k of
+  SpreadVine -> (110, 220, 90)
+  SpreadChoco -> (150, 90, 45)
+  SpreadSteam -> (225, 225, 235)
+
+-- | 小颗碎屑（比消除粒子少、慢、小），用于步末效果。
+crumbParticles :: Int -> (Word8, Word8, Word8) -> [Pos] -> [Particle]
+crumbParticles seed (cr, cg, cb) positions = concat (zipWith one [0 :: Int ..] positions)
+  where
+    one i pos =
+      let (ox, oy) = cellOrigin pos
+      in go (3 :: Int) (fromIntegral ox + fromIntegral cellPx / 2) (fromIntegral oy + fromIntegral cellPx / 2) (mkStdGen (seed * 6151 + i * 7727 + 3))
+    go 0 _ _ _ = []
+    go n cx cy g0 =
+      let (ang, g1) = randomR (0, 2 * pi :: Float) g0
+          (spd, g2) = randomR (0.6, 2.0 :: Float) g1
+          (life, g3) = randomR (14, 24 :: Int) g2
+          (sz, g4) = randomR (2, 4 :: Int) (g3 :: StdGen)
+          p =
+            Particle
+              { pX = cx
+              , pY = cy
+              , pVX = cos ang * spd
+              , pVY = sin ang * spd - 1.0
+              , pLife = life
+              , pMax = life
+              , pR = cr
+              , pG = cg
+              , pB = cb
+              , pSize = fromIntegral sz
+              }
+      in p : go (n - 1) cx cy g4
 
 -- | 棋盘左上角（逻辑像素，Float）。
 boardTopF, boardLeftF, cellF :: Float
@@ -623,13 +671,14 @@ noMoveFx = MoveFx 0 []
 -- * fx 为空（NoMatch / InvalidSwap / 操作前已结束）：不回放、不闪光，并清掉残留的连击弹字
 --   与 HUD 总结 —— 绝不重播上一步的连击特效（回归：failed_swap_resets_combo_feedback）。
 -- * 有回放脚本（MoveTrace）：交换动画 → 逐轮回放（高亮 → 消失 → 下落补子 → 下一轮），
---   连击弹字 / 得分浮字 / 震屏 / 粒子都在回放阶段切换时产生，HUD 总结在全部播完后才亮。
+--   连击弹字 / 得分浮字 / 震屏 / 粒子都在回放阶段切换时产生；轮次之间与全部落定之后按
+--   mtEnd 播放步末效果（倒计时减一 / 皮带 / 蔓延 / 蜗牛，必要时自动洗牌），HUD 总结在全部播完后才亮。
 -- * 兜底（理论上不会发生：结算过却没有轮次）：沿用旧的「闪光 + 粒子 + 轻落」。
 withMovePlayback :: GameState -> GameState -> MoveFx -> MoveTrace -> Maybe (Pos, Pos) -> App -> App
 withMovePlayback before after fx mt swapPair app
   | fx == noMoveFx =
       app {appFlash = [], appAnim = AnimNone, appComboShow = 0, appComboBest = 0, appPops = []}
-  | null (mtWaves mt) =
+  | null (mtWaves mt) && null (mtEnd mt) =
       let changed = fxCleared fx
           fall = AnimFall (gsBoard after) 0
       in app
@@ -755,6 +804,8 @@ handleEvent ref window ev = case eventPayload ev of
                             , appComboShow = 0
                             , appComboBest = 0
                             , appPops = []
+                            , appParticles = []
+                            , appShake = 0
                             , appAnim = AnimFall { afBoard = gsBoard gs, afFrame = 0 }
                             }
                     writeIORef ref app'
@@ -792,6 +843,7 @@ handleEvent ref window ev = case eventPayload ev of
                                 , appComboBest = 0
                                 , appPops = []
                                 , appParticles = []
+                                , appShake = 0
                                 }
                         writeIORef ref app'
                         updateTitle window app'
@@ -2458,14 +2510,188 @@ waveTint app k
   | otherwise = let (r, g, b) = styleRGB (comboStyle k) (appPulse app) in V3 r g b
 
 drawCascade :: Renderer -> App -> Cascade -> IO ()
-drawCascade ren app c = case cWaves c of
-  [] -> drawStatic ren app (cFinal c) 0
+drawCascade ren app c = case (cPhase c, cStages c) of
+  (PhEnd, st : _) -> drawEndStage ren app (phaseT c) st
+  _ -> drawCascadeWave ren app c
+
+drawCascadeWave :: Renderer -> App -> Cascade -> IO ()
+drawCascadeWave ren app c = case cWaves c of
+  [] -> drawStatic ren app (cShown c) 0
   (w : _) -> case cPhase c of
     PhStart -> drawStatic ren app (cwBefore w) 0
     PhFlash -> drawWaveFlash ren app c w
     PhPop -> drawWavePop ren app c w
     PhFall -> drawWaveFall ren app c w
     PhRest -> drawStatic ren app (cwAfter w) 0
+    PhEnd -> drawStatic ren app (cShown c) 0
+
+--------------------------------------------------------------------------------
+-- 步末效果绘制（阶段划分见 ComboFx.arrive / EndStage）
+--------------------------------------------------------------------------------
+
+drawEndStage :: Renderer -> App -> Double -> EndStage -> IO ()
+drawEndStage ren app t st = case stKind st of
+  StTick -> drawEndTick ren app t st
+  StBelt -> drawEndBelt ren app t st
+  StSpread -> drawEndSpread ren app t st
+  StSnail -> drawEndSnail ren app t st
+  StShuffle -> drawEndShuffle ren app t st
+
+smoothT :: Double -> Double
+smoothT x = let y = max 0 (min 1 x) in y * y * (3 - 2 * y)
+
+easeOutT :: Double -> Double
+easeOutT x = let y = max 0 (min 1 x) in 1 - (1 - y) * (1 - y)
+
+lerpC :: CInt -> CInt -> Double -> CInt
+lerpC a b e = a + round (fromIntegral (b - a) * e)
+
+-- | 棋盘底 + 除 hidden 以外的所有格（移动中的格由调用方另画）。
+drawCellsExcept :: Renderer -> App -> Board -> [Pos] -> IO ()
+drawCellsExcept ren app board hidden = do
+  drawBoardBase ren app
+  forM_ allCells $ \pos ->
+    unless (pos `elem` hidden) $ do
+      let (x, y) = cellOrigin pos
+      drawCellAny ren app x y (getCell board pos) False
+  drawUfosAny ren app
+
+-- | 倒计时减一：前半段旧数字、后半段新数字，炸弹格红光脉冲 + 数字放大回弹。
+drawEndTick :: Renderer -> App -> Double -> EndStage -> IO ()
+drawEndTick ren app t st = do
+  let board = if t < 0.5 then stBefore st else stAfter st
+      k = sin (pi * t)
+  drawStatic ren app board 0
+  forM_ (map fst (stageMoves st)) $ \pos -> do
+    let (x, y) = cellOrigin pos
+        grow = round (10 * k) :: CInt
+    case appArt app of
+      Just art -> do
+        void (drawSpriteAdd ren art "spark" (rect (x - 8) (y - 8) (cellPx + 16) (cellPx + 16)) (V3 255 90 60) (round (200 * k)))
+        case getCell board pos of
+          Countdown _ n ->
+            void (drawSprite ren art ("countdown_" ++ show (clampI 1 9 n)) (rect (x - grow) (y - grow) (cellPx + 2 * grow) (cellPx + 2 * grow)))
+          _ -> pure ()
+      Nothing -> do
+        rendererDrawColor ren $= V4 255 90 60 (round (255 * k))
+        drawRect ren (Just (rect (x - grow `div` 2) (y - grow `div` 2) (cellPx + grow) (cellPx + grow)))
+
+-- | 皮带移位：相邻格平滑滑过去；首尾相接的那一格在终点缩放淡入。
+drawEndBelt :: Renderer -> App -> Double -> EndStage -> IO ()
+drawEndBelt ren app t st = do
+  let moves = stageMoves st
+      e = smoothT t
+  drawCellsExcept ren app (stBefore st) (map snd moves)
+  rendererClipRect ren $= Just boardRect
+  forM_ moves $ \(o, d) -> do
+    let cell = getCell (stBefore st) o
+        (x0, y0) = cellOrigin o
+        (x1, y1) = cellOrigin d
+    if adjacent o d
+      then drawCellAny ren app (lerpC x0 x1 e) (lerpC y0 y1 e) cell False
+      else drawCellScaled ren app (x1 + cellPx `div` 2) (y1 + cellPx `div` 2) (max 0.05 e) (round (255 * e)) cell
+  rendererClipRect ren $= Nothing
+
+-- | 蔓延：新格的覆盖层从来源格那一侧「长」过来（按方向逐渐露出新状态）。
+-- 藤蔓分 4 段一节一节伸长；巧克力先快后慢地涂抹铺开；蒸汽匀速漫开并淡入。生长前沿带同色柔光。
+drawEndSpread :: Renderer -> App -> Double -> EndStage -> IO ()
+drawEndSpread ren app t st = do
+  drawStatic ren app (stBefore st) 0
+  forM_ [(kind, pr) | e <- stSteps st, EndSpread kind prs <- [esEffect e], pr <- prs] $ \(kind, (src, q)) -> do
+    let (x, y) = cellOrigin q
+        prog = case kind of
+          SpreadVine ->
+            let u = t * 4
+                seg = fromIntegral (floor u :: Int)
+            in min 1 ((seg + smoothT (u - seg)) / 4)
+          SpreadChoco -> easeOutT t
+          SpreadSteam -> t
+        w = max 1 (round (fromIntegral cellPx * prog)) :: CInt
+        (dr, dc) = (fst q - fst src, snd q - snd src)
+        (clip, front)
+          | dc == 1 = (rect x y w cellPx, rect (x + w - 10) (y - 4) 20 (cellPx + 8))
+          | dc == -1 = (rect (x + cellPx - w) y w cellPx, rect (x + cellPx - w - 10) (y - 4) 20 (cellPx + 8))
+          | dr == 1 = (rect x y cellPx w, rect (x - 4) (y + w - 10) (cellPx + 8) 20)
+          | dr == -1 = (rect x (y + cellPx - w) cellPx w, rect (x - 4) (y + cellPx - w - 10) (cellPx + 8) 20)
+          | otherwise =
+              let h = w `div` 2
+                  cx = x + cellPx `div` 2
+                  cy = y + cellPx `div` 2
+              in (rect (cx - h) (cy - h) (2 * h) (2 * h), rect (cx - h) (cy - h) (2 * h) (2 * h))
+        (cr, cg, cb) = spreadRGB kind
+    rendererClipRect ren $= Just clip
+    drawCellAny ren app x y (getCell (stAfter st) q) False
+    rendererClipRect ren $= Nothing
+    let glowA = round (220 * (1 - t) + 30) :: Word8
+    case appArt app of
+      Just art -> void (drawSpriteAdd ren art "spark" front (V3 cr cg cb) glowA)
+      Nothing -> do
+        rendererDrawColor ren $= V4 cr cg cb glowA
+        fillRect ren (Just front)
+
+-- | 蜗牛：沿爬行方向平滑挪一格（轻微一拱），被推的宝石同时退到蜗牛原格；碰壁的蜗牛原地翻身掉头。
+drawEndSnail :: Renderer -> App -> Double -> EndStage -> IO ()
+drawEndSnail ren app t st = do
+  let ms = [m | es <- stSteps st, EndSnail xs <- [esEffect es], m <- xs]
+      e = smoothT t
+  drawCellsExcept ren app (stBefore st) (concat [[smFrom m, smTo m] | m <- ms])
+  forM_ ms $ \m -> do
+    let (x0, y0) = cellOrigin (smFrom m)
+        (x1, y1) = cellOrigin (smTo m)
+    if smFrom m == smTo m
+      then do
+        -- 掉头：横向压扁到 0 再展开，中点换朝向
+        let sq = abs (cos (pi * t))
+            w = max 2 (round (fromIntegral cellPx * sq)) :: CInt
+            hop = round (4 * sin (pi * t)) :: CInt
+            dir = if t < 0.5 then oldDir m else smDir m
+        drawSnailAt ren app (x0 + (cellPx - w) `div` 2) (y0 - hop) w dir
+      else do
+        -- 被推的宝石交错时往侧面让一点，两者都看得见
+        let side = round (9 * sin (pi * t)) :: CInt
+            (sx, sy) = if y0 == y1 then (0, side) else (side, 0)
+        forM_ (smPushed m) $ \cell -> drawCellAny ren app (lerpC x1 x0 e + sx) (lerpC y1 y0 e + sy) cell False
+        let hop = round (5 * sin (pi * t)) :: CInt
+        drawSnailAt ren app (lerpC x0 x1 e) (lerpC y0 y1 e - hop) cellPx (smDir m)
+  where
+    oldDir m = case getCell (stBefore st) (smFrom m) of
+      Snail dr dc -> (dr, dc)
+      _ -> smDir m
+
+-- | 按朝向画蜗牛（宽度可压扁，用于掉头翻身）。
+drawSnailAt :: Renderer -> App -> CInt -> CInt -> CInt -> (Int, Int) -> IO ()
+drawSnailAt ren app x y w (dr, dc) = case appArt app of
+  Just art | hasSprite art "snail" -> do
+    let (ang, flipH)
+          | abs dc >= abs dr && dc >= 0 = (0, False)
+          | abs dc >= abs dr = (0, True)
+          | dr > 0 = (90, False)
+          | otherwise = (-90, False)
+    void (drawSpriteEx ren art "snail" (rect x y w cellPx) ang flipH)
+  _ -> drawGemAt ren x y (Snail dr dc) False
+
+-- | 自动洗牌（无可走步时规则层重排）：旧盘向中心收拢并被暗幕盖住 → 新盘从中心散开、暗幕褪去。
+-- 全程用完整的格子画法（覆盖层 / 角标不会突然消失），t = 0.5 时完全被暗幕盖住再换盘。
+drawEndShuffle :: Renderer -> App -> Double -> EndStage -> IO ()
+drawEndShuffle ren app t st = do
+  let (board, k)
+        | t < 0.5 = (stBefore st, smoothT (t * 2))
+        | otherwise = (stAfter st, 1 - smoothT (t * 2 - 1))
+      (mx, my) = cellOrigin (3, 3)
+      cx = mx + cellPx `div` 2
+      cy = my + cellPx `div` 2
+  drawBoardBase ren app
+  forM_ allCells $ \pos -> do
+    let (x, y) = cellOrigin pos
+        x' = lerpC x (cx - cellPx `div` 2) (0.3 * k)
+        y' = lerpC y (cy - cellPx `div` 2) (0.3 * k)
+    drawCellAny ren app x' y' (getCell board pos) False
+  drawUfosAny ren app
+  rendererDrawColor ren $= V4 20 12 40 (round (230 * k))
+  fillRect ren (Just boardRect)
+  forM_ (appArt app) $ \art -> do
+    let sz = round (fromIntegral boardPx * (0.2 + 0.5 * k)) :: CInt
+    void (drawSpriteAdd ren art "spark" (rect (cx - sz `div` 2) (cy - sz `div` 2) sz sz) (V3 200 150 255) (round (160 * k)))
 
 -- | 高亮：整盘压暗，被消格提到暗幕之上，闪两下 + 轻微弹跳 + 等级色光圈。
 drawWaveFlash :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
@@ -2541,6 +2767,7 @@ drawWaveFall ren app c w = do
         off = round (fromIntegral (fromIntegral d * cellPx) * (1 - e)) :: CInt
     drawCellAny ren app x (y - off) (getCell (cwAfter w) pos) False
   rendererClipRect ren $= Nothing
+  drawUfosAny ren app
 
 -- | 以格子中心 (cx, cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记）。
 drawCellScaled :: Renderer -> App -> CInt -> CInt -> Double -> Word8 -> Cell -> IO ()
@@ -2637,9 +2864,10 @@ drawStaticPrim ren app board yOff = do
   mapM_ (drawBelt ren yOff) (gsBelts (appGame app))
   -- Portal pair markers (violet rings)
   mapM_ (drawPortal ren yOff) (gsPortals (appGame app))
-  -- Vine / chocolate spread preview pulses
-  drawVineSpreadHints ren yOff pulse (gsBoard (appGame app))
-  drawChocoSpreadHints ren yOff pulse (gsBoard (appGame app))
+  -- Vine / chocolate spread preview pulses（只在静止时画，理由同贴图版）
+  unless (animBusy app) $ do
+    drawVineSpreadHints ren yOff pulse (gsBoard (appGame app))
+    drawChocoSpreadHints ren yOff pulse (gsBoard (appGame app))
   -- UFO overlays
   mapM_ (drawUfo ren yOff pulse) (gsUfos (appGame app))
 
@@ -3036,19 +3264,32 @@ drawStaticArt ren art app board yOff = do
       let (x, y) = cellOrigin p
       void (drawSpriteMod ren art "sel_ring" (cellRect x y) (V3 110 190 255) 220)
     _ -> pure ()
-  -- 藤蔓 / 巧克力下一步可能蔓延到的格子：绿 / 棕色柔光呼吸
+  -- 藤蔓 / 巧克力下一步可能蔓延到的格子：绿 / 棕色柔光呼吸。
+  -- 只在静止时画：预告基于结算后的盘面，回放 / 步末动画中画出来会和正在长出的格子混淆。
   let spreadA = fromIntegral (round (70 + 110 * breathe pulse 60) :: Int) :: Word8
-  forM_ (spreadTargets hasVine (gsBoard gs)) $ \pos -> do
-    let (x, y) = cellOrigin pos
-    void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 90 255 120) spreadA)
-  forM_ (spreadTargets hasChoco (gsBoard gs)) $ \pos -> do
-    let (x, y) = cellOrigin pos
-    void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 210 120 60) spreadA)
-  forM_ (gsUfos gs) $ \(Ufo pos col) -> do
+  unless (animBusy app) $ do
+    forM_ (spreadTargets hasVine (gsBoard gs)) $ \pos -> do
+      let (x, y) = cellOrigin pos
+      void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 90 255 120) spreadA)
+    forM_ (spreadTargets hasChoco (gsBoard gs)) $ \pos -> do
+      let (x, y) = cellOrigin pos
+      void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 210 120 60) spreadA)
+  drawUfosArt ren art app yOff
+
+-- | 飞碟（贴图版，缺图时退回几何画法）。
+drawUfosArt :: Renderer -> Art -> App -> CInt -> IO ()
+drawUfosArt ren art app yOff = do
+  let pulse = appPulse app
+  forM_ (gsUfos (appGame app)) $ \(Ufo pos col) -> do
     let (x, y) = cellOrigin pos
         bob = round (3 * sin (fromIntegral pulse / 10 :: Double)) :: CInt
     ok <- drawSprite ren art ("ufo_" ++ colorKey col) (rect x (y + yOff - 12 + bob) cellPx cellPx)
     unless ok $ drawUfo ren yOff pulse (Ufo pos col)
+
+drawUfosAny :: Renderer -> App -> IO ()
+drawUfosAny ren app = case appArt app of
+  Just art -> drawUfosArt ren art app 0
+  Nothing -> mapM_ (drawUfo ren 0 (appPulse app)) (gsUfos (appGame app))
 
 -- | 与 drawVineSpreadHints 相同的判定：源格正交相邻、且无覆盖层的普通宝石格。
 spreadTargets :: (Cell -> Bool) -> Board -> [Pos]

@@ -37,7 +37,7 @@
 |------|------|--------|
 | `Match3.Types` | `Color` / `GemKind` / `CellOverlay` / `CellContents`、构造器与谓词、`LevelGoal` / `Outcome` / `allLevels` | 连锁、交换、IO |
 | `Match3.Board` | 读写格、匹配查找、清除 / 特殊扩展、重力与补子、传送门沉降、UFO 波次连锁、`runCascade*`；逐轮快照 `traceCascade*`（`CascadeWave`） | 步数/目标结算、道具扣次 |
-| `Match3.Game` | `GameState`、`trySwap` / 道具、逐轮回放脚本 `trace*`（`MoveTrace`）、结局、洗牌保装饰、战役装饰与门户/皮带布局、步数携带 | 像素绘制 |
+| `Match3.Game` | `GameState`、`trySwap` / 道具、逐轮回放脚本 `trace*`（`MoveTrace`，含步末效果 `EndStep`）、结局、洗牌保装饰、战役装饰与门户/皮带布局、步数携带 | 像素绘制 |
 | `Match3.Core` | 再导出公共 API | 自身几乎无逻辑 |
 | `Match3.Obstacles` | 石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/瓶子/精灵/魔法帽/果汁机的邻消削层与触发 | 连锁循环 |
 | `Match3.Rainbow` | 彩虹判定与清色种子 | 合成几何（见 Combos） |
@@ -52,7 +52,7 @@
 | `Match3.Boosters` | 锤子/十字**种子位置**（纯几何） | 扣次数与连锁（Game） |
 | `Match3.Daily` | 日期种子、每日配置、三星公式 | 每日盘面装饰（Game） |
 | `app/Main.hs` | 窗口、事件、工具模式、地图 UI、动画 | 改写规则结果 |
-| `app/ComboFx.hs` | 连锁逐轮回放的纯逻辑：阶段机（高亮→消失→下落→落定）、时间线常量、连击等级样式、下落映射、浮字曲线 | 绘制、规则计算（只消费 `MoveTrace`） |
+| `app/ComboFx.hs` | 连锁逐轮回放的纯逻辑：阶段机（高亮→消失→下落→落定，以及步末阶段：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌）、时间线常量、连击等级样式、下落映射、浮字曲线 | 绘制、规则计算（只消费 `MoveTrace`） |
 | `app/Art.hs` | 贴图图集（BMP + 索引）加载、路径查找、九宫格面板、染色/加色绘制 | 游戏状态；缺资源时由 Main 退回几何绘制 |
 
 ## 构建工具链

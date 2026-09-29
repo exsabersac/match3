@@ -176,6 +176,11 @@ module Match3.Core
   , moveFx
   , clearMoveFx
   , MoveTrace(..)
+  , EndStep(..)
+  , EndEffect(..)
+  , SpreadKind(..)
+  , SnailMove(..)
+  , applyEndEffect
   , traceSwap
   , traceFreeSwap
   , traceHammer

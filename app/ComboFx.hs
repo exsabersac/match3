@@ -1,4 +1,4 @@
--- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、下落映射、连击等级样式、浮字曲线。
+-- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式、浮字曲线。
 -- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 Main.hs 的 drawCascade* / drawPops*），
 -- 也不改规则：回放脚本来自 Match3.Game 的 trace*，结算结果仍以 trySwap 等为准。
 module ComboFx
@@ -12,6 +12,8 @@ module ComboFx
   , scorePopLife
   , comboSummaryFrames
   , shakeFrames
+  , endStageBase
+  , endBudgetFrames
     -- * 逐轮回放阶段机
   , WavePhase (..)
   , Cascade (..)
@@ -21,6 +23,10 @@ module ComboFx
   , stepPlayback
   , phaseLen
   , phaseT
+    -- * 步末效果阶段
+  , StageKind (..)
+  , EndStage (..)
+  , stageMoves
     -- * 下落映射
   , fallTable
     -- * 连击等级样式
@@ -82,13 +88,42 @@ comboSummaryFrames = 96
 shakeFrames :: Int
 shakeFrames = 10
 
+-- | 步末阶段的基础帧数（1 帧 ≈ 16.7 ms）：倒计时减一 10（≈ 170 ms）、皮带移位 14（≈ 230 ms）、
+-- 蔓延 18（≈ 300 ms，藤 / 巧 / 蒸汽同时长出）、蜗牛 18（≈ 300 ms）、自动洗牌 22（≈ 370 ms）。
+endStageBase :: StageKind -> Int
+endStageBase k = case k of
+  StTick -> 10
+  StBelt -> 14
+  StSpread -> 18
+  StSnail -> 18
+  StShuffle -> 22
+
+-- | 同一时刻连续发生的步末阶段（不含自动洗牌）合计不超过 36 帧（≈ 0.6 s），超出时按比例压缩，
+-- 每段至少 8 帧，保证仍能看清。
+endBudgetFrames :: Int
+endBudgetFrames = 36
+
 --------------------------------------------------------------------------------
 -- 阶段机
 --------------------------------------------------------------------------------
 
 -- | 一轮的四个阶段；PhStart 只是「尚未进入第一轮」的占位（长度 0）。
-data WavePhase = PhStart | PhFlash | PhPop | PhFall | PhRest
+-- PhEnd：步末效果阶段（倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌），当前段是 cStages 的 head。
+data WavePhase = PhStart | PhFlash | PhPop | PhFall | PhRest | PhEnd
   deriving (Eq, Show)
+
+-- | 步末阶段的种类（同一时刻连续的藤 / 巧 / 蒸汽合并为一个 StSpread 同时播放）。
+data StageKind = StTick | StBelt | StSpread | StSnail | StShuffle
+  deriving (Eq, Show)
+
+-- | 一段步末动画：从 stBefore 播到 stAfter。
+data EndStage = EndStage
+  { stKind   :: StageKind
+  , stSteps  :: [EndStep] -- ^ 规则层记录的效果（StShuffle 为空）
+  , stBefore :: Board
+  , stAfter  :: Board
+  , stFrames :: Int
+  }
 
 -- | 一步操作的回放进度。
 data Cascade = Cascade
@@ -102,12 +137,16 @@ data Cascade = Cascade
   , cFinal :: Board         -- ^ 结算后的真实盘面（含蔓延 / 蜗牛 / 自动洗牌）
   , cShown :: Board         -- ^ 最近一次落定的盘面
   , cFast  :: Bool          -- ^ 玩家点击加速
+  , cEnds  :: [EndStep]     -- ^ 尚未播放的步末效果（按 esAfterWaves 排序）
+  , cDone  :: Int           -- ^ 已播完的轮数（= 下一个步末效果插入点）
+  , cStages :: [EndStage]   -- ^ PhEnd 中：当前及后续的步末段
   }
 
 -- | 阶段切换时前端要做的一次性动作。
 data CascadeEvent
   = EvHighlight Int CascadeWave -- ^ 进入高亮：k ≥ 2 时弹「连击 xk」
   | EvVanish Int CascadeWave    -- ^ 进入消失：粒子 + 本轮得分浮字 + 震屏（k ≥ 2）
+  | EvEndStage EndStage         -- ^ 进入一段步末动画：蔓延碎屑 / 倒计时火花等
 
 data StepResult = Continue Cascade | Finished Cascade
 
@@ -124,6 +163,9 @@ newCascade mt final base =
     , cFinal = final
     , cShown = mtStart mt
     , cFast = False
+    , cEnds = mtEnd mt
+    , cDone = 0
+    , cStages = []
     }
 
 phaseLen :: WavePhase -> CascadeWave -> Int
@@ -133,39 +175,104 @@ phaseLen ph w = case ph of
   PhPop -> wavePopFrames
   PhFall -> fallFramesFor (maximum (0 : [d | row <- fallTable w, (d, _) <- row]))
   PhRest -> waveRestFrames
+  PhEnd -> 0 -- 步末段长度见 EndStage.stFrames
+
+-- | 当前阶段的总帧数。
+curLen :: Cascade -> Int
+curLen c = case cPhase c of
+  PhStart -> 0
+  PhEnd -> case cStages c of
+    (s : _) -> stFrames s
+    [] -> 0
+  ph -> case cWaves c of
+    (w : _) -> phaseLen ph w
+    [] -> 0
 
 -- | 当前阶段进度 0..1。
 phaseT :: Cascade -> Double
-phaseT c = case cWaves c of
-  (w : _) ->
-    let n = phaseLen (cPhase c) w
-    in if n <= 0 then 1 else min 1 (fromIntegral (cFrame c) / fromIntegral n)
-  [] -> 1
+phaseT c =
+  let n = curLen c
+  in if n <= 0 then 1 else min 1 (fromIntegral (cFrame c) / fromIntegral n)
 
--- | 推进一帧（加速时一次推进 fastStep 帧）。
+-- | 推进一帧（加速时一次推进 fastStep 帧，步末阶段同样加速）。
 stepPlayback :: Cascade -> (StepResult, [CascadeEvent])
-stepPlayback c = case cWaves c of
-  [] -> (Finished c, [])
-  (w : _) ->
-    let f = cFrame c + (if cFast c then fastStep else 1)
-    in if f < phaseLen (cPhase c) w
-         then (Continue c {cFrame = f}, [])
-         else advance c
+stepPlayback c =
+  let f = cFrame c + (if cFast c then fastStep else 1)
+  in if f < curLen c
+       then (Continue c {cFrame = f}, [])
+       else advance c
 
 advance :: Cascade -> (StepResult, [CascadeEvent])
 advance c = case (cPhase c, cWaves c) of
+  (PhStart, _) -> arrive c
+  (PhEnd, _) -> case cStages c of
+    (s : rest@(s2 : _)) -> (Continue c {cStages = rest, cFrame = 0, cShown = stAfter s}, [EvEndStage s2])
+    (s : []) -> enterWave c {cStages = [], cShown = stAfter s}
+    [] -> enterWave c
   (_, []) -> (Finished c, [])
-  (PhStart, _) -> enterWave c
   (PhFlash, w : _) ->
     (Continue c {cPhase = PhPop, cFrame = 0, cGain = cGain c + cwScore w}, [EvVanish (cCombo c) w])
   (PhPop, _) -> (Continue c {cPhase = PhFall, cFrame = 0}, [])
   (PhFall, w : _) -> (Continue c {cPhase = PhRest, cFrame = 0, cShown = cwAfter w}, [])
-  (PhRest, _ : rest) -> enterWave c {cWaves = rest}
+  (PhRest, _ : rest) -> arrive c {cWaves = rest, cDone = cDone c + 1}
+
+-- | 到达插入点 cDone：先播这里的步末效果（全部轮次之后还要检查自动洗牌），再进入下一轮。
+arrive :: Cascade -> (StepResult, [CascadeEvent])
+arrive c =
+  let (now, later) = span ((<= cDone c) . esAfterWaves) (cEnds c)
+      stages0 = budget (groupStages now)
+      lastBoard = case reverse stages0 of
+        (s : _) -> stAfter s
+        [] -> cShown c
+      shuffle =
+        [ EndStage StShuffle [] lastBoard (cFinal c) (endStageBase StShuffle)
+        | null (cWaves c)
+        , lastBoard /= cFinal c
+        ]
+      stages = stages0 ++ shuffle
+      c' = c {cEnds = later}
+  in case stages of
+       (s : _) -> (Continue c' {cPhase = PhEnd, cFrame = 0, cStages = stages}, [EvEndStage s])
+       [] -> enterWave c'
+
+-- | 规则层的步末效果 → 表现段：连续的蔓延合并为一段同时播放。
+groupStages :: [EndStep] -> [EndStage]
+groupStages [] = []
+groupStages steps@(e : _) =
+  let k = kindOf e
+      (same, rest)
+        | k == StSpread = span ((== StSpread) . kindOf) steps
+        | otherwise = ([e], drop 1 steps)
+  in EndStage k same (esBefore (head same)) (esAfter (last same)) (endStageBase k) : groupStages rest
+  where
+    kindOf st = case esEffect st of
+      EndCountdownTick _ -> StTick
+      EndBeltShift _ -> StBelt
+      EndSpread _ _ -> StSpread
+      EndSnail _ -> StSnail
+
+-- | 按 endBudgetFrames 压缩同一时刻的多段步末动画。
+budget :: [EndStage] -> [EndStage]
+budget ss =
+  let total = sum (map stFrames ss)
+  in if total <= endBudgetFrames
+       then ss
+       else [s {stFrames = max 8 (stFrames s * endBudgetFrames `div` total)} | s <- ss]
+
+-- | 本段的「(来源, 目标)」格对：皮带 / 蔓延 / 蜗牛各自的移动或生长方向（倒计时 / 洗牌为空）。
+stageMoves :: EndStage -> [(Pos, Pos)]
+stageMoves s = concatMap (one . esEffect) (stSteps s)
+  where
+    one eff = case eff of
+      EndBeltShift mv -> mv
+      EndSpread _ ps -> ps
+      EndSnail ms -> [(smFrom m, smTo m) | m <- ms]
+      EndCountdownTick ps -> [(p, p) | p <- ps]
 
 -- | 进入 head 轮：没有被消格的轮（皮带沉降收饼干等）直接下落，不计连击。
 enterWave :: Cascade -> (StepResult, [CascadeEvent])
 enterWave c = case cWaves c of
-  [] -> (Finished c, [])
+  [] -> (Finished c {cPhase = PhRest, cStages = []}, [])
   (w : _)
     | null (cwCleared w) ->
         (Continue c {cPhase = PhFall, cFrame = 0, cGain = cGain c + cwScore w}, [])

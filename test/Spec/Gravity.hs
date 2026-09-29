@@ -8,7 +8,7 @@ module Spec.Gravity
   , gravity_then_refill
   ) where
 
-import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches)
+import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Board.Gravity (refill)
 import Match3.Core
@@ -67,7 +67,7 @@ immortal_no_gravity_fall = do
   let seeds = [(6, 3), (7, 3)]  -- far below (3,3); buffer gems avoid adj peels
       check name cell isImm = do
         let board = setCell stableBoard (3, 3) cell
-            CascadeRun {crBoard = b1} = cascadeSeeds Nothing seeds [] [] (mkStdGen 0) board
+            CascadeRun {crBoard = b1} = cascadeSeeds Nothing seeds noHooks (mkStdGen 0) board
             positions =
               [ (r, c)
               | r <- [0 .. boardSize - 1]
@@ -81,7 +81,7 @@ immortal_no_gravity_fall = do
   check "Snail" (mkSnail 1 0) isSnail
   -- Control: Cookie still falls toward bottom (may drain).
   let boardC = setCell stableBoard (3, 3) mkCookie
-      CascadeRun {crBoard = bC, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing [(4, 3), (5, 3), (6, 3), (7, 3)] [] [] (mkStdGen 1) boardC
+      CascadeRun {crBoard = bC, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing [(4, 3), (5, 3), (6, 3), (7, 3)] noHooks (mkStdGen 1) boardC
   assertBool "cookie left (3,3)" (not (isCookie (getCell bC (3, 3))))
   assertBool ("cookie fell or drained, cookies=" ++ show cookies) $
     cookies >= 1

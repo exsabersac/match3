@@ -2,7 +2,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | 开局与关卡装饰：新局 / 指定关 / 每日 / 重开 / 下一关，按关卡记录铺装饰（decorateLevel）、
--- 目标所需装饰补齐、皮带 / 传送门 / 飞碟 / 地毯 / 地面层取自关卡记录、步数携带。
+-- 目标所需装饰补齐、关卡级元素（皮带 / 传送门 / 飞碟 / 地毯 / 地面层，第 7 刀起在 gsLevelElems）由关卡记录开出、步数携带。
 -- 第 6 刀：各关的这些数据都在 Match3.Levels.Campaign 的关卡记录里（之前是本模块里按下标 case 的并行表）；
 -- 放置表经 placeAllWith 返回 Either，静态数据在 placeStatic 这一处边界上转成带关卡名的 error。
 --
@@ -17,6 +17,7 @@ module Match3.Game.Level
   , goalDecorWith
   , campaignGame
   , newGameAtLevel
+  , newGameAtLevelWith
   , newDailyGame
   , restart
   , restartLevel
@@ -26,8 +27,8 @@ module Match3.Game.Level
 
 import Data.Maybe (fromMaybe)
 import Match3.Board.Random (randomPlayableBoard)
-import Match3.Ufo (mkUfo)
 import Match3.Counts (CounterKey(..), noCounts)
+import Match3.Element.Level (startLevelsWith)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (PlaceError, Registry, countElementWith, placeAllWith)
 import Match3.Element.Types (Arg(..), Placement(..))
@@ -85,15 +86,22 @@ goalDecorWith reg goal b =
       _ -> Nothing
 
 -- | 指定关卡（0 基下标）+ 配置 + 种子开局：可玩随机盘 → 关卡装饰 → 目标所需装饰，
--- 填好皮带 / 传送门 / 飞碟 / 地毯 / 地面层字段 → ensurePlayable。同一 (关卡, 种子) 总是同一开局。
--- 装饰与关卡级元素取自 lookupLevel li 的记录（下标越界 = 没有装饰，只按目标补齐）；步数与目标取自 cfg。
+-- 按关卡记录开出关卡级元素（gsLevelElems）→ ensurePlayable。同一 (关卡, 种子) 总是同一开局。
+-- 装饰与关卡级元素取自 lookupLevel li 的记录（下标越界 = 没有装饰与关卡级元素，只按目标补齐）；步数与目标取自 cfg。
 newGameAtLevel :: Int -> GameConfig -> Int -> GameState
-newGameAtLevel li cfg seed =
+newGameAtLevel = newGameAtLevelWith defaultRegistry
+
+-- | newGameAtLevel（指定注册表）：装饰、目标补齐、可玩判定用这张表；关卡级元素 = 这张表里注册的各种 + 核心元素，
+-- 各自由关卡记录（lvlGoal 换成本局目标）给出开局状态（第 7 刀：飞碟 / 地毯的目标补齐也在各自的 levelStart 里）。
+newGameAtLevelWith :: Registry -> Int -> GameConfig -> Int -> GameState
+newGameAtLevelWith reg li cfg seed =
   let g0 = mkStdGen seed
       (board0, g1) = randomPlayableBoard g0
       lvl = lookupLevel li
-      field f = maybe [] f lvl
-      board = ensureGoalDecor (cfgGoal cfg) (maybe id decorateLevel lvl board0)
+      decorate l = placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith reg l
+      goalDecor = placeStatic ("目标 " ++ show (cfgGoal cfg) ++ " 的补齐装饰") . goalDecorWith reg (cfgGoal cfg)
+      board = goalDecor (maybe id decorate lvl board0)
+      start = (fromMaybe (level li "" (cfgMoves cfg) (cfgGoal cfg)) lvl) {lvlGoal = cfgGoal cfg}
       gs0 =
         GameState
           { gsBoard = board
@@ -107,36 +115,15 @@ newGameAtLevel li cfg seed =
           , gsHint = Nothing
           , gsCombo = 0
           , gsShuffled = False
-          , gsBelts = field lvlBelts
-          , gsPortals = field lvlPortals
           , gsHammers = 2
           , gsFreeSwaps = 1
           , gsCrossClears = 1
-          , gsUfos =
-              let placed = field lvlUfos
-              in if null placed
-                   then case goalView (cfgGoal cfg) of
-                          ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
-                          _ -> []
-                   else placed
-          , gsCarpetOpen =
-              let placed = field lvlCarpets
-              in if null placed
-                   then case goalView (cfgGoal cfg) of
-                          ViewCount CountCarpets n ->
-                            take (max n 1)
-                              [ (3, 2), (3, 3), (3, 4), (3, 5)
-                              , (4, 2), (4, 3), (4, 4), (4, 5)
-                              , (2, 2), (2, 5), (5, 2), (5, 5)
-                              ]
-                          _ -> []
-                   else placed
           , gsLastCleared = []
           , gsDaily = False
-          , gsGround = field lvlGround
+          , gsLevelElems = startLevelsWith reg start
           }
   -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.
-  in ensurePlayable gs0
+  in ensurePlayableWith reg gs0
 
 -- | Date-seeded daily challenge: same bare board as L0 décor, but clears as Won
 -- (not LevelClear into campaign) and never bumps map unlock.

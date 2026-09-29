@@ -78,7 +78,7 @@ ext_ground_layer_test_element :: Assertion
 ext_ground_layer_test_element = do
   let reg = register mossDef defaultRegistry
       ground0 = [((1, 1), ("moss", 2)), ((6, 6), ("moss", 1))]
-      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "moss") 3)) 1) {gsBoard = tripleBoard, gsGround = ground0}
+      gs0 = (setGround ground0 $ (newGame (GameConfig 5 (goalCount (CountNamed "moss") 3)) 1) {gsBoard = tripleBoard})
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
       hitsAt p = length [() | w <- mtWaves mt1, p `elem` (cwCleared w ++ cwDrained w)]
@@ -88,7 +88,7 @@ ext_ground_layer_test_element = do
   assertEqual "one layer peeled, other tile untouched" [((1, 1), ("moss", 1)), ((6, 6), ("moss", 1))] (gsGround gs1)
   assertEqual "counted per layer" [("moss", 1)] (namedCounts (gsCounts gs1))
   assertEqual "goal progress by name" 1 (gsCollected gs1)
-  assertEqual "ground does not occupy the board" (gsBoard (fst (trySwap p1 p2 gs0 {gsGround = []}))) (gsBoard gs1)
+  assertEqual "ground does not occupy the board" (gsBoard (fst (trySwap p1 p2 (setGround [] $ gs0)))) (gsBoard gs1)
   -- 第二次消除同一格：清掉，累计 2
   let gs1' = gs1 {gsBoard = tripleBoard}
       (gs2, _, _) = resolveSwapWith reg p1 p2 gs1'

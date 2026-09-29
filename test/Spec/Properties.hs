@@ -17,14 +17,14 @@ import Data.Maybe (isJust, isNothing)
 import Engine.Game (Game(..), Step(..), runActions)
 import Engine.History (History(..), HistoryPolicy(..), Undoable(..), historyDepth, startHistory)
 import Match3.Board.Cascade (CascadeRun(..))
-import Match3.Board.Default (cascadeMatches)
+import Match3.Board.Default (LevelHooks(..), builtinHooks, cascadeMatches, noHooks)
 import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Board.Grid (MBoard, atM, mboardFromRows)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
 import Match3.Counts (bumpCount, noCounts, plusCounts)
 import Match3.Element
-import Match3.Element.Class (toCell)
+import Match3.Element.Class (levelNameOf, toCell)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
@@ -52,6 +52,8 @@ tests =
       , testProperty "qc_counts_algebra" (withMaxSuccess 1000 qc_counts_algebra)
       , testProperty "qc_counts_monotone_legacy_view" (withMaxSuccess 60 qc_counts_monotone_legacy_view)
       , testProperty "qc_name_newtypes_show_ord" (withMaxSuccess 1000 qc_name_newtypes_show_ord)
+      , testProperty "qc_level_hooks_match_legacy" (withMaxSuccess 500 qc_level_hooks_match_legacy)
+      , testProperty "qc_level_elems_readers_roundtrip" (withMaxSuccess 100 qc_level_elems_readers_roundtrip)
       ]
   where
     -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
@@ -179,7 +181,7 @@ qc_cascade_terminates_stable :: Int -> Property
 qc_cascade_terminates_stable seed =
   forAll genPlayBoard $ \b0 ->
     within 2000000 $
-      let run = cascadeMatches Nothing [] [] (mkStdGen seed) b0
+      let run = cascadeMatches Nothing noHooks (mkStdGen seed) b0
           ws = crWaves run
           chained = and (zipWith (\a b -> cwAfter a == cwBefore b) ws (drop 1 ws))
       in classify (not (null ws)) "cascaded" $
@@ -707,3 +709,44 @@ qc_name_newtypes_show_ord =
          ]
   where
     nameGen = oneof [elements ["bubble", "jelly", "nest", "a\"b", "中文", ""], arbitrary]
+
+-- | 第 7 刀（7a）：Board 层的关卡级钩子（levelHooksWith 内置注册表 + 飞碟 / 传送门的元素值）与第 7 刀前的直接调用相同：
+-- 补子后吸收 = stepUfos（吸走的格、移动后的飞碟），沉降传送 = portalTeleport（本体可穿门谓词取自注册表）。
+qc_level_hooks_match_legacy :: Property
+qc_level_hooks_match_legacy =
+  forAll genPlayBoard $ \b ->
+    forAll genMBoard $ \mb ->
+      forAll (choose (0, 3) >>= \k -> vectorOf k (mkUfo <$> genPos <*> genColor)) $ \ufos ->
+        forAll (choose (0, 3) >>= \k -> vectorOf k ((,) <$> genPos <*> genPos)) $ \portals ->
+          let hooks = builtinHooks ufos portals
+              (ps, hooks') = onAbsorb hooks b
+          in conjoin
+               [ (ps, levelUfos (hookLevel hooks')) === stepUfos b ufos
+               , onSettle hooks mb === portalTeleport (portalWith defaultRegistry) portals mb
+               , onSettle hooks' mb === onSettle hooks mb
+               ]
+  where
+    genPos = (,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)
+
+-- | 第 7 刀（7a）：战役开局的关卡级元素 = 内置四种（注册顺序）+ 地面层；第 7 刀前的五个字段改为派生读数，
+-- 写回同一值是恒等（相等与 Show 都不变），读数等于关卡记录（没有放置的飞碟 / 地毯按目标补齐）。
+qc_level_elems_readers_roundtrip :: Property
+qc_level_elems_readers_roundtrip =
+  forAll genStart $ \(li, seed) -> case lookupLevel li of
+    Nothing -> counterexample ("no level " ++ show li) False
+    Just lvl ->
+     let gs = levelGame li seed
+         same gs' = gs' == gs .&&. show gs' === show gs
+     in conjoin
+         [ map levelNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "ground"]
+         , same (setUfos (gsUfos gs) gs)
+         , same (setBelts (gsBelts gs) gs)
+         , same (setPortals (gsPortals gs) gs)
+         , same (setCarpetOpen (gsCarpetOpen gs) gs)
+         , same (setGround (gsGround gs) gs)
+         , gsBelts gs === lvlBelts lvl
+         , gsPortals gs === lvlPortals lvl
+         , gsGround gs === lvlGround lvl
+         , if null (lvlUfos lvl) then property True else gsUfos gs === lvlUfos lvl
+         , if null (lvlCarpets lvl) then property True else gsCarpetOpen gs === lvlCarpets lvl
+         ]

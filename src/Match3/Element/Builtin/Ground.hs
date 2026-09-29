@@ -26,6 +26,6 @@ instance Element Jelly where
   groundRule _ = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
   counter _ = Just (CountNamed "jelly")
 
--- | 条目：地面层（关卡的地面层在关卡记录 lvlGround 里，由 Game.Level 开局时填进 gsGround，不经放置表）。
+-- | 条目：地面层（关卡的地面层在关卡记录 lvlGround 里，开局时由关卡级元素 GroundLayer 的 levelStart 取进 gsLevelElems（读数 gsGround），不经放置表）。
 jellyEntry :: Entry
 jellyEntry = groundEntry (Jelly 2)

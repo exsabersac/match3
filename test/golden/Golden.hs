@@ -19,7 +19,8 @@ module Golden
   , main
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint, builtinHooks, hookLevel)
+import Match3.Element.Level (levelUfos)
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (intercalate)
@@ -392,7 +393,7 @@ cascadeLines =
   | seed <- [1 .. 30 :: Int]
   , (k, (ufos, portals)) <- zip [0 :: Int ..] [([], []), ([mkUfo (2, 3) C1], []), ([], [((0, 1), (7, 6)), ((0, 6), (7, 1))])]
   , let (b0, g1) = randomBoard (mkStdGen seed)
-        run = cascadeMatches Nothing ufos portals g1 b0
+        run = cascadeMatches Nothing (builtinHooks ufos portals) g1 b0
         runP = pRun run
         trP = pTr run
   ]
@@ -400,7 +401,7 @@ cascadeLines =
        | seed <- [1 .. 20 :: Int]
        , (k, (seeds, ufos)) <- zip [0 :: Int ..] [([(3, 3)], []), ([(r, 4) | r <- [0 .. 7]], [mkUfo (1, 1) C2]), ([(2, c) | c <- [0 .. 7]] ++ [(r, 2) | r <- [0 .. 7]], [])]
        , let (b0, g1) = randomPlayableBoard (mkStdGen seed)
-             run = cascadeSeeds Nothing seeds ufos [] g1 b0
+             run = cascadeSeeds Nothing seeds (builtinHooks ufos []) g1 b0
        ]
   where
     -- 结算投影（原 15 元组的字段顺序）与回放投影（原 (轮次, 终盘, 飞碟, 生成器)）都从同一个 CascadeRun 取。
@@ -409,14 +410,14 @@ cascadeLines =
           c k = countOf k cnts
           (stones, chests, honey, balloons) = (c CountStones, c CountChests, c CountHoney, c CountBalloons)
           (cookies, cakes, uAbs) = (c CountCookies, c CountCakes, c CountUfo)
-          (b, ufos', g) = (crBoard r, crUfos r, crGen r)
+          (b, ufos', g) = (crBoard r, levelUfos (hookLevel (crHooks r)), crGen r)
       in unwords
         [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag (colorBag cnts)
         , "stone=" ++ show stones, "chest=" ++ show chests, "honey=" ++ show honey, "balloon=" ++ show balloons
         , "cookie=" ++ show cookies, "cake=" ++ show cakes, "uabs=" ++ show uAbs, "ufos=" ++ pUfos ufos'
         , "cleared=" ++ pPosList cleared, "gen=" ++ show (g :: StdGen) ]
     pTr r =
-      let (ws, b, ufos', g) = (crWaves r, crBoard r, crUfos r, crGen r)
+      let (ws, b, ufos', g) = (crWaves r, crBoard r, levelUfos (hookLevel (crHooks r)), crGen r)
       in unwords
         [ "w" ++ show (length ws) ++ "#" ++ fnv1a (intercalate "\n" (map pWave ws)), "b#" ++ fnv1a (pBoard b), "ufos=" ++ pUfos ufos', "gen=" ++ show (g :: StdGen) ]
 

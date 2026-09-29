@@ -42,6 +42,7 @@ executable match3-web
     Match3.Board.Match
     Match3.Board.Clear
     Match3.Board.Gravity
+    Match3.Board.Hooks
     Match3.Board.Cascade
     Match3.Board.Random
     Match3.Board.Default
@@ -81,6 +82,7 @@ executable match3-web
     Match3.Element.Event
     Match3.Element.Class
     Match3.Element.Message
+    Match3.Element.Level
   default-language: Haskell2010
   -- random / splitmix 钉在与桌面版 stack.yaml extra-deps 相同的版本（random-1.2.1.1 / splitmix-0.1.0.5，
   -- 桌面版为 GHC 9.14.1：lts-24.60 + compiler 覆盖），保证同种子同盘面；splitmix 的 ==0.1.0.5 在 cabal.project

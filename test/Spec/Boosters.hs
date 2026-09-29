@@ -129,14 +129,12 @@ hammer_peels_chain_not_gem :: Assertion
 hammer_peels_chain_not_gem = do
   let board0 = setCell stableBoard (3, 3) (mkChainGem C2 2)
       gs0 =
-        (newGame defaultConfig 3)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 3)
           { gsBoard = board0
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          }
+          })
       (gs1, out) = useHammer (3, 3) gs0
   case out of
     InvalidSwap -> assertFailure "hammer should apply"
@@ -156,13 +154,11 @@ hammer_peels_curtain_not_gem :: Assertion
 hammer_peels_curtain_not_gem = do
   let board0 = setCell stableBoard (2, 4) (mkCurtainGem C3 2)
       gs0 =
-        (newGame defaultConfig 4)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 4)
           { gsBoard = board0
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, _) = useHammer (2, 4) gs0
       cell = getCell (gsBoard gs1) (2, 4)
   assertBool "gem remains" (isGem cell)
@@ -173,14 +169,12 @@ hammer_chips_stone_layer :: Assertion
 hammer_chips_stone_layer = do
   let board0 = setCell stableBoard (5, 5) (mkStoneLayers 3)
       gs0 =
-        (newGame defaultConfig 5)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 5)
           { gsBoard = board0
           , gsHammers = 2
           , gsGoal = goalCount CountStones 8
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, _) = useHammer (5, 5) gs0
       cell = getCell (gsBoard gs1) (5, 5)
   assertBool "still stone" (isStone cell)
@@ -198,13 +192,11 @@ cross_peels_chain_on_seed :: Assertion
 cross_peels_chain_on_seed = do
   let board0 = setCell stableBoard (3, 3) (mkChainGem C1 1)
       gs0 =
-        (newGame defaultConfig 6)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 6)
           { gsBoard = board0
           , gsCrossClears = 1
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = useCrossClear (3, 3) gs0
   case out of
     InvalidSwap -> assertFailure "cross should apply"
@@ -220,11 +212,11 @@ freeswap_blocked_by_stone_chain = do
   let bStone = setCell stableBoard (1, 1) mkStone
       bChain = setCell stableBoard (2, 2) (mkChainGem C2 1)
       gsS =
-        (newGame defaultConfig 7)
-          { gsBoard = bStone, gsFreeSwaps = 1, gsOver = Nothing, gsBelts = [], gsUfos = [] }
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 7)
+          { gsBoard = bStone, gsFreeSwaps = 1, gsOver = Nothing})
       gsC =
-        (newGame defaultConfig 8)
-          { gsBoard = bChain, gsFreeSwaps = 1, gsOver = Nothing, gsBelts = [], gsUfos = [] }
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 8)
+          { gsBoard = bChain, gsFreeSwaps = 1, gsOver = Nothing})
   let (_, outS) = useFreeSwap (1, 1) (1, 3) gsS
       (_, outC) = useFreeSwap (2, 2) (2, 4) gsC
   assertEqual "stone blocks free-swap" NoMatch outS
@@ -237,25 +229,21 @@ hammer_clears_grass_vine :: Assertion
 hammer_clears_grass_vine = do
   let bg = setCell stableBoard (2, 2) (Gem C3 Normal 0 (Just Grass))
       gsG0 =
-        (newGame defaultConfig 2)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 2)
           { gsBoard = bg
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gsG1, _) = useHammer (2, 2) gsG0
   assertBool "grass cell cleared or refilled (not peel-locked)" $
     not (hasGrass (getCell (gsBoard gsG1) (2, 2)))
   let bv = setCell stableBoard (4, 4) (Gem C4 Normal 0 (Just Vine))
       gsV0 =
-        (newGame defaultConfig 3)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 3)
           { gsBoard = bv
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gsV1, _) = useHammer (4, 4) gsV0
   assertBool "vine cell cleared or refilled" $
     not (hasVine (getCell (gsBoard gsV1) (4, 4)))
@@ -264,15 +252,13 @@ hammer_clears_grass_vine = do
 hammer_immune_no_spend :: Assertion
 hammer_immune_no_spend = do
   let mkGs cell =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = setCell stableBoard (3, 3) cell
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
           , gsGoal = goalScore 99999
-          }
+          })
       check tag cell = do
         let gs0 = mkGs cell
             (gs1, out) = useHammer (3, 3) gs0
@@ -300,16 +286,14 @@ cross_keeps_maker_in_place :: Assertion
 cross_keeps_maker_in_place = do
   let board = setCell stableBoard (3, 3) (mkMakerCharges C5 5)
       gs0 =
-        (newGame defaultConfig 3)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 3)
           { gsBoard = board
           , gsCrossClears = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
           , gsGoal = goalScore 99999
           , gsMoves = 10
-          }
+          })
       (gs1, out) = useCrossClear (3, 3) gs0
   case out of
     NoMatch -> assertFailure "cross should apply"
@@ -343,17 +327,14 @@ booster_freeswap_skips_countdown_tick = do
           (mkGem C1)
       board = spawnCountdown board0 (5, 5) C5 3
       mkGs free =
-        (newGame defaultConfig 9)
+        (setBelts [] . setUfos [] . setPortals [] $ (newGame defaultConfig 9)
           { gsBoard = board
           , gsFreeSwaps = free
           , gsOver = Nothing
           , gsMoves = 10
-          , gsBelts = []
-          , gsUfos = []
-          , gsPortals = []
           , gsHint = Nothing
           , gsGoal = goalScore 99999
-          }
+          })
       (gsFree, outFree) = useFreeSwap (0, 2) (0, 3) (mkGs 1)
       (gsMove, outMove) = trySwap (0, 2) (0, 3) (mkGs 0)
   case outFree of

@@ -4,7 +4,7 @@
 -- 分派：内置本体按 cellSlot 编号、叠层按 overlaySlot 编号用数组 O(1) 取解码器；冰层单独一个；
 -- Custom 按名字查（未注册的名字退回 'Inert'：挡交换、打不动、会下落的惰性占格）。
 -- 一个格子解码成「修饰器（冰 → 叠层）包着本体」的元素值（'elementOf'），各查询就是在它上面调类方法。
--- 关卡级元素（'SomeLevel'）按消息回复流水线节拍（'askLevel'）。
+-- 关卡级元素（'SomeLevelElement'）的种类表（注册顺序；一局的状态与节拍见 Match3.Element.Level）。
 --
 -- 依赖：Element.Class / Message / Types、Match3.Types、Board.Grid。不含任何具体元素（内置见 Element.Builtin）。
 module Match3.Element.Registry
@@ -73,23 +73,16 @@ module Match3.Element.Registry
   , removeLevel
   , levelDefs
   , askLevel
-  , absorbWith
-  , beltShiftWith
-  , teleportWith
-  , coverWith
   ) where
 
 import Control.Monad (foldM)
 import Data.Array (Array, accumArray, bounds, inRange, (!))
 import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import Match3.Board.Grid (MBoard, getCell, setCell)
-import Match3.Conveyor (Belt)
+import Match3.Board.Grid (getCell, setCell)
 import Match3.Element.Class
-import Match3.Element.Message
 import Match3.Element.Types
 import Match3.Types
-import Match3.Ufo (Ufo)
 
 -- | 关卡放置：给出参数与原格，返回新格（Nothing = 不放）。
 type Placer = [Arg] -> Cell -> Maybe Cell
@@ -163,7 +156,7 @@ data Registry = Registry
   , regDiff     :: [(ElementName, CounterKey, Int)]    -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
   , regSwap     :: [SwapRule]                       -- 成对交换规则，按 srOrder 排好（稳定）
   , regOpen     :: [OpenRule]                       -- 开启规则（注册顺序）
-  , regLevel    :: [SomeLevel]                      -- 关卡级元素（注册顺序；同名以后注册的为准）
+  , regLevel    :: [SomeLevelElement]                      -- 关卡级元素（注册顺序；同名以后注册的为准）
   }
 
 -- | 建表时发现的条目错误（'mkRegistryChecked'）。
@@ -501,7 +494,7 @@ pushableWith reg = pushable . bodyOf reg
 -- 关卡级元素
 
 -- | 注册（或按名字替换）一个关卡级元素。
-registerLevel :: SomeLevel -> Registry -> Registry
+registerLevel :: SomeLevelElement -> Registry -> Registry
 registerLevel d reg = reg {regLevel = [x | x <- regLevel reg, levelNameOf x /= levelNameOf d] ++ [d]}
 
 -- | 去掉一个关卡级元素（测试用：去掉后该机制不生效）。
@@ -509,32 +502,11 @@ removeLevel :: ElementName -> Registry -> Registry
 removeLevel n reg = reg {regLevel = [x | x <- regLevel reg, levelNameOf x /= n]}
 
 -- | 全部关卡级元素（注册顺序）。
-levelDefs :: Registry -> [SomeLevel]
+levelDefs :: Registry -> [SomeLevelElement]
 levelDefs = regLevel
 
--- | 在一个流水线节拍上问关卡级元素：按注册顺序，第一个给出所要类型回复的为准；没人回复时 Nothing。
+-- | 问注册的关卡级元素（原型值，不带一局的状态；一局里的节拍见 Match3.Element.Level.askLevelIn）：
+-- 按注册顺序，第一个给出所要类型回复的为准；没人回复时 Nothing。
 askLevel :: (Message q, Message r) => Registry -> q -> Maybe r
 askLevel reg q =
-  listToMaybe [r | SomeLevel l <- regLevel reg, Just reply <- [levelReply l (SomeMessage q)], Just r <- [fromMessage reply]]
-
--- | 补子后的整轮吸收（飞碟节拍 'Refilled'）；没人回复时不吸、飞碟原样。
-absorbWith :: Registry -> [Ufo] -> Board -> ([Pos], [Ufo])
-absorbWith reg ufos b = case askLevel reg (Refilled ufos b) of
-  Just (Absorbed ps us) -> (ps, us)
-  Nothing -> ([], ufos)
-
--- | 步末移位（皮带节拍 'EndTicked'）；没人回复时 Nothing（皮带不动，也没有皮带后的再连锁）。
-beltShiftWith :: Registry -> [Belt] -> Maybe [(Pos, Pos)]
-beltShiftWith reg belts = fmap (\(Shifted mv) -> mv) (askLevel reg (EndTicked belts))
-
--- | 沉降时传送（传送门节拍 'Settling'，谓词 = 本体可穿门）；没人回复时不传送。
-teleportWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
-teleportWith reg portals mb = case askLevel reg (Settling (portalWith reg) portals mb) of
-  Just (Settled mb') -> mb'
-  Nothing -> mb
-
--- | 覆盖目标格（地毯节拍 'Covering'）；没人回复时不覆盖。
-coverWith :: Registry -> [Pos] -> [Pos] -> ([Pos], Int)
-coverWith reg open0 hit = case askLevel reg (Covering open0 hit) of
-  Just (Covered o n) -> (o, n)
-  Nothing -> (open0, 0)
+  listToMaybe [r | SomeLevelElement l <- regLevel reg, Just (reply, _) <- [levelReply l (SomeMessage q)], Just r <- [fromMessage reply]]

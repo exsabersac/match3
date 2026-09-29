@@ -7,7 +7,7 @@ module Spec.Builtin.Obstacle
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches, noHooks, builtinHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts, ctCells))
 import Match3.Core
 import Match3.Board.Grid (atM)
@@ -253,7 +253,7 @@ chest_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isChest (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountChests -> chests)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountChests -> chests)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "chest opened" (chests >= 1)
   assertBool "chest gone" (not (isChest (getCell board1 (2, 1))))
 
@@ -305,7 +305,7 @@ honey_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isHoney (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honey)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honey)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "honey smashed" (honey >= 1)
   assertBool "honey gone" (not (isHoney (getCell board1 (2, 1))))
 
@@ -357,7 +357,7 @@ balloon_popped_by_same_color = do
       (_b1, dead) = chipAdjacentBalloons board0 ms
   assertEqual "same color pops" [(2, 1)] dead
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountBalloons -> balloons)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountBalloons -> balloons)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "balloon counted" (balloons >= 1)
   assertBool "balloon gone" (not (isBalloon (getCell board1 (2, 1))))
 
@@ -424,7 +424,7 @@ cake_clears_at_zero = do
           mkCake
   assertBool "cake present" (isCake (getCell board0 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCakes -> cakes)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCakes -> cakes)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "cake cleared count" (cakes >= 1)
   assertBool "cake gone" (not (isCake (getCell board1 (2, 1))))
 
@@ -470,7 +470,7 @@ safe_opens_to_cookie = do
   assertBool "not still safe" (not (isSafe (getCell b1 (2, 1))))
   -- Cascade path: open + cookie may fall/collect
   let gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
@@ -478,9 +478,7 @@ safe_opens_to_cookie = do
           , gsCounts = noCounts
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -552,7 +550,7 @@ flip_becomes_back_on_clear = do
   -- Flip stays on board (not listed as clearable hole)
   assertBool "flip not cleared away" ((3, 1) `notElem` iceFree)
   -- Full cascade also leaves a gem (possibly later matched as C4)
-  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 2) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing noHooks (mkStdGen 2) board0
   assertBool "no flip remains at seed" (not (isFlip (getCell board1 (3, 1))))
 
 --------------------------------------------------------------------------------
@@ -629,15 +627,13 @@ surprise_explodes_small = do
   -- Still Surprise on board until clear holes applied
   assertBool "still surprise until clear" (isSurprise (getCell b1 (3, 3)))
   let gs0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -754,16 +750,14 @@ honey_balloon_same_clear = do
           (4, 1)
           (mkBalloon C1)
       gs0 =
-        (newGame defaultConfig 12)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 12)
           { gsBoard = board0
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsCounts = noCounts
           , gsGoal = goalScore 99999
-          }
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -796,23 +790,21 @@ safe_bottom_cookie_collected = do
     case atM mb (7, 1) of
       Just Cookie -> True
       _ -> False
-  let (settled, fallen, _) = settleBoardPortals [] mb
+  let (settled, fallen, _) = settleBoardPortals (builtinHooks [] []) mb
   assertEqual "cookie drained" (1 :: Int) fallen
   assertBool "bottom no longer cookie" $
     case atM settled (7, 1) of
       Just Cookie -> False
       _ -> True
   let gs0 =
-        (newGame defaultConfig 13)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 13)
           { gsBoard = board0
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsCounts = noCounts
           , gsGoal = goalCount CountSafes 1
-          }
+          })
       (gs1, out) = trySwap (6, 1) (6, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -839,7 +831,7 @@ surprise_direct_seed_opens = do
   assertEqual "LineH" (Just LineH) (cellKind cellU)
   -- Seed cascade (hammer path): special sits; not dug by iceFree hole.
   let g0 = mkStdGen 11
-      CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] [] [] g0 boardSpecial
+      CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] noHooks g0 boardSpecial
   assertEqual "special open clears no hole" (0 :: Int) nCleared
   let cellC = getCell bCas (4, 0)
   assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Just Normal)
@@ -851,16 +843,14 @@ surprise_direct_seed_opens = do
   -- (3,3) explode-outcome: hammer 3×3 scores >= 90 (single-cell would be 10).
   let boardBoom = setCell stableBoard (3, 3) mkSurprise
       gsB0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = boardBoom
           , gsHammers = 2
           , gsMoves = 20
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsGoal = goalScore 99999
-          }
+          })
       (gsB1, outB) = useHammer (3, 3) gsB0
   case outB of
     NoMatch -> assertFailure "hammer explode surprise should apply"
@@ -995,39 +985,37 @@ blast_chips_layered_obstacles_once = do
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
   -- Honey 2 on blast path: chip once → Honey 1 (not removed).
-  let CascadeRun {crBoard = bH} = cascadeMatches Nothing [] [] (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
+  let CascadeRun {crBoard = bH} = cascadeMatches Nothing noHooks (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
       cellH = getCell bH (3, 5)
   assertBool "honey survives" (isHoney cellH)
   assertEqual "honey chipped once 2→1" (1 :: Int) (honeyLayers cellH)
   -- Chest 2: same single chip.
-  let CascadeRun {crBoard = bC} = cascadeMatches Nothing [] [] (mkStdGen 52) (lineBoard (mkChestLayers 2))
+  let CascadeRun {crBoard = bC} = cascadeMatches Nothing noHooks (mkStdGen 52) (lineBoard (mkChestLayers 2))
       cellC = getCell bC (3, 5)
   assertBool "chest survives" (isChest cellC)
   assertEqual "chest chipped once 2→1" (1 :: Int) (chestLayers cellC)
   -- Cake 2: same single chip.
-  let CascadeRun {crBoard = bK} = cascadeMatches Nothing [] [] (mkStdGen 53) (lineBoard (mkCakeLayers 2))
+  let CascadeRun {crBoard = bK} = cascadeMatches Nothing noHooks (mkStdGen 53) (lineBoard (mkCakeLayers 2))
       cellK = getCell bK (3, 5)
   assertBool "cake survives" (isCake cellK)
   assertEqual "cake chipped once 2→1" (1 :: Int) (cakeLayers cellK)
   -- Control: Honey 1 on path fully clears (last layer).
-  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honeyHit)}} = cascadeMatches Nothing [] [] (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
+  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honeyHit)}} = cascadeMatches Nothing noHooks (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
   assertBool "honey1 cleared" (not (isHoney (getCell bH1 (3, 5))))
   assertBool "honey1 counted" (honeyHit >= 1)
   -- Hammer on Honey 3: chip 3→2, charge spent, not goal-counted yet.
   let boardHam = setCell stableBoard (5, 5) (mkHoneyLayers 3)
       gs0 =
-        (newGame defaultConfig 12)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 12)
           { gsBoard = boardHam
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
           , gsGoal = goalCount CountHoney 8
           , gsMoves = 20
           , gsScore = 0
           , gsCounts = noCounts
-          }
+          })
       (gs1, outH) = useHammer (5, 5) gs0
   case outH of
     NoMatch -> assertFailure "hammer chip should apply"

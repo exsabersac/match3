@@ -187,6 +187,19 @@ module Match3.Core
   , gsGoalMet
   , gsCollected
   , gsColorBag
+    -- ** 关卡级元素（第 7 刀：第 7 刀前的五个字段改为派生读数 + 写入函数）
+  , gsBelts
+  , gsPortals
+  , gsUfos
+  , gsCarpetOpen
+  , gsGround
+  , setLevelElem
+  , setUfos
+  , setBelts
+  , setPortals
+  , setCarpetOpen
+  , setGround
+  , SomeLevelElement
   , CounterKey(..)
   , Counts
   , countOf
@@ -321,6 +334,7 @@ import Match3.Ufo
   , stepUfo
   , stepUfos
   )
+import Match3.Element.Class (SomeLevelElement)
 import Match3.Game.Boosters
 import Match3.Game.Level
 import Match3.Game.Move

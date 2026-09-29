@@ -7,7 +7,7 @@ module Spec.Builtin.Collectible
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeSeeds)
+import Match3.Board.Default (cascadeSeeds, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Core
 import Match3.Element (defaultRegistry)
@@ -57,7 +57,7 @@ cookie_falls_with_gravity = do
   assertBool "cookie at top" (isCookie (getCell board0 (0, 1)))
   let seeds = findMatches board0
   assertBool "match under cookie col" ((3, 1) `elem` seeds)
-  let CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
       cookiePos =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -84,7 +84,7 @@ cookie_collected_at_bottom = do
           (mkGem C1)
   assertBool "cookie on bottom" (isCookie (getCell board0 (boardSize - 1, 4)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool ("cookie collected, got " ++ show cookies) (cookies >= 1)
   assertBool "cookie gone" (not (isCookie (getCell board1 (boardSize - 1, 4))))
 
@@ -116,14 +116,12 @@ time_spirit_awards_moves = do
           (1, 1)
           mkTimeSpirit
       gs0 =
-        (newGame defaultConfig 7)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 7)
           { gsBoard = board0
           , gsMoves = 10
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -160,15 +158,13 @@ time_spirit_rescues_last_move = do
           (1, 1)
           mkTimeSpirit
       gs0 =
-        (newGame defaultConfig 8)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 8)
           { gsBoard = board0
           , gsMoves = 1
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsGoal = goalScore 99999
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -196,7 +192,7 @@ cookie_immune_to_direct_clear = do
           (3, 4)
           (Gem C1 Bomb 0 Nothing)
       seeds = [(3, 4)]
-      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) boardBomb
+      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) boardBomb
       cookieLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -211,25 +207,22 @@ cookie_immune_to_direct_clear = do
           (setCell stableBoard (4, 2) mkCookie)
           (4, 4)
           (Gem C2 LineH 0 Nothing)
-      CascadeRun {crBoard = bL, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookiesL)}} = cascadeSeeds Nothing [(4, 4)] [] [] (mkStdGen 2) boardLine
+      CascadeRun {crBoard = bL, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookiesL)}} = cascadeSeeds Nothing [(4, 4)] noHooks (mkStdGen 2) boardLine
   assertEqual "line must not count mid-board cookie" (0 :: Int) cookiesL
   assertBool "cookie survives line" $
     any (\(r, c) -> isCookie (getCell bL (r, c)))
       [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
   -- trySwap bomb path: GoalCookie meter unchanged when cookie not at bottom
   let gs0 =
-        (newGame defaultConfig 21)
+        (setBelts [] . setUfos [] . setPortals [] $ (newGame defaultConfig 21)
           { gsBoard = boardBomb
           , gsMoves = 12
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsPortals = []
           , gsCounts = noCounts
           , gsGoal = goalCount CountCookies 5
           , gsHammers = 2
-          }
+          })
       -- Force bomb activation via useHammer on bomb cell (cookie neighbor)
       (gsH, outH) = useHammer (3, 4) gs0
   case outH of
@@ -254,5 +247,5 @@ cookie_immune_to_direct_clear = do
           (2, 2)
           (mkGem C1)
       seedsBot = findMatches boardBot
-      CascadeRun {crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookiesBot)}} = cascadeSeeds Nothing seedsBot [] [] (mkStdGen 3) boardBot
+      CascadeRun {crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookiesBot)}} = cascadeSeeds Nothing seedsBot noHooks (mkStdGen 3) boardBot
   assertBool ("bottom cookie still drains, got " ++ show cookiesBot) (cookiesBot >= 1)

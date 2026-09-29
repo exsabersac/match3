@@ -1,9 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 沉降与补子：重力（固定格不动）、底行饼干收集、传送门传送（settleBoardPortals 循环至稳定）、
+-- | 沉降与补子：重力（固定格不动）、底行饼干收集、沉降节拍的关卡级钩子（onSettle，内置 = 传送门传送）、
 -- 随机补子（refill）以及回放用的 settleRefill。
 --
--- 依赖：Grid（randomColor）、元素注册表（固定格 falls、传送门 portal、边缘收集 drains（方向可配））。
+-- 依赖：Grid（randomColor）、Board.Hooks（第 7 刀：关卡级钩子取代传送门对参数）、元素注册表（固定格 falls、边缘收集 drains（方向可配））。
 -- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 -- 不变量：refill 按行优先顺序逐个空洞消耗随机数；settleRefill 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
@@ -13,8 +13,6 @@ module Match3.Board.Gravity
   , applyGravityWith
   , drainBottomCookiesWith
   , drainEdgesMWith
-  , applyPortalTeleportsWith
-  , portalTeleport
   , settleBoardPortalsWith
   , settleDrainWith
   , refill
@@ -22,8 +20,9 @@ module Match3.Board.Gravity
   ) where
 
 import Data.Array (array, bounds, elems, listArray, (!))
-import Data.List (nub, nubBy)
-import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith, teleportWith)
+import Data.List (nubBy)
+import Match3.Board.Hooks (LevelHooks(..))
+import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith)
 import Match3.Element.Types (Edge(..))
 import Match3.Types
 import System.Random (RandomGen)
@@ -95,39 +94,18 @@ drainEdgesMWith reg mb =
              (mb2, more) = drainEdgesMWith reg (applyGravityWith reg mb1)
          in (mb2, hits ++ more)
 
--- | applyPortalTeleports（指定注册表）：段 4 起传送门是关卡级元素，经注册表向关卡级元素发 Settling 消息取实现
--- （内置 = portalTeleport；本体 portal 的格可传送）；未注册时不传送。
-applyPortalTeleportsWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
-applyPortalTeleportsWith = teleportWith
-
--- | 传送门的实现（内置关卡级元素 PortalLevel 回复 Settling 消息时调用）：可穿门谓词由注册表给出。
-portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard
-portalTeleport canPort portals mb =
-  -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
-  foldl tryPair mb (nub portals)
-  where
-    transferable (Just cell) = canPort cell
-    transferable Nothing = False
-    tryPair m (a, b) =
-      case (atM m a, atM m b) of
-        (ca, Nothing)
-          | transferable ca -> setM (setM m a Nothing) b ca
-        (Nothing, cb)
-          | transferable cb -> setM (setM m b Nothing) a cb
-        _ -> m
-
--- | settleBoardPortals（指定注册表）。
-settleBoardPortalsWith :: Registry -> [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
-settleBoardPortalsWith reg portals mb =
-  let (mb', drained) = settleDrainWith reg portals mb
+-- | settleBoardPortals（指定注册表；传送经钩子 onSettle）。
+settleBoardPortalsWith :: Registry -> LevelHooks -> MBoard -> (MBoard, Int, [Pos])
+settleBoardPortalsWith reg hooks mb =
+  let (mb', drained) = settleDrainWith reg hooks mb
   in (mb', length drained, map fst drained)
 
 -- | 沉降（段 2c）：同 settleBoardPortalsWith，但返回被边缘收走的原格（连锁按各自的 counter 计数）。
-settleDrainWith :: Registry -> [(Pos, Pos)] -> MBoard -> (MBoard, [(Pos, Cell)])
-settleDrainWith reg portals mb =
+settleDrainWith :: Registry -> LevelHooks -> MBoard -> (MBoard, [(Pos, Cell)])
+settleDrainWith reg hooks mb =
   let fallen = applyGravityWith reg mb
       (drained1, d1) = drainEdgesMWith reg fallen
-      ported = applyPortalTeleportsWith reg portals drained1
+      ported = onSettle hooks drained1
       fallen2 = if ported == drained1 then ported else applyGravityWith reg ported
       (drained2, d2) = drainEdgesMWith reg fallen2
   in (drained2, d1 ++ d2)
@@ -148,8 +126,8 @@ refill g0 mb =
       in (x : rest, g1)
 
 -- | settleRefill（指定注册表）。
-settleRefillWith :: RandomGen g => Registry -> [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)
-settleRefillWith reg portals g mb =
-  let (settled, _cookies, cookSites) = settleBoardPortalsWith reg portals mb
+settleRefillWith :: RandomGen g => Registry -> LevelHooks -> g -> MBoard -> (Board, [Pos], g)
+settleRefillWith reg hooks g mb =
+  let (settled, _cookies, cookSites) = settleBoardPortalsWith reg hooks mb
       (b', g') = refill g settled
   in (b', cookSites, g')

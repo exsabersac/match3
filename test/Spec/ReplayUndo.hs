@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | 回放、撤销与洗牌：回放脚本（trace*）的终盘 / 逐轮 / 步末重放与结算一致，撤销恢复，洗牌保留装饰与目标进度。
 -- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
@@ -6,11 +7,12 @@ module Spec.ReplayUndo
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, builtinHooks, hookLevel)
+import Match3.Element.Level (levelUfos)
 import Control.Monad (when)
 import Data.List (nub, sort)
 import Data.Maybe (isJust)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crUfos), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crHooks), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
 import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
@@ -214,15 +216,13 @@ shuffle_preserves_specials = do
           (1, 4)
           (Gem C4 Rainbow 0 Nothing)
       gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 20
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
           , gsGoal = goalScore 99999
-          }
+          })
       gs1 = shuffleGame gs0
       b1 = gsBoard gs1
   assertEqual "bomb kept" (Just Bomb) (cellKind (getCell b1 (1, 1)))
@@ -254,8 +254,8 @@ trace_cascade_final_equals_stabilized = do
     ( \(seed, ufos, portals) -> do
         let g = mkStdGen seed
             (b0, g1) = randomBoard g
-            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctMaxWave = maxW, ctCleared = clearedR}, crUfos = ufosR, crGen = gR} = cascadeMatches Nothing ufos portals g1 b0
-            CascadeRun {crWaves = ws, crBoard = bT, crUfos = ufosT, crGen = gT} = cascadeMatches Nothing ufos portals g1 b0
+            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctMaxWave = maxW, ctCleared = clearedR}, crHooks = (levelUfos . hookLevel -> ufosR), crGen = gR} = cascadeMatches Nothing (builtinHooks ufos portals) g1 b0
+            CascadeRun {crWaves = ws, crBoard = bT, crHooks = (levelUfos . hookLevel -> ufosT), crGen = gT} = cascadeMatches Nothing (builtinHooks ufos portals) g1 b0
             tag = "seed " ++ show seed
         bT @?= bR
         show gT @?= show gR
@@ -276,8 +276,8 @@ trace_seeds_final_equals_stabilized =
   mapM_
     ( \(seed, seeds, ufos) -> do
         let (b0, g1) = randomPlayableBoard (mkStdGen seed)
-            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctCleared = clearedR}, crUfos = ufosR, crGen = gR} = cascadeSeeds Nothing seeds ufos [] g1 b0
-            CascadeRun {crWaves = ws, crBoard = bT, crUfos = ufosT, crGen = gT} = cascadeSeeds Nothing seeds ufos [] g1 b0
+            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctCleared = clearedR}, crHooks = (levelUfos . hookLevel -> ufosR), crGen = gR} = cascadeSeeds Nothing seeds (builtinHooks ufos []) g1 b0
+            CascadeRun {crWaves = ws, crBoard = bT, crHooks = (levelUfos . hookLevel -> ufosT), crGen = gT} = cascadeSeeds Nothing seeds (builtinHooks ufos []) g1 b0
             tag = "seed " ++ show seed
         bT @?= bR
         show gT @?= show gR

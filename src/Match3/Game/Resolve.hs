@@ -5,7 +5,8 @@
 -- 回放 trace* 又各自重算一遍；现在四处入口只负责「校验 + 选择起手方式」，其余全部在这里。
 --
 -- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、元素注册表
--- （步末阶段 PhaseTick / PhaseSpread / PhaseMove 的规则、按差计数、地毯腾空都查注册表；皮带是关卡特性）。
+-- （步末阶段 PhaseTick / PhaseSpread / PhaseMove 的规则、按差计数、地毯腾空都查注册表）、Element.Level（第 7 刀：
+-- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经节拍消息）。
 -- 不变量（逐字保持旧行为，金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
 --     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛；
@@ -37,7 +38,9 @@ import Match3.Board.Cascade
   )
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, beltShiftWith, coverWith, endRules, hitGroundWith, pushableWith)
+import Match3.Board.Hooks (LevelHooks(..))
+import Match3.Element.Level (avoidCellsIn, beltShiftIn, coverIn, hitGroundIn, levelHooksWith, wallCellsIn)
+import Match3.Element.Registry (Registry, endRules, pushableWith)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
@@ -73,16 +76,17 @@ resolveMove = resolveMoveWith defaultRegistry
 -- | 公共结算（指定注册表）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
 resolveMoveWith :: Registry -> MoveKind -> Board -> Opening -> GameState -> (GameState, Outcome, MoveTrace)
 resolveMoveWith reg kind start opening gs =
-  let portals = gsPortals gs
+  let hooks0 = levelHooksWith reg (gsLevelElems gs)
       seg0 = case opening of
-        OpenMatch prefer -> cascadeMatchesWith reg prefer (gsUfos gs) portals (gsGen gs) start
-        OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds (gsUfos gs) portals (gsGen gs) start
+        OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) start
+        OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) start
       (segs, ends, board1, vacateAfter) =
-        if kind == KindSwap then swapEnd reg gs seg0 else boosterEnd reg portals seg0
+        if kind == KindSwap then swapEnd reg seg0 else boosterEnd reg seg0
       finalSeg = NE.last segs
       tallies1 = NE.map crTally segs
       tallies = NE.toList tallies1
-      ufosF = crUfos finalSeg
+      -- 连锁推进后的关卡级元素（内置：飞碟移动）
+      elemsC = hookLevel (crHooks finalSeg)
       gFinal = crGen finalSeg
       -- 计数
       total f = sum (map f tallies)
@@ -92,16 +96,18 @@ resolveMoveWith reg kind start opening gs =
       -- 按前后盘面差计数（保险箱开启、时间精灵 +2 步、自定义）
       diffs = diffCountsWith reg (gsBoard gs) board1
       bonusMoves = sum (map dcBonus diffs)
-      -- 地面层（段 2c）：逐轮被上方消除命中（每轮每格一次）；段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
-      (ground', groundCounts) =
-        let (gr', countsRev) =
+      -- 地面层节拍（段 2c；第 7 刀起地面层是关卡级元素，发 GroundHit）：逐轮被上方消除命中（每轮每格一次）；
+      -- 段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
+      (elemsG, groundCounts) =
+        let (es', countsRev) =
               foldl
-                (\(gr, accRev) w -> let (gr1, cs) = hitGroundWith reg (nub (cwCleared w ++ cwDrained w)) gr in (gr1, cs : accRev))
-                (gsGround gs, [])
+                (\(es, accRev) w -> let (cs, es1) = hitGroundIn reg (nub (cwCleared w ++ cwDrained w)) es in (es1, cs : accRev))
+                (elemsC, [])
                 (concatMap crWaves (NE.toList segs))
-        in (gr', concat (reverse countsRev))
-      (carpetOpen', carpetHit) =
-        coverWith reg (gsCarpetOpen gs) (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter)
+        in (es', concat (reverse countsRev))
+      -- 地毯节拍（Covering）
+      (carpetHit, elems') =
+        coverIn reg (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter) elemsG
       -- 计数（第 4 刀：统一进 gsCounts；第 5 刀：颜色袋也在 ctCounts 里、目标进度由目标数据派生）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
       counts' =
         gsCounts gs
@@ -125,10 +131,8 @@ resolveMoveWith reg kind start opening gs =
             , gsHint = Nothing
             , gsCombo = combo
             , gsShuffled = False
-            , gsUfos = ufosF
-            , gsCarpetOpen = carpetOpen'
             , gsLastCleared = nub clearedAll
-            , gsGround = ground'
+            , gsLevelElems = elems'
             }
       outcome = decideOutcome gs' gained
       gs'' = case outcome of
@@ -163,51 +167,52 @@ runPhase reg ph ctx k b0 =
       in ([EndStep k before after e | Just e <- [eff]] ++ accRev, after)
 
 -- | 玩家交换的步末：倒计时（PhaseTick）→ 皮带 → 蔓延（PhaseSpread）→ 会走的元素（PhaseMove）→（成消）再连锁。
--- 返回 (四段连锁, 步末记录, 终盘, 地毯腾空比较用的盘面)。
-swapEnd :: Registry -> GameState -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-swapEnd reg gs seg0 =
-  let portals = gsPortals gs
-      -- 皮带是关卡级元素：在「倒计时之后」这一节拍发 EndTicked 消息取移位；没人回复时当作没有皮带
-      (belts, mvBelt) = case beltShiftWith reg (gsBelts gs) of
-        Just mv -> (gsBelts gs, mv)
-        Nothing -> ([], [])
-      ws0 = crWaves seg0
+-- 返回 (四段连锁, 步末记录, 终盘, 地毯腾空比较用的盘面)。关卡级元素（皮带节拍、会走元素的避让格与墙）都经 seg0 的钩子里的状态问。
+swapEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+swapEnd reg seg0 =
+  let ws0 = crWaves seg0
       board0' = crBoard seg0
-      -- 倒计时 tick / 归零爆炸（带飞碟与传送门）
+      -- 倒计时 tick / 归零爆炸（带关卡级钩子）
       -- 倒计时规则只跑一遍：同时得到连锁与步末记录
-      (tickSteps, seg1) = cascadeCountdownsTracedWith reg (crUfos seg0) portals (crGen seg0) board0'
+      (tickSteps, seg1) = cascadeCountdownsTracedWith reg (crHooks seg0) (crGen seg0) board0'
       endTick = [EndStep (length ws0) before after e | (before, after, e) <- tickSteps]
+      -- 皮带是关卡级元素：在「倒计时之后」这一节拍发 EndTicked 消息取移位；没人回复时当作没有皮带
+      elems1 = hookLevel (crHooks seg1)
+      (hasBelts, mvBelt, hooks1) = case beltShiftIn reg elems1 of
+        Just (mv, es) -> (True, mv, levelHooksWith reg es)
+        Nothing -> (False, [], crHooks seg1)
       -- 皮带：移位后连锁 / 沉降（收皮带送到底行的饼干）
       boardCd = crBoard seg1
       boardBelt = applyBeltMoves boardCd mvBelt
       nBelt = length ws0 + length (crWaves seg1)
       endBelt =
         [ EndStep nBelt boardCd boardBelt (EndBeltShift mvBelt)
-        | not (null belts)
+        | hasBelts
         , not (null mvBelt)
         ]
       seg2 =
-        if null belts
-          then stillRun boardCd (crUfos seg1) (crGen seg1)
-          else cascadeAfterWith reg AfterBelt (crUfos seg1) portals (crGen seg1) boardBelt
-      -- 蔓延，然后会走的元素（跳过皮带格；传送门端点当墙）
+        if not hasBelts
+          then stillRun boardCd hooks1 (crGen seg1)
+          else cascadeAfterWith reg AfterBelt hooks1 (crGen seg1) boardBelt
+      -- 蔓延，然后会走的元素（跳过皮带格；传送门端点当墙：都问关卡级元素）
       boardBeltCas = crBoard seg2
       nEnd = nBelt + length (crWaves seg2)
-      beltCells = nub (concat belts)
-      portalEnds = nub (concatMap (\(a, b) -> [a, b]) portals)
+      elems2 = hookLevel (crHooks seg2)
+      avoid = nub (avoidCellsIn reg elems2)
+      walls = nub (wallCellsIn reg elems2)
       (endSpread, boardSpread) = traceSpreadsWith reg nEnd boardBeltCas
-      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx beltCells portalEnds (pushableWith reg)) nEnd boardSpread
+      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx avoid walls (pushableWith reg)) nEnd boardSpread
       -- 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁；
       -- 不再重复步末效果。内置元素没有空洞时等于旧的「成消才连锁」。
-      seg3 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSnail)) (crUfos seg2) portals (crGen seg2) boardSnail
+      seg3 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSnail)) (crHooks seg2) (crGen seg2) boardSnail
       board1 = crBoard seg3
   in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
 
 -- | 道具的步末：只有蔓延。地毯腾空比较用蔓延前的盘面（与旧实现一致）。
-boosterEnd :: Registry -> [(Pos, Pos)] -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-boosterEnd reg portals seg0 =
+boosterEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+boosterEnd reg seg0 =
   let boardH = crBoard seg0
       (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
       -- 步末补结算（同交换的统一路径；蔓延不会造出匹配，内置元素没有空洞时恒等）
-      seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crUfos seg0) portals (crGen seg0) boardSp
+      seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crHooks seg0) (crGen seg0) boardSp
   in (seg0 :| [seg1], ends, crBoard seg1, boardH)

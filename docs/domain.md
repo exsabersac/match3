@@ -63,14 +63,14 @@
 
 | 中文 | 字段 / 类型 | 说明 |
 |------|-------------|------|
-| 传送带 | `Belt` = `[Pos]`，`gsBelts` | 步末沿环移位；可再连锁 |
-| 传送门 | `gsPortals :: [(Pos,Pos)]` | 双向；沉降时 A 有子 B 空则传送 |
-| 飞碟 | `Ufo{ufoCell,ufoColor}`，`gsUfos` | 波末吸正交同色再移格；吸走≠引爆 |
-| 地毯 | `gsCarpetOpen` / `gsCount CountCarpets` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
-| 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(ElementName, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
+| 传送带 | `Belt` = `[Pos]`，`BeltLevel` 的状态（读数 `gsBelts`） | 步末沿环移位；可再连锁 |
+| 传送门 | `PortalLevel [(Pos,Pos)]`（读数 `gsPortals`） | 双向；沉降时 A 有子 B 空则传送 |
+| 飞碟 | `Ufo{ufoCell,ufoColor}`，`UfoLevel` 的状态（读数 `gsUfos`） | 波末吸正交同色再移格；吸走≠引爆 |
+| 地毯 | `CarpetLevel` 的状态（读数 `gsCarpetOpen`）/ `gsCount CountCarpets` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
+| 地面层（扩展槽） | `GroundLayer Ground`（读数 `gsGround`，`[(Pos,(ElementName, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
 | 边缘收集 | `drains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
 | 步末补结算 | `EndRule.erHoles`、`cascadeAfterWith (AfterEnd …)` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
-| 关卡级元素 | `LevelElement` / `SomeLevel`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel`），节拍消息 `Refilled` / `EndTicked` / `Settling` / `Covering` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；元素类迁移后改为回复流水线节拍消息；状态仍在上面各自的 `GameState` 字段；去掉即不生效 |
+| 关卡级元素 | `LevelElement` / `SomeLevelElement`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel` / 核心元素 `GroundLayer`），一局的全部在 `gsLevelElems`；节拍消息 `Refilled` / `EndTicked` / `Settling` / `Covering` / `GroundHit`；Board 层的钩子 `LevelHooks` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；元素类迁移后改为回复流水线节拍消息；第 7 刀起状态在元素值里（取代五个 `GameState` 专用字段，旧名为派生读数），开局状态由 `levelStart` 从关卡记录取；去掉即不生效（地面层除外） |
 
 ## 双层果冻与气泡（段 5）
 

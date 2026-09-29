@@ -2,12 +2,24 @@
 
 -- | 对局状态：GameState 及其（部分字段）相等语义、撤销快照、本步特效 MoveFx 的边沿触发、提示与撤销。
 --
--- 依赖：Match3.Types、Match3.Board.*（findHint）、Ufo / Conveyor（字段类型）。
+-- 依赖：Match3.Types、Match3.Board.*（findHint）、Element.Level（关卡级元素的读写）、Ufo / Conveyor（读数类型）。
 -- 不变量：gsCombo / gsLastCleared 只描述最近一次**真正结算**的一步；任何被拒操作经
 -- clearMoveFx / rejectMove 清零，moveFx 对 NoMatch / InvalidSwap / 已终局一律返回空，
 -- 前端因此不会重播上一步的连击（护栏 failed_swap_resets_combo_feedback 等）。
 module Match3.Game.State
   ( GameState(..)
+    -- * 关卡级元素（第 7 刀：第 7 刀前的五个字段改为派生读数 + 写入函数）
+  , gsBelts
+  , gsPortals
+  , gsUfos
+  , gsCarpetOpen
+  , gsGround
+  , setLevelElem
+  , setUfos
+  , setBelts
+  , setPortals
+  , setCarpetOpen
+  , setGround
   , gsCount
   , gsProgress
   , gsGoalMet
@@ -24,7 +36,9 @@ module Match3.Game.State
 import Data.Maybe (isJust)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Builtin (BeltLevel(..), CarpetLevel(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
+import Match3.Element.Class (LevelElement, SomeLevelElement, fromLevelElement)
+import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
 import Match3.Element.Registry (Registry)
 import Match3.Ufo (Ufo(..))
 import Match3.Conveyor (Belt)
@@ -46,19 +60,71 @@ data GameState = GameState
   , gsHint          :: Maybe (Pos, Pos)
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
   , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
-  , gsBelts         :: [Belt] -- conveyor paths (开心消消乐传送带)
-  , gsPortals       :: [(Pos, Pos)] -- bidirectional portal pairs (传送门)
   , gsHammers       :: Int    -- hammer booster charges
   , gsFreeSwaps     :: Int    -- free-swap booster charges (any two cells)
   , gsCrossClears   :: Int    -- cross-clear booster charges
-  , gsUfos          :: [Ufo]  -- flying saucers (飞碟)
-  , gsCarpetOpen    :: [Pos]  -- uncovered carpet / floor tiles (地毯目标)
   , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
   , gsDaily         :: Bool   -- True for date-seeded daily challenge (通关≠战役推进)
-  , gsGround        :: Ground -- 地面层（段 2c，元素名 + 层数；内置关卡恒为 []）
+  , gsLevelElems    :: [SomeLevelElement]
+    -- ^ 第 7 刀：一局的全部关卡级元素（状态在元素值里；内置 = 飞碟 / 皮带 / 传送门 / 地毯 / 地面层，
+    -- 取代第 7 刀前的 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround 五个字段，旧名现在是派生读数）。
+    -- 开局见 Match3.Element.Level.startLevelsWith，节拍与写回见同模块。
   }
 
--- | 与第 4 刀前派生的 Show 逐字相同：各计数仍按旧字段名、旧位置打印（元素查询快照对 show 取散列）。
+-- | 传送带路径（第 7 刀前的字段；派生读数）。
+gsBelts :: GameState -> [Belt]
+gsBelts = levelBelts . gsLevelElems
+
+-- | 双向传送门对（第 7 刀前的字段；派生读数）。
+gsPortals :: GameState -> [(Pos, Pos)]
+gsPortals = levelPortals . gsLevelElems
+
+-- | 飞碟（第 7 刀前的字段；派生读数）。
+gsUfos :: GameState -> [Ufo]
+gsUfos = levelUfos . gsLevelElems
+
+-- | 未覆盖的地毯格（第 7 刀前的字段；派生读数）。
+gsCarpetOpen :: GameState -> [Pos]
+gsCarpetOpen = levelCarpetOpen . gsLevelElems
+
+-- | 地面层（第 7 刀前的字段；派生读数；段 2c，元素名 + 层数）。
+gsGround :: GameState -> Ground
+gsGround = levelGround . gsLevelElems
+
+-- | 写入一个关卡级元素的状态（同名替换，没有则追加）。
+setLevelElem :: LevelElement l => l -> GameState -> GameState
+setLevelElem l gs = gs {gsLevelElems = putLevel l (gsLevelElems gs)}
+
+-- | 第 7 刀前的记录更新 @gs {gsUfos = us}@。
+setUfos :: [Ufo] -> GameState -> GameState
+setUfos = setLevelElem . UfoLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsBelts = bs}@。
+setBelts :: [Belt] -> GameState -> GameState
+setBelts = setLevelElem . BeltLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsPortals = ps}@。
+setPortals :: [(Pos, Pos)] -> GameState -> GameState
+setPortals = setLevelElem . PortalLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsCarpetOpen = ps}@。
+setCarpetOpen :: [Pos] -> GameState -> GameState
+setCarpetOpen = setLevelElem . CarpetLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsGround = g}@。
+setGround :: Ground -> GameState -> GameState
+setGround = setLevelElem . GroundLayer
+
+-- | 内置五种关卡级元素之一（Show 按第 7 刀前的字段名打印它们的状态）。
+builtinLevel :: SomeLevelElement -> Bool
+builtinLevel e =
+  isJust (fromLevelElement e :: Maybe UfoLevel)
+    || isJust (fromLevelElement e :: Maybe BeltLevel)
+    || isJust (fromLevelElement e :: Maybe PortalLevel)
+    || isJust (fromLevelElement e :: Maybe CarpetLevel)
+    || isJust (fromLevelElement e :: Maybe GroundLayer)
+
+-- | 与第 4 刀前派生的 Show 逐字相同（第 7 刀：皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影，仍按旧字段名、旧位置打印）：各计数仍按旧字段名、旧位置打印（元素查询快照对 show 取散列）。
 -- gsElementCounts 打印 namedCounts（按名字升序；旧实现按首次出现，快照里每局至多一个名字）。
 -- 没有旧字段的键（CountSpirits、扩展元素借用的其余内置键）不打印，相等判断仍比较全部计数。
 instance Show GameState where
@@ -97,8 +163,13 @@ instance Show GameState where
         . field "gsDaily" (gsDaily gs) . sep
         . field "gsElementCounts" (namedCounts (gsCounts gs)) . sep
         . field "gsGround" (gsGround gs)
+        . extras
         . showChar '}'
     where
+      -- 内置五种之外的关卡级元素（扩展）：有才打印，内置对局与第 7 刀前逐字相同
+      extras = case [e | e <- gsLevelElems gs, not (builtinLevel e)] of
+        [] -> id
+        es -> sep . field "gsLevelExtra" es
       cnt k = gsCount k gs
       sep = showString ", "
       field :: Show a => String -> a -> ShowS
@@ -114,14 +185,10 @@ instance Eq GameState where
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
       && gsDaily a == gsDaily b
-      && gsBelts a == gsBelts b
-      && gsPortals a == gsPortals b
       && gsHammers a == gsHammers b
       && gsFreeSwaps a == gsFreeSwaps b
       && gsCrossClears a == gsCrossClears b
-      && gsUfos a == gsUfos b
-      && gsCarpetOpen a == gsCarpetOpen b
-      && gsGround a == gsGround b
+      && gsLevelElems a == gsLevelElems b
 
 -- | 某计数键的累计个数（缺省 0；第 4 刀前是各自的字段，如 gsStonesCleared = gsCount CountStones）。
 gsCount :: CounterKey -> GameState -> Int

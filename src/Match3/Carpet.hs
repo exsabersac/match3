@@ -1,4 +1,4 @@
--- | 地毯 / 目标地砖：未铺格在 gsCarpetOpen；清除命中则覆盖并计数。
+-- | 地毯 / 目标地砖：未铺格是关卡级元素 CarpetLevel 的状态（读数 gsCarpetOpen）；清除命中则覆盖并计数。
 -- 饼干腾空与保险箱开启的覆盖种子由 Game.carpetVacateSeeds 补充；
 -- 沉降中途底行收饼由 Board 把 drain 位并入清除列表。不拥有重力逻辑。
 -- 各关的地毯布局第 6 刀起在关卡记录 lvlCarpets 里（Match3.Levels.Campaign.levelCarpets 按下标取）。

@@ -46,6 +46,7 @@ library
       Match3.Board.Match
       Match3.Board.Clear
       Match3.Board.Gravity
+      Match3.Board.Hooks
       Match3.Board.Cascade
       Match3.Board.Random
       Match3.Board.Default
@@ -85,6 +86,7 @@ library
       Match3.Element.Event
       Match3.Element.Class
       Match3.Element.Message
+      Match3.Element.Level
   other-modules:
       Paths_match3
   autogen-modules:

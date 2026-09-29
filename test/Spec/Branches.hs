@@ -4,7 +4,7 @@
 -- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
 -- * 开启规则（openRule）：内置彩蛋；测试专用「豆荚」被邻格真消除时开出直线，本轮坐住不引爆。
 -- * 可改色 / 可推动谓词（recolorable / pushable）：魔法帽 / 染色瓶、蜗牛只看注册表，内置取值与原写死的 isGem / pushable 相同。
--- * 关卡级元素（LevelElement：飞碟 / 皮带 / 传送门 / 地毯）：经注册表按消息回复，removeLevel 之后该机制不生效。
+-- * 关卡级元素（LevelElement：飞碟 / 皮带 / 传送门 / 地毯 / 地面层）：状态在元素值里，按消息回复，removeLevel 之后该机制不生效（地面层是核心元素）。
 -- * 源码扫描：主流程模块不再点名这些元素的专门函数。
 --
 -- 样例元素（拉杆、豆荚、小车）只定义在这里，主流程源码里没有它们的名字。
@@ -15,13 +15,13 @@ module Spec.Branches
 import Control.Monad (forM_)
 import Data.List (sort)
 import Data.Maybe (isNothing)
-import Match3.Board.Gravity (portalTeleport)
+import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Grid (setM, toM)
 import Match3.Board.Match (findHintWith)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
-import Match3.Element.Class (Archetype(..), Element(..), Hit(..), levelNameOf)
+import Match3.Element.Class (Archetype(..), Element(..), Hit(..), SomeLevelElement(..), levelNameOf)
 import Match3.Game.Move (resolveSwapWith)
 import qualified Match3.Snail as Snail
 import System.Random (mkStdGen)
@@ -39,6 +39,7 @@ tests =
   , testCase "br_level_hooks_builtin_and_removable" br_level_hooks_builtin_and_removable
   , testCase "br_level_hooks_removed_in_play" br_level_hooks_removed_in_play
   , testCase "br_main_flow_no_special_branches" br_main_flow_no_special_branches
+  , testCase "br_board_takes_hooks_only" br_board_takes_hooks_only
   ]
 
 -- tripleBoard / tripleMove / isCustomNamed / firstWave 见 Spec.Support。
@@ -194,27 +195,40 @@ br_pushable_from_registry = do
   assertBool "default: gem pushed" (isSnail (getCell bG (7, 2)))
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 
--- | 关卡级元素：内置表里四个钩子就是原实现；去掉后各自退化为「不生效」。
+-- | 关卡级元素：内置表里四种元素的节拍回复就是原实现（第 7 刀起状态在元素值里，Board 层经钩子 LevelHooks 调用）；
+-- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按注册表的地面层规则命中。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do
   assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet"] (map levelNameOf (levelDefs defaultRegistry))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       ufos = [mkUfo (3, 3) C1, mkUfo (0, 0) C2]
       noUfo = removeLevel "ufo" defaultRegistry
-  assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorbWith defaultRegistry ufos b0)
-  assertEqual "ufo removed: no absorb, ufos stay" ([], ufos) (absorbWith noUfo ufos b0)
+      absorb reg = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith reg [SomeLevelElement (UfoLevel ufos)]) b0)
+  assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorb defaultRegistry)
+  assertEqual "ufo removed: no absorb, ufos stay" ([], ufos) (absorb noUfo)
   let belts = [[(2, 0), (2, 1), (2, 2), (3, 2)]]
-  assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (beltShiftWith defaultRegistry belts)
-  assertBool "belt removed" (isNothing (beltShiftWith (removeLevel "belt" defaultRegistry) belts))
+      beltEl = [SomeLevelElement (BeltLevel belts)]
+  assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (fst <$> beltShiftIn defaultRegistry beltEl)
+  assertEqual "belt cells avoided" (concat belts) (avoidCellsIn defaultRegistry beltEl)
+  assertBool "belt removed" (isNothing (beltShiftIn (removeLevel "belt" defaultRegistry) beltEl))
+  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultRegistry [SomeLevelElement (BeltLevel [])])
   let mb = setM (toM b0) (0, 5) Nothing
       portals = [((7, 0), (0, 5))]
-  assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultRegistry) portals mb) (teleportWith defaultRegistry portals mb)
-  assertBool "portal hook moves something here" (teleportWith defaultRegistry portals mb /= mb)
-  assertEqual "portal removed: no teleport" mb (teleportWith (removeLevel "portal" defaultRegistry) portals mb)
+      settle reg = onSettle (levelHooksWith reg [SomeLevelElement (PortalLevel portals)]) mb
+  assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultRegistry) portals mb) (settle defaultRegistry)
+  assertBool "portal hook moves something here" (settle defaultRegistry /= mb)
+  assertEqual "portal removed: no teleport" mb (settle (removeLevel "portal" defaultRegistry))
+  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultRegistry [SomeLevelElement (PortalLevel portals)])
   let open0 = [(3, 0), (3, 1), (4, 4)]
       hit = [(3, 0), (3, 1), (5, 5)]
-  assertEqual "carpet hook = coverCarpets" (coverCarpets open0 hit) (coverWith defaultRegistry open0 hit)
-  assertEqual "carpet removed: nothing covered" (open0, 0) (coverWith (removeLevel "carpet" defaultRegistry) open0 hit)
+      cover reg = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn reg hit [SomeLevelElement (CarpetLevel open0)])
+  assertEqual "carpet hook = coverCarpets" (coverCarpets open0 hit) (cover defaultRegistry)
+  assertEqual "carpet removed: nothing covered" (open0, 0) (cover (removeLevel "carpet" defaultRegistry))
+  let ground0 = [((3, 0), ("jelly", 2)), ((5, 5), ("jelly", 1)), ((6, 6), ("jelly", 1))]
+      groundHit reg = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn reg hit [SomeLevelElement (GroundLayer ground0)])
+  assertEqual "ground hook = hitGroundWith" (hitGroundWith defaultRegistry hit ground0) (groundHit defaultRegistry)
+  assertEqual "ground is core" (groundHit defaultRegistry) (groundHit (removeLevel "ground" defaultRegistry))
+  assertBool "ground hit something here" (fst (groundHit defaultRegistry) /= ground0)
 
 -- | 38 关 × 前 6 手（种子 1，走提示）：四个关卡级元素都去掉后，飞碟不动不吸、皮带不移位、地毯不覆盖；
 -- 内置表下同样的对局里这三件事都真的发生过（证明扫描覆盖到了）。
@@ -265,3 +279,31 @@ br_main_flow_no_special_branches = do
         [(f, "import " ++ m) | (f, s) <- zip files srcs, m <- importsOf s, m `elem` bannedImports]
           ++ [(f, w) | (f, s) <- zip files srcs, w <- bannedIdents, mentionsIdent w s]
   assertEqual "special-cased names in main flow" [] bad
+
+-- | 第 7 刀（7a）：Board 层（连锁 / 沉降）只收关卡级钩子 LevelHooks，不 import 飞碟 / 皮带 / 地毯的实现模块、
+-- 也不碰 GameState；结算流水线不读第 7 刀前的五个关卡字段（它们在 Game/State.hs 里只是派生读数）；
+-- 第 7 刀删掉的名字（各元素的专用问法、crUfos、无状态的 SomeLevel、分开的回复消息）在 src / app / web 里都不再出现。
+br_board_takes_hooks_only :: Assertion
+br_board_takes_hooks_only = do
+  let boardCore = ["src/Match3/Board/" ++ m ++ ".hs" | m <- ["Match", "Clear", "Cascade", "Gravity", "Hooks", "Grid"]]
+  boardSrcs <- mapM readFile boardCore
+  assertEqual "Board core imports no level element state"
+    []
+    [(f, m) | (f, s) <- zip boardCore boardSrcs, m <- importsOf s, m `elem` ["Match3.Ufo", "Match3.Conveyor", "Match3.Carpet", "Match3.Game.State", "Match3.Element.Level", "Match3.Element.Builtin.Level"]]
+  assertEqual "Board core never names Ufo" [] [f | (f, s) <- zip boardCore boardSrcs, mentionsIdent "Ufo" s]
+  flow <- pipelineSources
+  let flowNoState = filter (/= "src/Match3/Game/State.hs") flow
+  flowSrcs <- mapM readFile flowNoState
+  assertBool "scanned Resolve" ("src/Match3/Game/Resolve.hs" `elem` flowNoState)
+  assertEqual "pipeline does not read the old level fields"
+    []
+    [(f, w) | (f, s) <- zip flowNoState flowSrcs, w <- ["gsUfos", "gsBelts", "gsPortals", "gsCarpetOpen", "gsGround"], mentionsIdent w s]
+  everything <- sourcesUnderAll ["src", "app", "web/hs"]
+  allSrcs <- mapM readFile everything
+  assertEqual "removed names are gone"
+    []
+    [ (f, w)
+    | (f, s) <- zip everything allSrcs
+    , w <- ["crUfos", "absorbWith", "beltShiftWith", "teleportWith", "coverWith", "applyPortalTeleportsWith", "SomeLevel", "Absorbed", "Shifted", "Settled", "Covered"]
+    , mentionsIdent w s
+    ]

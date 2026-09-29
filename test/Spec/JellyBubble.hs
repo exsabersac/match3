@@ -39,14 +39,14 @@ bubblesOn b = [p | p <- allPos, getCell b p == Custom "bubble" (CustomState 1)]
 jb_jelly_two_layers_counted_per_layer :: Assertion
 jb_jelly_two_layers_counted_per_layer = do
   let ground0 = [((1, 1), ("jelly", 2)), ((6, 6), ("jelly", 2))]
-      gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 4)) 1) {gsBoard = tripleBoard, gsGround = ground0}
+      gs0 = (setGround ground0 $ (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 4)) 1) {gsBoard = tripleBoard})
       (p1, p2) = tripleMove
       (gs1, o1, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
   assertEqual "one layer peeled at (1,1)" [((1, 1), ("jelly", 1)), ((6, 6), ("jelly", 2))] (gsGround gs1)
   assertEqual "counted per layer" [("jelly", 1)] (namedCounts (gsCounts gs1))
   assertEqual "goal progress" 1 (gsCollected gs1)
-  assertEqual "jelly does not occupy the board" (gsBoard (fst (trySwap p1 p2 gs0 {gsGround = []}))) (gsBoard gs1)
+  assertEqual "jelly does not occupy the board" (gsBoard (fst (trySwap p1 p2 (setGround [] $ gs0)))) (gsBoard gs1)
   let (gs2, _, _) = resolveSwapWith defaultRegistry p1 p2 gs1 {gsBoard = tripleBoard}
   assertEqual "second clear removes the tile" [((6, 6), ("jelly", 2))] (gsGround gs2)
   assertEqual "count accumulates" [("jelly", 2)] (namedCounts (gsCounts gs2))
@@ -57,7 +57,7 @@ jb_jelly_two_layers_counted_per_layer = do
 -- | 最后一层去掉即达成 GoalNamed "jelly"。
 jb_jelly_goal_wins_on_last_layer :: Assertion
 jb_jelly_goal_wins_on_last_layer = do
-  let gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 2)) 1) {gsBoard = tripleBoard, gsGround = [((1, 1), ("jelly", 2))]}
+  let gs0 = (setGround [((1, 1), ("jelly", 2))] $ (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 2)) 1) {gsBoard = tripleBoard})
       (p1, p2) = tripleMove
       (gs1, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "not yet" (gsOver gs1 == Nothing)

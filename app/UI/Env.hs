@@ -117,14 +117,14 @@ envSeed = do
 -- | MATCH3_SHOWCASE=1：把棋盘换成「全部棋子一览」，用于检查贴图（仅展示，不影响规则模块）。
 showcaseState :: GameState -> GameState
 showcaseState gs =
-  gs
-    { gsBoard = showcaseBoard
-    , gsHint = Nothing
-    , gsUfos = [Ufo (7, 7) C3]
-    , gsPortals = [((7, 5), (7, 6))]
-    , gsBelts = [[(7, 0), (7, 1), (7, 2), (7, 3)]]
-    , gsCarpetOpen = [(7, 4)]
-    }
+  setUfos [Ufo (7, 7) C3]
+    . setPortals [((7, 5), (7, 6))]
+    . setBelts [[(7, 0), (7, 1), (7, 2), (7, 3)]]
+    . setCarpetOpen [(7, 4)]
+    $ gs
+        { gsBoard = showcaseBoard
+        , gsHint = Nothing
+        }
 
 showcaseBoard :: Board
 showcaseBoard = boardFromRows

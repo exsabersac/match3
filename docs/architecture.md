@@ -42,7 +42,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 - 通用层 ← 具体游戏：`Engine.*` 与 `app/Shell/Loop.hs` 不 import 任何 `Match3` 模块；`Match3.Engine` 实现通用接口，三消前端作为插件接入外壳（见[多游戏接口](#多游戏接口)）。测试 `engine_layer_is_game_agnostic` 检查这一方向。
 - `Core` 把各子模块符号汇总导出，便于前端与测试只 import 一处。第三刀删掉了 `Match3.Board` / `Match3.Game` 两个外观模块：Game 子模块、`Core`、测试直接 import 各子模块。
 - 子模块之间单向依赖、无环（下文 `A ← B` 表示 B 依赖 A）：Board 内 `Grid ← Match ← Clear`、`Grid ← Gravity`、`Match ← Random`，`Cascade` 依赖 Grid / Match / Clear / Gravity；Game 内 `State ← Outcome / Shuffle / Trace`、`Shuffle ← Level`，`Resolve`（公共结算）依赖 State / Tally / Outcome / Shuffle / Trace，`Move` / `Boosters` 只做校验与起手选择、依赖 `Resolve`。Game 子模块直接 import 所需的 Board 子模块。
-- 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types`、`Element.Message` → `Element.Class`（元素类）→ `Element.Registry` → `Element.Builtin`；`Builtin` 里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过注册表查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
+- 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types`、`Element.Message` → `Element.Class`（元素类）→ `Element.Registry` → `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过注册表查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
 - 机制子模块（障碍、彩虹、合成、冰、草系、地毯、蜗牛、飞碟、倒计时、传送带、道具种子、每日）尽量只依赖 `Types`（及彼此必要的窄依赖），由 `Board.*` / `Game.*` 编排调用顺序。
 - 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/ComboFx.hs`（纯阶段机，按时间线把它拆成帧）→ `UI.Playback`（阶段事件 → 弹字 / 粒子 / 震屏）→ `UI.Cascade` / `UI.EndStage`（绘制）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
 
@@ -56,7 +56,15 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element` | 门面：再导出 `Types` / `Registry` / `Builtin` / `Event`（元素类 `Class` 与 `Message` 单独 import，方法名 `name` / `color` / `pushable` 等较通用，避免与使用方撞名） | 自身无实现 |
 | `Match3.Element.Types` | 规则与查询结果的数据类型：`Slot`、`HitResult`、`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、`Counter`、`Arg` / `Placement`、`cellSlot` | 调用顺序 |
 | `Match3.Element.Registry` | `Registry`（名字 → 构造器 `Entry`；按层数组 O(1) 取解码器 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、解码 `elementOf`、各能力的查询函数 `*With`、关卡级元素 `registerLevel` / `askLevel` | 具体元素 |
-| `Match3.Element.Builtin` | 全部内置元素的类型与 instance（本体 / 修饰器 / 关卡级元素）、条目表 `builtinDefs` 与 `defaultRegistry` | 流水线 |
+| `Match3.Element.Builtin` | 汇总：条目表 `builtinDefs`（注册顺序固定，快照锁定）、`builtinLevelDefs` 与 `defaultRegistry`；再导出测试 / 扩展用的元素类型 | 具体元素的定义 |
+| `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色与特殊合成的成对交换规则、`specialBlast` | 障碍与叠层 |
+| `Match3.Element.Builtin.Layer` | 冰层 `Ice` 与 8 种叠层修饰器（草 / 藤 / 巧 / 迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 蒸汽），蔓延规则 | 本体 |
+| `Match3.Element.Builtin.Obstacle` | 打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋 | 收走 / 按名字计数的元素（`Collectible`） |
+| `Match3.Element.Builtin.Collectible` | 收集与计数类：饼干、时间精灵、气泡 | 削层 / 变形（`Obstacle`） |
+| `Match3.Element.Builtin.Actor` | 会动或会生成东西的：魔法帽、果汁机、蜗牛（含 `traceSnails`）、染色瓶、倒计时 | 被动障碍（`Obstacle`） |
+| `Match3.Element.Builtin.Ground` | 地面层：果冻 | 占格本体 |
+| `Match3.Element.Builtin.Level` | 关卡级元素：飞碟、皮带、传送门、地毯（`LevelElement`，按节拍消息回复） | 关卡状态的存储（仍在 `GameState`） |
+| `Match3.Element.Builtin.Common` | 跨分组共用的辅助：`deadRule`（邻消打碎并入清除格）、`colorPlace`（按颜色放置） | 只在一组里用的辅助 |
 | `Match3.Element.Class` | 元素类（xmonad LayoutClass 风格）：`Element`（带默认实现的能力方法，默认由 `archetype` 推出）、`SomeElement`、修饰器 `Modifier` / `Modified`、惰性占格 `Inert`、关卡级元素 `LevelElement` / `SomeLevel` | 具体元素 |
 | `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息及回复（`Refilled` → `Absorbed`、`EndTicked` → `Shifted`、`Settling` → `Settled`、`Covering` → `Covered`） | 谁回复 |
 | `Match3.Element.Event` | `EndEffect` / `SpreadKind` / `SnailMove`、`applyEndEffect`、效果事件 `EventKind` / `Event` | 帧与样式 |
@@ -266,11 +274,11 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 ### 新增一种元素的步骤
 
 1. 选层：本体用 `Custom "名字" 值`（值自定义，例如耐久；存储编码只能是一个 `Int`）；格子下面的层用 `SlotGround`（放进 `gsGround`）；需要新的内置层时才动 `Types`。
-2. 写 instance：定义一个类型（状态放在值里），写 `instance Element 类型`，只写 `name` / `toCell` 和要改的方法（例如 `archetype`、`onHit`、`adjacentRule`、`counter`、`falls`、`drains`、`groundRule`、`color`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层类写 `instance Modifier`；不在格子里的机制写 `instance LevelElement`，回复流水线节拍消息（或自定义新消息）。
+2. 写 instance：定义一个类型（状态放在值里），写 `instance Element 类型`（测试 / 扩展元素写在自己的模块里；新的**内置**元素放进 `src/Match3/Element/Builtin/` 下功能最接近的分组文件——宝石 `Gem`、冰 / 叠层 `Layer`、打破型障碍 `Obstacle`、收集计数 `Collectible`、会动 / 会生成的 `Actor`、地面层 `Ground`、关卡级 `Level`——条目函数写在同一文件，跨分组共用的辅助放 `Common`；再在 `Element.Builtin.builtinDefs` 末尾追加条目，已有条目不要重排），只写 `name` / `toCell` 和要改的方法（例如 `archetype`、`onHit`、`adjacentRule`、`counter`、`falls`、`drains`、`groundRule`、`color`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层类写 `instance Modifier`；不在格子里的机制写 `instance LevelElement`，回复流水线节拍消息（或自定义新消息）。
    - 只经注册表即可接入的类别：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留，也可以是按颜色匹配的有色棋子：给 `color`、原型 `Piece`，见 `ec_custom_matchable_gem`）、叠层与冰的命中规则、地面层、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素、成对交换规则（`swapRule`）、开启类元素（`openRule`）、可被改色 / 推动（`recolorable` / `pushable`）、不进普通匹配提示（`hintable`）、在已有节拍上反应的关卡级元素（`LevelElement`，见 `ec_level_elements_by_message`）。
-   - 段 5 的双层果冻（`Jelly`：地面层 + `groundRule` + `CountNamed`）与气泡（`Bubble`：`Custom` + `onHit` + `adjacentRule` + `CountNamed`）就是这样接入的内置元素：规则只在 `Element.Builtin` 的 instance 里，关卡数据在 `Types.allLevels` / `Game.Level` 的放置 / 地面表里，主流程没有改动（`jb_main_flow_untouched_scan`）。
+   - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：地面层 + `groundRule` + `CountNamed`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` + `onHit` + `adjacentRule` + `CountNamed`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Types.allLevels` / `Game.Level` 的放置 / 地面表里，主流程没有改动（`jb_main_flow_untouched_scan`）。
    - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）、补子时生成自定义棋子。
-3. 注册：`register (customEntry 原型 (Int → 元素)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevel 值)`），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
+3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 里加一行（关卡级元素加进 `builtinLevelDefs`）；测试 / 扩展元素 = `register (customEntry 原型 (Int → 元素)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevel 值)`），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由条目的放置函数落格（`customEntry` 缺省 = `Custom 名字 第一个整数参数`；要别的解析用 `customEntryWith`）。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Layout.elementRGBTable`（HUD 目标 / 地图 / 几何版共用）；步末有新效果时在前端各查找表里加一行。
 6. 测试：参照 `element_registry_custom_crate_extensibility`、`test/Spec/Extension.hs` 与 `test/Spec/ElementClass.hs`（测试专用「木箱」`Crate` 只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
@@ -318,6 +326,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 - **阶段 1（原型）**：宝石（`PlainGem` / `SpecialGem`）、彩蛋（`SurpriseEgg`）、冰层（`Ice`）先写成 instance，经适配层 `bridgeBody` / `bridgeModifier` 桥接回旧记录，与其余旧记录并存；`ec_bridge_*` 与 `ec_registry_paths_agree_in_play` 逐字段 / 逐手比对新旧两条路径。彩蛋在现行规则里没有跨轮状态、`GameState` 里也没有彩蛋专用字段，「状态放在元素值里」改由测试专用「鸟窝」`Nest` 演示。
 - **阶段 2（迁移）**：全部 31 个内置条目都是 instance（19 个本体类型 + 1 个冰层 + 8 个叠层修饰器；`SpecialGem` 一个类型对应 line_h / line_v / bomb / rainbow 四个条目），四个关卡级元素是 `LevelElement`。`ElementDef` / `baseDef` / `LevelDef` / `LevelHook` 与适配层 `Match3.Element.Prototype` 一起删除；注册表改为「名字 → 构造器」（`Entry`），一格解码成嵌套的元素值后直接调类方法。
+- **分文件**（阶段 2 之后的纯搬家）：原来 640 行的 `Element.Builtin` 按功能拆到 `src/Match3/Element/Builtin/` 下的 `Gem` / `Layer` / `Obstacle` / `Collectible` / `Actor` / `Ground` / `Level` / `Common`（各文件开头的注释写明这一组的共同特征），每个元素的类型、instance、条目函数放在同一文件；`Element.Builtin` 只按原注册顺序汇总条目，对外导出不变。彩蛋归 `Obstacle`：它是原型 `Blocker`、命中即破的占格本体，没有计数（不是收集类），也不按颜色匹配（不是宝石）。只在一组里用到的辅助留在组内（`chip` / `layersPlace` 在 `Obstacle`，`peel` / `layerChip` / `spreadRule` 在 `Layer`，`tickRun` / `snailRun` / `traceSnails` 在 `Actor`），跨组共用的才进 `Common`。依赖只朝一个方向：`Obstacle` 引用 `Gem`（双面块翻成宝石）和 `Collectible`（保险箱开成饼干），其余分组互不引用。
 
 **等价性依据**：阶段 2 删掉旧记录之后，新旧两条路径无法在同一进程里并排比对，所以先在阶段 1 的代码上生成元素查询快照 `test/golden/element-queries.txt`（1648 行，生成器 `test/golden/ElementQueries.hs`；用阶段 1 的旧记录注册表生成的结果与之逐字相同），阶段 2 一字不改地比对它：Q 行 = 全部格子组合上的逐格查询，P = 放置，R = 规则表 / 条目名 / 个数差计数 / 关卡级元素清单，A / E / S / O / C / G = 邻格 / 步末 / 成对交换 / 开启规则、直接命中、地面层在样例盘上的输出，M = 40 关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列。三个 `ec_*_snapshot` 测试取代了阶段 1 的三个 bridge 测试。另有金标准 2534 行全等、三场景截图 AE=0。
 

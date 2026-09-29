@@ -176,7 +176,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `jb_bubble_pops_on_direct_hit` | 锤子直接命中即破并计数 |
 | `jb_bubble_blocks_swap_falls_no_match` | 三个气泡连成一排不算匹配；与气泡交换被拒；列里没有消除时不动；下方格被清掉后下落一格 |
 | `jb_levels_appended` | 共 40 关；第 39 / 40 关目标为 `GoalNamed "jelly" 32` / `GoalNamed "bubble" 12`，种子 1–3 开局层数 / 气泡数等于目标且有可走步；前 38 关开局没有地面层、没有气泡 |
-| `jb_main_flow_untouched_scan` | `Board.*`、`Game.{Resolve,Move,Boosters,Trace,Tally,Shuffle,State,Outcome}`、`Element.{Registry,Types,Event}`、`Match3.Engine`、`Engine.*` 源码里没有 `jelly` / `bubble`；两者定义在 `Element.Builtin` 并已注册 |
+| `jb_main_flow_untouched_scan` | `Board.*`、`Game.{Resolve,Move,Boosters,Trace,Tally,Shuffle,State,Outcome}`、`Element.{Registry,Types,Event}`、`Match3.Engine`、`Engine.*` 源码里没有 `jelly` / `bubble`；两者定义在 `Element.Builtin` 及其分组文件（`Builtin/*.hs`）里并已注册 |
 
 改动了的旧测试（名字不变）：7 个用例里的「关卡数 = 38」断言改为 40（`surprise_opens_to_special`、`chain_layer_decrement`、`freeze_layer_decrement`、`curtain_layer_decrement`、`steam_spreads_after_move`、`goal_carpet_counts`、`campaign_levels_batch_ok`）。
 

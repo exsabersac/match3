@@ -182,6 +182,7 @@ ec_flat_record_removed :: Assertion
 ec_flat_record_removed = do
   let srcFiles =
         [ "src/Match3/Element/" ++ m ++ ".hs" | m <- ["Types", "Registry", "Builtin", "Class", "Message", "Event"] ]
+          ++ [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ]
           ++ [ "src/Match3/Board/" ++ m ++ ".hs" | m <- ["Match", "Clear", "Gravity", "Cascade"] ]
           ++ [ "src/Match3/Game/" ++ m ++ ".hs" | m <- ["Resolve", "Move", "Boosters", "Tally", "Shuffle", "Trace"] ]
   srcs <- mapM (fmap stripComments . readFile) srcFiles

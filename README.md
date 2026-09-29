@@ -180,7 +180,8 @@ src/Match3/   Types Core Engine Obstacles Rainbow Combos Ice
               （Engine = 三消作为通用接口的第一个实现）
 src/Match3/Board/  Grid Match Clear Gravity Cascade Random Default（Default = 不带 With 的内置表便捷入口）
 src/Match3/Game/   State Tally Outcome Shuffle Level Trace Resolve Move Boosters
-src/Match3/Element/ Types Registry Builtin Event（元素框架：定义 / 注册表 / 内置元素 / 效果事件；Element.hs 为再导出外观）
+src/Match3/Element/ Types Class Message Registry Builtin Event（元素框架：规则类型 / 元素类 / 消息 / 注册表 / 内置元素汇总 / 效果事件；Element.hs 为再导出外观）
+src/Match3/Element/Builtin/ Gem Layer Obstacle Collectible Actor Ground Level Common（内置元素按功能分组的 instance；Builtin.hs 只汇总条目）
 app/Main.hs   SDL2 前端入口（读环境变量 → runShell）
 app/Shell/    Loop（通用 SDL 外壳：窗口 / 固定步长主循环 / 插件钩子；不依赖 Match3）
 app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw Cascade EndStage

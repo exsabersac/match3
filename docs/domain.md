@@ -74,7 +74,7 @@
 
 ## 双层果冻与气泡（段 5）
 
-两种新元素都只经注册表（`Element.Builtin` 的 `jellyDef` / `bubbleDef`）与段 2c 的白名单钩子接入，主流程（`Board.*` / `Game.*` / `Engine.*`）没有改动（源码扫描 `jb_main_flow_untouched_scan`）。
+两种新元素都只经注册表（`Element.Builtin.Ground` 的 `Jelly` 与 `Element.Builtin.Collectible` 的 `Bubble`）与段 2c 的白名单钩子接入，主流程（`Board.*` / `Game.*` / `Engine.*`）没有改动（源码扫描 `jb_main_flow_untouched_scan`）。
 
 | | 双层果冻 `jelly` | 气泡 `bubble` |
 |---|---|---|

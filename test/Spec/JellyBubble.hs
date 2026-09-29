@@ -166,6 +166,6 @@ jb_main_flow_untouched_scan = do
   srcs <- mapM readFile mainFlow
   let bad = [f | (f, s) <- zip mainFlow srcs, "jelly" `isInfixOf` s || "bubble" `isInfixOf` s]
   assertEqual "no jelly / bubble in the main flow" [] bad
-  builtin <- readFile "src/Match3/Element/Builtin.hs"
+  builtin <- concat <$> mapM readFile ("src/Match3/Element/Builtin.hs" : [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ])
   assertBool "both defined in Element.Builtin" ("\"jelly\"" `isInfixOf` builtin && "\"bubble\"" `isInfixOf` builtin)
   assertBool "both registered" (all (`elem` map entryName (registryDefs defaultRegistry)) ["jelly", "bubble"])

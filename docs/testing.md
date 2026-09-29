@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**220** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
+- 期望：**221** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -73,6 +73,16 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 **已知缺口**：发生自动洗牌（`gsShuffled`）的步只比对得分、清除格和连击数，**暂不逐帧比对终盘**。`mtFinal` 是洗牌前的盘面，洗牌用的生成器状态没有进 `MoveTrace`；等给 `MoveTrace` 加上 `mtGen`、机制刀重开时再补上洗牌步的逐帧比对。前端洗牌动画（`StShuffle`）直接以结算后的 `gsBoard` 为终点，不受影响。
 
+## 行为金标准（golden）
+
+`test/golden/Golden.hs` 把固定种子下的规则结果投影成稳定文本，入库为 `test/golden/golden.txt`（2186 行），`golden_behaviour_snapshot` 在 `stack test` 里逐行比对，失败时报告第一处分叉的行号。
+
+- **覆盖**：38 关 × 种子 {1, 2} × 最多 15 步（每步：成交的交换、结局、完整计数、`gsCombo` / `gsLastCleared`、随机数状态、`traceSwap` 回放；辅助列：撤销 / 提示 / 洗牌 / 自动洗牌 / 结局判定 / 被拒交换；每 3 步三种道具的有次数 / 无次数结果与回放）、2 个每日式开局、3 个手工局面（护栏里的蜗牛撞墙推格、巧克力关、首个 3 连锁，另含该局面全部成交交换）、门面 `Match3.Board` 的普通 / 种子连锁 × 飞碟 / 传送门、各关开局 / 重开 / 下一关。
+- **行首**：`L05 s2 #07` = 第 5 关、种子 2、第 7 步；`H1-snail`、`C03/1`、`S07/2`、`G12 s5` 等为其他用例。
+- **投影**：格子短码（如 `2hi1+K2` = 颜色 2、横向直线、1 层冰、2 层锁链）、具名计数、`StdGen` 的 `show`；盘面与回放脚本（`mtWaves` / `mtEnd` 投影文本）用手写 FNV-1a 64 压缩。不对内部类型直接 `show`。
+- **只经过门面**：取数只用 `Match3.Board` / `Match3.Game`（及数据类型 `Match3.Types` / `Match3.Ufo`），同一份代码在 `3bd26d8` 与 `5eef3e3` 上原样编译、输出全等（md5 `b792e77a…`）。
+- **维护纪律**：内部表示变了只改投影函数，`golden.txt` 一个字都不动；确需重录（规则行为有意变化，机制刀停期间不应发生）用 `test/golden/regen.sh`，并在提交说明里写明原因。
+
 ## 编写约定
 
 - 固定 `StdGen` / 手工构造 `Board`，避免 flaky。
@@ -81,4 +91,4 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 220 绿为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 221，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。

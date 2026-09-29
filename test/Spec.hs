@@ -6,6 +6,7 @@ import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Match3.Board (applyGravity, clearMatches, refill, runCascadeScoredWithUfos, runCascadeScoredFromSeedsWithUfos)
 import Match3.Core
+import qualified Golden
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -238,6 +239,7 @@ tests =
     , testCase "trace_end_steps_boosters_replay" trace_end_steps_boosters_replay
     , testCase "trace_end_snail_push_and_turn" trace_end_snail_push_and_turn
     , testCase "trace_end_spread_from_adjacent_source" trace_end_spread_from_adjacent_source
+    , testCase "golden_behaviour_snapshot" golden_behaviour_snapshot
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -8041,3 +8043,15 @@ trace_end_spread_from_adjacent_source = do
   assertBool "choco spread seen" (SpreadChoco `elem` map fst found)
   assertBool "vine spread seen" (SpreadVine `elem` map fst found)
   assertBool "every spread has targets" (all (not . null . snd) found)
+
+-- | 行为金标准：test/golden/Golden.hs 的投影输出必须与入库的 golden.txt 逐行全等
+-- （重构护栏；golden.txt 在 3bd26d8 与 5eef3e3 上生成且全等）。失败时报告第一处分叉的行号与两边内容。
+golden_behaviour_snapshot :: Assertion
+golden_behaviour_snapshot = do
+  expected <- lines <$> readFile "test/golden/golden.txt"
+  let actual = Golden.goldenLines
+      diffs = [ (i, e, a) | (i, e, a) <- zip3 [1 :: Int ..] expected actual, e /= a ]
+  case diffs of
+    ((i, e, a) : _) ->
+      assertFailure ("golden line " ++ show i ++ " differs (" ++ show (length diffs) ++ " lines differ)\nexpected: " ++ take 400 e ++ "\nactual:   " ++ take 400 a)
+    [] -> assertEqual "golden line count" (length expected) (length actual)

@@ -110,11 +110,13 @@ test-suite match3-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Golden
       Paths_match3
   autogen-modules:
       Paths_match3
   hs-source-dirs:
       test
+      test/golden
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array

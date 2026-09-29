@@ -1,0 +1,9 @@
+-- 独立于仓库根目录 stack 工程的 cabal 工程，只用于 wasm32-wasi-cabal 构建网页版。
+packages: .
+
+-- 与桌面版 lts-21.25 保持一致的随机数实现（同种子 → 同开局盘面）
+constraints: random ==1.2.1.1, splitmix ==0.1.0.5
+
+-- splitmix-0.1.0.5 在 Hackage 上的 base 上界是 <4.21（GHC 9.14 带 base-4.22），
+-- 算法本身不依赖新 base 特性，这里只放宽这一个上界。
+allow-newer: splitmix:base

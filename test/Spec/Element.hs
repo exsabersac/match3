@@ -35,7 +35,7 @@ element_registry_custom_crate_extensibility = do
   -- 注册表里有它，内置定义一个不少
   assertBool "registered" (isJust (lookupElement reg "crate"))
   assertEqual "builtins kept" (length (registryDefs defaultRegistry) + 1) (length (registryDefs reg))
-  -- 挡交换（baseDef 缺省），不可匹配
+  -- 挡交换（固定格原型），不可匹配
   let (gsB, oB) = trySwapWith reg (0, 1) (0, 2) gs0
   assertEqual "crate blocks swap" NoMatch oB
   assertEqual "blocked swap leaves board" (gsBoard gs0) (gsBoard gsB)
@@ -76,6 +76,7 @@ element_registry_custom_crate_extensibility = do
         , "src/Match3/Game/Move.hs", "src/Match3/Game/Boosters.hs", "src/Match3/Game/Level.hs"
         , "src/Match3/Element/Types.hs", "src/Match3/Element/Registry.hs", "src/Match3/Element/Builtin.hs"
         , "src/Match3/Element/Event.hs" ]
+          ++ [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ]
   srcs <- mapM readFile coreFiles
   let mentions = [f | (f, src) <- zip coreFiles srcs, show "crate" `isInfix` src || "木箱" `isInfix` src]
   assertEqual "core sources do not mention the test element" [] mentions

@@ -1,9 +1,9 @@
 -- | 段 4：原先写死在主流程里的专门分支收进元素框架后的行为锁定。
 --
--- * 成对交换规则（edSwap）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 edSwap 就能让无匹配的交换生效、进提示。
--- * 开启规则（edOpen）：内置彩蛋；测试专用「豆荚」被邻格真消除时开出直线，本轮坐住不引爆。
--- * 可改色 / 可推动谓词（edRecolorable / edPushable）：魔法帽 / 染色瓶、蜗牛只看注册表，内置取值与原写死的 isGem / pushable 相同。
--- * 关卡级元素（LevelDef：飞碟 / 皮带 / 传送门 / 地毯）：钩子经注册表取，removeLevel 之后该机制不生效。
+-- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
+-- * 开启规则（openRule）：内置彩蛋；测试专用「豆荚」被邻格真消除时开出直线，本轮坐住不引爆。
+-- * 可改色 / 可推动谓词（recolorable / pushable）：魔法帽 / 染色瓶、蜗牛只看注册表，内置取值与原写死的 isGem / pushable 相同。
+-- * 关卡级元素（LevelElement：飞碟 / 皮带 / 传送门 / 地毯）：经注册表按消息回复，removeLevel 之后该机制不生效。
 -- * 源码扫描：主流程模块不再点名这些元素的专门函数。
 --
 -- 样例元素（拉杆、豆荚、小车）只定义在这里，主流程源码里没有它们的名字。
@@ -16,15 +16,12 @@ import Data.List (isInfixOf, sort)
 import Data.Maybe (isNothing)
 import Match3.Board.Gravity (portalTeleport)
 import Match3.Board.Match (findHintWith)
-import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
-import Match3.Element.Event (EndEffect(..))
+import Match3.Element.Class (Archetype(..), Element(..), Hit(..), levelNameOf)
 import Match3.Game.Move (resolveSwapWith)
-import Match3.Game.Trace (EndStep(..), MoveTrace(..))
-import Match3.Snail (pushable)
-import Match3.Ufo (stepUfos)
+import qualified Match3.Snail as Snail
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -57,22 +54,38 @@ isCustom n cell = case cell of
 allCells :: Board -> [Cell]
 allCells b = [getCell b (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
 
-builtin :: ElementName -> ElementDef
-builtin n = head [d | d <- builtinDefs, edName d == n]
+-- | 替换内置「gem」的测试版本：原型同普通宝石，只关掉可改色 / 可推动（原先写成旧记录的字段更新）。
+data TweakedGem = TweakedGem Bool Bool Color
+  deriving (Eq, Show)
+
+instance Element TweakedGem where
+  name _ = "gem"
+  toCell (TweakedGem _ _ c) = Gem c Normal 0 Nothing
+  recolorable (TweakedGem r _ _) = r
+  pushable (TweakedGem _ p _) = p
+
+tweakedGem :: Bool -> Bool -> Entry
+tweakedGem r p = bodyEntry 0 (TweakedGem r p C1) (\cell -> case cell of Gem c _ _ _ -> Just (TweakedGem r p c); _ -> Nothing) (\_ _ -> Nothing)
 
 firstWave :: MoveTrace -> CascadeWave
 firstWave = head . mtWaves
 
 -- | 测试专用「拉杆」：可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
-leverDef :: ElementDef
-leverDef =
-  (baseDef "lever")
-    { edBlocksSwap = False
-    , edOnHit = const HitDestroy
-    , edSwap = Just (SwapRule 5 fires (\_ p1 p2 -> [p1, p2]))
-    }
-  where
-    fires b p1 p2 = isCustom "lever" (getCell b p1) || isCustom "lever" (getCell b p2)
+newtype Lever = Lever Int
+  deriving (Eq, Show)
+
+instance Element Lever where
+  name _ = "lever"
+  toCell (Lever k) = Custom "lever" k
+  archetype _ = Blocker
+  blocksSwap _ = False
+  onHit _ = Destroy
+  swapRule _ = Just (SwapRule 5 fires (\_ p1 p2 -> [p1, p2]))
+    where
+      fires b p1 p2 = isCustom "lever" (getCell b p1) || isCustom "lever" (getCell b p2)
+
+leverDef :: Entry
+leverDef = customEntry (Lever 1) Lever
 
 br_swap_rule_test_element :: Assertion
 br_swap_rule_test_element = do
@@ -94,14 +107,24 @@ br_swap_rule_test_element = do
   assertBool "default registry rejects" (not (moveApplied oD))
 
 -- | 测试专用「豆荚」：被命中或邻格在本批前沿里时开出 C2 直线（本轮坐住，不在本轮清除）。
-podDef :: ElementDef
-podDef = (baseDef "pod") {edOpen = Just (OpenRule openPods)}
-  where
-    openPods b front =
-      let near p = p `elem` front || any (`elem` front) [(fst p + dr, snd p + dc) | (dr, dc) <- [(-1, 0), (1, 0), (0, -1), (0, 1)]]
-          pods = [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), isCustom "pod" (getCell b p), near p]
-          b' = foldl (\bd p -> setCell bd p (Gem C2 LineH 0 Nothing)) b pods
-      in (b', [], pods)
+newtype Pod = Pod Int
+  deriving (Eq, Show)
+
+instance Element Pod where
+  name _ = "pod"
+  toCell (Pod k) = Custom "pod" k
+  archetype _ = Blocker
+  openRule _ = Just (OpenRule openPods)
+
+podDef :: Entry
+podDef = customEntry (Pod 1) Pod
+
+openPods :: Board -> [Pos] -> (Board, [Pos], [Pos])
+openPods b front =
+  let near p = p `elem` front || any (`elem` front) [(fst p + dr, snd p + dc) | (dr, dc) <- [(-1, 0), (1, 0), (0, -1), (0, 1)]]
+      pods = [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), isCustom "pod" (getCell b p), near p]
+      b' = foldl (\bd p -> setCell bd p (Gem C2 LineH 0 Nothing)) b pods
+  in (b', [], pods)
 
 br_open_rule_test_element :: Assertion
 br_open_rule_test_element = do
@@ -134,24 +157,33 @@ br_builtin_predicates_match_legacy = do
         ]
   forM_ samples $ \cell -> do
     assertEqual ("recolorable " ++ show cell) (isGem cell) (recolorableWith defaultRegistry cell)
-    assertEqual ("pushable " ++ show cell) (pushable cell) (pushableWith defaultRegistry cell)
+    assertEqual ("pushable " ++ show cell) (Snail.pushable cell) (pushableWith defaultRegistry cell)
 
--- | 魔法帽只给注册表里 edRecolorable 的格换色：把普通宝石改成不可改色后，帽子不再动它们。
+-- | 魔法帽只给注册表里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
 br_recolorable_from_registry :: Assertion
 br_recolorable_from_registry = do
-  let noRecolor = register ((builtin "gem") {edRecolorable = False}) defaultRegistry
+  let noRecolor = register (tweakedGem False True) defaultRegistry
       board0 = setCell tripleBoard (0, 1) MagicHat
       gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
-      after reg = let (_, _, mt) = resolveSwapWith reg p1 p2 gs0 in cwAfter (firstWave mt)
+      afterWave reg = let (_, _, mt) = resolveSwapWith reg p1 p2 gs0 in cwAfter (firstWave mt)
   -- (0,0) C1 与 (0,2) C3 是帽子的两个未消除邻格。第 1 行实际是四连（(1,3) 也是 C5），(1,2) 生成直线坐住，
   -- 所以 (0,0) 落到 (1,0)、(0,2) 留在原处
-  assertEqual "default: hat swapped the two colors" (mkGem C3, mkGem C1) (getCell (after defaultRegistry) (1, 0), getCell (after defaultRegistry) (0, 2))
-  assertEqual "not recolorable: colors kept" (mkGem C1, mkGem C3) (getCell (after noRecolor) (1, 0), getCell (after noRecolor) (0, 2))
+  assertEqual "default: hat swapped the two colors" (mkGem C3, mkGem C1) (getCell (afterWave defaultRegistry) (1, 0), getCell (afterWave defaultRegistry) (0, 2))
+  assertEqual "not recolorable: colors kept" (mkGem C1, mkGem C3) (getCell (afterWave noRecolor) (1, 0), getCell (afterWave noRecolor) (0, 2))
 
--- | 蜗牛只推注册表里 edPushable 的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
-cartDef :: ElementDef
-cartDef = (baseDef "cart") {edPushable = True}
+-- | 蜗牛只推注册表里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
+newtype Cart = Cart Int
+  deriving (Eq, Show)
+
+instance Element Cart where
+  name _ = "cart"
+  toCell (Cart k) = Custom "cart" k
+  archetype _ = Blocker
+  pushable _ = True
+
+cartDef :: Entry
+cartDef = customEntry (Cart 1) Cart
 
 br_pushable_from_registry :: Assertion
 br_pushable_from_registry = do
@@ -165,22 +197,22 @@ br_pushable_from_registry = do
   assertBool "default registry: snail turns around" (isSnail (getCell bD (7, 1)) && isCustom "cart" (getCell bD (7, 2)))
   let boardG = setCell tripleBoard (7, 1) (mkSnail 0 1)
       bG = final defaultRegistry boardG
-      bNoPush = final (register ((builtin "gem") {edPushable = False}) defaultRegistry) boardG
+      bNoPush = final (register (tweakedGem True False) defaultRegistry) boardG
   assertBool "default: gem pushed" (isSnail (getCell bG (7, 2)))
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 
 -- | 关卡级元素：内置表里四个钩子就是原实现；去掉后各自退化为「不生效」。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do
-  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet"] (map ldName (levelDefs defaultRegistry))
+  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet"] (map levelNameOf (levelDefs defaultRegistry))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       ufos = [mkUfo (3, 3) C1, mkUfo (0, 0) C2]
       noUfo = removeLevel "ufo" defaultRegistry
   assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorbWith defaultRegistry ufos b0)
   assertEqual "ufo removed: no absorb, ufos stay" ([], ufos) (absorbWith noUfo ufos b0)
   let belts = [[(2, 0), (2, 1), (2, 2), (3, 2)]]
-  assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (fmap ($ belts) (beltShiftWith defaultRegistry))
-  assertBool "belt removed" (isNothing (beltShiftWith (removeLevel "belt" defaultRegistry)))
+  assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (beltShiftWith defaultRegistry belts)
+  assertBool "belt removed" (isNothing (beltShiftWith (removeLevel "belt" defaultRegistry) belts))
   let mb = [[if (r, c) == (0, 5) then Nothing else Just (getCell b0 (r, c)) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
       portals = [((7, 0), (0, 5))]
   assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultRegistry) portals mb) (teleportWith defaultRegistry portals mb)

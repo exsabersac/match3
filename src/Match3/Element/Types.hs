@@ -1,11 +1,13 @@
--- | 元素框架的核心类型：一种元素 = 一个 ElementDef（record-of-functions），
--- 主流程（匹配、挡交换、直接命中、邻格波及、重力 / 传送门 / 底收、计数、洗牌、步末、关卡放置）
--- 只通过注册表（Match3.Element.Registry）查它的字段，不再按构造器写死分支。
+-- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键、放置参数。
+-- 元素本身是类型类（Match3.Element.Class 的 Element / Modifier / LevelElement），主流程（匹配、挡交换、
+-- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经注册表
+-- （Match3.Element.Registry）问它们，不按构造器写死分支。
 --
 -- 依赖：Match3.Types、Element.Event（步末规则产出 EndEffect）。不含具体元素（见 Element.Builtin）。
 --
 -- 一个格子最多三层，自上而下：冰层（宝石的 ice Int）→ 叠层（CellOverlay）→ 本体（CellContents 构造器 /
--- 宝石种类 / Custom 名字）。每层各由一个定义负责，命中与挡匹配等按层自上而下询问（见 Registry）。
+-- 宝石种类 / Custom 名字）。冰层与叠层是修饰器（Modifier），本体是元素（Element）；命中与挡匹配等
+-- 按层自上而下组合（见 Class 的 Modified 与 Registry）。
 module Match3.Element.Types
   ( ElementName
   , Slot(..)
@@ -22,31 +24,24 @@ module Match3.Element.Types
   , Placement(..)
   , SwapRule(..)
   , OpenRule(..)
-  , LevelHook(..)
-  , LevelDef(..)
-  , ElementDef(..)
-  , baseDef
   , cellSlot
   , overlaySlot
   , kindSlot
   ) where
 
-import Match3.Board.Grid (MBoard)
-import Match3.Conveyor (Belt)
 import Match3.Element.Event (EndEffect)
 import Match3.Types
-import Match3.Ufo (Ufo)
 
 -- | 元素名：注册表的键，也是关卡放置表、计数键、前端贴图 / 播放表的键。
 type ElementName = String
 
--- | 定义接管格子的哪一层。
+-- | 注册表条目接管格子的哪一层。
 data Slot
   = SlotCell Int     -- ^ 内置本体（cellSlot 编号；宝石按种类各占一个编号）
   | SlotOverlay Int  -- ^ 宝石叠层（overlaySlot 编号）
   | SlotIce          -- ^ 宝石冰层
-  | SlotCustom       -- ^ 自定义本体：Custom 名字 == edName
-  | SlotGround       -- ^ 地面层（段 2c）：GameState.gsGround 里名字 == edName 的格
+  | SlotCustom       -- ^ 自定义本体：Custom 名字 == 元素名
+  | SlotGround       -- ^ 地面层（段 2c）：GameState.gsGround 里名字 == 元素名的格
   deriving (Eq, Show)
 
 -- | 直接命中（匹配 / 特殊块 / 道具种子落在本格）时这一层的反应。
@@ -136,84 +131,6 @@ data SwapRule = SwapRule
 newtype OpenRule = OpenRule
   { orOpen :: Board -> [Pos] -> (Board, [Pos], [Pos])
   }
-
--- | 关卡级元素的钩子（段 4）：不在格子里、状态存在 GameState 专用字段（gsUfos / gsBelts / gsPortals /
--- gsCarpetOpen）的机制。主流程只经注册表取钩子；未注册即不生效。
-data LevelHook
-  = HookAbsorb ([Ufo] -> Board -> ([Pos], [Ufo]))            -- ^ 每轮补子之后整轮吸收（飞碟；吸走 ≠ 引爆）
-  | HookShift ([Belt] -> [(Pos, Pos)])                        -- ^ 步末（Tick 之后、Spread 之前）的「原格 → 新格」移位（皮带）
-  | HookTeleport ((Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard) -- ^ 沉降时传送（传送门；谓词 = 本体可穿门）
-  | HookCover ([Pos] -> [Pos] -> ([Pos], Int))                -- ^ 覆盖目标格（地毯）：(未覆盖格, 本步清除 / 腾空格) → (剩余, 新覆盖数)
-
--- | 关卡级元素：名字 + 钩子（段 4）。
-data LevelDef = LevelDef
-  { ldName :: ElementName
-  , ldHook :: LevelHook
-  }
-
--- | 一种元素的全部行为。字段含义与调用时机见 docs/architecture.md「元素框架与事件」。
--- 对本体层有意义的字段：edColor、edBlocksSwap、edActivates、edFalls、edPortal、edDrains、edOnHit、
--- edAdjacent、edCounter、edDiffCounter、edBonusMoves、edVacatesCarpet、edKeepOnShuffle、edBlast、edEnd、edPlace；
--- 冰层 / 叠层额外用 edBlocksMatch、edStripOnClear，其余本体字段对它们不适用。
-data ElementDef = ElementDef
-  { edName          :: ElementName
-  , edSlot          :: Slot
-  , edColor         :: Cell -> Maybe Color  -- ^ 本体颜色：参与匹配（无挡匹配的上层时）与颜色袋计数；Nothing = 无色
-  , edBlocksMatch   :: Bool                 -- ^ 冰层 / 叠层：盖住的宝石不参与匹配
-  , edBlocksSwap    :: Bool                 -- ^ 本格不能被交换（任一层为 True 即挡）
-  , edActivates     :: Cell -> Maybe Bool   -- ^ 特殊块能否点火：自上而下第一个 Just 决定（软锁纪律）
-  , edFalls         :: Bool                 -- ^ 本体随重力下落（False = 固定格，把列分段）
-  , edPortal        :: Bool                 -- ^ 本体可以穿过传送门
-  , edDrains        :: [Edge]               -- ^ 边缘收集：本体到达这些边时被收走（内置饼干 = [EdgeBottom]；段 2c 起方向可配）
-  , edOnHit         :: Cell -> HitResult    -- ^ 直接命中时这一层的反应
-  , edAdjacent      :: Maybe AdjacentRule   -- ^ 邻格有真消除时的反应（削层 / 触发）
-  , edStripOnClear  :: Bool                 -- ^ 叠层：本格真消除时随格清掉（草 / 藤 / 巧，否则会从空洞蔓延）
-  , edCounter       :: Maybe Counter        -- ^ 本体进入清除格时计数
-  , edDiffCounter   :: Maybe Counter        -- ^ 按步前 / 步后盘面上的个数差计数（保险箱开启、时间精灵）
-  , edBonusMoves    :: Int                  -- ^ 按个数差每少一个奖励的步数（时间精灵 = 2）
-  , edVacatesCarpet :: Bool                 -- ^ 本体离开格子（不进清除格）也算覆盖地毯（饼干 / 保险箱）
-  , edKeepOnShuffle :: Cell -> Bool         -- ^ 洗牌时原样放回（障碍、特殊块、带冰 / 叠层的宝石）
-  , edBlast         :: Maybe (Pos -> [Pos]) -- ^ 本体被消除且能点火时的爆炸范围（直线 / 炸弹）
-  , edEnd           :: Maybe EndRule        -- ^ 步末规则（倒计时 / 蔓延 / 蜗牛）
-  , edPlace         :: [Arg] -> Cell -> Maybe Cell  -- ^ 关卡放置：给出参数与原格，返回新格（Nothing = 不放）
-  , edGround        :: Maybe (Int -> Maybe Int)     -- ^ 地面层（SlotGround）：上方格子被消除一次时，层数 → 新层数（Nothing = 清掉）；每去掉一层按 edCounter 计 1
-  , edSwap          :: Maybe SwapRule       -- ^ 段 4：成对交换规则（彩虹 / 特殊合成）
-  , edOpen          :: Maybe OpenRule       -- ^ 段 4：开启规则（彩蛋）
-  , edRecolorable   :: Bool                 -- ^ 段 4：本体可被魔法帽 / 染色瓶改色（内置 = 宝石）
-  , edPushable      :: Bool                 -- ^ 段 4：本体可被蜗牛推动（内置 = 宝石 / 倒计时 / 双面）
-  }
-
--- | 自定义本体的起点：挡交换、无色、会下落、打不动、洗牌保留、放置 = Custom 名字 状态值（缺省 1）。
--- 自定义元素在此基础上覆盖需要的字段即可。
-baseDef :: ElementName -> ElementDef
-baseDef name =
-  ElementDef
-    { edName = name
-    , edSlot = SlotCustom
-    , edColor = const Nothing
-    , edBlocksMatch = False
-    , edBlocksSwap = True
-    , edActivates = const (Just False)
-    , edFalls = True
-    , edPortal = False
-    , edDrains = []
-    , edOnHit = const HitImmune
-    , edAdjacent = Nothing
-    , edStripOnClear = False
-    , edCounter = Nothing
-    , edDiffCounter = Nothing
-    , edBonusMoves = 0
-    , edVacatesCarpet = False
-    , edKeepOnShuffle = const True
-    , edBlast = Nothing
-    , edEnd = Nothing
-    , edPlace = \args _ -> Just (Custom name (case args of (AInt n : _) -> n; _ -> 1))
-    , edGround = Nothing
-    , edSwap = Nothing
-    , edOpen = Nothing
-    , edRecolorable = False
-    , edPushable = False
-    }
 
 -- | 内置本体的编号：宝石按种类 0..4（Normal / LineH / LineV / Bomb / Rainbow），其余构造器 5..19；
 -- Custom 为 -1（按名字查）。

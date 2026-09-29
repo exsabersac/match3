@@ -9,7 +9,8 @@ module Spec.Extension
 import Data.List (isInfixOf)
 import Engine.Game (Game(..), Step(..))
 import Match3.Core
-import Match3.Element (Counter(..), EndPhase(..), EndRule(..), Edge(..), ElementDef(..), Slot(..), baseDef, defaultRegistry, register)
+import Match3.Element (Counter(..), EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
+import Match3.Element.Class (Archetype(..), Element(..))
 import Match3.Game.Shuffle (shuffleGameWith)
 import Match3.Game.Move (resolveSwapWith)
 import qualified Match3.Engine as M3E
@@ -72,16 +73,19 @@ ext_goal_named_counts_crate = do
   let (gsD, _, _) = resolveSwapWith defaultRegistry (1, 2) (2, 2) (gs0 1)
   assertEqual "default registry: not counted" 0 (gsCollected gsD)
 
--- | 测试专用地面层元素「苔藓」（SlotGround，2 层）：上方格子每被消除一次去一层、按层计入 GoalNamed；
+-- | 测试专用地面层元素「苔藓」（地面层，2 层）：上方格子每被消除一次去一层、按层计入 GoalNamed；
 -- 不占格、不挡交换、洗牌不动、撤销恢复；未注册时地面层原样不动。
-mossDef :: ElementDef
-mossDef =
-  (baseDef "moss")
-    { edSlot = SlotGround
-    , edGround = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
-    , edCounter = Just (CountNamed "moss")
-    , edPlace = \_ _ -> Nothing
-    }
+newtype Moss = Moss Int
+  deriving (Eq, Show)
+
+instance Element Moss where
+  name _ = "moss"
+  toCell (Moss n) = Custom "moss" n
+  groundRule _ = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
+  counter _ = Just (CountNamed "moss")
+
+mossDef :: Entry
+mossDef = groundEntry (Moss 2)
 
 ext_ground_layer_test_element :: Assertion
 ext_ground_layer_test_element = do
@@ -110,10 +114,20 @@ ext_ground_layer_test_element = do
   let (gsD, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertEqual "unregistered ground untouched" ground0 (gsGround gsD)
 
--- | 测试专用侧边收集物「风筝」：edDrains = [EdgeLeft]，到左边即被收走并按 CountNamed "kite" 计数；
+-- | 测试专用侧边收集物「风筝」：drains = [EdgeLeft]，到左边即被收走并按 CountNamed "kite" 计数；
 -- 内部格与底边的风筝不收；未注册时是惰性占格。内置饼干的底边收集由原有 cookie_* 测试与金标准锁定。
-kiteDef :: ElementDef
-kiteDef = (baseDef "kite") {edDrains = [EdgeLeft], edCounter = Just (CountNamed "kite")}
+newtype Kite = Kite Int
+  deriving (Eq, Show)
+
+instance Element Kite where
+  name _ = "kite"
+  toCell (Kite k) = Custom "kite" k
+  archetype _ = Blocker
+  drains _ = [EdgeLeft]
+  counter _ = Just (CountNamed "kite")
+
+kiteDef :: Entry
+kiteDef = customEntry (Kite 1) Kite
 
 ext_edge_drain_side_collectible :: Assertion
 ext_edge_drain_side_collectible = do
@@ -131,15 +145,20 @@ ext_edge_drain_side_collectible = do
   let (gsD, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertEqual "unregistered: nothing drained" [(4, 0), (4, 3), (7, 5)] (customsOn "kite" (gsBoard gsD))
 
--- | 测试专用「陷坑」：步末规则（PhaseMove）不改盘，只经 erHoles 声明自己所在格为空洞 →
+-- | 测试专用「陷坑」（固定格）：步末规则（PhaseMove）不改盘，只经 erHoles 声明自己所在格为空洞 →
 -- 步末补结算把它挖空、上方下落、补子、成消再连锁；终盘稳定、没有陷坑，回放里多一个只有沉降的轮次。
 -- 补结算是统一路径（内置元素步末从不留下空洞，见 docs/testing.md 的扫描），没有开关。
-sinkholeDef :: ElementDef
-sinkholeDef =
-  (baseDef "sinkhole")
-    { edFalls = False
-    , edEnd = Just (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))
-    }
+newtype Sinkhole = Sinkhole Int
+  deriving (Eq, Show)
+
+instance Element Sinkhole where
+  name _ = "sinkhole"
+  toCell (Sinkhole k) = Custom "sinkhole" k
+  archetype _ = Fixed
+  endRule _ = Just (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))
+
+sinkholeDef :: Entry
+sinkholeDef = customEntry (Sinkhole 1) Sinkhole
 
 ext_post_end_settle_hole_element :: Assertion
 ext_post_end_settle_hole_element = do
@@ -165,10 +184,19 @@ ext_post_end_settle_hole_element = do
   assertEqual "default registry: sinkhole stays" [(5, 5)] (customsOn "sinkhole" (gsBoard gsD))
   assertBool "default registry: no settle-only wave" (all (not . null . cwCleared) (mtWaves mtD))
 
--- | 手动洗牌走 match3GameWith customReg 的 Shuffle 动作：木箱原样保留；「浮尘」（edKeepOnShuffle = const False）
+-- | 手动洗牌走 match3GameWith customReg 的 Shuffle 动作：木箱原样保留；「浮尘」（keepOnShuffle = False 的障碍）
 -- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的注册表，不再退回内置表。
-dustDef :: ElementDef
-dustDef = (baseDef "dust") {edKeepOnShuffle = const False}
+newtype Dust = Dust Int
+  deriving (Eq, Show)
+
+instance Element Dust where
+  name _ = "dust"
+  toCell (Dust k) = Custom "dust" k
+  archetype _ = Blocker
+  keepOnShuffle _ = False
+
+dustDef :: Entry
+dustDef = customEntry (Dust 1) Dust
 
 ext_manual_shuffle_keeps_crate_via_engine :: Assertion
 ext_manual_shuffle_keeps_crate_via_engine = do

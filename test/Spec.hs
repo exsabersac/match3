@@ -17,6 +17,7 @@ import qualified Spec.Element
 import qualified Spec.Extension
 import qualified Spec.Branches
 import qualified Spec.JellyBubble
+import qualified Spec.ElementClass
 import qualified Spec.Engine
 import qualified Spec.UIEvents
 import qualified Spec.ReplayUndo
@@ -44,6 +45,7 @@ tests =
         , Spec.Extension.tests
         , Spec.Branches.tests
         , Spec.JellyBubble.tests
+        , Spec.ElementClass.tests
         , Spec.Engine.tests
         , Spec.UIEvents.tests
         , Spec.ReplayUndo.tests

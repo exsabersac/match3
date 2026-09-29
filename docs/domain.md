@@ -67,20 +67,20 @@
 | 传送门 | `gsPortals :: [(Pos,Pos)]` | 双向；沉降时 A 有子 B 空则传送 |
 | 飞碟 | `Ufo{ufoCell,ufoColor}`，`gsUfos` | 波末吸正交同色再移格；吸走≠引爆 |
 | 地毯 | `gsCarpetOpen` / `gsCarpetsCovered` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
-| 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(名字, 层数))]`），`SlotGround` / `edGround` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
-| 边缘收集 | `edDrains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
+| 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(名字, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
+| 边缘收集 | `drains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
 | 步末补结算 | `EndRule.erHoles`、`cascadeAfterEndWith` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
-| 关卡级元素 | `LevelDef{ldName, ldHook}`，`LevelHook` = `HookAbsorb` / `HookShift` / `HookTeleport` / `HookCover` | 段 4：飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；状态仍在上面各自的 `GameState` 字段；去掉即不生效 |
+| 关卡级元素 | `LevelElement` / `SomeLevel`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel`），节拍消息 `Refilled` / `EndTicked` / `Settling` / `Covering` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；元素类迁移后改为回复流水线节拍消息；状态仍在上面各自的 `GameState` 字段；去掉即不生效 |
 
 ## 双层果冻与气泡（段 5）
 
-两种新元素都只经注册表（`Element.Builtin` 的 `jellyDef` / `bubbleDef`）与段 2c 的白名单钩子接入，主流程（`Board.*` / `Game.*` / `Engine.*`）没有改动（源码扫描 `jb_main_flow_untouched_scan`）。
+两种新元素都只经注册表（`Element.Builtin.Ground` 的 `Jelly` 与 `Element.Builtin.Collectible` 的 `Bubble`）与段 2c 的白名单钩子接入，主流程（`Board.*` / `Game.*` / `Engine.*`）没有改动（源码扫描 `jb_main_flow_untouched_scan`）。
 
 | | 双层果冻 `jelly` | 气泡 `bubble` |
 |---|---|---|
 | 所在层 | 地面层（`SlotGround`，`gsGround` 里 `(格, ("jelly", 层数))`），**不占格** | 本体（`Custom "bubble" 1`），**占格** |
 | 层数 / 耐久 | 2 层（关卡里铺满层；也可单层） | 1（一次就破） |
-| 怎么去掉 | 上方格子每被**消除**（匹配、特殊块、道具、连锁都算）或被边缘收走一次，去一层（`edGround`：2 → 1 → 清掉） | 正交邻格有**真消除**（任意颜色，`edAdjacent` 顺序 170）即破；被**直接命中**（锤子 / 十字 / 直线 / 炸弹的爆炸范围）也破（`edOnHit = HitDestroy`） |
+| 怎么去掉 | 上方格子每被**消除**（匹配、特殊块、道具、连锁都算）或被边缘收走一次，去一层（`groundRule`：2 → 1 → 清掉） | 正交邻格有**真消除**（任意颜色，`adjacentRule` 顺序 170）即破；被**直接命中**（锤子 / 十字 / 直线 / 炸弹的爆炸范围）也破（`onHit = Destroy`） |
 | 计数 / 目标 | 每去一层计 1（`CountNamed "jelly"`）；`GoalNamed "jelly" N` 按**层**数 | 每破一个计 1（`CountNamed "bubble"`）；`GoalNamed "bubble" N` |
 | 交换 / 匹配 | 不影响（上面的宝石照常交换、匹配） | 挡交换；无色，不参与匹配（三个气泡连一排也不消） |
 | 重力 / 洗牌 | 不随重力、不随洗牌移动（地面层固定在格上） | 随重力下落（下方格被清空就往下落）；不穿传送门；洗牌时原位保留 |
@@ -91,7 +91,7 @@
 - **果冻按层计目标**：目标数字 = 总层数，HUD 进度每去一层 +1，玩家能看到「消一次、薄一层」；不另设「整格清完才算」的计数。
 - **气泡一次就破、不分颜色**：和已有的气球（同色邻消才爆）、蜂蜜 / 宝箱（多层）区分开，是「最软」的障碍；难点来自它**会下落、挡交换**——落到底部或角落后只能靠旁边成消或道具。
 - **气泡不做「上浮」**：真正的气泡往上飘需要反向重力，是主流程改动；这里保持普通重力，只经注册表字段接入。
-- **气泡不可交换**：可交换的话需要给无色格定义「交换后是否成立」的新规则，超出白名单；挡交换沿用 `baseDef` 缺省。
+- **气泡不可交换**：可交换的话需要给无色格定义「交换后是否成立」的新规则，超出白名单；挡交换沿用原型 `Blocker` 的默认方法。
 - 两关追加在第 38 关之后，前 38 关不改；因此第 38 关「织毯」不再是终章（过关由 `Won` 变为 `LevelClear` 进入第 39 关），终章变成第 40 关。
 
 ## 目标与结局
@@ -102,7 +102,7 @@
 | 单色收集 | `GoalCollect` | `gsCollected` + 颜色袋 |
 | 多色收集 | `GoalCollectMulti` | `gsColorBag` |
 | 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | 对应 `Goal*` | 各 `gs*Cleared` / `gsUfoCollected` / `gsCarpetsCovered` 等 |
-| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsElementCounts` 里该名字累计 ≥ N（扩展元素经 `edCounter` / `edDiffCounter = CountNamed 名字` 计数） |
+| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsElementCounts` 里该名字累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
 | 步数 | `gsMoves` / `MovesLeft` | 成功步 −1；时间精灵可 +2 |
 | 步数银行 | `carryMovesBonus` | 战役过关最多带 3 步 |
 | 交换无效 | `InvalidSwap` | 越界/非邻/无次数等 |
@@ -143,9 +143,9 @@
 | 步末效果种类 | `EndEffect` = `EndCountdownTick` / `EndBeltShift` / `EndSpread SpreadKind` / `EndSnail [SnailMove]` | 倒计时减一 / 皮带移位 / 藤·巧·蒸汽蔓延 / 蜗牛爬行；`applyEndEffect` 可重放回盘面 |
 | 蜗牛一步 | `SnailMove { smFrom, smTo, smDir, smPushed }` | `smFrom == smTo` 表示碰壁掉头 |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（定义 / 注册表） | `ElementDef`、`Registry`、`defaultRegistry` | 一种格子内容在各时机的反应（见 [architecture.md](architecture.md#元素框架与事件)）；`gsElementCounts` 记注册表元素的具名计数 |
-| 成对交换规则 / 开启规则 | `SwapRule`（`edSwap`）/ `OpenRule`（`edOpen`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
-| 可改色 / 可推动 | `edRecolorable` / `edPushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
+| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsElementCounts` 记注册表元素的具名计数 |
+| 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
+| 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |
 | 回放加速 | 点击 / 空格 / 回车 / `N` | 每帧推进 3 帧（`fastStep`）；播放期间锁定交换、道具、撤销、洗牌 |

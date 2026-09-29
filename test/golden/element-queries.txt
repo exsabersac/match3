@@ -1,0 +1,1648 @@
+Q Gem C1 Normal 0 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False False [] [] True True "gem" "gem" Gem C1 Normal 0 Nothing
+Q Gem C1 Normal 0 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "grass" Gem C1 Normal 0 Nothing
+Q Gem C1 Normal 0 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "vine" Gem C1 Normal 0 Nothing
+Q Gem C1 Normal 0 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "choco" Gem C1 Normal 0 Nothing
+Q Gem C1 Normal 0 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "fog" Gem C1 Normal 0 (Just (Fog 1))
+Q Gem C1 Normal 0 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "fog" Gem C1 Normal 0 (Just (Fog 2))
+Q Gem C1 Normal 0 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Normal 0 Nothing) False Nothing False True [] [] True True "gem" "chain" Gem C1 Normal 0 (Just (Chain 1))
+Q Gem C1 Normal 0 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Normal 0 (Just (Chain 1))) False Nothing False True [] [] True True "gem" "chain" Gem C1 Normal 0 (Just (Chain 2))
+Q Gem C1 Normal 0 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "freeze" Gem C1 Normal 0 (Just (Freeze 1))
+Q Gem C1 Normal 0 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "freeze" Gem C1 Normal 0 (Just (Freeze 2))
+Q Gem C1 Normal 0 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 0 Nothing) False Nothing False True [] [] True True "gem" "curtain" Gem C1 Normal 0 (Just (Curtain 1))
+Q Gem C1 Normal 0 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 0 (Just (Curtain 1))) False Nothing False True [] [] True True "gem" "curtain" Gem C1 Normal 0 (Just (Curtain 2))
+Q Gem C1 Normal 0 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "steam" Gem C1 Normal 0 (Just Steam)
+Q Gem C1 Normal 1 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 Nothing
+Q Gem C1 Normal 1 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 Nothing
+Q Gem C1 Normal 1 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 Nothing
+Q Gem C1 Normal 1 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 Nothing
+Q Gem C1 Normal 1 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Fog 1))
+Q Gem C1 Normal 1 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Fog 2))
+Q Gem C1 Normal 1 (Just (Chain 1)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Chain 1))
+Q Gem C1 Normal 1 (Just (Chain 2)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Chain 2))
+Q Gem C1 Normal 1 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Freeze 1))
+Q Gem C1 Normal 1 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Freeze 2))
+Q Gem C1 Normal 1 (Just (Curtain 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Curtain 1))
+Q Gem C1 Normal 1 (Just (Curtain 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just (Curtain 2))
+Q Gem C1 Normal 1 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 1 (Just Steam)
+Q Gem C1 Normal 2 Nothing | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 Nothing) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 Nothing
+Q Gem C1 Normal 2 (Just Grass) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just Grass)) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 Nothing
+Q Gem C1 Normal 2 (Just Vine) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just Vine)) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 Nothing
+Q Gem C1 Normal 2 (Just Choco) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just Choco)) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 Nothing
+Q Gem C1 Normal 2 (Just (Fog 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Fog 1))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Fog 1))
+Q Gem C1 Normal 2 (Just (Fog 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Fog 2))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Fog 2))
+Q Gem C1 Normal 2 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Chain 1))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Chain 1))
+Q Gem C1 Normal 2 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Chain 2))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Chain 2))
+Q Gem C1 Normal 2 (Just (Freeze 1)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Freeze 1))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Freeze 1))
+Q Gem C1 Normal 2 (Just (Freeze 2)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Freeze 2))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Freeze 2))
+Q Gem C1 Normal 2 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Curtain 1))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Curtain 1))
+Q Gem C1 Normal 2 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just (Curtain 2))) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just (Curtain 2))
+Q Gem C1 Normal 2 (Just Steam) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Normal 1 (Just Steam)) False Nothing False True [] [] True True "gem" "ice" Gem C1 Normal 2 (Just Steam)
+Q Gem C1 LineH 0 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "line_h" Gem C1 LineH 0 Nothing
+Q Gem C1 LineH 0 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "grass" Gem C1 LineH 0 Nothing
+Q Gem C1 LineH 0 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "vine" Gem C1 LineH 0 Nothing
+Q Gem C1 LineH 0 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "choco" Gem C1 LineH 0 Nothing
+Q Gem C1 LineH 0 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "fog" Gem C1 LineH 0 (Just (Fog 1))
+Q Gem C1 LineH 0 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "fog" Gem C1 LineH 0 (Just (Fog 2))
+Q Gem C1 LineH 0 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineH 0 Nothing) False Nothing False True [] [] True True "line_h" "chain" Gem C1 LineH 0 (Just (Chain 1))
+Q Gem C1 LineH 0 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineH 0 (Just (Chain 1))) False Nothing False True [] [] True True "line_h" "chain" Gem C1 LineH 0 (Just (Chain 2))
+Q Gem C1 LineH 0 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "freeze" Gem C1 LineH 0 (Just (Freeze 1))
+Q Gem C1 LineH 0 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "freeze" Gem C1 LineH 0 (Just (Freeze 2))
+Q Gem C1 LineH 0 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 0 Nothing) False Nothing False True [] [] True True "line_h" "curtain" Gem C1 LineH 0 (Just (Curtain 1))
+Q Gem C1 LineH 0 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 0 (Just (Curtain 1))) False Nothing False True [] [] True True "line_h" "curtain" Gem C1 LineH 0 (Just (Curtain 2))
+Q Gem C1 LineH 0 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "steam" Gem C1 LineH 0 (Just Steam)
+Q Gem C1 LineH 1 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 Nothing
+Q Gem C1 LineH 1 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 Nothing
+Q Gem C1 LineH 1 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 Nothing
+Q Gem C1 LineH 1 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 Nothing
+Q Gem C1 LineH 1 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Fog 1))
+Q Gem C1 LineH 1 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Fog 2))
+Q Gem C1 LineH 1 (Just (Chain 1)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Chain 1))
+Q Gem C1 LineH 1 (Just (Chain 2)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Chain 2))
+Q Gem C1 LineH 1 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Freeze 1))
+Q Gem C1 LineH 1 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Freeze 2))
+Q Gem C1 LineH 1 (Just (Curtain 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Curtain 1))
+Q Gem C1 LineH 1 (Just (Curtain 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just (Curtain 2))
+Q Gem C1 LineH 1 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C1 LineH 1 (Just Steam)
+Q Gem C1 LineH 2 Nothing | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 Nothing) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 Nothing
+Q Gem C1 LineH 2 (Just Grass) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just Grass)) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 Nothing
+Q Gem C1 LineH 2 (Just Vine) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just Vine)) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 Nothing
+Q Gem C1 LineH 2 (Just Choco) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just Choco)) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 Nothing
+Q Gem C1 LineH 2 (Just (Fog 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Fog 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Fog 1))
+Q Gem C1 LineH 2 (Just (Fog 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Fog 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Fog 2))
+Q Gem C1 LineH 2 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Chain 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Chain 1))
+Q Gem C1 LineH 2 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Chain 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Chain 2))
+Q Gem C1 LineH 2 (Just (Freeze 1)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Freeze 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Freeze 1))
+Q Gem C1 LineH 2 (Just (Freeze 2)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Freeze 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Freeze 2))
+Q Gem C1 LineH 2 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Curtain 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Curtain 1))
+Q Gem C1 LineH 2 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just (Curtain 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just (Curtain 2))
+Q Gem C1 LineH 2 (Just Steam) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineH 1 (Just Steam)) False Nothing False True [] [] True True "line_h" "ice" Gem C1 LineH 2 (Just Steam)
+Q Gem C1 LineV 0 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "line_v" Gem C1 LineV 0 Nothing
+Q Gem C1 LineV 0 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "grass" Gem C1 LineV 0 Nothing
+Q Gem C1 LineV 0 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "vine" Gem C1 LineV 0 Nothing
+Q Gem C1 LineV 0 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "choco" Gem C1 LineV 0 Nothing
+Q Gem C1 LineV 0 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "fog" Gem C1 LineV 0 (Just (Fog 1))
+Q Gem C1 LineV 0 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "fog" Gem C1 LineV 0 (Just (Fog 2))
+Q Gem C1 LineV 0 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineV 0 Nothing) False Nothing False True [] [] True True "line_v" "chain" Gem C1 LineV 0 (Just (Chain 1))
+Q Gem C1 LineV 0 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineV 0 (Just (Chain 1))) False Nothing False True [] [] True True "line_v" "chain" Gem C1 LineV 0 (Just (Chain 2))
+Q Gem C1 LineV 0 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "freeze" Gem C1 LineV 0 (Just (Freeze 1))
+Q Gem C1 LineV 0 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "freeze" Gem C1 LineV 0 (Just (Freeze 2))
+Q Gem C1 LineV 0 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 0 Nothing) False Nothing False True [] [] True True "line_v" "curtain" Gem C1 LineV 0 (Just (Curtain 1))
+Q Gem C1 LineV 0 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 0 (Just (Curtain 1))) False Nothing False True [] [] True True "line_v" "curtain" Gem C1 LineV 0 (Just (Curtain 2))
+Q Gem C1 LineV 0 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "steam" Gem C1 LineV 0 (Just Steam)
+Q Gem C1 LineV 1 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 Nothing
+Q Gem C1 LineV 1 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 Nothing
+Q Gem C1 LineV 1 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 Nothing
+Q Gem C1 LineV 1 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 Nothing
+Q Gem C1 LineV 1 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Fog 1))
+Q Gem C1 LineV 1 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Fog 2))
+Q Gem C1 LineV 1 (Just (Chain 1)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Chain 1))
+Q Gem C1 LineV 1 (Just (Chain 2)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Chain 2))
+Q Gem C1 LineV 1 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Freeze 1))
+Q Gem C1 LineV 1 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Freeze 2))
+Q Gem C1 LineV 1 (Just (Curtain 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Curtain 1))
+Q Gem C1 LineV 1 (Just (Curtain 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just (Curtain 2))
+Q Gem C1 LineV 1 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C1 LineV 1 (Just Steam)
+Q Gem C1 LineV 2 Nothing | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 Nothing) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 Nothing
+Q Gem C1 LineV 2 (Just Grass) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just Grass)) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 Nothing
+Q Gem C1 LineV 2 (Just Vine) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just Vine)) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 Nothing
+Q Gem C1 LineV 2 (Just Choco) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just Choco)) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 Nothing
+Q Gem C1 LineV 2 (Just (Fog 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Fog 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Fog 1))
+Q Gem C1 LineV 2 (Just (Fog 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Fog 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Fog 2))
+Q Gem C1 LineV 2 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Chain 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Chain 1))
+Q Gem C1 LineV 2 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Chain 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Chain 2))
+Q Gem C1 LineV 2 (Just (Freeze 1)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Freeze 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Freeze 1))
+Q Gem C1 LineV 2 (Just (Freeze 2)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Freeze 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Freeze 2))
+Q Gem C1 LineV 2 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Curtain 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Curtain 1))
+Q Gem C1 LineV 2 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just (Curtain 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just (Curtain 2))
+Q Gem C1 LineV 2 (Just Steam) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 LineV 1 (Just Steam)) False Nothing False True [] [] True True "line_v" "ice" Gem C1 LineV 2 (Just Steam)
+Q Gem C1 Bomb 0 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "bomb" Gem C1 Bomb 0 Nothing
+Q Gem C1 Bomb 0 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "grass" Gem C1 Bomb 0 Nothing
+Q Gem C1 Bomb 0 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "vine" Gem C1 Bomb 0 Nothing
+Q Gem C1 Bomb 0 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "choco" Gem C1 Bomb 0 Nothing
+Q Gem C1 Bomb 0 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "fog" Gem C1 Bomb 0 (Just (Fog 1))
+Q Gem C1 Bomb 0 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "fog" Gem C1 Bomb 0 (Just (Fog 2))
+Q Gem C1 Bomb 0 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Bomb 0 Nothing) False Nothing False True [] [] True True "bomb" "chain" Gem C1 Bomb 0 (Just (Chain 1))
+Q Gem C1 Bomb 0 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Bomb 0 (Just (Chain 1))) False Nothing False True [] [] True True "bomb" "chain" Gem C1 Bomb 0 (Just (Chain 2))
+Q Gem C1 Bomb 0 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "freeze" Gem C1 Bomb 0 (Just (Freeze 1))
+Q Gem C1 Bomb 0 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "freeze" Gem C1 Bomb 0 (Just (Freeze 2))
+Q Gem C1 Bomb 0 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 0 Nothing) False Nothing False True [] [] True True "bomb" "curtain" Gem C1 Bomb 0 (Just (Curtain 1))
+Q Gem C1 Bomb 0 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 0 (Just (Curtain 1))) False Nothing False True [] [] True True "bomb" "curtain" Gem C1 Bomb 0 (Just (Curtain 2))
+Q Gem C1 Bomb 0 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "steam" Gem C1 Bomb 0 (Just Steam)
+Q Gem C1 Bomb 1 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 Nothing
+Q Gem C1 Bomb 1 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 Nothing
+Q Gem C1 Bomb 1 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 Nothing
+Q Gem C1 Bomb 1 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 Nothing
+Q Gem C1 Bomb 1 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Fog 1))
+Q Gem C1 Bomb 1 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Fog 2))
+Q Gem C1 Bomb 1 (Just (Chain 1)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Chain 1))
+Q Gem C1 Bomb 1 (Just (Chain 2)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Chain 2))
+Q Gem C1 Bomb 1 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Freeze 1))
+Q Gem C1 Bomb 1 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Freeze 2))
+Q Gem C1 Bomb 1 (Just (Curtain 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Curtain 1))
+Q Gem C1 Bomb 1 (Just (Curtain 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just (Curtain 2))
+Q Gem C1 Bomb 1 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C1 Bomb 1 (Just Steam)
+Q Gem C1 Bomb 2 Nothing | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 Nothing) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 Nothing
+Q Gem C1 Bomb 2 (Just Grass) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just Grass)) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 Nothing
+Q Gem C1 Bomb 2 (Just Vine) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just Vine)) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 Nothing
+Q Gem C1 Bomb 2 (Just Choco) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just Choco)) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 Nothing
+Q Gem C1 Bomb 2 (Just (Fog 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Fog 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Fog 1))
+Q Gem C1 Bomb 2 (Just (Fog 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Fog 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Fog 2))
+Q Gem C1 Bomb 2 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Chain 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Chain 1))
+Q Gem C1 Bomb 2 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Chain 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Chain 2))
+Q Gem C1 Bomb 2 (Just (Freeze 1)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Freeze 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Freeze 1))
+Q Gem C1 Bomb 2 (Just (Freeze 2)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Freeze 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Freeze 2))
+Q Gem C1 Bomb 2 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Curtain 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Curtain 1))
+Q Gem C1 Bomb 2 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just (Curtain 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just (Curtain 2))
+Q Gem C1 Bomb 2 (Just Steam) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Bomb 1 (Just Steam)) False Nothing False True [] [] True True "bomb" "ice" Gem C1 Bomb 2 (Just Steam)
+Q Gem C1 Rainbow 0 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "rainbow" Gem C1 Rainbow 0 Nothing
+Q Gem C1 Rainbow 0 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "grass" Gem C1 Rainbow 0 Nothing
+Q Gem C1 Rainbow 0 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "vine" Gem C1 Rainbow 0 Nothing
+Q Gem C1 Rainbow 0 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "choco" Gem C1 Rainbow 0 Nothing
+Q Gem C1 Rainbow 0 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "fog" Gem C1 Rainbow 0 (Just (Fog 1))
+Q Gem C1 Rainbow 0 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "fog" Gem C1 Rainbow 0 (Just (Fog 2))
+Q Gem C1 Rainbow 0 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Rainbow 0 Nothing) False Nothing False True [] [] True True "rainbow" "chain" Gem C1 Rainbow 0 (Just (Chain 1))
+Q Gem C1 Rainbow 0 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Rainbow 0 (Just (Chain 1))) False Nothing False True [] [] True True "rainbow" "chain" Gem C1 Rainbow 0 (Just (Chain 2))
+Q Gem C1 Rainbow 0 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "freeze" Gem C1 Rainbow 0 (Just (Freeze 1))
+Q Gem C1 Rainbow 0 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "freeze" Gem C1 Rainbow 0 (Just (Freeze 2))
+Q Gem C1 Rainbow 0 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 0 Nothing) False Nothing False True [] [] True True "rainbow" "curtain" Gem C1 Rainbow 0 (Just (Curtain 1))
+Q Gem C1 Rainbow 0 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 0 (Just (Curtain 1))) False Nothing False True [] [] True True "rainbow" "curtain" Gem C1 Rainbow 0 (Just (Curtain 2))
+Q Gem C1 Rainbow 0 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "steam" Gem C1 Rainbow 0 (Just Steam)
+Q Gem C1 Rainbow 1 Nothing | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 Nothing
+Q Gem C1 Rainbow 1 (Just Grass) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 Nothing
+Q Gem C1 Rainbow 1 (Just Vine) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 Nothing
+Q Gem C1 Rainbow 1 (Just Choco) | Just C1 Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 Nothing
+Q Gem C1 Rainbow 1 (Just (Fog 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Fog 1))
+Q Gem C1 Rainbow 1 (Just (Fog 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Fog 2))
+Q Gem C1 Rainbow 1 (Just (Chain 1)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Chain 1))
+Q Gem C1 Rainbow 1 (Just (Chain 2)) | Nothing Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Chain 2))
+Q Gem C1 Rainbow 1 (Just (Freeze 1)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Freeze 1))
+Q Gem C1 Rainbow 1 (Just (Freeze 2)) | Just C1 Just C1 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Freeze 2))
+Q Gem C1 Rainbow 1 (Just (Curtain 1)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Curtain 1))
+Q Gem C1 Rainbow 1 (Just (Curtain 2)) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just (Curtain 2))
+Q Gem C1 Rainbow 1 (Just Steam) | Nothing Just C1 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 1 (Just Steam)
+Q Gem C1 Rainbow 2 Nothing | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 Nothing) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 Nothing
+Q Gem C1 Rainbow 2 (Just Grass) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just Grass)) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 Nothing
+Q Gem C1 Rainbow 2 (Just Vine) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just Vine)) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 Nothing
+Q Gem C1 Rainbow 2 (Just Choco) | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just Choco)) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 Nothing
+Q Gem C1 Rainbow 2 (Just (Fog 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Fog 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Fog 1))
+Q Gem C1 Rainbow 2 (Just (Fog 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Fog 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Fog 2))
+Q Gem C1 Rainbow 2 (Just (Chain 1)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Chain 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Chain 1))
+Q Gem C1 Rainbow 2 (Just (Chain 2)) | Nothing Just C1 True True False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Chain 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Chain 2))
+Q Gem C1 Rainbow 2 (Just (Freeze 1)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Freeze 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Freeze 1))
+Q Gem C1 Rainbow 2 (Just (Freeze 2)) | Just C1 Just C1 True True False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Freeze 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Freeze 2))
+Q Gem C1 Rainbow 2 (Just (Curtain 1)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Curtain 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Curtain 1))
+Q Gem C1 Rainbow 2 (Just (Curtain 2)) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just (Curtain 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just (Curtain 2))
+Q Gem C1 Rainbow 2 (Just Steam) | Nothing Just C1 False False False True True False [] HitAbsorb (Gem C1 Rainbow 1 (Just Steam)) False Nothing False True [] [] True True "rainbow" "ice" Gem C1 Rainbow 2 (Just Steam)
+Q Gem C4 Normal 0 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False False [] [] True True "gem" "gem" Gem C4 Normal 0 Nothing
+Q Gem C4 Normal 0 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "grass" Gem C4 Normal 0 Nothing
+Q Gem C4 Normal 0 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "vine" Gem C4 Normal 0 Nothing
+Q Gem C4 Normal 0 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "choco" Gem C4 Normal 0 Nothing
+Q Gem C4 Normal 0 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "fog" Gem C4 Normal 0 (Just (Fog 1))
+Q Gem C4 Normal 0 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "fog" Gem C4 Normal 0 (Just (Fog 2))
+Q Gem C4 Normal 0 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Normal 0 Nothing) False Nothing False True [] [] True True "gem" "chain" Gem C4 Normal 0 (Just (Chain 1))
+Q Gem C4 Normal 0 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Normal 0 (Just (Chain 1))) False Nothing False True [] [] True True "gem" "chain" Gem C4 Normal 0 (Just (Chain 2))
+Q Gem C4 Normal 0 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "freeze" Gem C4 Normal 0 (Just (Freeze 1))
+Q Gem C4 Normal 0 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "freeze" Gem C4 Normal 0 (Just (Freeze 2))
+Q Gem C4 Normal 0 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 0 Nothing) False Nothing False True [] [] True True "gem" "curtain" Gem C4 Normal 0 (Just (Curtain 1))
+Q Gem C4 Normal 0 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 0 (Just (Curtain 1))) False Nothing False True [] [] True True "gem" "curtain" Gem C4 Normal 0 (Just (Curtain 2))
+Q Gem C4 Normal 0 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "steam" Gem C4 Normal 0 (Just Steam)
+Q Gem C4 Normal 1 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 Nothing
+Q Gem C4 Normal 1 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 Nothing
+Q Gem C4 Normal 1 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 Nothing
+Q Gem C4 Normal 1 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 Nothing
+Q Gem C4 Normal 1 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Fog 1))
+Q Gem C4 Normal 1 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Fog 2))
+Q Gem C4 Normal 1 (Just (Chain 1)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Chain 1))
+Q Gem C4 Normal 1 (Just (Chain 2)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Chain 2))
+Q Gem C4 Normal 1 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Freeze 1))
+Q Gem C4 Normal 1 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Freeze 2))
+Q Gem C4 Normal 1 (Just (Curtain 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Curtain 1))
+Q Gem C4 Normal 1 (Just (Curtain 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just (Curtain 2))
+Q Gem C4 Normal 1 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 1 (Just Steam)
+Q Gem C4 Normal 2 Nothing | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 Nothing) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 Nothing
+Q Gem C4 Normal 2 (Just Grass) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just Grass)) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 Nothing
+Q Gem C4 Normal 2 (Just Vine) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just Vine)) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 Nothing
+Q Gem C4 Normal 2 (Just Choco) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just Choco)) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 Nothing
+Q Gem C4 Normal 2 (Just (Fog 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Fog 1))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Fog 1))
+Q Gem C4 Normal 2 (Just (Fog 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Fog 2))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Fog 2))
+Q Gem C4 Normal 2 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Chain 1))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Chain 1))
+Q Gem C4 Normal 2 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Chain 2))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Chain 2))
+Q Gem C4 Normal 2 (Just (Freeze 1)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Freeze 1))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Freeze 1))
+Q Gem C4 Normal 2 (Just (Freeze 2)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Freeze 2))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Freeze 2))
+Q Gem C4 Normal 2 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Curtain 1))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Curtain 1))
+Q Gem C4 Normal 2 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just (Curtain 2))) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just (Curtain 2))
+Q Gem C4 Normal 2 (Just Steam) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Normal 1 (Just Steam)) False Nothing False True [] [] True True "gem" "ice" Gem C4 Normal 2 (Just Steam)
+Q Gem C4 LineH 0 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "line_h" Gem C4 LineH 0 Nothing
+Q Gem C4 LineH 0 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "grass" Gem C4 LineH 0 Nothing
+Q Gem C4 LineH 0 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "vine" Gem C4 LineH 0 Nothing
+Q Gem C4 LineH 0 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "choco" Gem C4 LineH 0 Nothing
+Q Gem C4 LineH 0 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "fog" Gem C4 LineH 0 (Just (Fog 1))
+Q Gem C4 LineH 0 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "fog" Gem C4 LineH 0 (Just (Fog 2))
+Q Gem C4 LineH 0 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineH 0 Nothing) False Nothing False True [] [] True True "line_h" "chain" Gem C4 LineH 0 (Just (Chain 1))
+Q Gem C4 LineH 0 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineH 0 (Just (Chain 1))) False Nothing False True [] [] True True "line_h" "chain" Gem C4 LineH 0 (Just (Chain 2))
+Q Gem C4 LineH 0 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "freeze" Gem C4 LineH 0 (Just (Freeze 1))
+Q Gem C4 LineH 0 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "freeze" Gem C4 LineH 0 (Just (Freeze 2))
+Q Gem C4 LineH 0 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 0 Nothing) False Nothing False True [] [] True True "line_h" "curtain" Gem C4 LineH 0 (Just (Curtain 1))
+Q Gem C4 LineH 0 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 0 (Just (Curtain 1))) False Nothing False True [] [] True True "line_h" "curtain" Gem C4 LineH 0 (Just (Curtain 2))
+Q Gem C4 LineH 0 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "steam" Gem C4 LineH 0 (Just Steam)
+Q Gem C4 LineH 1 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 Nothing
+Q Gem C4 LineH 1 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 Nothing
+Q Gem C4 LineH 1 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 Nothing
+Q Gem C4 LineH 1 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 Nothing
+Q Gem C4 LineH 1 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Fog 1))
+Q Gem C4 LineH 1 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Fog 2))
+Q Gem C4 LineH 1 (Just (Chain 1)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Chain 1))
+Q Gem C4 LineH 1 (Just (Chain 2)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Chain 2))
+Q Gem C4 LineH 1 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Freeze 1))
+Q Gem C4 LineH 1 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Freeze 2))
+Q Gem C4 LineH 1 (Just (Curtain 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Curtain 1))
+Q Gem C4 LineH 1 (Just (Curtain 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just (Curtain 2))
+Q Gem C4 LineH 1 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7)] [(0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7)] True True "line_h" "ice" Gem C4 LineH 1 (Just Steam)
+Q Gem C4 LineH 2 Nothing | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 Nothing) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 Nothing
+Q Gem C4 LineH 2 (Just Grass) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just Grass)) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 Nothing
+Q Gem C4 LineH 2 (Just Vine) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just Vine)) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 Nothing
+Q Gem C4 LineH 2 (Just Choco) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just Choco)) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 Nothing
+Q Gem C4 LineH 2 (Just (Fog 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Fog 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Fog 1))
+Q Gem C4 LineH 2 (Just (Fog 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Fog 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Fog 2))
+Q Gem C4 LineH 2 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Chain 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Chain 1))
+Q Gem C4 LineH 2 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Chain 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Chain 2))
+Q Gem C4 LineH 2 (Just (Freeze 1)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Freeze 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Freeze 1))
+Q Gem C4 LineH 2 (Just (Freeze 2)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Freeze 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Freeze 2))
+Q Gem C4 LineH 2 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Curtain 1))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Curtain 1))
+Q Gem C4 LineH 2 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just (Curtain 2))) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just (Curtain 2))
+Q Gem C4 LineH 2 (Just Steam) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineH 1 (Just Steam)) False Nothing False True [] [] True True "line_h" "ice" Gem C4 LineH 2 (Just Steam)
+Q Gem C4 LineV 0 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "line_v" Gem C4 LineV 0 Nothing
+Q Gem C4 LineV 0 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "grass" Gem C4 LineV 0 Nothing
+Q Gem C4 LineV 0 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "vine" Gem C4 LineV 0 Nothing
+Q Gem C4 LineV 0 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "choco" Gem C4 LineV 0 Nothing
+Q Gem C4 LineV 0 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "fog" Gem C4 LineV 0 (Just (Fog 1))
+Q Gem C4 LineV 0 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "fog" Gem C4 LineV 0 (Just (Fog 2))
+Q Gem C4 LineV 0 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineV 0 Nothing) False Nothing False True [] [] True True "line_v" "chain" Gem C4 LineV 0 (Just (Chain 1))
+Q Gem C4 LineV 0 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineV 0 (Just (Chain 1))) False Nothing False True [] [] True True "line_v" "chain" Gem C4 LineV 0 (Just (Chain 2))
+Q Gem C4 LineV 0 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "freeze" Gem C4 LineV 0 (Just (Freeze 1))
+Q Gem C4 LineV 0 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "freeze" Gem C4 LineV 0 (Just (Freeze 2))
+Q Gem C4 LineV 0 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 0 Nothing) False Nothing False True [] [] True True "line_v" "curtain" Gem C4 LineV 0 (Just (Curtain 1))
+Q Gem C4 LineV 0 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 0 (Just (Curtain 1))) False Nothing False True [] [] True True "line_v" "curtain" Gem C4 LineV 0 (Just (Curtain 2))
+Q Gem C4 LineV 0 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "steam" Gem C4 LineV 0 (Just Steam)
+Q Gem C4 LineV 1 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 Nothing
+Q Gem C4 LineV 1 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 Nothing
+Q Gem C4 LineV 1 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 Nothing
+Q Gem C4 LineV 1 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 Nothing
+Q Gem C4 LineV 1 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Fog 1))
+Q Gem C4 LineV 1 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Fog 2))
+Q Gem C4 LineV 1 (Just (Chain 1)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Chain 1))
+Q Gem C4 LineV 1 (Just (Chain 2)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Chain 2))
+Q Gem C4 LineV 1 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Freeze 1))
+Q Gem C4 LineV 1 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Freeze 2))
+Q Gem C4 LineV 1 (Just (Curtain 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Curtain 1))
+Q Gem C4 LineV 1 (Just (Curtain 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just (Curtain 2))
+Q Gem C4 LineV 1 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)] [(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7),(7,7)] True True "line_v" "ice" Gem C4 LineV 1 (Just Steam)
+Q Gem C4 LineV 2 Nothing | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 Nothing) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 Nothing
+Q Gem C4 LineV 2 (Just Grass) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just Grass)) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 Nothing
+Q Gem C4 LineV 2 (Just Vine) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just Vine)) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 Nothing
+Q Gem C4 LineV 2 (Just Choco) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just Choco)) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 Nothing
+Q Gem C4 LineV 2 (Just (Fog 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Fog 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Fog 1))
+Q Gem C4 LineV 2 (Just (Fog 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Fog 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Fog 2))
+Q Gem C4 LineV 2 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Chain 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Chain 1))
+Q Gem C4 LineV 2 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Chain 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Chain 2))
+Q Gem C4 LineV 2 (Just (Freeze 1)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Freeze 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Freeze 1))
+Q Gem C4 LineV 2 (Just (Freeze 2)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Freeze 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Freeze 2))
+Q Gem C4 LineV 2 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Curtain 1))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Curtain 1))
+Q Gem C4 LineV 2 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just (Curtain 2))) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just (Curtain 2))
+Q Gem C4 LineV 2 (Just Steam) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 LineV 1 (Just Steam)) False Nothing False True [] [] True True "line_v" "ice" Gem C4 LineV 2 (Just Steam)
+Q Gem C4 Bomb 0 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "bomb" Gem C4 Bomb 0 Nothing
+Q Gem C4 Bomb 0 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "grass" Gem C4 Bomb 0 Nothing
+Q Gem C4 Bomb 0 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "vine" Gem C4 Bomb 0 Nothing
+Q Gem C4 Bomb 0 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "choco" Gem C4 Bomb 0 Nothing
+Q Gem C4 Bomb 0 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "fog" Gem C4 Bomb 0 (Just (Fog 1))
+Q Gem C4 Bomb 0 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "fog" Gem C4 Bomb 0 (Just (Fog 2))
+Q Gem C4 Bomb 0 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Bomb 0 Nothing) False Nothing False True [] [] True True "bomb" "chain" Gem C4 Bomb 0 (Just (Chain 1))
+Q Gem C4 Bomb 0 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Bomb 0 (Just (Chain 1))) False Nothing False True [] [] True True "bomb" "chain" Gem C4 Bomb 0 (Just (Chain 2))
+Q Gem C4 Bomb 0 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "freeze" Gem C4 Bomb 0 (Just (Freeze 1))
+Q Gem C4 Bomb 0 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "freeze" Gem C4 Bomb 0 (Just (Freeze 2))
+Q Gem C4 Bomb 0 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 0 Nothing) False Nothing False True [] [] True True "bomb" "curtain" Gem C4 Bomb 0 (Just (Curtain 1))
+Q Gem C4 Bomb 0 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 0 (Just (Curtain 1))) False Nothing False True [] [] True True "bomb" "curtain" Gem C4 Bomb 0 (Just (Curtain 2))
+Q Gem C4 Bomb 0 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "steam" Gem C4 Bomb 0 (Just Steam)
+Q Gem C4 Bomb 1 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 Nothing
+Q Gem C4 Bomb 1 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 Nothing
+Q Gem C4 Bomb 1 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 Nothing
+Q Gem C4 Bomb 1 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 Nothing
+Q Gem C4 Bomb 1 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Fog 1))
+Q Gem C4 Bomb 1 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Fog 2))
+Q Gem C4 Bomb 1 (Just (Chain 1)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Chain 1))
+Q Gem C4 Bomb 1 (Just (Chain 2)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Chain 2))
+Q Gem C4 Bomb 1 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Freeze 1))
+Q Gem C4 Bomb 1 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Freeze 2))
+Q Gem C4 Bomb 1 (Just (Curtain 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Curtain 1))
+Q Gem C4 Bomb 1 (Just (Curtain 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just (Curtain 2))
+Q Gem C4 Bomb 1 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [(2,2),(2,3),(2,4),(3,2),(3,3),(3,4),(4,2),(4,3),(4,4)] [(0,6),(0,7),(1,6),(1,7)] True True "bomb" "ice" Gem C4 Bomb 1 (Just Steam)
+Q Gem C4 Bomb 2 Nothing | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 Nothing) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 Nothing
+Q Gem C4 Bomb 2 (Just Grass) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just Grass)) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 Nothing
+Q Gem C4 Bomb 2 (Just Vine) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just Vine)) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 Nothing
+Q Gem C4 Bomb 2 (Just Choco) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just Choco)) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 Nothing
+Q Gem C4 Bomb 2 (Just (Fog 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Fog 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Fog 1))
+Q Gem C4 Bomb 2 (Just (Fog 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Fog 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Fog 2))
+Q Gem C4 Bomb 2 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Chain 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Chain 1))
+Q Gem C4 Bomb 2 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Chain 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Chain 2))
+Q Gem C4 Bomb 2 (Just (Freeze 1)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Freeze 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Freeze 1))
+Q Gem C4 Bomb 2 (Just (Freeze 2)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Freeze 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Freeze 2))
+Q Gem C4 Bomb 2 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Curtain 1))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Curtain 1))
+Q Gem C4 Bomb 2 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just (Curtain 2))) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just (Curtain 2))
+Q Gem C4 Bomb 2 (Just Steam) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Bomb 1 (Just Steam)) False Nothing False True [] [] True True "bomb" "ice" Gem C4 Bomb 2 (Just Steam)
+Q Gem C4 Rainbow 0 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "rainbow" Gem C4 Rainbow 0 Nothing
+Q Gem C4 Rainbow 0 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "grass" Gem C4 Rainbow 0 Nothing
+Q Gem C4 Rainbow 0 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "vine" Gem C4 Rainbow 0 Nothing
+Q Gem C4 Rainbow 0 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "choco" Gem C4 Rainbow 0 Nothing
+Q Gem C4 Rainbow 0 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "fog" Gem C4 Rainbow 0 (Just (Fog 1))
+Q Gem C4 Rainbow 0 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "fog" Gem C4 Rainbow 0 (Just (Fog 2))
+Q Gem C4 Rainbow 0 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Rainbow 0 Nothing) False Nothing False True [] [] True True "rainbow" "chain" Gem C4 Rainbow 0 (Just (Chain 1))
+Q Gem C4 Rainbow 0 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Rainbow 0 (Just (Chain 1))) False Nothing False True [] [] True True "rainbow" "chain" Gem C4 Rainbow 0 (Just (Chain 2))
+Q Gem C4 Rainbow 0 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "freeze" Gem C4 Rainbow 0 (Just (Freeze 1))
+Q Gem C4 Rainbow 0 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "freeze" Gem C4 Rainbow 0 (Just (Freeze 2))
+Q Gem C4 Rainbow 0 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 0 Nothing) False Nothing False True [] [] True True "rainbow" "curtain" Gem C4 Rainbow 0 (Just (Curtain 1))
+Q Gem C4 Rainbow 0 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 0 (Just (Curtain 1))) False Nothing False True [] [] True True "rainbow" "curtain" Gem C4 Rainbow 0 (Just (Curtain 2))
+Q Gem C4 Rainbow 0 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "steam" Gem C4 Rainbow 0 (Just Steam)
+Q Gem C4 Rainbow 1 Nothing | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 Nothing
+Q Gem C4 Rainbow 1 (Just Grass) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 Nothing
+Q Gem C4 Rainbow 1 (Just Vine) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 Nothing
+Q Gem C4 Rainbow 1 (Just Choco) | Just C4 Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 Nothing
+Q Gem C4 Rainbow 1 (Just (Fog 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Fog 1))
+Q Gem C4 Rainbow 1 (Just (Fog 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Fog 2))
+Q Gem C4 Rainbow 1 (Just (Chain 1)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Chain 1))
+Q Gem C4 Rainbow 1 (Just (Chain 2)) | Nothing Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Chain 2))
+Q Gem C4 Rainbow 1 (Just (Freeze 1)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Freeze 1))
+Q Gem C4 Rainbow 1 (Just (Freeze 2)) | Just C4 Just C4 True True True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Freeze 2))
+Q Gem C4 Rainbow 1 (Just (Curtain 1)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Curtain 1))
+Q Gem C4 Rainbow 1 (Just (Curtain 2)) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just (Curtain 2))
+Q Gem C4 Rainbow 1 (Just Steam) | Nothing Just C4 False False True True True False [] HitDestroy False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 1 (Just Steam)
+Q Gem C4 Rainbow 2 Nothing | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 Nothing) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 Nothing
+Q Gem C4 Rainbow 2 (Just Grass) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just Grass)) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 Nothing
+Q Gem C4 Rainbow 2 (Just Vine) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just Vine)) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 Nothing
+Q Gem C4 Rainbow 2 (Just Choco) | Just C4 Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just Choco)) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 Nothing
+Q Gem C4 Rainbow 2 (Just (Fog 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Fog 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Fog 1))
+Q Gem C4 Rainbow 2 (Just (Fog 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Fog 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Fog 2))
+Q Gem C4 Rainbow 2 (Just (Chain 1)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Chain 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Chain 1))
+Q Gem C4 Rainbow 2 (Just (Chain 2)) | Nothing Just C4 True True False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Chain 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Chain 2))
+Q Gem C4 Rainbow 2 (Just (Freeze 1)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Freeze 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Freeze 1))
+Q Gem C4 Rainbow 2 (Just (Freeze 2)) | Just C4 Just C4 True True False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Freeze 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Freeze 2))
+Q Gem C4 Rainbow 2 (Just (Curtain 1)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Curtain 1))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Curtain 1))
+Q Gem C4 Rainbow 2 (Just (Curtain 2)) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just (Curtain 2))) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just (Curtain 2))
+Q Gem C4 Rainbow 2 (Just Steam) | Nothing Just C4 False False False True True False [] HitAbsorb (Gem C4 Rainbow 1 (Just Steam)) False Nothing False True [] [] True True "rainbow" "ice" Gem C4 Rainbow 2 (Just Steam)
+Q Stone 1 | Nothing Nothing True False False True False False [] HitDestroy False Just CountStones False True [] [] False False "stone" "stone" Stone 1
+Q Stone 2 | Nothing Nothing True False False True False False [] HitAbsorb (Stone 1) False Just CountStones False True [] [] False False "stone" "stone" Stone 2
+Q Stone 3 | Nothing Nothing True False False True False False [] HitAbsorb (Stone 2) False Just CountStones False True [] [] False False "stone" "stone" Stone 3
+Q Chest 1 | Nothing Nothing True False False True False False [] HitDestroy False Just CountChests False True [] [] False False "chest" "chest" Chest 1
+Q Chest 2 | Nothing Nothing True False False True False False [] HitAbsorb (Chest 1) False Just CountChests False True [] [] False False "chest" "chest" Chest 2
+Q Honey 1 | Nothing Nothing True False False True False False [] HitDestroy False Just CountHoney False True [] [] False False "honey" "honey" Honey 1
+Q Honey 2 | Nothing Nothing True False False True False False [] HitAbsorb (Honey 1) False Just CountHoney False True [] [] False False "honey" "honey" Honey 2
+Q Balloon C1 | Nothing Nothing True False False True False False [] HitDestroy False Just CountBalloons False True [] [] False False "balloon" "balloon" Balloon C1
+Q Balloon C2 | Nothing Nothing True False False True False False [] HitDestroy False Just CountBalloons False True [] [] False False "balloon" "balloon" Balloon C2
+Q Balloon C3 | Nothing Nothing True False False True False False [] HitDestroy False Just CountBalloons False True [] [] False False "balloon" "balloon" Balloon C3
+Q Balloon C4 | Nothing Nothing True False False True False False [] HitDestroy False Just CountBalloons False True [] [] False False "balloon" "balloon" Balloon C4
+Q Balloon C5 | Nothing Nothing True False False True False False [] HitDestroy False Just CountBalloons False True [] [] False False "balloon" "balloon" Balloon C5
+Q Cookie | Nothing Nothing True False False True True True [EdgeBottom] HitImmune True Just CountCookies True True [] [] False False "cookie" "cookie" Cookie
+Q Cake 1 | Nothing Nothing True False False True False False [] HitDestroy False Just CountCakes False True [] [] False False "cake" "cake" Cake 1
+Q Cake 2 | Nothing Nothing True False False True False False [] HitAbsorb (Cake 1) False Just CountCakes False True [] [] False False "cake" "cake" Cake 2
+Q Cake 3 | Nothing Nothing True False False True False False [] HitAbsorb (Cake 2) False Just CountCakes False True [] [] False False "cake" "cake" Cake 3
+Q MagicHat | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "magic_hat" "magic_hat" MagicHat
+Q Maker C2 1 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "maker" "maker" Maker C2 1
+Q Maker C2 3 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "maker" "maker" Maker C2 3
+Q Maker C5 1 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "maker" "maker" Maker C5 1
+Q Maker C5 3 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "maker" "maker" Maker C5 3
+Q Snail 0 1 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "snail" "snail" Snail 0 1
+Q Snail 1 0 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "snail" "snail" Snail 1 0
+Q Snail 0 (-1) | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "snail" "snail" Snail 0 (-1)
+Q Snail (-1) 0 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "snail" "snail" Snail (-1) 0
+Q Safe 1 | Nothing Nothing True False False True False False [] HitAbsorb Cookie False Nothing True True [] [] False False "safe" "safe" Safe 1
+Q Safe 2 | Nothing Nothing True False False True False False [] HitAbsorb (Safe 1) False Nothing True True [] [] False False "safe" "safe" Safe 2
+Q Safe 3 | Nothing Nothing True False False True False False [] HitAbsorb (Safe 2) False Nothing True True [] [] False False "safe" "safe" Safe 3
+Q Flip C1 C2 | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C2 Normal 0 Nothing) False Nothing False True [] [] True True "flip" "flip" Flip C1 C2
+Q Flip C1 C5 | Just C1 Just C1 False False False True True False [] HitAbsorb (Gem C5 Normal 0 Nothing) False Nothing False True [] [] True True "flip" "flip" Flip C1 C5
+Q Flip C3 C2 | Just C3 Just C3 False False False True True False [] HitAbsorb (Gem C2 Normal 0 Nothing) False Nothing False True [] [] True True "flip" "flip" Flip C3 C2
+Q Flip C3 C5 | Just C3 Just C3 False False False True True False [] HitAbsorb (Gem C5 Normal 0 Nothing) False Nothing False True [] [] True True "flip" "flip" Flip C3 C5
+Q Surprise | Nothing Nothing True False False True False False [] HitDestroy False Nothing False True [] [] False False "surprise" "surprise" Surprise
+Q Bottle C1 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "bottle" "bottle" Bottle C1
+Q Bottle C2 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "bottle" "bottle" Bottle C2
+Q Bottle C3 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "bottle" "bottle" Bottle C3
+Q Bottle C4 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "bottle" "bottle" Bottle C4
+Q Bottle C5 | Nothing Nothing True False False False False False [] HitImmune True Nothing False True [] [] False False "bottle" "bottle" Bottle C5
+Q TimeSpirit | Nothing Nothing True False False True False False [] HitDestroy False Nothing False True [] [] False False "time_spirit" "time_spirit" TimeSpirit
+Q Countdown C1 1 | Just C1 Just C1 False False False True True False [] HitDestroy False Nothing False True [] [] True True "countdown" "countdown" Countdown C1 1
+Q Countdown C1 5 | Just C1 Just C1 False False False True True False [] HitDestroy False Nothing False True [] [] True True "countdown" "countdown" Countdown C1 5
+Q Countdown C5 1 | Just C5 Just C5 False False False True True False [] HitDestroy False Nothing False True [] [] True True "countdown" "countdown" Countdown C5 1
+Q Countdown C5 5 | Just C5 Just C5 False False False True True False [] HitDestroy False Nothing False True [] [] True True "countdown" "countdown" Countdown C5 5
+Q Custom "bubble" 1 | Nothing Nothing True False False True False False [] HitDestroy False Just (CountNamed "bubble") False True [] [] False False "bubble" "bubble" Custom "bubble" 1
+Q Custom "bubble" 2 | Nothing Nothing True False False True False False [] HitDestroy False Just (CountNamed "bubble") False True [] [] False False "bubble" "bubble" Custom "bubble" 2
+Q Custom "unregistered" 3 | Nothing Nothing True False False True False False [] HitImmune True Nothing False True [] [] False False "unregistered" "unregistered" Custom "unregistered" 3
+P ice [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P ice [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [] Stone 1 -> Stone 1
+P ice [] Countdown C4 2 -> Countdown C4 2
+P ice [] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 1 Nothing
+P ice [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [AInt 1] Stone 1 -> Stone 1
+P ice [AInt 1] Countdown C4 2 -> Countdown C4 2
+P ice [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 3 Nothing
+P ice [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 3 (Just Grass)
+P ice [AInt 3] Stone 1 -> Stone 1
+P ice [AInt 3] Countdown C4 2 -> Countdown C4 2
+P ice [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P ice [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [AColor C2] Stone 1 -> Stone 1
+P ice [AColor C2] Countdown C4 2 -> Countdown C4 2
+P ice [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P ice [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [AColor C1,AColor C4] Stone 1 -> Stone 1
+P ice [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P ice [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P ice [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [AColor C3,AInt 5] Stone 1 -> Stone 1
+P ice [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P ice [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P ice [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [AInt 1,AInt 0] Stone 1 -> Stone 1
+P ice [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P ice [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P ice [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P ice [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P ice [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P ice [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P ice [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [] Stone 1 -> Stone 1
+P grass [] Countdown C4 2 -> Countdown C4 2
+P grass [] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AInt 1] Stone 1 -> Stone 1
+P grass [AInt 1] Countdown C4 2 -> Countdown C4 2
+P grass [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AInt 3] Stone 1 -> Stone 1
+P grass [AInt 3] Countdown C4 2 -> Countdown C4 2
+P grass [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AColor C2] Stone 1 -> Stone 1
+P grass [AColor C2] Countdown C4 2 -> Countdown C4 2
+P grass [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AColor C1,AColor C4] Stone 1 -> Stone 1
+P grass [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P grass [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AColor C3,AInt 5] Stone 1 -> Stone 1
+P grass [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P grass [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AInt 1,AInt 0] Stone 1 -> Stone 1
+P grass [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P grass [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P grass [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Grass)
+P grass [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P grass [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P grass [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P grass [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [] Stone 1 -> Stone 1
+P vine [] Countdown C4 2 -> Countdown C4 2
+P vine [] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AInt 1] Stone 1 -> Stone 1
+P vine [AInt 1] Countdown C4 2 -> Countdown C4 2
+P vine [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AInt 3] Stone 1 -> Stone 1
+P vine [AInt 3] Countdown C4 2 -> Countdown C4 2
+P vine [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AColor C2] Stone 1 -> Stone 1
+P vine [AColor C2] Countdown C4 2 -> Countdown C4 2
+P vine [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AColor C1,AColor C4] Stone 1 -> Stone 1
+P vine [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P vine [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AColor C3,AInt 5] Stone 1 -> Stone 1
+P vine [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P vine [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AInt 1,AInt 0] Stone 1 -> Stone 1
+P vine [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P vine [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P vine [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Vine)
+P vine [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Vine)
+P vine [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P vine [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P vine [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [] Stone 1 -> Stone 1
+P choco [] Countdown C4 2 -> Countdown C4 2
+P choco [] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AInt 1] Stone 1 -> Stone 1
+P choco [AInt 1] Countdown C4 2 -> Countdown C4 2
+P choco [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AInt 3] Stone 1 -> Stone 1
+P choco [AInt 3] Countdown C4 2 -> Countdown C4 2
+P choco [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AColor C2] Stone 1 -> Stone 1
+P choco [AColor C2] Countdown C4 2 -> Countdown C4 2
+P choco [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AColor C1,AColor C4] Stone 1 -> Stone 1
+P choco [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P choco [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AColor C3,AInt 5] Stone 1 -> Stone 1
+P choco [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P choco [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AInt 1,AInt 0] Stone 1 -> Stone 1
+P choco [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P choco [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P choco [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Choco)
+P choco [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Choco)
+P choco [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P choco [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P choco [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P fog [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P fog [] Stone 1 -> Stone 1
+P fog [] Countdown C4 2 -> Countdown C4 2
+P fog [] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Fog 1))
+P fog [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Fog 1))
+P fog [AInt 1] Stone 1 -> Stone 1
+P fog [AInt 1] Countdown C4 2 -> Countdown C4 2
+P fog [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Fog 3))
+P fog [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Fog 3))
+P fog [AInt 3] Stone 1 -> Stone 1
+P fog [AInt 3] Countdown C4 2 -> Countdown C4 2
+P fog [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P fog [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P fog [AColor C2] Stone 1 -> Stone 1
+P fog [AColor C2] Countdown C4 2 -> Countdown C4 2
+P fog [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P fog [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P fog [AColor C1,AColor C4] Stone 1 -> Stone 1
+P fog [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P fog [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P fog [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P fog [AColor C3,AInt 5] Stone 1 -> Stone 1
+P fog [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P fog [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P fog [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P fog [AInt 1,AInt 0] Stone 1 -> Stone 1
+P fog [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P fog [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P fog [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P fog [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P fog [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P fog [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P fog [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chain [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chain [] Stone 1 -> Stone 1
+P chain [] Countdown C4 2 -> Countdown C4 2
+P chain [] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Chain 1))
+P chain [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Chain 1))
+P chain [AInt 1] Stone 1 -> Stone 1
+P chain [AInt 1] Countdown C4 2 -> Countdown C4 2
+P chain [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Chain 3))
+P chain [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Chain 3))
+P chain [AInt 3] Stone 1 -> Stone 1
+P chain [AInt 3] Countdown C4 2 -> Countdown C4 2
+P chain [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chain [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chain [AColor C2] Stone 1 -> Stone 1
+P chain [AColor C2] Countdown C4 2 -> Countdown C4 2
+P chain [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chain [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chain [AColor C1,AColor C4] Stone 1 -> Stone 1
+P chain [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P chain [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chain [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chain [AColor C3,AInt 5] Stone 1 -> Stone 1
+P chain [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P chain [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chain [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chain [AInt 1,AInt 0] Stone 1 -> Stone 1
+P chain [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P chain [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P chain [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chain [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chain [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P chain [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P chain [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P freeze [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P freeze [] Stone 1 -> Stone 1
+P freeze [] Countdown C4 2 -> Countdown C4 2
+P freeze [] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Freeze 1))
+P freeze [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Freeze 1))
+P freeze [AInt 1] Stone 1 -> Stone 1
+P freeze [AInt 1] Countdown C4 2 -> Countdown C4 2
+P freeze [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Freeze 3))
+P freeze [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Freeze 3))
+P freeze [AInt 3] Stone 1 -> Stone 1
+P freeze [AInt 3] Countdown C4 2 -> Countdown C4 2
+P freeze [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P freeze [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P freeze [AColor C2] Stone 1 -> Stone 1
+P freeze [AColor C2] Countdown C4 2 -> Countdown C4 2
+P freeze [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P freeze [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P freeze [AColor C1,AColor C4] Stone 1 -> Stone 1
+P freeze [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P freeze [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P freeze [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P freeze [AColor C3,AInt 5] Stone 1 -> Stone 1
+P freeze [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P freeze [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P freeze [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P freeze [AInt 1,AInt 0] Stone 1 -> Stone 1
+P freeze [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P freeze [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P freeze [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P freeze [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P freeze [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P freeze [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P freeze [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P curtain [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P curtain [] Stone 1 -> Stone 1
+P curtain [] Countdown C4 2 -> Countdown C4 2
+P curtain [] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Curtain 1))
+P curtain [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Curtain 1))
+P curtain [AInt 1] Stone 1 -> Stone 1
+P curtain [AInt 1] Countdown C4 2 -> Countdown C4 2
+P curtain [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just (Curtain 3))
+P curtain [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just (Curtain 3))
+P curtain [AInt 3] Stone 1 -> Stone 1
+P curtain [AInt 3] Countdown C4 2 -> Countdown C4 2
+P curtain [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P curtain [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P curtain [AColor C2] Stone 1 -> Stone 1
+P curtain [AColor C2] Countdown C4 2 -> Countdown C4 2
+P curtain [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P curtain [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P curtain [AColor C1,AColor C4] Stone 1 -> Stone 1
+P curtain [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P curtain [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P curtain [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P curtain [AColor C3,AInt 5] Stone 1 -> Stone 1
+P curtain [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P curtain [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P curtain [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P curtain [AInt 1,AInt 0] Stone 1 -> Stone 1
+P curtain [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P curtain [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P curtain [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P curtain [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P curtain [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P curtain [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P curtain [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [] Stone 1 -> Stone 1
+P steam [] Countdown C4 2 -> Countdown C4 2
+P steam [] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AInt 1] Stone 1 -> Stone 1
+P steam [AInt 1] Countdown C4 2 -> Countdown C4 2
+P steam [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AInt 3] Stone 1 -> Stone 1
+P steam [AInt 3] Countdown C4 2 -> Countdown C4 2
+P steam [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AColor C2] Stone 1 -> Stone 1
+P steam [AColor C2] Countdown C4 2 -> Countdown C4 2
+P steam [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AColor C1,AColor C4] Stone 1 -> Stone 1
+P steam [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P steam [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AColor C3,AInt 5] Stone 1 -> Stone 1
+P steam [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P steam [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AInt 1,AInt 0] Stone 1 -> Stone 1
+P steam [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P steam [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P steam [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 (Just Steam)
+P steam [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Steam)
+P steam [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P steam [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P steam [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P stone [] Gem C2 Normal 0 Nothing -> Stone 1
+P stone [] Gem C3 LineH 1 (Just Grass) -> Stone 1
+P stone [] Stone 1 -> Stone 1
+P stone [] Countdown C4 2 -> Stone 1
+P stone [] Custom "bubble" 1 -> Stone 1
+P stone [AInt 1] Gem C2 Normal 0 Nothing -> Stone 1
+P stone [AInt 1] Gem C3 LineH 1 (Just Grass) -> Stone 1
+P stone [AInt 1] Stone 1 -> Stone 1
+P stone [AInt 1] Countdown C4 2 -> Stone 1
+P stone [AInt 1] Custom "bubble" 1 -> Stone 1
+P stone [AInt 3] Gem C2 Normal 0 Nothing -> Stone 3
+P stone [AInt 3] Gem C3 LineH 1 (Just Grass) -> Stone 3
+P stone [AInt 3] Stone 1 -> Stone 3
+P stone [AInt 3] Countdown C4 2 -> Stone 3
+P stone [AInt 3] Custom "bubble" 1 -> Stone 3
+P stone [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P stone [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P stone [AColor C2] Stone 1 -> Stone 1
+P stone [AColor C2] Countdown C4 2 -> Countdown C4 2
+P stone [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P stone [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P stone [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P stone [AColor C1,AColor C4] Stone 1 -> Stone 1
+P stone [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P stone [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P stone [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P stone [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P stone [AColor C3,AInt 5] Stone 1 -> Stone 1
+P stone [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P stone [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P stone [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P stone [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P stone [AInt 1,AInt 0] Stone 1 -> Stone 1
+P stone [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P stone [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P stone [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P stone [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P stone [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P stone [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P stone [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P chest [] Gem C2 Normal 0 Nothing -> Chest 1
+P chest [] Gem C3 LineH 1 (Just Grass) -> Chest 1
+P chest [] Stone 1 -> Chest 1
+P chest [] Countdown C4 2 -> Chest 1
+P chest [] Custom "bubble" 1 -> Chest 1
+P chest [AInt 1] Gem C2 Normal 0 Nothing -> Chest 1
+P chest [AInt 1] Gem C3 LineH 1 (Just Grass) -> Chest 1
+P chest [AInt 1] Stone 1 -> Chest 1
+P chest [AInt 1] Countdown C4 2 -> Chest 1
+P chest [AInt 1] Custom "bubble" 1 -> Chest 1
+P chest [AInt 3] Gem C2 Normal 0 Nothing -> Chest 3
+P chest [AInt 3] Gem C3 LineH 1 (Just Grass) -> Chest 3
+P chest [AInt 3] Stone 1 -> Chest 3
+P chest [AInt 3] Countdown C4 2 -> Chest 3
+P chest [AInt 3] Custom "bubble" 1 -> Chest 3
+P chest [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chest [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chest [AColor C2] Stone 1 -> Stone 1
+P chest [AColor C2] Countdown C4 2 -> Countdown C4 2
+P chest [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P chest [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chest [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chest [AColor C1,AColor C4] Stone 1 -> Stone 1
+P chest [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P chest [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P chest [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chest [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chest [AColor C3,AInt 5] Stone 1 -> Stone 1
+P chest [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P chest [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P chest [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chest [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chest [AInt 1,AInt 0] Stone 1 -> Stone 1
+P chest [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P chest [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P chest [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P chest [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P chest [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P chest [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P chest [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P honey [] Gem C2 Normal 0 Nothing -> Honey 1
+P honey [] Gem C3 LineH 1 (Just Grass) -> Honey 1
+P honey [] Stone 1 -> Honey 1
+P honey [] Countdown C4 2 -> Honey 1
+P honey [] Custom "bubble" 1 -> Honey 1
+P honey [AInt 1] Gem C2 Normal 0 Nothing -> Honey 1
+P honey [AInt 1] Gem C3 LineH 1 (Just Grass) -> Honey 1
+P honey [AInt 1] Stone 1 -> Honey 1
+P honey [AInt 1] Countdown C4 2 -> Honey 1
+P honey [AInt 1] Custom "bubble" 1 -> Honey 1
+P honey [AInt 3] Gem C2 Normal 0 Nothing -> Honey 3
+P honey [AInt 3] Gem C3 LineH 1 (Just Grass) -> Honey 3
+P honey [AInt 3] Stone 1 -> Honey 3
+P honey [AInt 3] Countdown C4 2 -> Honey 3
+P honey [AInt 3] Custom "bubble" 1 -> Honey 3
+P honey [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P honey [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P honey [AColor C2] Stone 1 -> Stone 1
+P honey [AColor C2] Countdown C4 2 -> Countdown C4 2
+P honey [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P honey [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P honey [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P honey [AColor C1,AColor C4] Stone 1 -> Stone 1
+P honey [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P honey [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P honey [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P honey [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P honey [AColor C3,AInt 5] Stone 1 -> Stone 1
+P honey [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P honey [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P honey [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P honey [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P honey [AInt 1,AInt 0] Stone 1 -> Stone 1
+P honey [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P honey [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P honey [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P honey [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P honey [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P honey [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P honey [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [] Stone 1 -> Stone 1
+P balloon [] Countdown C4 2 -> Countdown C4 2
+P balloon [] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [AInt 1] Stone 1 -> Stone 1
+P balloon [AInt 1] Countdown C4 2 -> Countdown C4 2
+P balloon [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [AInt 3] Stone 1 -> Stone 1
+P balloon [AInt 3] Countdown C4 2 -> Countdown C4 2
+P balloon [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [AColor C2] Gem C2 Normal 0 Nothing -> Balloon C2
+P balloon [AColor C2] Gem C3 LineH 1 (Just Grass) -> Balloon C2
+P balloon [AColor C2] Stone 1 -> Balloon C2
+P balloon [AColor C2] Countdown C4 2 -> Balloon C2
+P balloon [AColor C2] Custom "bubble" 1 -> Balloon C2
+P balloon [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [AColor C1,AColor C4] Stone 1 -> Stone 1
+P balloon [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P balloon [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [AColor C3,AInt 5] Stone 1 -> Stone 1
+P balloon [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P balloon [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [AInt 1,AInt 0] Stone 1 -> Stone 1
+P balloon [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P balloon [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P balloon [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P balloon [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P balloon [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P balloon [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P balloon [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P cookie [] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [] Stone 1 -> Cookie
+P cookie [] Countdown C4 2 -> Cookie
+P cookie [] Custom "bubble" 1 -> Cookie
+P cookie [AInt 1] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AInt 1] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AInt 1] Stone 1 -> Cookie
+P cookie [AInt 1] Countdown C4 2 -> Cookie
+P cookie [AInt 1] Custom "bubble" 1 -> Cookie
+P cookie [AInt 3] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AInt 3] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AInt 3] Stone 1 -> Cookie
+P cookie [AInt 3] Countdown C4 2 -> Cookie
+P cookie [AInt 3] Custom "bubble" 1 -> Cookie
+P cookie [AColor C2] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AColor C2] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AColor C2] Stone 1 -> Cookie
+P cookie [AColor C2] Countdown C4 2 -> Cookie
+P cookie [AColor C2] Custom "bubble" 1 -> Cookie
+P cookie [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AColor C1,AColor C4] Stone 1 -> Cookie
+P cookie [AColor C1,AColor C4] Countdown C4 2 -> Cookie
+P cookie [AColor C1,AColor C4] Custom "bubble" 1 -> Cookie
+P cookie [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AColor C3,AInt 5] Stone 1 -> Cookie
+P cookie [AColor C3,AInt 5] Countdown C4 2 -> Cookie
+P cookie [AColor C3,AInt 5] Custom "bubble" 1 -> Cookie
+P cookie [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AInt 1,AInt 0] Stone 1 -> Cookie
+P cookie [AInt 1,AInt 0] Countdown C4 2 -> Cookie
+P cookie [AInt 1,AInt 0] Custom "bubble" 1 -> Cookie
+P cookie [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Cookie
+P cookie [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Cookie
+P cookie [AInt 0,AInt (-1)] Stone 1 -> Cookie
+P cookie [AInt 0,AInt (-1)] Countdown C4 2 -> Cookie
+P cookie [AInt 0,AInt (-1)] Custom "bubble" 1 -> Cookie
+P cake [] Gem C2 Normal 0 Nothing -> Cake 1
+P cake [] Gem C3 LineH 1 (Just Grass) -> Cake 1
+P cake [] Stone 1 -> Cake 1
+P cake [] Countdown C4 2 -> Cake 1
+P cake [] Custom "bubble" 1 -> Cake 1
+P cake [AInt 1] Gem C2 Normal 0 Nothing -> Cake 1
+P cake [AInt 1] Gem C3 LineH 1 (Just Grass) -> Cake 1
+P cake [AInt 1] Stone 1 -> Cake 1
+P cake [AInt 1] Countdown C4 2 -> Cake 1
+P cake [AInt 1] Custom "bubble" 1 -> Cake 1
+P cake [AInt 3] Gem C2 Normal 0 Nothing -> Cake 3
+P cake [AInt 3] Gem C3 LineH 1 (Just Grass) -> Cake 3
+P cake [AInt 3] Stone 1 -> Cake 3
+P cake [AInt 3] Countdown C4 2 -> Cake 3
+P cake [AInt 3] Custom "bubble" 1 -> Cake 3
+P cake [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P cake [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P cake [AColor C2] Stone 1 -> Stone 1
+P cake [AColor C2] Countdown C4 2 -> Countdown C4 2
+P cake [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P cake [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P cake [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P cake [AColor C1,AColor C4] Stone 1 -> Stone 1
+P cake [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P cake [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P cake [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P cake [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P cake [AColor C3,AInt 5] Stone 1 -> Stone 1
+P cake [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P cake [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P cake [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P cake [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P cake [AInt 1,AInt 0] Stone 1 -> Stone 1
+P cake [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P cake [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P cake [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P cake [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P cake [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P cake [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P cake [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P magic_hat [] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [] Stone 1 -> MagicHat
+P magic_hat [] Countdown C4 2 -> MagicHat
+P magic_hat [] Custom "bubble" 1 -> MagicHat
+P magic_hat [AInt 1] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AInt 1] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AInt 1] Stone 1 -> MagicHat
+P magic_hat [AInt 1] Countdown C4 2 -> MagicHat
+P magic_hat [AInt 1] Custom "bubble" 1 -> MagicHat
+P magic_hat [AInt 3] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AInt 3] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AInt 3] Stone 1 -> MagicHat
+P magic_hat [AInt 3] Countdown C4 2 -> MagicHat
+P magic_hat [AInt 3] Custom "bubble" 1 -> MagicHat
+P magic_hat [AColor C2] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AColor C2] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AColor C2] Stone 1 -> MagicHat
+P magic_hat [AColor C2] Countdown C4 2 -> MagicHat
+P magic_hat [AColor C2] Custom "bubble" 1 -> MagicHat
+P magic_hat [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AColor C1,AColor C4] Stone 1 -> MagicHat
+P magic_hat [AColor C1,AColor C4] Countdown C4 2 -> MagicHat
+P magic_hat [AColor C1,AColor C4] Custom "bubble" 1 -> MagicHat
+P magic_hat [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AColor C3,AInt 5] Stone 1 -> MagicHat
+P magic_hat [AColor C3,AInt 5] Countdown C4 2 -> MagicHat
+P magic_hat [AColor C3,AInt 5] Custom "bubble" 1 -> MagicHat
+P magic_hat [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AInt 1,AInt 0] Stone 1 -> MagicHat
+P magic_hat [AInt 1,AInt 0] Countdown C4 2 -> MagicHat
+P magic_hat [AInt 1,AInt 0] Custom "bubble" 1 -> MagicHat
+P magic_hat [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> MagicHat
+P magic_hat [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> MagicHat
+P magic_hat [AInt 0,AInt (-1)] Stone 1 -> MagicHat
+P magic_hat [AInt 0,AInt (-1)] Countdown C4 2 -> MagicHat
+P magic_hat [AInt 0,AInt (-1)] Custom "bubble" 1 -> MagicHat
+P maker [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P maker [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P maker [] Stone 1 -> Stone 1
+P maker [] Countdown C4 2 -> Countdown C4 2
+P maker [] Custom "bubble" 1 -> Custom "bubble" 1
+P maker [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P maker [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P maker [AInt 1] Stone 1 -> Stone 1
+P maker [AInt 1] Countdown C4 2 -> Countdown C4 2
+P maker [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P maker [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P maker [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P maker [AInt 3] Stone 1 -> Stone 1
+P maker [AInt 3] Countdown C4 2 -> Countdown C4 2
+P maker [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P maker [AColor C2] Gem C2 Normal 0 Nothing -> Maker C2 3
+P maker [AColor C2] Gem C3 LineH 1 (Just Grass) -> Maker C2 3
+P maker [AColor C2] Stone 1 -> Maker C2 3
+P maker [AColor C2] Countdown C4 2 -> Maker C2 3
+P maker [AColor C2] Custom "bubble" 1 -> Maker C2 3
+P maker [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P maker [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P maker [AColor C1,AColor C4] Stone 1 -> Stone 1
+P maker [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P maker [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P maker [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Maker C3 5
+P maker [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Maker C3 5
+P maker [AColor C3,AInt 5] Stone 1 -> Maker C3 5
+P maker [AColor C3,AInt 5] Countdown C4 2 -> Maker C3 5
+P maker [AColor C3,AInt 5] Custom "bubble" 1 -> Maker C3 5
+P maker [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P maker [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P maker [AInt 1,AInt 0] Stone 1 -> Stone 1
+P maker [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P maker [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P maker [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P maker [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P maker [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P maker [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P maker [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P snail [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P snail [] Stone 1 -> Stone 1
+P snail [] Countdown C4 2 -> Countdown C4 2
+P snail [] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P snail [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P snail [AInt 1] Stone 1 -> Stone 1
+P snail [AInt 1] Countdown C4 2 -> Countdown C4 2
+P snail [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P snail [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P snail [AInt 3] Stone 1 -> Stone 1
+P snail [AInt 3] Countdown C4 2 -> Countdown C4 2
+P snail [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P snail [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P snail [AColor C2] Stone 1 -> Stone 1
+P snail [AColor C2] Countdown C4 2 -> Countdown C4 2
+P snail [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P snail [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P snail [AColor C1,AColor C4] Stone 1 -> Stone 1
+P snail [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P snail [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P snail [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P snail [AColor C3,AInt 5] Stone 1 -> Stone 1
+P snail [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P snail [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P snail [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Snail 1 0
+P snail [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Snail 1 0
+P snail [AInt 1,AInt 0] Stone 1 -> Snail 1 0
+P snail [AInt 1,AInt 0] Countdown C4 2 -> Snail 1 0
+P snail [AInt 1,AInt 0] Custom "bubble" 1 -> Snail 1 0
+P snail [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Snail 0 (-1)
+P snail [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Snail 0 (-1)
+P snail [AInt 0,AInt (-1)] Stone 1 -> Snail 0 (-1)
+P snail [AInt 0,AInt (-1)] Countdown C4 2 -> Snail 0 (-1)
+P snail [AInt 0,AInt (-1)] Custom "bubble" 1 -> Snail 0 (-1)
+P safe [] Gem C2 Normal 0 Nothing -> Safe 1
+P safe [] Gem C3 LineH 1 (Just Grass) -> Safe 1
+P safe [] Stone 1 -> Safe 1
+P safe [] Countdown C4 2 -> Safe 1
+P safe [] Custom "bubble" 1 -> Safe 1
+P safe [AInt 1] Gem C2 Normal 0 Nothing -> Safe 1
+P safe [AInt 1] Gem C3 LineH 1 (Just Grass) -> Safe 1
+P safe [AInt 1] Stone 1 -> Safe 1
+P safe [AInt 1] Countdown C4 2 -> Safe 1
+P safe [AInt 1] Custom "bubble" 1 -> Safe 1
+P safe [AInt 3] Gem C2 Normal 0 Nothing -> Safe 3
+P safe [AInt 3] Gem C3 LineH 1 (Just Grass) -> Safe 3
+P safe [AInt 3] Stone 1 -> Safe 3
+P safe [AInt 3] Countdown C4 2 -> Safe 3
+P safe [AInt 3] Custom "bubble" 1 -> Safe 3
+P safe [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P safe [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P safe [AColor C2] Stone 1 -> Stone 1
+P safe [AColor C2] Countdown C4 2 -> Countdown C4 2
+P safe [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P safe [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P safe [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P safe [AColor C1,AColor C4] Stone 1 -> Stone 1
+P safe [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P safe [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P safe [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P safe [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P safe [AColor C3,AInt 5] Stone 1 -> Stone 1
+P safe [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P safe [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P safe [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P safe [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P safe [AInt 1,AInt 0] Stone 1 -> Stone 1
+P safe [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P safe [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P safe [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P safe [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P safe [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P safe [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P safe [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [] Stone 1 -> Stone 1
+P flip [] Countdown C4 2 -> Countdown C4 2
+P flip [] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [AInt 1] Stone 1 -> Stone 1
+P flip [AInt 1] Countdown C4 2 -> Countdown C4 2
+P flip [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [AInt 3] Stone 1 -> Stone 1
+P flip [AInt 3] Countdown C4 2 -> Countdown C4 2
+P flip [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [AColor C2] Stone 1 -> Stone 1
+P flip [AColor C2] Countdown C4 2 -> Countdown C4 2
+P flip [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Flip C1 C4
+P flip [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Flip C1 C4
+P flip [AColor C1,AColor C4] Stone 1 -> Flip C1 C4
+P flip [AColor C1,AColor C4] Countdown C4 2 -> Flip C1 C4
+P flip [AColor C1,AColor C4] Custom "bubble" 1 -> Flip C1 C4
+P flip [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [AColor C3,AInt 5] Stone 1 -> Stone 1
+P flip [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P flip [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [AInt 1,AInt 0] Stone 1 -> Stone 1
+P flip [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P flip [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P flip [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P flip [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P flip [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P flip [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P flip [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P surprise [] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [] Stone 1 -> Surprise
+P surprise [] Countdown C4 2 -> Surprise
+P surprise [] Custom "bubble" 1 -> Surprise
+P surprise [AInt 1] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AInt 1] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AInt 1] Stone 1 -> Surprise
+P surprise [AInt 1] Countdown C4 2 -> Surprise
+P surprise [AInt 1] Custom "bubble" 1 -> Surprise
+P surprise [AInt 3] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AInt 3] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AInt 3] Stone 1 -> Surprise
+P surprise [AInt 3] Countdown C4 2 -> Surprise
+P surprise [AInt 3] Custom "bubble" 1 -> Surprise
+P surprise [AColor C2] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AColor C2] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AColor C2] Stone 1 -> Surprise
+P surprise [AColor C2] Countdown C4 2 -> Surprise
+P surprise [AColor C2] Custom "bubble" 1 -> Surprise
+P surprise [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AColor C1,AColor C4] Stone 1 -> Surprise
+P surprise [AColor C1,AColor C4] Countdown C4 2 -> Surprise
+P surprise [AColor C1,AColor C4] Custom "bubble" 1 -> Surprise
+P surprise [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AColor C3,AInt 5] Stone 1 -> Surprise
+P surprise [AColor C3,AInt 5] Countdown C4 2 -> Surprise
+P surprise [AColor C3,AInt 5] Custom "bubble" 1 -> Surprise
+P surprise [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AInt 1,AInt 0] Stone 1 -> Surprise
+P surprise [AInt 1,AInt 0] Countdown C4 2 -> Surprise
+P surprise [AInt 1,AInt 0] Custom "bubble" 1 -> Surprise
+P surprise [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Surprise
+P surprise [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Surprise
+P surprise [AInt 0,AInt (-1)] Stone 1 -> Surprise
+P surprise [AInt 0,AInt (-1)] Countdown C4 2 -> Surprise
+P surprise [AInt 0,AInt (-1)] Custom "bubble" 1 -> Surprise
+P bottle [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [] Stone 1 -> Stone 1
+P bottle [] Countdown C4 2 -> Countdown C4 2
+P bottle [] Custom "bubble" 1 -> Custom "bubble" 1
+P bottle [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [AInt 1] Stone 1 -> Stone 1
+P bottle [AInt 1] Countdown C4 2 -> Countdown C4 2
+P bottle [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P bottle [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [AInt 3] Stone 1 -> Stone 1
+P bottle [AInt 3] Countdown C4 2 -> Countdown C4 2
+P bottle [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P bottle [AColor C2] Gem C2 Normal 0 Nothing -> Bottle C2
+P bottle [AColor C2] Gem C3 LineH 1 (Just Grass) -> Bottle C2
+P bottle [AColor C2] Stone 1 -> Bottle C2
+P bottle [AColor C2] Countdown C4 2 -> Bottle C2
+P bottle [AColor C2] Custom "bubble" 1 -> Bottle C2
+P bottle [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [AColor C1,AColor C4] Stone 1 -> Stone 1
+P bottle [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P bottle [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P bottle [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [AColor C3,AInt 5] Stone 1 -> Stone 1
+P bottle [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P bottle [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P bottle [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [AInt 1,AInt 0] Stone 1 -> Stone 1
+P bottle [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P bottle [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P bottle [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P bottle [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P bottle [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P bottle [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P bottle [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P time_spirit [] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [] Stone 1 -> TimeSpirit
+P time_spirit [] Countdown C4 2 -> TimeSpirit
+P time_spirit [] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AInt 1] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AInt 1] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AInt 1] Stone 1 -> TimeSpirit
+P time_spirit [AInt 1] Countdown C4 2 -> TimeSpirit
+P time_spirit [AInt 1] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AInt 3] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AInt 3] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AInt 3] Stone 1 -> TimeSpirit
+P time_spirit [AInt 3] Countdown C4 2 -> TimeSpirit
+P time_spirit [AInt 3] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AColor C2] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AColor C2] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AColor C2] Stone 1 -> TimeSpirit
+P time_spirit [AColor C2] Countdown C4 2 -> TimeSpirit
+P time_spirit [AColor C2] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AColor C1,AColor C4] Stone 1 -> TimeSpirit
+P time_spirit [AColor C1,AColor C4] Countdown C4 2 -> TimeSpirit
+P time_spirit [AColor C1,AColor C4] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AColor C3,AInt 5] Stone 1 -> TimeSpirit
+P time_spirit [AColor C3,AInt 5] Countdown C4 2 -> TimeSpirit
+P time_spirit [AColor C3,AInt 5] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AInt 1,AInt 0] Stone 1 -> TimeSpirit
+P time_spirit [AInt 1,AInt 0] Countdown C4 2 -> TimeSpirit
+P time_spirit [AInt 1,AInt 0] Custom "bubble" 1 -> TimeSpirit
+P time_spirit [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> TimeSpirit
+P time_spirit [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> TimeSpirit
+P time_spirit [AInt 0,AInt (-1)] Stone 1 -> TimeSpirit
+P time_spirit [AInt 0,AInt (-1)] Countdown C4 2 -> TimeSpirit
+P time_spirit [AInt 0,AInt (-1)] Custom "bubble" 1 -> TimeSpirit
+P countdown [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P countdown [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P countdown [] Stone 1 -> Stone 1
+P countdown [] Countdown C4 2 -> Countdown C4 2
+P countdown [] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AInt 1] Gem C2 Normal 0 Nothing -> Countdown C2 1
+P countdown [AInt 1] Gem C3 LineH 1 (Just Grass) -> Countdown C3 1
+P countdown [AInt 1] Stone 1 -> Stone 1
+P countdown [AInt 1] Countdown C4 2 -> Countdown C4 1
+P countdown [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AInt 3] Gem C2 Normal 0 Nothing -> Countdown C2 3
+P countdown [AInt 3] Gem C3 LineH 1 (Just Grass) -> Countdown C3 3
+P countdown [AInt 3] Stone 1 -> Stone 1
+P countdown [AInt 3] Countdown C4 2 -> Countdown C4 3
+P countdown [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P countdown [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P countdown [AColor C2] Stone 1 -> Stone 1
+P countdown [AColor C2] Countdown C4 2 -> Countdown C4 2
+P countdown [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P countdown [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P countdown [AColor C1,AColor C4] Stone 1 -> Stone 1
+P countdown [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P countdown [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P countdown [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P countdown [AColor C3,AInt 5] Stone 1 -> Stone 1
+P countdown [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P countdown [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P countdown [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P countdown [AInt 1,AInt 0] Stone 1 -> Stone 1
+P countdown [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P countdown [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P countdown [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P countdown [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P countdown [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P countdown [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P countdown [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [] Gem C2 Normal 0 Nothing -> Custom "bubble" 1
+P bubble [] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 1
+P bubble [] Stone 1 -> Custom "bubble" 1
+P bubble [] Countdown C4 2 -> Custom "bubble" 1
+P bubble [] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [AInt 1] Gem C2 Normal 0 Nothing -> Custom "bubble" 1
+P bubble [AInt 1] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 1
+P bubble [AInt 1] Stone 1 -> Custom "bubble" 1
+P bubble [AInt 1] Countdown C4 2 -> Custom "bubble" 1
+P bubble [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [AInt 3] Gem C2 Normal 0 Nothing -> Custom "bubble" 3
+P bubble [AInt 3] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 3
+P bubble [AInt 3] Stone 1 -> Custom "bubble" 3
+P bubble [AInt 3] Countdown C4 2 -> Custom "bubble" 3
+P bubble [AInt 3] Custom "bubble" 1 -> Custom "bubble" 3
+P bubble [AColor C2] Gem C2 Normal 0 Nothing -> Custom "bubble" 1
+P bubble [AColor C2] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 1
+P bubble [AColor C2] Stone 1 -> Custom "bubble" 1
+P bubble [AColor C2] Countdown C4 2 -> Custom "bubble" 1
+P bubble [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Custom "bubble" 1
+P bubble [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 1
+P bubble [AColor C1,AColor C4] Stone 1 -> Custom "bubble" 1
+P bubble [AColor C1,AColor C4] Countdown C4 2 -> Custom "bubble" 1
+P bubble [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Custom "bubble" 1
+P bubble [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 1
+P bubble [AColor C3,AInt 5] Stone 1 -> Custom "bubble" 1
+P bubble [AColor C3,AInt 5] Countdown C4 2 -> Custom "bubble" 1
+P bubble [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Custom "bubble" 1
+P bubble [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 1
+P bubble [AInt 1,AInt 0] Stone 1 -> Custom "bubble" 1
+P bubble [AInt 1,AInt 0] Countdown C4 2 -> Custom "bubble" 1
+P bubble [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P bubble [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Custom "bubble" 0
+P bubble [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Custom "bubble" 0
+P bubble [AInt 0,AInt (-1)] Stone 1 -> Custom "bubble" 0
+P bubble [AInt 0,AInt (-1)] Countdown C4 2 -> Custom "bubble" 0
+P bubble [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 0
+P jelly [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [] Stone 1 -> Stone 1
+P jelly [] Countdown C4 2 -> Countdown C4 2
+P jelly [] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AInt 1] Stone 1 -> Stone 1
+P jelly [AInt 1] Countdown C4 2 -> Countdown C4 2
+P jelly [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AInt 3] Stone 1 -> Stone 1
+P jelly [AInt 3] Countdown C4 2 -> Countdown C4 2
+P jelly [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AColor C2] Stone 1 -> Stone 1
+P jelly [AColor C2] Countdown C4 2 -> Countdown C4 2
+P jelly [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AColor C1,AColor C4] Stone 1 -> Stone 1
+P jelly [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P jelly [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AColor C3,AInt 5] Stone 1 -> Stone 1
+P jelly [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P jelly [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AInt 1,AInt 0] Stone 1 -> Stone 1
+P jelly [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P jelly [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P jelly [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P jelly [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P jelly [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P jelly [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P jelly [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [] Stone 1 -> Stone 1
+P gem [] Countdown C4 2 -> Countdown C4 2
+P gem [] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AInt 1] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AInt 1] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AInt 1] Stone 1 -> Stone 1
+P gem [AInt 1] Countdown C4 2 -> Countdown C4 2
+P gem [AInt 1] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AInt 3] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AInt 3] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AInt 3] Stone 1 -> Stone 1
+P gem [AInt 3] Countdown C4 2 -> Countdown C4 2
+P gem [AInt 3] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AColor C2] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AColor C2] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AColor C2] Stone 1 -> Stone 1
+P gem [AColor C2] Countdown C4 2 -> Countdown C4 2
+P gem [AColor C2] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AColor C1,AColor C4] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AColor C1,AColor C4] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AColor C1,AColor C4] Stone 1 -> Stone 1
+P gem [AColor C1,AColor C4] Countdown C4 2 -> Countdown C4 2
+P gem [AColor C1,AColor C4] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AColor C3,AInt 5] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AColor C3,AInt 5] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AColor C3,AInt 5] Stone 1 -> Stone 1
+P gem [AColor C3,AInt 5] Countdown C4 2 -> Countdown C4 2
+P gem [AColor C3,AInt 5] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AInt 1,AInt 0] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AInt 1,AInt 0] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AInt 1,AInt 0] Stone 1 -> Stone 1
+P gem [AInt 1,AInt 0] Countdown C4 2 -> Countdown C4 2
+P gem [AInt 1,AInt 0] Custom "bubble" 1 -> Custom "bubble" 1
+P gem [AInt 0,AInt (-1)] Gem C2 Normal 0 Nothing -> Gem C2 Normal 0 Nothing
+P gem [AInt 0,AInt (-1)] Gem C3 LineH 1 (Just Grass) -> Gem C3 LineH 1 (Just Grass)
+P gem [AInt 0,AInt (-1)] Stone 1 -> Stone 1
+P gem [AInt 0,AInt (-1)] Countdown C4 2 -> Countdown C4 2
+P gem [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
+R adjacent [10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170]
+R end [(PhaseTick,[10]),(PhaseSpread,[10,20,30]),(PhaseMove,[10])]
+R swap [10,20]
+R names ["gem","line_h","line_v","bomb","rainbow","ice","grass","vine","choco","fog","chain","freeze","curtain","steam","stone","chest","honey","balloon","cookie","cake","magic_hat","maker","snail","safe","flip","surprise","bottle","time_spirit","countdown","jelly","bubble"]
+R diff [("safe",Just CountSafes,0),("time_spirit",Just CountSpirits,2)]
+R level ["ufo","belt","portal","carpet"]
+A 0 [(3,3)] f8e87b773c8badf4
+A 0 [(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(3,5),(4,2),(4,3),(4,4),(4,5),(5,2),(5,3),(5,4),(5,5)] 7e2df37eb596d25c
+A 0 [(0,0),(0,2),(0,4),(0,6),(1,1),(1,3),(1,5),(1,7),(2,0),(2,2),(2,4),(2,6),(3,1),(3,3),(3,5),(3,7),(4,0),(4,2),(4,4),(4,6),(5,1),(5,3),(5,5),(5,7),(6,0),(6,2),(6,4),(6,6),(7,1),(7,3),(7,5),(7,7)] f2f353c959a40421
+A 60 [(3,3)] 2ac04130fc1c985d
+A 60 [(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(3,5),(4,2),(4,3),(4,4),(4,5),(5,2),(5,3),(5,4),(5,5)] f2d48ab66fcd303c
+A 60 [(0,0),(0,2),(0,4),(0,6),(1,1),(1,3),(1,5),(1,7),(2,0),(2,2),(2,4),(2,6),(3,1),(3,3),(3,5),(3,7),(4,0),(4,2),(4,4),(4,6),(5,1),(5,3),(5,5),(5,7),(6,0),(6,2),(6,4),(6,6),(7,1),(7,3),(7,5),(7,7)] 50ddb2831159904b
+A 120 [(3,3)] 6c6eeb6402e98646
+A 120 [(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(3,5),(4,2),(4,3),(4,4),(4,5),(5,2),(5,3),(5,4),(5,5)] db8eccdaa822023
+A 120 [(0,0),(0,2),(0,4),(0,6),(1,1),(1,3),(1,5),(1,7),(2,0),(2,2),(2,4),(2,6),(3,1),(3,3),(3,5),(3,7),(4,0),(4,2),(4,4),(4,6),(5,1),(5,3),(5,5),(5,7),(6,0),(6,2),(6,4),(6,6),(7,1),(7,3),(7,5),(7,7)] ceaad4da6a19ea
+A 180 [(3,3)] c4298bca926334b5
+A 180 [(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(3,5),(4,2),(4,3),(4,4),(4,5),(5,2),(5,3),(5,4),(5,5)] 8444eca7ba8edf4a
+A 180 [(0,0),(0,2),(0,4),(0,6),(1,1),(1,3),(1,5),(1,7),(2,0),(2,2),(2,4),(2,6),(3,1),(3,3),(3,5),(3,7),(4,0),(4,2),(4,4),(4,6),(5,1),(5,3),(5,5),(5,7),(6,0),(6,2),(6,4),(6,6),(7,1),(7,3),(7,5),(7,7)] ba4124cc3016baa4
+A 240 [(3,3)] ed9dcfff31af27d
+A 240 [(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(3,5),(4,2),(4,3),(4,4),(4,5),(5,2),(5,3),(5,4),(5,5)] b55d6d74155c2c48
+A 240 [(0,0),(0,2),(0,4),(0,6),(1,1),(1,3),(1,5),(1,7),(2,0),(2,2),(2,4),(2,6),(3,1),(3,3),(3,5),(3,7),(4,0),(4,2),(4,4),(4,6),(5,1),(5,3),(5,5),(5,7),(6,0),(6,2),(6,4),(6,6),(7,1),(7,3),(7,5),(7,7)] e18db174d96645f7
+E 0 PhaseTick 172861a8f0dc7f05
+E 0 PhaseSpread c56273506010ba70
+E 0 PhaseMove 172861a8f0dc7f05
+E 60 PhaseTick 5f58f3e68842b53b
+E 60 PhaseSpread df4ad422680b8782
+E 60 PhaseMove 5f58f3e68842b53b
+E 120 PhaseTick 9dcce3eb2ac824fb
+E 120 PhaseSpread aba866ed8cec665e
+E 120 PhaseMove 9dcce3eb2ac824fb
+E 180 PhaseTick e8812fa136a9beee
+E 180 PhaseSpread 80fe2d75a10a5685
+E 180 PhaseMove e8812fa136a9beee
+E 240 PhaseTick c29e4adba07cc696
+E 240 PhaseSpread 1ee5ab69c5ddfffd
+E 240 PhaseMove c29e4adba07cc696
+S 0 fd41618fa137e389
+S 60 a36fc357401e2b99
+S 120 5c0d4cdf5d56d062
+S 180 aedbadded13e95fa
+S 240 178b76caba92bc
+O 0 5536835957fa63dc
+O 60 31d8a45e1d8931b6
+O 120 63cb09d1fb129cea
+O 180 4d816cd733ecdeb9
+O 240 91a08a96642dbf0d
+C 0 c2b8774e9d2fb3a2
+C 60 76357762ccabe79
+C 120 3912044ae31ea75b
+C 180 9fe9b66ece45e950
+C 240 1ac84d9087fd3678
+G ([((1,1),("jelly",1)),((3,3),("jelly",2)),((1,1),("moss",1))],[("jelly",1),("jelly",1)])
+M 1 1 c5b0f3b211a3c919
+M 1 2 58cd9e475406588f
+M 2 1 36830f7376281c2d
+M 2 2 2fb4c84e198be9c5
+M 3 1 4b214a42a5fcc9cd
+M 3 2 998d21c1bf44f721
+M 4 1 4678fd4b2e04674b
+M 4 2 1503d1d806c0a91
+M 5 1 e6f6f5b54fe5c39
+M 5 2 29eb127b8b1a295c
+M 6 1 721ec259fd59c148
+M 6 2 a465525b1f3e2c52
+M 7 1 ea4b3b9569b73f23
+M 7 2 de0cf95c64464734
+M 8 1 abe5b8b8dbca08d4
+M 8 2 eb809b546f2053d1
+M 9 1 695e77880ad3037b
+M 9 2 fabfdbfdd3965b25
+M 10 1 bb6d3db1e48537bb
+M 10 2 14baebe687b3d10a
+M 11 1 41e15e872139234
+M 11 2 2d4ecce01526ff7c
+M 12 1 dc91ed1b65cb1399
+M 12 2 42e3d7ab0df6e911
+M 13 1 a474df504fb28954
+M 13 2 1d516ddeb1bc90d5
+M 14 1 1467a08a1145ecc7
+M 14 2 d62e18103a92623
+M 15 1 797b9c8c72c8d584
+M 15 2 b69dcf2ed09abb81
+M 16 1 14ce00bddb5d2f1e
+M 16 2 8580075913aadc98
+M 17 1 12b7af6e0787975d
+M 17 2 c010f3f3c04425b4
+M 18 1 43f12480a5bd427b
+M 18 2 13285a76ed3b8c61
+M 19 1 dc4d605fd8f7ed21
+M 19 2 bc90959403942624
+M 20 1 7de10e0df7330643
+M 20 2 bc1bcefd6e23eda3
+M 21 1 531f1021a3e40897
+M 21 2 e4b022cfb0f2a4be
+M 22 1 79da307a4ba69736
+M 22 2 cfa25959bf324984
+M 23 1 cb100ad9b5e63014
+M 23 2 a0605f2a65131610
+M 24 1 4ad6b7c6e2a676b1
+M 24 2 f13a0c01911f92ee
+M 25 1 bb78379e5f81fb64
+M 25 2 909b7fab8ab0ccb6
+M 26 1 1ac88066e2e1e6
+M 26 2 bf233ebdd7b81652
+M 27 1 d7d5d23bd1ab7ac1
+M 27 2 3f9a6392373fb9d3
+M 28 1 e3e77122977fc2bd
+M 28 2 416f97f675b56969
+M 29 1 7840d88d740e3ff5
+M 29 2 8e7443f55fa380a6
+M 30 1 f57699b28bd1a8a2
+M 30 2 ef9f4d11f68c07a9
+M 31 1 5dfcc6509d68e43f
+M 31 2 8174f48ddde02471
+M 32 1 193bf5810873d703
+M 32 2 84ba16b0344ccd35
+M 33 1 e7d763caa8af2fd2
+M 33 2 6bc77a9bf754e97
+M 34 1 33f21bc34a1eb556
+M 34 2 d3d8872c5142afff
+M 35 1 a79db49647e1cb0
+M 35 2 7b00bb7a56ea9e10
+M 36 1 a1c2af1c263eb19d
+M 36 2 f668007c8f1686d7
+M 37 1 a27a052e753e4bc0
+M 37 2 2e1c3b154a7cf963
+M 38 1 700a4cbf5c4eb563
+M 38 2 aa2742caf7c8dbe9
+M 39 1 e83f95071eb7a119
+M 39 2 90e870175d05de4
+M 40 1 2a80e6c1396f39d8
+M 40 2 4b283518c38ead47

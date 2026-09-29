@@ -6,7 +6,7 @@
 --
 -- 第二刀 2b：直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
 -- （Match3.Element.Registry）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
--- 段 4：彩蛋开启改为注册表的开启规则（edOpen），彩虹取色 / 特殊合成改为成对交换规则（edSwap，在 Game.Move）。
+-- 段 4：彩蛋开启改为注册表的开启规则（openRule），彩虹取色 / 特殊合成改为成对交换规则（swapRule，在 Game.Move）。
 -- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 --
 -- 依赖：Grid、Match、元素注册表。
@@ -32,8 +32,8 @@ import Match3.Types
 import Match3.Board.Grid
 import Match3.Board.Match
 
--- | expandSpecials（指定注册表）：爆炸范围 = 本体定义的 edBlast，能否点火 = 各层 edActivates（软锁纪律）。
--- 彩虹没有 edBlast（只经 rainbowClearSeeds 按交换对象取色，否则彩虹 × 宝石会重复清两色）。
+-- | expandSpecials（指定注册表）：爆炸范围 = 本体定义的 blast，能否点火 = 各层 activates（软锁纪律）。
+-- 彩虹没有 blast（只经 rainbowClearSeeds 按交换对象取色，否则彩虹 × 宝石会重复清两色）。
 expandSpecialsWith :: Registry -> Board -> [Pos] -> [Pos]
 expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
   where
@@ -64,12 +64,12 @@ spawnSpecials prefer runs clearable =
           _ -> slots !! (length slots `div` 2)
   ]
 
--- | countColor（指定注册表）：按本体颜色 edColor 计（不看叠层）。
+-- | countColor（指定注册表）：按本体颜色 color 计（不看叠层）。
 countColorWith :: Registry -> Board -> [Pos] -> Color -> Int
 countColorWith reg b ps col = length [p | p <- ps, colorOfWith reg (getCell b p) == Just col]
 
 -- | surpriseClearPass（指定注册表）：一轮内的多轮开启（段 4 起是通用的「开启类元素」流程：开启规则来自
--- 注册表的 edOpen，内置只有彩蛋；开出的格本轮坐住、屏蔽后再展开爆炸，新命中的格进入下一批前沿）。
+-- 注册表的 openRule，内置只有彩蛋；开出的格本轮坐住、屏蔽后再展开爆炸，新命中的格进入下一批前沿）。
 surpriseClearPassWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
 surpriseClearPassWith reg b0 seeds0 =
   go b0 (nub seeds0) [] [] []

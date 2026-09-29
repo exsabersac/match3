@@ -63,7 +63,17 @@ library
       Match3.Element.Types
       Match3.Element.Registry
       Match3.Element.Builtin
+      Match3.Element.Builtin.Common
+      Match3.Element.Builtin.Gem
+      Match3.Element.Builtin.Layer
+      Match3.Element.Builtin.Obstacle
+      Match3.Element.Builtin.Collectible
+      Match3.Element.Builtin.Actor
+      Match3.Element.Builtin.Ground
+      Match3.Element.Builtin.Level
       Match3.Element.Event
+      Match3.Element.Class
+      Match3.Element.Message
   other-modules:
       Paths_match3
   autogen-modules:
@@ -130,6 +140,7 @@ test-suite match3-test
       Spec.Branches
       Spec.Cascade
       Spec.Element
+      Spec.ElementClass
       Spec.Engine
       Spec.Extension
       Spec.GoalsLevels
@@ -146,6 +157,7 @@ test-suite match3-test
       Spec.Support
       Spec.UIEvents
       Toy
+      ElementQueries
       Golden
       Paths_match3
   autogen-modules:

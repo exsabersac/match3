@@ -1,5 +1,5 @@
 -- | 段 5：双层果冻（地面层）与气泡（占格本体）。两者是内置元素，但只经注册表（Element.Builtin 的定义）
--- 与白名单钩子（SlotGround / edGround、edOnHit / edAdjacent、CountNamed / GoalNamed）接入；
+-- 与白名单钩子（SlotGround / groundRule、onHit / adjacentRule、CountNamed / GoalNamed）接入；
 -- 主流程源码里没有它们的名字（jb_main_flow_untouched_scan）。设定见 docs/domain.md「双层果冻与气泡」。
 module Spec.JellyBubble
   ( tests
@@ -166,6 +166,6 @@ jb_main_flow_untouched_scan = do
   srcs <- mapM readFile mainFlow
   let bad = [f | (f, s) <- zip mainFlow srcs, "jelly" `isInfixOf` s || "bubble" `isInfixOf` s]
   assertEqual "no jelly / bubble in the main flow" [] bad
-  builtin <- readFile "src/Match3/Element/Builtin.hs"
+  builtin <- concat <$> mapM readFile ("src/Match3/Element/Builtin.hs" : [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ])
   assertBool "both defined in Element.Builtin" ("\"jelly\"" `isInfixOf` builtin && "\"bubble\"" `isInfixOf` builtin)
-  assertBool "both registered" (all (`elem` map edName (registryDefs defaultRegistry)) ["jelly", "bubble"])
+  assertBool "both registered" (all (`elem` map entryName (registryDefs defaultRegistry)) ["jelly", "bubble"])

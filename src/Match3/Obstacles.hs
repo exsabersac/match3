@@ -302,7 +302,7 @@ triggerAdjacentHats b cleared = triggerAdjacentHatsExcept b cleared []
 triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsExcept = triggerAdjacentHatsBy isGem
 
--- | 段 4：可改色谓词由调用方给出（元素框架里 = 注册表的 edRecolorable；内置等于 isGem）。
+-- | 段 4：可改色谓词由调用方给出（元素框架里 = 注册表的 recolorable；内置等于 isGem）。
 triggerAdjacentHatsBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsBy recolorable b cleared protected =
   foldl triggerOne b (hatsAdjacentTo b cleared)

@@ -43,8 +43,8 @@
 
 1. 已有 `gsOver` → 原样返回该结局。
 2. 坐标越界或不相邻 → `InvalidSwap`。
-3. `swapBlockedWith reg`（注册表的 `edBlocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
-4. `swapCells` 后：若没有成对交换规则成立（段 4：注册表的 `edSwap`，按 `srOrder`：彩虹取色 10 → 特殊合成 20；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。
+3. `swapBlockedWith reg`（注册表的 `blocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
+4. `swapCells` 后：若没有成对交换规则成立（段 4：注册表的 `swapRule`，按 `srOrder`：彩虹取色 10 → 特殊合成 20；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。
 
 2–4 返回的状态盘面 / 分数 / 步数不变，但会经 `clearMoveFx` 把 `gsCombo`、`gsLastCleared` 清零（这两个字段只描述最近一次**真正结算**的一步）。道具被拒（锤免疫、次数用完、自由交换无匹配）、撤销（`Engine.History` 的 `Undo`，经 `match3History.hpRestore`）、`shuffleGame` 同样清零。
 
@@ -56,10 +56,10 @@
 
 每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
-1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `edOpen`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
-2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4：`HookTeleport`，内置 = `portalTeleport`）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `edDrains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `edCounter` 计数；地面层（`gsGround`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
+1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
+2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级元素：元素类迁移后为 `Settling` 消息，内置回复者调 `portalTeleport`）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
 3. `refill` 补随机普通宝石。
-4. 飞碟吸收（段 4：注册表关卡级元素 `HookAbsorb`，内置 = `stepUfos`；去掉 `ufo` 即不吸收）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
+4. 飞碟吸收（段 4：注册表关卡级元素回复 `Refilled` 消息，内置 = `stepUfos`；去掉 `ufo` 即不吸收）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 
 波次分：`scoreForWave wave n`。
 
@@ -77,7 +77,7 @@
 
 ## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterBelt`）
 
-- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素 `HookShift` 取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用这一份。
+- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用这一份。
 - 移位后有匹配 → 全连锁。
 - **无匹配**仍 `settleBoardPortals`：皮带把饼干送到底行时也要收集；settle 后若出现匹配再连锁。
 
@@ -91,12 +91,12 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 ```
 
 - 本步已清除的藤/巧/蒸汽不蔓延。
-- 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。只推注册表里 `edPushable` 的格（段 4，内置 = 宝石 / 倒计时 / 双面块）；魔法帽 / 染色瓶同样只改 `edRecolorable` 的格。
+- 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。只推注册表里 `pushable` 的格（段 4，内置 = 宝石 / 倒计时 / 双面块）；魔法帽 / 染色瓶同样只改 `recolorable` 的格。
 - 蜗牛推动后若形成匹配：再 `cascadeMatches` 一次；**不再**重复倒计时/皮带/蜗牛/蔓延。
 
 ## 6. 结算
 
-- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经 `HookCover`，内置 = `coverCarpets`）。
+- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。
 - 步数：`gsMoves - 1 + 2 * spiritHit`。
 - `decideOutcome`：目标满足 → 每日则 `Won`，否则战役 `LevelClear` 或终章 `Won`；步数用尽 → `Lost`；否则 `MoveApplied`。
 - `MoveApplied` 时 `ensurePlayable`：无合法手则洗牌并 `restoreDecor`（保留障碍/特殊/叠层等装饰）。

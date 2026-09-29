@@ -2,7 +2,7 @@
 --
 -- 两类：
 --   * 步末效果 EndEffect（倒计时 / 皮带 / 蔓延 / 蜗牛）：原在 Match3.Game.Trace，第二刀 2b 搬到这里，
---     因为元素定义（ElementDef 的步末规则）要直接产出它；Game.Trace 原样再导出，旧代码不用改。
+--     因为元素的步末规则（`endRule`）要直接产出它；Game.Trace 原样再导出，旧代码不用改。
 --   * 效果事件 Event（消除 / 波及 / 特殊块爆炸 / 收集 / 得分 / 连击 / 步末 / 洗牌）：由回放脚本派生
 --     （Match3.Game.Trace.traceEvents），不参与结算。
 --

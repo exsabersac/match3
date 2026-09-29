@@ -3,7 +3,7 @@
 -- | 沉降与补子：重力（固定格不动）、底行饼干收集、传送门传送（settleBoardPortals 循环至稳定）、
 -- 随机补子（refill）以及回放用的 settleRefill。
 --
--- 依赖：Grid（randomColor）、元素注册表（固定格 edFalls、传送门 edPortal、边缘收集 edDrains（方向可配））。
+-- 依赖：Grid（randomColor）、元素注册表（固定格 falls、传送门 portal、边缘收集 drains（方向可配））。
 -- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 -- 不变量：refill 按行优先顺序逐个空洞消耗随机数；settleRefill 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
@@ -28,7 +28,7 @@ import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
 
--- | 固定格（指定注册表）：本体 edFalls = False。
+-- | 固定格（指定注册表）：本体 falls = False。
 gravityFixedCellWith :: Registry -> Cell -> Bool
 gravityFixedCellWith reg = not . fallsWith reg
 
@@ -59,7 +59,7 @@ drainBottomCookiesWith reg mb =
   let (mb', drained) = drainEdgesMWith reg mb
   in (mb', length drained, map fst drained)
 
--- | 边缘收集（段 2c，方向可配）：本体 edDrains 含某条边、且正位于这条边上的格被收走，
+-- | 边缘收集（段 2c，方向可配）：本体 drains 含某条边、且正位于这条边上的格被收走，
 -- 然后重力，重复到没有可收的格。返回（盘面，按收集顺序的 (位置, 原格)）。
 -- 每一轮按 底 → 左 → 右 → 上 扫四条边（边内按列 / 行升序，角格只收一次）；
 -- 内置只有饼干 = [EdgeBottom]，因此与旧的「底行收饼干、重力、再收」逐位相同。
@@ -87,12 +87,12 @@ drainEdgesMWith reg mb =
              (mb2, more) = drainEdgesMWith reg (applyGravityWith reg mb1)
          in (mb2, hits ++ more)
 
--- | applyPortalTeleports（指定注册表）：段 4 起传送门是关卡级元素，经注册表的 HookTeleport 取实现
--- （内置 = portalTeleport；本体 edPortal 的格可传送）；未注册时不传送。
+-- | applyPortalTeleports（指定注册表）：段 4 起传送门是关卡级元素，经注册表向关卡级元素发 Settling 消息取实现
+-- （内置 = portalTeleport；本体 portal 的格可传送）；未注册时不传送。
 applyPortalTeleportsWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
 applyPortalTeleportsWith = teleportWith
 
--- | 传送门的实现（内置 LevelDef "portal" 的钩子）：可穿门谓词由注册表给出。
+-- | 传送门的实现（内置关卡级元素 PortalLevel 回复 Settling 消息时调用）：可穿门谓词由注册表给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard
 portalTeleport canPort portals mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
@@ -115,7 +115,7 @@ settleBoardPortalsWith reg portals mb =
   let (mb', drained) = settleDrainWith reg portals mb
   in (mb', length drained, map fst drained)
 
--- | 沉降（段 2c）：同 settleBoardPortalsWith，但返回被边缘收走的原格（连锁按各自的 edCounter 计数）。
+-- | 沉降（段 2c）：同 settleBoardPortalsWith，但返回被边缘收走的原格（连锁按各自的 counter 计数）。
 settleDrainWith :: Registry -> [(Pos, Pos)] -> MBoard -> (MBoard, [(Pos, Cell)])
 settleDrainWith reg portals mb =
   let fallen = applyGravityWith reg mb

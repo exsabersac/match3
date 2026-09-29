@@ -119,14 +119,12 @@ drawWavePop ren app p v = do
   let t = phaseT p
       w = wvWave v
       tint = waveTint app (cCombo (plStage p))
-      holes = cwHoles w
       cleared = wvCleared v
-      holeAt (r, cc) = (holes !! r) !! cc
       veilA = round ((1 - t) * 120) :: Word8
   drawBoardBase ren app
   forM_ allCells $ \pos -> do
     let (x, y) = cellOrigin pos
-    case holeAt pos of
+    case holeAt w pos of
       Just cell | pos `notElem` cleared -> drawCellAny ren app x y cell False
       _ -> pure ()
   rendererDrawColor ren $= V4 8 6 24 veilA
@@ -141,7 +139,7 @@ drawWavePop ren app p v = do
     forM_ (appArt app) $ \art ->
       void (drawSpriteAdd ren art "spark" (rect (cx - ring `div` 2) (cy - ring `div` 2) ring ring) tint a)
     drawCellScaled ren app cx cy s a (getCell (cwBefore w) pos)
-    case holeAt pos of
+    case holeAt w pos of
       Just cell -> drawCellScaled ren app cx cy (max 0.05 t) 255 cell
       Nothing -> pure ()
 
@@ -154,8 +152,8 @@ drawWaveFall ren app p v = do
       table = fallTable w
   drawBoardBase ren app
   rendererClipRect ren $= Just boardRect
-  forM_ allCells $ \pos@(r, cc) -> do
-    let (d, _new) = (table !! r) !! cc
+  forM_ allCells $ \pos -> do
+    let (d, _new) = fallAt table pos
         (x, y) = cellOrigin pos
         off = round (fromIntegral (fromIntegral d * cellPx) * (1 - e)) :: CInt
     drawCellAny ren app x (y - off) (getCell (cwAfter w) pos) False

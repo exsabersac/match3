@@ -11,7 +11,6 @@ module ElementQueries
 
 import Data.Bits (xor)
 import Data.Char (ord)
-import Data.List (foldl')
 import Data.Word (Word64)
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Board.Match (findHintWith)
@@ -26,6 +25,12 @@ import Numeric (showHex)
 
 main :: IO ()
 main = mapM_ putStrLn queryLines
+
+-- | 战役第 1 关（关卡表为空时直接报错）。
+firstLevel :: Level
+firstLevel = case allLevels of
+  (l : _) -> l
+  [] -> error "firstLevel: allLevels is empty"
 
 reg :: Registry
 reg = defaultRegistry
@@ -101,7 +106,7 @@ base = mkBoard [[toEnum ((r * 3 + c * 2 + (r `div` 2)) `mod` 5) | c <- [0 .. boa
     emptyish _ = (initialBoard, ())
 
 initialBoard :: Board
-initialBoard = gsBoard (newGameAtLevel 0 (levelConfig (head allLevels)) 1)
+initialBoard = gsBoard (newGameAtLevel 0 (levelConfig firstLevel) 1)
 
 -- | 全元素样例盘：每个样本格放一格（按行优先填满，多出来的丢掉），再补一条 C1 三连做真消除源。
 zoo :: Int -> Board

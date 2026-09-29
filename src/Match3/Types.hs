@@ -104,6 +104,7 @@ module Match3.Types
   , boardSize
   , numColors
   , allColors
+  , colorAt
   , Score
   , MovesLeft
   , TargetScore
@@ -379,9 +380,9 @@ isBalloon :: Cell -> Bool
 isBalloon (Balloon _) = True
 isBalloon _ = False
 
-balloonColor :: Cell -> Color
-balloonColor (Balloon c) = c
-balloonColor _ = error "balloonColor: not a balloon"
+balloonColor :: Cell -> Maybe Color
+balloonColor (Balloon c) = Just c
+balloonColor _ = Nothing
 
 -- | Biscuit / cookie (饼干): falls; collected on the bottom row.
 mkCookie :: Cell
@@ -422,9 +423,9 @@ mkMaker c = Maker c 3
 mkMakerCharges :: Color -> Int -> Cell
 mkMakerCharges c n = Maker c (max 1 n)
 
-makerColor :: Cell -> Color
-makerColor (Maker c _) = c
-makerColor _ = error "makerColor: not a maker"
+makerColor :: Cell -> Maybe Color
+makerColor (Maker c _) = Just c
+makerColor _ = Nothing
 
 makerCharges :: Cell -> Int
 makerCharges (Maker _ n) = n
@@ -457,13 +458,13 @@ isFlip :: Cell -> Bool
 isFlip (Flip _ _) = True
 isFlip _ = False
 
-flipFront :: Cell -> Color
-flipFront (Flip f _) = f
-flipFront _ = error "flipFront: not a Flip"
+flipFront :: Cell -> Maybe Color
+flipFront (Flip f _) = Just f
+flipFront _ = Nothing
 
-flipBack :: Cell -> Color
-flipBack (Flip _ b) = b
-flipBack _ = error "flipBack: not a Flip"
+flipBack :: Cell -> Maybe Color
+flipBack (Flip _ b) = Just b
+flipBack _ = Nothing
 
 -- | Surprise egg / gift box (彩蛋 / 惊喜盒).
 mkSurprise :: Cell
@@ -481,9 +482,9 @@ isBottle :: Cell -> Bool
 isBottle (Bottle _) = True
 isBottle _ = False
 
-bottleColor :: Cell -> Color
-bottleColor (Bottle c) = c
-bottleColor _ = error "bottleColor: not a Bottle"
+bottleColor :: Cell -> Maybe Color
+bottleColor (Bottle c) = Just c
+bottleColor _ = Nothing
 
 -- | Time spirit (时间精灵): adjacent clear removes it and awards +2 moves.
 mkTimeSpirit :: Cell
@@ -540,51 +541,35 @@ isGem (Bottle _) = False
 isGem TimeSpirit = False
 isGem (Custom _ _) = False
 
--- | Color of a gem / countdown cell. Partial on Stone.
-cellColor :: Cell -> Color
-cellColor (Gem c _ _ _) = c
-cellColor (Countdown c _) = c
-cellColor (Stone _) = error "cellColor: Stone has no color"
-cellColor (Chest _) = error "cellColor: Chest has no color"
-cellColor (Honey _) = error "cellColor: Honey has no color"
-cellColor (Balloon _) = error "cellColor: Balloon has no color (use balloonColor)"
-cellColor Cookie = error "cellColor: Cookie has no color"
-cellColor (Cake _) = error "cellColor: Cake has no color"
-cellColor MagicHat = error "cellColor: MagicHat has no color"
-cellColor (Maker _ _) = error "cellColor: Maker has no color (use makerColor)"
-cellColor (Snail _ _) = error "cellColor: Snail has no color"
-cellColor (Safe _) = error "cellColor: Safe has no color"
-cellColor (Flip f _) = f
-cellColor Surprise = error "cellColor: Surprise has no color"
-cellColor (Bottle _) = error "cellColor: Bottle has no color (use bottleColor)"
-cellColor TimeSpirit = error "cellColor: TimeSpirit has no color"
-cellColor (Custom n _) = error ("cellColor: custom element " ++ n ++ " has no color")
+-- | 宝石 / 倒计时 / 双面块（正面）的颜色；其余格没有颜色（Nothing）。
+-- 气球 / 榨汁机 / 染色瓶的颜色另见 balloonColor / makerColor / bottleColor。
+cellColor :: Cell -> Maybe Color
+cellColor cell = case cell of
+  Gem c _ _ _ -> Just c
+  Countdown c _ -> Just c
+  Flip f _ -> Just f
+  _ -> Nothing
 
--- | Kind of a gem cell. Countdown acts as Normal for combo checks.
-cellKind :: Cell -> GemKind
-cellKind (Gem _ k _ _) = k
-cellKind (Countdown _ _) = Normal
-cellKind (Stone _) = error "cellKind: Stone has no kind"
-cellKind (Chest _) = error "cellKind: Chest has no kind"
-cellKind (Honey _) = error "cellKind: Honey has no kind"
-cellKind (Balloon _) = error "cellKind: Balloon has no kind"
-cellKind Cookie = error "cellKind: Cookie has no kind"
-cellKind (Cake _) = error "cellKind: Cake has no kind"
-cellKind MagicHat = error "cellKind: MagicHat has no kind"
-cellKind (Maker _ _) = error "cellKind: Maker has no kind"
-cellKind (Snail _ _) = error "cellKind: Snail has no kind"
-cellKind (Safe _) = error "cellKind: Safe has no kind"
-cellKind (Flip _ _) = Normal
-cellKind Surprise = error "cellKind: Surprise has no kind"
-cellKind (Bottle _) = error "cellKind: Bottle has no kind"
-cellKind TimeSpirit = error "cellKind: TimeSpirit has no kind"
-cellKind (Custom n _) = error ("cellKind: custom element " ++ n ++ " has no kind")
+-- | 宝石的种类；倒计时与双面块按 Normal 参与组合判定；其余格没有种类（Nothing）。
+cellKind :: Cell -> Maybe GemKind
+cellKind cell = case cell of
+  Gem _ k _ _ -> Just k
+  Countdown _ _ -> Just Normal
+  Flip _ _ -> Just Normal
+  _ -> Nothing
 
 numColors :: Int
 numColors = 5
 
 allColors :: [Color]
 allColors = [minBound .. maxBound]
+
+-- | 第 i 种颜色（按 allColors 顺序，下标对颜色数取模，负数也落在范围内）。
+-- 取代 toEnum 构造颜色：总函数，不会因越界报错。
+colorAt :: Int -> Color
+colorAt i = case drop (i `mod` length allColors) allColors of
+  c : _ -> c
+  [] -> minBound
 
 type Pos = (Int, Int)
 -- | 盘面：以 (行, 列) 为下标的二维数组（第三刀起；之前是 [[Cell]]，读格要走两次 (!!)）。

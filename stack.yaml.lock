@@ -3,10 +3,45 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/topics/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: random-1.2.1.1@sha256:e7c1f881159d5cc788619c9ee8b8f340ba2ff0db571cdf3d1a1968ebc5108789,6777
+    pantry-tree:
+      sha256: adc460de1e12074b8fb5634330089e11aeeac02b02716ba15b9f4de6fa1de425
+      size: 1528
+  original:
+    hackage: random-1.2.1.1
+- completed:
+    hackage: splitmix-0.1.0.5@sha256:caa9b4a92abf1496c7f6a3c0f4e357426a54880077cb9f04e260a8bfa034b77b,6596
+    pantry-tree:
+      sha256: 6eb34b55fb0eb1c41fe539fb8ece181e31e82f4c89abf2b1aaf46df4b274797d
+      size: 1519
+  original:
+    hackage: splitmix-0.1.0.5
+- completed:
+    hackage: parallel-3.3.0.0@sha256:7a4b82d3ad83e38f5b3be442ee32c9e17905ba9a813349fa76707fd0377e91aa,1849
+    pantry-tree:
+      sha256: c2170f3d46b899bde98acfa554577583668822bdf23cf785a00754ad9c27d226
+      size: 392
+  original:
+    hackage: parallel-3.3.0.0
+- completed:
+    hackage: tagged-0.8.10@sha256:435d941c96a187f55b27803ad08ac387f5ec89f11e604f3cd7c959c29136dcd6,2201
+    pantry-tree:
+      sha256: ee290c846d19e0b2c8db41a890d2d507c8ea1cbc66af50cc9c43b6cb581e8812
+      size: 438
+  original:
+    hackage: tagged-0.8.10
+- completed:
+    hackage: unordered-containers-0.2.21@sha256:c5de1fb3377ed3c5f4cd851a771d1acc5c37d2f6bef0a499295c0e8857da5605,3987
+    pantry-tree:
+      sha256: e60c9f5dcacee1c8230534bc7d29224015341c956b63464fb7884a6de8b3614d
+      size: 1779
+  original:
+    hackage: unordered-containers-0.2.21
 snapshots:
 - completed:
-    sha256: a81fb3877c4f9031e1325eb3935122e608d80715dc16b586eb11ddbff8671ecd
-    size: 640086
-    url: http://mirrors.ustc.edu.cn/stackage/stackage-snapshots/lts/21/25.yaml
-  original: lts-21.25
+    sha256: 5851c9fcb30f350a167916d8873bdd53c149ce73ceb9637f4caba0cd554c2af6
+    size: 732465
+    url: http://mirrors.ustc.edu.cn/stackage/stackage-snapshots/lts/24/60.yaml
+  original: lts-24.60

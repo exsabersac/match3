@@ -29,24 +29,10 @@ tests =
   , testCase "jb_main_flow_untouched_scan" jb_main_flow_untouched_scan
   ]
 
--- | 交换 (1,2)↔(2,2) 后第 1 行 (1,0)–(1,3) 是 C5 四连（同 Spec.Extension 的盘）。
-tripleBoard :: Board
-tripleBoard = foldl (\b (p, c) -> setCell b p c) stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5)]
-
-tripleMove :: (Pos, Pos)
-tripleMove = ((1, 2), (2, 2))
-
-allPos :: [Pos]
-allPos = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+-- tripleBoard / tripleMove / allPos / isWin 见 Spec.Support。
 
 bubblesOn :: Board -> [Pos]
 bubblesOn b = [p | p <- allPos, getCell b p == Custom "bubble" 1]
-
-isWin :: Maybe Outcome -> Bool
-isWin o = case o of
-  Just (Won _) -> True
-  Just (LevelClear _ _) -> True
-  _ -> False
 
 -- | 上方格子每被消除一次去一层、每层计 1；没被消到的果冻不动；不占格（盘面与无果冻时相同）。
 jb_jelly_two_layers_counted_per_layer :: Assertion
@@ -98,7 +84,8 @@ jb_bubble_pops_on_adjacent_clear = do
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
-  assertBool "adjacent bubble cleared in the first wave" ((0, 1) `elem` cwCleared (head (mtWaves mt1)))
+  w1 <- firstWave mt1
+  assertBool "adjacent bubble cleared in the first wave" ((0, 1) `elem` cwCleared w1)
   assertEqual "far bubble stays" [(6, 6)] (bubblesOn (gsBoard gs1))
   assertEqual "counted" [("bubble", 1)] (gsElementCounts gs1)
   assertBool "goal reached" (isWin (gsOver gs1))
@@ -125,7 +112,8 @@ jb_bubble_blocks_swap_falls_no_match = do
       board2 = setCell (setCell board1 (1, 5) (mkGem C1)) (2, 5) (mkGem C2)
       gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board2}
       (_, _, mt) = resolveSwapWith defaultRegistry (1, 2) (2, 2) gs0
-  assertEqual "untouched column: bubble stays" (Custom "bubble" 1) (getCell (cwAfter (head (mtWaves mt))) (0, 5))
+  w <- firstWave mt
+  assertEqual "untouched column: bubble stays" (Custom "bubble" 1) (getCell (cwAfter w) (0, 5))
   -- 下落：第 3 行 (3,0)(3,1)(3,2) 成三连被清；气泡放在 (1,0)（与清除格隔一格，不被波及），
   -- 清掉 (3,0) 后 (2,0)、(1,0) 各落一格，气泡到 (2,0)
   let bF0 = foldl (\b (p, c) -> setCell b p c) stableBoard [((3, 0), mkGem C2), ((3, 1), mkGem C2), ((1, 0), Custom "bubble" 1)]
@@ -133,7 +121,8 @@ jb_bubble_blocks_swap_falls_no_match = do
   case [(a, b) | (a, b) <- [((3, 2), (2, 2)), ((3, 2), (4, 2))], moveApplied (snd (trySwap a b gsF))] of
     ((a, b) : _) -> do
       let (_, _, mtF) = resolveSwapWith defaultRegistry a b gsF
-      assertEqual "bubble fell one row" (Custom "bubble" 1) (getCell (cwAfter (head (mtWaves mtF))) (2, 0))
+      wF <- firstWave mtF
+      assertEqual "bubble fell one row" (Custom "bubble" 1) (getCell (cwAfter wF) (2, 0))
     [] -> assertFailure "fixture: no move completes row 3"
 
 -- | 追加在 38 关之后：第 39 关果冻、第 40 关气泡；目标按元素名；前 38 关的名字 / 目标不变（金标准另外逐字锁定）。
@@ -158,14 +147,11 @@ jb_levels_appended = do
 -- 元素定义（Element.Builtin）和关卡数据（Types 的关卡表、Game.Level 的放置 / 地面表）里。
 jb_main_flow_untouched_scan :: Assertion
 jb_main_flow_untouched_scan = do
-  let mainFlow =
-        [ "src/Match3/Board/" ++ m ++ ".hs" | m <- ["Cascade", "Clear", "Gravity", "Match", "Grid", "Random", "Default"] ]
-          ++ [ "src/Match3/Game/" ++ m ++ ".hs" | m <- ["Resolve", "Move", "Boosters", "Trace", "Tally", "Shuffle", "State", "Outcome"] ]
-          ++ [ "src/Match3/Element/" ++ m ++ ".hs" | m <- ["Registry", "Types", "Event"] ]
-          ++ [ "src/Match3/Engine.hs", "src/Engine/Game.hs", "src/Engine/History.hs", "src/Engine/Effect.hs", "src/Engine/Playback.hs" ]
+  mainFlow <- mainFlowSources
+  assertBool "scanned the main flow" (all (`elem` mainFlow) ["src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs", "src/Match3/Element/Registry.hs", "src/Match3/Engine.hs", "src/Engine/Game.hs"])
   srcs <- mapM readFile mainFlow
   let bad = [f | (f, s) <- zip mainFlow srcs, "jelly" `isInfixOf` s || "bubble" `isInfixOf` s]
   assertEqual "no jelly / bubble in the main flow" [] bad
-  builtin <- concat <$> mapM readFile ("src/Match3/Element/Builtin.hs" : [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ])
+  builtin <- concat <$> (mapM readFile =<< builtinSources)
   assertBool "both defined in Element.Builtin" ("\"jelly\"" `isInfixOf` builtin && "\"bubble\"" `isInfixOf` builtin)
   assertBool "both registered" (all (`elem` map entryName (registryDefs defaultRegistry)) ["jelly", "bubble"])

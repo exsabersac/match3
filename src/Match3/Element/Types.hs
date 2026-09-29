@@ -42,6 +42,7 @@ data Slot
   | SlotIce          -- ^ 宝石冰层
   | SlotCustom       -- ^ 自定义本体：Custom 名字 == 元素名
   | SlotGround       -- ^ 地面层（段 2c）：GameState.gsGround 里名字 == 元素名的格
+  | SlotNone         -- ^ 原型推不出内置槽位（构造器用错）：mkRegistryChecked 报错，mkRegistry 不为它分派
   deriving (Eq, Show)
 
 -- | 直接命中（匹配 / 特殊块 / 道具种子落在本格）时这一层的反应。

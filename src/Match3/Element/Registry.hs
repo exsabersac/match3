@@ -21,6 +21,8 @@ module Match3.Element.Registry
   , groundEntry
   , inertEntry
   , mkRegistry
+  , mkRegistryChecked
+  , RegistryError(..)
   , register
   , registryDefs
   , lookupElement
@@ -76,7 +78,7 @@ module Match3.Element.Registry
   , coverWith
   ) where
 
-import Data.Array (Array, accumArray, (!))
+import Data.Array (Array, accumArray, bounds, inRange, (!))
 import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Match3.Board.Grid (MBoard, getCell, setCell)
@@ -105,9 +107,16 @@ data Entry = Entry
   , entryPlace :: Placer
   }
 
--- | 内置本体槽位（cellSlot 编号）的构造器：原型值、解码器、放置。
-bodyEntry :: Element e => Int -> e -> (Cell -> Maybe e) -> Placer -> Entry
-bodyEntry i proto dec = Entry (name proto) (SlotCell i) (PBody (SomeElement proto) (fmap SomeElement . dec))
+-- | 内置本体槽位的构造器：原型值、解码器、放置。槽号由原型写回的格子推导（'cellSlot'），
+-- 原型写回 Custom 时推不出内置槽位（'SlotNone'，mkRegistryChecked 报错）。
+bodyEntry :: Element e => e -> (Cell -> Maybe e) -> Placer -> Entry
+bodyEntry proto dec = Entry (name proto) (bodySlot (toCell proto)) (PBody (SomeElement proto) (fmap SomeElement . dec))
+
+-- | 本体格子的内置槽位。
+bodySlot :: Cell -> Slot
+bodySlot cell = case cell of
+  Custom _ _ -> SlotNone
+  _ -> SlotCell (cellSlot cell)
 
 -- | 自定义本体（格子 = Custom 名字 状态值）：原型值、状态值 → 元素值；放置 = Custom 名字 参数（缺省 1）。
 customEntry :: Element e => e -> (Int -> e) -> Entry
@@ -119,9 +128,16 @@ customEntry proto mk = customEntryWith proto mk (\args _ -> Just (Custom n (case
 customEntryWith :: Element e => e -> (Int -> e) -> Placer -> Entry
 customEntryWith proto mk = Entry (name proto) SlotCustom (PCustom (SomeElement proto) (SomeElement . mk))
 
--- | 修饰器（冰层 SlotIce / 叠层 SlotOverlay i）的构造器。
-modifierEntry :: Modifier m => Slot -> m -> (Cell -> Maybe m) -> Placer -> Entry
-modifierEntry sl proto dec = Entry (modName proto) sl (PMod (SomeModifier proto) (fmap SomeModifier . dec))
+-- | 修饰器（冰层 / 叠层）的构造器：原型值、解码器、放置。槽位由原型写到一颗裸宝石上的结果推导：
+-- 盖了叠层 = SlotOverlay ('overlaySlot')，否则有冰层 = SlotIce，都没有 = 'SlotNone'。
+modifierEntry :: Modifier m => m -> (Cell -> Maybe m) -> Placer -> Entry
+modifierEntry proto dec = Entry (modName proto) (modifierSlot proto) (PMod (SomeModifier proto) (fmap SomeModifier . dec))
+
+modifierSlot :: Modifier m => m -> Slot
+modifierSlot m = case modApply m (Gem C1 Normal 0 Nothing) of
+  Gem _ _ _ (Just o) -> SlotOverlay (overlaySlot o)
+  Gem _ _ ice Nothing | ice > 0 -> SlotIce
+  _ -> SlotNone
 
 -- | 地面层元素（不占格；层数在 gsGround 里）：规则取原型值的 'ground' 与 'counter'；不经放置表放。
 groundEntry :: Element e => e -> Entry
@@ -134,8 +150,8 @@ inertEntry n = customEntry (Inert n (Custom n 1)) (Inert n . Custom n)
 -- | 注册表。用 mkRegistry / register 构造；字段不导出（分派数组由条目列表派生）。
 data Registry = Registry
   { regDefs     :: [Entry]                          -- 注册顺序
-  , regCells    :: Array Int (Cell -> SomeElement)  -- 内置本体 0..19 的解码器
-  , regOverlays :: Array Int (Cell -> Maybe SomeModifier)  -- 叠层 0..7
+  , regCells    :: Array Int (Cell -> SomeElement)  -- 内置本体的解码器（按 cellSlot；边界由条目算出）
+  , regOverlays :: Array Int (Cell -> Maybe SomeModifier)  -- 叠层（按 overlaySlot；边界由条目算出）
   , regIce      :: Cell -> Maybe SomeModifier
   , regCustom   :: [(ElementName, Int -> SomeElement)]
   , regGround   :: [(ElementName, SomeElement)]
@@ -147,15 +163,47 @@ data Registry = Registry
   , regLevel    :: [SomeLevel]                      -- 关卡级元素（注册顺序；同名以后注册的为准）
   }
 
--- | 由条目列表建表。同一槽位 / 同名的多个条目以后出现的为准。
+-- | 建表时发现的条目错误（'mkRegistryChecked'）。
+data RegistryError
+  = DuplicateName ElementName        -- ^ 同名条目出现多次
+  | DuplicateSlot Slot [ElementName] -- ^ 同一内置槽位（本体 / 叠层 / 冰层）被多个条目占用
+  | NoSlot ElementName               -- ^ 原型推不出内置槽位（'SlotNone'）
+  deriving (Eq, Show)
+
+-- | 由条目列表建表并检查：名字互不相同、内置槽位互不相同、每个内置构造器都推得出槽位。
+-- 有错时返回全部错误（按条目顺序）；没错时与 'mkRegistry' 建出同一张表。
+mkRegistryChecked :: [Entry] -> Either [RegistryError] Registry
+mkRegistryChecked defs =
+  case dupNames ++ dupSlots ++ noSlots of
+    [] -> Right (mkRegistry defs)
+    errs -> Left errs
+  where
+    names = map entryName defs
+    dupNames = [DuplicateName n | n <- nub names, length (filter (== n) names) > 1]
+    builtinSlot sl = case sl of
+      SlotCell _ -> True
+      SlotOverlay _ -> True
+      SlotIce -> True
+      _ -> False
+    slots = nub [entrySlot d | d <- defs, builtinSlot (entrySlot d)]
+    dupSlots =
+      [ DuplicateSlot sl ns
+      | sl <- slots
+      , let ns = [entryName d | d <- defs, entrySlot d == sl]
+      , length ns > 1
+      ]
+    noSlots = [NoSlot (entryName d) | d <- defs, entrySlot d == SlotNone]
+
+-- | 由条目列表建表（总函数，不报错）。同一槽位 / 同名的多个条目以后出现的为准；推不出槽位的条目不参与分派。
+-- 分派数组的边界由条目的槽号算出，查不到的槽号退回缺省（本体 = 惰性占格，叠层 = 无）。
 mkRegistry :: [Entry] -> Registry
 mkRegistry defs0 =
   let defs = dedupe defs0
       opaque cell = SomeElement (Inert "?" cell)
-      cells =
-        accumArray (\_ d -> d) opaque (0, 19)
-          [(i, \cell -> fromMaybe (opaque cell) (dec cell)) | Entry {entrySlot = SlotCell i, entryProto = PBody _ dec} <- defs]
-      ovs = accumArray (\_ d -> d) (const Nothing) (0, 7) [(i, dec) | Entry {entrySlot = SlotOverlay i, entryProto = PMod _ dec} <- defs]
+      cellDecs = [(i, \cell -> fromMaybe (opaque cell) (dec cell)) | Entry {entrySlot = SlotCell i, entryProto = PBody _ dec} <- defs]
+      ovDecs = [(i, dec) | Entry {entrySlot = SlotOverlay i, entryProto = PMod _ dec} <- defs]
+      cells = accumArray (\_ d -> d) opaque (slotBounds (map fst cellDecs)) cellDecs
+      ovs = accumArray (\_ d -> d) (const Nothing) (slotBounds (map fst ovDecs)) ovDecs
       ice = fromMaybe (const Nothing) (listToMaybe (reverse [dec | Entry {entrySlot = SlotIce, entryProto = PMod _ dec} <- defs]))
       bodies = concat [bodyProto d | d <- defs]
   in Registry
@@ -175,8 +223,12 @@ mkRegistry defs0 =
   where
     -- 同名只留最后一个，位置取第一次出现处（注册顺序稳定）
     dedupe ds =
-      let names = nub (map entryName ds)
-      in [last [d | d <- ds, entryName d == n] | n <- names]
+      [ d
+      | n <- nub (map entryName ds)
+      , Just d <- [listToMaybe (reverse [d' | d' <- ds, entryName d' == n])]
+      ]
+    -- 槽号 0..最大者；没有条目时为空区间
+    slotBounds is = (0, maximum (-1 : is))
     bodyProto d = case entryProto d of
       PBody e _ -> [e]
       PCustom e _ -> [e]
@@ -208,14 +260,20 @@ lookupElement reg n = listToMaybe [d | d <- regDefs reg, entryName d == n]
 bodyOf :: Registry -> Cell -> SomeElement
 bodyOf reg cell = case cell of
   Custom n k -> maybe (SomeElement (Inert n cell)) ($ k) (lookup n (regCustom reg))
-  _ -> (regCells reg ! cellSlot cell) cell
+  _ -> slotAt (regCells reg) (cellSlot cell) (\c -> SomeElement (Inert "?" c)) cell
+
+-- | 按槽号取分派数组里的解码器；越界（注册表里没有该槽位的条目）取缺省。
+slotAt :: Array Int a -> Int -> a -> a
+slotAt arr i dflt
+  | inRange (bounds arr) i = arr ! i
+  | otherwise = dflt
 
 -- | 本体之上的各层（自上而下）：冰层（ice > 0）、叠层。
 upperOf :: Registry -> Cell -> [SomeModifier]
 upperOf reg cell = case cell of
   Gem _ _ ice ov ->
     [m | ice > 0, Just m <- [regIce reg cell]]
-      ++ [m | Just o <- [ov], Just m <- [(regOverlays reg ! overlaySlot o) cell]]
+      ++ [m | Just o <- [ov], Just m <- [slotAt (regOverlays reg) (overlaySlot o) (const Nothing) cell]]
   _ -> []
 
 -- | 整个格子的元素值：修饰器（冰 → 叠层，自上而下）包着本体。
@@ -305,7 +363,7 @@ stripOnClearWith reg b ps = foldl strip b (nub ps)
   where
     strip board p = case getCell board p of
       cell@(Gem col kind ice (Just o))
-        | Just (SomeModifier m) <- (regOverlays reg ! overlaySlot o) cell
+        | Just (SomeModifier m) <- slotAt (regOverlays reg) (overlaySlot o) (const Nothing) cell
         , modStripOnClear m ->
             setCell board p (Gem col kind ice Nothing)
       _ -> board

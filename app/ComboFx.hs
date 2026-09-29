@@ -42,6 +42,8 @@ module ComboFx
   , stageMoves
     -- * 下落映射
   , fallTable
+  , fallAt
+  , holeAt
     -- * 连击等级样式
   , ComboStyle (..)
   , comboStyle
@@ -58,7 +60,10 @@ module ComboFx
   ) where
 
 import Match3.Board.Default (gravityFixedCell)
+import Match3.Board.Grid (atM)
 import Data.List (transpose)
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NE
 import Data.Word (Word8)
 import Match3.Core
 import Match3.Element.Event (Event (..), EventKind (..), endEffectKind, endEffectPairs)
@@ -118,7 +123,9 @@ endStageTable =
 
 -- | 步末阶段的基础帧数（查 endStageTable）。
 endStageBase :: StageKind -> Int
-endStageBase k = head ([n | (_, (k', n)) <- endStageTable, k' == k] ++ [18])
+endStageBase k = case [n | (_, (k', n)) <- endStageTable, k' == k] of
+  n : _ -> n
+  [] -> 18
 
 -- | 事件类型对应的表现段种类（查 endStageTable）。
 stageKindFor :: EventKind -> StageKind
@@ -291,12 +298,13 @@ arrive c =
 -- | 规则层的步末效果 → 表现段：连续的蔓延合并为一段同时播放。
 groupStages :: [EndStep] -> [EndStage]
 groupStages [] = []
-groupStages steps@(e : _) =
+groupStages (e : more) =
   let k = kindOf e
-      (same, rest)
-        | k == StSpread = span ((== StSpread) . kindOf) steps
-        | otherwise = ([e], drop 1 steps)
-  in EndStage k same (esBefore (head same)) (esAfter (last same)) (endStageBase k) : groupStages rest
+      (sameMore, rest)
+        | k == StSpread = span ((== StSpread) . kindOf) more
+        | otherwise = ([], more)
+      same = e :| sameMore
+  in EndStage k (NE.toList same) (esBefore e) (esAfter (NE.last same)) (endStageBase k) : groupStages rest
   where
     kindOf = stageKindFor . endEffectKind . esEffect
 
@@ -338,17 +346,17 @@ fallTable w = transpose [colInfo c | c <- [0 .. boardSize - 1]]
   where
     rows = [0 .. boardSize - 1]
     colInfo c =
-      let holes = [(cwHoles w !! r) !! c | r <- rows]
-          after = [getCell (cwAfter w) (r, c) | r <- rows]
+      let holes = [holeAt w (r, c) | r <- rows]
+          afterAt r = getCell (cwAfter w) (r, c)
           segs = segments (zip rows holes)
           predicted = concatMap segPredict segs -- [(targetRow, drop, isNew, expected)]
           ok =
             length predicted == boardSize
-              && and [maybe True (== (after !! rt)) ex | (rt, _, _, ex) <- predicted]
+              && and [maybe True (== afterAt rt) ex | (rt, _, _, ex) <- predicted]
           byRow = [(d, n) | (_, d, n, _) <- sortRows predicted]
           fallback =
-            [ if holes !! r == Just (after !! r) then (0, False) else (1, True)
-            | r <- rows
+            [ if hole == Just (afterAt r) then (0, False) else (1, True)
+            | (r, hole) <- zip rows holes
             ]
       in if ok then byRow else fallback
     sortRows ps = [p | r <- rows, p@(rt, _, _, _) <- ps, rt == r]
@@ -373,6 +381,16 @@ fallTable w = transpose [colInfo c | c <- [0 .. boardSize - 1]]
             | ((rs, cell), rt) <- zip survivors (drop h segRows)
             ]
       in news ++ olds
+
+-- | 下落映射里某格的 (偏移行数, 是否新补)；越界按「不动」处理。
+fallAt :: [[(Int, Bool)]] -> Pos -> (Int, Bool)
+fallAt table (r, c) = case drop r table of
+  row : _ | r >= 0, c >= 0, x : _ <- drop c row -> x
+  _ -> (0, False)
+
+-- | 本轮消除并放下新特殊块之后、下落之前某格的内容（Nothing = 空洞；越界也按空洞）。
+holeAt :: CascadeWave -> Pos -> Maybe Cell
+holeAt w = atM (cwHoles w)
 
 --------------------------------------------------------------------------------
 -- 连击等级样式
@@ -470,10 +488,10 @@ popRise p = case tpKind p of
 -- | 被消格的锚点：(平均行, 平均列, 最上行, 最下行)。
 clearedAnchor :: [Pos] -> (Float, Float, Int, Int)
 clearedAnchor [] = (3.5, 3.5, 3, 4)
-clearedAnchor ps =
+clearedAnchor ps@((r0, _) : _) =
   let n = fromIntegral (length ps)
   in ( sum [fromIntegral r | (r, _) <- ps] / n
      , sum [fromIntegral c | (_, c) <- ps] / n
-     , minimum (map fst ps)
-     , maximum (map fst ps)
+     , foldr (min . fst) r0 ps
+     , foldr (max . fst) r0 ps
      )

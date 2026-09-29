@@ -24,6 +24,8 @@ module Art
 import Control.Exception (SomeException, evaluate, try)
 import Control.Monad (forM, forM_, unless, when)
 import Data.List (nub, sortOn)
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import Data.Word (Word8)
 import Foreign.C.Types (CDouble, CInt)
@@ -98,13 +100,14 @@ loadFrom ren dir = do
   idx <- readFile (dir </> "atlas.txt")
   entries <- evaluate (parseIndex idx)
   when (null entries) $ ioError (userError "empty atlas.txt")
-  let nPages = 1 + maximum [pg | (_, _, pg) <- entries]
+  let nPages = 1 + foldr max 0 [pg | (_, _, pg) <- entries]
   -- 任何一页缺失都算整体失败（交给调用方回退），避免半套贴图；先检查文件再建纹理
   forM_ [0 .. nPages - 1] $ \i -> do
     ok <- doesFileExist (dir </> pageFile i)
     unless ok $ ioError (userError ("missing atlas page " ++ pageFile i))
   pages <- forM [0 .. nPages - 1] $ \i -> loadTexture ren (dir </> pageFile i)
-  let rects = M.fromList [(name, Sprite (pages !! pg) r) | (name, r, pg) <- entries]
+  let pageAt = M.fromList (zip [0 ..] pages)
+      rects = M.fromList [(name, Sprite tex r) | (name, r, pg) <- entries, Just tex <- [M.lookup pg pageAt]]
       mips =
         M.map (sortOn sprH) $
           M.fromListWith (++) [(baseName name, [s]) | (name, s) <- M.toList rects]
@@ -157,11 +160,12 @@ hasSprite art name = M.member name (artRects art)
 -- 都不够就取最大的。没有变体表时按全名精确查找。
 pickSprite :: Art -> String -> CInt -> Maybe Sprite
 pickSprite art name want = case M.lookup name (artMips art) of
-  Just vs@(_ : _) ->
-    let target = ceiling (fromIntegral want * artScale art - 0.01 :: Float)
-    in case filter ((>= target) . sprH) vs of
+  Just (v0 : vs') ->
+    let vs = v0 :| vs'
+        target = ceiling (fromIntegral want * artScale art - 0.01 :: Float)
+    in case NE.filter ((>= target) . sprH) vs of
          (v : _) -> Just v
-         [] -> Just (last vs)
+         [] -> Just (NE.last vs)
   _ -> M.lookup name (artRects art)
 
 -- | 基名贴图的原始尺寸（像素）。
@@ -238,11 +242,11 @@ drawPanelMod ren art name (Rectangle (P (V2 x y)) (V2 w h)) c tint = case pickSp
         dstY = [y, y + c', y + h - c']
         dstHs = [c', h - 2 * c', c']
     textureColorMod tex $= tint
-    forM_ [0 .. 2 :: Int] $ \j ->
-      forM_ [0 .. 2 :: Int] $ \i ->
-        unless ((dstW !! i) <= 0 || (dstHs !! j) <= 0) $
+    forM_ (zip3 srcY srcH (zip dstY dstHs)) $ \(syj, shj, (dyj, dhj)) ->
+      forM_ (zip3 srcX srcW (zip dstX dstW)) $ \(sxi, swi, (dxi, dwi)) ->
+        unless (dwi <= 0 || dhj <= 0) $
           copy ren tex
-            (Just (Rectangle (P (V2 (srcX !! i) (srcY !! j))) (V2 (srcW !! i) (srcH !! j))))
-            (Just (Rectangle (P (V2 (dstX !! i) (dstY !! j))) (V2 (dstW !! i) (dstHs !! j))))
+            (Just (Rectangle (P (V2 sxi syj)) (V2 swi shj)))
+            (Just (Rectangle (P (V2 dxi dyj)) (V2 dwi dhj)))
     textureColorMod tex $= V3 255 255 255
     pure True

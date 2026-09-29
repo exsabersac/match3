@@ -79,7 +79,7 @@ bubbleAdjacent ctx b =
 -- 条目
 
 cookieEntry, timeSpiritEntry, bubbleEntry :: Entry
-cookieEntry = bodyEntry 9 CookieE (\cell -> case cell of Cookie -> Just CookieE; _ -> Nothing) (\_ _ -> Just Cookie)
-timeSpiritEntry = bodyEntry 18 TimeSpiritE (\cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing) (\_ _ -> Just TimeSpirit)
+cookieEntry = bodyEntry CookieE (\cell -> case cell of Cookie -> Just CookieE; _ -> Nothing) (\_ _ -> Just Cookie)
+timeSpiritEntry = bodyEntry TimeSpiritE (\cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing) (\_ _ -> Just TimeSpirit)
 -- 气泡：Custom 本体，放置参数 = 值（缺省 1）。
 bubbleEntry = customEntry (Bubble 1) Bubble

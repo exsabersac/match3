@@ -133,6 +133,7 @@ module Match3.Core
   , boardSize
   , numColors
   , allColors
+  , colorAt
   , Score
   , MovesLeft
   , TargetScore

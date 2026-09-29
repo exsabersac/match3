@@ -1,11 +1,11 @@
 # 网页版（GHC WebAssembly）
 
-> 分支 `web-wasm-spike` 上的技术验证，尚未合入 main。操作细节（命令、参数）以 [`web/README.md`](../web/README.md) 为准，
+> 技术验证，最初在分支 `web-wasm-spike` 上开发，已合入 main（`59f1e53`）。操作细节（命令、参数）以 [`web/README.md`](../web/README.md) 为准，
 > 本文讲结构与取舍，供评审阅读。
 
 ## 1. 一句话
 
-用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/UI/ComboFx.hs`）
+用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/ComboFx.hs`）
 编成一个 `.wasm`，浏览器里的 JS 只做三件事：**加载、画、收输入**。规则判定、连锁时间轴、帧数都在 Haskell 里算，
 所以同关卡同种子，网页版与桌面版的每一步结果、每一帧动画相位都逐字节一致（有测试守着，见 §7）。
 
@@ -119,13 +119,13 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-09-29，合入元素类之后）：wasm `-Oz` 后 1.74 MB（gzip 675 KB）；dist 合计 2.20 MB，逐文件 gzip 约 1.05 MB。
+体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm `-Oz` 后 1,737,478 B ≈ 1.74 MB（gzip 674,329 B）；dist 合计 2,194,833 B ≈ 2.19 MB，逐文件 gzip 约 1.05 MB。
 
 ## 3. 工具链与构建
 
 - 工具链：[ghc-wasm-meta](https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta) `FLAVOUR=9.14`，装在 `~/.ghc-wasm`（约 6.4 GB），
-  与桌面版的 Stack / GHC 9.4.8 完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
-- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与 lts-21.25 相同的版本，保证同种子同结果；
+  与桌面版的 Stack / GHC 9.14.1（原生 x86_64 / arm64）完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
+- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；桌面版现为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
 - 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。部署到 Mac 不需要工具链，只拷 `dist/`。
@@ -142,12 +142,12 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
 | `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
 | `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
-| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
+| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.14.1、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 262 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 273 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -239,7 +239,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（262 个） | `make test-native` |
+| `stack test` | 核心规则（273 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（12 组） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（10 组） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `make e2e` |

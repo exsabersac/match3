@@ -7,7 +7,7 @@
 # 环境变量：
 #   CASES   "关卡:种子 …"（关卡 0 起），默认见下；NODE 默认 ~/.ghc-wasm/nodejs/bin/node
 #   OUT     输出与原生二进制目录，默认 web/.cache/parity
-# 前置：已 make build（需要 web/dist）；原生侧用 stack 的 GHC 9.4.8 编译（首次约 1 分钟，之后增量）。
+# 前置：已 make build（需要 web/dist）；原生侧用 stack 的 GHC 9.14.1 编译（首次约 1 分钟，之后增量）。
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"

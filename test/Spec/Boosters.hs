@@ -145,7 +145,7 @@ hammer_peels_chain_not_gem = do
   let cell = getCell (gsBoard gs1) (3, 3)
   assertBool "gem remains" (isGem cell)
   assertBool "chain peeled to 1" (hasChain cell && chainLayers cell == 1)
-  assertEqual "color kept" C2 (cellColor cell)
+  assertEqual "color kept" (Just C2) (cellColor cell)
   -- second hammer unlocks fully (gem may reshuffle if board was stuck)
   let (gs2, _) = useHammer (3, 3) gs1 { gsOver = Nothing }
       cell2 = getCell (gsBoard gs2) (3, 3)

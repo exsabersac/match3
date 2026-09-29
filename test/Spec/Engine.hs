@@ -7,13 +7,13 @@ module Spec.Engine
   ) where
 
 import Data.Bits (xor)
-import Data.Char (isAlphaNum, ord)
-import Data.List (foldl', isPrefixOf, isSuffixOf)
+import Data.Char (ord)
+import Data.List (isPrefixOf)
 import Data.Maybe (isJust)
 import Data.Word (Word64)
 import Engine.History (History(..), Undoable(..), historyDepth, startHistory)
 import Numeric (showHex)
-import System.Directory (doesDirectoryExist, listDirectory)
+import Spec.Support.Source (importsOf, mentionsIdent, sourcesUnder, sourcesUnderAll)
 import Match3.Core
 import Match3.Game.Trace (traceEvents)
 import Engine.Effect (Effect(..))
@@ -83,18 +83,15 @@ engine_toy_counter_game = do
 -- | 通用层（src/Engine/*、app/Shell/*）与玩具实现不 import 任何 Match3 模块（依赖方向单向）。
 engine_layer_is_game_agnostic :: Assertion
 engine_layer_is_game_agnostic = do
-  let files =
-        [ "src/Engine/Game.hs", "src/Engine/Effect.hs", "src/Engine/Playback.hs", "src/Engine/History.hs"
-        , "app/Shell/Loop.hs", "test/Toy.hs" ]
+  files <- (++ ["test/Toy.hs"]) <$> sourcesUnderAll ["src/Engine", "app/Shell"]
+  assertBool "scanned the generic layer" (all (`elem` files) ["src/Engine/Game.hs", "src/Engine/Playback.hs", "app/Shell/Loop.hs"])
   srcs <- mapM readFile files
   let bad =
-        [ f ++ ": " ++ l
+        [ f ++ ": import " ++ m
         | (f, src) <- zip files srcs
-        , l <- lines src
-        , take 7 l == "import "
-        , hasMatch3 l
+        , m <- importsOf src
+        , m == "Match3" || "Match3." `isPrefixOf` m
         ]
-      hasMatch3 l = any (\w -> take 6 w == "Match3") (words l)
   assertEqual "no Match3 imports in the generic layer" [] bad
 
 -- | 三消实例（Match3.Engine）：经通用接口 step 的结果与直接调用旧入口（trySwap / use* / trace* /
@@ -154,7 +151,7 @@ engine_match3_instance_matches_direct_api = do
   assertEqual "stops after terminal" 1 (length run1)
   assertBool "terminal outcome" (isJust (stepOutcome (last run1)))
   assertEqual "terminal: no actions" 0 (length (gameActions g (stepState (last run1))))
-  assertEqual "terminal: step rejected" False (stepAccepted (gameStep g (stepState (last run1)) (head acts1)))
+  assertEqual "terminal: step rejected" [False] [stepAccepted (gameStep g (stepState (last run1)) a) | a <- take 1 acts1]
   where
     forM_' xs f = mapM_ f xs
 
@@ -218,45 +215,19 @@ legacyProj h =
 -- 扫描去掉注释与字符串后的标识符（含限定名 M3E.play）；同时确认前端确实经 match3Shell 的 gameStep。
 engine_frontend_steps_only_via_gameStep :: Assertion
 engine_frontend_steps_only_via_gameStep = do
-  files <- hsFiles "app"
+  files <- sourcesUnder "app"
   assertBool "scanned the whole front end" (length files >= 20)
   srcs <- mapM readFile files
   let banned = ["play", "playWith", "undoMove"]
       bad =
-        [ f ++ ": " ++ t
+        [ f ++ ": " ++ w
         | (f, src) <- zip files srcs
-        , t <- concatMap (idents . stripComment) (stripBlock src)
-        , let base = reverse (takeWhile (/= '.') (reverse t))
-        , base `elem` banned
+        , w <- banned
+        , mentionsIdent w src
         ]
       uses = [f | (f, src) <- zip files srcs, any ("gameStep M3E.match3Shell" `isPrefixOf`) (tailsS src)]
   assertEqual "no direct play / playWith / undoMove in app/" [] bad
   assertBool "front end steps through match3Shell's gameStep" (not (null uses))
   where
-    hsFiles dir = do
-      names <- listDirectory dir
-      fmap concat $ mapM (\n -> do
-        let p = dir ++ "/" ++ n
-        isDir <- doesDirectoryExist p
-        if isDir then hsFiles p else pure [p | ".hs" `isSuffixOf` n]) names
-    stripComment = go
-      where
-        go ('-' : '-' : _) = []
-        go ('"' : rest) = let (_, r) = break (== '"') rest in ' ' : go (drop 1 r)
-        go (c : cs) = c : go cs
-        go [] = []
-    stripBlock s = lines (goB (0 :: Int) s)
-      where
-        goB n ('{' : '-' : r) = goB (n + 1) r
-        goB n ('-' : '}' : r) | n > 0 = goB (n - 1) r
-        goB n (c : r)
-          | n > 0 = (if c == '\n' then '\n' else ' ') : goB n r
-          | otherwise = c : goB n r
-        goB _ [] = []
-    idents l = case dropWhile (not . identStart) l of
-      [] -> []
-      s -> let (w, rest) = span identChar s in w : idents rest
-    identStart c = isAlphaNum c || c == '_'
-    identChar c = isAlphaNum c || c == '_' || c == '\'' || c == '.'
     tailsS [] = [[]]
     tailsS xs@(_ : r) = xs : tailsS r

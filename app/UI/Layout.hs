@@ -93,8 +93,8 @@ cellRGB cell = case cell of
   Surprise -> (255, 100, 160)
   Bottle col -> colorRGB col
   TimeSpirit -> (80, 220, 255)
-  Countdown _ _ -> colorRGB (cellColor cell)
-  Gem _ _ _ _ -> colorRGB (cellColor cell)
+  Countdown col _ -> colorRGB col
+  Gem col _ _ _ -> colorRGB col
   Custom n _ -> maybe (160, 160, 170) id (lookup n elementRGBTable)
 
 -- | 逻辑坐标 → 棋盘格；棋盘外返回 Nothing。

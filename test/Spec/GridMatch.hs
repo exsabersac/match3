@@ -23,7 +23,31 @@ tests =
   , testCase "match_line_ge3" match_line_ge3
   , testCase "hint_finds_move" hint_finds_move
   , testCase "playable_board_stable_and_has_move" playable_board_stable_and_has_move
+  , testCase "cell_accessors_total" cell_accessors_total
   ]
+
+-- | 格子取值函数是总函数：没有颜色 / 种类的格给 Nothing；colorAt 按 allColors 取模（负数也落在范围内）。
+cell_accessors_total :: Assertion
+cell_accessors_total = do
+  assertEqual "gem color" (Just C3) (cellColor (mkGem C3))
+  assertEqual "flip front color" (Just C2) (cellColor (mkFlip C2 C4))
+  assertEqual "countdown color" (Just C5) (cellColor (Countdown C5 2))
+  assertEqual "stone has no color" Nothing (cellColor mkStone)
+  assertEqual "custom has no color" Nothing (cellColor (Custom "x" 1))
+  assertEqual "gem kind" (Just Bomb) (cellKind (Gem C1 Bomb 0 Nothing))
+  assertEqual "countdown kind" (Just Normal) (cellKind (Countdown C1 1))
+  assertEqual "cookie has no kind" Nothing (cellKind mkCookie)
+  assertEqual "balloon color" (Just C2) (balloonColor (mkBalloon C2))
+  assertEqual "not a balloon" Nothing (balloonColor (mkGem C2))
+  assertEqual "maker color" (Just C4) (makerColor (mkMaker C4))
+  assertEqual "not a maker" Nothing (makerColor mkCookie)
+  assertEqual "flip faces" (Just C1, Just C2) (flipFront (mkFlip C1 C2), flipBack (mkFlip C1 C2))
+  assertEqual "not a flip" (Nothing, Nothing) (flipFront mkStone, flipBack mkStone)
+  assertEqual "bottle color" (Just C3) (bottleColor (mkBottle C3))
+  assertEqual "not a bottle" Nothing (bottleColor mkStone)
+  assertEqual "colorAt 0..4 = allColors" allColors (map colorAt [0 .. numColors - 1])
+  assertEqual "colorAt wraps" (take 12 (cycle allColors)) (map colorAt [0 .. 11])
+  assertEqual "colorAt negative" C5 (colorAt (-1))
 
 inv_no_match_rollback :: Assertion
 inv_no_match_rollback = do

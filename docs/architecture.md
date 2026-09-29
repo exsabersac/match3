@@ -142,8 +142,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 项 | 值 |
 |----|-----|
 | 构建 | Stack（`package.yaml` → hpack → `match3.cabal`） |
-| Resolver | **lts-21.25** |
-| GHC | **9.4.8**（`stack.yaml`：`system-ghc: true`） |
+| Resolver | **lts-24.60** + `compiler: ghc-9.14.1`（Stackage 暂无 9.14 快照；`extra-deps` 钉 random 1.2.1.1 / splitmix 0.1.0.5 等，见 `stack.yaml`） |
+| GHC | **9.14.1**（`stack.yaml`：`system-ghc: true`，用 ghcup 安装） |
 | 库名 | `match3` |
 | 可执行文件 | `match3-sdl` |
 | 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck） |
@@ -152,7 +152,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ## 网页版（技术验证）
 
-分支 `web-wasm-spike` 上的 `web/` 目录用 GHC wasm 后端把核心（`Engine.*` / `Match3.*`）和 `ComboFx` 编成 wasm，
+`web/` 目录（已合入 main，`59f1e53`）用 GHC wasm 后端把核心（`Engine.*` / `Match3.*`）和 `ComboFx` 编成 wasm，
 接口层 `web/hs/Match3Web/Api.hs` 与桌面外壳一样只调 `gameStep match3Shell`，JS 只负责绘制与输入，核心源码不改。
 元素框架（`Match3.Element.Class` 的 `Element` / `Modifier` / `LevelElement` 与 `SomeElement` 等存在类型、`Match3.Element.Message`、
 `Match3.Element.Builtin.*` 分文件）整体编进 wasm；网页接口层不直接调用元素类，盘面按 `Cell` 构造器编码成 JSON，
@@ -217,7 +217,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 **修饰器**（`Modifier`，对应 xmonad 的 `LayoutModifier`）：冰层（`Ice 层数`）和八种叠层（`GrassL` / `VineL` / `ChocoL` / `FogL` / `ChainL` / `FreezeL` / `CurtainL` / `SteamL`）。`Modified` 把修饰器和里面的元素合成一个元素：挡匹配 / 挡交换任一层即挡；点火与命中自上而下第一个有意见的层决定；名字 / 颜色 / 计数 / 下落等取本体；有上层就洗牌保留。一格解码为「冰 → 叠层 → 本体」的嵌套 `Modified`。
 
-**注册表条目**（`Registry.Entry`，名字 → 构造器）：`bodyEntry 槽位 原型 解码 放置`（内置本体）、`customEntry 原型 (Int → 元素)`（`Custom 名字 k`）、`modifierEntry 槽位 原型 解码 放置`（冰 / 叠层）、`groundEntry 原型`（地面层）、`inertEntry 名字`（`Inert`：挡交换、无色、会下落、打不动、洗牌保留的惰性占格，即旧 `baseDef` 的等价物；未注册的 `Custom` 名字也按它处理）。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）。
+**注册表条目**（`Registry.Entry`，名字 → 构造器）：`bodyEntry 原型 解码 放置`（内置本体；槽号由原型推导 = `cellSlot (toCell 原型)`）、`customEntry 原型 (Int → 元素)`（`Custom 名字 k`）、`modifierEntry 原型 解码 放置`（冰 / 叠层；槽位由原型写到裸宝石上的结果推导：叠层 → `SlotOverlay (overlaySlot …)`，冰 → `SlotIce`）、`groundEntry 原型`（地面层）、`inertEntry 名字`（`Inert`：挡交换、无色、会下落、打不动、洗牌保留的惰性占格，即旧 `baseDef` 的等价物；未注册的 `Custom` 名字也按它处理）。建表：`mkRegistry`（总函数：同名 / 同槽以后出现的为准，分派数组边界由条目的槽号算出，查不到的槽号退回惰性占格）；`mkRegistryChecked :: [Entry] -> Either [RegistryError] Registry` 把重名（`DuplicateName`）、槽位冲突（`DuplicateSlot`）、推不出槽位（`NoSlot`，原型写回 `Custom` 或修饰器不落任何层）暴露成值，内置条目表由测试 `ec_registry_checked_slots` 保证通过检查。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）。
 
 **关卡级元素**（`LevelElement`：`levelName`、`levelReply :: l -> SomeMessage -> Maybe SomeMessage`）：飞碟 / 皮带 / 传送门 / 地毯。主流程在固定的流水线节拍上发消息，关卡级元素自己决定回复哪条（`Registry.askLevel`，取第一个类型对得上的回复）：
 

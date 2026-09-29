@@ -224,11 +224,11 @@ shuffle_preserves_specials = do
           }
       gs1 = shuffleGame gs0
       b1 = gsBoard gs1
-  assertEqual "bomb kept" Bomb (cellKind (getCell b1 (1, 1)))
-  assertEqual "bomb color" C1 (cellColor (getCell b1 (1, 1)))
-  assertEqual "lineH kept" LineH (cellKind (getCell b1 (1, 2)))
-  assertEqual "lineV kept" LineV (cellKind (getCell b1 (1, 3)))
-  assertEqual "rainbow kept" Rainbow (cellKind (getCell b1 (1, 4)))
+  assertEqual "bomb kept" (Just Bomb) (cellKind (getCell b1 (1, 1)))
+  assertEqual "bomb color" (Just C1) (cellColor (getCell b1 (1, 1)))
+  assertEqual "lineH kept" (Just LineH) (cellKind (getCell b1 (1, 2)))
+  assertEqual "lineV kept" (Just LineV) (cellKind (getCell b1 (1, 3)))
+  assertEqual "rainbow kept" (Just Rainbow) (cellKind (getCell b1 (1, 4)))
   -- Countdown still kept (pre-existing decor path)
   let boardCd = setCell board (2, 2) (mkCountdown C5 4)
       gsCd = shuffleGame (gs0 { gsBoard = boardCd })
@@ -409,7 +409,7 @@ trace_multi_wave_each_round_visible =
   case
     [ (gs0, p1, p2, gs1)
     | seed <- [1 .. 400 :: Int]
-    , let gs0 = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+    , let gs0 = newGameAtLevel 0 (levelConfig firstLevel) seed
     , Just (p1, p2) <- [findHint (gsBoard gs0)]
     , let (gs1, out) = trySwap p1 p2 gs0
     , out /= NoMatch

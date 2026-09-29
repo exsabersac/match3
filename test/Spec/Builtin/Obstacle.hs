@@ -1,13 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 本体障碍（按元素）：石头、宝箱、蜂蜜、气球、饼干、蛋糕、魔法帽、果汁机、保险箱、双面、彩蛋、染色瓶、时间精灵。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
-module Spec.Obstacles.Body
+-- | 本体障碍（对应 Element/Builtin/Obstacle）：石头、宝箱、蜂蜜、气球、蛋糕、保险箱、双面、彩蛋。
+-- （第 1 刀由 Spec.Obstacles.Body / Features 按 Builtin 分组纯搬家而来；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
+module Spec.Builtin.Obstacle
   ( tests
   ) where
 
 import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies, ctChests, ctBalloons, ctCakes, ctScore, ctMaxWave, ctCells, ctHoney))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctChests, ctBalloons, ctCakes, ctCells, ctHoney))
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
@@ -33,17 +33,9 @@ tests =
   , testCase "balloon_blocks_swap" balloon_blocks_swap
   , testCase "balloon_popped_by_same_color" balloon_popped_by_same_color
   , testCase "balloon_ignores_other_color" balloon_ignores_other_color
-  , testCase "cookie_blocks_swap" cookie_blocks_swap
-  , testCase "cookie_falls_with_gravity" cookie_falls_with_gravity
-  , testCase "cookie_collected_at_bottom" cookie_collected_at_bottom
   , testCase "cake_blocks_swap" cake_blocks_swap
   , testCase "cake_layer_decrement" cake_layer_decrement
   , testCase "cake_clears_at_zero" cake_clears_at_zero
-  , testCase "hat_triggered_by_adjacent" hat_triggered_by_adjacent
-  , testCase "hat_swaps_colors" hat_swaps_colors
-  , testCase "maker_blocks_swap" maker_blocks_swap
-  , testCase "maker_charges_on_same_color" maker_charges_on_same_color
-  , testCase "maker_produces_bomb" maker_produces_bomb
   , testCase "safe_blocks_swap" safe_blocks_swap
   , testCase "safe_opens_to_cookie" safe_opens_to_cookie
   , testCase "safe_layer_decrement" safe_layer_decrement
@@ -52,28 +44,16 @@ tests =
   , testCase "surprise_blocks_swap" surprise_blocks_swap
   , testCase "surprise_opens_to_special" surprise_opens_to_special
   , testCase "surprise_explodes_small" surprise_explodes_small
-  , testCase "bottle_blocks_swap" bottle_blocks_swap
-  , testCase "bottle_dyes_neighbors" bottle_dyes_neighbors
-  , testCase "time_spirit_blocks_swap" time_spirit_blocks_swap
-  , testCase "time_spirit_awards_moves" time_spirit_awards_moves
-  , testCase "time_spirit_rescues_last_move" time_spirit_rescues_last_move
   , testCase "flip_four_match_spawns_line" flip_four_match_spawns_line
   , testCase "surprise_blast_expands_bomb" surprise_blast_expands_bomb
-  , testCase "maker_bomb_survives_wave" maker_bomb_survives_wave
   , testCase "honey_balloon_same_clear" honey_balloon_same_clear
   , testCase "safe_bottom_cookie_collected" safe_bottom_cookie_collected
-  , testCase "bottle_dye_followup_match" bottle_dye_followup_match
-  , testCase "hat_recolor_followup_match" hat_recolor_followup_match
-  , testCase "maker_multi_adjacent_charges_once" maker_multi_adjacent_charges_once
   , testCase "surprise_direct_seed_opens" surprise_direct_seed_opens
   , testCase "surprise_blast_peels_adjacent" surprise_blast_peels_adjacent
   , testCase "blast_chips_layered_obstacles_once" blast_chips_layered_obstacles_once
-  , testCase "hat_immune_to_direct_clear" hat_immune_to_direct_clear
   , testCase "surprise_blast_opens_nested" surprise_blast_opens_nested
   , testCase "surprise_nested_special_no_fire" surprise_nested_special_no_fire
   , testCase "surprise_special_sits_hat_bottle" surprise_special_sits_hat_bottle
-  , testCase "maker_bomb_sits_bottle" maker_bomb_sits_bottle
-  , testCase "cookie_immune_to_direct_clear" cookie_immune_to_direct_clear
   ]
 
 -- | trySwap involving a Stone returns NoMatch; board/moves/score unchanged.
@@ -396,64 +376,6 @@ balloon_ignores_other_color = do
   assertEqual "other color ignored" ([] :: [Pos]) dead
 
 --------------------------------------------------------------------------------
--- Cookies / 饼干 (fall to bottom collect)
---------------------------------------------------------------------------------
-
-cookie_blocks_swap :: Assertion
-cookie_blocks_swap = do
-  let board = setCell stableBoard (3, 3) mkCookie
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
-  assertBool "is cookie" (isCookie (getCell board (3, 3)))
-
-cookie_falls_with_gravity :: Assertion
-cookie_falls_with_gravity = do
-  -- Cookie at (0,1); clear horizontal match on row 3 including (3,1) so col 1 has a hole
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (0, 1) mkCookie)
-                (3, 0)
-                (mkGem C1))
-             (3, 1)
-             (mkGem C1))
-          (3, 2)
-          (mkGem C1)
-  assertBool "cookie at top" (isCookie (getCell board0 (0, 1)))
-  let seeds = findMatches board0
-  assertBool "match under cookie col" ((3, 1) `elem` seeds)
-  let CascadeRun {crBoard = board1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
-      cookiePos =
-        [ (r, c)
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , isCookie (getCell board1 (r, c))
-        ]
-  assertBool
-    ("cookie fell or collected, pos=" ++ show cookiePos ++ " collected=" ++ show cookies)
-    (cookies >= 1 || null cookiePos || any (\(r, c) -> c == 1 && r > 0) cookiePos)
-
-cookie_collected_at_bottom :: Assertion
-cookie_collected_at_bottom = do
-  -- Place cookie already on bottom; clearing elsewhere should drain it
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (boardSize - 1, 4) mkCookie)
-                (3, 0)
-                (mkGem C1))
-             (3, 1)
-             (mkGem C1))
-          (3, 2)
-          (mkGem C1)
-  assertBool "cookie on bottom" (isCookie (getCell board0 (boardSize - 1, 4)))
-  let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
-  assertBool ("cookie collected, got " ++ show cookies) (cookies >= 1)
-  assertBool "cookie gone" (not (isCookie (getCell board1 (boardSize - 1, 4))))
-
---------------------------------------------------------------------------------
 -- Cake / 蛋糕 (layered obstacle; distinct from Cookie drop-collect)
 --------------------------------------------------------------------------------
 
@@ -502,150 +424,6 @@ cake_clears_at_zero = do
       CascadeRun {crBoard = board1, crTally = CascadeTally {ctCakes = cakes}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "cake cleared count" (cakes >= 1)
   assertBool "cake gone" (not (isCake (getCell board1 (2, 1))))
-
---------------------------------------------------------------------------------
--- Magic hat / 魔法帽 (adjacent trigger swaps neighbor colors)
---------------------------------------------------------------------------------
-
-hat_triggered_by_adjacent :: Assertion
-hat_triggered_by_adjacent = do
-  -- Stones block side neighbors so only (1,1) gem remains for the hat
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell
-                      (setCell
-                         (setCell stableBoard (3, 0) (mkGem C1))
-                         (3, 1)
-                         (mkGem C1))
-                      (3, 2)
-                      (mkGem C1))
-                   (2, 1)
-                   mkMagicHat)
-                (1, 1)
-                (mkGem C2))
-             (2, 0)
-             mkStone)
-          (2, 2)
-          mkStone
-  assertBool "hat present" (isMagicHat (getCell board0 (2, 1)))
-  let ms = findMatches board0
-      hats = hatsAdjacentTo board0 ms
-  assertEqual "hat adjacent to match" [(2, 1)] hats
-  let board1 = triggerAdjacentHats board0 ms
-  assertBool "hat still there" (isMagicHat (getCell board1 (2, 1)))
-  assertEqual "cycled neighbor" C3 (cellColor (getCell board1 (1, 1)))
-
-hat_swaps_colors :: Assertion
-hat_swaps_colors = do
-  -- Hat at (2,1); match on row 3; stone above so only left/right gems swap
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell
-                      (setCell
-                         (setCell stableBoard (3, 0) (mkGem C1))
-                         (3, 1)
-                         (mkGem C1))
-                      (3, 2)
-                      (mkGem C1))
-                   (2, 1)
-                   mkMagicHat)
-                (2, 0)
-                (mkGem C4))
-             (2, 2)
-             (mkGem C5))
-          (1, 1)
-          mkStone
-  let ms = findMatches board0
-      cLeft0 = cellColor (getCell board0 (2, 0))
-      cRight0 = cellColor (getCell board0 (2, 2))
-  assertEqual "left before" C4 cLeft0
-  assertEqual "right before" C5 cRight0
-  let board1 = triggerAdjacentHats board0 ms
-      cLeft1 = cellColor (getCell board1 (2, 0))
-      cRight1 = cellColor (getCell board1 (2, 2))
-  assertEqual "left got right" C5 cLeft1
-  assertEqual "right got left" C4 cRight1
-  assertBool "hat remains" (isMagicHat (getCell board1 (2, 1)))
-
-
---------------------------------------------------------------------------------
--- Maker / 果汁机 (same-color adjacent charge -> Bomb)
---------------------------------------------------------------------------------
-
-maker_blocks_swap :: Assertion
-maker_blocks_swap = do
-  let board = setCell stableBoard (3, 3) (mkMaker C1)
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
-  assertBool "is maker" (isMaker (getCell board (3, 3)))
-  assertEqual "default charges" (3 :: Int) (makerCharges (getCell board (3, 3)))
-
-maker_charges_on_same_color :: Assertion
-maker_charges_on_same_color = do
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (3, 0) (mkGem C1))
-                (3, 1)
-                (mkGem C1))
-             (3, 2)
-             (mkGem C1))
-          (2, 1)
-          (mkMakerCharges C1 3)
-  let ms = findMatches board0
-      b1 = chargeAdjacentMakers board0 ms
-  assertBool "still maker" (isMaker (getCell b1 (2, 1)))
-  assertEqual "charges 3->2" (2 :: Int) (makerCharges (getCell b1 (2, 1)))
-  -- Wrong color adjacent clear does not charge
-  let boardWrong =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (3, 0) (mkGem C2))
-                (3, 1)
-                (mkGem C2))
-             (3, 2)
-             (mkGem C2))
-          (2, 1)
-          (mkMakerCharges C1 2)
-      ms2 = findMatches boardWrong
-      b2 = chargeAdjacentMakers boardWrong ms2
-  assertEqual "wrong color no charge" (2 :: Int) (makerCharges (getCell b2 (2, 1)))
-
-maker_produces_bomb :: Assertion
-maker_produces_bomb = do
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (3, 0) (mkGem C1))
-                (3, 1)
-                (mkGem C1))
-             (3, 2)
-             (mkGem C1))
-          (2, 1)
-          (mkMakerCharges C1 1)
-  let ms = findMatches board0
-      b1 = chargeAdjacentMakers board0 ms
-  assertBool "became gem" (isGem (getCell b1 (2, 1)))
-  assertEqual "bomb kind" Bomb (cellKind (getCell b1 (2, 1)))
-  assertEqual "bomb color" C1 (cellColor (getCell b1 (2, 1)))
-  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
-      nMaker =
-        length
-          [ ()
-          | r <- [0 .. boardSize - 1]
-          , c <- [0 .. boardSize - 1]
-          , isMaker (getCell (gsBoard gs) (r, c))
-          ]
-  assertBool ("decor makers >= 3, got " ++ show nMaker) (nMaker >= 3)
-  assertBool "level has portals" (not (null (gsPortals gs)))
 
 --------------------------------------------------------------------------------
 -- Safe / 保险箱 (layered vault; opens into Cookie; GoalSafe)
@@ -746,8 +524,8 @@ flip_matches_front = do
           (mkGem C1)
   assertBool "flip participates" (not (null (findMatches boardM)))
   assertBool "is flip" (isFlip (getCell boardM (3, 1)))
-  assertEqual "front" C1 (flipFront (getCell boardM (3, 1)))
-  assertEqual "back" C3 (flipBack (getCell boardM (3, 1)))
+  assertEqual "front" (Just C1) (flipFront (getCell boardM (3, 1)))
+  assertEqual "back" (Just C3) (flipBack (getCell boardM (3, 1)))
   -- Can swap like a gem
   assertBool "not blocked" (not (swapBlockedWith defaultRegistry boardM (3, 1) (3, 3)))
 
@@ -767,7 +545,7 @@ flip_becomes_back_on_clear = do
       cellAfter = getCell b1 (3, 1)
   assertBool "became gem" (isGem cellAfter)
   assertBool "not still flip" (not (isFlip cellAfter))
-  assertEqual "back color" C4 (cellColor cellAfter)
+  assertEqual "back color" (Just C4) (cellColor cellAfter)
   -- Flip stays on board (not listed as clearable hole)
   assertBool "flip not cleared away" ((3, 1) `notElem` iceFree)
   -- Full cascade also leaves a gem (possibly later matched as C4)
@@ -814,8 +592,8 @@ surprise_opens_to_special = do
       (b1, expl) = openAdjacentSurprises board0 ms
   assertEqual "no explode" (0 :: Int) (length expl)
   let cell = getCell b1 (4, 0)
-  assertBool "became special gem" (isGem cell && cellKind cell /= Normal)
-  assertEqual "LineH" LineH (cellKind cell)
+  assertBool "became special gem" (isGem cell && cellKind cell /= Just Normal)
+  assertEqual "LineH" (Just LineH) (cellKind cell)
   let gs = newGameAtLevel 32 (levelConfig (allLevels !! 32)) 42
       nSur =
         length
@@ -865,138 +643,6 @@ surprise_explodes_small = do
   assertBool "surprise cleared by blast" $
     not (isSurprise (getCell (gsBoard gs1) (3, 3)))
 
---------------------------------------------------------------------------------
--- Bottle / 染色瓶 (adjacent clear dyes ortho gems)
---------------------------------------------------------------------------------
-
-bottle_blocks_swap :: Assertion
-bottle_blocks_swap = do
-  let board = setCell stableBoard (3, 3) (mkBottle C2)
-  assertBool "is bottle" (isBottle (getCell board (3, 3)))
-  assertEqual "color" C2 (bottleColor (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
-
-bottle_dyes_neighbors :: Assertion
-bottle_dyes_neighbors = do
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell stableBoard (3, 0) (mkGem C1))
-                   (3, 1)
-                   (mkGem C1))
-                (3, 2)
-                (mkGem C1))
-             (2, 1)
-             (mkBottle C3))
-          (2, 2)
-          (mkGem C5)
-  let ms = findMatches board0
-      b1 = triggerAdjacentBottles board0 ms
-  assertBool "bottle stays" (isBottle (getCell b1 (2, 1)))
-  assertEqual "dyed neighbor" C3 (cellColor (getCell b1 (2, 2)))
-  let gs = newGameAtLevel 33 (levelConfig (allLevels !! 33)) 42
-      nBot =
-        length
-          [ ()
-          | r <- [0 .. boardSize - 1]
-          , c <- [0 .. boardSize - 1]
-          , isBottle (getCell (gsBoard gs) (r, c))
-          ]
-  assertBool ("decor bottles >= 6, got " ++ show nBot) (nBot >= 6)
-
---------------------------------------------------------------------------------
--- TimeSpirit / 时间精灵 (+2 moves) & Steam / 蒸汽 & carry bonus
---------------------------------------------------------------------------------
-
-time_spirit_blocks_swap :: Assertion
-time_spirit_blocks_swap = do
-  let board = setCell stableBoard (3, 3) mkTimeSpirit
-  assertBool "is spirit" (isTimeSpirit (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
-
-time_spirit_awards_moves :: Assertion
-time_spirit_awards_moves = do
-  -- Form match via swap (0,2)<->(0,3): C1 C1 C2 C1 → C1 C1 C1 C2; spirit at (1,1) adjacent
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell stableBoard (0, 0) (mkGem C1))
-                   (0, 1)
-                   (mkGem C1))
-                (0, 2)
-                (mkGem C2))
-             (0, 3)
-             (mkGem C1))
-          (1, 1)
-          mkTimeSpirit
-      gs0 =
-        (newGame defaultConfig 7)
-          { gsBoard = board0
-          , gsMoves = 10
-          , gsOver = Nothing
-          , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
-      (gs1, out) = trySwap (0, 2) (0, 3) gs0
-  case out of
-    NoMatch -> assertFailure "expected match"
-    InvalidSwap -> assertFailure "expected valid"
-    _ -> pure ()
-  assertBool "spirit cleared" (not (isTimeSpirit (getCell (gsBoard gs1) (1, 1))))
-  -- spent 1 move, gained +2 → net +1 from 10 → 11
-  assertEqual "moves +2 net" (11 :: Int) (gsMoves gs1)
-  let gsL = newGameAtLevel 34 (levelConfig (allLevels !! 34)) 42
-      nSp =
-        length
-          [ ()
-          | r <- [0 .. boardSize - 1]
-          , c <- [0 .. boardSize - 1]
-          , isTimeSpirit (getCell (gsBoard gsL) (r, c))
-          ]
-  assertBool ("decor spirits >= 6, got " ++ show nSp) (nSp >= 6)
-
--- | TimeSpirit adjacent-clear on the final move: -1+2 keeps the player alive.
-time_spirit_rescues_last_move :: Assertion
-time_spirit_rescues_last_move = do
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell stableBoard (0, 0) (mkGem C1))
-                   (0, 1)
-                   (mkGem C1))
-                (0, 2)
-                (mkGem C2))
-             (0, 3)
-             (mkGem C1))
-          (1, 1)
-          mkTimeSpirit
-      gs0 =
-        (newGame defaultConfig 8)
-          { gsBoard = board0
-          , gsMoves = 1
-          , gsOver = Nothing
-          , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
-      (gs1, out) = trySwap (0, 2) (0, 3) gs0
-  case out of
-    NoMatch -> assertFailure "expected match"
-    InvalidSwap -> assertFailure "expected valid"
-    Lost _ -> assertFailure "spirit should rescue last move"
-    _ -> pure ()
-  assertBool "spirit gone" (not (isTimeSpirit (getCell (gsBoard gs1) (1, 1))))
-  assertEqual "net +1 from last move" (2 :: Int) (gsMoves gs1)
-  assertEqual "not over" Nothing (gsOver gs1)
-
 -- | Flip at the natural 4-match spawn anchor: Line must still appear on a hole.
 -- Locks Flip+Match: non-clearing Flip seeds must not swallow special spawns.
 flip_four_match_spawns_line :: Assertion
@@ -1017,15 +663,16 @@ flip_four_match_spawns_line = do
   assertEqual "three holes (flip stays)" (3 :: Int) n
   assertBool "flip became back gem" $
     case (mb !! 3) !! 2 of
-      Just c -> isGem c && cellColor c == C4 && cellKind c == Normal
+      Just c -> isGem c && cellColor c == Just C4 && cellKind c == Just Normal
       Nothing -> False
   let specials =
-        [ (r, c, cellKind cell)
+        [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [((mb !! r) !! c)]
         , isGem cell
-        , cellKind cell /= Normal
+        , Just k <- [cellKind cell]
+        , k /= Normal
         ]
   assertBool ("expected Line spawn, got " ++ show specials) $
     any (\(_, _, k) -> k == LineH || k == LineV) specials
@@ -1043,12 +690,13 @@ flip_four_match_spawns_line = do
           (mkGem C2)
       (mbI, _) = clearMatches boardIce
       specsI =
-        [ cellKind cell
+        [ k
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [((mbI !! r) !! c)]
         , isGem cell
-        , cellKind cell /= Normal
+        , Just k <- [cellKind cell]
+        , k /= Normal
         ]
   assertBool ("ice mid still spawns, got " ++ show specsI) (LineH `elem` specsI || LineV `elem` specsI)
 
@@ -1083,48 +731,6 @@ surprise_blast_expands_bomb = do
   -- Bomb at (2,3) expands to row1; (1,3) is outside surprise 3×3 alone.
   assertBool "bomb expansion reached (1,3)" ((1, 3) `elem` holes)
   assertBool "cleared well beyond match+surprise" (n >= 12)
-
--- | Maker charge-1 → Bomb in place; Bomb is not consumed by the producing wave.
--- Locks Maker+Bomb: produced Bomb sits until a later match/swap.
-maker_bomb_survives_wave :: Assertion
-maker_bomb_survives_wave = do
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (3, 0) (mkGem C1))
-                (3, 1)
-                (mkGem C1))
-             (3, 2)
-             (mkGem C1))
-          (2, 1)
-          (mkMakerCharges C1 1)
-      gs0 =
-        (newGame defaultConfig 11)
-          { gsBoard = board0
-          , gsMoves = 15
-          , gsOver = Nothing
-          , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
-      (gs1, out) = trySwap (3, 1) (3, 2) gs0
-  case out of
-    NoMatch -> assertFailure "expected match"
-    InvalidSwap -> assertFailure "expected valid"
-    _ -> pure ()
-  let cell = getCell (gsBoard gs1) (2, 1)
-  -- trySwap path: Maker is gone (converted); Bomb may still sit or cascade-detonate.
-  assertBool "maker converted away" (not (isMaker cell))
-  -- Unit path: same-wave clearMatches leaves Bomb in place (not consumed by producing wave)
-  let (mb, _) = clearMatches board0
-  case (mb !! 2) !! 1 of
-    Just c -> do
-      assertBool "unit bomb gem" (isGem c)
-      assertEqual "unit Bomb kind" Bomb (cellKind c)
-      assertEqual "unit bomb color" C1 (cellColor c)
-    Nothing -> assertFailure "maker cell must not hole"
 
 -- | One match adjacent to Honey and same-color Balloon clears both in the wave.
 -- Locks Honey+Balloon: independent adjacency rules share iceFree seeds.
@@ -1214,106 +820,6 @@ safe_bottom_cookie_collected = do
   assertBool "safe opened" (gsSafesOpened gs1 >= 1)
   assertBool "cookie collected" (gsCookiesCollected gs1 >= 1)
 
--- | Dye bottle recolors neighbors mid-clear; a new match must cascade (not stall).
-bottle_dye_followup_match :: Assertion
-bottle_dye_followup_match = do
-  let bSafe = boardFromRows $
-        [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
-        | r <- [0 .. 7]
-        ]
-      board =
-        foldl
-          (\b (p, c) -> setCell b p c)
-          bSafe
-          [ ((6, 0), mkGem C1)
-          , ((6, 1), mkGem C1)
-          , ((6, 2), mkGem C1)
-          , ((5, 1), mkBottle C3)
-          , ((5, 0), mkGem C4)
-          , ((5, 2), mkGem C4)
-          , ((4, 2), mkGem C3)
-          , ((3, 2), mkGem C3)
-          ]
-      ms = findMatches board
-  assertBool "seed match includes row6" $
-    all (`elem` ms) [(6, 0), (6, 1), (6, 2)]
-  let dyed = triggerAdjacentBottles board ms
-  assertEqual "dyed (5,2)" C3 (cellColor (getCell dyed (5, 2)))
-  assertBool "dye created vertical C3" $
-    all (`elem` findMatches dyed) [(3, 2), (4, 2), (5, 2)]
-  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 42) board
-  assertBool ("follow-up cascade cells>=6 got " ++ show cells) (cells >= 6)
-  assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
-  assertBool "scored" (scored >= scoreForWave 1 3 + scoreForWave 2 3)
-
--- | Magic hat recolor of neighbors can create a match; cascade must clear it.
-hat_recolor_followup_match :: Assertion
-hat_recolor_followup_match = do
-  let bSafe = boardFromRows $
-        [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
-        | r <- [0 .. 7]
-        ]
-      board =
-        foldl
-          (\b (p, c) -> setCell b p c)
-          bSafe
-          [ ((6, 0), mkGem C1)
-          , ((6, 1), mkGem C1)
-          , ((6, 2), mkGem C1)
-          , ((5, 1), mkMagicHat)
-          , ((4, 1), mkStone) -- only left/right gem neighbors
-          , ((5, 0), mkGem C2)
-          , ((5, 2), mkGem C3)
-          , ((4, 0), mkGem C3)
-          , ((3, 0), mkGem C3)
-          ]
-      ms = findMatches board
-      hatted = triggerAdjacentHats board ms
-  assertEqual "hat swapped left to C3" C3 (cellColor (getCell hatted (5, 0)))
-  assertEqual "hat swapped right to C2" C2 (cellColor (getCell hatted (5, 2)))
-  assertBool "hat created col0 C3 match" $
-    all (`elem` findMatches hatted) [(3, 0), (4, 0), (5, 0)]
-  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 7) board
-  assertBool ("hat follow-up cells>=6 got " ++ show cells) (cells >= 6)
-  assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
-  let CascadeRun {crBoard = bAfter} = cascadeMatches Nothing [] [] (mkStdGen 7) board
-      hatLeft =
-        [ (r, c)
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , isMagicHat (getCell bAfter (r, c))
-        ]
-  -- Hat is gravity-fixed (immortal class); stays put through clears below.
-  assertEqual "hat still on board" (1 :: Int) (length hatLeft)
-  assertEqual "hat stayed put" [(5, 1)] hatLeft
-  assertBool "scored" (scored >= scoreForWave 1 3)
-
-
--- | Three same-color adjacent clears in one wave charge a maker only once.
-maker_multi_adjacent_charges_once :: Assertion
-maker_multi_adjacent_charges_once = do
-  let board =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (2, 2) (mkMakerCharges C1 2))
-                (2, 1)
-                (mkGem C1))
-             (2, 3)
-             (mkGem C1))
-          (1, 2)
-          (mkGem C1)
-      cleared = [(2, 1), (2, 3), (1, 2)]
-      adj = makersAdjacentSameColor board cleared
-  assertEqual "nub single maker" [(2, 2)] adj
-  let b1 = chargeAdjacentMakers board cleared
-  assertBool "still maker" (isMaker (getCell b1 (2, 2)))
-  assertEqual "2->1 once" (1 :: Int) (makerCharges (getCell b1 (2, 2)))
-  let bLow = setCell board (2, 2) (mkMakerCharges C1 1)
-      bBomb = chargeAdjacentMakers bLow cleared
-  assertBool "became bomb" (cellKind (getCell bBomb (2, 2)) == Bomb)
-  assertBool "not maker" (not (isMaker (getCell bBomb (2, 2))))
-
 --------------------------------------------------------------------------------
 -- Surprise direct-seed open (hammer / cross): special survives; explode blasts
 --------------------------------------------------------------------------------
@@ -1328,19 +834,19 @@ surprise_direct_seed_opens = do
   assertEqual "no explode for outcome 0" (0 :: Int) (length expl0)
   assertEqual "saved special cell" [(4, 0)] saved0
   let cellU = getCell bOpen (4, 0)
-  assertBool "opened to special" (isGem cellU && cellKind cellU /= Normal)
-  assertEqual "LineH" LineH (cellKind cellU)
+  assertBool "opened to special" (isGem cellU && cellKind cellU /= Just Normal)
+  assertEqual "LineH" (Just LineH) (cellKind cellU)
   -- Seed cascade (hammer path): special sits; not dug by iceFree hole.
   let g0 = mkStdGen 11
       CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] [] [] g0 boardSpecial
   assertEqual "special open clears no hole" (0 :: Int) nCleared
   let cellC = getCell bCas (4, 0)
-  assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Normal)
-  assertEqual "cascade LineH" LineH (cellKind cellC)
+  assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Just Normal)
+  assertEqual "cascade LineH" (Just LineH) (cellKind cellC)
   -- Direct-hit alongside another seed: special is saved (not spawn-then-hole).
   let (bOpen2, _, saved2) = openSurprises boardSpecial [(4, 0), (4, 1)]
   assertBool "saved when co-seeded" ((4, 0) `elem` saved2)
-  assertEqual "still LineH when co-seeded" LineH (cellKind (getCell bOpen2 (4, 0)))
+  assertEqual "still LineH when co-seeded" (Just LineH) (cellKind (getCell bOpen2 (4, 0)))
   -- (3,3) explode-outcome: hammer 3×3 scores >= 90 (single-cell would be 10).
   let boardBoom = setCell stableBoard (3, 3) mkSurprise
       gsB0 =
@@ -1363,7 +869,6 @@ surprise_direct_seed_opens = do
   assertBool "surprise gone after explode" $
     not (isSurprise (getCell (gsBoard gsB1) (3, 3)))
   assertBool ("explode score >= 90, got " ++ show (gsScore gsB1)) (gsScore gsB1 >= 90)
-
 
 -- | Surprise 3×3 explode must peel/chip adjacent obstacles like Bomb (trueClears).
 -- Regression: surpFree used to skip stone/fog/chain/freeze/curtain/honey peels.
@@ -1541,82 +1046,6 @@ blast_chips_layered_obstacles_once = do
   assertEqual "cake 2→1" (1 :: Int) (cakeLayers (getCell bCake (2, 2)))
 
 --------------------------------------------------------------------------------
--- MagicHat survives Line/Bomb/Hammer direct seeds (Maker/Bottle parity)
---------------------------------------------------------------------------------
-
--- | Hats only recolor via adjacent clears and must stay on the board. chipIceOnClear
--- used to list MagicHat as clearable, so LineH/Bomb/Hammer/Cross wiped hats without
--- a useful trigger (row neighbors already in the clear set). Align with Maker /
--- Snail / Bottle immunity; hammer rejects without spending. Adjacent trigger still
--- works. Regression: hat_immune_to_direct_clear.
-hat_immune_to_direct_clear :: Assertion
-hat_immune_to_direct_clear = do
-  -- Unit: direct seed does not mark hat clearable; cell unchanged.
-  let (bU, freeU) = chipIceOnClear (setCell stableBoard (2, 2) mkMagicHat) [(2, 2)]
-  assertEqual "hat not clearable" ([] :: [Pos]) freeU
-  assertBool "hat stays on chipIce" (isMagicHat (getCell bU (2, 2)))
-  -- LineH blast through a hat: hat survives (Maker parity).
-  let lineBoard lock =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell
-                      (setCell
-                         (setCell
-                            (setCell stableBoard (3, 0) (mkGem C1))
-                            (3, 1)
-                            (Gem C1 LineH 0 Nothing))
-                         (3, 2)
-                         (mkGem C1))
-                      (3, 3)
-                      (mkGem C3))
-                   (3, 4)
-                   (mkGem C4))
-                (3, 5)
-                lock)
-             (3, 6)
-             (mkGem C5))
-          (3, 7)
-          (mkGem C3)
-  assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
-  let CascadeRun {crBoard = bLine} = cascadeMatches Nothing [] [] (mkStdGen 61) (lineBoard mkMagicHat)
-  assertBool "hat survives line blast" (isMagicHat (getCell bLine (3, 5)))
-  -- Hammer on hat: NoMatch, charge kept, board unchanged.
-  let gs0 =
-        (newGame defaultConfig 12)
-          { gsBoard = setCell stableBoard (4, 4) mkMagicHat
-          , gsHammers = 2
-          , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsHint = Nothing
-          , gsGoal = GoalScore 99999
-          , gsMoves = 20
-          , gsScore = 0
-          }
-      (gs1, outH) = useHammer (4, 4) gs0
-  outH @?= NoMatch
-  assertEqual "hammer not spent" (2 :: Int) (gsHammers gs1)
-  assertBool "hat remains after hammer" (isMagicHat (getCell (gsBoard gs1) (4, 4)))
-  -- Adjacent clear still triggers hat (recolor) and hat stays.
-  let boardAdj =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (2, 0) (mkGem C1))
-                (2, 1)
-                (mkGem C1))
-             (2, 2)
-             (mkGem C1))
-          (1, 1)
-          mkMagicHat
-      ms = [(2, 0), (2, 1), (2, 2)]
-  assertBool "hat present" (isMagicHat (getCell boardAdj (1, 1)))
-  let boardTrig = triggerAdjacentHats boardAdj ms
-  assertBool "hat still after adj trigger" (isMagicHat (getCell boardTrig (1, 1)))
-
---------------------------------------------------------------------------------
 -- Surprise explode must open nested Surprises (Bomb parity)
 --------------------------------------------------------------------------------
 
@@ -1646,7 +1075,7 @@ surprise_blast_opens_nested = do
   case (mbS !! 2) !! 2 of
     Just c -> do
       assertBool "nested opened to gem" (isGem c)
-      assertEqual "nested Bomb special" Bomb (cellKind c)
+      assertEqual "nested Bomb special" (Just Bomb) (cellKind c)
       assertBool "not still Surprise" (not (isSurprise c))
     Nothing -> assertFailure "nested Surprise must open to special, not hole-delete"
   -- Same-pass special must sit (Bomb parity): must NOT fire-and-survive.
@@ -1673,7 +1102,7 @@ surprise_blast_opens_nested = do
           mkSurprise
       (mbB, _) = clearMatches boardBomb
   case (mbB !! 2) !! 2 of
-    Just c -> assertEqual "bomb-hit nested Bomb" Bomb (cellKind c)
+    Just c -> assertEqual "bomb-hit nested Bomb" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "bomb-hit Surprise must open"
   -- Nested explode at (2,3): chain must reach (1,3) outside outer 3×3 alone.
   let boardChain =
@@ -1737,7 +1166,7 @@ surprise_nested_special_no_fire = do
         , ((mb !! r) !! c) == Nothing
         ]
   case (mb !! 2) !! 2 of
-    Just c -> assertEqual "special sits" Bomb (cellKind c)
+    Just c -> assertEqual "special sits" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "nested special must survive"
   assertBool "no fire beyond outer blast (1,1)" ((1, 1) `notElem` holes)
   assertBool "no fire beyond outer blast (1,2)" ((1, 2) `notElem` holes)
@@ -1800,7 +1229,7 @@ surprise_special_sits_hat_bottle = do
   assertEqual "saved special pos" [(2, 2)] saved
   assertEqual "opened Bomb C4" expectedSpecial (getCell bOpen (2, 2))
   let dyedBare = triggerAdjacentBottles bOpen clears
-  assertEqual "unprotected Bottle dyes special" C3 (cellColor (getCell dyedBare (2, 2)))
+  assertEqual "unprotected Bottle dyes special" (Just C3) (cellColor (getCell dyedBare (2, 2)))
   let dyedProt = triggerAdjacentBottlesExcept bOpen clears saved
   assertEqual "protected Bottle skips special" expectedSpecial (getCell dyedProt (2, 2))
   -- Unit: Hat would swap special color without protection
@@ -1815,7 +1244,7 @@ surprise_special_sits_hat_bottle = do
       (hOpen, _, hSaved) = openSurprises boardHat clears
       hattedBare = triggerAdjacentHats hOpen clears
       hattedProt = triggerAdjacentHatsExcept hOpen clears hSaved
-  assertEqual "unprotected Hat recolors special" C1 (cellColor (getCell hattedBare (2, 2)))
+  assertEqual "unprotected Hat recolors special" (Just C1) (cellColor (getCell hattedBare (2, 2)))
   assertEqual "protected Hat skips special" expectedSpecial (getCell hattedProt (2, 2))
   -- Integration: clearMatches keeps opened special through Hat+Bottle.
   -- Hat (2,1) with stones so only neighbor is Surprise special → would cycleColor;
@@ -1840,121 +1269,6 @@ surprise_special_sits_hat_bottle = do
       (mb, _) = clearMatches boardBoth
   case (mb !! 2) !! 2 of
     Just c -> do
-      assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
-      assertEqual "cascade keeps special color (not Bottle/Hat)" C4 (cellColor c)
+      assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
+      assertEqual "cascade keeps special color (not Bottle/Hat)" (Just C4) (cellColor c)
     Nothing -> assertFailure "Surprise special must sit, not hole"
-
--- | Maker-produced Bomb must sit through same-wave Bottle dye (Surprise special
--- parity). Regression: chargeAdjacentMakers ran before Bottle, and surpSaved did
--- not cover Maker bomb sites, so Bottle recolored C1 Bomb → C3 Bomb in-place.
-maker_bomb_sits_bottle :: Assertion
-maker_bomb_sits_bottle = do
-  -- Match row (3,0..2) C1; Maker C1@1 at (2,1) → Bomb; Bottle C3 at (2,2) ortho.
-  let board0 =
-        setCell
-          (setCell
-             (setCell
-                (setCell
-                   (setCell stableBoard (3, 0) (mkGem C1))
-                   (3, 1)
-                   (mkGem C1))
-                (3, 2)
-                (mkGem C1))
-             (2, 1)
-             (mkMakerCharges C1 1))
-          (2, 2)
-          (mkBottle C3)
-      clears = [(3, 0), (3, 1), (3, 2)]
-  -- Unit: unprotected Bottle dyes freshly produced Maker Bomb
-  let (bCharged, saved) = chargeAdjacentMakersSit board0 clears
-  assertEqual "maker bomb sites" [(2, 1)] saved
-  assertEqual "produced C1 Bomb" (Gem C1 Bomb 0 Nothing) (getCell bCharged (2, 1))
-  let dyedBare = triggerAdjacentBottles bCharged clears
-  assertEqual "unprotected Bottle dyes maker bomb" C3 (cellColor (getCell dyedBare (2, 1)))
-  let dyedProt = triggerAdjacentBottlesExcept bCharged clears saved
-  assertEqual "protected Bottle skips maker bomb" (Gem C1 Bomb 0 Nothing) (getCell dyedProt (2, 1))
-  -- Integration: clearMatches keeps Maker Bomb color through Bottle
-  let (mb, _) = clearMatches board0
-  case (mb !! 2) !! 1 of
-    Just c -> do
-      assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
-      assertEqual "cascade keeps maker color (not Bottle)" C1 (cellColor c)
-    Nothing -> assertFailure "Maker Bomb must sit, not hole"
-
--- | Cookie mid-board is immune to Line/Bomb/Hammer direct seeds: must not wipe
--- or count toward GoalCookie. Cookies only collect via bottom-row drain.
--- Regression: chipIceOnClear listed Cookie clearable → blast "collected" mid-air.
-cookie_immune_to_direct_clear :: Assertion
-cookie_immune_to_direct_clear = do
-  -- Unit: chipIceOnClear leaves Cookie, not clearable
-  let boardC = setCell stableBoard (3, 3) mkCookie
-      (bIce, free) = chipIceOnClear boardC [(3, 3)]
-  assertEqual "cookie not clearable" ([] :: [Pos]) free
-  assertBool "cookie persists after chipIce" (isCookie (getCell bIce (3, 3)))
-  -- Bomb footprint covers Cookie: cookie survives; GoalCookie count stays 0
-  let boardBomb =
-        setCell
-          (setCell stableBoard (3, 3) mkCookie)
-          (3, 4)
-          (Gem C1 Bomb 0 Nothing)
-      seeds = [(3, 4)]
-      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) boardBomb
-      cookieLeft =
-        [ (r, c)
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , isCookie (getCell b1 (r, c))
-        ]
-  assertEqual "bomb must not count mid-board cookie" (0 :: Int) cookies
-  assertBool ("cookie still on board after bomb, left=" ++ show cookieLeft) (not (null cookieLeft))
-  -- LineH through cookie: same immunity
-  let boardLine =
-        setCell
-          (setCell stableBoard (4, 2) mkCookie)
-          (4, 4)
-          (Gem C2 LineH 0 Nothing)
-      CascadeRun {crBoard = bL, crTally = CascadeTally {ctCookies = cookiesL}} = cascadeSeeds Nothing [(4, 4)] [] [] (mkStdGen 2) boardLine
-  assertEqual "line must not count mid-board cookie" (0 :: Int) cookiesL
-  assertBool "cookie survives line" $
-    any (\(r, c) -> isCookie (getCell bL (r, c)))
-      [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
-  -- trySwap bomb path: GoalCookie meter unchanged when cookie not at bottom
-  let gs0 =
-        (newGame defaultConfig 21)
-          { gsBoard = boardBomb
-          , gsMoves = 12
-          , gsOver = Nothing
-          , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsPortals = []
-          , gsCookiesCollected = 0
-          , gsGoal = GoalCookie 5
-          , gsHammers = 2
-          }
-      -- Force bomb activation via useHammer on bomb cell (cookie neighbor)
-      (gsH, outH) = useHammer (3, 4) gs0
-  case outH of
-    NoMatch -> assertFailure "hammer on bomb should apply"
-    InvalidSwap -> assertFailure "hammer on bomb should apply"
-    _ -> pure ()
-  assertEqual "bomb hammer must not collect mid cookie" (0 :: Int) (gsCookiesCollected gsH)
-  assertBool "cookie still present after bomb hammer" $
-    any (\(r, c) -> isCookie (getCell (gsBoard gsH) (r, c)))
-      [ (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1] ]
-  -- Control: bottom-row cookie still drains on unrelated clear
-  let bottom = boardSize - 1
-      boardBot =
-        setCell
-          (setCell
-             (setCell
-                (setCell stableBoard (bottom, 4) mkCookie)
-                (2, 0)
-                (mkGem C1))
-             (2, 1)
-             (mkGem C1))
-          (2, 2)
-          (mkGem C1)
-      seedsBot = findMatches boardBot
-      CascadeRun {crTally = CascadeTally {ctCookies = cookiesBot}} = cascadeSeeds Nothing seedsBot [] [] (mkStdGen 3) boardBot
-  assertBool ("bottom cookie still drains, got " ++ show cookiesBot) (cookiesBot >= 1)

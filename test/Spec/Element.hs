@@ -7,6 +7,7 @@ module Spec.Element
   ) where
 
 import Match3.Board.Default (gravityFixedCell)
+import Data.List (isInfixOf)
 import Data.Maybe (isJust)
 import Match3.Core
 import Match3.Element (defaultRegistry, HitResult(HitAbsorb, HitDestroy), activatesWith, blocksSwapWith, directHitWith, hitImmuneWith, keepOnShuffleWith, lookupElement, matchColorWith, register, registryDefs)
@@ -45,7 +46,8 @@ element_registry_custom_crate_extensibility = do
   assertBool "move 1 applied" (moveApplied o1)
   assertEqual "move 1: crate chipped once, stays put" [((0, 1), Custom "crate" 1)] (cratesOn (gsBoard gs1))
   assertEqual "move 1: not counted yet" [] (gsElementCounts gs1)
-  assertBool "move 1: crate absent from first-wave clears" ((0, 1) `notElem` cwCleared (head (mtWaves mt1)))
+  w1 <- firstWave mt1
+  assertBool "move 1: crate absent from first-wave clears" ((0, 1) `notElem` cwCleared w1)
   assertBool "move 1: EvHit on crate"
     (any (\e -> evKind e == EvHit && evElement e == "crate" && ((0, 1), (0, 1)) `elem` evCells e) (traceEventsWith reg mt1))
   -- 第 2 手：同样的局面（耐久 1）再波及一次 → 碎，进入清除格并计数
@@ -53,7 +55,8 @@ element_registry_custom_crate_extensibility = do
       (gs2, o2, mt2) = resolveSwapWith reg (1, 2) (2, 2) gs1'
   assertBool "move 2 applied" (moveApplied o2)
   assertEqual "move 2: crate broken" [] (cratesOn (gsBoard gs2))
-  assertBool "move 2: crate in first-wave clears" ((0, 1) `elem` cwCleared (head (mtWaves mt2)))
+  w2 <- firstWave mt2
+  assertBool "move 2: crate in first-wave clears" ((0, 1) `elem` cwCleared w2)
   assertEqual "move 2: counted by name" [("crate", 1)] (gsElementCounts gs2)
   assertBool "move 2: EvClear of crate"
     (any (\e -> evKind e == EvClear && evElement e == "crate") (traceEventsWith reg mt2))
@@ -68,24 +71,12 @@ element_registry_custom_crate_extensibility = do
   assertEqual "unregistered: inert, untouched" [Custom "crate" 2] (map snd (cratesOn (gsBoard gsD)))
   assertBool "unregistered: hammer immune" (hitImmuneWith defaultRegistry (Custom "crate" 2))
   assertEqual "unregistered: not counted" [] (gsElementCounts gsD)
-  -- 主流程没有为它改动：核心模块源码里没有这个元素名的字面量 "crate"（注释里描述石块的英文词不算）
-  let coreFiles =
-        [ "src/Match3/Types.hs", "src/Match3/Board/Match.hs", "src/Match3/Board/Clear.hs"
-        , "src/Match3/Board/Gravity.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"
-        , "src/Match3/Game/Tally.hs", "src/Match3/Game/Shuffle.hs", "src/Match3/Game/Trace.hs"
-        , "src/Match3/Game/Move.hs", "src/Match3/Game/Boosters.hs", "src/Match3/Game/Level.hs"
-        , "src/Match3/Element/Types.hs", "src/Match3/Element/Registry.hs", "src/Match3/Element/Builtin.hs"
-        , "src/Match3/Element/Event.hs" ]
-          ++ [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ]
+  -- 主流程没有为它改动：src/ 与 app/ 下全部源码（含注释）里都没有这个元素名的字面量 "crate" 或「木箱」
+  coreFiles <- sourcesUnderAll ["src", "app"]
+  assertBool "scanned the core sources" ("src/Match3/Board/Cascade.hs" `elem` coreFiles && "src/Match3/Element/Builtin.hs" `elem` coreFiles)
   srcs <- mapM readFile coreFiles
-  let mentions = [f | (f, src) <- zip coreFiles srcs, show "crate" `isInfix` src || "木箱" `isInfix` src]
+  let mentions = [f | (f, src) <- zip coreFiles srcs, show "crate" `isInfixOf` src || "木箱" `isInfixOf` src]
   assertEqual "core sources do not mention the test element" [] mentions
-  where
-    isInfix needle hay = any (startsWith needle) (suffixes hay)
-    startsWith a b = take (length a) b == a
-    suffixes xs = xs : case xs of
-      [] -> []
-      (_ : rest) -> suffixes rest
 
 -- | 注册表的查询与第二刀之前按构造器写死的谓词逐格等价（对所有内置本体 × 冰层 × 叠层）。
 element_registry_matches_legacy_predicates :: Assertion

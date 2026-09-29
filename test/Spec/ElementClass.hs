@@ -52,6 +52,7 @@ tests =
   , testCase "ec_flat_record_removed" ec_flat_record_removed
   , testCase "ec_level_elements_by_message" ec_level_elements_by_message
   , testCase "ec_custom_matchable_gem" ec_custom_matchable_gem
+  , testCase "ec_registry_checked_slots" ec_registry_checked_slots
   ]
 
 -- | 快照里以给定前缀开头的行，两边逐行比；报告第一处分叉。
@@ -180,29 +181,18 @@ ec_open_messages = do
 -- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 31 个，名字与阶段 1 相同由快照锁定）。
 ec_flat_record_removed :: Assertion
 ec_flat_record_removed = do
-  let srcFiles =
-        [ "src/Match3/Element/" ++ m ++ ".hs" | m <- ["Types", "Registry", "Builtin", "Class", "Message", "Event"] ]
-          ++ [ "src/Match3/Element/Builtin/" ++ m ++ ".hs" | m <- ["Common", "Gem", "Layer", "Obstacle", "Collectible", "Actor", "Ground", "Level"] ]
-          ++ [ "src/Match3/Board/" ++ m ++ ".hs" | m <- ["Match", "Clear", "Gravity", "Cascade"] ]
-          ++ [ "src/Match3/Game/" ++ m ++ ".hs" | m <- ["Resolve", "Move", "Boosters", "Tally", "Shuffle", "Trace"] ]
-  srcs <- mapM (fmap stripComments . readFile) srcFiles
+  srcFiles <- sourcesUnderAll ["src/Match3/Element", "src/Match3/Board", "src/Match3/Game"]
+  assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/Element/Registry.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
+  srcs <- mapM (fmap stripStrings . readFile) srcFiles
   let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover"], w `isInfixOf` s]
   assertEqual "no flat record / closed hooks" [] bad
-  match <- stripComments <$> readFile "src/Match3/Board/Match.hs"
-  assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` match) && not ("Match3.Rainbow" `isInfixOf` match))
-  flow <- mapM (fmap stripComments . readFile) ["src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs", "src/Match3/Board/Gravity.hs"]
-  assertBool "main flow does not call level element implementations" (not (any (\s -> any (`isInfixOf` s) ["stepUfos", "beltMoves", "coverCarpets"]) flow))
+  match <- readFile "src/Match3/Board/Match.hs"
+  assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` stripStrings match) && "Match3.Rainbow" `notElem` importsOf match)
+  flowFiles <- pipelineSources
+  flow <- mapM readFile flowFiles
+  assertEqual "main flow does not call level element implementations" [] [(f, w) | (f, s) <- zip flowFiles flow, w <- ["stepUfos", "beltMoves", "coverCarpets"], mentionsIdent w s]
   assertEqual "31 builtin entries" 31 (length builtinDefs)
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet"] (map levelNameOf builtinLevelDefs)
-  where
-    stripComments = unlines . map dropComment . lines
-    dropComment l
-      | take 2 (dropWhile (== ' ') l) == "--" = ""
-      | otherwise = cut l
-    cut s = case s of
-      [] -> []
-      (' ' : '-' : '-' : ' ' : _) -> []
-      (x : xs) -> x : cut xs
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；
 -- 不改主流程，只 registerLevel。新消息类型（Ping）也能经 askLevel 发给关卡级元素。
@@ -250,7 +240,7 @@ instance Element Star where
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do
-  let reg = register (customEntry (Star C5) (Star . toEnum)) defaultRegistry
+  let reg = register (customEntry (Star C5) (Star . colorAt)) defaultRegistry
       star = Custom "star" (fromEnum C5)
       board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
       gs0 = (newGame (GameConfig 5 (GoalNamed "star" 1)) 1) {gsBoard = board0}
@@ -259,9 +249,38 @@ ec_custom_matchable_gem = do
   assertEqual "star matches as C5" (Just C5) (matchColorWith reg star)
   assertBool "star can be swapped" (not (blocksSwapWith reg star))
   assertBool "move applied" (moveApplied o1)
-  assertBool "star cleared in the first wave" ((1, 1) `elem` cwCleared (head (mtWaves mt1)))
+  w1 <- firstWave mt1
+  assertBool "star cleared in the first wave" ((1, 1) `elem` cwCleared w1)
   assertEqual "counted by name" [("star", 1)] (gsElementCounts gs1)
   assertBool "hint sees the star" (isJust (findHintWith reg board0))
   let (_, oD) = trySwap p1 p2 gs0
   assertEqual "unregistered star is inert" Nothing (matchColorWith defaultRegistry star)
   assertBool "unregistered: no match through it" (not (moveApplied oD) || gsElementCounts (fst (trySwap p1 p2 gs0)) == [])
+
+-- | 注册表条目的槽位由原型推导；mkRegistryChecked 把重名 / 槽位冲突 / 推不出槽位暴露成值，
+-- 内置条目表通过检查；mkRegistry 是总函数（空表也能解码，查不到的槽位退回惰性占格）。
+newtype OtherGem = OtherGem Color
+  deriving (Eq, Show)
+
+instance Element OtherGem where
+  name _ = "other_gem"
+  toCell (OtherGem c) = Gem c Normal 0 Nothing
+
+ec_registry_checked_slots :: Assertion
+ec_registry_checked_slots = do
+  let errsOf = either Just (const Nothing) . mkRegistryChecked
+      otherGem = bodyEntry (OtherGem C1) (const Nothing) (\_ _ -> Nothing)
+      stray = bodyEntry (C.Inert "stray" (Custom "stray" 1)) (const Nothing) (\_ _ -> Nothing)
+      slotOf n = [entrySlot e | e <- builtinDefs, entryName e == n]
+  assertEqual "builtin defs pass the check" Nothing (errsOf builtinDefs)
+  assertEqual "gem slot derived from prototype" [SlotCell 0] (slotOf "gem")
+  assertEqual "countdown slot derived from prototype" [SlotCell (cellSlot (Countdown C1 1))] (slotOf "countdown")
+  assertEqual "ice slot derived from prototype" [SlotIce] (slotOf "ice")
+  assertEqual "steam slot derived from prototype" [SlotOverlay (overlaySlot Steam)] (slotOf "steam")
+  assertEqual "duplicate name" (Just [DuplicateName "dup"]) (errsOf [inertEntry "dup", inertEntry "dup"])
+  assertEqual "duplicate slot" (Just [DuplicateSlot (SlotCell 0) ["gem", "other_gem"]]) (errsOf (builtinDefs ++ [otherGem]))
+  assertEqual "no slot" (Just [NoSlot "stray"]) (errsOf [stray])
+  assertEqual "stray entry has no slot" SlotNone (entrySlot stray)
+  -- 总函数：register 按名字替换仍可用；空注册表解码不崩
+  assertEqual "empty registry decodes to inert" "?" (elementName (mkRegistry []) (mkGem C1))
+  assertEqual "empty registry: no upper layers" 0 (length (upperOf (mkRegistry []) (mkIceGem C1 2)))

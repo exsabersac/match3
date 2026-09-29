@@ -485,7 +485,7 @@ daily_ufo_goal_spawns_saucer = do
   let cfg = GameConfig 26 (GoalUfo 8)
       gs = newGame cfg 20260929
   assertBool "default UFO placed" (not (null (gsUfos gs)))
-  assertEqual "target color" C1 (ufoColor (head (gsUfos gs)))
+  assertEqual "target color" [C1] (map ufoColor (take 1 (gsUfos gs)))
 
 
 goal_carpet_counts :: Assertion

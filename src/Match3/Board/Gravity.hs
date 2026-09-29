@@ -71,12 +71,11 @@ drainEdgesMWith reg mb =
         EdgeLeft -> [(r, 0) | r <- [0 .. n]]
         EdgeRight -> [(r, n) | r <- [0 .. n]]
         EdgeTop -> [(0, c) | c <- [0 .. n]]
-      atM (r, c) = (mb !! r) !! c
       hits0 =
         [ (p, cell)
         | e <- [EdgeBottom, EdgeLeft, EdgeRight, EdgeTop]
         , p <- edgeCells e
-        , Just cell <- [atM p]
+        , Just cell <- [atM mb p]
         , e `elem` drainEdgesWith reg cell
         ]
       hits = nubBy (\x y -> fst x == fst y) hits0
@@ -98,7 +97,6 @@ portalTeleport canPort portals mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
   foldl tryPair mb (nub portals)
   where
-    atM m (r, c) = (m !! r) !! c
     transferable (Just cell) = canPort cell
     transferable Nothing = False
     tryPair m (a, b) =
@@ -129,16 +127,16 @@ settleDrainWith reg portals mb =
 refill :: RandomGen g => g -> MBoard -> (Board, g)
 refill g0 mb =
   let (filled, g') = fillList g0 (concat mb)
-  in (boardFromRows (chunk boardSize (map (maybe (error "refill: hole") id) filled)), g')
+  in (boardFromRows (chunk boardSize filled), g')
   where
     fillList g [] = ([], g)
     fillList g (Nothing : xs) =
       let (c, g1) = randomColor g
           (rest, g2) = fillList g1 xs
-      in (Just (mkGem c) : rest, g2)
+      in (mkGem c : rest, g2)
     fillList g (Just x : xs) =
       let (rest, g1) = fillList g xs
-      in (Just x : rest, g1)
+      in (x : rest, g1)
 
 -- | settleRefill（指定注册表）。
 settleRefillWith :: RandomGen g => Registry -> [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)

@@ -8,9 +8,11 @@ import qualified Spec.GridMatch
 import qualified Spec.Gravity
 import qualified Spec.Cascade
 import qualified Spec.Specials
-import qualified Spec.Obstacles.Body
-import qualified Spec.Obstacles.Layers
-import qualified Spec.Obstacles.Features
+import qualified Spec.Builtin.Obstacle
+import qualified Spec.Builtin.Collectible
+import qualified Spec.Builtin.Actor
+import qualified Spec.Builtin.Layer
+import qualified Spec.Builtin.Level
 import qualified Spec.Boosters
 import qualified Spec.GoalsLevels
 import qualified Spec.Element
@@ -23,6 +25,7 @@ import qualified Spec.UIEvents
 import qualified Spec.ReplayUndo
 import qualified Spec.Golden
 import qualified Spec.Properties
+import qualified Spec.SourceScan
 
 main :: IO ()
 main = defaultMain tests
@@ -36,9 +39,11 @@ tests =
         , Spec.Gravity.tests
         , Spec.Cascade.tests
         , Spec.Specials.tests
-        , Spec.Obstacles.Body.tests
-        , Spec.Obstacles.Layers.tests
-        , Spec.Obstacles.Features.tests
+        , Spec.Builtin.Obstacle.tests
+        , Spec.Builtin.Collectible.tests
+        , Spec.Builtin.Actor.tests
+        , Spec.Builtin.Layer.tests
+        , Spec.Builtin.Level.tests
         , Spec.Boosters.tests
         , Spec.GoalsLevels.tests
         , Spec.Element.tests
@@ -51,5 +56,6 @@ tests =
         , Spec.ReplayUndo.tests
         , Spec.Golden.tests
         , Spec.Properties.tests
+        , Spec.SourceScan.tests
         ]
     )

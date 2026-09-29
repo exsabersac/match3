@@ -503,8 +503,8 @@ primCountdown ren x y cell flashing = case cell of
 -- | 几何版：宝石（含特殊块 / 冰 / 覆盖层）。底色块 → 冰 → 覆盖层 → 特殊块标记。
 primGem :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
 primGem ren x y cell flashing = case cell of
-  Gem _ _ ice ov -> do
-    let (cr0, cg0, cb0) = colorRGB (cellColor cell)
+  Gem col kind ice ov -> do
+    let (cr0, cg0, cb0) = colorRGB col
         (cr, cg, cb) = if flashing then (255, 255, 255) else (cr0, cg0, cb0)
         gap = 3 :: CInt
     rendererDrawColor ren $= V4 cr cg cb 255
@@ -519,7 +519,7 @@ primGem ren x y cell flashing = case cell of
       drawRect ren (Just (Rectangle (P (V2 (x + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
     primIce ren x y ice
     primOverlay ren x y ov
-    primMark ren x y (cellKind cell)
+    primMark ren x y kind
   _ -> pure ()
 
 -- | 几何版：冰层（青色框 + 裂纹，两层以上加内框）。

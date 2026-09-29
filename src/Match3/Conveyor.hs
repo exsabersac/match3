@@ -24,14 +24,14 @@ beltMoves :: [Belt] -> [(Pos, Pos)]
 beltMoves belts =
   let cells = nub (concat belts)
       origin0 = [(p, p) | p <- cells]
-      shiftOne orig ps
-        | length ps < 2 = orig
-        | otherwise =
-            -- 新[i] = 旧[i-1]，新[0] = 旧[last]
-            let prevOf = reverse (zip ps (last ps : init ps))
-            in [ (p, maybe o (\q -> maybe q id (lookup q orig)) (lookup p prevOf))
-               | (p, o) <- orig
-               ]
+      shiftOne orig ps = case reverse ps of
+        -- 至少两格才移位：新[i] = 旧[i-1]，新[0] = 旧[last]
+        lastP : restRev@(_ : _) ->
+          let prevOf = reverse (zip ps (lastP : reverse restRev))
+          in [ (p, maybe o (\q -> maybe q id (lookup q orig)) (lookup p prevOf))
+             | (p, o) <- orig
+             ]
+        _ -> orig
       final = foldl shiftOne origin0 belts
   in [(o, d) | (d, o) <- final, o /= d]
 

@@ -1,8 +1,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（原 test/Spec.hs 的非测试顶层定义，逐字搬运）。
+-- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（原 test/Spec.hs 的非测试顶层定义，逐字搬运），
+-- 以及第 1 刀从各模块收拢的重复助手（tripleBoard / tripleMove / allPos / isWin / firstWave / firstLevel …）。
+-- 源码扫描工具在 "Spec.Support.Source"，这里一并导出。
 module Spec.Support
-  ( findNoMatchPair
+  ( -- * 通用局面与查询
+    allPos
+  , setCells
+  , customsOn
+  , isCustomNamed
+  , tripleBoard
+  , tripleMove
+  , isWin
+  , firstLevel
+  , firstWave
+    -- * 原有助手
+  , findNoMatchPair
   , findMatchPair
   , stuckNoMoveBoard
   , stableBoard
@@ -20,6 +33,8 @@ module Spec.Support
   , moveApplied
   , cratesOn
   , stepThenUndo
+    -- * 源码扫描
+  , module Spec.Support.Source
   ) where
 
 import Control.Monad (foldM)
@@ -33,6 +48,51 @@ import Engine.History (History(..), Undoable(..), startHistory)
 import Match3.Element.Registry (Registry)
 import qualified Match3.Engine as M3E
 import Test.Tasty.HUnit
+import Spec.Support.Source
+
+-- | 棋盘全部格子（行优先）。
+allPos :: [Pos]
+allPos = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+
+-- | 依次写入若干格。
+setCells :: Board -> [(Pos, Cell)] -> Board
+setCells = foldl (\b (p, c) -> setCell b p c)
+
+-- | 盘上名字为 n 的自定义格位置（行优先）。
+customsOn :: String -> Board -> [Pos]
+customsOn n b = [p | p <- allPos, isCustomNamed n (getCell b p)]
+
+-- | 是否是名字为 n 的自定义格。
+isCustomNamed :: String -> Cell -> Bool
+isCustomNamed n cell = case cell of
+  Custom m _ -> m == n
+  _ -> False
+
+-- | 第 1 行 (1,0)(1,1) 为 C5 的稳定盘：交换 (1,2)↔(2,2) 后第 1 行 (1,0)–(1,3) 是 C5 四连（(1,3) 本来就是 C5）。
+tripleBoard :: Board
+tripleBoard = setCells stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5)]
+
+tripleMove :: (Pos, Pos)
+tripleMove = ((1, 2), (2, 2))
+
+-- | 结局是否是过关（Won / LevelClear）。
+isWin :: Maybe Outcome -> Bool
+isWin o = case o of
+  Just (Won _) -> True
+  Just (LevelClear _ _) -> True
+  _ -> False
+
+-- | 战役第 1 关（allLevels 的第一项；关卡表为空时直接报错）。
+firstLevel :: Level
+firstLevel = case allLevels of
+  (l : _) -> l
+  [] -> error "firstLevel: allLevels is empty"
+
+-- | 走步报告的第一轮连锁；没有任何一轮时断言失败。
+firstWave :: HasCallStack => MoveTrace -> IO CascadeWave
+firstWave mt = case mtWaves mt of
+  (w : _) -> pure w
+  [] -> assertFailure "expected at least one cascade wave"
 
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -98,7 +158,7 @@ comboMoveState =
   case
     [ (gs0, gs1)
     | seed <- [1 .. 400 :: Int]
-    , let gs0 = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+    , let gs0 = newGameAtLevel 0 (levelConfig firstLevel) seed
     , r <- [0 .. boardSize - 1]
     , c <- [0 .. boardSize - 1]
     , p2 <- [(r, c + 1), (r + 1, c)]
@@ -262,15 +322,14 @@ crateDef = customEntry (Crate 1) Crate
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
 crateBoard :: Int -> Board
 crateBoard durability =
-  foldl (\b (p, c) -> setCell b p c) stableBoard
-    [((1, 0), mkGem C5), ((1, 1), mkGem C5), ((0, 1), Custom "crate" durability)]
+  setCells stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5), ((0, 1), Custom "crate" durability)]
 
 -- | 这一手是否真正结算（不是 NoMatch / InvalidSwap）。
 moveApplied :: Outcome -> Bool
 moveApplied o = o /= NoMatch && o /= InvalidSwap
 
 cratesOn :: Board -> [(Pos, Cell)]
-cratesOn b = [((r, c), cell) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let cell = getCell b (r, c), isCustom cell]
+cratesOn b = [(p, cell) | p <- allPos, let cell = getCell b p, isCustom cell]
 
 -- | 段 3：撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith reg 执行一个动作，
 -- 再执行 Undo，返回撤销后的状态；走步或撤销被拒时 Nothing。

@@ -58,8 +58,8 @@ if command -v stack >/dev/null 2>&1; then ok "stack" "$(ver stack --numeric-vers
 else bad "stack" "找不到" "https://docs.haskellstack.org/ 或 ghcup install stack"; fi
 # stack.yaml 用 system-ghc：以 stack 实际拿到的 ghc 为准（可能来自 ~/.ghcup/bin）
 if command -v stack >/dev/null 2>&1 && v="$(cd "$HERE/.." && stack exec -- ghc --numeric-version 2>/dev/null)"; then
-  case "$v" in 9.4.8) ok "ghc（stack 用的）" "$v" ;; *) opt "ghc（stack 用的）" "$v（lts-21.25 期望 9.4.8）" "ghcup install ghc 9.4.8" ;; esac
-else bad "ghc（stack 用的）" "stack 找不到 ghc（stack.yaml 用 system-ghc）" "ghcup install ghc 9.4.8；并 export PATH=\$HOME/.ghcup/bin:\$PATH"; fi
+  case "$v" in 9.14.*) ok "ghc（stack 用的）" "$v" ;; *) opt "ghc（stack 用的）" "$v（stack.yaml 期望 9.14.1）" "ghcup install ghc 9.14.1" ;; esac
+else bad "ghc（stack 用的）" "stack 找不到 ghc（stack.yaml 用 system-ghc）" "ghcup install ghc 9.14.1；并 export PATH=\$HOME/.ghcup/bin:\$PATH"; fi
 if [ -n "${CC:-}" ] && printf '%s' "${CC}" | grep -q wasm; then
   bad "环境变量 CC" "$CC" "当前 shell source 过 ~/.ghc-wasm/env，会让 stack 用错编译器；开个新终端"
 fi

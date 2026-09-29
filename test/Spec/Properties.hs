@@ -1,12 +1,28 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | QuickCheck 性质测试。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
+--
+-- qc_findMatches_ge3 是原有的性质（逐字不变）。其余是第 1 刀新增的不变量，覆盖重力、补子、连锁、
+-- 撤销 / 重做、回放、目标进度与元素注册表。为了可复现，新性质统一挂在固定种子下
+-- （localOption (QuickCheckReplayLegacy 20260930)），每条用 withMaxSuccess 控制次数。
+-- 生成器只用本模块里的 Gen（格子、可空盘面、战役关卡 + 种子 + 动作选择），不依赖规则实现。
 module Spec.Properties
   ( tests
   ) where
 
+import Data.List (nub, sort)
+import Data.Maybe (isJust, isNothing)
+import Engine.Game (Game(..), Step(..), runActions)
+import Engine.History (History(..), HistoryPolicy(..), Undoable(..), historyDepth, startHistory)
+import Match3.Board.Cascade (CascadeRun(..))
+import Match3.Board.Default (cascadeMatches)
+import Match3.Board.Grid (MBoard)
+import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
+import Match3.Element
+import Match3.Element.Class (toCell)
+import qualified Match3.Engine as M3E
+import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
@@ -15,6 +31,19 @@ tests :: [TestTree]
 tests =
   [ testProperty "qc_findMatches_ge3" qc_findMatches_ge3
   ]
+    ++ map fixedSeed
+      [ testProperty "qc_gravity_keeps_cells_and_column_order" (withMaxSuccess 500 qc_gravity_keeps_cells_and_column_order)
+      , testProperty "qc_refill_leaves_no_holes" (withMaxSuccess 500 qc_refill_leaves_no_holes)
+      , testProperty "qc_cascade_terminates_stable" (withMaxSuccess 300 qc_cascade_terminates_stable)
+      , testProperty "qc_undo_redo_roundtrip" (withMaxSuccess 100 qc_undo_redo_roundtrip)
+      , testProperty "qc_replay_same_seed_deterministic" (withMaxSuccess 60 qc_replay_same_seed_deterministic)
+      , testProperty "qc_goal_progress_monotone" (withMaxSuccess 60 qc_goal_progress_monotone)
+      , testProperty "qc_registry_decode_roundtrip" (withMaxSuccess 1000 qc_registry_decode_roundtrip)
+      , testProperty "qc_registry_names_slots_unique" (once qc_registry_names_slots_unique)
+      ]
+  where
+    -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
+    fixedSeed = localOption (QuickCheckReplayLegacy 20260930)
 
 qc_findMatches_ge3 :: Property
 qc_findMatches_ge3 =
@@ -31,3 +60,287 @@ qc_findMatches_ge3 =
       in (r, c0) `elem` ms
            && (r, c0 + 1) `elem` ms
            && (r, c0 + 2) `elem` ms
+
+--------------------------------------------------------------------------------
+-- 生成器
+
+genColor :: Gen Color
+genColor = elements [minBound .. maxBound]
+
+genOverlay :: Gen CellOverlay
+genOverlay =
+  oneof
+    [ elements [Grass, Vine, Choco, Steam]
+    , Fog <$> choose (1, 2)
+    , Chain <$> choose (1, 2)
+    , Freeze <$> choose (1, 2)
+    , Curtain <$> choose (1, 2)
+    ]
+
+-- | 宝石（任意种类、冰层 0..2、可带叠层）。
+genGem :: Gen Cell
+genGem =
+  Gem
+    <$> genColor
+    <*> frequency [(6, pure Normal), (1, elements [LineH, LineV, Bomb, Rainbow])]
+    <*> frequency [(4, pure 0), (1, choose (1, 2))]
+    <*> frequency [(4, pure Nothing), (1, Just <$> genOverlay)]
+
+-- | 任意格：宝石为主，覆盖全部内置本体与几种自定义名字（含已注册的 bubble 与未注册的名字）。
+genCell :: Gen Cell
+genCell =
+  frequency
+    [ (12, genGem)
+    , (1, Stone <$> choose (1, 3))
+    , (1, Chest <$> choose (1, 3))
+    , (1, Honey <$> choose (1, 3))
+    , (1, Balloon <$> genColor)
+    , (1, pure Cookie)
+    , (1, Cake <$> choose (1, 3))
+    , (1, pure MagicHat)
+    , (1, Maker <$> genColor <*> choose (0, 3))
+    , (1, elements [Snail 0 1, Snail 0 (-1), Snail 1 0, Snail (-1) 0])
+    , (1, Safe <$> choose (1, 3))
+    , (1, Flip <$> genColor <*> genColor)
+    , (1, pure Surprise)
+    , (1, Bottle <$> genColor)
+    , (1, pure TimeSpirit)
+    , (1, Countdown <$> genColor <*> choose (1, 5))
+    , (1, Custom <$> elements ["bubble", "qc_unregistered"] <*> choose (1, 3))
+    ]
+
+-- | 可空盘面（行优先），约 1/4 是空洞。
+genMBoard :: Gen MBoard
+genMBoard = vectorOf boardSize (vectorOf boardSize (frequency [(3, Just <$> genCell), (1, pure Nothing)]))
+
+-- | 只含普通 / 特殊宝石（少量冰、叠层）与少量障碍的完整盘面，常带现成的匹配。
+genPlayBoard :: Gen Board
+genPlayBoard =
+  boardFromRows
+    <$> vectorOf boardSize (vectorOf boardSize (frequency [(10, mkGem <$> genColor), (2, genGem), (1, genCell)]))
+
+column :: MBoard -> Int -> [Maybe Cell]
+column mb c = [row !! c | row <- mb]
+
+--------------------------------------------------------------------------------
+-- 重力 / 补子 / 连锁
+
+-- | 重力：每列非空格数量不变；固定格（falls = False）原地不动；可下落格自上而下的相对顺序不变；
+-- 相邻两个固定格之间（及列两端）的每一段里空洞都在上面、实格沉在下面。
+qc_gravity_keeps_cells_and_column_order :: Property
+qc_gravity_keeps_cells_and_column_order =
+  forAll genMBoard $ \mb ->
+    let reg = defaultRegistry
+        mb' = applyGravityWith reg mb
+        fixed = gravityFixedCellWith reg
+        isFixedM = maybe False fixed
+        colOk c =
+          let colBefore = column mb c
+              colAfter = column mb' c
+              fixedAt col = [(i, x) | (i, Just x) <- zip [0 :: Int ..] col, fixed x]
+              movable col = [x | Just x <- col, not (fixed x)]
+              segments col = case break isFixedM col of
+                (seg, _ : rest) -> seg : segments rest
+                (seg, []) -> [seg]
+              packed seg = let (hs, ss) = span isNothing seg in all isJust ss && length hs + length ss == length seg
+          in length [() | Just _ <- colBefore] == length [() | Just _ <- colAfter]
+               && fixedAt colBefore == fixedAt colAfter
+               && movable colBefore == movable colAfter
+               && all packed (segments colAfter)
+    in counterexample (show mb') (length mb' == boardSize && all ((== boardSize) . length) mb' && all colOk [0 .. boardSize - 1])
+
+-- | 补子：任何可空盘面都能补满（不触发 "refill: hole"）；原有格不变；每个空洞补成普通宝石。
+qc_refill_leaves_no_holes :: Int -> Property
+qc_refill_leaves_no_holes seed =
+  forAll genMBoard $ \mb ->
+    let (b, _) = refill (mkStdGen seed) mb
+        cellOk (r, c) = case (mb !! r) !! c of
+          Just x -> getCell b (r, c) == x
+          Nothing -> case getCell b (r, c) of
+            Gem _ Normal 0 Nothing -> True
+            _ -> False
+    in all cellOk [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+
+-- | 连锁：从带现成匹配的盘面开始，内置注册表下的连锁一定结束（2 秒内），结束后盘面上没有现成匹配，
+-- 每一轮首尾相接。
+qc_cascade_terminates_stable :: Int -> Property
+qc_cascade_terminates_stable seed =
+  forAll genPlayBoard $ \b0 ->
+    within 2000000 $
+      let run = cascadeMatches Nothing [] [] (mkStdGen seed) b0
+          ws = crWaves run
+          chained = and (zipWith (\a b -> cwAfter a == cwBefore b) ws (drop 1 ws))
+      in classify (not (null ws)) "cascaded" $
+           classify (length ws >= 3) "3+ waves" $
+           counterexample (show (crBoard run)) $
+           not (hasAnyMatch (crBoard run))
+             && chained
+             && (null ws || cwAfter (last ws) == crBoard run)
+
+--------------------------------------------------------------------------------
+-- 整局：战役关卡 + 种子 + 动作选择
+
+-- | 战役关卡下标与种子。
+genStart :: Gen (Int, Int)
+genStart = (,) <$> choose (0, length allLevels - 1) <*> choose (1, 100000)
+
+-- | 一步动作的选择：交换的起点、方向，偶尔换成道具（没有次数时被拒，也是合法输入）。
+data Pick = Pick Int Int Bool Int
+  deriving (Show)
+
+genPick :: Gen Pick
+genPick = Pick <$> choose (0, boardSize * boardSize - 1) <*> choose (0, 1) <*> frequency [(9, pure False), (1, pure True)] <*> choose (0, 2)
+
+-- | 从选择得到一个动作：交换时从起点开始按行优先找第一对「会被接受」的相邻交换（找不到就用起点那一对），
+-- 道具时按起点格用锤子 / 十字清除 / 自由交换。
+pickAction :: GameState -> Pick -> M3E.Action
+pickAction gs (Pick start dir booster which)
+  | booster = case which of
+      0 -> M3E.Hammer (at start)
+      1 -> M3E.CrossClear (at start)
+      _ -> M3E.FreeSwap (at start) (at (start + 9))
+  | otherwise = case filter accepted candidates of
+      (a : _) -> a
+      [] -> case candidates of
+        (a : _) -> a
+        [] -> M3E.Hint
+  where
+    n = boardSize * boardSize
+    at i = let k = i `mod` n in (k `div` boardSize, k `mod` boardSize)
+    candidates =
+      [ M3E.Swap p q
+      | i <- [start .. start + n - 1]
+      , d <- [dir, 1 - dir]
+      , let p@(r, c) = at i
+            q = if d == 0 then (r, c + 1) else (r + 1, c)
+      , inBounds q
+      ]
+    accepted a = stepAccepted (gameStep M3E.match3Game gs a)
+
+-- | 按选择依次走（遇到结局停）；返回动作序列与每一步的结果。
+playPicks :: GameState -> [Pick] -> ([M3E.Action], [Step GameState Event Outcome M3E.Played])
+playPicks _ [] = ([], [])
+playPicks gs (p : ps)
+  | isJust (gsOver gs) = ([], [])
+  | otherwise =
+      let a = pickAction gs p
+          st = gameStep M3E.match3Game gs a
+          (as, sts) = playPicks (stepState st) ps
+      in (a : as, st : sts)
+
+startState :: (Int, Int) -> GameState
+startState (li, seed) = gameNew M3E.match3Game (M3E.Campaign li) seed
+
+-- | 撤销 / 重做往返：走若干步到局中，再走一步被接受的走步；撤销回到走步前的状态（按撤销规则整理过的快照，
+-- 包括随机数生成器，按 Show 全字段比较）、历史深度复原；再把同一个动作重做一遍，结果与第一次逐字段相同。
+qc_undo_redo_roundtrip :: Property
+qc_undo_redo_roundtrip =
+  forAll genStart $ \start ->
+    forAll (choose (0, 3) >>= \k -> vectorOf k genPick) $ \prefixPicks ->
+      forAll genPick $ \lastPick ->
+        let g = M3E.match3Shell
+            policy = M3E.match3History
+            (prefix, _) = playPicks (startState start) prefixPicks
+            h0 = foldl (\h act -> stepState (gameStep g h (Act act))) (startHistory (startState start)) prefix
+            s0 = histNow h0
+            a = pickAction s0 lastPick
+            st1 = gameStep g h0 (Act a)
+            h1 = stepState st1
+            recorded = stepAccepted st1 && historyDepth h1 == historyDepth h0 + 1
+            st2 = gameStep g h1 Undo
+            h2 = stepState st2
+            st3 = gameStep g h2 (Act a)
+            h3 = stepState st3
+        in isNothing (gsOver s0) && recorded ==>
+             counterexample (show a) $
+               conjoin
+                 [ counterexample "undo accepted" (stepAccepted st2)
+                 , counterexample "undo restores the snapshot" (show (histNow h2) === show (hpRestore policy (hpSnapshot policy s0)))
+                 , counterexample "undo restores depth" (historyDepth h2 === historyDepth h0)
+                 , counterexample "redo accepted" (stepAccepted st3)
+                 , counterexample "redo repeats the move" (show (histNow h3) === show (histNow h1))
+                 ]
+
+-- | 回放确定：同关卡、同种子、同一串动作，两次独立执行的每一步状态与事件逐字相同。
+qc_replay_same_seed_deterministic :: Property
+qc_replay_same_seed_deterministic =
+  forAll genStart $ \start ->
+    forAll (choose (1, 6) >>= \k -> vectorOf k genPick) $ \picks ->
+      let (acts, steps1) = playPicks (startState start) picks
+          steps2 = runActions M3E.match3Game (startState start) acts
+          summary sts = [(show (stepState st), show (stepEvents st), stepAccepted st) | st <- sts]
+      in classify (any stepAccepted steps1) "some move accepted" $
+           counterexample (show acts) (summary steps1 === summary steps2)
+
+-- | 目标进度单调：一局里每一步之后，分数、主进度（gsCollected）、goalProgressEx、各类计数字段、
+-- 按名字的计数都不减；目标一旦满足就一直满足。
+qc_goal_progress_monotone :: Property
+qc_goal_progress_monotone =
+  forAll genStart $ \start ->
+    forAll (choose (1, 8) >>= \k -> vectorOf k genPick) $ \picks ->
+      let s0 = startState start
+          (_, steps) = playPicks s0 picks
+          states = s0 : map stepState steps
+          pairs = zip states (drop 1 states)
+          ok (a, b) =
+            and (zipWith (<=) (meters a) (meters b))
+              && and [lookupN n b >= v | (n, v) <- gsElementCounts a]
+              && (not (satisfied a) || satisfied b)
+      in classify (length (filter stepAccepted steps) >= 3) "3+ accepted steps" $
+           classify (any (\st -> gsScore (stepState st) > gsScore s0) steps) "scored" $
+           counterexample (show (map meters states)) (all ok pairs)
+  where
+    meters gs =
+      [ gsScore gs, gsCollected gs, progressOf gs
+      , gsStonesCleared gs, gsChestsCleared gs, gsHoneyCleared gs, gsBalloonsPopped gs
+      , gsCookiesCollected gs, gsCakesCleared gs, gsSafesOpened gs, gsUfoCollected gs, gsCarpetsCovered gs
+      ]
+    lookupN n gs = maybe 0 id (lookup n (gsElementCounts gs))
+    progressOf gs =
+      goalProgressEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsStonesCleared gs) (gsUfoCollected gs)
+        (gsChestsCleared gs) (gsHoneyCleared gs) (gsBalloonsPopped gs) (gsCookiesCollected gs) (gsCakesCleared gs) (gsSafesOpened gs)
+    satisfied gs =
+      goalMetEx (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs) (gsStonesCleared gs) (gsUfoCollected gs)
+        (gsChestsCleared gs) (gsHoneyCleared gs) (gsBalloonsPopped gs) (gsCookiesCollected gs) (gsCakesCleared gs) (gsSafesOpened gs)
+
+--------------------------------------------------------------------------------
+-- 元素注册表
+
+-- | 解码往返：任意格解码成元素值（修饰器包着本体）再编码回去，得到原格；本体的元素名落在注册表的条目上，
+-- 且条目的槽位与格子的编号一致（内置本体 = SlotCell (cellSlot 格)，已注册的自定义 = SlotCustom），
+-- 最上层的叠层 / 冰层同样落在槽位一致的条目上。未注册的自定义名字解码成惰性占格，编码仍是原格。
+qc_registry_decode_roundtrip :: Property
+qc_registry_decode_roundtrip =
+  forAll genCell $ \cell ->
+    let reg = defaultRegistry
+        entries = registryDefs reg
+        slotOf n = [entrySlot e | e <- entries, entryName e == n]
+        bodyName = elementName reg cell
+        bodyOk = case cell of
+          Custom n _
+            | n `elem` map entryName entries -> bodyName == n && slotOf n == [SlotCustom]
+            | otherwise -> bodyName == n && null (slotOf n)
+          _ -> slotOf bodyName == [SlotCell (cellSlot cell)]
+        topName = topLayerName reg cell
+        topOk = case cell of
+          Gem _ _ ice ov
+            | ice > 0 -> slotOf topName == [SlotIce]
+            | Just o <- ov -> slotOf topName == [SlotOverlay (overlaySlot o)]
+          _ -> topName == bodyName
+    in counterexample (show (bodyName, topName, slotOf bodyName, slotOf topName)) $
+         toCell (elementOf reg cell) === cell .&&. bodyOk .&&. topOk
+
+-- | 内置条目表（去重之前的原始列表）：名字互不相同；内置本体 / 叠层的槽号互不相同；冰层只有一个；
+-- 全部内置本体槽号 0..19 与叠层槽号 0..7 都有条目。
+qc_registry_names_slots_unique :: Property
+qc_registry_names_slots_unique =
+  let names = map entryName builtinDefs
+      cells = sort [i | SlotCell i <- map entrySlot builtinDefs]
+      ovs = sort [i | SlotOverlay i <- map entrySlot builtinDefs]
+      ices = [() | SlotIce <- map entrySlot builtinDefs]
+  in conjoin
+       [ counterexample "names unique" (length (nub names) === length names)
+       , counterexample "body slots unique and complete" (cells === [0 .. 19])
+       , counterexample "overlay slots unique and complete" (ovs === [0 .. 7])
+       , counterexample "one ice entry" (length ices === 1)
+       ]

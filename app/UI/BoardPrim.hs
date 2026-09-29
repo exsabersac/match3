@@ -224,9 +224,9 @@ drawUfo ren yOff pulse (Ufo cell col) = do
 
 drawBelt :: Renderer -> CInt -> [Pos] -> IO ()
 drawBelt _ _ [] = pure ()
-drawBelt ren yOff belt = do
+drawBelt ren yOff belt@(b0 : bs) = do
   rendererDrawColor ren $= V4 40 200 180 220
-  let pairs = zip belt (tail belt ++ [head belt])
+  let pairs = zip belt (bs ++ [b0])
   mapM_
     ( \(a, b) -> do
         let (x0, y0) = cellOrigin a

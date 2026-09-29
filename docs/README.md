@@ -10,6 +10,7 @@
 | [rules-pipeline.md](rules-pipeline.md) | `trySwap` / 稳定化 / 连锁波次流水线（据实描述代码）；[与前端的边界](rules-pipeline.md#8-与前端的边界)：`MoveFx`、`MoveTrace`、`mtEnd` |
 | [testing.md](testing.md) | 如何跑测、覆盖面、合并门禁（含截图 AE=0 比对）；[逐轮回放护栏](testing.md#逐轮回放护栏)（`trace_*` / `trace_end_*`、比对底线、洗牌步缺口）；[行为金标准](testing.md#行为金标准golden)；[多游戏接口验收](testing.md#多游戏接口验收第三刀) |
 | [ui-controls.md](ui-controls.md) | SDL 键位与道具点选流（前端 `app/UI/Input.hs` / `Actions.hs`）；回放加速键与[播放锁定](ui-controls.md#播放锁定animbusy) |
+| [web.md](web.md) | 网页版（GHC wasm 技术验证）：wasm 核心与导出接口、ComboFx 进 wasm、JS 渲染器、自适应布局、资源管线、构建 / 本地与局域网运行 / Mac 与 itch.io 部署、一致性测试与 e2e、已知限制与 TODO |
 | [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |
 | [ui-art.md § 连击表现](ui-art.md#连击表现逐轮回放) | 连锁逐轮回放时间线、[步末阶段（PhEnd）](ui-art.md#步末阶段phend)、[连击等级样式](ui-art.md#连击等级样式combostyle)、截图与复现 seed |
 

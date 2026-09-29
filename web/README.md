@@ -4,9 +4,14 @@
 在浏览器里用桌面版同一套美术（2x 精灵图集）把 40 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/UI/ComboFx.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
+结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
+
 ```
 web/
-├── build.sh              构建脚本（→ web/dist/），--serve 顺便起静态服务器
+├── build.sh              构建脚本（→ web/dist/），--serve 构建后用 serve.py 起服务器
+├── serve.py              本地静态服务器（Python 3 标准库；正确 MIME、开发期 no-cache、打印局域网地址）
+├── serve.sh              serve.py 的薄包装
+├── deploy-mac.sh         打包 dist 并在 macOS 上安装 / 前台运行 / launchd 常驻 / 状态检查
 ├── cabal.project         独立的 cabal 工程（只给 wasm32-wasi-cabal 用）
 ├── match3-web.cabal      可执行 match3-web：hs/ + 直接引用 ../src（不复制核心源码）
 ├── hs/
@@ -85,9 +90,30 @@ dist 合计 2,124,656 B，逐文件 gzip 合计约 1.02 MB（WebP 已压缩，gz
 
 ```sh
 cd web
-./build.sh --serve          # 等价于构建后在 dist/ 里 python3 -m http.server 8080
+./build.sh --serve                 # 构建后起 serve.py（默认 0.0.0.0:8080），其余参数原样传给 serve.py
+./serve.sh                         # 已构建过就直接起；等价于 python3 serve.py
+python3 serve.py --port 9000 --bind 127.0.0.1 --dir /path/to/dist --quiet
 # 浏览器打开 http://127.0.0.1:8080/?level=0&seed=42
 ```
+
+`serve.py`（Python 3.7+ 标准库，macOS 自带 python3 即可）：
+- 默认目录 `web/dist`，`--dir` 改目录；`--port` 默认 8080；`--bind` 默认 `0.0.0.0`（只给本机用填 `127.0.0.1`）；`--quiet` 不打印请求；
+- Content-Type：`.wasm` → `application/wasm`、`.webp` → `image/webp`、`.json` → `application/json`、`.js` → `text/javascript`；
+- 对 HTML / wasm / JS / JSON 发 `Cache-Control: no-cache`（改完刷新即生效），图片 `max-age=300`；
+- 启动时打印本机与局域网地址（手机连同一 Wi-Fi 打开即可；macOS 首次会弹防火墙提示，选「允许」）；
+- 端口被占用时提示用 `lsof -i :端口` 查；Ctrl-C / SIGTERM 干净退出。
+
+部署到 Mac（目标机只需 python3，不需要工具链）：
+
+```sh
+./build.sh && ./deploy-mac.sh pack                 # → web/match3-web-dist.tgz
+# 拷到 Mac 后：
+bash deploy-mac.sh install match3-web-dist.tgz     # 默认目标 /Users/yubin/Documents/dev/haskell/match3-web（TARGET 可改）
+bash deploy-mac.sh run                             # 前台运行；或 start 交给 launchd 常驻，stop 停止，status 查看
+```
+
+注意：不要在一次性会话里 `nohup … &`（会话结束进程就被杀）；Mac 睡眠时不响应、重启后前台进程不会自己回来；
+用 `lsof -i :8080` 或 `deploy-mac.sh status` 检查。详见 [`docs/web.md` §5](../docs/web.md#5-部署)（含 itch.io 静态托管）。
 
 - 点一格再点相邻格交换，或按住拖向相邻格（拖过半格即交换）；
 - 交换补间 → 逐轮高亮 / 消失 + 粒子 / 下落补子 → 连锁、连击浮字、震屏 → 步末效果（倒计时、传送带、蔓延、蜗牛、洗牌）；
@@ -196,4 +222,5 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - 3x 图集：面积是 2x 的 2.25 倍，WebP 估计多约 400 KB，只对 dpr3 手机和平板（格子物理 130–170 px）有收益，
   目前放大后观感可接受，先不做，可作为可选项（按 dpr 选图集）；
 - 播放期间 HUD 的分数 / 装饰层显示的是结算后的状态（与桌面版一致），不逐轮递增；
-- `m3Swap` 仍返回完整 JSON（约 15–23 KB/步），没做增量。
+- `m3Swap` 仍返回完整 JSON（中位数约 30 KB/步，长连锁可达约 120 KB），没做增量；
+- 真机（iOS Safari / Android Chrome）与 itch.io 上线尚未实测；TODO 列表见 [`docs/web.md` §9](../docs/web.md#9-todo)。

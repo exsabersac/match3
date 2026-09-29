@@ -25,12 +25,21 @@ fs.rmSync(shots, { recursive: true, force: true });
 fs.mkdirSync(shots, { recursive: true });
 const PORT = 8765;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const server = spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], { cwd: dist, stdio: "ignore" });
+// 用仓库自带的 web/serve.py（与本地试玩 / 部署同一个服务器，顺带验证它的 Content-Type）
+const server = spawn("python3", [path.resolve(here, "../serve.py"), "--dir", dist, "--port", String(PORT), "--bind", "127.0.0.1", "--quiet"], { stdio: "ignore" });
 await sleep(800);
+const serverTypes = {};
+for (const [f, want] of [["index.html", "text/html"], ["match3-web.wasm", "application/wasm"], ["atlas.webp", "image/webp"], ["atlas.json", "application/json"], ["main.js", "text/javascript"]]) {
+  const r = await fetch(`http://127.0.0.1:${PORT}/${f}`);
+  serverTypes[f] = { status: r.status, type: r.headers.get("content-type"), cache: r.headers.get("cache-control"), want };
+  await r.arrayBuffer();
+}
 const browser = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome", headless: true });
 const report = { shots: [], checks: [] };
 const logs = [];
 const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, ...(detail !== undefined ? { detail } : {}) }); if (!ok) console.error("FAIL", name, detail ?? ""); };
+report.serverTypes = serverTypes;
+check("serve.py 的 Content-Type 正确", Object.values(serverTypes).every((t) => t.status === 200 && (t.type || "").startsWith(t.want)), serverTypes);
 
 async function openPage(vp, level, seed) {
   const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, deviceScaleFactor: vp.dpr, hasTouch: !!vp.touch, isMobile: !!vp.mobile });

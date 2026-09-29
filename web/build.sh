@@ -3,7 +3,7 @@
 #
 # 用法：
 #   ./build.sh            # 构建到 web/dist/
-#   ./build.sh --serve    # 构建后在 http://127.0.0.1:8080/ 起静态服务器
+#   ./build.sh --serve [serve.py 参数]   # 构建后用 serve.py 起静态服务器（默认 0.0.0.0:8080，打印局域网地址）
 #
 # 前置：已用 ghc-wasm-meta 安装工具链到 ~/.ghc-wasm（见 README.md），可用 GHC_WASM_PREFIX 覆盖。
 set -euo pipefail
@@ -84,6 +84,6 @@ echo "dist 合计 $total 字节（逐文件 gzip -9 后合计 $totalgz；WebP �
 echo "产物在 $DIST"
 
 if [ "${1:-}" = "--serve" ]; then
-  echo "打开 http://127.0.0.1:8080/?level=0 试玩（Ctrl+C 退出）"
-  cd "$DIST" && exec python3 -m http.server 8080 --bind 127.0.0.1
+  shift   # 其余参数原样交给 serve.py，例如 ./build.sh --serve --port 9000 --bind 127.0.0.1
+  exec python3 "$HERE/serve.py" --dir "$DIST" "$@"
 fi

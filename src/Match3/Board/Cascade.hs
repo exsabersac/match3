@@ -5,8 +5,8 @@
 -- 结算与回放因此天然一致（第二刀之前是 runCascade* 与 traceCascade* 两份平行实现）。
 --
 -- 核心：cascadeMatchesFrom / cascadeSeeds / cascadeAfterBelt / cascadeCountdowns，返回 CascadeRun。
--- 兼容层：runCascade* / resolveCountdowns / runPostBeltCascade 仍返回旧的元组，traceCascade* 仍返回
--- (轮次, 终盘, 飞碟, 生成器)，全部由核心结果投影而来（测试与旧调用方不必改）；新代码请用记录版。
+-- 第三刀删除了旧元组兼容层（runCascade* / resolveCountdowns / runPostBeltCascade / traceCascade*），
+-- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascade 保留为「恰好一轮」的小工具。
 --
 -- 依赖：Grid、Match、Clear、Gravity、Ufo、元素注册表（计数键 edCounter、倒计时 = PhaseTick 步末规则）。
 -- 不变量：每轮 = clear → settleBoardPortals → refill → stepUfos（→ 飞碟吸收单独一轮），随机数按此顺序消耗；
@@ -33,24 +33,9 @@ module Match3.Board.Cascade
   , cascadeCountdownsWith
     -- * 回放数据
   , CascadeWave(..)
-    -- * 兼容层（旧元组 API，由记录版投影）
+    -- * 单轮
   , stepCascade
   , stepCascadeAt
-  , stepCascadeDetailed
-  , runCascade
-  , runCascadeAt
-  , runCascadeScored
-  , runCascadeScoredWithUfos
-  , runCascadeScoredWithUfosFromWave
-  , runCascadeScoredFromSeeds
-  , runCascadeScoredFromSeedsWithUfos
-  , runPostBeltCascade
-  , resolveCountdowns
-  , traceCascade
-  , traceCascadeFromWave
-  , traceCascadeFromSeeds
-  , tracePostBeltCascade
-  , traceCountdowns
   ) where
 
 import Data.List (nub)
@@ -324,171 +309,19 @@ cascadeCountdownsWith reg ufos0 portals g b =
        else cascadeSeedsWith reg Nothing seeds ufos0 portals g bTick
 
 --------------------------------------------------------------------------------
--- 兼容层：旧元组 API
+-- 单轮
 
-type Tuple15 g = (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
-
-toTuple15 :: CascadeRun g -> Tuple15 g
-toTuple15 r =
-  let t = crTally r
-  in ( crBoard r, ctCells t, ctScore t, ctMaxWave t, ctColors t, ctStones t, ctChests t, ctHoney t
-     , ctBalloons t, ctCookies t, ctCakes t, ctUfoAbsorbed t, crUfos r, ctCleared t, crGen r )
-
-toTuple12 :: CascadeRun g -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
-toTuple12 r =
-  let t = crTally r
-  in ( crBoard r, ctCells t, ctScore t, ctMaxWave t, ctColors t, ctStones t, ctChests t, ctHoney t
-     , ctBalloons t, ctCookies t, ctCakes t, crGen r )
-
-toTrace :: CascadeRun g -> ([CascadeWave], Board, [Ufo], g)
-toTrace r = (crWaves r, crBoard r, crUfos r, crGen r)
-
--- | 一步连锁（无优先生成位）；无匹配时返回 Nothing。
+-- | 恰好一轮匹配消除 + 沉降补子（不跑飞碟、无传送门）；无匹配时返回 Nothing。
+-- 与 cascadeMatchesFrom 的单轮是同一组调用：clear → settleBoardPortals → refill。
 stepCascade :: RandomGen g => g -> Board -> Maybe (Board, Int, g)
 stepCascade = stepCascadeAt Nothing
 
--- | stepCascadeDetailed 的简化版：只返回新盘面、清除数和生成器。
+-- | 第一轮在 prefer 处优先生成特殊块的 stepCascade。
 stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
-stepCascadeAt prefer g b =
-  case stepCascadeDetailed prefer [] g b of
-    Nothing -> Nothing
-    Just (b', n, _, _, _, _, _, _, _, g') -> Just (b', n, g')
-
--- | 恰好一轮匹配消除 + 沉降补子（不跑飞碟）：(新盘面, 清除数, 清除格 ∪ 收饼干位, 石头, 宝箱,
--- 蜂蜜, 气球, 饼干, 蛋糕, 生成器)。与 cascadeMatchesFrom 的单轮完全相同（同一组调用）。
-stepCascadeDetailed
-  :: RandomGen g
-  => Maybe Pos
-  -> [(Pos, Pos)]
-  -> g
-  -> Board
-  -> Maybe (Board, Int, [Pos], Int, Int, Int, Int, Int, Int, g)
-stepCascadeDetailed prefer portals g b
+stepCascadeAt prefer g b
   | not (hasAnyMatch b) = Nothing
   | otherwise =
-      let (mb, n, pos) = clearMatchesDetailed prefer b
-          h = hitsOn defaultRegistry b pos
-          (settled, cookiesFallen, cookSites) = settleBoardPortals portals mb
+      let (mb, n, _) = clearMatchesDetailed prefer b
+          (settled, _, _) = settleBoardPortals [] mb
           (b', g') = refill g settled
-      in Just (b', n, nub (pos ++ cookSites), hStones h, hChests h, hHoney h, hBalloons h, hCookies h + cookiesFallen, hCakes h, g')
-
--- | 连锁到稳定（无优先生成位），返回最终盘面、累计清除数、生成器。
-runCascade :: RandomGen g => g -> Board -> (Board, Int, g)
-runCascade = runCascadeAt Nothing
-
--- | 第一轮用 prefer 生成特殊块；返回 (终盘, 清除数, 生成器)。
-runCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> (Board, Int, g)
-runCascadeAt prefer g b =
-  let r = cascadeMatches prefer [] [] g b
-  in (crBoard r, ctCells (crTally r), crGen r)
-
--- | 旧 12 元组：(盘面, 清除数, 得分, 最大波次, 颜色袋, 石头, 宝箱, 蜂蜜, 气球, 饼干, 蛋糕, 生成器)。
-runCascadeScored
-  :: RandomGen g
-  => Maybe Pos
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
-runCascadeScored prefer g b = toTuple12 (cascadeMatches prefer [] [] g b)
-
--- | 旧 15 元组版 cascadeMatches：(… 蛋糕, 飞碟吸收数, 飞碟, 清除格, 生成器)。
-runCascadeScoredWithUfos
-  :: RandomGen g
-  => Maybe Pos
-  -> [Ufo]
-  -> [(Pos, Pos)]
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
-runCascadeScoredWithUfos prefer ufos0 portals g b = toTuple15 (cascadeMatches prefer ufos0 portals g b)
-
--- | 旧 15 元组版 cascadeMatchesFrom。
-runCascadeScoredWithUfosFromWave
-  :: RandomGen g
-  => Int
-  -> Maybe Pos
-  -> [Ufo]
-  -> [(Pos, Pos)]
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
-runCascadeScoredWithUfosFromWave startW prefer ufos0 portals g b =
-  toTuple15 (cascadeMatchesFrom startW prefer ufos0 portals g b)
-
--- | 旧 12 元组版 cascadeSeeds（无飞碟 / 传送门）。
-runCascadeScoredFromSeeds
-  :: RandomGen g
-  => Maybe Pos
-  -> [Pos]
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, g)
-runCascadeScoredFromSeeds prefer seeds g b = toTuple12 (cascadeSeeds prefer seeds [] [] g b)
-
--- | 旧 15 元组版 cascadeSeeds。
-runCascadeScoredFromSeedsWithUfos
-  :: RandomGen g
-  => Maybe Pos
-  -> [Pos]
-  -> [Ufo]
-  -> [(Pos, Pos)]
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
-runCascadeScoredFromSeedsWithUfos prefer seeds ufos0 portals g b =
-  toTuple15 (cascadeSeeds prefer seeds ufos0 portals g b)
-
--- | 旧 15 元组版 cascadeAfterBelt。
-runPostBeltCascade
-  :: RandomGen g
-  => [Ufo]
-  -> [(Pos, Pos)]
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
-runPostBeltCascade ufos portals g b = toTuple15 (cascadeAfterBelt ufos portals g b)
-
--- | 旧 15 元组版 cascadeCountdowns。
-resolveCountdowns
-  :: RandomGen g
-  => [Ufo]
-  -> [(Pos, Pos)]
-  -> g
-  -> Board
-  -> (Board, Int, Score, Int, [(Color, Int)], Int, Int, Int, Int, Int, Int, Int, [Ufo], [Pos], g)
-resolveCountdowns ufos0 portals g b = toTuple15 (cascadeCountdowns ufos0 portals g b)
-
--- | cascadeMatches 的回放投影：(每一轮, 终盘, 飞碟, 生成器)。
-traceCascade
-  :: RandomGen g
-  => Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board
-  -> ([CascadeWave], Board, [Ufo], g)
-traceCascade prefer ufos portals g b = toTrace (cascadeMatches prefer ufos portals g b)
-
--- | cascadeMatchesFrom 的回放投影。
-traceCascadeFromWave
-  :: RandomGen g
-  => Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board
-  -> ([CascadeWave], Board, [Ufo], g)
-traceCascadeFromWave startW prefer ufos portals g b = toTrace (cascadeMatchesFrom startW prefer ufos portals g b)
-
--- | cascadeSeeds 的回放投影。
-traceCascadeFromSeeds
-  :: RandomGen g
-  => Maybe Pos -> [Pos] -> [Ufo] -> [(Pos, Pos)] -> g -> Board
-  -> ([CascadeWave], Board, [Ufo], g)
-traceCascadeFromSeeds prefer seeds ufos portals g b = toTrace (cascadeSeeds prefer seeds ufos portals g b)
-
--- | cascadeAfterBelt 的回放投影。
-tracePostBeltCascade
-  :: RandomGen g
-  => [Ufo] -> [(Pos, Pos)] -> g -> Board
-  -> ([CascadeWave], Board, [Ufo], g)
-tracePostBeltCascade ufos portals g b = toTrace (cascadeAfterBelt ufos portals g b)
-
--- | cascadeCountdowns 的回放投影。
-traceCountdowns
-  :: RandomGen g
-  => [Ufo] -> [(Pos, Pos)] -> g -> Board
-  -> ([CascadeWave], Board, [Ufo], g)
-traceCountdowns ufos portals g b = toTrace (cascadeCountdowns ufos portals g b)
+      in Just (b', n, g')

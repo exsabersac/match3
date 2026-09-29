@@ -1,6 +1,6 @@
 -- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式、浮字曲线。
 -- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 Main.hs 的 drawCascade* / drawPops*），
--- 也不改规则：回放脚本来自 Match3.Game 的 trace*，结算结果仍以 trySwap 等为准。
+-- 也不改规则：回放脚本来自 Match3.Game.Move / Boosters 的 trace*，结算结果仍以 trySwap 等为准。
 module ComboFx
   ( -- * 时间线（帧；主循环固定 60 fps 步长，1 帧 ≈ 16.7 ms）
     waveFlashFrames
@@ -49,7 +49,7 @@ module ComboFx
 import Data.List (transpose)
 import Data.Word (Word8)
 import Match3.Core
-import Match3.Board (gravityFixedCell)
+import Match3.Board.Gravity (gravityFixedCell)
 import Match3.Element.Event (EventKind (..), endEffectKind, endEffectPairs)
 
 --------------------------------------------------------------------------------

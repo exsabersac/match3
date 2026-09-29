@@ -4,16 +4,21 @@ module Main (main) where
 import Control.Monad (foldM, when)
 import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
-import Match3.Board (applyGravity, clearMatches, refill, runCascadeScoredWithUfos, runCascadeScoredFromSeedsWithUfos, gravityFixedCell)
+import Match3.Board.Cascade
+  ( CascadeRun(..), CascadeTally(..), cascadeCountdowns, cascadeMatches, cascadeSeeds )
+import Match3.Board.Clear (clearMatches)
+import Match3.Board.Gravity (applyGravity, gravityFixedCell, refill)
 import Match3.Core
 import Match3.Element
   ( AdjCtx(..), AdjOut(..), AdjacentRule(..), Counter(..), ElementDef(..), HitResult(..)
   , activatesWith, baseDef, blocksSwapWith, defaultRegistry, directHitWith, hitImmuneWith
   , keepOnShuffleWith, matchColorWith, register, lookupElement, registryDefs )
-import Match3.Game
-  ( EventKind(..), Event(..), extractDecorWith, resolveHammerWith, resolveSwapWith, traceEvents
-  , traceEventsWith, trySwapWith )
-import Match3.Game.Shuffle (CellDecor(..))
+import Match3.Element.Event (EventKind(..), Event(..))
+import Match3.Element.Registry (swapBlockedWith)
+import Match3.Game.Boosters (resolveHammerWith)
+import Match3.Game.Move (resolveSwapWith, trySwapWith)
+import Match3.Game.Shuffle (CellDecor(..), extractDecorWith)
+import Match3.Game.Trace (traceEvents, traceEventsWith)
 import Match3.Types (isCustom)
 import qualified Golden
 import System.Random (mkStdGen)
@@ -398,7 +403,7 @@ cascade_until_stable :: Assertion
 cascade_until_stable = do
   let g = mkStdGen 1
       (b0, g1) = randomBoard g
-      (b1, cleared, g2) = runCascade g1 b0
+      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCells = cleared}, crGen = g2} = cascadeMatches Nothing [] [] g1 b0
   assertBool "stable" (not (hasAnyMatch b1))
   assertBool "stepCascade Nothing" (isNothing (stepCascade g2 b1))
   if hasAnyMatch b0
@@ -573,7 +578,7 @@ combo_wave_scoring = do
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
       b = take 3 b0 ++ [row3] ++ drop 4 b0
-      (_, cells, scored, combo, tallies, _, _, _, _, _, _, _) = runCascadeScored Nothing (mkStdGen 3) b
+      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = combo, ctColors = tallies}} = cascadeMatches Nothing [] [] (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
   assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)
@@ -1241,7 +1246,7 @@ countdown_bomb_ticks_after_move :: Assertion
 countdown_bomb_ticks_after_move = do
   let bPure = spawnCountdown stableBoard (2, 2) C3 5
   assertEqual "pure tick 5->4" (4 :: Int) (countdownTurns (getCell (tickCountdowns bPure) (2, 2)))
-  let (bRes, nClear, _, _, _, _, _, _, _, _, _, _, _, _, _) = resolveCountdowns [] [] (mkStdGen 0) bPure
+  let CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCells = nClear}} = cascadeCountdowns [] [] (mkStdGen 0) bPure
   assertEqual "resolve ticks" (4 :: Int) (countdownTurns (getCell bRes (2, 2)))
   assertEqual "no explode when >0" (0 :: Int) nClear
   -- trySwap path: use a tiny score goal so outcome is terminal (skips ensurePlayable shuffle)
@@ -1834,7 +1839,7 @@ choco_blocked_by_clear = do
 chest_blocks_swap :: Assertion
 chest_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkChest
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is chest" (isChest (getCell board (3, 3)))
 
 chest_cleared_by_adjacent :: Assertion
@@ -1856,8 +1861,7 @@ chest_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isChest (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      (board1, _n, _sc, _c, _t, _st, chests, _h, _b, _ck, _cak, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctChests = chests}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "chest opened" (chests >= 1)
   assertBool "chest gone" (not (isChest (getCell board1 (2, 1))))
 
@@ -2014,7 +2018,7 @@ ufo_goal_counts = do
 honey_blocks_swap :: Assertion
 honey_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkHoney
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is honey" (isHoney (getCell board (3, 3)))
 
 honey_cleared_by_adjacent :: Assertion
@@ -2036,8 +2040,7 @@ honey_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isHoney (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      (board1, _n, _sc, _c, _t, _st, _ch, honey, _b, _ck, _cak, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctHoney = honey}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "honey smashed" (honey >= 1)
   assertBool "honey gone" (not (isHoney (getCell board1 (2, 1))))
 
@@ -2089,7 +2092,7 @@ goal_honey_counts = do
 balloon_blocks_swap :: Assertion
 balloon_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkBalloon C1)
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is balloon" (isBalloon (getCell board (3, 3)))
 
 balloon_popped_by_same_color :: Assertion
@@ -2110,8 +2113,7 @@ balloon_popped_by_same_color = do
       (_b1, dead) = chipAdjacentBalloons board0 ms
   assertEqual "same color pops" [(2, 1)] dead
   let seeds = findMatches board0
-      (board1, _n, _sc, _c, _t, _st, _ch, _h, balloons, _ck, _cak, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctBalloons = balloons}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "balloon counted" (balloons >= 1)
   assertBool "balloon gone" (not (isBalloon (getCell board1 (2, 1))))
 
@@ -2243,7 +2245,7 @@ daily_ufo_goal_spawns_saucer = do
 cookie_blocks_swap :: Assertion
 cookie_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkCookie
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is cookie" (isCookie (getCell board (3, 3)))
 
 cookie_falls_with_gravity :: Assertion
@@ -2263,8 +2265,7 @@ cookie_falls_with_gravity = do
   assertBool "cookie at top" (isCookie (getCell board0 (0, 1)))
   let seeds = findMatches board0
   assertBool "match under cookie col" ((3, 1) `elem` seeds)
-  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, cookies, _cak, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
       cookiePos =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -2291,8 +2292,7 @@ cookie_collected_at_bottom = do
           (mkGem C1)
   assertBool "cookie on bottom" (isCookie (getCell board0 (boardSize - 1, 4)))
   let seeds = findMatches board0
-      (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, cookies, _cak, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool ("cookie collected, got " ++ show cookies) (cookies >= 1)
   assertBool "cookie gone" (not (isCookie (getCell board1 (boardSize - 1, 4))))
 
@@ -2354,8 +2354,7 @@ fog_cleared_by_adjacent = do
   assertBool "fog gone" (not (hasFog (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
   -- Via cascade clear path
-  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
-        runCascadeScoredFromSeeds Nothing ms (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeSeeds Nothing ms [] [] (mkStdGen 1) board0
   assertBool "fog cleared in cascade" (not (hasFog (getCell board1 (2, 1))))
 
 fog_layer_decrement :: Assertion
@@ -2397,7 +2396,7 @@ fog_layer_decrement = do
 cake_blocks_swap :: Assertion
 cake_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkCake
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is cake" (isCake (getCell board (3, 3)))
   assertBool "not cookie" (not (isCookie (getCell board (3, 3))))
 
@@ -2436,8 +2435,7 @@ cake_clears_at_zero = do
           mkCake
   assertBool "cake present" (isCake (getCell board0 (2, 1)))
   let seeds = findMatches board0
-      (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, cakes, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCakes = cakes}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
   assertBool "cake cleared count" (cakes >= 1)
   assertBool "cake gone" (not (isCake (getCell board1 (2, 1))))
 
@@ -2573,7 +2571,7 @@ chain_blocks_swap = do
   out @?= NoMatch
   gsBoard gs1 @?= gsBoard gs0
   gsMoves gs1 @?= gsMoves gs0
-  assertBool "swapBlocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "swapBlocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
 
 chain_cleared_by_adjacent :: Assertion
 chain_cleared_by_adjacent = do
@@ -2594,8 +2592,7 @@ chain_cleared_by_adjacent = do
   assertEqual "one chain unlocked" (1 :: Int) cleared
   assertBool "chain gone" (not (hasChain (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
-  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
-        runCascadeScoredFromSeeds Nothing ms (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeSeeds Nothing ms [] [] (mkStdGen 1) board0
   assertBool "chain cleared in cascade" (not (hasChain (getCell board1 (2, 1))))
 
 chain_layer_decrement :: Assertion
@@ -2636,7 +2633,7 @@ chain_layer_decrement = do
 maker_blocks_swap :: Assertion
 maker_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkMaker C1)
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is maker" (isMaker (getCell board (3, 3)))
   assertEqual "default charges" (3 :: Int) (makerCharges (getCell board (3, 3)))
 
@@ -2738,7 +2735,7 @@ snail_blocks_swap :: Assertion
 snail_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkSnail 0 1)
   assertBool "is snail" (isSnail (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   let gs0 =
         (newGame defaultConfig 7)
           { gsBoard = board
@@ -2822,7 +2819,7 @@ freeze_blocks_swap :: Assertion
 freeze_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkFreezeGem C2 1)
   assertBool "has freeze" (hasFreeze (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   -- Frozen gem CAN still participate in matches (unlike Chain)
   let boardM =
         setCell
@@ -2865,8 +2862,7 @@ freeze_cleared_by_adjacent = do
   assertBool "freeze gone" (not (hasFreeze (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
   -- Cascade path also peels
-  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
-        runCascadeScored Nothing (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 1) board0
   assertBool "freeze cleared in cascade" (not (hasFreeze (getCell board1 (2, 1))))
 
 freeze_layer_decrement :: Assertion
@@ -2940,8 +2936,7 @@ curtain_cleared_by_adjacent = do
   assertEqual "fully opened" (1 :: Int) cleared
   assertBool "curtain gone" (not (hasCurtain (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
-  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
-        runCascadeScored Nothing (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 1) board0
   assertBool "curtain cleared in cascade" (not (hasCurtain (getCell board1 (2, 1))))
 
 curtain_layer_decrement :: Assertion
@@ -2983,7 +2978,7 @@ safe_blocks_swap :: Assertion
 safe_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkSafe
   assertBool "is safe" (isSafe (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   let gs0 =
         (newGame defaultConfig 7)
           { gsBoard = board
@@ -3104,7 +3099,7 @@ flip_matches_front = do
   assertEqual "front" C1 (flipFront (getCell boardM (3, 1)))
   assertEqual "back" C3 (flipBack (getCell boardM (3, 1)))
   -- Can swap like a gem
-  assertBool "not blocked" (not (swapBlockedByStone boardM (3, 1) (3, 3)))
+  assertBool "not blocked" (not (swapBlockedWith defaultRegistry boardM (3, 1) (3, 3)))
 
 flip_becomes_back_on_clear :: Assertion
 flip_becomes_back_on_clear = do
@@ -3126,8 +3121,7 @@ flip_becomes_back_on_clear = do
   -- Flip stays on board (not listed as clearable hole)
   assertBool "flip not cleared away" ((3, 1) `notElem` iceFree)
   -- Full cascade also leaves a gem (possibly later matched as C4)
-  let (board1, _n, _sc, _c, _t, _st, _ch, _h, _b, _ck, _cak, _) =
-        runCascadeScored Nothing (mkStdGen 2) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 2) board0
   assertBool "no flip remains at seed" (not (isFlip (getCell board1 (3, 1))))
 
 --------------------------------------------------------------------------------
@@ -3138,7 +3132,7 @@ surprise_blocks_swap :: Assertion
 surprise_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkSurprise
   assertBool "is surprise" (isSurprise (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   let gs0 =
         (newGame defaultConfig 7)
           { gsBoard = board
@@ -3230,7 +3224,7 @@ bottle_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkBottle C2)
   assertBool "is bottle" (isBottle (getCell board (3, 3)))
   assertEqual "color" C2 (bottleColor (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
 
 bottle_dyes_neighbors :: Assertion
 bottle_dyes_neighbors = do
@@ -3296,7 +3290,7 @@ time_spirit_blocks_swap :: Assertion
 time_spirit_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkTimeSpirit
   assertBool "is spirit" (isTimeSpirit (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedByStone board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
 
 time_spirit_awards_moves :: Assertion
 time_spirit_awards_moves = do
@@ -4302,8 +4296,7 @@ countdown_explode_keeps_ufo_portals = do
       board0 =
         spawnCountdown (setCell stableBoard (bottom, 6) mkCookie) (4, 4) C5 1
       u0 = mkUfo (2, 2) C1
-      (bRes, _n, _sc, _mw, _t, _st, _ch, _h, _bal, cookies, _cak, _uAbs, ufos', _pos, _) =
-        resolveCountdowns [u0] portals (mkStdGen 5) board0
+      CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCookies = cookies}, crUfos = ufos'} = cascadeCountdowns [u0] portals (mkStdGen 5) board0
   assertBool ("explode settle collected bottom cookie, got " ++ show cookies) (cookies >= 1)
   assertBool "cookie not left on bottom portal" (not (isCookie (getCell bRes (bottom, 6))))
   assertEqual "UFO list preserved through resolve" (1 :: Int) (length ufos')
@@ -4360,8 +4353,7 @@ cascade_terminates_bounded = do
     Nothing -> assertFailure "need a matching swap"
     Just (p1, p2) -> do
       let swapped = swapCells (gsBoard gs0) p1 p2
-          (bCas, cells, _scored, maxW, _, _, _, _, _, _, _, gCas) =
-            runCascadeScored (Just p2) (gsGen gs0) swapped
+          CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = cells, ctMaxWave = maxW}, crGen = gCas} = cascadeMatches (Just p2) [] [] (gsGen gs0) swapped
       assertBool "cascade waves within bound" (maxW <= bound)
       assertBool "cascade reached stable" (not (hasAnyMatch bCas))
       assertBool "stepCascade exhausted" (isNothing (stepCascade gCas bCas))
@@ -4382,8 +4374,7 @@ cascade_terminates_bounded = do
         let g = mkStdGen seed
             (b0, g1) = randomBoard g
             (b1, maxW, g2) =
-              let (b', _cells, _sc, waves, _, _, _, _, _, _, _, g') =
-                    runCascadeScored Nothing g1 b0
+              let CascadeRun {crBoard = b', crTally = CascadeTally {ctMaxWave = waves}, crGen = g'} = cascadeMatches Nothing [] [] g1 b0
               in (b', waves, g')
         assertBool ("waves bounded seed " ++ show seed) (maxW <= bound)
         assertBool ("stable seed " ++ show seed) (not (hasAnyMatch b1))
@@ -4744,7 +4735,7 @@ curtain_allows_swap_blocks_match = do
           (5, 4)
           (mkGem C2)
   assertBool "curtain does not block swap" $
-    not (swapBlockedByStone board (5, 3) (5, 2))
+    not (swapBlockedWith defaultRegistry board (5, 3) (5, 2))
   assertBool "no H match through curtain" $
     not ((5, 2) `elem` findMatches board)
       && not ((5, 3) `elem` findMatches board)
@@ -4799,7 +4790,7 @@ freeze_blocks_freeswap_and_swap = do
           , gsBelts = []
           , gsUfos = []
           }
-  assertBool "swapBlocked" (swapBlockedByStone board (2, 2) (2, 3))
+  assertBool "swapBlocked" (swapBlockedWith defaultRegistry board (2, 2) (2, 3))
   let (gs1, out1) = trySwap (2, 2) (2, 3) gs0
   assertEqual "trySwap NoMatch" NoMatch out1
   assertEqual "moves kept" (gsMoves gs0) (gsMoves gs1)
@@ -4838,8 +4829,7 @@ combo_seed_continues_wave_score = do
           (7, 7)
           (mkGem C2)
       seeds = [(0, 0), (0, 1), (0, 2)]
-      (_, cells, scored, maxW, _, _, _, _, _, _, _, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 0) board
+      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 0) board
   assertBool "cleared both seed + follow-up" (cells >= 6)
   assertBool ("maxW >= 2, got " ++ show maxW) (maxW >= 2)
   -- With wave multipliers, score must beat flat 10/cell (all waves at 1x).
@@ -4878,8 +4868,7 @@ bottle_dye_followup_match = do
   assertEqual "dyed (5,2)" C3 (cellColor (getCell dyed (5, 2)))
   assertBool "dye created vertical C3" $
     all (`elem` findMatches dyed) [(3, 2), (4, 2), (5, 2)]
-  let (_, cells, scored, maxW, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 42) board
+  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 42) board
   assertBool ("follow-up cascade cells>=6 got " ++ show cells) (cells >= 6)
   assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
   assertBool "scored" (scored >= scoreForWave 1 3 + scoreForWave 2 3)
@@ -4911,12 +4900,10 @@ hat_recolor_followup_match = do
   assertEqual "hat swapped right to C2" C2 (cellColor (getCell hatted (5, 2)))
   assertBool "hat created col0 C3 match" $
     all (`elem` findMatches hatted) [(3, 0), (4, 0), (5, 0)]
-  let (_, cells, scored, maxW, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 7) board
+  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 7) board
   assertBool ("hat follow-up cells>=6 got " ++ show cells) (cells >= 6)
   assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
-  let (bAfter, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 7) board
+  let CascadeRun {crBoard = bAfter} = cascadeMatches Nothing [] [] (mkStdGen 7) board
       hatLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -5199,8 +5186,7 @@ surprise_direct_seed_opens = do
   assertEqual "LineH" LineH (cellKind cellU)
   -- Seed cascade (hammer path): special sits; not dug by iceFree hole.
   let g0 = mkStdGen 11
-      (bCas, nCleared, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScoredFromSeeds Nothing [(4, 0)] g0 boardSpecial
+      CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] [] [] g0 boardSpecial
   assertEqual "special open clears no hole" (0 :: Int) nCleared
   let cellC = getCell bCas (4, 0)
   assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Normal)
@@ -5258,8 +5244,7 @@ soft_hit_preserves_choco_steam = do
   let expanded = expandSpecials boardIce (findMatches boardIce)
       (_, iceFree) = chipIceOnClear boardIce expanded
   assertBool "soft ice not a hole" ((3, 1) `notElem` iceFree)
-  let (boardI1, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 21) boardIce
+  let CascadeRun {crBoard = boardI1} = cascadeMatches Nothing [] [] (mkStdGen 21) boardIce
   assertEqual "ice chipped once" (1 :: Int) (iceLayers (getCell boardI1 (3, 1)))
   assertBool "choco survives ice soft-hit" (hasChoco (getCell boardI1 (2, 1)))
   -- Control: same layout with bare mid gem — true clear *does* strip choco.
@@ -5274,8 +5259,7 @@ soft_hit_preserves_choco_steam = do
              (mkGem C1))
           (2, 1)
           (mkChocoGem C2)
-      (boardH1, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 22) boardHard
+      CascadeRun {crBoard = boardH1} = cascadeMatches Nothing [] [] (mkStdGen 22) boardHard
   assertBool "true clear strips choco" (not (hasChoco (getCell boardH1 (2, 1))))
   -- Flip in a 3-match: flips to back, stays; adjacent steam must survive.
   let boardFlip =
@@ -5292,8 +5276,7 @@ soft_hit_preserves_choco_steam = do
   assertBool "flip match present" (not (null (findMatches boardFlip)))
   let (_, iceF) = chipIceOnClear boardFlip (expandSpecials boardFlip (findMatches boardFlip))
   assertBool "flip not a hole" ((4, 1) `notElem` iceF)
-  let (boardF1, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 23) boardFlip
+  let CascadeRun {crBoard = boardF1} = cascadeMatches Nothing [] [] (mkStdGen 23) boardFlip
   assertBool "became back gem" $
     isGem (getCell boardF1 (4, 1)) && not (isFlip (getCell boardF1 (4, 1)))
   assertEqual "back color C5" C5 (cellColor (getCell boardF1 (4, 1)))
@@ -5454,8 +5437,7 @@ soft_lock_blocks_special_expand = do
   assertBool "ice match" (not (null (findMatches boardIce)))
   let expIce = expandSpecials boardIce (findMatches boardIce)
   assertEqual "ice>1 LineH does not expand row" (sort (findMatches boardIce)) (sort expIce)
-  let (bIce, nIce, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 31) boardIce
+  let CascadeRun {crBoard = bIce, crTally = CascadeTally {ctCells = nIce}} = cascadeMatches Nothing [] [] (mkStdGen 31) boardIce
   assertEqual "only two match partners clear" (2 :: Int) nIce
   assertEqual "LineH survives" LineH (cellKind (getCell bIce (3, 1)))
   assertEqual "ice chipped 2→1" (1 :: Int) (iceLayers (getCell bIce (3, 1)))
@@ -5546,32 +5528,27 @@ line_blast_no_double_peel = do
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
   -- Chain 2 on blast path: peel once → Chain 1 (not fully unlocked).
-  let (bCh, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 41) (lineBoard (Gem C2 Normal 0 (Just (Chain 2))))
+  let CascadeRun {crBoard = bCh} = cascadeMatches Nothing [] [] (mkStdGen 41) (lineBoard (Gem C2 Normal 0 (Just (Chain 2))))
       cellCh = getCell bCh (3, 5)
   assertBool "chain survives" (hasChain cellCh)
   assertEqual "chain peeled once 2→1" (1 :: Int) (chainLayers cellCh)
   -- Curtain 2: same single peel.
-  let (bCu, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 42) (lineBoard (Gem C2 Normal 0 (Just (Curtain 2))))
+  let CascadeRun {crBoard = bCu} = cascadeMatches Nothing [] [] (mkStdGen 42) (lineBoard (Gem C2 Normal 0 (Just (Curtain 2))))
       cellCu = getCell bCu (3, 5)
   assertBool "curtain survives" (hasCurtain cellCu)
   assertEqual "curtain peeled once 2→1" (1 :: Int) (curtainLayers cellCu)
   -- Stone 2: chip once → Stone 1 (not removed).
-  let (bSt, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 43) (lineBoard (mkStoneLayers 2))
+  let CascadeRun {crBoard = bSt} = cascadeMatches Nothing [] [] (mkStdGen 43) (lineBoard (mkStoneLayers 2))
       cellSt = getCell bSt (3, 5)
   assertBool "stone survives" (isStone cellSt)
   assertEqual "stone chipped once 2→1" (1 :: Int) (stoneLayers cellSt)
   -- Safe 2: chip once → Safe 1 (not opened to Cookie).
-  let (bSa, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 44) (lineBoard (mkSafeLayers 2))
+  let CascadeRun {crBoard = bSa} = cascadeMatches Nothing [] [] (mkStdGen 44) (lineBoard (mkSafeLayers 2))
       cellSa = getCell bSa (3, 5)
   assertBool "safe survives" (isSafe cellSa)
   assertEqual "safe chipped once 2→1" (1 :: Int) (safeLayers cellSa)
   -- Control: Chain 1 on path fully unlocks (single peel strips last layer).
-  let (bC1, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 45) (lineBoard (Gem C2 Normal 0 (Just (Chain 1))))
+  let CascadeRun {crBoard = bC1} = cascadeMatches Nothing [] [] (mkStdGen 45) (lineBoard (Gem C2 Normal 0 (Just (Chain 1))))
   assertBool "chain1 unlocked" (not (hasChain (getCell bC1 (3, 5))))
   -- Control: adjacent-only Chain 2 (not on blast) still peels once.
   let boardAdj =
@@ -5585,8 +5562,7 @@ line_blast_no_double_peel = do
              (mkGem C1))
           (4, 1)
           (Gem C2 Normal 0 (Just (Chain 2)))
-      (bAdj, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 46) boardAdj
+      CascadeRun {crBoard = bAdj} = cascadeMatches Nothing [] [] (mkStdGen 46) boardAdj
       cellAdj = getCell bAdj (4, 1)
   assertBool "adj chain survives" (hasChain cellAdj)
   assertEqual "adj chain peeled 2→1" (1 :: Int) (chainLayers cellAdj)
@@ -5626,26 +5602,22 @@ blast_chips_layered_obstacles_once = do
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
   -- Honey 2 on blast path: chip once → Honey 1 (not removed).
-  let (bH, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
+  let CascadeRun {crBoard = bH} = cascadeMatches Nothing [] [] (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
       cellH = getCell bH (3, 5)
   assertBool "honey survives" (isHoney cellH)
   assertEqual "honey chipped once 2→1" (1 :: Int) (honeyLayers cellH)
   -- Chest 2: same single chip.
-  let (bC, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 52) (lineBoard (mkChestLayers 2))
+  let CascadeRun {crBoard = bC} = cascadeMatches Nothing [] [] (mkStdGen 52) (lineBoard (mkChestLayers 2))
       cellC = getCell bC (3, 5)
   assertBool "chest survives" (isChest cellC)
   assertEqual "chest chipped once 2→1" (1 :: Int) (chestLayers cellC)
   -- Cake 2: same single chip.
-  let (bK, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 53) (lineBoard (mkCakeLayers 2))
+  let CascadeRun {crBoard = bK} = cascadeMatches Nothing [] [] (mkStdGen 53) (lineBoard (mkCakeLayers 2))
       cellK = getCell bK (3, 5)
   assertBool "cake survives" (isCake cellK)
   assertEqual "cake chipped once 2→1" (1 :: Int) (cakeLayers cellK)
   -- Control: Honey 1 on path fully clears (last layer).
-  let (bH1, _, _, _, _, _, _, honeyHit, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
+  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctHoney = honeyHit}} = cascadeMatches Nothing [] [] (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
   assertBool "honey1 cleared" (not (isHoney (getCell bH1 (3, 5))))
   assertBool "honey1 counted" (honeyHit >= 1)
   -- Hammer on Honey 3: chip 3→2, charge spent, not goal-counted yet.
@@ -5721,8 +5693,7 @@ hat_immune_to_direct_clear = do
           (3, 7)
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
-  let (bLine, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 61) (lineBoard mkMagicHat)
+  let CascadeRun {crBoard = bLine} = cascadeMatches Nothing [] [] (mkStdGen 61) (lineBoard mkMagicHat)
   assertBool "hat survives line blast" (isMagicHat (getCell bLine (3, 5)))
   -- Hammer on hat: NoMatch, charge kept, board unchanged.
   let gs0 =
@@ -5846,8 +5817,7 @@ soft_hit_no_adj_side_effects = do
   assertEqual "soft ice peels no Curtain" (0 :: Int) nCu
   assertEqual "Curtain2 unchanged" (2 :: Int) (curtainLayers (getCell bCuU (2, 1)))
   -- Live cascade: Maker of match color must not charge on soft ice wave.
-  let (bMk, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 72) (boardIce (mkMakerCharges C1 3))
+  let CascadeRun {crBoard = bMk} = cascadeMatches Nothing [] [] (mkStdGen 72) (boardIce (mkMakerCharges C1 3))
   assertBool "Maker still maker" (isMaker (getCell bMk (2, 1)))
   assertEqual "Maker uncharged" (3 :: Int) (makerCharges (getCell bMk (2, 1)))
   -- Soft Flip match: Balloon same front-color must not pop; Bottle must not dye.
@@ -5867,8 +5837,7 @@ soft_hit_no_adj_side_effects = do
           (mkGem C3)
   assertBool "flip match" (not (null (findMatches boardFlip)))
   let boardFlipBot = setCell boardFlip (3, 1) (mkBottle C4)
-      (bFlip, _, _, _, _, _, _, _, _, _, _, _) =
-        runCascadeScored Nothing (mkStdGen 73) boardFlipBot
+      CascadeRun {crBoard = bFlip} = cascadeMatches Nothing [] [] (mkStdGen 73) boardFlipBot
   assertBool "Balloon survives soft Flip" (isBalloon (getCell bFlip (5, 1)))
   assertEqual "Bottle did not dye neighbor" C3 (cellColor (getCell bFlip (5, 2)))
   -- Control: true clear mid gem *does* peel Fog / charge Maker.
@@ -6496,8 +6465,7 @@ cookie_immune_to_direct_clear = do
           (3, 4)
           (Gem C1 Bomb 0 Nothing)
       seeds = [(3, 4)]
-      (b1, _n, _sc, _mw, _t, _st, _ch, _h, _bal, cookies, _cak, _) =
-        runCascadeScoredFromSeeds Nothing seeds (mkStdGen 1) boardBomb
+      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) boardBomb
       cookieLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -6512,8 +6480,7 @@ cookie_immune_to_direct_clear = do
           (setCell stableBoard (4, 2) mkCookie)
           (4, 4)
           (Gem C2 LineH 0 Nothing)
-      (bL, _nL, _scL, _mwL, _tL, _stL, _chL, _hL, _balL, cookiesL, _cakL, _) =
-        runCascadeScoredFromSeeds Nothing [(4, 4)] (mkStdGen 2) boardLine
+      CascadeRun {crBoard = bL, crTally = CascadeTally {ctCookies = cookiesL}} = cascadeSeeds Nothing [(4, 4)] [] [] (mkStdGen 2) boardLine
   assertEqual "line must not count mid-board cookie" (0 :: Int) cookiesL
   assertBool "cookie survives line" $
     any (\(r, c) -> isCookie (getCell bL (r, c)))
@@ -6556,8 +6523,7 @@ cookie_immune_to_direct_clear = do
           (2, 2)
           (mkGem C1)
       seedsBot = findMatches boardBot
-      (_bBot, _nBot, _scBot, _cBot, _tBot, _stBot, _chBot, _hBot, _bBot2, cookiesBot, _cakBot, _) =
-        runCascadeScoredFromSeeds Nothing seedsBot (mkStdGen 3) boardBot
+      CascadeRun {crTally = CascadeTally {ctCookies = cookiesBot}} = cascadeSeeds Nothing seedsBot [] [] (mkStdGen 3) boardBot
   assertBool ("bottom cookie still drains, got " ++ show cookiesBot) (cookiesBot >= 1)
 
 -- | Belt delivers Cookie onto bottom with no follow-up match → must still drain.
@@ -7057,8 +7023,7 @@ ufo_absorb_no_special_expand = do
           (mkGem C3)
       swapped = swapCells boardMatch (0, 2) (0, 3)
   assertBool "setup match" (hasAnyMatch swapped)
-  let (b2, _, _, _, _, _, _, _, _, _, _, uAbs2, _, _, _) =
-        runCascadeScoredWithUfos (Just (0, 3)) [u] [] (mkStdGen 5) swapped
+  let CascadeRun {crBoard = b2, crTally = CascadeTally {ctUfoAbsorbed = uAbs2}} = cascadeMatches (Just (0, 3)) [u] [] (mkStdGen 5) swapped
   assertBool "UFO absorbed bomb" (uAbs2 >= 1)
   assertBool "bomb cell no longer Bomb" $
     case getCell b2 (3, 3) of
@@ -7081,8 +7046,7 @@ ufo_absorb_no_special_expand = do
           (mkGem C3)
       swappedL = swapCells boardLM (6, 2) (6, 3)
   assertBool "line setup match" (hasAnyMatch swappedL)
-  let (bL, _, _, _, _, _, _, _, _, _, _, uAbsL, _, _, _) =
-        runCascadeScoredWithUfos (Just (6, 3)) [uL] [] (mkStdGen 11) swappedL
+  let CascadeRun {crBoard = bL, crTally = CascadeTally {ctUfoAbsorbed = uAbsL}} = cascadeMatches (Just (6, 3)) [uL] [] (mkStdGen 11) swappedL
   assertBool "absorbed line" (uAbsL >= 1)
   assertBool "line cell no longer LineH" $
     case getCell bL (2, 3) of
@@ -7287,8 +7251,7 @@ immortal_no_gravity_fall = do
   let seeds = [(6, 3), (7, 3)]  -- far below (3,3); buffer gems avoid adj peels
       check name cell isImm = do
         let board = setCell stableBoard (3, 3) cell
-            (b1, _, _, _, _, _, _, _, _, _, _, _) =
-              runCascadeScoredFromSeeds Nothing seeds (mkStdGen 0) board
+            CascadeRun {crBoard = b1} = cascadeSeeds Nothing seeds [] [] (mkStdGen 0) board
             positions =
               [ (r, c)
               | r <- [0 .. boardSize - 1]
@@ -7302,8 +7265,7 @@ immortal_no_gravity_fall = do
   check "Snail" (mkSnail 1 0) isSnail
   -- Control: Cookie still falls toward bottom (may drain).
   let boardC = setCell stableBoard (3, 3) mkCookie
-      (bC, _, _, _, _, _, _, _, _, cookies, _, _) =
-        runCascadeScoredFromSeeds Nothing [(4, 3), (5, 3), (6, 3), (7, 3)] (mkStdGen 1) boardC
+      CascadeRun {crBoard = bC, crTally = CascadeTally {ctCookies = cookies}} = cascadeSeeds Nothing [(4, 3), (5, 3), (6, 3), (7, 3)] [] [] (mkStdGen 1) boardC
   assertBool "cookie left (3,3)" (not (isCookie (getCell bC (3, 3))))
   assertBool ("cookie fell or drained, cookies=" ++ show cookies) $
     cookies >= 1
@@ -7710,9 +7672,8 @@ trace_cascade_final_equals_stabilized = do
     ( \(seed, ufos, portals) -> do
         let g = mkStdGen seed
             (b0, g1) = randomBoard g
-            (bR, _cells, score, maxW, _t, _s, _c, _h, _b, _k, _ca, _u, ufosR, clearedR, gR) =
-              runCascadeScoredWithUfos Nothing ufos portals g1 b0
-            (ws, bT, ufosT, gT) = traceCascade Nothing ufos portals g1 b0
+            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctMaxWave = maxW, ctCleared = clearedR}, crUfos = ufosR, crGen = gR} = cascadeMatches Nothing ufos portals g1 b0
+            CascadeRun {crWaves = ws, crBoard = bT, crUfos = ufosT, crGen = gT} = cascadeMatches Nothing ufos portals g1 b0
             tag = "seed " ++ show seed
         bT @?= bR
         show gT @?= show gR
@@ -7733,9 +7694,8 @@ trace_seeds_final_equals_stabilized =
   mapM_
     ( \(seed, seeds, ufos) -> do
         let (b0, g1) = randomPlayableBoard (mkStdGen seed)
-            (bR, _cells, score, _maxW, _t, _s, _c, _h, _b, _k, _ca, _u, ufosR, clearedR, gR) =
-              runCascadeScoredFromSeedsWithUfos Nothing seeds ufos [] g1 b0
-            (ws, bT, ufosT, gT) = traceCascadeFromSeeds Nothing seeds ufos [] g1 b0
+            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctCleared = clearedR}, crUfos = ufosR, crGen = gR} = cascadeSeeds Nothing seeds ufos [] g1 b0
+            CascadeRun {crWaves = ws, crBoard = bT, crUfos = ufosT, crGen = gT} = cascadeSeeds Nothing seeds ufos [] g1 b0
             tag = "seed " ++ show seed
         bT @?= bR
         show gT @?= show gR
@@ -8263,7 +8223,7 @@ element_registry_matches_legacy_predicates = do
       board c = setCell stableBoard (0, 0) c
       check name f g = assertEqual name [] [show c | c <- cells, f c /= g c]
   check "blocksSwap" (blocksSwapWith reg) legacyBlock
-  check "swapBlockedByStone" (\c -> swapBlockedByStone (board c) (0, 0) (0, 1)) legacyBlock
+  check "swapBlockedWith" (\c -> swapBlockedWith defaultRegistry (board c) (0, 0) (0, 1)) legacyBlock
   check "hitImmune" (hitImmuneWith reg) legacyImmune
   check "gravityFixed" gravityFixedCell legacyFixed
   check "activates" (activatesWith reg) specialActivates

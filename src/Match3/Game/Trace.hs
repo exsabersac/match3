@@ -7,7 +7,7 @@
 -- traceSnails 搬到 Match3.Element.Builtin（蜗牛的步末规则），这里原样再导出。蔓延改为依次执行注册表里
 -- PhaseSpread 阶段的步末规则。
 --
--- 依赖：Match3.Board、元素框架（事件词汇 / 注册表）、Conveyor（皮带）。只描述「变了什么」，不结算。
+-- 依赖：Match3.Board.*、元素框架（事件词汇 / 注册表）、Conveyor（皮带）。只描述「变了什么」，不结算。
 -- 结算直接使用 traceSpreads / traceSnails 返回的盘面（Match3.Game.Resolve），不再另算一遍；
 -- traceSnails 与 stepSnailsAvoidingBlocked 逐只调用同一个 stepSnailAtBlocked，结果恒等。
 -- 护栏 trace_end_steps_replay_to_trySwap_final、trace_end_snail_push_and_turn、trace_end_spread_from_adjacent_source。
@@ -32,7 +32,8 @@ module Match3.Game.Trace
   , traceEventsWith
   ) where
 
-import Match3.Board (CascadeWave(..), getCell)
+import Match3.Board.Cascade (CascadeWave(..))
+import Match3.Board.Grid (getCell)
 import Match3.Conveyor (Belt)
 import Data.List (nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)

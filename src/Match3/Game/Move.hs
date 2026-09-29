@@ -1,7 +1,7 @@
 -- | 玩家交换：trySwap（= runMove）与回放 traceSwap。两者都是 resolveSwap 的投影：
 -- 同一次计算同时产出新状态、结局与回放脚本（Match3.Game.Resolve.resolveMove），天然一致。
 --
--- 依赖：Resolve、State、Trace、Match3.Board、元素注册表（挡交换）、Rainbow / Combos（起手种子）。
+-- 依赖：Resolve、State、Trace、Match3.Board.*、元素注册表（挡交换）、Rainbow / Combos（起手种子）。
 -- 护栏 trace_swap_final_equals_trySwap、trace_end_steps_replay_to_trySwap_final、trace_rejected_move_is_empty、
 -- trace_shuffle_step_replays。
 module Match3.Game.Move
@@ -13,7 +13,8 @@ module Match3.Game.Move
   , trySwapWith
   ) where
 
-import Match3.Board (hasAnyMatchWith, inBounds, adjacent, swapCells)
+import Match3.Board.Grid (inBounds, adjacent, swapCells)
+import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, swapBlockedWith)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)

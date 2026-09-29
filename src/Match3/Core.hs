@@ -1,4 +1,4 @@
--- | 库门面：再导出 Types / Board / Game 与各机制模块的稳定公开 API。
+-- | 库门面：再导出 Types、Board.* / Game.* 子模块与各机制模块的稳定公开 API（给前端用）。
 -- 自身几乎无业务逻辑；前端与测试应优先 import Match3.Core。
 -- 不拥有：SDL、关卡装饰布局细节（在 Game）、连锁波次实现（在 Board）。
 module Match3.Core
@@ -117,7 +117,6 @@ module Match3.Core
   , countdownsAtZero
   , explodeRadius
   , explodeSeedsFor
-  , resolveCountdowns
   , Belt
   , shiftBelt
   , shiftBelts
@@ -155,9 +154,6 @@ module Match3.Core
   , hasAnyMatch
   , hasValidMove
   , stepCascade
-  , runCascade
-  , runCascadeAt
-  , runCascadeScored
   , randomBoard
   , randomStableBoard
   , randomPlayableBoard
@@ -186,8 +182,6 @@ module Match3.Core
   , traceHammer
   , traceCrossClear
   , CascadeWave(..)
-  , traceCascade
-  , traceCascadeFromSeeds
   , runMove
   , restart
   , restartLevel
@@ -206,7 +200,6 @@ module Match3.Core
   , mapClickJump
   , hammerClearSeeds
   , crossClearSeeds
-  , swapBlockedByStone
   , orthoNeighbors
   , stonesAdjacentTo
   , withAdjacentStones
@@ -241,7 +234,6 @@ module Match3.Core
   , isRainbow
   , isRainbowSwap
   , rainbowClearSeeds
-  , runCascadeScoredFromSeeds
   , isLineBombCombo
   , isRainbowLineCombo
   , isBombBombCombo
@@ -254,7 +246,12 @@ module Match3.Core
   , starRating
   ) where
 
-import Match3.Board
+import Match3.Board.Cascade (CascadeWave(..), stepCascade)
+import Match3.Board.Clear (countColor, expandSpecials, scoreForCleared, scoreForWave)
+import Match3.Board.Gravity (applyPortalTeleports, settleBoardPortals)
+import Match3.Board.Grid (adjacent, getCell, inBounds, setCell, swapCells)
+import Match3.Board.Match (MatchRun(..), findHint, findMatchRuns, findMatches, hasAnyMatch, hasValidMove)
+import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
 import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn
@@ -291,10 +288,15 @@ import Match3.Ufo
   , stepUfo
   , stepUfos
   )
-import Match3.Game
+import Match3.Game.Boosters
+import Match3.Game.Level
+import Match3.Game.Move
+import Match3.Game.Outcome
+import Match3.Game.Shuffle
+import Match3.Game.State
+import Match3.Game.Trace
 import Match3.Obstacles
-  ( swapBlockedByStone
-  , orthoNeighbors
+  ( orthoNeighbors
   , stonesAdjacentTo
   , withAdjacentStones
   , chipAdjacentStones

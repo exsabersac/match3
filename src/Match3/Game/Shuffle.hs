@@ -2,7 +2,7 @@
 
 -- | 洗牌：保留装饰（障碍 / 特殊 / 叠层）的重洗，以及无可走步时的自动洗牌 ensurePlayable。
 --
--- 依赖：State、Match3.Board（shufflePlayable / hasValidMove）、元素注册表（保留判定 keepOnShuffleWith）。
+-- 依赖：State、Match3.Board.*（shufflePlayable / hasValidMove）、元素注册表（保留判定 keepOnShuffleWith）。
 -- 不变量：只换普通宝石颜色的位置，装饰原样放回；自动洗牌不在回放脚本的 mtEnd 里，
 -- 前端用 mtFinal 与结算后 gsBoard 的差异补播（app 的 StShuffle 阶段）。
 module Match3.Game.Shuffle
@@ -15,7 +15,9 @@ module Match3.Game.Shuffle
   , shuffleGame
   ) where
 
-import Match3.Board (hasValidMoveWith, shufflePlayable, setCell, getCell)
+import Match3.Board.Grid (setCell, getCell)
+import Match3.Board.Match (hasValidMoveWith)
+import Match3.Board.Random (shufflePlayable)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, keepOnShuffleWith)
 import Match3.Types

@@ -1,5 +1,5 @@
 -- | 倒计时炸弹：可按色匹配的计时器；tick −1；归零产生 3×3 爆炸种子。
--- 爆炸后的连锁由 Board.resolveCountdowns 调用种子连锁完成。
+-- 爆炸后的连锁由 Board.Cascade.cascadeCountdowns 调用种子连锁完成。
 module Match3.Countdown
   ( mkCountdown
   , isCountdown

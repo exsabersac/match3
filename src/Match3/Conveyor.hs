@@ -1,4 +1,4 @@
--- | 传送带：环路径上格内容循环前移一格。移位后的连锁/收饼由 Game + Board.runPostBeltCascade 处理。
+-- | 传送带：环路径上格内容循环前移一格。移位后的连锁/收饼由 Game.Resolve + Board.Cascade.cascadeAfterBelt 处理。
 module Match3.Conveyor
   ( Belt
   , shiftBelt

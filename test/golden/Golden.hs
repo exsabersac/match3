@@ -3,8 +3,10 @@
 --
 -- 用途：重构（第二刀起）前后逐字比对，证明玩家可见的规则行为没有变化。
 -- 约束（重要）：
---   * 取数只经过门面 Match3.Board / Match3.Game（以及数据类型 Match3.Types / Match3.Ufo），
---     这份代码在 3bd26d8 与 5eef3e3 上都能原样编译，两边输出全等；
+--   * 入库时（4fbcefc）取数只经过门面 Match3.Board / Match3.Game，那一版代码在 3bd26d8 与 5eef3e3 上
+--     都能原样编译、两边输出全等。第三刀删除了这两个门面，本文件改为直接 import Board.* / Game.*
+--     子模块与记录版连锁 CascadeRun，因此**今后不能再原样在 51b1cfa 及更早的提交上编译**；
+--     要和旧提交比对，取 4fbcefc 版的 Golden.hs 到旧提交上跑（输出与 golden.txt 逐字相同）；
 --   * 不对内部类型直接调用 show，全部用下面手写的投影函数（格子短码、具名计数）；
 --     唯一例外是 StdGen 的 show（随机数状态）；
 --   * 回放脚本 mtWaves / mtEnd 投影成文本后用手写 FNV-1a 64 压缩，不引入新依赖；
@@ -20,19 +22,17 @@ import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (foldl', intercalate)
 import Data.Word (Word64)
-import Match3.Board
-  ( CascadeWave(..)
-  , findHint
-  , inBounds
-  , randomBoard
-  , randomPlayableBoard
-  , runCascadeScoredFromSeedsWithUfos
-  , runCascadeScoredWithUfos
-  , setCell
-  , traceCascade
-  , traceCascadeFromSeeds
-  )
-import Match3.Game
+import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..), cascadeMatches, cascadeSeeds)
+import Match3.Board.Grid (inBounds, setCell)
+import Match3.Board.Match (findHint)
+import Match3.Board.Random (randomBoard, randomPlayableBoard)
+import Match3.Game.Boosters
+import Match3.Game.Level
+import Match3.Game.Move
+import Match3.Game.Outcome
+import Match3.Game.Shuffle
+import Match3.Game.State
+import Match3.Game.Trace
 import Match3.Types
 import Match3.Ufo (Ufo(..), mkUfo)
 import Numeric (showHex)
@@ -335,7 +335,7 @@ handmade =
        ++ runGame "H2-choco" chocoGs 8 ++ allSwaps "H2-choco" chocoGs
        ++ runGame "H3-combo" comboGs 8 ++ allSwaps "H3-combo" comboGs
 
--- | 连锁 API（门面 Match3.Board）：随机盘 × 飞碟 / 传送门的普通连锁与种子连锁，结算与回放各一份。
+-- | 连锁 API（Match3.Board.Cascade 记录版）：随机盘 × 飞碟 / 传送门的普通连锁与种子连锁，结算与回放各一份。
 cascadeLines :: [String]
 cascadeLines =
   [ unwords
@@ -343,23 +343,31 @@ cascadeLines =
   | seed <- [1 .. 30 :: Int]
   , (k, (ufos, portals)) <- zip [0 :: Int ..] [([], []), ([mkUfo (2, 3) C1], []), ([], [((0, 1), (7, 6)), ((0, 6), (7, 1))])]
   , let (b0, g1) = randomBoard (mkStdGen seed)
-        runP = pRun (runCascadeScoredWithUfos Nothing ufos portals g1 b0)
-        trP = pTr (traceCascade Nothing ufos portals g1 b0)
+        run = cascadeMatches Nothing ufos portals g1 b0
+        runP = pRun run
+        trP = pTr run
   ]
-    ++ [ unwords [ "S" ++ pad2 seed ++ "/" ++ show k, "run=" ++ pRun (runCascadeScoredFromSeedsWithUfos Nothing seeds ufos [] g1 b0), "trace=" ++ pTr (traceCascadeFromSeeds Nothing seeds ufos [] g1 b0) ]
+    ++ [ unwords [ "S" ++ pad2 seed ++ "/" ++ show k, "run=" ++ pRun run, "trace=" ++ pTr run ]
        | seed <- [1 .. 20 :: Int]
        , (k, (seeds, ufos)) <- zip [0 :: Int ..] [([(3, 3)], []), ([(r, 4) | r <- [0 .. 7]], [mkUfo (1, 1) C2]), ([(2, c) | c <- [0 .. 7]] ++ [(r, 2) | r <- [0 .. 7]], [])]
        , let (b0, g1) = randomPlayableBoard (mkStdGen seed)
+             run = cascadeSeeds Nothing seeds ufos [] g1 b0
        ]
   where
-    pRun (b, cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos', cleared, g) =
-      unwords
+    -- 结算投影（原 15 元组的字段顺序）与回放投影（原 (轮次, 终盘, 飞碟, 生成器)）都从同一个 CascadeRun 取。
+    pRun r =
+      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctColors = tallies, ctStones = stones
+                       , ctChests = chests, ctHoney = honey, ctBalloons = balloons, ctCookies = cookies, ctCakes = cakes
+                       , ctUfoAbsorbed = uAbs, ctCleared = cleared} = crTally r
+          (b, ufos', g) = (crBoard r, crUfos r, crGen r)
+      in unwords
         [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag tallies
         , "stone=" ++ show stones, "chest=" ++ show chests, "honey=" ++ show honey, "balloon=" ++ show balloons
         , "cookie=" ++ show cookies, "cake=" ++ show cakes, "uabs=" ++ show uAbs, "ufos=" ++ pUfos ufos'
         , "cleared=" ++ pPosList cleared, "gen=" ++ show (g :: StdGen) ]
-    pTr (ws, b, ufos', g) =
-      unwords
+    pTr r =
+      let (ws, b, ufos', g) = (crWaves r, crBoard r, crUfos r, crGen r)
+      in unwords
         [ "w" ++ show (length ws) ++ "#" ++ fnv1a (intercalate "\n" (map pWave ws)), "b#" ++ fnv1a (pBoard b), "ufos=" ++ pUfos ufos', "gen=" ++ show (g :: StdGen) ]
 
 -- | 开局 / 重开 / 下一关（关卡装饰与随机数消费顺序）。

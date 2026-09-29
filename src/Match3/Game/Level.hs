@@ -3,7 +3,7 @@
 -- | 开局与关卡装饰：新局 / 指定关 / 每日 / 重开 / 下一关，战役装饰布局（decorateLevel）、
 -- 目标所需装饰补齐、皮带 / 传送门 / 飞碟布局、步数携带。
 --
--- 依赖：State、Shuffle（开局 ensurePlayable）、Match3.Board、元素注册表（装饰按元素名放置）。
+-- 依赖：State、Shuffle（开局 ensurePlayable）、Match3.Board.Grid / Random、元素注册表（装饰按元素名放置）。
 -- 不变量：同一 (关卡, 种子) 总得到同一开局（随机数只来自 mkStdGen seed）。
 module Match3.Game.Level
   ( newGame
@@ -13,7 +13,6 @@ module Match3.Game.Level
   , decorateLevelWith
   , levelPlacements
   , levelUfos
-  , overlayAt
   , ensureGoalDecor
   , newGameAtLevel
   , newDailyGame
@@ -23,7 +22,7 @@ module Match3.Game.Level
   , nextLevel
   ) where
 
-import Match3.Board (randomPlayableBoard, setCell, getCell)
+import Match3.Board.Random (randomPlayableBoard)
 import Match3.Ufo (Ufo(..), mkUfo)
 import Match3.Conveyor (Belt)
 import Match3.Carpet (levelCarpets)
@@ -225,16 +224,6 @@ levelUfos 13 = [mkUfo (1, 2) C1, mkUfo (1, 5) C3]
 levelUfos 15 = [mkUfo (0, 4) C2]
 levelUfos 27 = [mkUfo (2, 4) C1]
 levelUfos _ = []
-
--- | Stamp Grass/Vine/Choco onto existing gems (keep color/kind/ice).
--- （关卡装饰已改用放置表；本函数保留给测试与旧调用方。）
-overlayAt :: Board -> CellOverlay -> [Pos] -> Board
-overlayAt b ov = foldl step b
-  where
-    step board p =
-      case getCell board p of
-        Gem col kind ice _ -> setCell board p (Gem col kind ice (Just ov))
-        _ -> board
 
 -- | Daily (and any bare board) must still be completable: if the goal needs
 -- board entities but level décor did not place enough, seed a minimal set.

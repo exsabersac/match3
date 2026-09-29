@@ -2,7 +2,7 @@
 
 -- | 对局状态：GameState 及其（部分字段）相等语义、撤销快照、本步特效 MoveFx 的边沿触发、提示与撤销。
 --
--- 依赖：Match3.Types、Match3.Board（findHint）、Ufo / Conveyor（字段类型）。
+-- 依赖：Match3.Types、Match3.Board.*（findHint）、Ufo / Conveyor（字段类型）。
 -- 不变量：gsCombo / gsLastCleared 只描述最近一次**真正结算**的一步；任何被拒操作经
 -- clearMoveFx / rejectMove 清零，moveFx 对 NoMatch / InvalidSwap / 已终局一律返回空，
 -- 前端因此不会重播上一步的连击（护栏 failed_swap_resets_combo_feedback 等）。
@@ -18,7 +18,7 @@ module Match3.Game.State
   ) where
 
 import Data.Maybe (isJust)
-import Match3.Board (findHint)
+import Match3.Board.Match (findHint)
 import Match3.Ufo (Ufo(..))
 import Match3.Conveyor (Belt)
 import Match3.Types

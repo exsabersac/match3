@@ -4,7 +4,7 @@
 -- 第二刀之前，trySwap 与三种道具各有一份几乎相同的结算代码（计数、目标、结局、洗牌四处重复），
 -- 回放 trace* 又各自重算一遍；现在四处入口只负责「校验 + 选择起手方式」，其余全部在这里。
 --
--- 依赖：Match3.Board（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、元素注册表
+-- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、元素注册表
 -- （步末阶段 PhaseTick / PhaseSpread / PhaseMove 的规则、按差计数、地毯腾空都查注册表；皮带是关卡特性）。
 -- 不变量（逐字保持旧行为，金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
@@ -21,16 +21,16 @@ module Match3.Game.Resolve
   ) where
 
 import Data.List (nub)
-import Match3.Board
+import Match3.Board.Cascade
   ( CascadeRun(..)
   , CascadeTally(..)
   , cascadeAfterBeltWith
   , cascadeCountdownsWith
   , cascadeMatchesWith
   , cascadeSeedsWith
-  , hasAnyMatchWith
   , stillRun
   )
+import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (shiftBelts)
 import Match3.Element.Builtin (defaultRegistry)

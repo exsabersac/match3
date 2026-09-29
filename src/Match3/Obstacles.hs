@@ -1,8 +1,7 @@
 -- | 占格障碍与邻消触发：石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/染色瓶/时间精灵/魔法帽/果汁机。
 -- 一般不可匹配、挡交换；邻消削一层或触发效果。不负责连锁循环本身。
 module Match3.Obstacles
-  ( swapBlockedByStone
-  , orthoNeighbors
+  ( orthoNeighbors
   , stonesAdjacentTo
   , chestsAdjacentTo
   , honeysAdjacentTo
@@ -50,7 +49,6 @@ import Match3.Types
   , isChest
   , isHoney
   , isBalloon
-  , isCookie
   , isCake
   , isMagicHat
   , isMaker
@@ -58,9 +56,6 @@ import Match3.Types
   , isSurprise
   , isBottle
   , isTimeSpirit
-  , hasChain
-  , hasFreeze
-  , isSnail
   , mkSafeLayers
   , safeLayers
   , mkCookie
@@ -89,17 +84,6 @@ setAt b (r, c) v =
   take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
   where
     row = b !! r
-
--- | True if either swap endpoint is a blocker, chained, frozen, or snail.
--- | 交换是否被占格障碍 / 锁链 / 火箭冰冻等挡住（名称历史遗留，范围已超出纯石头）。
-swapBlockedByStone :: Board -> Pos -> Pos -> Bool
-swapBlockedByStone b p1 p2 =
-  let block c =
-        isStone c || isChest c || isHoney c || isBalloon c || isCookie c
-          || isCake c || isMagicHat c || isMaker c || isSnail c || isSafe c
-          || isSurprise c || isBottle c || isTimeSpirit c
-          || hasChain c || hasFreeze c
-  in block (at b p1) || block (at b p2)
 
 -- | Up / down / left / right neighbors (may be out of bounds).
 orthoNeighbors :: Pos -> [Pos]

@@ -2,7 +2,7 @@
 
 -- | 结算计数辅助：颜色袋累加、「按前后盘面差计数」（保险箱开启 / 时间精灵 / 自定义）、地毯可覆盖的腾空格。
 --
--- 依赖：Match3.Types、Match3.Board、元素注册表。被公共结算 Match3.Game.Resolve.resolveMove 使用
+-- 依赖：Match3.Types、Match3.Board.*、元素注册表。被公共结算 Match3.Game.Resolve.resolveMove 使用
 -- （交换与三种道具共用一处）。第二刀 2b：哪些元素按差计数（edDiffCounter / edBonusMoves）、
 -- 哪些元素离格算地毯覆盖（edVacatesCarpet）改由元素定义声明；旧的 countSafes / countTimeSpirits /
 -- carpetVacateSeeds 保留为内置注册表上的同名入口。
@@ -18,7 +18,7 @@ module Match3.Game.Tally
   ) where
 
 import Data.Maybe (fromMaybe)
-import Match3.Board (getCell)
+import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, countElementWith, diffDefs, elementName, vacatesCarpetWith)
 import Match3.Element.Types (Counter, ElementDef(..), ElementName)

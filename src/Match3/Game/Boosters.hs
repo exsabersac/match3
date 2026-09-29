@@ -1,7 +1,7 @@
 -- | 道具：锤子 / 自由交换 / 十字清除。每种道具一个 resolve* 函数（校验 + 起手方式），
 -- 结算与回放都是它的投影（use* = 结果，trace* = 回放脚本），公共结算见 Match3.Game.Resolve。
 --
--- 依赖：Resolve、State、Trace、Match3.Board、Match3.Boosters（十字种子几何）、元素注册表（挡交换 / 锤子免疫）、Rainbow / Combos。
+-- 依赖：Resolve、State、Trace、Match3.Board.*、Match3.Boosters（十字种子几何）、元素注册表（挡交换 / 锤子免疫）、Rainbow / Combos。
 -- 不变量：道具不耗步、不推进倒计时、没有皮带 / 蜗牛，步末只有蔓延；锤子对免疫格不扣次数（NoMatch）。
 -- 护栏 trace_boosters_final_equal_result、trace_end_steps_boosters_replay。
 module Match3.Game.Boosters
@@ -20,7 +20,8 @@ module Match3.Game.Boosters
   , resolveCrossClearWith
   ) where
 
-import Match3.Board (hasAnyMatchWith, inBounds, swapCells, getCell)
+import Match3.Board.Grid (inBounds, swapCells, getCell)
+import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, hitImmuneWith, swapBlockedWith)
 import Match3.Combos (isSpecialCombo, comboClearSeeds)

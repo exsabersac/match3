@@ -32,14 +32,12 @@ library:
   exposed-modules:
   - Match3.Core
   - Match3.Types
-  - Match3.Board
   - Match3.Board.Grid
   - Match3.Board.Match
   - Match3.Board.Clear
   - Match3.Board.Gravity
   - Match3.Board.Cascade
   - Match3.Board.Random
-  - Match3.Game
   - Match3.Game.State
   - Match3.Game.Tally
   - Match3.Game.Outcome

@@ -8027,7 +8027,7 @@ trace_end_spread_from_adjacent_source = do
   assertBool "every spread has targets" (all (not . null . snd) found)
 
 -- | 行为金标准：test/golden/Golden.hs 的投影输出必须与入库的 golden.txt 逐行全等
--- （重构护栏；golden.txt 在 3bd26d8 与 5eef3e3 上生成且全等）。失败时报告第一处分叉的行号与两边内容。
+-- （重构护栏；前 2186 行在 3bd26d8 与 5eef3e3 上生成且全等，末尾 H4–H6 在 31275da 与 13094d1 上生成且全等）。失败时报告第一处分叉的行号与两边内容。
 golden_behaviour_snapshot :: Assertion
 golden_behaviour_snapshot = do
   expected <- lines <$> readFile "test/golden/golden.txt"

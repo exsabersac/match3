@@ -1,12 +1,13 @@
+-- 存档（不参与编译）：段 1 在 31275da 上生成 H4–H6 用的旧侧 Golden.hs = 4fbcefc 版 + 同一段 H4–H6。
+-- 用法：git worktree add /tmp/w 31275da && cp 本文件 /tmp/w/test/golden/Golden.hs && (cd /tmp/w && test/golden/regen.sh /tmp/old.txt)，
+-- 再与当前仓库 regen 的输出逐行比对。
 -- | 行为金标准（golden）：固定种子下「关卡 × 种子 × 逐步推进」以及道具、撤销、洗牌和几个手工局面的
 -- 规则结果，投影成稳定的文本，一个用例一行，行首是「关卡 / 种子 / 第几步」。
 --
 -- 用途：重构（第二刀起）前后逐字比对，证明玩家可见的规则行为没有变化。
 -- 约束（重要）：
---   * 入库时（4fbcefc）取数只经过门面 Match3.Board / Match3.Game，那一版代码在 3bd26d8 与 5eef3e3 上
---     都能原样编译、两边输出全等。第三刀删除了这两个门面，本文件改为直接 import Board.* / Game.*
---     子模块与记录版连锁 CascadeRun，因此**今后不能再原样在 51b1cfa 及更早的提交上编译**；
---     要和旧提交比对，取 4fbcefc 版的 Golden.hs 到旧提交上跑（输出与 golden.txt 逐字相同）；
+--   * 取数只经过门面 Match3.Board / Match3.Game（以及数据类型 Match3.Types / Match3.Ufo），
+--     这份代码在 3bd26d8 与 5eef3e3 上都能原样编译，两边输出全等；
 --   * 不对内部类型直接调用 show，全部用下面手写的投影函数（格子短码、具名计数）；
 --     唯一例外是 StdGen 的 show（随机数状态）；
 --   * 回放脚本 mtWaves / mtEnd 投影成文本后用手写 FNV-1a 64 压缩，不引入新依赖；
@@ -22,22 +23,20 @@ import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (foldl', intercalate)
 import Data.Word (Word64)
-import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..), cascadeMatches, cascadeSeeds)
-import Match3.Board.Grid (getCell, inBounds, setCell)
-import Match3.Board.Match (findHint)
-import Match3.Board.Random (randomBoard, randomPlayableBoard)
-import Engine.Game (Game(..), Step(..))
-import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, register)
-import Match3.Element.Types (baseDef)
-import qualified Match3.Engine as M3E
-import Match3.Game.Boosters
-import Match3.Game.Level
-import Match3.Game.Move
-import Match3.Game.Outcome
-import Match3.Game.Shuffle
-import Match3.Game.State
-import Match3.Game.Trace
+import Match3.Board
+  ( CascadeWave(..)
+  , findHint
+  , inBounds
+  , randomBoard
+  , randomPlayableBoard
+  , runCascadeScoredFromSeedsWithUfos
+  , runCascadeScoredWithUfos
+  , getCell
+  , setCell
+  , traceCascade
+  , traceCascadeFromSeeds
+  )
+import Match3.Game
 import Match3.Types
 import Match3.Ufo (Ufo(..), mkUfo)
 import Numeric (showHex)
@@ -101,10 +100,9 @@ pCell cell = case cell of
   Bottle c -> "D" ++ pColor c
   TimeSpirit -> "T"
   Countdown c n -> "@" ++ pColor c ++ ":" ++ show n
-  Custom n v -> "E" ++ n ++ ":" ++ show v
 
 pBoard :: Board -> String
-pBoard = intercalate "/" . map (intercalate "," . map pCell) . boardRows
+pBoard = intercalate "/" . map (intercalate "," . map pCell)
 
 pHoles :: [[Maybe Cell]] -> String
 pHoles = intercalate "/" . map (intercalate "," . map (maybe "_" pCell))
@@ -303,7 +301,7 @@ runGame tag gs0 n = (tag ++ " start " ++ pState gs0 ++ " board=" ++ pBoard (gsBo
           let (ls, next) = stepLines tag i gs
           in ls ++ maybe [tag ++ " #" ++ pad2 i ++ " end"] (go (i + 1)) next
 
--- | 全部行：38 关 × 种子 {1,2} × 15 步、2 个每日式开局、手工局面、连锁 API、开局，最后是 H4–H6（段 1 追加）。
+-- | 全部行：38 关 × 种子 {1,2} × 15 步、2 个每日式开局、手工局面、连锁 API。
 goldenLines :: [String]
 goldenLines =
   concat
@@ -331,7 +329,12 @@ handmade =
              , Just (p1, p2) <- [findHint (gsBoard gs0)], let (gs1, out) = trySwap p1 p2 gs0, out /= NoMatch, gsCombo gs1 >= 3 ] of
           (g : _) -> g
           [] -> base
-      allSwaps = allSwapsOf
+      allSwaps tag gs =
+        [ unwords [tag, "pair", pPos p1 ++ "-" ++ pPos p2, "out=" ++ pOutcome o, "st=" ++ pState g, "tr=" ++ pTrace (traceSwap p1 p2 gs)]
+        | (p1, p2) <- allPairs
+        , let (g, o) = trySwap p1 p2 gs
+        , applied o
+        ]
   in runGame "H1-snail" snailGs 8 ++ allSwaps "H1-snail" snailGs
        ++ runGame "H2-choco" chocoGs 8 ++ allSwaps "H2-choco" chocoGs
        ++ runGame "H3-combo" comboGs 8 ++ allSwaps "H3-combo" comboGs
@@ -345,7 +348,7 @@ allSwapsOf tag gs =
   , applied o
   ]
 
--- | 连锁 API（Match3.Board.Cascade 记录版）：随机盘 × 飞碟 / 传送门的普通连锁与种子连锁，结算与回放各一份。
+-- | 连锁 API（门面 Match3.Board）：随机盘 × 飞碟 / 传送门的普通连锁与种子连锁，结算与回放各一份。
 cascadeLines :: [String]
 cascadeLines =
   [ unwords
@@ -353,31 +356,23 @@ cascadeLines =
   | seed <- [1 .. 30 :: Int]
   , (k, (ufos, portals)) <- zip [0 :: Int ..] [([], []), ([mkUfo (2, 3) C1], []), ([], [((0, 1), (7, 6)), ((0, 6), (7, 1))])]
   , let (b0, g1) = randomBoard (mkStdGen seed)
-        run = cascadeMatches Nothing ufos portals g1 b0
-        runP = pRun run
-        trP = pTr run
+        runP = pRun (runCascadeScoredWithUfos Nothing ufos portals g1 b0)
+        trP = pTr (traceCascade Nothing ufos portals g1 b0)
   ]
-    ++ [ unwords [ "S" ++ pad2 seed ++ "/" ++ show k, "run=" ++ pRun run, "trace=" ++ pTr run ]
+    ++ [ unwords [ "S" ++ pad2 seed ++ "/" ++ show k, "run=" ++ pRun (runCascadeScoredFromSeedsWithUfos Nothing seeds ufos [] g1 b0), "trace=" ++ pTr (traceCascadeFromSeeds Nothing seeds ufos [] g1 b0) ]
        | seed <- [1 .. 20 :: Int]
        , (k, (seeds, ufos)) <- zip [0 :: Int ..] [([(3, 3)], []), ([(r, 4) | r <- [0 .. 7]], [mkUfo (1, 1) C2]), ([(2, c) | c <- [0 .. 7]] ++ [(r, 2) | r <- [0 .. 7]], [])]
        , let (b0, g1) = randomPlayableBoard (mkStdGen seed)
-             run = cascadeSeeds Nothing seeds ufos [] g1 b0
        ]
   where
-    -- 结算投影（原 15 元组的字段顺序）与回放投影（原 (轮次, 终盘, 飞碟, 生成器)）都从同一个 CascadeRun 取。
-    pRun r =
-      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctColors = tallies, ctStones = stones
-                       , ctChests = chests, ctHoney = honey, ctBalloons = balloons, ctCookies = cookies, ctCakes = cakes
-                       , ctUfoAbsorbed = uAbs, ctCleared = cleared} = crTally r
-          (b, ufos', g) = (crBoard r, crUfos r, crGen r)
-      in unwords
+    pRun (b, cells, score, maxW, tallies, stones, chests, honey, balloons, cookies, cakes, uAbs, ufos', cleared, g) =
+      unwords
         [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag tallies
         , "stone=" ++ show stones, "chest=" ++ show chests, "honey=" ++ show honey, "balloon=" ++ show balloons
         , "cookie=" ++ show cookies, "cake=" ++ show cakes, "uabs=" ++ show uAbs, "ufos=" ++ pUfos ufos'
         , "cleared=" ++ pPosList cleared, "gen=" ++ show (g :: StdGen) ]
-    pTr r =
-      let (ws, b, ufos', g) = (crWaves r, crBoard r, crUfos r, crGen r)
-      in unwords
+    pTr (ws, b, ufos', g) =
+      unwords
         [ "w" ++ show (length ws) ++ "#" ++ fnv1a (intercalate "\n" (map pWave ws)), "b#" ++ fnv1a (pBoard b), "ufos=" ++ pUfos ufos', "gen=" ++ show (g :: StdGen) ]
 
 -- | 开局 / 重开 / 下一关（关卡装饰与随机数消费顺序）。
@@ -392,7 +387,6 @@ levelLines =
        | li <- [0, 10, 27, 35], s <- [4, 8 :: Int] ]
     ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (nextLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) 4)
        | li <- [0, 10, 27] ]
-
 --------------------------------------------------------------------------------
 -- 手工局面第二批 H4–H6（段 1 追加在 golden.txt 末尾，前 2186 行不动）。
 -- 生成方式：本段代码与 4fbcefc 版 Golden.hs 上的同一段（只换取数入口）分别在 13094d1 与 31275da 上运行，
@@ -459,24 +453,16 @@ h6Gs =
 h6Dead :: GameState
 h6Dead =
   let base = newGame defaultConfig 11
-      stripes = boardFromRows [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
+      stripes = [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
   in base {gsBoard = setCell stripes (3, 3) (Stone 2)}
 
--- | H6 用的自定义注册表：内置表 + 一个测试专用的惰性元素（不在盘面上）。
--- 经 match3GameWith 的洗牌 / 交换动作走注册表路径，结果必须与内置表逐字相同。
-h6Reg :: Registry
-h6Reg = register (baseDef "golden_probe") defaultRegistry
-
--- | H6：洗牌 + 自定义注册表。每步先手动洗牌（Shuffle 动作），再按固定公式挑一手成交的交换；
--- 最后记死局的自动洗牌与手动洗牌。
+-- | H6（31275da 侧，没有注册表）：手动洗牌 / 交换 / 自动洗牌直接调旧入口。
 h6Lines :: [String]
 h6Lines =
-  let g = M3E.match3GameWith h6Reg
-      shuf s = stepState (gameStep g s M3E.Shuffle)
-      swapTo s p1 p2 =
-        let st = gameStep g s (M3E.Swap p1 p2)
-        in if stepAccepted st then Just (stepState st) else Nothing
-  in h6Run shuf swapTo (ensurePlayableWith h6Reg)
+  let swapTo s p1 p2 =
+        let (g, o) = trySwap p1 p2 s
+        in if applied o then Just g else Nothing
+  in h6Run shuffleGame swapTo ensurePlayable
 
 -- | H6 的推进与投影（两边共用的部分；只有三种操作的取数入口不同）。
 h6Run :: (GameState -> GameState) -> (GameState -> Pos -> Pos -> Maybe GameState) -> (GameState -> GameState) -> [String]

@@ -77,9 +77,14 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 行为金标准（golden）
 
-`test/golden/Golden.hs` 把固定种子下的规则结果投影成稳定文本，入库为 `test/golden/golden.txt`（2186 行），`golden_behaviour_snapshot` 在 `stack test` 里逐行比对，失败时报告第一处分叉的行号。
+`test/golden/Golden.hs` 把固定种子下的规则结果投影成稳定文本，入库为 `test/golden/golden.txt`（2344 行：前 2186 行自 `4fbcefc` 起逐字不变，第 2187–2344 行是段 1 追加的 H4–H6），`golden_behaviour_snapshot` 在 `stack test` 里逐行比对，失败时报告第一处分叉的行号。
 
-- **覆盖**：38 关 × 种子 {1, 2} × 最多 15 步（每步：成交的交换、结局、完整计数、`gsCombo` / `gsLastCleared`、随机数状态、`traceSwap` 回放；辅助列：撤销 / 提示 / 洗牌 / 自动洗牌 / 结局判定 / 被拒交换；每 3 步三种道具的有次数 / 无次数结果与回放）、2 个每日式开局、3 个手工局面（护栏里的蜗牛撞墙推格、巧克力关、首个 3 连锁，另含该局面全部成交交换）、连锁 API（`Match3.Board.Cascade` 的 `cascadeMatches` / `cascadeSeeds`）的普通 / 种子连锁 × 飞碟 / 传送门、各关开局 / 重开 / 下一关。
+- **覆盖**：38 关 × 种子 {1, 2} × 最多 15 步（每步：成交的交换、结局、完整计数、`gsCombo` / `gsLastCleared`、随机数状态、`traceSwap` 回放；辅助列：撤销 / 提示 / 洗牌 / 自动洗牌 / 结局判定 / 被拒交换；每 3 步三种道具的有次数 / 无次数结果与回放）、2 个每日式开局、6 个手工局面（H1–H3：护栏里的蜗牛撞墙推格、巧克力关、首个 3 连锁；H4–H6 见下；另含该局面全部成交交换）、连锁 API（`Match3.Board.Cascade` 的 `cascadeMatches` / `cascadeSeeds`）的普通 / 种子连锁 × 飞碟 / 传送门、各关开局 / 重开 / 下一关。
+- **H4–H6（段 1 追加，第 2187–2344 行）**：仓库与文档里没有 H4–H6 的现成定义，按下面三类代表性手工局面补齐：
+  - `H4-spread`：第 28 关（皮带 + 传送门 + 地毯 + 飞碟）再放藤 / 巧 / 蒸汽、两只蜗牛、将归零的倒计时和两块饼干——步末全部阶段（倒计时 → 皮带 → 蔓延 → 蜗牛 → 再连锁）同盘出现，蔓延源紧贴本步消除留下的空洞；局面第 4 步后连自动洗牌也救不回（`shuffle` 行连续出现），一并锁住。选它是因为 2c 的「步末之后补结算」就改在这里。
+  - `H5-layers`：第 37 关地毯上，冰（1–3 层）与锁链 / 草 / 迷雾 / 冰冻 / 窗帘 / 藤 / 巧 / 蒸汽同格，含直线 / 炸弹压叠层——「多种叠层同格」由注册表自上而下逐层询问，是第二刀元素框架最容易走偏的地方。
+  - `H6-shuffle`：经 `match3GameWith h6Reg`（内置表 + 一个不在盘上的测试探针元素）的 `Shuffle` / `Swap` 动作逐步「手动洗牌 → 交换」，再记一个斜纹死局的自动洗牌 `ensurePlayableWith h6Reg` 与手动洗牌——锁住「自定义注册表下的洗牌」，2c 修 `playWith` 洗牌分支时它必须不变。
+  - 生成与比对：`13094d1` 上用当前 `Golden.hs`、`31275da`（2b 之前）上用 `4fbcefc` 版 `Golden.hs` 加同一段 H4–H6（旧侧没有注册表，H6 直接调 `shuffleGame` / `trySwap` / `ensurePlayable`；文件存档在 `tools/golden/Golden-4fbcefc-h456.hs`，不参与编译），两边 2344 行逐字全等后才追加入库。
 - **行首**：`L05 s2 #07` = 第 5 关、种子 2、第 7 步；`H1-snail`、`C03/1`、`S07/2`、`G12 s5` 等为其他用例。
 - **投影**：格子短码（如 `2hi1+K2` = 颜色 2、横向直线、1 层冰、2 层锁链）、具名计数、`StdGen` 的 `show`；盘面与回放脚本（`mtWaves` / `mtEnd` 投影文本）用手写 FNV-1a 64 压缩。不对内部类型直接 `show`。
 - **取数路径**：入库时（`4fbcefc`）取数只经过门面 `Match3.Board` / `Match3.Game`，同一份代码在 `3bd26d8` 与 `5eef3e3` 上原样编译、输出全等（md5 `b792e77a…`）。第三刀删掉了这两个门面和元组兼容层，`Golden.hs` 改为直接 import `Match3.Board.*` / `Match3.Game.*` 子模块、从 `CascadeRun` 记录取连锁字段，盘面经 `boardRows` 投影——**它今后不能在 `51b1cfa` 及更早的提交上编译**；要和旧提交比对，把 `4fbcefc` 版的 `Golden.hs` 拿到旧提交上跑（输出与 `golden.txt` 逐字相同）。

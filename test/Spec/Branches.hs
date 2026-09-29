@@ -14,7 +14,7 @@ module Spec.Branches
 
 import Control.Monad (forM_)
 import Data.List (sort)
-import Data.Maybe (isNothing)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Grid (setM, toM)
 import Match3.Board.Match (findHintWith)
@@ -22,7 +22,10 @@ import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
 import Match3.Element.Class (Archetype(..), Element(..), Hit(..), SomeLevelElement(..), levelNameOf)
+import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
+import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Resolve (MoveKind(..), endTableFor)
 import qualified Match3.Snail as Snail
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -40,6 +43,7 @@ tests =
   , testCase "br_level_hooks_removed_in_play" br_level_hooks_removed_in_play
   , testCase "br_main_flow_no_special_branches" br_main_flow_no_special_branches
   , testCase "br_board_takes_hooks_only" br_board_takes_hooks_only
+  , testCase "br_end_phase_table_order" br_end_phase_table_order
   ]
 
 -- tripleBoard / tripleMove / isCustomNamed / firstWave 见 Spec.Support。
@@ -243,7 +247,7 @@ br_level_hooks_removed_in_play = do
             | otherwise = case findHintWith reg (gsBoard gs) of
                 Nothing -> (gs, reverse acc)
                 Just (a, b) -> let (gs', _, mt) = resolveSwapWith reg a b gs in go (n - 1) gs' ((gs, gs', mt) : acc)
-      beltShifts steps = [() | (_, _, mt) <- steps, EndStep {esEffect = EndBeltShift (_ : _)} <- mtEnd mt]
+      beltShifts steps = [() | (_, _, mt) <- steps, EndStep {esEffect = EndEffect EvBelt _ (_ : _)} <- mtEnd mt]
       levelsWith f = [li | li <- [0 .. length allLevels - 1], not (f (levelGame li 1))]
       ufoLv = levelsWith (null . gsUfos)
       beltLv = levelsWith (null . gsBelts)
@@ -306,4 +310,46 @@ br_board_takes_hooks_only = do
     | (f, s) <- zip everything allSrcs
     , w <- ["crUfos", "absorbWith", "beltShiftWith", "teleportWith", "coverWith", "applyPortalTeleportsWith", "SomeLevel", "Absorbed", "Shifted", "Settled", "Covered"]
     , mentionsIdent w s
+    ]
+
+-- | 第 7 刀（7b）：步末结算是一张 EndPhase 表，顺序与第 7 刀前的手写流程相同（交换：倒计时 → 皮带 → 蔓延 → 蜗牛 →
+-- 补结算，最后记地毯腾空盘面；道具：先记腾空盘面，再蔓延 → 补结算），每行跑的元素步末规则阶段写在表上；
+-- runEndTable 严格按表执行（空表 = 只有主连锁；蔓延行重复两次 = 蔓延两次、记录首尾相接）。
+-- 主流程（Resolve）不再手写各阶段：不直接调倒计时 / 皮带 / 蔓延 / 蜗牛的节拍函数。
+br_end_phase_table_order :: Assertion
+br_end_phase_table_order = do
+  map stageName swapEndTable @?= ["tick", "belt", "spread", "move", "settle", "vacate"]
+  map stagePhase swapEndTable @?= [Just PhaseTick, Nothing, Just PhaseSpread, Just PhaseMove, Nothing, Nothing]
+  map stageName boosterEndTable @?= ["vacate", "spread", "settle"]
+  map (map stageName . endTableFor) [KindSwap, KindHammer, KindFreeSwap, KindCross]
+    @?= map stageName swapEndTable : replicate 3 (map stageName boosterEndTable)
+  let gs = levelGame 4 1
+      reg = defaultRegistry
+      hint = findHintWith reg (gsBoard gs)
+      (a, b) = fromMaybe ((0, 0), (0, 1)) hint
+      seg0 = cascadeMatchesWith reg (Just b) (levelHooksWith reg (gsLevelElems gs)) (gsGen gs) (swapCells (gsBoard gs) a b)
+      (segsE, endsE, boardE, vacE) = runEndTable reg [] seg0
+      (_, ends1, board1, _) = runEndTable reg [spreadStage] seg0
+      (segs2, ends2, board2, _) = runEndTable reg [spreadStage, spreadStage] seg0
+  assertBool "L5 has a hint" (isJust hint)
+  length segsE @?= 1
+  endsE @?= []
+  (boardE, vacE) @?= (crBoard seg0, crBoard seg0)
+  assertBool "L5 spreads after the hint" (not (null ends1))
+  assertEqual "second spread row appends after the first" ends1 (take (length ends1) ends2)
+  assertBool "second spread row runs again" (length ends2 > length ends1 && board2 /= board1)
+  assertEqual "spread rows open no cascade segment" 1 (length segs2)
+  assertEqual "records chain" [esAfter e | e <- init ends2] [esBefore e | e <- drop 1 ends2]
+  resolve <- readFile "src/Match3/Game/Resolve.hs"
+  assertEqual "Resolve runs the table, not hand-written stages"
+    []
+    [w | w <- ["cascadeCountdownsTracedWith", "beltShiftIn", "traceSpreadsWith", "avoidCellsIn", "wallCellsIn", "endHolesWith", "swapEnd", "boosterEnd"], mentionsIdent w resolve]
+  everything <- sourcesUnderAll ["src", "app", "web/hs"]
+  allSrcs <- mapM readFile everything
+  assertEqual "closed end-effect constructors and first-replier asks are gone"
+    []
+    [ (f, w)
+    | (f, src) <- zip everything allSrcs
+    , w <- ["EndCountdownTick", "EndBeltShift", "EndSpread", "EndSnail", "SnailMove", "SpreadKind", "SpreadVine", "SpreadChoco", "SpreadSteam", "spreadOverlay", "smFrom", "smTo", "smDir", "smPushed", "spreadRGB", "askLevel", "askLevelIn"]
+    , mentionsIdent w src
     ]

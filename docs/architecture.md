@@ -46,6 +46,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 - 子模块之间单向依赖、无环（下文 `A ← B` 表示 B 依赖 A）：Board 内 `Grid ← Match ← Clear`、`Grid ← Gravity`、`Match ← Random`，`Cascade` 依赖 Grid / Match / Clear / Gravity；Game 内 `State ← Outcome / Shuffle / Trace`、`Shuffle ← Level`，`Resolve`（公共结算）依赖 State / Tally / Outcome / Shuffle / Trace，`Move` / `Boosters` 只做校验与起手选择、依赖 `Resolve`。Game 子模块直接 import 所需的 Board 子模块。
 - 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types`、`Element.Message` → `Element.Class`（元素类；`SomeElement` / `SomeModifier` 的相等第 6b 刀起按具体类型（`Typeable` 的 `cast`）+ 该类型的 `Eq`，不再比较名字字符串）→ `Element.Registry` → `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过注册表查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
 - 关卡级元素（第 7 刀）：`Element.Class`（`SomeLevelElement`）← `Board.Hooks`（钩子记录 `LevelHooks`，只把元素列表当不透明载荷）← `Board.Gravity` / `Board.Cascade`；`Element.Registry` / `Element.Builtin.Level` / `Board.Hooks` ← `Element.Level`（开局、节拍、造钩子）← `Board.Default`（`builtinHooks`）/ `Game.State` / `Game.Level` / `Game.Resolve`。`Element.Class` 为 `levelStart` 依赖 `Levels.Level`（关卡记录）。
+- 步末表（第 7b 刀）：`Board.Cascade` / `Element.Level` / `Game.Trace`（`EndStep`、`traceSpreadsWith`）← `Game.EndPhase`（`runEndTable`）← `Game.Resolve`（`endTableFor`）；步末效果的通用形状在 `Element.Event`。
 - 类型层（第 6 刀拆分）：`Match3.Color` / `Types.Name` ← `Types.Cell ← Types.Overlay / Types.Body`、`Types.Cell ← Types.Board ← Types.Game`（`Types.Game` 另依赖 `Match3.Goal`；`Types.Name` 无依赖，`Match3.Counts` 的 `CountNamed` 也用它），`Match3.Types` 只再导出这六个模块（导出列表与拆分前相同，只少了移走的关卡表、多了第 6b 刀的 `ElementName` / `CustomState`）；关卡层 `Levels.Level ← Levels.Campaign` 在 `Types` / `Element.Types`（放置表）/ `Ufo` / `Conveyor`（`Belt`）之上、`Game.Level` / `Daily` / `Game.Outcome` 之下。
 - 机制子模块（障碍、彩虹、合成、冰、草系、地毯、蜗牛、飞碟、倒计时、传送带、道具种子、每日）尽量只依赖 `Types`（及彼此必要的窄依赖），由 `Board.*` / `Game.*` 编排调用顺序。
 - 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/ComboFx.hs`（纯阶段机，按时间线把它拆成帧）→ `UI.Playback`（阶段事件 → 弹字 / 粒子 / 震屏）→ `UI.Cascade` / `UI.EndStage`（绘制）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
@@ -70,7 +71,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
 | `Match3.Element` | 门面：再导出 `Types` / `Registry` / `Builtin` / `Event` / `Level`（第 7 刀；元素类 `Class` 与 `Message` 单独 import，方法名 `name` / `color` / `pushable` 等较通用，避免与使用方撞名） | 自身无实现 |
 | `Match3.Element.Types` | 规则与查询结果的数据类型：`Slot`、`HitResult`、`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、`CounterKey`（再导出自 `Match3.Counts`，第 4 刀前叫 `Counter`）、`Arg` / `Placement`、`cellSlot` | 调用顺序 |
-| `Match3.Element.Registry` | `Registry`（名字 → 构造器 `Entry`；按层数组 O(1) 取解码器 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、解码 `elementOf`、各能力的查询函数 `*With`、关卡级元素的种类表 `registerLevel` / `removeLevel` / `levelDefs` / `askLevel`（问注册的原型值；第 7 刀删掉了带状态参数的 `absorbWith` / `beltShiftWith` / `teleportWith` / `coverWith`） | 具体元素、一局的关卡级状态（`Element.Level`） |
+| `Match3.Element.Registry` | `Registry`（名字 → 构造器 `Entry`；按层数组 O(1) 取解码器 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、解码 `elementOf`、各能力的查询函数 `*With`、关卡级元素的种类表 `registerLevel` / `removeLevel` / `levelDefs` / `askLevels`（问注册的原型值，第 7 刀 7b 起折叠所有回复者；第 7 刀删掉了带状态参数的 `absorbWith` / `beltShiftWith` / `teleportWith` / `coverWith`） | 具体元素、一局的关卡级状态（`Element.Level`） |
 | `Match3.Element.Builtin` | 汇总：条目表 `builtinDefs`（注册顺序固定，快照锁定）、`builtinLevelDefs` 与 `defaultRegistry`；再导出测试 / 扩展用的元素类型 | 具体元素的定义 |
 | `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色与特殊合成的成对交换规则、`specialBlast` | 障碍与叠层 |
 | `Match3.Element.Builtin.Layer` | 冰层 `Ice` 与 8 种叠层修饰器（草 / 藤 / 巧 / 迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 蒸汽），蔓延规则 | 本体 |
@@ -79,11 +80,11 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element.Builtin.Actor` | 会动或会生成东西的：魔法帽、果汁机、蜗牛（含 `traceSnails`）、染色瓶、倒计时 | 被动障碍（`Obstacle`） |
 | `Match3.Element.Builtin.Ground` | 地面层：果冻 | 占格本体 |
 | `Match3.Element.Builtin.Level` | 关卡级元素：飞碟 `UfoLevel [Ufo]`、皮带 `BeltLevel [Belt]`、传送门 `PortalLevel [(Pos,Pos)]`、地毯 `CarpetLevel [Pos]`、地面层 `GroundLayer Ground`（第 7 刀：状态在元素值里；按节拍消息回复并交回推进后的自身，开局状态 `levelStart` 取自关卡记录，飞碟 / 地毯的目标补齐也在这里）；`portalTeleport`（第 7 刀前在 `Board.Gravity`） | 一局里有哪些元素（`GameState.gsLevelElems`） |
-| `Match3.Element.Level` | 第 7 刀（7a）：一局的关卡级元素 `gsLevelElems`——开局 `startLevelsWith`（注册的各种 + 核心元素地面层）、每个节拍参与的元素 `activeLevels`（注册顺序取同名状态，没有则用原型；未注册的不参与，核心元素总参与）、`askLevelIn`（发消息并写回推进后的状态）、读写 `levelState` / `putLevel` 与内置读数 `levelUfos` / `levelBelts` / `levelPortals` / `levelCarpetOpen` / `levelGround`、给 Board 层的钩子 `levelHooksWith`、Game 层的节拍 `beltShiftIn` / `avoidCellsIn` / `wallCellsIn` / `coverIn` / `hitGroundIn` | 连锁顺序（`Board.Cascade`） |
+| `Match3.Element.Level` | 第 7 刀（7a）：一局的关卡级元素 `gsLevelElems`——开局 `startLevelsWith`（注册的各种 + 核心元素地面层）、每个节拍参与的元素 `activeLevels`（注册顺序取同名状态，没有则用原型；未注册的不参与，核心元素总参与）、`askLevelsIn`（发消息，第 7 刀 7b 起按参与顺序折叠所有回复者并依次写回推进后的状态）、读写 `levelState` / `putLevel` 与内置读数 `levelUfos` / `levelBelts` / `levelPortals` / `levelCarpetOpen` / `levelGround`、给 Board 层的钩子 `levelHooksWith`、Game 层的节拍 `beltShiftIn` / `avoidCellsIn` / `wallCellsIn` / `coverIn` / `hitGroundIn` | 连锁顺序（`Board.Cascade`） |
 | `Match3.Element.Builtin.Common` | 跨分组共用的辅助：`deadRule`（邻消打碎并入清除格）、`colorPlace`（按颜色放置） | 只在一组里用的辅助 |
 | `Match3.Element.Class` | 元素类（xmonad LayoutClass 风格）：`Element`（带默认实现的能力方法，默认由 `archetype` 推出）、`SomeElement`、修饰器 `Modifier` / `Modified`、惰性占格 `Inert`、关卡级元素 `LevelElement`（`levelName` / `levelReply` 返回（回复，推进后的自身）/ `levelStart` / `levelCore`）与存在类型 `SomeLevelElement`（第 7 刀前的 `SomeLevel` 没有状态；相等 = 同类型且值相等） | 具体元素 |
 | `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息（第 7 刀起问题与回复同类型，回复者在上面累加：`Refilled`、`EndTicked`、`Settling`、`Covering`、`GroundHit`，查询 `AvoidCells` / `WallCells`；第 7 刀前的 `Absorbed` / `Shifted` / `Settled` / `Covered` 已删） | 谁回复 |
-| `Match3.Element.Event` | `EndEffect` / `SpreadKind` / `SnailMove`、`applyEndEffect`、效果事件 `EventKind` / `Event` | 帧与样式 |
+| `Match3.Element.Event` | 通用步末效果 `EndEffect { endEffectKind, endEffectElement, endEffectItems }` / `EndItem { eiFrom, eiTo, eiCell, eiBack }`（第 7 刀 7b 取代四个构造器与 `SpreadKind` / `SnailMove`；`Show` 手写成旧构造器文本）、`applyEndEffect` / `endEffectPairs` / `endItemDir` / `spreadPairs`、效果事件 `EventKind` / `Event` | 帧与样式 |
 | `Match3.Core` | 再导出公共 API | 自身几乎无逻辑 |
 | `Match3.Board.Grid` | 坐标边界、读写格（`getCell` = `boardAt`，O(1)）、交换、相邻、可空盘面 `MBoard = Array Pos (Maybe Cell)`（第 3 刀起与 `Board` 同形的二维数组，`atM` / `setM` / `setManyM` 读写、`mboardRows` 转行列表；只在一轮消除 / 沉降内部使用，重力按列取出不再转置）、`randomColor` | 任何规则 |
 | `Match3.Board.Match` | `MatchRun` / `findMatchRuns` / `hasAnyMatch`、`findHint` / `hasValidMove`（第 3 刀起提示只对交换两格所在的行 / 列做局部匹配检查，其余行列用原盘的结果；遍历顺序与返回值不变，性质 `qc_find_hint_local_matches_reference` 与旧实现对照） | 修改盘面 |
@@ -99,7 +100,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Game.Shuffle` | 保装饰洗牌 `shuffleGame`、自动洗牌 `ensurePlayable` | 回放（洗牌不在 `mtEnd`） |
 | `Match3.Game.Level` | 开局 / 每日 / 重开 / 下一关（越界的关卡下标夹到关卡表范围）、`campaignGame :: Int -> Int -> Maybe GameState`、按关卡记录铺装饰 `decorateLevel`、关卡级元素由 `startLevelsWith` 按记录开出（第 7 刀；`newGameAtLevelWith reg` 用指定注册表开局）、目标补齐 `ensureGoalDecor`、步数携带；放置表返回 `Either PlaceError`，静态数据在 `placeStatic` 这一处转成带关卡名的 error | 关卡数据（`Levels.Campaign`）、走步 |
 | `Match3.Game.Trace` | `MoveTrace`（含 `mtGen` / `mtShuffle`）/ `EndStep`（`EndEffect` 等再导出自 `Element.Event`）、`traceSpreads`（跑注册表的蔓延规则）、`beltMoves`（再导出自 `Conveyor`）、效果事件 `traceEvents` | 结算 |
-| `Match3.Game.Resolve` | 交换与三种道具的**公共结算** `resolveMove`：主连锁 → 步末（交换：倒计时 / 皮带 / 蔓延 / 蜗牛 / 再连锁；道具：蔓延）→ 计数与目标 → 结局 → 自动洗牌，同时产出 `MoveTrace` | 入口校验（在 `Move` / `Boosters`） |
+| `Match3.Game.EndPhase` | 第 7 刀 7b：步末表 `EndStage { stageName, stagePhase, stageRun }`、累积器 `EndAcc`、`swapEndTable`（tick → belt → spread → move → settle → vacate）/ `boosterEndTable`（vacate → spread → settle）、`runEndTable`、各行 `tickStage` … `vacateStage`、`runPhase` | 计数、结局（在 `Resolve`） |
+| `Match3.Game.Resolve` | 交换与三种道具的**公共结算** `resolveMove`：主连锁 → 步末（按 `endTableFor` 选的 EndPhase 表执行）→ 计数与目标 → 结局 → 自动洗牌，同时产出 `MoveTrace` | 入口校验（在 `Move` / `Boosters`）、步末各阶段（在 `EndPhase`） |
 | `Match3.Game.Move` | `resolveSwap`（校验 + 起手选择）及其投影 `trySwap`（= `runMove`）/ `traceSwap` | 道具 |
 | `Match3.Game.Boosters` | `resolveHammer` / `resolveFreeSwap` / `resolveCrossClear` 及其投影 `use*` / `trace*` | 种子几何（见 `Match3.Boosters`） |
 | `Match3.Obstacles` | 石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/瓶子/精灵/魔法帽/果汁机的邻消削层与触发 | 连锁循环 |
@@ -194,7 +196,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 一步操作 | `Match3.Game.Resolve.resolveMove`（交换与三种道具共用；`Move.resolveSwap` / `Boosters.resolve*` 只做校验与起手选择） | `trySwap` / `use*` = 取 `(GameState, Outcome)` | `trace*` = 取 `MoveTrace` | `trace_swap_final_equals_trySwap`、`trace_boosters_final_equal_result`、`trace_rejected_move_is_empty`、`trace_shuffle_step_replays` |
 | 步末描述 | 结算直接使用 `Match3.Game.Trace` 的 `traceSpreads` / `traceSnails` 返回的盘面；`applyEndEffect` 把 `EndEffect` 重放回盘面 | — | `mtEnd` | `trace_end_steps_replay_to_trySwap_final`、`trace_end_steps_boosters_replay`、`trace_end_snail_push_and_turn`、`trace_end_spread_from_adjacent_source` |
 
-皮带：第三刀起 `Conveyor.beltMoves` 是唯一实现，结算（`applyBeltMoves`）、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用同一份「原格 → 新格」表。行为金标准见 [testing.md](testing.md#行为金标准golden)；护栏细节与底线见 [testing.md](testing.md#逐轮回放护栏)；前端时间线见 [ui-art.md](ui-art.md#连击表现逐轮回放)。
+皮带：第三刀起 `Conveyor.beltMoves` 是唯一实现，结算（`applyBeltMoves`）、回放描述（`EvBelt` 步末效果）与重放（`applyEndEffect`）共用同一份「原格 → 新格」表。行为金标准见 [testing.md](testing.md#行为金标准golden)；护栏细节与底线见 [testing.md](testing.md#逐轮回放护栏)；前端时间线见 [ui-art.md](ui-art.md#连击表现逐轮回放)。
 
 ## 元素框架与事件
 
@@ -228,7 +230,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `keepOnShuffle` | 洗牌时原样放回 | `Game.Shuffle.extractDecorWith` / `ensurePlayableWith` |
 | `blast` | 被消除且能点火时的爆炸范围 | `Clear.expandSpecials` |
 | `groundRule` | 地面层（`SlotGround`）：上方格子每被消除 / 收走一次，层数 → 新层数（`Nothing` = 清掉）；每去掉一层按 `counter` 计 1 | `Registry.hitGroundWith`（`Game.Resolve` 逐轮调用） |
-| `endRule` | 步末规则 `EndRule{erPhase, erOrder, erRun, erHoles}`：`PhaseTick`（倒计时）→ 皮带 → `PhaseSpread`（蔓延）→ `PhaseMove`（蜗牛）→ 再连锁；`erHoles` 在全部步末阶段之后给出要挖空的格，由 `cascadeAfterEndWith` 补结算 | `Game.Resolve.runPhase`、`Cascade.cascadeCountdownsWith`、`Trace.traceSpreadsWith` |
+| `endRule` | 步末规则 `EndRule{erPhase, erOrder, erRun, erHoles}`：`PhaseTick`（倒计时）→ 皮带 → `PhaseSpread`（蔓延）→ `PhaseMove`（蜗牛）→ 再连锁；`erHoles` 在全部步末阶段之后给出要挖空的格，由 `cascadeAfterEndWith` 补结算 | `Game.EndPhase`（步末表的 `tick` / `spread` / `move` 行、`runPhase`）、`Cascade.cascadeCountdownsWith`、`Trace.traceSpreadsWith` |
 | `handleMessage` | 开放消息：`Nothing` = 不关心，`Just` = 新的元素值（可以换成别的元素） | `sendMessage`（内置格内元素目前都不收消息；护栏见 `ec_open_messages`） |
 
 规则类方法（`adjacentRule` / `endRule` / `swapRule` / `openRule` / `groundRule`）描述「这类元素」在一轮里怎么作用于盘面，注册表在注册时从原型值上取一次；其余方法逐格调用：先把格子解码成元素值（`elementOf`），再调方法。
@@ -239,13 +241,13 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 **关卡级元素**（`LevelElement`：`levelName`、`levelReply :: l -> SomeMessage -> Maybe (SomeMessage, l)`、`levelStart :: Level -> l -> l`、`levelCore :: l -> Bool`）：飞碟 / 皮带 / 传送门 / 地毯 / 地面层。第 7 刀（7a）起与格子元素同一写法：**状态在元素值里**（`UfoLevel [Ufo]`、`BeltLevel [Belt]`、`PortalLevel [(Pos,Pos)]`、`CarpetLevel [Pos]`、`GroundLayer Ground`），一局的全部关卡级元素是 `GameState.gsLevelElems :: [SomeLevelElement]`（取代第 7 刀前的五个专用字段；旧名 `gsUfos` 等改为派生读数）。开局由 `Element.Level.startLevelsWith reg 关卡记录` 开出：注册表里的各种（注册顺序）+ 核心元素（地面层），各自的 `levelStart` 从关卡记录取初始状态（飞碟 / 地毯没有放置而目标需要时的补齐也在 `levelStart` 里）。
 
-主流程在固定的流水线节拍上发消息，关卡级元素自己决定回复哪条；回复 = （同类型的消息，回复者在上面累加自己的结果；推进后的自身），推进后的状态写回 `gsLevelElems`。每个节拍参与的元素（`activeLevels`）= 注册顺序的各种（取 `gsLevelElems` 里同名的状态，没有则用注册的原型值）+ `gsLevelElems` 里的核心元素；**未注册（或 `removeLevel` 去掉）的名字即使状态在 `gsLevelElems` 里也不参与**（同未注册的 `Custom` 格按惰性占格处理）。第 7a 刀仍取第一个回复者（`askLevelIn`）：
+主流程在固定的流水线节拍上发消息，关卡级元素自己决定回复哪条；回复 = （同类型的消息，回复者在上面累加自己的结果；推进后的自身），推进后的状态写回 `gsLevelElems`。每个节拍参与的元素（`activeLevels`）= 注册顺序的各种（取 `gsLevelElems` 里同名的状态，没有则用注册的原型值）+ `gsLevelElems` 里的核心元素；**未注册（或 `removeLevel` 去掉）的名字即使状态在 `gsLevelElems` 里也不参与**（同未注册的 `Custom` 格按惰性占格处理）。第 7 刀 7b 起**折叠所有回复者**（`askLevelsIn`：按参与顺序，前一个的回复是后一个的问题，各自推进后的状态依次写回；7a 取第一个回复者，内置元素每种消息只有一个回复者，结果相同）：
 
 | 节拍消息（问题 = 回复的类型） | 时机 | 内置回复者 | 主流程入口 |
 |------|------|------|------|
 | `Refilled 盘 吸走格` | 每轮补子之后 | `UfoLevel`（`stepUfos`，飞碟移动） | 钩子 `onAbsorb`（`Board.Cascade.absorbRound`） |
-| `EndTicked 移位表` | 玩家交换的步末，倒计时之后、蔓延之前；没有皮带时不回复 | `BeltLevel`（`beltMoves`） | `Element.Level.beltShiftIn`（`Resolve.swapEnd`） |
-| `AvoidCells 格` / `WallCells 格` | 会走的元素（PhaseMove）之前 | `BeltLevel`（皮带格）/ `PortalLevel`（门端点） | `avoidCellsIn` / `wallCellsIn`（`Resolve.swapEnd` 的 `EndCtx`） |
+| `EndTicked 移位表` | 玩家交换的步末，倒计时之后、蔓延之前；没有皮带时不回复 | `BeltLevel`（`beltMoves`） | `Element.Level.beltShiftIn`（步末表 `belt` 行） |
+| `AvoidCells 格` / `WallCells 格` | 会走的元素（PhaseMove）之前 | `BeltLevel`（皮带格）/ `PortalLevel`（门端点） | `avoidCellsIn` / `wallCellsIn`（步末表 `move` 行的 `EndCtx`） |
 | `Settling 可穿门谓词 可空盘` | 沉降时 | `PortalLevel`（`portalTeleport`） | 钩子 `onSettle`（`Board.Gravity.settleDrainWith`） |
 | `Covering 本步格 新覆盖数` | 步末结算 | `CarpetLevel`（`coverCarpets`） | `coverIn`（`Resolve`） |
 | `GroundHit 规则 命中格 去层数` | 每轮之后（按轮） | `GroundLayer`（规则 = 注册表的 `hitGroundWith`；核心元素） | `hitGroundIn`（`Resolve`） |
@@ -351,9 +353,9 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 地面层元素的 `toCell` 只用于显示 | 保留 | 地面层在 `GroundLayer` 的状态里（`gsGround` 读数）、不进盘面，`toCell` 写回的格子不会落到 `Board` 上 |
 | 地面层是核心关卡级元素（`levelCore`），不在 `levelDefs` 里 | 保留（第 7 刀） | 地面层里每层元素的行为已由注册表的地面层条目（`groundEntry`）决定，关卡级这一层只是承载；把它加进 `levelDefs` 会改变元素查询快照的 `R level` 行 |
 | 冰层 / 叠层槽位没有注册条目时的兜底 | 行为略有不同 | 新版直接跳过这一层（不当修饰器询问）；旧版按 `baseDef` 缺省把它当一层惰性层（挡交换、打不动）。内置注册表恒含全部冰层 / 叠层条目，不影响内置元素与金标准 |
-| `Resolve` 仍 import `Conveyor.applyBeltMoves`；`Trace` 重放 `EndBeltShift` 时也直接用它；`Trace` 再导出 `beltMoves` | 保留 | `applyBeltMoves` 是「按 (原格, 新格) 列表移格」的通用搬运，与皮带语义无关；再导出只为兼容旧 import |
+| `Game.EndPhase`（皮带行）仍 import `Conveyor.applyBeltMoves`；`Trace` 再导出 `beltMoves` | 保留 | `applyBeltMoves` 是「按 (原格, 新格) 列表移格」的通用搬运，与皮带语义无关；再导出只为兼容旧 import |
 | `Rainbow` / `Combos` / `Obstacles` / `Snail` 里的规则实现本身 | 保留 | 实现仍在各自模块，只是改由 `Element.Builtin` 的 instance 引用；旧的 `*Except` / `stepSnailAtBlocked` 保留为 `By isGem` / `By pushable` 的包装（测试与 `Board.Default` 在用） |
-| `SpreadKind` | 保留 | 封闭 ADT，被步末蔓延规则与前端取色穷举匹配（`LevelGoal` 第 5 刀起是数据：计数键 + 目标值，新元素用 `goalCount (CountNamed 名字) N` 作目标） |
+| `EventKind` | 保留 | 封闭枚举，是前端播放表的键；第 7 刀 7b 起步末效果本身是通用形状（`SpreadKind` 已删，蔓延种类即元素名），新步末元素复用已有事件类型（如 `EvMove`）即可接入 |
 
 ### 元素类（阶段 1 原型 → 阶段 2 迁移）
 

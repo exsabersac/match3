@@ -4,12 +4,12 @@
 -- 第二刀之前，trySwap 与三种道具各有一份几乎相同的结算代码（计数、目标、结局、洗牌四处重复），
 -- 回放 trace* 又各自重算一遍；现在四处入口只负责「校验 + 选择起手方式」，其余全部在这里。
 --
--- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、元素注册表
--- （步末阶段 PhaseTick / PhaseSpread / PhaseMove 的规则、按差计数、地毯腾空都查注册表）、Element.Level（第 7 刀：
+-- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、EndPhase（第 7 刀 7b：步末表）、
+-- 元素注册表（按差计数、地毯腾空都查注册表）、Element.Level（第 7 刀：
 -- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经节拍消息）。
 -- 不变量（逐字保持旧行为，金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
---     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛；
+--     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛（第 7 刀 7b 起写成 EndPhase 表，见 endTableFor）；
 --   * 连击数：第一段的最大波次，之后每段有清除时叠加该段的最大波次；
 --   * 交换耗 1 步，道具不耗步但扣对应次数；时间精灵每只 +2 步；
 --   * 只有 MoveApplied（未终局）才调用 ensurePlayable；洗牌前的盘面 / 生成器记在 mtFinal / mtGen。
@@ -18,38 +18,31 @@ module Match3.Game.Resolve
   , Opening(..)
   , resolveMove
   , resolveMoveWith
+  , endTableFor
   , combineCombo
   ) where
 
 import Data.List (nub)
-import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import Match3.Board.Cascade
   ( CascadeRun(..)
   , CascadeTally(..)
   , CascadeWave(..)
-  , AfterEntry(..)
-  , cascadeAfterWith
-  , endHolesWith
-  , cascadeCountdownsTracedWith
   , cascadeMatchesWith
   , cascadeSeedsWith
-  , stillRun
   )
-import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Board.Hooks (LevelHooks(..))
-import Match3.Element.Level (avoidCellsIn, beltShiftIn, coverIn, hitGroundIn, levelHooksWith, wallCellsIn)
-import Match3.Element.Registry (Registry, endRules, pushableWith)
+import Match3.Element.Level (coverIn, hitGroundIn, levelHooksWith)
+import Match3.Element.Registry (Registry)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
-import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
+import Match3.Game.EndPhase (EndStage, boosterEndTable, runEndTable, swapEndTable)
 import Match3.Types
 import Match3.Game.Outcome
 import Match3.Game.Shuffle
 import Match3.Game.State
 import Match3.Game.Tally
 import Match3.Game.Trace
-import System.Random (StdGen)
 
 -- | 操作种类：决定步末效果、步数 / 道具次数的扣法。
 data MoveKind = KindSwap | KindHammer | KindFreeSwap | KindCross
@@ -80,8 +73,8 @@ resolveMoveWith reg kind start opening gs =
       seg0 = case opening of
         OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) start
         OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) start
-      (segs, ends, board1, vacateAfter) =
-        if kind == KindSwap then swapEnd reg seg0 else boosterEnd reg seg0
+      -- 步末：按表的顺序执行（第 7 刀 7b）
+      (segs, ends, board1, vacateAfter) = runEndTable reg (endTableFor kind) seg0
       finalSeg = NE.last segs
       tallies1 = NE.map crTally segs
       tallies = NE.toList tallies1
@@ -155,64 +148,6 @@ resolveMoveWith reg kind start opening gs =
           }
   in (gs''', outcome, trace)
 
--- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
-runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
-runPhase reg ph ctx k b0 =
-  let (stepsRev, b1) = foldl one ([], b0) (endRules reg ph)
-  in (reverse stepsRev, b1)
-  where
-    -- 反向累积，收尾再反转
-    one (accRev, before) rule =
-      let (eff, after) = erRun rule ctx before
-      in ([EndStep k before after e | Just e <- [eff]] ++ accRev, after)
-
--- | 玩家交换的步末：倒计时（PhaseTick）→ 皮带 → 蔓延（PhaseSpread）→ 会走的元素（PhaseMove）→（成消）再连锁。
--- 返回 (四段连锁, 步末记录, 终盘, 地毯腾空比较用的盘面)。关卡级元素（皮带节拍、会走元素的避让格与墙）都经 seg0 的钩子里的状态问。
-swapEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-swapEnd reg seg0 =
-  let ws0 = crWaves seg0
-      board0' = crBoard seg0
-      -- 倒计时 tick / 归零爆炸（带关卡级钩子）
-      -- 倒计时规则只跑一遍：同时得到连锁与步末记录
-      (tickSteps, seg1) = cascadeCountdownsTracedWith reg (crHooks seg0) (crGen seg0) board0'
-      endTick = [EndStep (length ws0) before after e | (before, after, e) <- tickSteps]
-      -- 皮带是关卡级元素：在「倒计时之后」这一节拍发 EndTicked 消息取移位；没人回复时当作没有皮带
-      elems1 = hookLevel (crHooks seg1)
-      (hasBelts, mvBelt, hooks1) = case beltShiftIn reg elems1 of
-        Just (mv, es) -> (True, mv, levelHooksWith reg es)
-        Nothing -> (False, [], crHooks seg1)
-      -- 皮带：移位后连锁 / 沉降（收皮带送到底行的饼干）
-      boardCd = crBoard seg1
-      boardBelt = applyBeltMoves boardCd mvBelt
-      nBelt = length ws0 + length (crWaves seg1)
-      endBelt =
-        [ EndStep nBelt boardCd boardBelt (EndBeltShift mvBelt)
-        | hasBelts
-        , not (null mvBelt)
-        ]
-      seg2 =
-        if not hasBelts
-          then stillRun boardCd hooks1 (crGen seg1)
-          else cascadeAfterWith reg AfterBelt hooks1 (crGen seg1) boardBelt
-      -- 蔓延，然后会走的元素（跳过皮带格；传送门端点当墙：都问关卡级元素）
-      boardBeltCas = crBoard seg2
-      nEnd = nBelt + length (crWaves seg2)
-      elems2 = hookLevel (crHooks seg2)
-      avoid = nub (avoidCellsIn reg elems2)
-      walls = nub (wallCellsIn reg elems2)
-      (endSpread, boardSpread) = traceSpreadsWith reg nEnd boardBeltCas
-      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx avoid walls (pushableWith reg)) nEnd boardSpread
-      -- 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁；
-      -- 不再重复步末效果。内置元素没有空洞时等于旧的「成消才连锁」。
-      seg3 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSnail)) (crHooks seg2) (crGen seg2) boardSnail
-      board1 = crBoard seg3
-  in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
-
--- | 道具的步末：只有蔓延。地毯腾空比较用蔓延前的盘面（与旧实现一致）。
-boosterEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-boosterEnd reg seg0 =
-  let boardH = crBoard seg0
-      (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
-      -- 步末补结算（同交换的统一路径；蔓延不会造出匹配，内置元素没有空洞时恒等）
-      seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crHooks seg0) (crGen seg0) boardSp
-  in (seg0 :| [seg1], ends, crBoard seg1, boardH)
+-- | 各操作种类的步末表（Match3.Game.EndPhase）：交换 = tick → belt → spread → move → settle → vacate；道具 = vacate → spread → settle。
+endTableFor :: MoveKind -> [EndStage]
+endTableFor kind = if kind == KindSwap then swapEndTable else boosterEndTable

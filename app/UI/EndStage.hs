@@ -17,11 +17,13 @@ module UI.EndStage
 
 import Art
 import ComboFx
+import Control.Applicative ((<|>))
 import Control.Monad (forM_, void)
+import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.Element.Event (endEffectElement, endEffectPairs)
+import Match3.Element.Event (EventKind (..))
 import SDL hiding (Normal)
 import UI.BoardArt
 import UI.BoardPrim
@@ -129,31 +131,34 @@ drawEndSpread ren app t st = do
 -- | 蜗牛：沿爬行方向平滑挪一格（轻微一拱），被推的宝石同时退到蜗牛原格；碰壁的蜗牛原地翻身掉头。
 drawEndSnail :: Renderer -> App -> Double -> EndStage -> IO ()
 drawEndSnail ren app t st = do
-  let ms = [m | es <- stSteps st, EndSnail xs <- [esEffect es], m <- xs]
+  let ms = [m | es <- stSteps st, endEffectKind (esEffect es) == EvMove, m <- endEffectItems (esEffect es)]
       e = smoothT t
-  drawCellsExcept ren app (stBefore st) (concat [[smFrom m, smTo m] | m <- ms])
+  drawCellsExcept ren app (stBefore st) (concat [[eiFrom m, eiTo m] | m <- ms])
   forM_ ms $ \m -> do
-    let (x0, y0) = cellOrigin (smFrom m)
-        (x1, y1) = cellOrigin (smTo m)
-    if smFrom m == smTo m
+    let (x0, y0) = cellOrigin (eiFrom m)
+        (x1, y1) = cellOrigin (eiTo m)
+    if eiFrom m == eiTo m
       then do
         -- 掉头：横向压扁到 0 再展开，中点换朝向
         let sq = abs (cos (pi * t))
             w = max 2 (round (fromIntegral cellPx * sq)) :: CInt
             hop = round (4 * sin (pi * t)) :: CInt
-            dir = if t < 0.5 then oldDir m else smDir m
+            dir = if t < 0.5 then oldDir m else newDir m
         drawSnailAt ren app (x0 + (cellPx - w) `div` 2) (y0 - hop) w dir
       else do
         -- 被推的宝石交错时往侧面让一点，两者都看得见
         let side = round (9 * sin (pi * t)) :: CInt
             (sx, sy) = if y0 == y1 then (0, side) else (side, 0)
-        forM_ (smPushed m) $ \cell -> drawCellAny ren app (lerpC x1 x0 e + sx) (lerpC y1 y0 e + sy) cell False
+        forM_ (eiBack m) $ \cell -> drawCellAny ren app (lerpC x1 x0 e + sx) (lerpC y1 y0 e + sy) cell False
         let hop = round (5 * sin (pi * t)) :: CInt
-        drawSnailAt ren app (lerpC x0 x1 e) (lerpC y0 y1 e - hop) cellPx (smDir m)
+        drawSnailAt ren app (lerpC x0 x1 e) (lerpC y0 y1 e - hop) cellPx (newDir m)
   where
-    oldDir m = case getCell (stBefore st) (smFrom m) of
-      Snail dr dc -> (dr, dc)
-      _ -> smDir m
+    -- 朝向：新朝向 = 这一项写入的蜗牛（endItemDir），旧朝向 = 前盘上起点的蜗牛；缺一个时用另一个
+    beforeDir m = case getCell (stBefore st) (eiFrom m) of
+      Snail dr dc -> Just (dr, dc)
+      _ -> Nothing
+    newDir m = fromMaybe (0, 1) (endItemDir m <|> beforeDir m)
+    oldDir m = fromMaybe (0, 1) (beforeDir m <|> endItemDir m)
 
 -- | 按朝向画蜗牛（宽度可压扁，用于掉头翻身）。
 drawSnailAt :: Renderer -> App -> CInt -> CInt -> CInt -> (Int, Int) -> IO ()

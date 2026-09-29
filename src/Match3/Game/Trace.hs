@@ -4,7 +4,8 @@
 -- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreads（beltMoves 再导出自 Conveyor），
 -- 以及从回放脚本派生效果事件的 traceEvents。
 --
--- 第二刀 2b：EndEffect / SpreadKind / SnailMove / applyEndEffect / spreadPairs 搬到 Match3.Element.Event，
+-- 第二刀 2b：EndEffect / applyEndEffect / spreadPairs 搬到 Match3.Element.Event（第 7 刀 7b 起 EndEffect 是通用形状
+-- 「事件类型 + 元素名 + 逐项 EndItem」，SpreadKind / SnailMove 已删），
 -- traceSnails 搬到 Match3.Element.Builtin（蜗牛的步末规则），这里原样再导出。蔓延改为依次执行注册表里
 -- PhaseSpread 阶段的步末规则。
 --
@@ -16,10 +17,10 @@ module Match3.Game.Trace
   ( MoveTrace(..)
   , EndStep(..)
   , EndEffect(..)
-  , SpreadKind(..)
-  , SnailMove(..)
+  , EndItem(..)
   , applyEndEffect
-  , spreadOverlay
+  , endEffectPairs
+  , endItemDir
   , spreadPairs
   , traceSpreads
   , traceSpreadsWith

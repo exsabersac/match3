@@ -92,21 +92,21 @@ tickRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 tickRun _ b =
   let b' = tickCountdowns b
       ticked = [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p /= getCell b' p]
-  in (if null ticked then Nothing else Just (EndCountdownTick ticked), b')
+  in (if null ticked then Nothing else Just (EndEffect EvTick "countdown" [EndItem p p (getCell b' p) Nothing | p <- ticked]), b')
 
 -- | 蜗牛爬行（跳过本步被皮带移过的格，传送门端点当墙）。
 snailRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 snailRun ctx b =
   let (ms, b') = traceSnailsBy (ecPushable ctx) (ecAvoid ctx) (ecWalls ctx) b
-  in (if null ms then Nothing else Just (EndSnail ms), b')
+  in (if null ms then Nothing else Just (EndEffect EvMove "snail" ms), b')
 
 -- | stepSnailsAvoidingBlocked 的逐只记录版：对同一快照顺序逐只调用 stepSnailAtBlocked，
 -- 结果盘面与原函数完全一致（测试锁定）。
-traceSnails :: [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
+traceSnails :: [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnails = traceSnailsBy Snail.pushable
 
 -- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 注册表的 pushable）。
-traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
+traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnailsBy canPush avoid walls b0 =
   let (movesRev, b1) = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
   in (reverse movesRev, b1)
@@ -117,8 +117,8 @@ traceSnailsBy canPush avoid walls b0 =
         let board' = stepSnailAtBy canPush walls board pos
             next = (fst pos + dr, snd pos + dc)
             mv = case getCell board' pos of
-              Snail dr' dc' -> SnailMove pos pos (dr', dc') Nothing
-              pushed -> SnailMove pos next (dr, dc) (Just pushed)
+              Snail dr' dc' -> EndItem pos pos (Snail dr' dc') Nothing
+              pushed -> EndItem pos next (Snail dr dc) (Just pushed)
         in (mv : acc, board')
       _ -> (acc, board)
 

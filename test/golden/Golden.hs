@@ -233,17 +233,25 @@ pWave w =
     , show (cwScore w)
     ]
 
+-- 第 7 刀 7b：EndEffect 改为通用形状（事件类型 + 元素名 + 逐项 EndItem），这里按事件类型手写成与之前逐字相同的文本。
 pEffect :: EndEffect -> String
-pEffect e = case e of
-  EndCountdownTick ps -> "tick" ++ pPosList ps
-  EndBeltShift mv -> "belt" ++ concat [pPos a ++ ">" ++ pPos b ++ ";" | (a, b) <- mv]
-  EndSpread k ps -> "spread" ++ pSpread k ++ concat [pPos a ++ ">" ++ pPos b ++ ";" | (a, b) <- ps]
-  EndSnail ms -> "snail" ++ concat [pPos (smFrom m) ++ ">" ++ pPos (smTo m) ++ "d" ++ show (fst (smDir m)) ++ ":" ++ show (snd (smDir m)) ++ "p" ++ maybe "-" pCell (smPushed m) ++ ";" | m <- ms]
+pEffect e = case endEffectKind e of
+  EvTick -> "tick" ++ pPosList (map eiTo items)
+  EvBelt -> "belt" ++ pairsText
+  EvSpread -> "spread" ++ pSpread (endEffectElement e) ++ pairsText
+  EvMove -> "snail" ++ concat [pPos (eiFrom m) ++ ">" ++ pPos (eiTo m) ++ pDir (endItemDir m) ++ "p" ++ maybe "-" pCell (eiBack m) ++ ";" | m <- items]
+  k -> show k ++ pairsText
   where
-    pSpread k = case k of
-      SpreadVine -> "V"
-      SpreadChoco -> "C"
-      SpreadSteam -> "S"
+    items = endEffectItems e
+    pairsText = concat [pPos a ++ ">" ++ pPos b ++ ";" | (a, b) <- endEffectPairs e]
+    pDir d = case d of
+      Just (dr, dc) -> "d" ++ show dr ++ ":" ++ show dc
+      Nothing -> "d?"
+    pSpread n = case n of
+      "vine" -> "V"
+      "choco" -> "C"
+      "steam" -> "S"
+      _ -> unElementName n
 
 pEnd :: EndStep -> String
 pEnd s = intercalate "|" [show (esAfterWaves s), pBoard (esBefore s), pBoard (esAfter s), pEffect (esEffect s)]

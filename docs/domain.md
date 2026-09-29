@@ -143,8 +143,8 @@
 | 得分浮字 | 「+N」 | 每轮 `cwScore`，从本轮消除格中心飘起 |
 | 回放脚本 | `MoveTrace { mtStart, mtWaves, mtFinal, mtEnd, mtGen, mtShuffle }` | `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear` 生成；`mtFinal` / `mtGen` 为洗牌前的稳定盘与生成器，`mtShuffle` 为洗牌后盘面 |
 | 步末效果 | `EndStep { esAfterWaves, esBefore, esAfter, esEffect }` | 插在第 `esAfterWaves` 轮之后的非消除变化 |
-| 步末效果种类 | `EndEffect` = `EndCountdownTick` / `EndBeltShift` / `EndSpread SpreadKind` / `EndSnail [SnailMove]` | 倒计时减一 / 皮带移位 / 藤·巧·蒸汽蔓延 / 蜗牛爬行；`applyEndEffect` 可重放回盘面 |
-| 蜗牛一步 | `SnailMove { smFrom, smTo, smDir, smPushed }` | `smFrom == smTo` 表示碰壁掉头 |
+| 步末效果 | `EndEffect { endEffectKind, endEffectElement, endEffectItems }`（第 7 刀 7b 起的通用形状） | 事件类型 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` + 元素名 countdown / belt / vine·choco·steam / snail；`applyEndEffect` 逐项重放回盘面 |
+| 步末一项 | `EndItem { eiFrom, eiTo, eiCell, eiBack }` | 目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它；蜗牛 `eiFrom == eiTo` 表示碰壁掉头，新朝向 = `endItemDir` |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
 | 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
 | 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |

@@ -14,6 +14,7 @@ import Data.List (nub, sort)
 import Data.Maybe (isJust)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crHooks), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
+import Match3.Element.Event (EventKind(..))
 import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import qualified Match3.Engine as M3E
@@ -460,7 +461,7 @@ trace_end_steps_replay_to_trySwap_final = do
     ]
   sequence_
     [ assertBool ("sample covers end effect " ++ k ++ " (seen " ++ show (length (filter (== k) names)) ++ ")") (k `elem` names)
-    | k <- ["tick", "belt", "SpreadVine", "SpreadChoco", "SpreadSteam", "snail"]
+    | k <- ["countdown", "belt", "vine", "choco", "steam", "snail"]
     ]
 
 -- | 道具（锤子 / 十字 / 自由交换）只有蔓延类步末效果，重放后同样到达终盘。
@@ -473,7 +474,7 @@ trace_end_steps_boosters_replay = do
         case out of
           MoveApplied _ | not (gsShuffled gs1) -> assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
           _ -> pure ()
-        assertBool (tag ++ ": boosters only spread") (all (`elem` ["SpreadVine", "SpreadChoco", "SpreadSteam"]) ks)
+        assertBool (tag ++ ": boosters only spread") (all (`elem` ["vine", "choco", "steam"]) ks)
         pure ks
     | li <- [4, 9, 15, 27, 35]
     , seed <- [1 .. 2 :: Int]
@@ -485,7 +486,8 @@ trace_end_steps_boosters_replay = do
     ]
   assertBool "booster sample includes a spread" (not (null names))
 
--- | 蜗牛：碰壁原地掉头（smFrom == smTo，朝向反转），前方是宝石则爬过去、宝石换到原格。
+-- | 蜗牛：碰壁原地掉头（eiFrom == eiTo，朝向反转），前方是宝石则爬过去、宝石换到原格
+-- （第 7 刀 7b：通用 EndEffect，事件类型 EvMove、元素名 snail，逐项 EndItem）。
 trace_end_snail_push_and_turn :: Assertion
 trace_end_snail_push_and_turn = do
   let base = newGame defaultConfig 7
@@ -507,14 +509,15 @@ trace_end_snail_push_and_turn = do
     ((p1, p2, gs1) : _) -> do
       let mt = traceSwap p1 p2 gs0
       _ <- replayTimeline "snail" mt
-      case [(e, ms) | e <- mtEnd mt, EndSnail ms <- [esEffect e]] of
+      case [(e, endEffectItems (esEffect e)) | e <- mtEnd mt, endEffectKind (esEffect e) == EvMove] of
         [(e, ms)] -> do
-          assertBool "wall snail turns in place" (SnailMove (0, 0) (0, 0) (0, 1) Nothing `elem` ms)
-          case [m | m <- ms, smFrom m == (3, 3)] of
+          unElementName (endEffectElement (esEffect e)) @?= "snail"
+          assertBool "wall snail turns in place" (EndItem (0, 0) (0, 0) (mkSnail 0 1) Nothing `elem` ms)
+          case [m | m <- ms, eiFrom m == (3, 3)] of
             [m] -> do
-              smTo m @?= (3, 4)
-              smDir m @?= (0, 1)
-              smPushed m @?= Just (getCell (esBefore e) (3, 4))
+              eiTo m @?= (3, 4)
+              endItemDir m @?= Just (0, 1)
+              eiBack m @?= Just (getCell (esBefore e) (3, 4))
             other -> assertFailure ("expected one move for snail at (3,3), got " ++ show other)
         other -> assertFailure ("expected exactly one snail end step, got " ++ show (length other))
       when (not (gsShuffled gs1)) $ gsBoard gs1 @?= mtFinal mt
@@ -527,16 +530,17 @@ trace_end_snail_push_and_turn = do
 trace_end_spread_from_adjacent_source :: Assertion
 trace_end_spread_from_adjacent_source = do
   let found =
-        [ (kind, pairs)
+        [ (unElementName (endEffectElement eff), endEffectPairs eff)
         | li <- [4, 9]
         , seed <- [1 .. 3 :: Int]
         , let gs0 = levelGame li seed
         , Just (p1, p2) <- [findHint (gsBoard gs0)]
         , e <- mtEnd (traceSwap p1 p2 gs0)
-        , EndSpread kind pairs <- [esEffect e]
+        , let eff = esEffect e
+        , endEffectKind eff == EvSpread
         ]
-  assertBool "choco spread seen" (SpreadChoco `elem` map fst found)
-  assertBool "vine spread seen" (SpreadVine `elem` map fst found)
+  assertBool "choco spread seen" ("choco" `elem` map fst found)
+  assertBool "vine spread seen" ("vine" `elem` map fst found)
   assertBool "every spread has targets" (all (not . null . snd) found)
 
 -- | 补上「自动洗牌步」的逐帧比对缺口（第二刀：MoveTrace 新增 mtGen / mtShuffle）。

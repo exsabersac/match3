@@ -29,7 +29,6 @@ import ComboFx
 import Data.Word (Word8)
 import Engine.Playback (Tick (..), acceleratePlayer, newPlayer)
 import Match3.Core
-import Match3.Element.Event (endEffectElement, endEffectPairs)
 import qualified Match3.Element.Event as Ev
 import System.Random (StdGen, mkStdGen, randomR)
 import UI.Layout

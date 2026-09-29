@@ -72,7 +72,7 @@ module Match3.Element.Registry
   , registerLevel
   , removeLevel
   , levelDefs
-  , askLevel
+  , askLevels
   ) where
 
 import Control.Monad (foldM)
@@ -505,8 +505,11 @@ removeLevel n reg = reg {regLevel = [x | x <- regLevel reg, levelNameOf x /= n]}
 levelDefs :: Registry -> [SomeLevelElement]
 levelDefs = regLevel
 
--- | 问注册的关卡级元素（原型值，不带一局的状态；一局里的节拍见 Match3.Element.Level.askLevelIn）：
--- 按注册顺序，第一个给出所要类型回复的为准；没人回复时 Nothing。
-askLevel :: (Message q, Message r) => Registry -> q -> Maybe r
-askLevel reg q =
-  listToMaybe [r | SomeLevelElement l <- regLevel reg, Just (reply, _) <- [levelReply l (SomeMessage q)], Just r <- [fromMessage reply]]
+-- | 问注册的关卡级元素（原型值，不带一局的状态；一局里的节拍见 Match3.Element.Level.askLevelsIn）：
+-- 问题与回复同类型（累积器），按注册顺序**折叠所有回复者**（前一个的回复是后一个的问题）；没人回复时 Nothing。
+askLevels :: Message q => Registry -> q -> Maybe q
+askLevels reg q0 = foldl one Nothing (regLevel reg)
+  where
+    one acc (SomeLevelElement l) = case levelReply l (SomeMessage (maybe q0 id acc)) of
+      Just (reply, _) | Just q' <- fromMessage reply -> Just q'
+      _ -> acc

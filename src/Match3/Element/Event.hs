@@ -2,8 +2,10 @@
 -- | 元素框架的事件词汇：规则层产出的**纯数据**效果描述，前端按事件类型查表播放。
 --
 -- 两类：
---   * 步末效果 EndEffect（倒计时 / 皮带 / 蔓延 / 蜗牛）：原在 Match3.Game.Trace，第二刀 2b 搬到这里，
---     因为元素的步末规则（`endRule`）要直接产出它；Game.Trace 原样再导出，旧代码不用改。
+--   * 步末效果 EndEffect：原在 Match3.Game.Trace，第二刀 2b 搬到这里，因为元素的步末规则（`endRule`）要直接产出它；
+--     Game.Trace 原样再导出。第 7 刀（7b）起是**通用形状**：事件类型 + 元素名 + 逐项 EndItem（来源、目标、写入目标格的
+--     内容、换回来源格的内容），倒计时 / 皮带 / 藤 / 巧 / 蒸汽 / 蜗牛都是这一种形状（原来的四个构造器、SpreadKind、
+--     SnailMove 已删）；新的步末元素不用改这里就能产出可重放、可播放的效果。
 --   * 效果事件 Event（消除 / 波及 / 特殊块爆炸 / 收集 / 得分 / 连击 / 步末 / 洗牌）：由回放脚本派生
 --     （Match3.Game.Trace.traceEvents），不参与结算。
 --
@@ -11,74 +13,96 @@
 module Match3.Element.Event
   ( -- * 步末效果
     EndEffect(..)
-  , SpreadKind(..)
-  , SnailMove(..)
+  , EndItem(..)
   , applyEndEffect
-  , spreadOverlay
+  , endEffectPairs
+  , endItemDir
   , spreadPairs
     -- * 效果事件
   , EventKind(..)
   , Event(..)
-  , endEffectKind
-  , endEffectElement
-  , endEffectPairs
   ) where
 
 import Match3.Board.Grid (getCell, inBounds, setCell)
-import Match3.Conveyor (applyBeltMoves)
 import Match3.Types
 
--- | 步末效果的种类与播放所需的细节（只描述「变了什么」，规则仍由元素定义计算）。
-data EndEffect
-  = EndCountdownTick [Pos]            -- ^ 倒计时炸弹减一（列出数值真的变了的格）
-  | EndBeltShift [(Pos, Pos)]         -- ^ 传送带移位：(原格, 新格)；多条皮带已按顺序合成
-  | EndSpread SpreadKind [(Pos, Pos)] -- ^ 藤蔓 / 巧克力 / 蒸汽蔓延：(来源格, 新占的格)
-  | EndSnail [SnailMove]              -- ^ 蜗牛爬行（按规则的逐只顺序）
-  deriving (Eq, Show)
+-- | 步末效果（通用形状）：事件类型（EvTick / EvBelt / EvSpread / EvMove …，前端播放表的键）、相关元素名
+-- （注册表的键；皮带是关卡级元素，记为 "belt"）、按发生顺序的逐项变化。只描述「变了什么」，规则仍由元素定义计算。
+data EndEffect = EndEffect
+  { endEffectKind    :: EventKind
+  , endEffectElement :: ElementName
+  , endEffectItems   :: [EndItem]
+  } deriving (Eq)
 
--- | 会在步末蔓延的叠层种类。
-data SpreadKind = SpreadVine | SpreadChoco | SpreadSteam
-  deriving (Eq, Show)
+-- | Show 手写（第 7 刀 7b）：内置的六种步末效果显示成第 7 刀前四个构造器的派生文本（EndCountdownTick /
+-- EndBeltShift / EndSpread SpreadVine… / EndSnail [SnailMove {…}]），金标准与元素查询快照里的散列因此逐字不变；
+-- 其余（扩展元素的效果）按记录语法显示全部字段。内置形状的文本不含 eiCell（可由前盘重算），Eq 仍比较全部字段。
+instance Show EndEffect where
+  showsPrec d eff = case (endEffectKind eff, unElementName (endEffectElement eff)) of
+    (EvTick, "countdown") -> con "EndCountdownTick " (showsPrec 11 (map eiTo items))
+    (EvBelt, "belt") -> con "EndBeltShift " (showsPrec 11 pairs)
+    (EvSpread, n) | Just k <- lookup n spreadKinds -> con "EndSpread " (showString k . showChar ' ' . showsPrec 11 pairs)
+    (EvMove, "snail") | Just ms <- mapM snailText items -> con "EndSnail " (showChar '[' . foldr (.) id (commas ms) . showChar ']')
+    _ ->
+      showParen (d >= 11) $
+        showString "EndEffect {endEffectKind = " . showsPrec 0 (endEffectKind eff)
+          . showString ", endEffectElement = " . showsPrec 0 (endEffectElement eff)
+          . showString ", endEffectItems = " . showsPrec 0 items
+          . showChar '}'
+    where
+      items = endEffectItems eff
+      pairs = endEffectPairs eff
+      con name body = showParen (d >= 11) (showString name . body)
+      spreadKinds = [("vine", "SpreadVine"), ("choco", "SpreadChoco"), ("steam", "SpreadSteam")]
+      snailText i =
+        fmap
+          ( \dir ->
+              showString "SnailMove {smFrom = " . showsPrec 0 (eiFrom i)
+                . showString ", smTo = " . showsPrec 0 (eiTo i)
+                . showString ", smDir = " . showsPrec 0 dir
+                . showString ", smPushed = " . showsPrec 0 (eiBack i)
+                . showChar '}'
+          )
+          (endItemDir i)
+      commas xs = case xs of
+        [] -> []
+        (x : rest) -> x : map (showChar ',' .) rest
 
--- | 一只蜗牛的一步：smFrom == smTo 表示碰壁掉头；否则爬到 smTo，被推的格子
--- （smPushed，爬之前在 smTo 的内容）换到 smFrom。smDir 是这一步之后的朝向。
-data SnailMove = SnailMove
-  { smFrom   :: Pos
-  , smTo     :: Pos
-  , smDir    :: (Int, Int)
-  , smPushed :: Maybe Cell
+-- | 步末效果的一项：eiFrom → eiTo（单格效果 eiFrom == eiTo）；重放时目标格写成 eiCell，
+-- eiBack 为 Just 时来源格写成它（会走的元素推开的格换到原格）。
+--
+-- 内置：倒计时 = (p, p, 减一后的格)；皮带 = (原格, 新格, 原格的内容)；蔓延 = (来源, 新格, 带叠层的新格)；
+-- 蜗牛 = (起点, 终点, 新朝向的蜗牛, 被推开的格)，碰壁掉头时起点 == 终点、eiBack = Nothing。
+data EndItem = EndItem
+  { eiFrom :: Pos
+  , eiTo   :: Pos
+  , eiCell :: Cell
+  , eiBack :: Maybe Cell
   } deriving (Eq, Show)
 
--- | 把步末效果的描述重放到盘面上（纯函数，供测试证明描述完整、前端必要时直接用）。
+-- | 把步末效果的描述重放到盘面上（纯函数，供测试证明描述完整、前端必要时直接用）：逐项、先目标后来源。
 applyEndEffect :: EndEffect -> Board -> Board
-applyEndEffect eff b0 = case eff of
-  EndCountdownTick ps -> foldl tick b0 ps
-  EndBeltShift moves -> applyBeltMoves b0 moves
-  EndSpread kind pairs -> foldl (\b (_, q) -> plant (spreadOverlay kind) b q) b0 pairs
-  EndSnail moves -> foldl snail b0 moves
+applyEndEffect eff b0 = foldl one b0 (endEffectItems eff)
   where
-    tick b p = case getCell b p of
-      Countdown col n -> setCell b p (Countdown col (max 0 (n - 1)))
-      _ -> b
-    plant ov b q = case getCell b q of
-      Gem col kind ice Nothing -> setCell b q (Gem col kind ice (Just ov))
-      _ -> b
-    snail b (SnailMove from to (dr, dc) pushed)
-      | from == to = setCell b from (Snail dr dc)
-      | otherwise = case pushed of
-          Just cell -> setCell (setCell b to (Snail dr dc)) from cell
-          Nothing -> setCell b to (Snail dr dc)
+    one b (EndItem from to cell back) =
+      let b' = setCell b to cell
+      in maybe b' (setCell b' from) back
 
--- | SpreadKind 对应的叠层构造器。
-spreadOverlay :: SpreadKind -> CellOverlay
-spreadOverlay SpreadVine = Vine
-spreadOverlay SpreadChoco = Choco
-spreadOverlay SpreadSteam = Steam
+-- | 步末效果涉及的 (来源, 目标) 对：皮带 = (原格, 新格)；蔓延 = (来源, 新格)；
+-- 蜗牛 = (起点, 终点)；倒计时 = (p, p)。
+endEffectPairs :: EndEffect -> [(Pos, Pos)]
+endEffectPairs eff = [(eiFrom i, eiTo i) | i <- endEffectItems eff]
+
+-- | 一项写入的本体朝向（会走的元素：蜗牛）；其余为 Nothing。
+endItemDir :: EndItem -> Maybe (Int, Int)
+endItemDir i = case eiCell i of
+  Snail dr dc -> Just (dr, dc)
+  _ -> Nothing
 
 -- | 蔓延的 (来源, 新格)：新格 = 之前无覆盖层、之后带该覆盖层的格；来源取之前盘面上
 -- 与新格正交相邻的第一个同类格（按行优先：上、左、右、下），只用于表现层决定「从哪边长出来」。
-spreadPairs :: SpreadKind -> Board -> Board -> [(Pos, Pos)]
-spreadPairs kind before after =
+spreadPairs :: CellOverlay -> Board -> Board -> [(Pos, Pos)]
+spreadPairs ov before after =
   [ (src, q)
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
@@ -90,8 +114,6 @@ spreadPairs kind before after =
           (n : _) -> n
           [] -> q
   ]
-  where
-    ov = spreadOverlay kind
 
 --------------------------------------------------------------------------------
 -- 效果事件
@@ -120,30 +142,3 @@ data Event = Event
   , evCells   :: [(Pos, Pos)]
   , evAmount  :: Int
   } deriving (Eq, Show)
-
--- | 步末效果对应的事件类型。
-endEffectKind :: EndEffect -> EventKind
-endEffectKind eff = case eff of
-  EndCountdownTick _ -> EvTick
-  EndBeltShift _ -> EvBelt
-  EndSpread _ _ -> EvSpread
-  EndSnail _ -> EvMove
-
--- | 步末效果相关的元素名（注册表的键；皮带是关卡特性，记为 "belt"）。
-endEffectElement :: EndEffect -> ElementName
-endEffectElement eff = case eff of
-  EndCountdownTick _ -> "countdown"
-  EndBeltShift _ -> "belt"
-  EndSpread SpreadVine _ -> "vine"
-  EndSpread SpreadChoco _ -> "choco"
-  EndSpread SpreadSteam _ -> "steam"
-  EndSnail _ -> "snail"
-
--- | 步末效果涉及的 (来源, 目标) 对：皮带 = (原格, 新格)；蔓延 = (来源, 新格)；
--- 蜗牛 = (起点, 终点)；倒计时 = (p, p)。
-endEffectPairs :: EndEffect -> [(Pos, Pos)]
-endEffectPairs eff = case eff of
-  EndBeltShift mv -> mv
-  EndSpread _ ps -> ps
-  EndSnail ms -> [(smFrom m, smTo m) | m <- ms]
-  EndCountdownTick ps -> [(p, p) | p <- ps]

@@ -15,7 +15,7 @@ module Match3.Element.Level
     startLevelsWith
   , coreLevels
   , activeLevels
-  , askLevelIn
+  , askLevelsIn
   , levelState
   , putLevel
     -- * 内置元素的状态读数（第 7 刀前 GameState 的专用字段）
@@ -75,21 +75,21 @@ active reg elems =
 activeLevels :: Registry -> [SomeLevelElement] -> [SomeLevelElement]
 activeLevels reg = map fst . active reg
 
--- | 在一个节拍上问一局的关卡级元素：按 'activeLevels' 的顺序，第一个给出同类型回复的为准；
--- 返回 (回复, 写回推进后状态的关卡级元素)。没人回复时 Nothing。
-askLevelIn :: Message q => Registry -> [SomeLevelElement] -> q -> Maybe (q, [SomeLevelElement])
-askLevelIn reg elems q =
-  listToMaybe
-    [ (q', writeBack stored e (SomeLevelElement l'))
-    | (e@(SomeLevelElement l), stored) <- active reg elems
-    , Just (reply, l') <- [levelReply l (SomeMessage q)]
-    , Just q' <- [fromMessage reply]
-    ]
+-- | 在一个节拍上问一局的关卡级元素：问题与回复同类型（累积器），按 'activeLevels' 的顺序**折叠所有回复者**
+-- （前一个的回复是后一个的问题），各回复者推进后的状态依次写回；返回 (最终回复, 写回后的关卡级元素)。
+-- 没人回复时 Nothing（第 7 刀 7a 取第一个回复者；内置元素每种消息只有一个回复者，结果相同）。
+askLevelsIn :: Message q => Registry -> [SomeLevelElement] -> q -> Maybe (q, [SomeLevelElement])
+askLevelsIn reg elems0 q0 = foldl one Nothing (active reg elems0)
   where
-    writeBack stored e e'
-      | stored = replaceNamed e' elems
-      | e' == e = elems
-      | otherwise = elems ++ [e']
+    one acc (e@(SomeLevelElement l), stored) =
+      let (q, es) = maybe (q0, elems0) id acc
+      in case levelReply l (SomeMessage q) of
+           Just (reply, l') | Just q' <- fromMessage reply -> Just (q', writeBack es stored e (SomeLevelElement l'))
+           _ -> acc
+    writeBack es stored e e'
+      | stored = replaceNamed e' es
+      | e' == e = es
+      | otherwise = es ++ [e']
 
 -- | 同名替换（没有则追加）。
 replaceNamed :: SomeLevelElement -> [SomeLevelElement] -> [SomeLevelElement]
@@ -134,8 +134,8 @@ levelHooksWith reg elems = hooks
   where
     hooks =
       LevelHooks
-        { onSettle = \mb -> maybe mb (\(Settling _ mb', _) -> mb') (askLevelIn reg elems (Settling (portalWith reg) mb))
-        , onAbsorb = \b -> case askLevelIn reg elems (Refilled b []) of
+        { onSettle = \mb -> maybe mb (\(Settling _ mb', _) -> mb') (askLevelsIn reg elems (Settling (portalWith reg) mb))
+        , onAbsorb = \b -> case askLevelsIn reg elems (Refilled b []) of
             Just (Refilled _ ps, elems') -> (ps, levelHooksWith reg elems')
             Nothing -> ([], hooks)
         , hookLevel = elems
@@ -143,21 +143,21 @@ levelHooksWith reg elems = hooks
 
 -- | 皮带节拍（'EndTicked'）：Just (移位, 推进后的元素)；没人回复时 Nothing（没有皮带，也没有皮带后的再连锁）。
 beltShiftIn :: Registry -> [SomeLevelElement] -> Maybe ([(Pos, Pos)], [SomeLevelElement])
-beltShiftIn reg elems = (\(EndTicked mv, es) -> (mv, es)) <$> askLevelIn reg elems (EndTicked [])
+beltShiftIn reg elems = (\(EndTicked mv, es) -> (mv, es)) <$> askLevelsIn reg elems (EndTicked [])
 
 -- | 会走的元素要跳过的格（'AvoidCells'，内置 = 皮带格）。
 avoidCellsIn :: Registry -> [SomeLevelElement] -> [Pos]
-avoidCellsIn reg elems = maybe [] (\(AvoidCells ps, _) -> ps) (askLevelIn reg elems (AvoidCells []))
+avoidCellsIn reg elems = maybe [] (\(AvoidCells ps, _) -> ps) (askLevelsIn reg elems (AvoidCells []))
 
 -- | 会走的元素当墙的格（'WallCells'，内置 = 传送门端点）。
 wallCellsIn :: Registry -> [SomeLevelElement] -> [Pos]
-wallCellsIn reg elems = maybe [] (\(WallCells ps, _) -> ps) (askLevelIn reg elems (WallCells []))
+wallCellsIn reg elems = maybe [] (\(WallCells ps, _) -> ps) (askLevelsIn reg elems (WallCells []))
 
 -- | 地毯节拍（'Covering'）：(新覆盖数, 推进后的元素)；没人回复时不覆盖。
 coverIn :: Registry -> [Pos] -> [SomeLevelElement] -> (Int, [SomeLevelElement])
-coverIn reg hit elems = maybe (0, elems) (\(Covering _ n, es) -> (n, es)) (askLevelIn reg elems (Covering hit 0))
+coverIn reg hit elems = maybe (0, elems) (\(Covering _ n, es) -> (n, es)) (askLevelsIn reg elems (Covering hit 0))
 
 -- | 地面层节拍（'GroundHit'，规则 = 注册表的 hitGroundWith）：(按名字的去层数, 推进后的元素)。
 hitGroundIn :: Registry -> [Pos] -> [SomeLevelElement] -> ([(ElementName, Int)], [SomeLevelElement])
 hitGroundIn reg hits elems =
-  maybe ([], elems) (\(GroundHit _ _ cs, es) -> (cs, es)) (askLevelIn reg elems (GroundHit (hitGroundWith reg) hits []))
+  maybe ([], elems) (\(GroundHit _ _ cs, es) -> (cs, es)) (askLevelsIn reg elems (GroundHit (hitGroundWith reg) hits []))

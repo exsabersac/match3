@@ -16,7 +16,15 @@ import Data.List (isInfixOf, nub, sort)
 import Data.Maybe (isJust, isNothing)
 import Engine.Game (Game(..), Step(..), runActions)
 import Engine.History (History(..), HistoryPolicy(..), Undoable(..), historyDepth, startHistory)
-import Match3.Board.Cascade (CascadeRun(..))
+import Match3.Board.Cascade (AfterEntry(..), CascadeRun(..), cascadeAfterWith, cascadeCountdownsTracedWith, cascadeMatchesWith, cascadeSeedsWith, endHolesWith, stillRun)
+import qualified Data.List.NonEmpty as NE
+import Data.List.NonEmpty (NonEmpty(..))
+import Match3.Conveyor (applyBeltMoves)
+import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
+import Match3.Element.Message (Message, fromMessage)
+import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
+import Match3.Game.Trace (traceSpreadsWith)
+import System.Random (StdGen)
 import Match3.Board.Default (LevelHooks(..), builtinHooks, cascadeMatches, noHooks)
 import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Board.Grid (MBoard, atM, mboardFromRows)
@@ -54,6 +62,8 @@ tests =
       , testProperty "qc_name_newtypes_show_ord" (withMaxSuccess 1000 qc_name_newtypes_show_ord)
       , testProperty "qc_level_hooks_match_legacy" (withMaxSuccess 500 qc_level_hooks_match_legacy)
       , testProperty "qc_level_elems_readers_roundtrip" (withMaxSuccess 100 qc_level_elems_readers_roundtrip)
+      , testProperty "qc_end_table_matches_legacy" (withMaxSuccess 300 qc_end_table_matches_legacy)
+      , testProperty "qc_ask_levels_folds_in_order" (withMaxSuccess 300 qc_ask_levels_folds_in_order)
       ]
   where
     -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
@@ -749,4 +759,103 @@ qc_level_elems_readers_roundtrip =
          , gsGround gs === lvlGround lvl
          , if null (lvlUfos lvl) then property True else gsUfos gs === lvlUfos lvl
          , if null (lvlCarpets lvl) then property True else gsCarpetOpen gs === lvlCarpets lvl
+         ]
+
+-- | 第 7 刀（7b）：步末表与第 7 刀前手写的步末流程（下面逐字保留的 legacySwapEnd / legacyBoosterEnd，只把皮带效果
+-- 换成通用形状）逐段相同：各段连锁（终盘 / 轮次 / 计数 / 生成器 / 关卡级元素）、步末记录、终盘、地毯腾空盘面。
+-- 局面 = 战役任意关 + 种子走 0–4 手之后；交换取提示，道具取随机格为种子。
+qc_end_table_matches_legacy :: Property
+qc_end_table_matches_legacy =
+  forAll genStart $ \start ->
+    forAll (choose (0, 4) >>= \k -> vectorOf k genPick) $ \picks ->
+      forAll ((,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)) $ \seedPos ->
+        let s0 = startState start
+            gs = last (s0 : map stepState (snd (playPicks s0 picks)))
+            reg = defaultRegistry
+            hooks0 = levelHooksWith reg (gsLevelElems gs)
+            summary (segs, ends, board, vacate) =
+              ( [(crBoard r, crWaves r, crTally r, show (crGen r), hookLevel (crHooks r)) | r <- NE.toList segs]
+              , ends
+              , board
+              , vacate
+              )
+            segB = cascadeSeedsWith reg Nothing [seedPos] hooks0 (gsGen gs) (gsBoard gs)
+            segS = [cascadeMatchesWith reg (Just b) hooks0 (gsGen gs) (swapCells (gsBoard gs) a b) | Just (a, b) <- [findHintWith reg (gsBoard gs)]]
+            endsOf (_, e, _, _) = e
+        in classify (any (not . null . endsOf . legacySwapEnd reg) segS) "swap has end effects" $
+             conjoin [summary (runEndTable reg swapEndTable seg) === summary (legacySwapEnd reg seg) | seg <- segS]
+               .&&. summary (runEndTable reg boosterEndTable segB) === summary (legacyBoosterEnd reg segB)
+
+-- | 第 7 刀前 Resolve.swapEnd 的逐字副本（皮带效果改为通用形状）。
+legacySwapEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+legacySwapEnd reg seg0 =
+  let ws0 = crWaves seg0
+      board0' = crBoard seg0
+      (tickSteps, seg1) = cascadeCountdownsTracedWith reg (crHooks seg0) (crGen seg0) board0'
+      endTick = [EndStep (length ws0) bB bA e | (bB, bA, e) <- tickSteps]
+      elems1 = hookLevel (crHooks seg1)
+      (hasBelts, mvBelt, hooks1) = case beltShiftIn reg elems1 of
+        Just (mv, es) -> (True, mv, levelHooksWith reg es)
+        Nothing -> (False, [], crHooks seg1)
+      boardCd = crBoard seg1
+      boardBelt = applyBeltMoves boardCd mvBelt
+      nBelt = length ws0 + length (crWaves seg1)
+      endBelt =
+        [ EndStep nBelt boardCd boardBelt (EndEffect EvBelt "belt" [EndItem o d (getCell boardCd o) Nothing | (o, d) <- mvBelt])
+        | hasBelts
+        , not (null mvBelt)
+        ]
+      seg2 =
+        if not hasBelts
+          then stillRun boardCd hooks1 (crGen seg1)
+          else cascadeAfterWith reg AfterBelt hooks1 (crGen seg1) boardBelt
+      boardBeltCas = crBoard seg2
+      nEnd = nBelt + length (crWaves seg2)
+      elems2 = hookLevel (crHooks seg2)
+      avoid = nub (avoidCellsIn reg elems2)
+      walls = nub (wallCellsIn reg elems2)
+      (endSpread, boardSpread) = traceSpreadsWith reg nEnd boardBeltCas
+      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx avoid walls (pushableWith reg)) nEnd boardSpread
+      seg3 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSnail)) (crHooks seg2) (crGen seg2) boardSnail
+      board1 = crBoard seg3
+  in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
+
+-- | 第 7 刀前 Resolve.boosterEnd 的逐字副本。
+legacyBoosterEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+legacyBoosterEnd reg seg0 =
+  let boardH = crBoard seg0
+      (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
+      seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crHooks seg0) (crGen seg0) boardSp
+  in (seg0 :| [seg1], ends, crBoard seg1, boardH)
+
+-- | 第 7 刀（7b）：askLevels / askLevelsIn 折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的问题；
+-- 用若干个「加常数」的测试元素随机注册（可含重复的数），结果 = 起始值 + 各回复者的数按注册顺序依次作用。
+-- | 测试元素：名字由编号决定（adder1、adder5 …），状态是被问的次数。
+data Adder = Adder Int Int
+  deriving (Eq, Show)
+
+newtype AdderMsg = AdderMsg [Int]
+
+instance Message AdderMsg
+
+instance LevelElement Adder where
+  levelName (Adder k _) = ElementName ("adder" ++ show k)
+  levelReply (Adder k n) msg = case fromMessage msg of
+    Just (AdderMsg acc) -> Just (SomeMessage (AdderMsg (acc ++ [k])), Adder k (n + 1))
+    Nothing -> Nothing
+
+qc_ask_levels_folds_in_order :: Property
+qc_ask_levels_folds_in_order =
+  forAll (choose (0, 5) >>= \n -> vectorOf n (choose (1, 9 :: Int))) $ \ks0 ->
+    let ks = nub ks0
+        reg = foldl (\r k -> registerLevel (SomeLevelElement (Adder k 0)) r) defaultRegistry ks
+        elems = [SomeLevelElement (Adder k 5) | k <- ks]
+        viaReg = fmap (\(AdderMsg xs) -> xs) (askLevels reg (AdderMsg []))
+        viaIn = fmap (\(AdderMsg xs, es) -> (xs, es)) (askLevelsIn reg elems (AdderMsg []))
+        expected = if null ks then Nothing else Just ks
+    in conjoin
+         [ viaReg === expected
+         , fmap fst viaIn === expected
+         -- 每个回复者推进后的状态都写回（同名替换，顺序不变）
+         , fmap snd viaIn === (if null ks then Nothing else Just [SomeLevelElement (Adder k 6) | k <- ks])
          ]

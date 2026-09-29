@@ -66,7 +66,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import Data.Word (Word8)
 import Match3.Core
-import Match3.Element.Event (Event (..), EventKind (..), endEffectKind, endEffectPairs)
+import Match3.Element.Event (Event (..), EventKind (..))
 import Engine.Playback (Player (..), Stages (..), Tick (..), playerProgress, stepPlayer)
 
 --------------------------------------------------------------------------------

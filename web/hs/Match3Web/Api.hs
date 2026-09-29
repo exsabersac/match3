@@ -28,7 +28,7 @@ import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
 import Match3.Board.Grid (mboardRows)
 import Match3.Core
-import Match3.Element.Event (Event(..))
+import Match3.Element.Event (Event(..), EventKind(..), endEffectPairs, endItemDir)
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
 import Match3.Game.Trace (emptyTrace)
 import Match3Web.Anim (AnimSeed, seedOf)
@@ -196,24 +196,25 @@ encodeEnd e =
     ]
 
 -- | 步末效果（结构化）：{type:"tick",cells} / {type:"belt",pairs} / {type:"spread",kind,pairs} / {type:"snail",moves}
---   pairs 为 [[来源],[目标]]。
+--   pairs 为 [[来源],[目标]]。第 7 刀 7b 起 EndEffect 是通用形状（事件类型 + 元素名 + 逐项 EndItem），
+--   这里按事件类型编码成与之前逐字节相同的 JSON；其余事件类型编码为 {type:<eventKindTag>,kind:<元素名>,pairs}。
 encodeEndEffect :: EndEffect -> String
-encodeEndEffect eff = case eff of
-  EndCountdownTick ps -> obj [("type", str "tick"), ("cells", arr (map encodePos ps))]
-  EndBeltShift ps -> obj [("type", str "belt"), ("pairs", arr (map encodePair ps))]
-  EndSpread k ps -> obj [("type", str "spread"), ("kind", str (spreadName k)), ("pairs", arr (map encodePair ps))]
-  EndSnail ms -> obj [("type", str "snail"), ("moves", arr (map snail ms))]
+encodeEndEffect eff = case endEffectKind eff of
+  EvTick -> obj [("type", str "tick"), ("cells", arr (map (encodePos . eiTo) items))]
+  EvBelt -> obj [("type", str "belt"), ("pairs", arr (map encodePair pairs))]
+  EvSpread -> obj [("type", str "spread"), ("kind", str name), ("pairs", arr (map encodePair pairs))]
+  EvMove -> obj [("type", str "snail"), ("moves", arr (map snail items))]
+  k -> obj [("type", str (eventKindTag k)), ("kind", str name), ("pairs", arr (map encodePair pairs))]
   where
-    spreadName k = case k of
-      SpreadVine -> "vine"
-      SpreadChoco -> "choco"
-      SpreadSteam -> "steam"
+    items = endEffectItems eff
+    pairs = endEffectPairs eff
+    name = unElementName (endEffectElement eff)
     snail m =
       obj
-        [ ("from", encodePos (smFrom m))
-        , ("to", encodePos (smTo m))
-        , ("dir", encodePos (smDir m))
-        , ("pushed", maybe "null" encodeCell (smPushed m))
+        [ ("from", encodePos (eiFrom m))
+        , ("to", encodePos (eiTo m))
+        , ("dir", encodePos (maybe (0, 0) id (endItemDir m)))
+        , ("pushed", maybe "null" encodeCell (eiBack m))
         ]
 
 -- | 效果事件（规则层 Match3.Element.Event.Event，按时间顺序）：

@@ -67,19 +67,30 @@
 
 彩虹 / 特殊合成 / 倒计时爆炸 / 道具：先 `clearFromSeedsDetailed`（对种子做特殊扩展与邻障处理），再 UFO，再转入普通匹配连锁（波次编号衔接）。
 
+### 步末表（第 7 刀 7b：`Match3.Game.EndPhase`）
+
+主连锁之后的第 3–5 节不再是手写流程，而是一张按顺序执行的表（`runEndTable reg 表 主连锁`；`Game.Resolve.endTableFor` 按操作种类选表），每行 = 名字 + 它跑的元素步末规则阶段（`EndPhase`）+ 执行函数：
+
+| 表 | 行（按顺序） |
+|------|------|
+| 玩家交换 `swapEndTable` | `tick`（`PhaseTick`，新一段连锁）→ `belt`（关卡级元素 `EndTicked` 节拍，新一段连锁；没人回复时是空段）→ `spread`（`PhaseSpread`）→ `move`（`PhaseMove`，避让格 / 墙问关卡级元素）→ `settle`（步末补结算，新一段连锁）→ `vacate`（地毯腾空比较用终盘） |
+| 道具 `boosterEndTable` | `vacate`（腾空比较用蔓延前的盘面）→ `spread` → `settle` |
+
+顺序、各段连锁、步末记录、随机数消费都与第 7 刀前逐字相同（性质 `qc_end_table_matches_legacy` 对照留在测试里的旧 `swapEnd` / `boosterEnd` 副本，`br_end_phase_table_order` 锁定表的内容与「按表执行」）。
+
 ## 3. 倒计时（`cascadeCountdowns`）
 
 1. `tickCountdowns`：所有倒计时 −1。
 2. 若有归零：`explodeSeedsFor` → 种子连锁（仍带 UFO + 传送门）。
 3. 匹配或特殊清掉倒计时可在清除阶段解除（不走到爆炸）。
 
-交换结算的步末（`Game.Resolve.swapEnd`）调 `cascadeCountdownsTracedWith`：倒计时规则只跑一遍，同时给出连锁和步末记录（`EndStep`）；第 2 刀之前是先跑一遍取连锁、再为记录重跑一遍 `PhaseTick`，结果相同。
+交换结算的步末（第 7 刀 7b 起是 EndPhase 表 `Game.EndPhase.swapEndTable` 的 `tick` 行）调 `cascadeCountdownsTracedWith`：倒计时规则只跑一遍，同时给出连锁和步末记录（`EndStep`）；第 2 刀之前是先跑一遍取连锁、再为记录重跑一遍 `PhaseTick`，结果相同。
 
 **注意**：`useFreeSwap` 不走 tick（不耗步、不推进倒计时）；普通 `trySwap` 成功后才 tick。
 
 ## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterWith AfterBelt`）
 
-- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用这一份。
+- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EvBelt` 步末效果）与重放（`applyEndEffect`）共用这一份。
 - 移位后有匹配 → 全连锁。
 - **无匹配**仍 `settleBoardPortals`：皮带把饼干送到底行时也要收集；settle 后若出现匹配再连锁。
 
@@ -111,7 +122,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 | `useFreeSwap` | 否 | 否（交换后连锁，再仅蔓延） | 不移位 / 不爬 |
 | `useCrossClear` | 否 | 否（同锤子：种子连锁后仅蔓延） | 不移位 / 不爬 |
 
-三者成功（`MoveApplied`）后同样 `ensurePlayable`。回放脚本里道具的 `mtEnd` 只会出现 `EndSpread`（`trace_end_steps_boosters_replay` 锁定）。
+三者成功（`MoveApplied`）后同样 `ensurePlayable`。回放脚本里道具的 `mtEnd` 只会出现蔓延（`EvSpread`，`trace_end_steps_boosters_replay` 锁定）。
 
 校验与起手见 `src/Match3/Game/Boosters.hs` 各 `resolve*`，结算与交换共用 `Match3.Game.Resolve.resolveMove`（`MoveKind` 决定步末与扣次）；测试锁定「FreeSwap 不 tick」「锤免疫不扣次」等不变量。
 
@@ -123,4 +134,4 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 **逐轮回放用的纯函数**：`traceSwap`（`Match3.Game.Move`）/ `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Boosters`）与对应的结算 API 是同一次 `resolveMove` 计算的两个投影；连锁层同理，`Match3.Board.Cascade` 的记录版 `cascade*` 同时产出计数（`CascadeTally`）与每一轮（`CascadeWave`），调用方直接读 `CascadeRun` 的字段（第三刀删掉了旧的元组 API `runCascade*` / `traceCascade*`）。`MoveTrace` 含每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮）；`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器，没有自动洗牌时就等于结算结果的 `gsBoard` / `gsGen`，洗牌时 `mtShuffle` 记下洗牌后的盘面。`trace_*` 系列测试保留作回归，现在天然成立。
 
-`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EndCountdownTick`）→ 皮带移位（`EndBeltShift`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EndSpread`，带来源格）→ 蜗牛爬行（`EndSnail`，每只的起点、终点、朝向和被推的格子）。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。
+`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EvTick` / `countdown`）→ 皮带移位（`EvBelt` / `belt`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EvSpread` / `vine` · `choco` · `steam`，带来源格）→ 蜗牛爬行（`EvMove` / `snail`，每只的起点、终点、写入的新朝向蜗牛和被推的格子）。第 7 刀 7b 起每个效果都是同一种通用形状 `EndEffect { endEffectKind, endEffectElement, endEffectItems :: [EndItem] }`（`EndItem { eiFrom, eiTo, eiCell, eiBack }`：目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它），原来的四个构造器、`SpreadKind`、`SnailMove` 已删；`Show` 手写成原构造器的文本，金标准与快照散列不变。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。

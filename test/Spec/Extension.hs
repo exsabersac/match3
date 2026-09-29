@@ -13,6 +13,8 @@ import Match3.Core
 import Match3.Board.Grid (atM)
 import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
 import Match3.Element.Class (Archetype(..), Element(..))
+import Match3.Element.Event (Event(..), EventKind(..))
+import Match3.Game.Trace (traceEventsWith)
 import Match3.Game.Shuffle (shuffleGameWith)
 import Match3.Game.Move (resolveSwapWith)
 import qualified Match3.Engine as M3E
@@ -28,6 +30,7 @@ tests =
   , testCase "ext_edge_drain_side_collectible" ext_edge_drain_side_collectible
   , testCase "ext_post_end_settle_hole_element" ext_post_end_settle_hole_element
   , testCase "ext_manual_shuffle_keeps_crate_via_engine" ext_manual_shuffle_keeps_crate_via_engine
+  , testCase "ext_end_effect_generic_hopper" ext_end_effect_generic_hopper
   ]
 
 -- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
@@ -198,3 +201,48 @@ ext_manual_shuffle_keeps_crate_via_engine = do
   assertEqual "dust washed away under the custom registry" [] (customsOn "dust" b1)
   let stD = gameStep M3E.match3Game gs0 M3E.Shuffle
   assertEqual "built-in registry keeps unknown dust (inert default)" [(5, 5)] (customsOn "dust" (gsBoard (stepState stD)))
+
+-- | 第 7 刀（7b）：步末效果是通用形状（事件类型 + 元素名 + 逐项 EndItem）。测试专用「跳跳虫」（固定格）在步末
+-- （PhaseMove，排在蜗牛之后）向右跳一格、与右边的宝石换位，产出 EndEffect EvMove "hopper" —— 不改 Event / Trace /
+-- 主流程：回放按时间线重放到终盘（applyEndEffect 逐项重放）、效果事件里有它、内置表下它是惰性占格。
+newtype Hopper = Hopper Int
+  deriving (Eq, Show)
+
+instance Element Hopper where
+  name _ = "hopper"
+  toCell (Hopper k) = Custom "hopper" (CustomState k)
+  archetype _ = Fixed
+  endRule _ = Just (EndRule PhaseMove 80 hop (const []) (const []))
+    where
+      hop _ b0 =
+        let step (items, b) p =
+              let q = (fst p, snd p + 1)
+              in case (inBounds q, getCell b q) of
+                   (True, g@Gem {}) -> (items ++ [EndItem p q (getCell b p) (Just g)], setCell (setCell b q (getCell b p)) p g)
+                   _ -> (items, b)
+            (its, b1) = foldl step ([], b0) (customsOn "hopper" b0)
+        in (if null its then Nothing else Just (EndEffect EvMove "hopper" its), b1)
+
+ext_end_effect_generic_hopper :: Assertion
+ext_end_effect_generic_hopper = do
+  let reg = register (customEntry (Hopper 1) (Hopper . unCustomState)) defaultRegistry
+      hopper = Custom "hopper" (CustomState 1)
+      board0 = setCell tripleBoard (7, 0) hopper
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
+      (p1, p2) = tripleMove
+      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
+      hops = [e | e <- mtEnd mt1, endEffectElement (esEffect e) == "hopper"]
+  assertBool "move applied" (moveApplied o1)
+  case hops of
+    [e] -> do
+      endEffectKind (esEffect e) @?= EvMove
+      endEffectItems (esEffect e) @?= [EndItem (7, 0) (7, 1) hopper (Just (getCell (esBefore e) (7, 1)))]
+      assertBool "Show falls back to the record form" ("EndEffect {endEffectKind = EvMove" `isPrefixOf` show (esEffect e))
+      assertEqual "event carries the pairs" [(EvMove, "hopper", [((7, 0), (7, 1))])]
+        [(evKind ev, evElement ev, evCells ev) | ev <- traceEventsWith reg mt1, evElement ev == "hopper"]
+    _ -> assertFailure ("expected one hopper end step, got " ++ show (length hops))
+  _ <- replayTimeline "hopper" mt1
+  assertEqual "hopped right" [(7, 1)] (customsOn "hopper" (gsBoard gs1))
+  let (gsD, _, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0
+  assertEqual "default registry: hopper stays" [(7, 0)] (customsOn "hopper" (gsBoard gsD))
+  assertBool "default registry: no hopper effect" (all ((/= "hopper") . endEffectElement . esEffect) (mtEnd mtD))

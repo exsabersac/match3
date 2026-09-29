@@ -34,6 +34,7 @@ import Match3.Element.Class
   , sendMessage
   )
 import qualified Match3.Element.Class as C
+import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Element.Message (Refilled(..))
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGameAtLevelWith)
@@ -233,43 +234,54 @@ ec_flat_record_removed = do
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet"] (map levelNameOf builtinLevelDefs)
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；
--- 不改主流程，只 registerLevel（无状态：开局没有它时用注册的原型值）。新消息类型（Ping）也能经 askLevel 发给关卡级元素。
+-- 不改主流程，只 registerLevel（无状态：开局没有它时用注册的原型值）。第 7 刀 7b 起节拍折叠所有回复者：
+-- 保留内置飞碟（本局没有飞碟，回复空）时磁铁照样生效。新消息类型（Ping）也能经 askLevels 发给关卡级元素，
+-- 多个回复者按注册顺序折叠（磁铁 +1、倍增器 ×2）。
 data Magnet = Magnet
+  deriving (Eq, Show)
+
+data Doubler = Doubler
   deriving (Eq, Show)
 
 newtype Ping = Ping Int
 
-newtype Pong = Pong Int
-
 instance Message Ping
-instance Message Pong
 
 instance LevelElement Magnet where
   levelName _ = "magnet"
   levelReply m msg
     | Just (Refilled b acc) <- fromMessage msg =
         Just (SomeMessage (Refilled b (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1])), m)
-    | Just (Ping n) <- fromMessage msg = Just (SomeMessage (Pong (n + 1)), m)
+    | Just (Ping n) <- fromMessage msg = Just (SomeMessage (Ping (n + 1)), m)
+    | otherwise = Nothing
+
+instance LevelElement Doubler where
+  levelName _ = "doubler"
+  levelReply d msg
+    | Just (Ping n) <- fromMessage msg = Just (SomeMessage (Ping (n * 2)), d)
     | otherwise = Nothing
 
 ec_level_elements_by_message :: Assertion
 ec_level_elements_by_message = do
-  let reg = registerLevel (SomeLevelElement Magnet) (removeLevel "ufo" defaultRegistry)
+  let reg = registerLevel (SomeLevelElement Magnet) defaultRegistry
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
       (p1, p2) = ((1, 2), (2, 2))
       (_, o, mt) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b1}
       (_, oD, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0 {gsBoard = b1}
+      ping r = fmap (\(Ping n) -> n) (askLevels r (Ping 7))
   assertBool "applied" (moveApplied o && moveApplied oD)
-  assertBool "magnet adds an absorb wave" (length (mtWaves mt) > length (mtWaves mtD))
-  assertEqual "ping / pong" (Just 8) (fmap (\(Pong n) -> n) (askLevel reg (Ping 7)))
-  assertEqual "nobody answers ping by default" Nothing (fmap (\(Pong n) -> n) (askLevel defaultRegistry (Ping 7)))
-  assertEqual "registered after the builtins" ["belt", "portal", "carpet", "magnet"] (map levelNameOf (levelDefs reg))
+  assertBool "magnet adds an absorb wave (ufo also answers)" (length (mtWaves mt) > length (mtWaves mtD))
+  assertEqual "ping folds the only replier" (Just 8) (ping reg)
+  assertEqual "ping folds all repliers in registration order" (Just 16) (ping (registerLevel (SomeLevelElement Doubler) reg))
+  assertEqual "other order" (Just 15) (ping (registerLevel (SomeLevelElement Magnet) (registerLevel (SomeLevelElement Doubler) defaultRegistry)))
+  assertEqual "nobody answers ping by default" Nothing (ping defaultRegistry)
+  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "magnet"] (map levelNameOf (levelDefs reg))
 
 -- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 levelStart 给 2 格电量，
 -- 每轮补子之后（Refilled）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
 -- 由结算写回。只 registerLevel + 用这张表开局 / 走子；去掉注册后状态原样、不再生效。Show 在内置字段后追加
--- gsLevelExtra（内置对局没有这一项，快照不变）。
+-- gsLevelExtra（内置对局没有这一项，快照不变）。第 7 刀 7b：保留内置飞碟，同一节拍两者都生效（回复折叠：先飞碟、后虹吸）。
 newtype Siphon = Siphon Int
   deriving (Eq, Show)
 
@@ -285,7 +297,7 @@ instance LevelElement Siphon where
 
 ec_level_element_stateful_extension :: Assertion
 ec_level_element_stateful_extension = do
-  let reg = registerLevel (SomeLevelElement (Siphon 0)) (removeLevel "ufo" defaultRegistry)
+  let reg = registerLevel (SomeLevelElement (Siphon 0)) defaultRegistry
       gs0 = newGameAtLevelWith reg 0 defaultConfig 7
       charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
       play r n gs
@@ -295,7 +307,7 @@ ec_level_element_stateful_extension = do
             Just (a, b) -> let (gs', _, _) = resolveSwapWith r a b gs in gs : play r (n - 1) gs'
       states = play reg 12 gs0
       final = last states
-  assertEqual "opened in registration order + core ground" ["belt", "portal", "carpet", "siphon", "ground"] (map levelNameOf (gsLevelElems gs0))
+  assertEqual "opened in registration order + core ground" ["ufo", "belt", "portal", "carpet", "siphon", "ground"] (map levelNameOf (gsLevelElems gs0))
   assertEqual "levelStart gives the charge" (Just 2) (charge gs0)
   assertBool "Show appends the extension state" ("gsLevelExtra = [Siphon 2]" `isInfixOf` show gs0)
   assertBool "builtin games show no extras" (not ("gsLevelExtra" `isInfixOf` show (newGameAtLevel 0 defaultConfig 7)))
@@ -306,6 +318,17 @@ ec_level_element_stateful_extension = do
       finalBare = last (play bare 12 gs0)
   assertEqual "unregistered: state untouched" (Just 2) (charge finalBare)
   assertEqual "unregistered: nothing absorbed" 0 (gsCount CountUfo finalBare)
+  -- 飞碟关（第 13 关）：一次 Refilled 节拍 = 飞碟的吸收 ++ 虹吸的吸收，两者的状态都推进
+  let gsU = newGameAtLevelWith reg 12 defaultConfig 1
+      gsUD = newGameAtLevel 12 defaultConfig 1
+      bU = gsBoard gsU
+      (psBoth, hooksBoth) = onAbsorb (levelHooksWith reg (gsLevelElems gsU)) bU
+      (psUfo, hooksUfo) = onAbsorb (levelHooksWith defaultRegistry (gsLevelElems gsUD)) bU
+      lastC2 = last [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell bU q == mkGem C2]
+  assertBool "ufo level has ufos" (not (null (levelUfos (gsLevelElems gsU))))
+  assertEqual "both absorb in one beat (ufo first)" (psUfo ++ [lastC2]) psBoth
+  assertEqual "ufo state advanced as without the siphon" (levelUfos (hookLevel hooksUfo)) (levelUfos (hookLevel hooksBoth))
+  assertEqual "siphon state advanced" (Just 1) (fmap (\(Siphon k) -> k) (levelState (hookLevel hooksBoth)))
 
 -- | 自定义元素可以当可匹配的有色宝石：测试专用「星星」（Custom "star" 颜色号，原型 Piece、按颜色匹配）
 -- 与同色宝石成三连被消除并按名字计数、进提示；未注册时是惰性占格（打断连线）。

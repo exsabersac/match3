@@ -218,9 +218,10 @@ module Match3.Core
   , MoveTrace(..)
   , EndStep(..)
   , EndEffect(..)
-  , SpreadKind(..)
-  , SnailMove(..)
+  , EndItem(..)
   , applyEndEffect
+  , endEffectPairs
+  , endItemDir
   , traceSwap
   , traceFreeSwap
   , traceHammer

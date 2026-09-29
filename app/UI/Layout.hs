@@ -15,7 +15,6 @@ module UI.Layout
   , winW
   , winH
   , colorRGB
-  , spreadRGB
   , elementRGBTable
   , namedRGB
   , cellRGB
@@ -37,7 +36,6 @@ import Data.Int (Int32)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.Element.Event (endEffectElement)
 import SDL hiding (Normal)
 
 -- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口 = 棋盘 + 两侧边距 + HUD。
@@ -57,9 +55,6 @@ colorRGB C3 = (56, 128, 246)  -- 蓝·菱
 colorRGB C4 = (255, 194, 36)  -- 黄·星
 colorRGB C5 = (172, 88, 236)  -- 紫·三角
 
--- | 蔓延覆盖层的主色（碎屑 / 生长前沿光）。
-spreadRGB :: SpreadKind -> (Word8, Word8, Word8)
-spreadRGB k = maybe (255, 255, 255) id (lookup (endEffectElement (EndSpread k [])) elementRGBTable)
 
 -- | 名字目标（goalCount (CountNamed …)） / 自定义元素按名字取色；表里没有的名字为灰蓝。
 namedRGB :: ElementName -> (Word8, Word8, Word8)

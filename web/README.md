@@ -1,6 +1,6 @@
 # 网页版技术验证（GHC WebAssembly 后端）
 
-目标：不改一行核心代码，把纯规则核心 `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
+目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
 在浏览器里用最简单的彩色方块把一关跑通。**所有规则判定都调用 Haskell 核心**，
 JS 只负责加载、画格子、收鼠标事件、按核心给的逐轮快照播放动画。
 
@@ -10,15 +10,15 @@ web/
 ├── cabal.project         独立的 cabal 工程（只给 wasm32-wasi-cabal 用）
 ├── match3-web.cabal      可执行 match3-web：hs/ + 直接引用 ../src（不复制核心源码）
 ├── hs/
-│   ├── Match3Web/Api.hs  纯接口层：GameState / MoveTrace → JSON（无 JSFFI，原生 GHC 也能编）
-│   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3State / m3Levels
+│   ├── Match3Web/Api.hs  纯接口层：经 Match3.Engine.match3Shell 的 gameStep 执行，Step / Played → JSON（无 JSFFI，原生 GHC 也能编）
+│   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels
 ├── www/
 │   ├── index.html        页面（HUD + 画布 + 结局提示）
 │   └── main.js           加载 wasm、Canvas 2D 渲染、点选/拖拽、回放动画
 └── test/
     ├── e2e.mjs           无头 Chrome 冒烟测试（真实鼠标交换 + 截图 + 耗时）
     ├── node-parity.mjs   node 里跑 wasm，按提示连走 N 步打印 JSON
-    └── Parity.hs         原生 GHC 跑同样的步骤；两边输出应逐字节相同
+    └── Parity.hs         原生 GHC 跑同样的步骤（最后撤销一步）；两边输出应逐字节相同
 ```
 
 ## 1. 安装工具链（一次性，约 6.4 GB，装在 ~/.ghc-wasm）
@@ -52,7 +52,7 @@ cd web
 ```
 
 它会：
-1. 检查 `match3-web.cabal` 里的核心模块清单与 `package.yaml` 的 `library.exposed-modules` 是否一致
+1. 检查 `match3-web.cabal` 里的核心模块清单（`Engine.*` + `Match3.*`）与 `package.yaml` 的 `library.exposed-modules` 是否一致
    （核心新增模块时要同步到 cabal 文件，否则会打印警告）；
 2. `wasm32-wasi-cabal build exe:match3-web`，链接为 WASI **reactor** 模块；
 3. `wasm-opt -Oz` 压体积；用 GHC 自带的 `post-link.mjs` 生成 JSFFI 胶水 `ghc_wasm_jsffi.js`；
@@ -74,7 +74,8 @@ cd web
 - 点一格再点相邻格交换，或按住拖到相邻格松开；
 - 匹配 3 个以上消除 → 下落 → 补子 → 连锁，逐轮播放；HUD 显示分数、剩余步数、目标进度；
 - 换了不能消会提示「已退回」且不扣步；过关 / 通关 / 步数用完时盘面上出现结局提示；
-- 下拉框可选 38 关中的任一关（非宝石障碍目前只画成带文字的灰块）；「提示」按钮高亮核心 `findHint` 的建议。
+- 下拉框可选 40 关中的任一关（非宝石障碍目前只画成带文字的灰块）；「提示」按钮高亮核心 `findHint` 的建议；
+  「撤销」回到上一步（历史在核心 `Engine.History`，最多 20 步，终局后也可撤销）。
 
 必须通过 HTTP 访问（`file://` 下 `fetch` wasm 会被浏览器拒绝）。服务器需给 `.wasm` 返回
 `application/wasm`（python http.server 默认如此），否则 `instantiateStreaming` 会失败。
@@ -88,31 +89,42 @@ NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules ~/.ghc-wasm/nodejs/bin/node web/te
 
 # 原生 vs wasm 一致性（仓库根目录）
 ~/.ghc-wasm/nodejs/bin/node web/test/node-parity.mjs 0 20260929 12 > /tmp/wasm.txt
-stack runghc -- -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 > /tmp/native.txt   # 需 LANG=C.UTF-8
+stack exec -- runghc -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 > /tmp/native.txt   # 需 LANG=C.UTF-8
 cmp /tmp/wasm.txt /tmp/native.txt && echo 一致
 ```
 
 ## 5. 网页端与核心的接口
 
-wasm 导出 4 个 **同步** JSFFI 函数（`foreign export javascript "... sync"`），都返回 JSON 字符串：
+wasm 导出 5 个 **同步** JSFFI 函数（`foreign export javascript "... sync"`），都返回 JSON 字符串：
 
 | 导出 | 参数 | 返回 |
 | --- | --- | --- |
 | `m3New(level, seed)` | 关卡序号（0 起）、种子 | `{ok, state}` |
-| `m3Swap(r1, c1, r2, c2)` | 两个格子 | `{ok, outcome, trace, state}` |
+| `m3Swap(r1, c1, r2, c2)` | 两个格子 | `{ok, accepted, outcome, trace, events, state}` |
+| `m3Undo()` | – | 同 `m3Swap`（`trace` 为空脚本、`events` 为空；没有历史时 `accepted:false`） |
 | `m3State()` | – | `{ok, state}` |
 | `m3Levels()` | – | 关卡列表 `[{index,name,moves,goal}]` |
 
-- `state`：`level/name/score/moves/goal/progress/target/over/loseHint/combo/shuffled/hint/lastCleared/board`；
+- `state`：`level/name/score/moves/goal/progress/target/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
+  （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal.name` 为 `GoalNamed` 的元素名）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
-- `trace`：核心 `traceSwap` 的逐轮快照 `start → waves[{before,cleared,holes,after,score}] → end[] → final`，
-  前端按它逐轮播放；真正结算用的是同一步的 `trySwap`（两者走相同随机数，核心测试锁定一致）；
-- `board`：8×8，宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物}`，其他格 `{"t":"X","c":颜色,"s":"核心 show 文本"}`。
+- 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
+  表现数据全部取自 `stepReport`（`Played`），规则每步只算一次；
+- `trace`：`pdTrace` 的逐轮快照 `start → waves[{before,cleared,drained,holes,after,score}] → end[] → final → shuffle`，
+  前端按它逐轮播放；`end[i] = {afterWaves,before,after,effect}`，`effect` 为结构化步末效果：
+  `{type:"tick",cells}` / `{type:"belt",pairs}` / `{type:"spread",kind:"vine|choco|steam",pairs}` / `{type:"snail",moves:[{from,to,dir,pushed}]}`；
+  `shuffle` 为本步触发自动洗牌后的盘面（否则 `null`）；
+- `events`：规则层效果事件 `pdEvents`（按时间顺序）`{kind,beat,subject,pairs:[[来源],[目标]],amount}`，
+  `kind` ∈ `clear/hit/blast/drain/score/combo/tick/belt/spread/move/shuffle`（同 `Match3.Engine.eventKindTag`），
+  `beat` 与 `end[].afterWaves` 同一时间轴、同 beat 同时播放；比通用 `Engine.Effect` 多保留来源格（爆炸方向、移动轨迹）；
+- `board`：8×8，宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物}`，其他格 `{"t":"X","c":颜色,"s":"核心 show 文本"}`
+  （元素框架自定义格如气泡另带 `name` / `v`）。
 
 当前局面保存在 Haskell 侧的全局 `IORef`（单线程 RTS，一个页面一局）；异常会被兜底成 `{ok:false,error}`。
 
 ## 6. 已知限制
 
-- 只做了交换这一种操作；道具（锤子/自由交换/十字消）、撤销、洗牌按钮、每日挑战未接；
-- 非宝石格（石头、宝箱、蜗牛等）只画灰块 + 文字；步末效果（皮带、蔓延、蜗牛）只按快照瞬切；
+- 只接了交换与撤销；道具（锤子/自由交换/十字消）、洗牌按钮、每日挑战未接（`match3Shell` 已支持，只差 JSFFI 导出与 UI）；
+- 关卡级元素（传送门 / 皮带路径 / 飞碟 / 地毯）还没进 `state`，只能从盘面格看出；
+- 非宝石格（石头、宝箱、蜗牛等）只画灰块 + 文字；步末效果（皮带、蔓延、蜗牛）只按快照瞬切，`events` 还没被前端使用；
 - 每次调用返回完整 JSON（约 15–23 KB/步），没做增量；详见仓库外的 spike 报告。

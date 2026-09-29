@@ -1,6 +1,7 @@
 // 网页外壳（spike）：只负责加载 wasm、画彩色方块、收集点击/拖拽、按回放脚本播放动画。
 // 所有规则（能否交换、消除、下落、补子、连锁、计分、胜负）都在 Haskell 核心里，
-// 这里通过 m3New / m3Swap / m3State / m3Levels 四个 JSFFI 导出拿到 JSON 结果。
+// 这里通过 m3New / m3Swap / m3Undo / m3State / m3Levels 五个 JSFFI 导出拿到 JSON 结果
+// （核心侧走 Engine.Game 的三消外壳实例 match3Shell，与桌面版同一条路径；m3Swap 另带结构化效果事件 events）。
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
 
@@ -143,10 +144,10 @@ async function doSwap(a, b) {
   const waves = res.trace.waves.length;
   // 记录：wasm 调用耗时（含 Haskell 结算 + JSON 序列化 + JSString 转换）、JS 解析耗时、JSON 字节数
   perf.steps.push({ ms: +(t2 - t0).toFixed(2), wasmMs: +(t1 - t0).toFixed(2), parseMs: +(t2 - t1).toFixed(2),
-                    jsonBytes: raw.length, outcome: res.outcome.tag, waves });
+                    jsonBytes: raw.length, outcome: res.outcome?.tag ?? null, waves });
   const o = res.outcome;
-  if (o.tag === "NoMatch" || o.tag === "InvalidSwap") {
-    $("msg").textContent = o.tag === "NoMatch" ? "这样换不能消除，已退回" : "只能交换相邻两格";
+  if (!res.accepted) {
+    $("msg").textContent = o && o.tag === "NoMatch" ? "这样换不能消除，已退回" : "只能交换相邻两格";
   } else {
     await playTrace(res.trace);
     const gained = res.trace.waves.reduce((s, w) => s + w.score, 0);
@@ -203,6 +204,15 @@ $("level").innerHTML = levels.map((l) => `<option value="${l.index}">第 ${l.ind
 $("level").addEventListener("change", () => newGame(+$("level").value, Date.now() & 0x7fffffff));
 $("restart").addEventListener("click", () => newGame(+$("level").value, Date.now() & 0x7fffffff));
 $("hintBtn").addEventListener("click", () => { showHint = state.hint; drawBoard(state.board); });
+// 撤销：历史在核心的 Engine.History 里（最多 20 步，终局后也能撤销）
+$("undoBtn").addEventListener("click", () => {
+  if (busy) return;
+  const res = call("m3Undo");
+  if (!res.accepted) { $("msg").textContent = "没有可撤销的步"; return; }
+  state = res.state; sel = null; showHint = null;
+  $("msg").textContent = `已撤销（还可撤销 ${state.undo} 步）`;
+  renderAll();
+});
 
 // URL 参数：?level=0&seed=42 便于复现（无头浏览器测试也用它固定盘面）
 const q = new URLSearchParams(location.search);

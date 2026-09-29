@@ -4,7 +4,7 @@
 --   JS 侧在 wasi.initialize(instance) 之后即可调用下面的导出函数（RTS 由构造器自动初始化）。
 -- * 全部是 "sync" 导出：JS 调用立即返回字符串（JSON），无需 await。
 -- * 当前局面存在一个全局 IORef 里（单线程 RTS，一个页面一局），JS 只持有 JSON 快照。
--- * 规则全在 Match3.Core；本文件只负责 IORef 读写、异常兜底和 String ↔ JSString。
+-- * 规则全在核心（经 Match3.Engine.match3Shell 的 gameStep）；本文件只负责 IORef 读写、异常兜底和 String ↔ JSString。
 module Main (main) where
 
 import Control.Exception (SomeException, evaluate, try)
@@ -12,16 +12,16 @@ import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import GHC.Wasm.Prim (JSString (..), toJSString)
 import System.IO.Unsafe (unsafePerformIO)
 
-import Match3.Core (GameState)
-import Match3Web.Api (apiLevels, apiNew, apiState, apiSwap, jsonString)
+import Match3Web.Api (WebGame, apiLevels, apiNew, apiState, apiSwap, apiUndo, jsonString)
 
--- | 当前这一局（Nothing = 还没调用过 m3New）。
+-- | 当前这一局（含撤销历史；Nothing = 还没调用过 m3New）。
 {-# NOINLINE stateRef #-}
-stateRef :: IORef (Maybe GameState)
+stateRef :: IORef (Maybe WebGame)
 stateRef = unsafePerformIO (newIORef Nothing)
 
 foreign export javascript "m3New sync" jsNew :: Int -> Int -> IO JSString
 foreign export javascript "m3Swap sync" jsSwap :: Int -> Int -> Int -> Int -> IO JSString
+foreign export javascript "m3Undo sync" jsUndo :: IO JSString
 foreign export javascript "m3State sync" jsState :: IO JSString
 foreign export javascript "m3Levels sync" jsLevels :: IO JSString
 
@@ -33,16 +33,24 @@ jsNew li seed = guarded $ do
   writeIORef stateRef (Just gs)
   pure out
 
--- | m3Swap(r1,c1,r2,c2)：交换两格；返回 {ok,outcome,trace,state}。
+-- | m3Swap(r1,c1,r2,c2)：交换两格；返回 {ok,accepted,outcome,trace,events,state}。
 jsSwap :: Int -> Int -> Int -> Int -> IO JSString
-jsSwap r1 c1 r2 c2 = guarded $ do
-  mgs <- readIORef stateRef
-  case mgs of
+jsSwap r1 c1 r2 c2 = withGame (apiSwap (r1, c1) (r2, c2))
+
+-- | m3Undo()：撤销一步；JSON 形状同 m3Swap。
+jsUndo :: IO JSString
+jsUndo = withGame apiUndo
+
+-- | 对当前一局执行一个纯动作：JSON 完整算出后才写回全局状态。
+withGame :: (WebGame -> (WebGame, String)) -> IO JSString
+withGame f = guarded $ do
+  mh <- readIORef stateRef
+  case mh of
     Nothing -> pure (errJson "no game; call m3New first")
-    Just gs -> do
-      let (gs', out) = apiSwap (r1, c1) (r2, c2) gs
+    Just h -> do
+      let (h', out) = f h
       _ <- evaluate (length out)
-      writeIORef stateRef (Just gs')
+      writeIORef stateRef (Just h')
       pure out
 
 -- | m3State()：当前局面快照。

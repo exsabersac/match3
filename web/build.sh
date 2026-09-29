@@ -22,9 +22,9 @@ fi
 # shellcheck disable=SC1091
 source "$PREFIX/env"
 
-# 1) 检查核心模块列表：match3-web.cabal 直接编译 ../src，模块清单要与 package.yaml 一致
-want=$(sed -n '/^library:/,/^[a-z]/p' "$ROOT/package.yaml" | sed -n 's/^  - \(Match3\..*\)$/\1/p' | sort)
-have=$(sed -n 's/^    \(Match3\.[A-Za-z.]*\)$/\1/p' "$HERE/match3-web.cabal" | sort)
+# 1) 检查核心模块列表：match3-web.cabal 直接编译 ../src，模块清单（Engine.* + Match3.*）要与 package.yaml 一致
+want=$(sed -n '/^library:/,/^[a-z]/p' "$ROOT/package.yaml" | sed -n 's/^  - \(\(Match3\|Engine\)\..*\)$/\1/p' | sort)
+have=$(sed -n 's/^    \(\(Match3\|Engine\)\.[A-Za-z.]*\)$/\1/p' "$HERE/match3-web.cabal" | sort)
 if [ "$want" != "$have" ]; then
   echo "警告：match3-web.cabal 的核心模块清单与 package.yaml 不一致：" >&2
   diff <(echo "$want") <(echo "$have") >&2 || true

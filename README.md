@@ -170,9 +170,13 @@ Stackage：**lts-21.25** / GHC **9.4.8**（`stack.yaml` 已 `system-ghc: true`�
 ## 目录结构
 
 ```
-src/Match3/   Types Board Game Core Obstacles Rainbow Combos Ice
+src/Match3/   Types Core Board Game Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
-app/Main.hs   SDL2 前端
+src/Match3/Board/  Grid Match Clear Gravity Cascade Random（Board.hs 为再导出外观）
+src/Match3/Game/   State Tally Outcome Shuffle Level Trace Move Boosters（Game.hs 为再导出外观）
+app/Main.hs   SDL2 前端入口与主循环
+app/UI/       前端模块：Types Layout Env Input Actions Playback Draw Cascade EndStage
+              BoardArt BoardPrim HudArt HudPrim TextArt Glyph LevelMap
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
 app/ComboFx.hs 连锁逐轮回放 / 步末动画的纯阶段机与时间线常量
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）

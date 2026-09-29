@@ -1,0 +1,340 @@
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+-- | 棋盘贴图绘制与分派：宝石 / 障碍贴图、层数角标、棋盘底纹与皮带、飞碟、蔓延预告，
+-- 以及「有贴图画贴图、否则退回几何」的分派函数（drawCellAny / drawStatic / drawUfosAny / drawParticlesAny），
+-- 和回放 / 步末绘制共用的底盘与格子部件（drawBoardBase / drawCellsExcept / drawCellScaled / waveTint）。
+--
+-- 依赖：UI.BoardPrim（降级）、Art、UI.Types、UI.Layout。
+module UI.BoardArt
+  ( drawBoardBase
+  , waveTint
+  , drawCellsExcept
+  , drawCellScaled
+  , drawStatic
+  , colorKey
+  , gemSprite
+  , breathe
+  , drawCellAny
+  , primarySprite
+  , drawCellArt
+  , drawLayerBadge
+  , drawBadgeAt
+  , beltAngles
+  , drawBoardBgArt
+  , drawStaticArt
+  , drawUfosArt
+  , drawUfosAny
+  , spreadTargets
+  , drawParticlesAny
+  ) where
+
+import Art
+import ComboFx
+import Control.Monad (forM_, unless, void, when)
+import Data.Word (Word8)
+import Foreign.C.Types (CDouble, CInt)
+import Match3.Core
+import SDL hiding (Normal)
+import UI.BoardPrim
+import UI.Layout
+import UI.Types
+
+-- | 棋盘底层（格子 / 地毯 / 传送带 / 传送门），不画棋子。
+drawBoardBase :: Renderer -> App -> IO ()
+drawBoardBase ren app = case appArt app of
+  Just art -> drawBoardBgArt ren art app
+  Nothing ->
+    forM_ allCells $ \pos@(r, c) -> do
+      let (x, y) = cellOrigin pos
+      rendererDrawColor ren $= if even (r + c) then V4 36 36 48 255 else V4 28 28 40 255
+      fillRect ren (Just (cellRect x y))
+
+-- | 高亮 / 光圈颜色：第 1 轮柔白，连击轮用等级色。
+waveTint :: App -> Int -> V3 Word8
+waveTint app k
+  | k <= 1 = V3 255 250 220
+  | otherwise = let (r, g, b) = styleRGB (comboStyle k) (appPulse app) in V3 r g b
+
+-- | 棋盘底 + 除 hidden 以外的所有格（移动中的格由调用方另画）。
+drawCellsExcept :: Renderer -> App -> Board -> [Pos] -> IO ()
+drawCellsExcept ren app board hidden = do
+  drawBoardBase ren app
+  forM_ allCells $ \pos ->
+    unless (pos `elem` hidden) $ do
+      let (x, y) = cellOrigin pos
+      drawCellAny ren app x y (getCell board pos) False
+  drawUfosAny ren app
+
+-- | 以格子中心 (cx, cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记）。
+drawCellScaled :: Renderer -> App -> CInt -> CInt -> Double -> Word8 -> Cell -> IO ()
+drawCellScaled ren app cx cy s a cell
+  | s <= 0.03 || a == 0 = pure ()
+  | otherwise = do
+      let sz = max 1 (round (fromIntegral cellPx * s)) :: CInt
+          dst = rect (cx - sz `div` 2) (cy - sz `div` 2) sz sz
+          white = V3 255 255 255
+      case appArt app of
+        Just art | hasSprite art (primarySprite cell) -> do
+          void (drawSpriteMod ren art (primarySprite cell) dst white a)
+          case cell of
+            Gem _ LineH _ _ -> void (drawSpriteMod ren art "line_h" dst white a)
+            Gem _ LineV _ _ -> void (drawSpriteMod ren art "line_v" dst white a)
+            Gem _ Bomb _ _ -> void (drawSpriteMod ren art "bomb_mark" dst white a)
+            _ -> pure ()
+        _ -> do
+          let (r, g, b) = cellRGB cell
+          rendererDrawColor ren $= V4 r g b a
+          fillRect ren (Just dst)
+
+drawStatic :: Renderer -> App -> Board -> CInt -> IO ()
+drawStatic ren app board yOff = case appArt app of
+  Just art -> drawStaticArt ren art app board yOff
+  Nothing -> drawStaticPrim ren app board yOff
+
+-- | 颜色 → 贴图后缀（c1..c5）。
+colorKey :: Color -> String
+colorKey C1 = "c1"
+colorKey C2 = "c2"
+colorKey C3 = "c3"
+colorKey C4 = "c4"
+colorKey C5 = "c5"
+
+gemSprite :: Color -> String
+gemSprite c = "gem_" ++ colorKey c
+
+-- | 0..1 正弦呼吸，周期约 period 帧。
+breathe :: Int -> Double -> Double
+breathe pulse period = 0.5 + 0.5 * sin (fromIntegral pulse * 2 * pi / period)
+
+-- | 单格绘制入口：有贴图走精灵，否则走原矩形版。
+drawCellAny :: Renderer -> App -> CInt -> CInt -> Cell -> Bool -> IO ()
+drawCellAny ren app x y cell flashing = case appArt app of
+  Just art -> drawCellArt ren art (appPulse app) x y cell flashing
+  Nothing -> drawGemAt ren x y cell flashing
+
+-- | 该格的主贴图名（用于检测资源缺失时逐格回退）。
+primarySprite :: Cell -> String
+primarySprite cell = case cell of
+  Gem c k _ _ -> if k == Rainbow then "rainbow" else gemSprite c
+  Stone _ -> "stone_3"
+  Chest _ -> "chest"
+  Honey _ -> "honey"
+  Balloon c -> "balloon_" ++ colorKey c
+  Cookie -> "cookie"
+  Cake _ -> "cake_1"
+  MagicHat -> "magic_hat"
+  Maker c _ -> "maker_" ++ colorKey c
+  Snail _ _ -> "snail"
+  Safe _ -> "safe"
+  Flip f _ -> gemSprite f
+  Surprise -> "surprise"
+  Bottle c -> "bottle_" ++ colorKey c
+  TimeSpirit -> "time_spirit"
+  Countdown c _ -> gemSprite c
+
+-- | 精灵版单格：底层宝石 / 障碍 → 特殊标记 → 冰 → 覆盖层 → 层数角标 → 闪白。
+drawCellArt :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> Bool -> IO ()
+drawCellArt ren art pulse x y cell flashing
+  | not (hasSprite art (primarySprite cell)) = drawGemAt ren x y cell flashing
+  | otherwise = do
+      let dst = cellRect x y
+          spr n = void (drawSprite ren art n dst)
+          -- 气球 / 精灵轻微上下浮动
+          bob = round (2 * sin (fromIntegral pulse / 9 :: Double)) :: CInt
+          sprBob n = void (drawSprite ren art n (cellRect x (y + bob)))
+          badge = drawLayerBadge ren art x y
+      case cell of
+        Gem col kind ice ov -> do
+          -- 炸弹：身后橙色呼吸光晕
+          when (kind == Bomb) $ do
+            let a = round (140 + 110 * breathe pulse 50) :: Int
+            void (drawSpriteMod ren art "bomb_glow" dst (V3 255 255 255) (fromIntegral a))
+          if kind == Rainbow
+            then void (drawSpriteEx ren art "rainbow" dst (fromIntegral (pulse * 2 `mod` 360) :: CDouble) False)
+            else spr (gemSprite col)
+          case kind of
+            LineH -> spr "line_h"
+            LineV -> spr "line_v"
+            Bomb -> spr "bomb_mark"
+            _ -> pure ()
+          when (ice > 0) $ spr ("ice_" ++ show (clampI 1 3 ice))
+          layers <- case ov of
+            Just Grass -> spr "grass" >> pure 0
+            Just Vine -> spr "vine" >> pure 0
+            Just Choco -> spr "choco" >> pure 0
+            Just (Fog n) -> spr ("fog_" ++ show (clampI 1 2 n)) >> pure n
+            Just (Chain n) -> spr ("chain_" ++ show (clampI 1 2 n)) >> pure n
+            Just (Freeze n) -> spr ("freeze_" ++ show (clampI 1 2 n)) >> pure n
+            Just (Curtain n) -> spr ("curtain_" ++ show (clampI 1 2 n)) >> pure n
+            Just Steam -> spr "steam" >> pure 0
+            Nothing -> pure 0
+          badge (if layers > 0 then layers else ice)
+        Stone n -> spr ("stone_" ++ show (clampI 1 3 n)) >> badge n
+        Chest n -> spr "chest" >> badge n
+        Honey n -> spr "honey" >> badge n
+        Balloon c -> sprBob ("balloon_" ++ colorKey c)
+        Cookie -> spr "cookie"
+        Cake n -> spr ("cake_" ++ show (clampI 1 3 n)) >> badge n
+        MagicHat -> spr "magic_hat"
+        Maker c n -> do
+          spr ("maker_" ++ colorKey c)
+          -- 果汁机是计数器：剩余次数始终显示
+          drawBadgeAt ren art x y (max 1 n)
+        Snail dr dc -> do
+          -- 贴图朝右；按爬行方向旋转 / 翻转
+          let (ang, flipH)
+                | abs dc >= abs dr && dc >= 0 = (0, False)
+                | abs dc >= abs dr = (0, True)
+                | dr > 0 = (90, False)
+                | otherwise = (-90, False)
+          void (drawSpriteEx ren art "snail" dst ang flipH)
+        Safe n -> spr "safe" >> badge n
+        Flip f b -> do
+          spr (gemSprite f)
+          -- 右上角小图 = 翻面后的颜色；左下角双箭头标记
+          void (drawSprite ren art (gemSprite b) (rect (x + cellPx - 25) (y + 1) 24 24))
+          spr "flip_mark"
+        Surprise -> spr "surprise"
+        Bottle c -> spr ("bottle_" ++ colorKey c)
+        TimeSpirit -> sprBob "time_spirit"
+        Countdown c n -> do
+          spr (gemSprite c)
+          spr ("countdown_" ++ show (clampI 1 9 n))
+      when flashing $
+        void (drawSpriteAdd ren art "spark" (rect (x - 10) (y - 10) (cellPx + 20) (cellPx + 20)) (V3 255 255 230) 210)
+
+-- | 层数 ≥ 2 时右下角数字角标。
+drawLayerBadge :: Renderer -> Art -> CInt -> CInt -> Int -> IO ()
+drawLayerBadge ren art x y n = when (n >= 2) $ drawBadgeAt ren art x y n
+
+drawBadgeAt :: Renderer -> Art -> CInt -> CInt -> Int -> IO ()
+drawBadgeAt ren art x y n =
+  void (drawSprite ren art ("badge_" ++ show (clampI 1 9 n)) (rect (x + cellPx - 23) (y + cellPx - 23) 23 23))
+
+-- | 传送带每格的朝向角度（右 0 / 下 90 / 左 180 / 上 270）。
+beltAngles :: [Pos] -> [(Pos, CDouble)]
+beltAngles belt = go Nothing (zip belt (drop 1 belt ++ take 1 belt))
+  where
+    go _ [] = []
+    go prev ((a, b) : rest) =
+      let ang = case dirAngle a b of
+            Just d -> d
+            Nothing -> maybe 0 id prev
+      in (a, ang) : go (Just ang) rest
+    dirAngle (r1, c1) (r2, c2)
+      | r1 == r2 && c2 == c1 + 1 = Just 0
+      | r1 == r2 && c2 == c1 - 1 = Just 180
+      | c1 == c2 && r2 == r1 + 1 = Just 90
+      | c1 == c2 && r2 == r1 - 1 = Just 270
+      | otherwise = Nothing
+
+-- | 棋盘底层：圆角框 + 棋盘格 + 地毯 + 传送带 + 传送门（都在棋子下面）。
+drawBoardBgArt :: Renderer -> Art -> App -> IO ()
+drawBoardBgArt ren art app = do
+  let gs = appGame app
+      carpets = levelCarpets (gsLevel gs)
+  _ <- drawPanel ren art "panel_dark" (rect (padPx - 8) (hudH + padPx - 8) (boardPx + 16) (boardPx + 16)) 16
+  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \pos@(r, c) -> do
+    let (x, y) = cellOrigin pos
+        carpetOpen = pos `elem` gsCarpetOpen gs
+        carpetCovered = pos `elem` carpets && not carpetOpen
+    void (drawSprite ren art (if even (r + c) then "tile_a" else "tile_b") (cellRect x y))
+    when carpetCovered $ void (drawSprite ren art "carpet_covered" (cellRect x y))
+    when carpetOpen $ void (drawSprite ren art "carpet_open" (cellRect x y))
+  forM_ (gsBelts gs) $ \belt ->
+    forM_ (beltAngles belt) $ \(pos, ang) -> do
+      let (x, y) = cellOrigin pos
+      void (drawSpriteEx ren art "belt" (cellRect x y) ang False)
+  forM_ (gsPortals gs) $ \(a, b) ->
+    forM_ [a, b] $ \pos -> do
+      let (x, y) = cellOrigin pos
+          spin = fromIntegral (appPulse app * 3 `mod` 360) :: CDouble
+      void (drawSpriteEx ren art "portal" (cellRect x y) spin False)
+
+-- | 精灵版棋盘：底层 → 提示光 → 棋子（下落时带 yOff）→ 选中框 → 蔓延预告 → 飞碟。
+drawStaticArt :: Renderer -> Art -> App -> Board -> CInt -> IO ()
+drawStaticArt ren art app board yOff = do
+  let gs = appGame app
+      pulse = appPulse app
+      flashSet = map fst (appFlash app)
+      hintCells = maybe [] (\(a, b) -> [a, b]) (gsHint gs)
+      hintA = round (120 + 135 * breathe pulse 60) :: Int
+  drawBoardBgArt ren art app
+  forM_ hintCells $ \pos -> do
+    let (x, y) = cellOrigin pos
+    void (drawSpriteMod ren art "hint_glow" (rect (x - 3) (y - 3) (cellPx + 6) (cellPx + 6)) (V3 255 255 255) (fromIntegral hintA))
+  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \pos -> do
+    let (x, y) = cellOrigin pos
+    drawCellArt ren art pulse x (y + yOff) (getCell board pos) (pos `elem` flashSet)
+  -- 提示格再叠一层淡淡的加色光，便于一眼看到
+  forM_ hintCells $ \pos -> do
+    let (x, y) = cellOrigin pos
+    void (drawSpriteAdd ren art "hint_glow" (cellRect x y) (V3 255 230 150) (fromIntegral (hintA `div` 3)))
+  forM_ (appSel app) $ \pos -> do
+    let (x, y) = cellOrigin pos
+        tint = case appTool app of
+          ToolHammer -> V3 255 170 80
+          ToolFreeSwap _ -> V3 110 190 255
+          ToolCross -> V3 235 110 235
+          ToolNone -> V3 255 255 255
+        grow = round (2 * breathe pulse 30) :: CInt
+    void (drawSpriteMod ren art "sel_ring" (rect (x - 2 - grow) (y - 2 - grow) (cellPx + 4 + 2 * grow) (cellPx + 4 + 2 * grow)) tint 255)
+  -- 自由交换第一格：保持高亮
+  case appTool app of
+    ToolFreeSwap (Just p) -> do
+      let (x, y) = cellOrigin p
+      void (drawSpriteMod ren art "sel_ring" (cellRect x y) (V3 110 190 255) 220)
+    _ -> pure ()
+  -- 藤蔓 / 巧克力下一步可能蔓延到的格子：绿 / 棕色柔光呼吸。
+  -- 只在静止时画：预告基于结算后的盘面，回放 / 步末动画中画出来会和正在长出的格子混淆。
+  let spreadA = fromIntegral (round (70 + 110 * breathe pulse 60) :: Int) :: Word8
+  unless (animBusy app) $ do
+    forM_ (spreadTargets hasVine (gsBoard gs)) $ \pos -> do
+      let (x, y) = cellOrigin pos
+      void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 90 255 120) spreadA)
+    forM_ (spreadTargets hasChoco (gsBoard gs)) $ \pos -> do
+      let (x, y) = cellOrigin pos
+      void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 210 120 60) spreadA)
+  drawUfosArt ren art app yOff
+
+-- | 飞碟（贴图版，缺图时退回几何画法）。
+drawUfosArt :: Renderer -> Art -> App -> CInt -> IO ()
+drawUfosArt ren art app yOff = do
+  let pulse = appPulse app
+  forM_ (gsUfos (appGame app)) $ \(Ufo pos col) -> do
+    let (x, y) = cellOrigin pos
+        bob = round (3 * sin (fromIntegral pulse / 10 :: Double)) :: CInt
+    ok <- drawSprite ren art ("ufo_" ++ colorKey col) (rect x (y + yOff - 12 + bob) cellPx cellPx)
+    unless ok $ drawUfo ren yOff pulse (Ufo pos col)
+
+drawUfosAny :: Renderer -> App -> IO ()
+drawUfosAny ren app = case appArt app of
+  Just art -> drawUfosArt ren art app 0
+  Nothing -> mapM_ (drawUfo ren 0 (appPulse app)) (gsUfos (appGame app))
+
+-- | 与 drawVineSpreadHints 相同的判定：源格正交相邻、且无覆盖层的普通宝石格。
+spreadTargets :: (Cell -> Bool) -> Board -> [Pos]
+spreadTargets isSource board =
+  [ q
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , isSource (getCell board (r, c))
+  , q <- [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+  , inBounds q
+  , case getCell board q of
+      Gem _ _ _ Nothing -> True
+      _ -> False
+  ]
+
+-- | 粒子：有贴图时用柔光圆点（按颜色着色、随寿命淡出）。
+drawParticlesAny :: Renderer -> App -> IO ()
+drawParticlesAny ren app = case appArt app of
+  Nothing -> drawParticles ren (appParticles app)
+  Just art ->
+    forM_ (appParticles app) $ \p -> do
+      let fade = if pMax p <= 0 then 255 else fromIntegral (255 * pLife p `div` pMax p) :: Word8
+          s = pSize p * 3
+          x = round (pX p) - s `div` 2
+          y = round (pY p) - s `div` 2
+      void (drawSpriteMod ren art "spark" (rect x y s s) (V3 (pR p) (pG p) (pB p)) fade)

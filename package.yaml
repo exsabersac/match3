@@ -33,7 +33,21 @@ library:
   - Match3.Core
   - Match3.Types
   - Match3.Board
+  - Match3.Board.Grid
+  - Match3.Board.Match
+  - Match3.Board.Clear
+  - Match3.Board.Gravity
+  - Match3.Board.Cascade
+  - Match3.Board.Random
   - Match3.Game
+  - Match3.Game.State
+  - Match3.Game.Tally
+  - Match3.Game.Outcome
+  - Match3.Game.Shuffle
+  - Match3.Game.Level
+  - Match3.Game.Trace
+  - Match3.Game.Move
+  - Match3.Game.Boosters
   - Match3.Obstacles
   - Match3.Rainbow
   - Match3.Combos

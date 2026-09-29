@@ -16,9 +16,14 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
 import Foreign.C.Types (CDouble, CInt)
+import Foreign.Marshal.Alloc (alloca)
+import Foreign.Storable (peek)
 import Match3.Core
 import SDL hiding (Normal)
+import qualified SDL.Internal.Types as SI
+import qualified SDL.Raw as Raw
 import System.Environment (lookupEnv)
+import System.IO (hPutStrLn, stderr)
 import System.Random (randomIO, randomRIO)
 import Text.Read (readMaybe)
 
@@ -89,6 +94,8 @@ data App = App
   , appMapOpen   :: Bool  -- level map overlay (选关)
   , appMaxReached :: Int  -- highest unlocked campaign index
   , appArt       :: Maybe Art  -- 贴图集；Nothing 时回退到矩形绘制
+  , appScale     :: Float  -- 渲染倍率：物理像素 / 逻辑像素（Retina = 2）；0 表示尚未同步
+  , appMouseScale :: Float -- 鼠标倍率：窗口坐标 / 逻辑像素（macOS Retina = 1；MATCH3_SCALE=N 时 = N）
   }
 
 colorRGB :: Color -> (Word8, Word8, Word8)
@@ -109,12 +116,18 @@ main = do
   seed <- randomIO
   startIdx <- envStartLevel
   showcase <- isJust <$> lookupEnv "MATCH3_SHOWCASE"
+  winScale <- envWindowScale
   let lvl = allLevels !! startIdx
       gs0 = newGameAtLevel startIdx (levelConfig lvl) seed
+  -- 高分屏：windowHighDPI 让 macOS Retina 给出 2x 物理像素的绘制表面（窗口坐标仍是逻辑点）。
+  -- MATCH3_SCALE=N（测试用）把窗口本身放大 N 倍，在 Xvfb 等没有 HiDPI 的环境里模拟 Retina。
   window <-
     createWindow
       "Match-3"
-      defaultWindow { windowInitialSize = V2 winW winH }
+      defaultWindow
+        { windowInitialSize = V2 (winW * winScale) (winH * winScale)
+        , windowHighDPI = True
+        }
   renderer <- createRenderer window (-1) defaultRenderer
   -- 开启 alpha 混合：面板、遮罩、粒子的半透明才生效
   rendererDrawBlendMode renderer $= BlendAlphaBlend
@@ -141,9 +154,13 @@ main = do
         , appMapOpen = False
         , appMaxReached = startIdx
         , appArt = art
+        , appScale = 0
+        , appMouseScale = 1
         }
   updateTitle window =<< readIORef ref
   let loop = do
+        -- 每帧同步倍率（两次查询很便宜）：窗口拖到不同 DPI 的显示器上也能立刻跟上
+        syncScale window renderer ref
         events <- pollEvents
         shouldQuit <- foldEvents ref window events
         modifyIORef' ref tickAnim
@@ -326,8 +343,72 @@ foldEvents ref window = go False
   where
     go q [] = pure q
     go q (e : es) = do
-      q' <- handleEvent ref window e
+      ms <- appMouseScale <$> readIORef ref
+      -- 先把鼠标坐标换算成逻辑坐标，后面的点选 / 拖拽 / 地图 / 按钮判定全部沿用逻辑坐标
+      q' <- handleEvent ref window (mouseToLogical ms e)
       go (q || q') es
+
+--------------------------------------------------------------------------------
+-- 高分屏（Retina）倍率
+--------------------------------------------------------------------------------
+
+-- | 渲染器输出尺寸（物理像素）。Retina + windowHighDPI 下是窗口点数的 2 倍。
+rendererOutputPixels :: Renderer -> IO (V2 CInt)
+rendererOutputPixels (SI.Renderer raw) =
+  alloca $ \pw -> alloca $ \ph -> do
+    rc <- Raw.getRendererOutputSize raw pw ph
+    if rc /= 0 then pure (V2 winW winH) else V2 <$> peek pw <*> peek ph
+
+-- | 由「尺寸 / 逻辑尺寸」求倍率；宽高取较小者，保证整个逻辑画面都放得下。
+ratioOf :: V2 CInt -> Float
+ratioOf (V2 w h) =
+  max 0.25 (min (fromIntegral w / fromIntegral winW) (fromIntegral h / fromIntegral winH))
+
+-- | 查询当前倍率，变化时更新 SDL 渲染缩放和贴图变体选择用的 artScale。
+-- 游戏逻辑与所有绘制坐标始终是 480x588 逻辑单位；SDL_RenderSetScale 负责乘上物理倍率。
+syncScale :: Window -> Renderer -> IORef App -> IO ()
+syncScale window ren ref = do
+  out <- rendererOutputPixels ren
+  win <- get (windowSize window)
+  let ps = ratioOf out
+      ms = ratioOf win
+  app <- readIORef ref
+  when (ps /= appScale app || ms /= appMouseScale app) $ do
+    rendererScale ren $= V2 (realToFrac ps) (realToFrac ps)
+    hPutStrLn stderr $
+      "match3-sdl: render scale " ++ show ps ++ " (output " ++ showV2 out
+        ++ ", window " ++ showV2 win ++ ", logical " ++ showV2 (V2 winW winH) ++ ")"
+    writeIORef ref app
+      { appScale = ps
+      , appMouseScale = ms
+      , appArt = fmap (\a -> a {artScale = ps}) (appArt app)
+      }
+  where
+    showV2 (V2 a b) = show a ++ "x" ++ show b
+
+-- | 鼠标事件：窗口坐标 → 逻辑坐标。macOS Retina 上 SDL 给的已是逻辑点（倍率 1，不变）；
+-- MATCH3_SCALE=N 放大窗口时窗口坐标 = 物理像素，需要除以 N。
+mouseToLogical :: Float -> Event -> Event
+mouseToLogical s ev
+  | s == 1 = ev
+  | otherwise = case eventPayload ev of
+      MouseButtonEvent me ->
+        ev {eventPayload = MouseButtonEvent me {mouseButtonEventPos = conv (mouseButtonEventPos me)}}
+      MouseMotionEvent mm ->
+        ev {eventPayload = MouseMotionEvent mm {mouseMotionEventPos = conv (mouseMotionEventPos mm)}}
+      _ -> ev
+  where
+    conv (P (V2 x y)) = P (V2 (d x) (d y))
+    d :: Int32 -> Int32
+    d v = floor (fromIntegral v / s :: Float)
+
+-- | MATCH3_SCALE=N（1..4，测试用）：窗口按 N 倍逻辑尺寸创建。默认 1。
+envWindowScale :: IO CInt
+envWindowScale = do
+  v <- lookupEnv "MATCH3_SCALE"
+  pure $ case v >>= readMaybe of
+    Just n | n >= 1 && n <= (4 :: Int) -> fromIntegral n
+    _ -> 1
 
 -- | Reset tip/help for a (re)started level; auto-hint on level 1 (index 0).
 freshLevelUi :: GameState -> App -> App
@@ -2763,11 +2844,12 @@ textW px s = 4 * px * fromIntegral (length s)
 textAC :: Renderer -> Art -> CInt -> CInt -> CInt -> V4 Word8 -> String -> IO ()
 textAC ren art cx y px col s = textA ren art (cx - textW px s `div` 2) y px col s
 
--- | 中文标签贴图宽度（按目标高度 h 等比）。
+-- | 中文标签贴图宽度（按目标高度 h 等比；用实际选中的尺寸变体计算，保证与绘制一致）。
 zhW :: Art -> String -> CInt -> CInt
-zhW art key h = maybe 0 (\(w0, h0) -> w0 * h `div` max 1 h0) (spriteSize art key)
+zhW art key h = maybe 0 (\(w0, h0) -> w0 * h `div` max 1 h0) (spriteSizeAt art key h)
 
--- | 画中文标签（贴图生成时为 2x，h=20 时最清晰）；返回宽度。
+-- | 画中文标签：按游戏内实际高度 h 烘焙了 2x 变体（见 tools/gen_assets.py 的 ZH_SIZES），
+-- Retina 上贴图像素与物理像素 1:1；返回宽度。
 zhA :: Renderer -> Art -> String -> CInt -> CInt -> CInt -> IO CInt
 zhA ren art key x y h = do
   let w = zhW art key h
@@ -2779,10 +2861,7 @@ zhAC ren art key cx y h = void (zhA ren art key (cx - zhW art key h `div` 2) y h
 
 -- | 着色九宫格（进度条填充）。
 drawPanelTint :: Renderer -> Art -> String -> Rectangle CInt -> CInt -> V3 Word8 -> IO ()
-drawPanelTint ren art name r c tint = do
-  textureColorMod (artTex art) $= tint
-  _ <- drawPanel ren art name r c
-  textureColorMod (artTex art) $= V3 255 255 255
+drawPanelTint ren art name r c tint = void (drawPanelMod ren art name r c tint)
 
 -- | 按键小方块。
 keyChipA :: Renderer -> Art -> CInt -> CInt -> Char -> V4 Word8 -> IO ()

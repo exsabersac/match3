@@ -4,13 +4,21 @@
 match3 美术资源生成器（程序化、可复现）。
 
 输出（均提交到仓库）：
-  assets/atlas.bmp      32 位 BGRA 贴图集（BITMAPV4 头 + alpha 掩码，SDL2 核心 SDL_LoadBMP 可直接读取）
-  assets/atlas.txt      贴图索引：每行 `名字 x y w h`
-  assets/background.bmp 窗口背景（480x588，不透明）
+  assets/atlas.bmp      32 位 BGRA 贴图集第 0 页（BITMAPV4 头 + alpha 掩码，SDL2 核心 SDL_LoadBMP 可直接读取）
+  assets/atlas1.bmp ... 第 1 页起（单页超过 1024x2048 时自动分页）
+  assets/atlas.txt      贴图索引：每行 `名字 x y w h 页号`
+  assets/background.bmp 窗口背景（960x1176 = 480x588 的 2x，24 位不透明）
   docs/images/legend.png 图例总表（中英文标注）
 
 用法：python3 tools/gen_assets.py   （依赖 Pillow + numpy）
 风格：2x 超采样绘制（格子 56px → 贴图 112px），光泽宝石 + 「颜色 × 形状」双编码。
+
+高分屏（Retina）约定：
+  - 所有 UI 贴图都按「逻辑尺寸 × 2」烘焙，Retina 上 1 个贴图像素 = 1 个物理像素。
+  - 文字（中文标签 / HUD 字形）按游戏内实际使用的逻辑高度 × TS 直接用 FreeType 渲染（带 hinting），
+    不再「超大字号 + 缩小」，笔画落在像素格上更锐利。
+  - 同一贴图可有多个尺寸变体，命名为 `基名@像素高`（如 `zh_combo@68`、`g_48@60`、`gem_c1@56`）；
+    运行时 app/Art.hs 按「目标物理高度」挑最小的够用变体，基名本身始终存在，旧名字全部可用。
 """
 import math
 import os
@@ -31,6 +39,8 @@ S = 112          # 棋子贴图边长（游戏内按 56px 绘制，即 2x）
 SS = 4           # 超采样倍数
 N = S * SS       # 工作画布边长
 WIN_W, WIN_H = 480, 588   # 与 app/Main.hs 的 winW / winH 一致
+TS = 2           # 文字 / UI 烘焙倍率：贴图像素 = 逻辑像素 × TS（Retina 2x 下 1:1）
+PAGE_W, PAGE_H = 1024, 2048   # 单页图集上限（兼顾老 GPU 的 2048 纹理限制）
 
 # ---------------------------------------------------------------- 调色板
 # 颜色 × 形状双编码：色弱玩家也能靠轮廓区分
@@ -1051,14 +1061,14 @@ def hint_glow():
     return img
 
 
-def spark(size=32):
+def spark(size=64):
     img = new()
     img = comp(img, fill_layer(blur(ellipse_mask((U(0.2), U(0.2), U(0.8), U(0.8))), U(0.1)), (255, 255, 255)))
     img = comp(img, fill_layer(ellipse_mask((U(0.38), U(0.38), U(0.62), U(0.62))), (255, 255, 255)))
     return down(img, size)
 
 
-def star(on, size=64):
+def star(on, size=96):     # 结算面板按 48 逻辑像素绘制
     img = new()
     m = poly_mask(pts_px(shape_points("star", 0.5, 0.47, 0.39)))
     if on:
@@ -1095,8 +1105,9 @@ def map_node(kind, size=80):
     return down(img, size)
 
 
-def panel(kind, size=96):
-    """九宫格面板（角半径 = size/4）。"""
+def panel(kind, size=144):
+    """九宫格面板（角 = size/4）。144 → 角 36px，覆盖逻辑角半径 18 的 2x；
+    另生成 @80 小变体（角 20px）给 7..10 的小角半径，避免大比例缩小时描边发虚 / 锯齿。"""
     img = new()
     m = rrect_mask((U(0.03), U(0.03), U(0.97), U(0.97)), U(0.22))
     if kind == "dark":
@@ -1176,7 +1187,7 @@ def icon(kind, size=64):
     return down(img, size)
 
 
-def badge(n, size=48):
+def badge(n, size=46):     # 角标按 23 逻辑像素绘制 → 2x 正好 46
     img = new()
     m = ellipse_mask((U(0.06), U(0.06), U(0.94), U(0.94)))
     img = paint(img, m, ("v", (70, 60, 140), (30, 24, 80)), outline=(255, 220, 100), ow=0.06)
@@ -1236,49 +1247,68 @@ def text_on(img, s, cx, cy, h, fill, outline):
     return comp(img, layer)
 
 
-def glyph(ch, w=40, h=60):
+def _probe():
+    return ImageDraw.Draw(Image.new("RGBA", (8, 8)))
+
+
+def glyph(ch, px=3, ts=TS):
     """HUD 字形：白色字 + 深色描边，运行时用 colorMod 着色。
-    统一字高；过宽的字（如 W、M）水平压缩而不是整体缩小，保证大小一致。"""
-    ss = 4
-    W, H = w * ss, h * ss
-    probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
+    游戏内每字占 4px × 6px 逻辑像素（px = 3/4/5），这里直接按物理像素 (4px·ts) × (6px·ts)
+    用 FreeType 渲染（带 hinting），不做超采样缩小，保证 Retina 下笔画锐利。
+    过宽的字（如 W、M）只做水平压缩，竖直方向保持 1:1，横笔依旧清晰。"""
+    W, H = 4 * px * ts, 6 * px * ts
+    probe = _probe()
     size = H * 0.98
+    sw = max(1, round(H * 0.07))
     f = font_latin(size)
-    sw = int(H * 0.07)
     while True:
         ref = probe.textbbox((0, 0), "H", font=f, stroke_width=sw)
-        if ref[3] - ref[1] <= H * 0.92 or size < 10:
+        if ref[3] - ref[1] <= H * 0.92 or size < 6:
             break
-        size *= 0.94
+        size *= 0.97
         f = font_latin(size)
     bb = probe.textbbox((0, 0), ch, font=f, stroke_width=sw)
-    cw = max(W, int((bb[2] - bb[0]) / 0.98) + 1)
+    gw = bb[2] - bb[0]
+    cw = max(W, gw + 2)
     img = Image.new("RGBA", (cw, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    x = (cw - (bb[2] - bb[0])) / 2 - bb[0]
-    y = (H - (ref[3] - ref[1])) / 2 - ref[1]
+    x = (cw - gw) // 2 - bb[0]
+    y = round((H - (ref[3] - ref[1])) / 2 - ref[1])
     d.text((x, y), ch, font=f, fill=(255, 255, 255, 255), stroke_width=sw, stroke_fill=(16, 12, 36, 255))
-    return img.resize((w, h), Image.LANCZOS)
+    if cw != W:
+        img = img.resize((W, H), Image.LANCZOS)
+    return img
 
 
-def zh_label(s, h=40, color=(255, 255, 255), outline=(16, 12, 36)):
-    """中文标签（2x 高度 h；游戏内按一半显示）。"""
-    ss = 4
-    f = font_cjk(h * ss * 0.8)
-    sw = max(1, int(h * ss * 0.07))
-    tmp = Image.new("RGBA", (10, 10))
-    bb = ImageDraw.Draw(tmp).textbbox((0, 0), s, font=f, stroke_width=sw)
-    W = bb[2] - bb[0] + 2 * ss
-    H = h * ss
+def zh_label(s, h=20, color=(255, 255, 255), outline=(16, 12, 36), ts=TS):
+    """中文标签：h 为游戏内逻辑高度，贴图高 h·ts，按目标字号直接渲染（FreeType hinting）。
+    宽度补齐到 ts 的整数倍，保证逻辑宽度为整数、Retina 下贴图像素与物理像素一一对应。"""
+    H = h * ts
+    f = font_cjk(round(H * 0.8))
+    sw = max(1, round(H * 0.07))
+    bb = _probe().textbbox((0, 0), s, font=f, stroke_width=sw)
+    W = bb[2] - bb[0] + 2 * ts
+    W = -(-W // ts) * ts
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.text((ss - bb[0], (H - (bb[3] - bb[1])) / 2 - bb[1]), s, font=f, fill=rgba(color), stroke_width=sw, stroke_fill=rgba(outline))
-    w2 = max(2, int(round(W / ss)))
-    w2 += w2 % 2
-    return img.resize((w2, h), Image.LANCZOS)
+    x = (W - (bb[2] - bb[0])) // 2 - bb[0]
+    y = round((H - (bb[3] - bb[1])) / 2 - bb[1])
+    d.text((x, y), s, font=f, fill=rgba(color), stroke_width=sw, stroke_fill=rgba(outline))
+    return img
 
 
 GLYPH_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!+-/?:x"
+GLYPH_PX = (3, 4, 5)   # textA 用到的字号；3 为基名 g_<码点>，其余为 g_<码点>@<像素高>
+
+# 中文标签在游戏内的逻辑高度（与 app/Main.hs 的 zhA / zhAC 调用一致）；第一个是基名，其余生成 @变体。
+# 未列出的默认 20。改了 Main.hs 里的高度，记得同步这里，否则会被非整数倍缩放（略糊但仍可用）。
+ZH_SIZES = {
+    "daily": [22], "combo": [18, 34], "shuffle": [18], "score": [18], "help_more": [16],
+    "pause": [32], "clear": [38], "win": [38], "lose": [38], "next": [22], "retry": [26],
+    "map": [32], "map_hint": [18],
+    "ch1": [14], "ch2": [14], "ch3": [14], "ch4": [14], "ch5": [14], "ch6": [14], "ch7": [14],
+}
+NAME_SIZES = [24]      # 关卡名 name_<i>
 
 # 中文 UI 标签（键 → 文本）
 ZH = {
@@ -1301,7 +1331,9 @@ def level_names():
 
 
 # ---------------------------------------------------------------- 背景
-def background(w=WIN_W, h=WIN_H):
+def background(w=WIN_W, h=WIN_H, k=1):
+    """窗口背景；k 为像素倍率（游戏用 k=2 生成 960x1176，图案几何按 k 等比放大，观感与 1x 相同）。"""
+    w, h = w * k, h * k
     rnd = random.Random(21)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     t = yy / h
@@ -1314,14 +1346,16 @@ def background(w=WIN_W, h=WIN_H):
     img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
     pat = Image.new("L", (w, h), 0)
     d = ImageDraw.Draw(pat)
-    for y in range(-40, h + 40, 40):
-        for x in range(-40, w + 40, 40):
-            ox = 20 if (y // 40) % 2 else 0
-            d.polygon([(x + ox, y - 8), (x + ox + 8, y), (x + ox, y + 8), (x + ox - 8, y)], fill=255)
+    step, half, dia = 40 * k, 20 * k, 8 * k
+    for y in range(-step, h + step, step):
+        for x in range(-step, w + step, step):
+            ox = half if (y // step) % 2 else 0
+            d.polygon([(x + ox, y - dia), (x + ox + dia, y), (x + ox, y + dia), (x + ox - dia, y)], fill=255)
     img = Image.alpha_composite(img, fill_layer(pat, (255, 255, 255), 0.035))
     bok = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    for i in range(int(26 * w * h / (WIN_W * WIN_H))):
-        x, y, r = rnd.uniform(0, w), rnd.uniform(0, h), rnd.uniform(6, 30)
+    area = w * h / (WIN_W * WIN_H * k * k)
+    for i in range(int(26 * area)):
+        x, y, r = rnd.uniform(0, w), rnd.uniform(0, h), rnd.uniform(6, 30) * k
         col = rnd.choice([(255, 120, 200), (120, 180, 255), (255, 220, 120), (180, 120, 255)])
         m = Image.new("L", (w, h), 0)
         ImageDraw.Draw(m).ellipse((x - r, y - r, x + r, y + r), fill=255)
@@ -1329,9 +1363,9 @@ def background(w=WIN_W, h=WIN_H):
     img = Image.alpha_composite(img, bok)
     stars = Image.new("L", (w, h), 0)
     d = ImageDraw.Draw(stars)
-    for i in range(int(40 * w * h / (WIN_W * WIN_H))):
+    for i in range(int(40 * area)):
         x, y = rnd.uniform(0, w), rnd.uniform(0, h)
-        r = rnd.uniform(0.6, 1.6)
+        r = rnd.uniform(0.6, 1.6) * k
         d.ellipse((x - r, y - r, x + r, y + r), fill=int(rnd.uniform(80, 220)))
     img = Image.alpha_composite(img, fill_layer(stars, (255, 255, 255)))
     return img
@@ -1353,28 +1387,37 @@ def bleed(img):
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
 
 
-def pack(sprites, width=1024):
-    """货架式打包，精灵之间留 2px 间隙。"""
+def pack(sprites, width=PAGE_W, max_h=PAGE_H):
+    """货架式打包，精灵之间留 2px 间隙；一页放不下就开新页。
+    返回 (pages, rects)，rects[name] = (x, y, w, h, page)。"""
     items = sorted(sprites.items(), key=lambda kv: (-kv[1].size[1], kv[0]))
-    x = y = 0
-    shelf = 0
-    rects = {}
     gap = 2
+    rects = {}
+    heights = []
+    page = x = y = shelf = 0
     for name, im in items:
         w, h = im.size
         if x + w > width:
             x = 0
             y += shelf + gap
             shelf = 0
-        rects[name] = (x, y, w, h)
+        if y + h > max_h:
+            heights.append(y - gap)
+            page += 1
+            x = y = shelf = 0
+        rects[name] = (x, y, w, h, page)
         x += w + gap
         shelf = max(shelf, h)
-    H = y + shelf
-    atlas = Image.new("RGBA", (width, H), (0, 0, 0, 0))
+    heights.append(y + shelf)
+    pages = [Image.new("RGBA", (width, ph), (0, 0, 0, 0)) for ph in heights]
     for name, im in sprites.items():
-        rx, ry, _, _ = rects[name]
-        atlas.paste(im, (rx, ry))
-    return atlas, rects
+        rx, ry, _, _, pg = rects[name]
+        pages[pg].paste(im, (rx, ry))
+    return pages, rects
+
+
+def page_file(i):
+    return "atlas.bmp" if i == 0 else "atlas%d.bmp" % i
 
 
 def save_bmp32(img, path):
@@ -1449,14 +1492,23 @@ def build_sprites():
         sp["node_" + k] = map_node(k)
     for k in ("dark", "gold", "chip", "bar", "fill"):
         sp["panel_" + k] = panel(k)
+        sp["panel_%s@80" % k] = panel(k, 80)
     for k in ("hammer", "swap", "cross", "moves", "score", "multi"):
         sp["icon_" + k] = icon(k)
     for ch in GLYPH_CHARS:
-        sp["g_%d" % ord(ch)] = glyph(ch)
+        for j, px in enumerate(GLYPH_PX):
+            im = glyph(ch, px)
+            sp["g_%d" % ord(ch) + ("" if j == 0 else "@%d" % im.size[1])] = im
     for k, s in ZH.items():
-        sp["zh_" + k] = zh_label(s)
+        for j, h in enumerate(ZH_SIZES.get(k, [20])):
+            sp["zh_" + k + ("" if j == 0 else "@%d" % (h * TS))] = zh_label(s, h)
     for i, n in level_names():
-        sp["name_%d" % i] = zh_label(n, 44, (255, 240, 200), (40, 20, 10))
+        for j, h in enumerate(NAME_SIZES):
+            sp["name_%d" % i + ("" if j == 0 else "@%d" % (h * TS))] = zh_label(n, h, (255, 240, 200), (40, 20, 10))
+    # 112px 棋盘贴图再各出一个 @56 半尺寸变体：HUD 目标图标（26 / 18 逻辑像素）、
+    # 双面块小角标、以及 1x 屏上的棋盘格都用它，避免 SDL 双线性一次缩小 2 倍以上产生锯齿。
+    for name in [n for n, im in sp.items() if im.size == (S, S)]:
+        sp[name + "@56"] = sp[name].resize((S // 2, S // 2), Image.LANCZOS)
     return sp
 
 
@@ -1557,18 +1609,23 @@ def main():
     ASSETS.mkdir(exist_ok=True)
     DOCIMG.mkdir(parents=True, exist_ok=True)
     sp = build_sprites()
-    atlas, rects = pack({k: bleed(v) for k, v in sp.items()})
-    save_bmp32(atlas, ASSETS / "atlas.bmp")
+    pages, rects = pack({k: bleed(v) for k, v in sp.items()})
+    for old in ASSETS.glob("atlas*.bmp"):
+        old.unlink()
+    for i, pg in enumerate(pages):
+        save_bmp32(pg, ASSETS / page_file(i))
     with open(ASSETS / "atlas.txt", "w", encoding="utf-8") as fp:
-        fp.write("# match3 sprite atlas index: name x y w h  (generated by tools/gen_assets.py)\n")
+        fp.write("# match3 sprite atlas index: name x y w h page  (generated by tools/gen_assets.py)\n")
+        fp.write("# page 0 = atlas.bmp, page n = atlas<n>.bmp; name@H = size variant of name (H px tall)\n")
         for name in sorted(rects):
-            x, y, w, h = rects[name]
-            fp.write("%s %d %d %d %d\n" % (name, x, y, w, h))
-    save_bmp32(background(), ASSETS / "background.bmp")
-    legend(sp, DOCIMG / "legend.png")
+            x, y, w, h, pg = rects[name]
+            fp.write("%s %d %d %d %d %d\n" % (name, x, y, w, h, pg))
+    background(k=2).convert("RGB").save(ASSETS / "background.bmp")
+    legend({k: v for k, v in sp.items() if "@" not in k}, DOCIMG / "legend.png")
     if "--preview" in sys.argv:
-        atlas.save("/tmp/atlas_preview.png")
-    print("atlas %dx%d, %d sprites" % (atlas.size[0], atlas.size[1], len(rects)))
+        for i, pg in enumerate(pages):
+            pg.save("/tmp/atlas_preview%s.png" % ("" if i == 0 else i))
+    print("atlas: %d page(s) %s, %d sprites" % (len(pages), ", ".join("%dx%d" % pg.size for pg in pages), len(rects)))
 
 
 if __name__ == "__main__":

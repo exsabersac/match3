@@ -7,10 +7,10 @@
 ## 风格
 
 - **糖果宝石风**：深紫夜空背景，棋盘格是圆角深蓝半透明方砖（棋盘格交替两种深浅）。宝石有高光、渐变和柔和投影。
-- **统一规格**：棋盘贴图按 **112×112**（格子 56 px 的 2 倍）绘制，运行时用线性过滤缩到格子大小，Retina / 高 DPI 下也清晰。
+- **统一规格**：棋盘贴图按 **112×112**（格子 56 px 的 2 倍）绘制；HUD 面板、图标、星星、角标、背景和全部文字也都按**逻辑尺寸的 2 倍**烘焙。窗口开启 HiDPI 后在 Retina 上 1 个贴图像素 = 1 个物理像素（见下文「高分屏 / Retina」）。
 - **颜色 + 形状双编码**：每种颜色同时对应一种轮廓，色弱玩家或灰度截图也能一眼区分（见下表）。
 - **层数可读**：多层障碍的外观会随层数变化（裂纹、层数、厚度），层数 ≥ 2 时右下角还有**数字角标**。
-- **HUD**：九宫格圆角面板（`panel_*`），金色描边表示强调/选中；数字用描边字形，中文标签预渲染成贴图，所以运行时不需要字体库（无 SDL_ttf）。
+- **HUD**：九宫格圆角面板（`panel_*`），金色描边表示强调/选中；数字用描边字形，中文标签预渲染成贴图，所以运行时不需要字体库（无 SDL_ttf）。字形和标签按游戏内实际使用的字号分别烘焙（2x），不会被非整数倍缩放。
 
 ## 颜色 → 形状
 
@@ -86,27 +86,29 @@
 
 `sel_ring`（选中框，颜色随道具模式变化）、`hint_glow`（提示呼吸光）、`spark`（消除闪光）、`star_on/off`、`medal`、`node_cur/done/lock`（地图节点）、`icon_*`（锤子 / 交换 / 十字 / 步数 / 分数 / 多色）、`badge_1..9`、`g_*`（字形）、`zh_*`（中文标签）、`name_*`（关卡名）。
 
+名字里带 `@` 的是同一贴图的**尺寸变体**（`基名@像素高`），例如 `zh_combo@68`（「连击」34 px 大字版）、`g_48@60`（5 号字形「0」）、`gem_c1@56`（半尺寸宝石，给 HUD 小图标用）、`panel_gold@80`（小圆角面板）。代码里始终只写基名，运行时自动挑变体。
+
 ## 重新生成贴图
 
 ```bash
 pip install pillow numpy        # 或 apt install python3-pil python3-numpy
-python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_preview.png
+python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_preview*.png
 ```
 
 脚本会生成：
 
-- `assets/atlas.bmp`：全部贴图打包成一张图集（32 位 BGRA，带透明通道）
-- `assets/atlas.txt`：索引文件，每行 `name x y w h`
-- `assets/background.bmp`：窗口背景（480×588）
+- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2024 + 1024×158），共 393 个贴图（含尺寸变体）
+- `assets/atlas.txt`：索引文件，每行 `name x y w h page`（第 6 列页号；旧的 5 列格式视为第 0 页）
+- `assets/background.bmp`：窗口背景（960×1176，即 480×588 的 2 倍，24 位不透明）
 - `docs/images/legend.png`：图例
 
-绘制采用 4 倍超采样再缩小，随机种子固定，所以同一台机器上多次运行结果一致。关卡名从 `src/Match3/Types.hs` 解析，新增关卡后重新跑一次即可。字体按顺序查找：拉丁字形用 Barlow Condensed / DejaVu / Arial，中文用 Noto Sans CJK / 文泉驿 / 苹方 / 华文黑体。
+图形采用 4 倍超采样再缩小；**文字不超采样**，而是按目标像素字号直接用 FreeType 渲染（带 hinting，笔画对齐像素格）。随机种子固定，所以同一台机器上多次运行结果一致。关卡名从 `src/Match3/Types.hs` 解析，新增关卡后重新跑一次即可。字体按顺序查找：拉丁字形用 Barlow Condensed / DejaVu / Arial，中文用 Noto Sans CJK / 文泉驿 / 苹方 / 华文黑体。
 
 ## 加载与降级
 
 实现见 `app/Art.hs`。
 
-1. **格式**：BMP V4 头（`BI_BITFIELDS` + alpha 掩码），用 SDL2 核心的 `SDL.loadBMP` 就能保留透明度，**不需要 SDL_image / SDL_ttf**。macOS 只要已有的 `brew install sdl2`，**不用装任何新的 brew 包**。新增的 Haskell 依赖只有 GHC 自带的 `containers`、`directory`、`filepath`。
+1. **格式**：BMP V4 头（`BI_BITFIELDS` + alpha 掩码；多页时按 `atlas.txt` 最大页号依次加载 `atlas.bmp`、`atlas1.bmp`……，任何一页缺失都整体降级），用 SDL2 核心的 `SDL.loadBMP` 就能保留透明度，**不需要 SDL_image / SDL_ttf**。macOS 只要已有的 `brew install sdl2`，**不用装任何新的 brew 包**。新增的 Haskell 依赖只有 GHC 自带的 `containers`、`directory`、`filepath`。
 2. **路径查找**（找到第一个同时包含 `atlas.bmp` 和 `atlas.txt` 的目录就用它）：
    1. 环境变量 `MATCH3_ASSETS`
    2. 当前目录下的 `./assets`（在仓库根目录运行 `stack exec match3-sdl` 时就是这个）
@@ -120,6 +122,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 | `MATCH3_ASSETS=/path/to/assets` | 指定资源目录 |
 | `MATCH3_LEVEL=16` | 从第 N 关开始（从 1 开始计数，方便截图） |
 | `MATCH3_SHOWCASE=1` | 展示盘面：一屏摆出所有宝石、特殊块、覆盖物、障碍、地砖（仅用于预览美术，不影响规则） |
+| `MATCH3_SCALE=2` | **测试用**：窗口按 N 倍（1..4）逻辑尺寸创建，在没有 HiDPI 的环境（Linux / Xvfb）里模拟 Retina；真 Mac 上不需要设置 |
 
 截图示例（无显示器）：
 
@@ -128,3 +131,46 @@ MATCH3_SHOWCASE=1 xvfb-run -a stack exec match3-sdl
 ```
 
 ![展示盘面](images/showcase.png)
+
+模拟 Retina 截图（窗口 960×1176，渲染倍率 2）：
+
+```bash
+Xvfb :98 -screen 0 1400x1300x24 &
+DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
+```
+
+## 高分屏 / Retina
+
+### 倍率怎么检测
+
+1. 窗口创建时打开 `windowHighDPI = True`（即 `SDL_WINDOW_ALLOW_HIGHDPI`）。macOS 上这样窗口大小仍是 480×588 **点**，但绘制表面是 960×1176 **物理像素**。不设置 `SDL_HINT_VIDEO_HIGHDPI_DISABLED`。
+2. 每帧查询两个尺寸（很便宜，所以窗口拖到另一块不同 DPI 的显示器上会立刻跟上，不依赖特定窗口事件）：
+   - 渲染器输出尺寸 `SDL_GetRendererOutputSize` → **渲染倍率** = 输出像素 / 逻辑尺寸（普通屏 1，Retina 2）
+   - 窗口尺寸 `SDL_GetWindowSize` → **鼠标倍率** = 窗口坐标 / 逻辑尺寸
+   - 宽高比不一致时取较小的倍率，保证整个逻辑画面放得下。
+3. 倍率变化时：`SDL_RenderSetScale(倍率)`，同时把倍率写进 `Art.artScale`（挑贴图变体用），并在 stderr 打印一行，例如：
+   `match3-sdl: render scale 2.0 (output 960x1176, window 480x588, logical 480x588)`
+
+### 倍率怎么应用
+
+- **游戏布局和所有绘制坐标仍是 480×588 逻辑单位**，代码里没有任何地方手动乘倍率；SDL 的渲染缩放把目标矩形乘到物理像素。
+- **贴图选择**：`Art` 按「目标逻辑高度 × 倍率」在同名变体里挑最小的够用尺寸。文字 / 标签按实际使用高度烘焙了 2x 版本（如「连击」在 HUD 里 18 px、在棋盘中央 34 px，分别有 36 px 和 68 px 两个贴图），所以 Retina 上是精确的 1:1，不经过任何缩放。
+- **纹理过滤**：创建渲染器 / 纹理前设置 `HintRenderScaleQuality = ScaleLinear`，2x 贴图在 1x 屏上按 2:1 线性缩小，边缘平滑、没有锯齿。缩小超过 2 倍的地方（HUD 目标小图标、双面块角标）有 `@56` 半尺寸变体，九宫格面板小圆角有 `@80` 变体。
+- **鼠标**：SDL 给的鼠标坐标是**窗口坐标**。macOS Retina 上窗口坐标就是逻辑点（鼠标倍率 1，原样使用）；`MATCH3_SCALE=N` 时窗口本身放大了 N 倍，窗口坐标 = 物理像素，事件在进入处理逻辑之前统一除以 N。换算只在 `foldEvents` 一处完成，所以点选、拖拽交换、道具点格、选关地图节点、结算面板点击都自动正确。
+
+### 模拟 Retina：`MATCH3_SCALE`
+
+Xvfb 没有 HiDPI，所以加了测试开关 `MATCH3_SCALE=N`：窗口按 N 倍逻辑尺寸创建，渲染倍率和鼠标倍率都变成 N，走的是和 Retina 完全相同的渲染路径（渲染缩放 + 变体选择），另外还额外覆盖了鼠标坐标换算。真 Mac 上**不要**设置它（设置后窗口会变成 960×1176 点，也就是 4 倍物理像素）。
+
+### 为什么现在不用 SDF 字体
+
+SDF（有向距离场）字体的优点是一张小图任意缩放都锐利，但它需要在**片元着色器**里对距离值做 `smoothstep` 阈值。SDL2 的 2D 渲染 API（`SDL_Renderer`）**不支持自定义着色器**，只能做固定的纹理拷贝 + 颜色 / alpha 调制；直接把 SDF 图当普通纹理画，只会得到一团模糊的灰度渐变。要用 SDF 必须绕开 `SDL_Renderer`，改走 OpenGL（或 Metal）路径。
+
+本游戏的文字是固定的一组 UI 标签和数字，字号也是固定的几档，所以「按实际字号 × 2 预烘焙」已经能在 Retina 上做到像素级清晰，成本最低，也不需要任何新依赖（Mac 上仍然只要 `brew install sdl2`）。
+
+### 以后如果要做 SDF，大致是这样
+
+1. `tools/gen_assets.py` 为每个字（或整条标签）生成单通道距离场图（例如 32 px/em、扩散半径 4 px；多通道 MSDF 可以保住尖角），打进一张灰度图集，索引里再记字宽 / 基线等度量。
+2. 前端改用 OpenGL 3.3 core 上下文（`SDL_GL_CreateContext`，Haskell 端用 `gl` 或 `OpenGL` 包），自己管理顶点缓冲、正交投影矩阵和纹理；所有精灵绘制也要一并迁到 GL（不能和 `SDL_Renderer` 混用同一个窗口）。
+3. 片元着色器：`a = smoothstep(0.5 - w, 0.5 + w, texture(sdf, uv).r)`，`w` 取 `fwidth(dist)`，这样在任何倍率下边缘都约 1 个物理像素宽；描边 / 发光 / 阴影用第二个阈值即可，不必再单独烘焙描边。
+4. 好处：字可以任意缩放、做动画（连击数字弹跳放大）；代价：要维护一整套 GL 渲染层。

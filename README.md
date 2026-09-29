@@ -159,7 +159,7 @@ src/Match3/   Types Board Game Core Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
 app/Main.hs   SDL2 前端
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
-assets/       生成的贴图（atlas.bmp + atlas.txt + background.bmp）
+assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）
 test/Spec.hs  tasty（205 命名用例）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）

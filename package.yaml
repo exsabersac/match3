@@ -108,8 +108,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    # 测试里大量 head (mtWaves …) 之类断言（空表即测试失败），不逐处改写
-    - -Wno-x-partial
     dependencies:
     - match3
     - tasty

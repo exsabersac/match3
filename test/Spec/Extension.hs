@@ -6,7 +6,7 @@ module Spec.Extension
   ( tests
   ) where
 
-import Data.List (isInfixOf)
+import Data.List (isPrefixOf)
 import Engine.Game (Game(..), Step(..))
 import Match3.Core
 import Match3.Element (Counter(..), EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
@@ -28,32 +28,17 @@ tests =
   , testCase "ext_manual_shuffle_keeps_crate_via_engine" ext_manual_shuffle_keeps_crate_via_engine
   ]
 
--- | 第 1 行 (1,0)(1,1) 为 C5 的稳定盘：交换 (1,2)↔(2,2) 在第 1 行成 C5 三连。
-tripleBoard :: Board
-tripleBoard = foldl (\b (p, c) -> setCell b p c) stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5)]
+-- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
 
-tripleMove :: (Pos, Pos)
-tripleMove = ((1, 2), (2, 2))
-
-allPos :: [Pos]
-allPos = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
-
-customsOn :: String -> Board -> [Pos]
-customsOn n b = [p | p <- allPos, case getCell b p of Custom m _ -> m == n; _ -> False]
-
-isWin :: Maybe Outcome -> Bool
-isWin o = case o of
-  Just (Won _) -> True
-  Just (LevelClear _ _) -> True
-  _ -> False
-
--- | 通用层之下的 Board.{Cascade, Clear, Gravity, Match} 不再直接依赖内置注册表（全程收 reg）。
+-- | 通用层之下的 Board.*（除了按内置注册表包一层的 Board.Default）不再直接依赖内置注册表（全程收 reg）：
+-- 不 import Element.Builtin*，代码里（去掉注释与字符串）不用 defaultRegistry。
 ext_board_modules_take_registry :: Assertion
 ext_board_modules_take_registry = do
-  let files = ["src/Match3/Board/" ++ m ++ ".hs" | m <- ["Cascade", "Clear", "Gravity", "Match"]]
+  files <- filter (/= "src/Match3/Board/Default.hs") <$> sourcesUnder "src/Match3/Board"
+  assertBool "scanned Board core" (all (`elem` files) ["src/Match3/Board/" ++ m ++ ".hs" | m <- ["Cascade", "Clear", "Gravity", "Match"]])
   srcs <- mapM readFile files
-  let importsBuiltin s = any (\l -> take 7 l == "import " && "Element.Builtin" `isInfixOf` l) (lines s)
-      bad = [f | (f, s) <- zip files srcs, "defaultRegistry" `isInfixOf` s || importsBuiltin s]
+  let importsBuiltin s = any ("Match3.Element.Builtin" `isPrefixOf`) (importsOf s)
+      bad = [f | (f, s) <- zip files srcs, mentionsIdent "defaultRegistry" s || importsBuiltin s]
   assertEqual "no defaultRegistry / Element.Builtin in Board core" [] bad
 
 -- | GoalNamed：测试专用木箱经 CountNamed "crate" 计数，GoalNamed "crate" 1 达成即过关（直接结算与通用接口两条入口）。
@@ -137,7 +122,8 @@ ext_edge_drain_side_collectible = do
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
-  assertBool "left-edge kite drained in the first settle" ((4, 0) `elem` cwDrained (head (mtWaves mt1)))
+  w1 <- firstWave mt1
+  assertBool "left-edge kite drained in the first settle" ((4, 0) `elem` cwDrained w1)
   assertEqual "inner and bottom-edge kites stay" [(4, 3), (7, 5)] (customsOn "kite" (gsBoard gs1))
   assertEqual "counted by name" [("kite", 1)] (gsElementCounts gs1)
   assertBool "goal reached" (isWin (gsOver gs1))

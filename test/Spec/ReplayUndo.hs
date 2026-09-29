@@ -409,7 +409,7 @@ trace_multi_wave_each_round_visible =
   case
     [ (gs0, p1, p2, gs1)
     | seed <- [1 .. 400 :: Int]
-    , let gs0 = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+    , let gs0 = newGameAtLevel 0 (levelConfig firstLevel) seed
     , Just (p1, p2) <- [findHint (gsBoard gs0)]
     , let (gs1, out) = trySwap p1 p2 gs0
     , out /= NoMatch

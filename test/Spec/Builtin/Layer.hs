@@ -1,8 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 冰层与叠层（按元素）：冰、草、藤、巧克力、迷雾、锁链、冰冻、窗帘、蒸汽，以及软命中不伤同格叠层。
+-- | 冰层与叠层（对应 Element/Builtin/Layer）：冰、草、藤、巧克力、迷雾、锁链、冰冻、窗帘、蒸汽，以及软命中不伤同格叠层。
 -- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
-module Spec.Obstacles.Layers
+module Spec.Builtin.Layer
   ( tests
   ) where
 

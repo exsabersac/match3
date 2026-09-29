@@ -138,6 +138,11 @@ test-suite match3-test
   other-modules:
       Spec.Boosters
       Spec.Branches
+      Spec.Builtin.Actor
+      Spec.Builtin.Collectible
+      Spec.Builtin.Layer
+      Spec.Builtin.Level
+      Spec.Builtin.Obstacle
       Spec.Cascade
       Spec.Element
       Spec.ElementClass
@@ -148,13 +153,12 @@ test-suite match3-test
       Spec.Gravity
       Spec.GridMatch
       Spec.JellyBubble
-      Spec.Obstacles.Body
-      Spec.Obstacles.Features
-      Spec.Obstacles.Layers
       Spec.Properties
       Spec.ReplayUndo
+      Spec.SourceScan
       Spec.Specials
       Spec.Support
+      Spec.Support.Source
       Spec.UIEvents
       Toy
       ElementQueries
@@ -165,7 +169,7 @@ test-suite match3-test
   hs-source-dirs:
       test
       test/golden
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -Wno-x-partial
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array
     , base >=4.7 && <5

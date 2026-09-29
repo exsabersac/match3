@@ -44,6 +44,12 @@ import Numeric (showHex)
 import System.Random (StdGen, mkStdGen)
 
 -- | 生成器入口：ghc -main-is Golden（见 regen.sh）。
+-- | 战役第 1 关（关卡表为空时直接报错）。
+firstLevel :: Level
+firstLevel = case allLevels of
+  (l : _) -> l
+  [] -> error "firstLevel: allLevels is empty"
+
 main :: IO ()
 main = mapM_ putStrLn goldenLines
 
@@ -350,7 +356,7 @@ handmade =
       snailGs = base {gsBoard = setCell (setCell (gsBoard base) (0, 0) (Snail 0 (-1))) (3, 3) (Snail 0 1)}
       chocoGs = newGameAtLevel 4 (levelConfig (allLevels !! 4)) 1
       comboGs =
-        case [ gs0 | seed <- [1 .. 400 :: Int], let gs0 = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+        case [ gs0 | seed <- [1 .. 400 :: Int], let gs0 = newGameAtLevel 0 (levelConfig firstLevel) seed
              , Just (p1, p2) <- [findHint (gsBoard gs0)], let (gs1, out) = trySwap p1 p2 gs0, out /= NoMatch, gsCombo gs1 >= 3 ] of
           (g : _) -> g
           [] -> base

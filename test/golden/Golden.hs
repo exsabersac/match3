@@ -21,7 +21,7 @@ module Golden
 import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint)
 import Data.Bits (xor)
 import Data.Char (ord)
-import Data.List (foldl', intercalate)
+import Data.List (intercalate)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
 import Match3.Board.Grid (getCell, inBounds, setCell)

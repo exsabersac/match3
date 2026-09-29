@@ -151,8 +151,8 @@ traceEventsWith reg t =
             ]
           -- 连续同名分组：保持原顺序（前端按 EvClear 的格序画高亮 / 迸粒子，须与 cwCleared 逐项相同）
           runs kind nameOf ps =
-            [ Event kind k (nameOf (head g)) [(p, p) | p <- g] (length g)
-            | g <- groupBy (\a b -> nameOf a == nameOf b) ps
+            [ Event kind k (nameOf g0) [(p, p) | p <- g] (length g)
+            | g@(g0 : _) <- groupBy (\a b -> nameOf a == nameOf b) ps
             ]
           rank = comboRank k
       in blasts

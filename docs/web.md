@@ -124,8 +124,8 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 ## 3. 工具链与构建
 
 - 工具链：[ghc-wasm-meta](https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta) `FLAVOUR=9.14`，装在 `~/.ghc-wasm`（约 6.4 GB），
-  与桌面版的 Stack / GHC 9.4.8 完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
-- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与 lts-21.25 相同的版本，保证同种子同结果；
+  与桌面版的 Stack / GHC 9.14.1（原生 x86_64 / arm64）完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
+- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（1.2.1.1 / 0.1.0.5，最初取自 lts-21.25），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
 - 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。部署到 Mac 不需要工具链，只拷 `dist/`。
@@ -142,7 +142,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
 | `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
 | `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
-| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
+| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.14.1、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |

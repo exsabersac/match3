@@ -169,7 +169,9 @@ export PATH="$HOME/.ghcup/bin:$PATH"
 stack build && stack test && stack exec match3-sdl
 ```
 
-Stackage：**lts-21.25** / GHC **9.4.8**（`stack.yaml` 已 `system-ghc: true`）。
+GHC **9.14.1**；Stackage 快照 **lts-24.60**（快照本身对应 GHC 9.10.3，`stack.yaml` 用 `compiler: ghc-9.14.1` 换成 9.14.1，
+少量依赖在 `extra-deps` 里钉了兼容版本）。`stack.yaml` 已 `system-ghc: true`，首次先 `ghcup install ghc 9.14.1`。
+建议 Stack 3.11.1；较旧的 Stack（如 3.7）会提示「not tested with GHC 9.12 and above / Cabal 3.14 and above」，可忽略。
 
 ## 目录结构
 

@@ -142,8 +142,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 项 | 值 |
 |----|-----|
 | 构建 | Stack（`package.yaml` → hpack → `match3.cabal`） |
-| Resolver | **lts-21.25** |
-| GHC | **9.4.8**（`stack.yaml`：`system-ghc: true`） |
+| Resolver | **lts-24.60** + `compiler: ghc-9.14.1`（Stackage 暂无 9.14 快照；`extra-deps` 钉 random 1.2.1.1 / splitmix 0.1.0.5 等，见 `stack.yaml`） |
+| GHC | **9.14.1**（`stack.yaml`：`system-ghc: true`，用 ghcup 安装） |
 | 库名 | `match3` |
 | 可执行文件 | `match3-sdl` |
 | 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck） |

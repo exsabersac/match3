@@ -59,7 +59,7 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
 | `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
 | `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
-| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
+| `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.14.1、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
@@ -98,7 +98,7 @@ wasi-sdk、binaryen（`wasm-opt`）、wasmtime、node（自带 playwright-core�
 注意：
 - `~/.ghc-wasm/env` 会改写 `CC`/`AR`/`LD` 等变量。**不要把它 source 进日常 shell**，
   否则桌面版 `stack build` 会拿 wasm 的 clang 去编 C 代码。`build.sh` 只在自己的子进程里 source。
-- 不影响已有的 GHC 9.4.8 / Stack，两者完全独立。
+- 不影响桌面版的原生 GHC 9.14.1 / Stack，两者完全独立。
 - 首次构建前 `build.sh` 会自动走 `wasm32-wasi-cabal build`；如提示没有 Hackage 索引，先跑一次
   `bash -c 'source ~/.ghc-wasm/env && wasm32-wasi-cabal update'`。
 
@@ -127,8 +127,8 @@ make size            # 事后单独看体积
 dist 合计 2,196,011 B，逐文件 gzip 合计约 1.05 MB（WebP 已压缩，gzip 基本无收益）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
-随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 lts-21.25 相同的版本
-（1.2.1.1 / 0.1.0.5，后者放宽了 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**
+随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
+（1.2.1.1 / 0.1.0.5，最初取自 lts-21.25；后者放宽了 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**
 （`test/Parity.hs` 与 `test/node-parity.mjs` 已验证）。
 
 ## 3. 本地试玩

@@ -118,7 +118,9 @@ endStageTable =
 
 -- | 步末阶段的基础帧数（查 endStageTable）。
 endStageBase :: StageKind -> Int
-endStageBase k = head ([n | (_, (k', n)) <- endStageTable, k' == k] ++ [18])
+endStageBase k = case [n | (_, (k', n)) <- endStageTable, k' == k] of
+  n : _ -> n
+  [] -> 18
 
 -- | 事件类型对应的表现段种类（查 endStageTable）。
 stageKindFor :: EventKind -> StageKind
@@ -296,7 +298,7 @@ groupStages steps@(e : _) =
       (same, rest)
         | k == StSpread = span ((== StSpread) . kindOf) steps
         | otherwise = ([e], drop 1 steps)
-  in EndStage k same (esBefore (head same)) (esAfter (last same)) (endStageBase k) : groupStages rest
+  in EndStage k same (esBefore e) (esAfter (last same)) (endStageBase k) : groupStages rest
   where
     kindOf = stageKindFor . endEffectKind . esEffect
 

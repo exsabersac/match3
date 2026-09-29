@@ -26,7 +26,7 @@ module Match3.Board.Clear
   , clearFromSeedsDetailedWith
   ) where
 
-import Data.List (foldl', nub)
+import Data.List (nub)
 import Match3.Element.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, openWith, runAdjacentWith, stripOnClearWith)
 import Match3.Types
 import Match3.Board.Grid

@@ -281,7 +281,7 @@ advanceOrMsg ref window = do
       writeIORef ref app'
       updateTitle window app'
     Just (Won _) -> do
-      let gs = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+      let gs = newGameAtLevel 0 (levelConfig (allLevels !! 0)) seed
           app' = (freshLevelUi gs app) { appMsg = "New campaign" }
       writeIORef ref app'
       updateTitle window app'

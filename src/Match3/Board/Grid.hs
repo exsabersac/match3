@@ -61,7 +61,13 @@ setM b (r, c) v =
 transposeM :: MBoard -> MBoard
 transposeM [] = []
 transposeM ([] : _) = []
-transposeM rows = map head rows : transposeM (map tail rows)
+transposeM rows = map hd rows : transposeM (map tl rows)
+  where
+    -- 盘面恒为矩形；参差行与原 head/tail 一样直接报错
+    hd (x : _) = x
+    hd [] = error "transposeM: ragged board"
+    tl (_ : xs) = xs
+    tl [] = error "transposeM: ragged board"
 
 -- | 均匀随机取一种颜色；恰好调用一次 randomR（随机数消耗顺序的基本单位）。
 randomColor :: RandomGen g => g -> (Color, g)

@@ -8,7 +8,7 @@ module Spec.Engine
 
 import Data.Bits (xor)
 import Data.Char (isAlphaNum, ord)
-import Data.List (foldl', isPrefixOf, isSuffixOf)
+import Data.List (isPrefixOf, isSuffixOf)
 import Data.Maybe (isJust)
 import Data.Word (Word64)
 import Engine.History (History(..), Undoable(..), historyDepth, startHistory)

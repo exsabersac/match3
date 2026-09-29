@@ -24,7 +24,7 @@ macOS Apple Silicon 构建 SDL 前端时：
 export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 ```
 
-若 Stack 镜像/签名异常，优先使用 `stack.yaml` 中 `system-ghc: true` 与本机已缓存的 GHC 9.4.8。
+若 Stack 镜像/签名异常，优先使用 `stack.yaml` 中 `system-ghc: true` 与本机 ghcup 装好的 GHC 9.14.1；Hackage 镜像报 root.json 签名不足时改用官方 Hackage 源（去掉全局配置里的 `package-index` 镜像设置）。
 
 ## 套件结构
 

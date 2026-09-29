@@ -1,8 +1,27 @@
-resolver: lts-21.25
+# Stackage 还没有 GHC 9.14 的快照：用最新 LTS（lts-24.60，GHC 9.10.3）的包集，编译器换成 9.14.1。
+resolver: lts-24.60
+compiler: ghc-9.14.1
 
 packages:
 - .
 
-extra-deps: []
+extra-deps:
+# 随机数与 lts-21.25 时代相同（同种子 → 同盘面；金标准与网页版 web/cabal.project 依赖这一点）
+- random-1.2.1.1
+- splitmix-0.1.0.5
+# lts-24.60 里的版本上界不认 base-4.22 / template-haskell-2.24，换成已支持 9.14 的新版
+- parallel-3.3.0.0
+- tagged-0.8.10
+- unordered-containers-0.2.21
+
+# 快照里的 file-io-0.1.6 会顶替 GHC 9.14.1 自带的 0.1.5，连带把 directory / process 剪掉；
+# 去掉它，直接用编译器自带的那份。
+drop-packages:
+- file-io
+
+# 只放宽 splitmix-0.1.0.5 的 base 上界（<4.21）；算法不依赖新 base 特性，与 web/cabal.project 相同处理。
+allow-newer: true
+allow-newer-deps:
+- splitmix
 
 system-ghc: true

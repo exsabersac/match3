@@ -11,7 +11,6 @@ module ElementQueries
 
 import Data.Bits (xor)
 import Data.Char (ord)
-import Data.List (foldl')
 import Data.Word (Word64)
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Board.Match (findHintWith)

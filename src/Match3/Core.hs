@@ -172,6 +172,9 @@ module Match3.Core
   , newGameAtLevel
   , newDailyGame
   , trySwap
+  , MoveFx(..)
+  , moveFx
+  , clearMoveFx
   , runMove
   , restart
   , restartLevel

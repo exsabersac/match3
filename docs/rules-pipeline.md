@@ -39,6 +39,8 @@
 3. `swapBlockedByStone`（石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
 4. `swapCells` 后：若非 `isRainbowSwap`、非 `isSpecialCombo`、且 `not hasAnyMatch` → `NoMatch`。
 
+2–4 返回的状态盘面 / 分数 / 步数不变，但会经 `clearMoveFx` 把 `gsCombo`、`gsLastCleared` 清零（这两个字段只描述最近一次**真正结算**的一步）。道具被拒（锤免疫、次数用完、自由交换无匹配）、`undoMove`、`shuffleGame` 同样清零。
+
 彩虹与合成在**交换前**的两端判定激活资格（`specialActivates`：多冰/锁链/窗帘软锁不点火）。
 
 ## 2. 主连锁（`Board`）
@@ -105,3 +107,5 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 ## 8. 与前端的边界
 
 `app/Main.hs` 在调用 `trySwap` / 道具 API **之后**播放交换/下落动画与粒子；规则结果不依赖帧。暂停（`P`）冻结动画并清拖拽，不改 `GameState` 规则字段。
+
+**特效是边沿触发**：前端用 `moveFx before after outcome` 取本次操作的 `MoveFx`（`fxCombo` 连击波数、`fxCleared` 清除格），只有这次调用真正结算了一步才非空；`NoMatch` / `InvalidSwap` / 操作前已终局一律为空。闪光、粒子、连击（爆击）弹字的 120 帧计时都只看 `MoveFx`，不再直接读持久字段 `gsCombo`——旧实现里无匹配回滚后 `gsCombo` 仍是上一步的值，会把上一步的连击特效再播一遍。

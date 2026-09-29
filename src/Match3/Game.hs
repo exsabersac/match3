@@ -10,6 +10,9 @@ module Match3.Game
   , newDailyGame
   , trySwap
   , runMove
+  , MoveFx(..)
+  , moveFx
+  , clearMoveFx
   , restart
   , restartLevel
   , checkOutcome
@@ -27,7 +30,7 @@ module Match3.Game
   , mapClickJump
   ) where
 
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Match3.Board
   ( findHint
   , hasAnyMatch
@@ -638,7 +641,8 @@ shuffleGame gs =
   let decor = extractDecor (gsBoard gs)
       (board0, g') = shufflePlayable (gsGen gs)
       board = restoreDecor board0 decor
-  in gs { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True, gsOver = Nothing }
+  -- 洗牌不是一步消除：清掉上一步的连击 / 清除格反馈
+  in (clearMoveFx gs) { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True, gsOver = Nothing }
 
 countSafes :: Board -> Int
 countSafes b =
@@ -685,24 +689,56 @@ carryMovesBonus :: MovesLeft -> MovesLeft
 carryMovesBonus left = min 3 (max 0 left)
 
 
+-- | 清空「上一步」的 UI 反馈字段（连击波数 / 本步清除格）。
+-- 这两个字段只描述最近一次**真正结算**的一步；任何没有结算的操作（无匹配回滚、
+-- 挡交换、非相邻、道具无效、洗牌、撤销）都必须把它们归零，否则前端会把旧值
+-- 当成新一步的结果，再播一遍爆击（连击）特效。规则判定不读这两个字段。
+clearMoveFx :: GameState -> GameState
+clearMoveFx gs = gs { gsCombo = 0, gsLastCleared = [] }
+
+-- | 交换 / 道具被拒（NoMatch）时的回滚状态：盘面不变，清提示与本步反馈。
+rejectMove :: GameState -> GameState
+rejectMove gs = (clearMoveFx gs) { gsHint = Nothing, gsShuffled = False }
+
+-- | 一次操作之后，前端该播的特效（边沿触发，只看这一次调用的结果）。
+data MoveFx = MoveFx
+  { fxCombo   :: Int    -- ^ 本步连击波数；> 1 才播连击 / 爆击特效
+  , fxCleared :: [Pos]  -- ^ 本步清除格（闪光 + 粒子）
+  } deriving (Eq, Show)
+
+-- | 由「操作前状态、操作后状态、结果」决定要不要播特效。
+-- 只有这次调用真正结算了一步（MoveApplied / 本次才产生的 Won / Lost / LevelClear）
+-- 才返回 after 的连击与清除格；NoMatch / InvalidSwap / 操作前就已结束（trySwap 原样
+-- 返回旧 gsOver）一律返回空，不会重播上一步的爆击特效。
+moveFx :: GameState -> GameState -> Outcome -> MoveFx
+moveFx before after out
+  | isJust (gsOver before) = noFx
+  | otherwise = case out of
+      NoMatch -> noFx
+      InvalidSwap -> noFx
+      _ -> MoveFx (gsCombo after) (gsLastCleared after)
+  where
+    noFx = MoveFx 0 []
+
 -- | 玩家相邻交换入口。成功路径固定顺序：
 -- 主连锁 → 倒计时 tick/爆炸 → 皮带移位+settle → 藤/巧/蒸汽蔓延 → 蜗牛 →
 -- （若蜗牛成消）再连锁一次（不再重复步末效果）→ 结算目标/步数 → ensurePlayable。
--- 无匹配或挡交换返回原盘 + NoMatch；不修改规则字段以外的 UI 状态。
+-- 无匹配或挡交换返回原盘 + NoMatch；同时清零 gsCombo / gsLastCleared（见 clearMoveFx），
+-- 避免前端把上一步的连击当成这一步再播一次。
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwap p1 p2 gs
   | Just o <- gsOver gs = (gs, o)
-  | not (inBounds p1 && inBounds p2) = (gs, InvalidSwap)
-  | not (adjacent p1 p2) = (gs, InvalidSwap)
+  | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap)
+  | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap)
   | swapBlockedByStone (gsBoard gs) p1 p2 =
-      (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
+      (rejectMove gs, NoMatch)
   | otherwise =
       let board0 = gsBoard gs
           swapped = swapCells board0 p1 p2
           rainbow = isRainbowSwap board0 p1 p2
           specialCombo = isSpecialCombo board0 p1 p2
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
-           then (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
+           then (rejectMove gs, NoMatch)
            else
              let ufos0 = gsUfos gs
                  (board0', cleared0, gained0, combo0, tallies0, stones0, chests0, honey0, balloons0, cookies0, cakes0, uAbs0, ufos1, pos0, g0') =
@@ -839,7 +875,8 @@ runMove = trySwap
 undoMove :: GameState -> Maybe GameState
 undoMove gs = case gsHistory gs of
   (prev : rest) ->
-    Just prev { gsHistory = rest, gsHint = Nothing, gsOver = Nothing, gsShuffled = False }
+    -- 快照里的 gsCombo / gsLastCleared 属于更早那一步，撤销后不应再当作「本步反馈」
+    Just (clearMoveFx prev) { gsHistory = rest, gsHint = Nothing, gsOver = Nothing, gsShuffled = False }
   [] -> Nothing
 
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))
@@ -870,10 +907,10 @@ hammerImmune c = isMaker c || isSnail c || isBottle c || isMagicHat c || isCooki
 useHammer :: Pos -> GameState -> (GameState, Outcome)
 useHammer p gs
   | Just o <- gsOver gs = (gs, o)
-  | gsHammers gs <= 0 = (gs, InvalidSwap)
-  | not (inBounds p) = (gs, InvalidSwap)
+  | gsHammers gs <= 0 = (clearMoveFx gs, InvalidSwap)
+  | not (inBounds p) = (clearMoveFx gs, InvalidSwap)
   | hammerImmune (getCell (gsBoard gs) p) =
-      (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
+      (rejectMove gs, NoMatch)
   | otherwise =
       let seeds = [p]
           (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =
@@ -952,18 +989,18 @@ useHammer p gs
 useFreeSwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 useFreeSwap p1 p2 gs
   | Just o <- gsOver gs = (gs, o)
-  | gsFreeSwaps gs <= 0 = (gs, InvalidSwap)
-  | not (inBounds p1 && inBounds p2) = (gs, InvalidSwap)
-  | p1 == p2 = (gs, InvalidSwap)
+  | gsFreeSwaps gs <= 0 = (clearMoveFx gs, InvalidSwap)
+  | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap)
+  | p1 == p2 = (clearMoveFx gs, InvalidSwap)
   | swapBlockedByStone (gsBoard gs) p1 p2 =
-      (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
+      (rejectMove gs, NoMatch)
   | otherwise =
       let board0 = gsBoard gs
           swapped = swapCells board0 p1 p2
           rainbow = isRainbowSwap board0 p1 p2
           specialCombo = isSpecialCombo board0 p1 p2
       in if not rainbow && not specialCombo && not (hasAnyMatch swapped)
-           then (gs { gsHint = Nothing, gsShuffled = False, gsLastCleared = [] }, NoMatch)
+           then (rejectMove gs, NoMatch)
            else
              let (boardF, _c, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =
                    if rainbow
@@ -1046,8 +1083,8 @@ useFreeSwap p1 p2 gs
 useCrossClear :: Pos -> GameState -> (GameState, Outcome)
 useCrossClear p gs
   | Just o <- gsOver gs = (gs, o)
-  | gsCrossClears gs <= 0 = (gs, InvalidSwap)
-  | not (inBounds p) = (gs, InvalidSwap)
+  | gsCrossClears gs <= 0 = (clearMoveFx gs, InvalidSwap)
+  | not (inBounds p) = (clearMoveFx gs, InvalidSwap)
   | otherwise =
       let seeds = crossClearSeeds p
           (boardH, _n, gained, combo, tallies, stonesHit, chestsHit, honeyHit, balloonHit, cookieHit, cakeHit, uAbs, ufos', posCleared, g') =

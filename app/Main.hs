@@ -113,7 +113,7 @@ main = do
   initializeAll
   -- 线性过滤：2x 贴图缩到 56px 格子时更平滑（须在创建纹理之前设置）
   HintRenderScaleQuality $= ScaleLinear
-  seed <- randomIO
+  seed <- envSeed
   startIdx <- envStartLevel
   showcase <- isJust <$> lookupEnv "MATCH3_SHOWCASE"
   winScale <- envWindowScale
@@ -443,11 +443,10 @@ applyHammer ref window app pos = do
   let before = gsBoard (appGame app)
       (gs', out) = useHammer pos (appGame app)
       after = gsBoard gs'
-      changed = flashSites out (gsLastCleared gs')
-      flash = case out of
-        NoMatch -> []
-        InvalidSwap -> []
-        _ -> [(p, 18) | p <- changed]
+      -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
+      fx = moveFx (appGame app) gs' out
+      changed = fxCleared fx
+      flash = [(p, 18) | p <- changed]
       msg = case out of
         InvalidSwap -> "No hammers left"
         NoMatch -> "Hammer failed"
@@ -471,7 +470,7 @@ applyHammer ref window app pos = do
             , appMsg = msg
             , appFlash = flash
             , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+            , appComboShow = comboFxFrames fx
             , appParticles = parts
             }
           out
@@ -486,11 +485,10 @@ applyCrossClear ref window app pos = do
   let before = gsBoard (appGame app)
       (gs', out) = useCrossClear pos (appGame app)
       after = gsBoard gs'
-      changed = flashSites out (gsLastCleared gs')
-      flash = case out of
-        NoMatch -> []
-        InvalidSwap -> []
-        _ -> [(p, 18) | p <- changed]
+      -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
+      fx = moveFx (appGame app) gs' out
+      changed = fxCleared fx
+      flash = [(p, 18) | p <- changed]
       msg = case out of
         InvalidSwap -> "No cross-clears left"
         NoMatch -> "Cross failed"
@@ -514,7 +512,7 @@ applyCrossClear ref window app pos = do
             , appMsg = msg
             , appFlash = flash
             , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+            , appComboShow = comboFxFrames fx
             , appParticles = parts
             }
           out
@@ -527,11 +525,10 @@ applyFreeSwap ref window app p1 p2 = do
   let before = gsBoard (appGame app)
       (gs', out) = useFreeSwap p1 p2 (appGame app)
       after = gsBoard gs'
-      changed = flashSites out (gsLastCleared gs')
-      flash = case out of
-        NoMatch -> []
-        InvalidSwap -> []
-        _ -> [(p, 18) | p <- changed]
+      -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
+      fx = moveFx (appGame app) gs' out
+      changed = fxCleared fx
+      flash = [(p, 18) | p <- changed]
       msg = case out of
         InvalidSwap -> "Free-swap invalid / empty"
         NoMatch -> "Free-swap: no match; not spent"
@@ -560,7 +557,7 @@ applyFreeSwap ref window app p1 p2 = do
             , appMsg = msg
             , appFlash = flash
             , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+            , appComboShow = comboFxFrames fx
             , appParticles = parts
             }
           out
@@ -573,12 +570,11 @@ animBusy app = case appAnim app of
   AnimNone -> False
   _ -> True
 
--- | Flash/particle sites from last cascade clears (skips belt/snail relocation noise).
-flashSites :: Outcome -> [Pos] -> [Pos]
-flashSites out cleared = case out of
-  NoMatch -> []
-  InvalidSwap -> []
-  _ -> cleared
+-- | 连击（爆击）特效持续帧数。只由本次操作的 MoveFx 决定（边沿触发）：
+-- 旧实现直接读 gsCombo，无匹配回滚后 gsCombo 仍是上一步的值，于是又置 120 帧重播。
+-- 清除格 fxCleared 已排除传送带 / 蜗牛挪位噪声（见 gsLastCleared）。
+comboFxFrames :: MoveFx -> Int
+comboFxFrames fx = if fxCombo fx > 1 then 120 else 0
 
 -- | Bump map unlock after LevelClear / Won (daily Won must not unlock campaign).
 withUnlock :: App -> Outcome -> App
@@ -653,6 +649,8 @@ handleEvent ref window ev = case eventPayload ev of
                             , appSel = Nothing
                             , appMsg = "Shuffled"
                             , appFlash = []
+                              -- 洗牌不是消除：收掉仍在播的连击角标 / 弹字
+                            , appComboShow = 0
                             , appAnim = AnimFall { afBoard = gsBoard gs, afFrame = 0 }
                             }
                     writeIORef ref app'
@@ -814,11 +812,10 @@ handleEvent ref window ev = case eventPayload ev of
                   let before = gsBoard (appGame app)
                       (gs', out) = trySwap p1 p2 (appGame app)
                       after = gsBoard gs'
-                      changed = flashSites out (gsLastCleared gs')
-                      flash = case out of
-                        NoMatch -> []
-                        InvalidSwap -> []
-                        _ -> [(p, 18) | p <- changed]
+                      -- 无匹配回滚：fx 为空，不闪光、不播连击（修复重播上一步爆击特效）
+                      fx = moveFx (appGame app) gs' out
+                      changed = fxCleared fx
+                      flash = [(p, 18) | p <- changed]
                       anim = case out of
                         MoveApplied _ -> AnimSwap p1 p2 before after 0
                         Won _ -> AnimSwap p1 p2 before after 0
@@ -847,7 +844,7 @@ handleEvent ref window ev = case eventPayload ev of
                             , appMsg = msg
                             , appFlash = flash
                             , appAnim = anim
-                            , appComboShow = if gsCombo gs' > 1 then 120 else 0
+                            , appComboShow = comboFxFrames fx
                             , appParticles = parts
                             , appTipFrames = 0
                             }
@@ -983,17 +980,15 @@ handleEvent ref window ev = case eventPayload ev of
                             let before = gsBoard (appGame app)
                                 (gs', out) = trySwap p1 pos (appGame app)
                                 after = gsBoard gs'
-                                changed = flashSites out (gsLastCleared gs')
-                                flash =
-                                  case out of
-                                    NoMatch -> []
-                                    InvalidSwap -> []
-                                    _ -> [(p, 18) | p <- changed]
+                                -- 无匹配回滚 / 非相邻：fx 为空，不闪光、不播连击（修复重播上一步爆击特效）
+                                fx = moveFx (appGame app) gs' out
+                                changed = fxCleared fx
+                                flash = [(p, 18) | p <- changed]
                                 shuffledMsg =
                                   if gsShuffled gs' then " (auto-shuffled)" else ""
                                 comboMsg =
-                                  if gsCombo gs' > 1
-                                    then " combo x" <> T.pack (show (gsCombo gs'))
+                                  if fxCombo fx > 1
+                                    then " combo x" <> T.pack (show (fxCombo fx))
                                     else ""
                                 collectMsg = case gsGoal gs' of
                                   GoalCollect col n ->
@@ -1091,9 +1086,8 @@ handleEvent ref window ev = case eventPayload ev of
                                   LevelClear _ _ -> AnimSwap p1 pos before after 0
                                   _ -> AnimNone
                                 -- Combo SFX placeholder: when audio lands, play a rising
-                                -- pitched blip for gsCombo gs' >= 2 (cascade wave cheer).
-                                comboShow =
-                                  if gsCombo gs' > 1 then 120 else 0
+                                -- pitched blip for fxCombo fx >= 2 (cascade wave cheer).
+                                comboShow = comboFxFrames fx
                             parts <-
                               if null flash
                                 then pure (appParticles app)
@@ -2561,6 +2555,15 @@ envStartLevel = do
   pure $ case v >>= readMaybe of
     Just n | n >= 1 && n <= length allLevels -> n - 1
     _ -> 0
+
+-- | 开发 / 复现用：MATCH3_SEED=N 固定开局随机种子（便于 Xvfb 下按固定坐标复现问题）；
+-- 未设置时仍随机。只影响首局，重开 / 下一关照旧随机。
+envSeed :: IO Int
+envSeed = do
+  v <- lookupEnv "MATCH3_SEED"
+  case v >>= readMaybe of
+    Just n -> pure n
+    Nothing -> randomIO
 
 -- | MATCH3_SHOWCASE=1：把棋盘换成「全部棋子一览」，用于检查贴图（仅展示，不影响规则模块）。
 showcaseState :: GameState -> GameState

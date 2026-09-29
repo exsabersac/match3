@@ -223,6 +223,11 @@ tests =
     , testCase "last_cleared_includes_countdown_explode" last_cleared_includes_countdown_explode
     , testCase "daily_clear_is_won_not_levelclear" daily_clear_is_won_not_levelclear
     , testCase "daily_won_does_not_unlock_map" daily_won_does_not_unlock_map
+    , testCase "failed_swap_resets_combo_feedback" failed_swap_resets_combo_feedback
+    , testCase "invalid_swap_resets_combo_feedback" invalid_swap_resets_combo_feedback
+    , testCase "booster_noop_resets_combo_feedback" booster_noop_resets_combo_feedback
+    , testCase "undo_shuffle_reset_combo_feedback" undo_shuffle_reset_combo_feedback
+    , testCase "move_fx_ignores_already_over" move_fx_ignores_already_over
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -7472,3 +7477,157 @@ daily_won_does_not_unlock_map = do
   assertEqual "campaign LevelClear unlocks" (1 :: Int) (unlockAfterOutcome gsC 0 (LevelClear 10 1))
   assertEqual "finale Won unlocks all" (length allLevels - 1) (unlockAfterOutcome gsC 0 (Won 999))
   assertEqual "unlockAfterClear finale Won unchanged" (length allLevels - 1) (unlockAfterClear 0 (Won 999))
+
+--------------------------------------------------------------------------------
+-- 爆击（连击）特效不重播：失败操作必须清掉上一步的 UI 反馈
+--------------------------------------------------------------------------------
+
+-- | 第 1 关若干种子里找一步「连击 >= 2」的交换，返回交换后的状态（固定、可复现）。
+comboMoveState :: Maybe (GameState, GameState)
+comboMoveState =
+  case
+    [ (gs0, gs1)
+    | seed <- [1 .. 400 :: Int]
+    , let gs0 = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+    , r <- [0 .. boardSize - 1]
+    , c <- [0 .. boardSize - 1]
+    , p2 <- [(r, c + 1), (r + 1, c)]
+    , inBounds p2
+    , let (gs1, out) = trySwap (r, c) p2 gs0
+    , isApplied out
+    , gsCombo gs1 >= 2
+    ] of
+    (x : _) -> Just x
+    [] -> Nothing
+  where
+    isApplied (MoveApplied _) = True
+    isApplied _ = False
+
+-- | 当前盘面上一对「交换后 NoMatch」的相邻格。
+noMatchSwap :: GameState -> Maybe (Pos, Pos)
+noMatchSwap gs =
+  case
+    [ (p1, p2)
+    | r <- [0 .. boardSize - 1]
+    , c <- [0 .. boardSize - 2]
+    , let p1 = (r, c)
+          p2 = (r, c + 1)
+    , snd (trySwap p1 p2 gs) == NoMatch
+    ] of
+    (x : _) -> Just x
+    [] -> Nothing
+
+noFx :: MoveFx
+noFx = MoveFx 0 []
+
+withComboState :: (GameState -> GameState -> Assertion) -> Assertion
+withComboState k = case comboMoveState of
+  Nothing -> assertFailure "need a cascading (combo >= 2) move"
+  Just (gs0, gs1) -> do
+    let fx1 = moveFx gs0 gs1 (MoveApplied 0)
+    assertBool "combo move fires combo fx" (fxCombo fx1 >= 2)
+    assertBool "combo move has clear sites" (not (null (fxCleared fx1)))
+    k gs0 gs1
+
+-- | 用户报告：「爆击后，下一次点击没有触发消除，状态重置时会再播放爆击特效」。
+-- 连击一步之后做一次无匹配交换：回滚状态里 gsCombo / gsLastCleared 必须归零，
+-- moveFx 也不给特效（旧实现 gsCombo 残留 → 前端再置 120 帧连击弹字）。
+failed_swap_resets_combo_feedback :: Assertion
+failed_swap_resets_combo_feedback = withComboState $ \_ gs1 ->
+  case noMatchSwap gs1 of
+    Nothing -> assertFailure "need a no-match swap after the combo move"
+    Just (p1, p2) -> do
+      let (gs2, out) = trySwap p1 p2 gs1
+      out @?= NoMatch
+      gsBoard gs2 @?= gsBoard gs1
+      gsScore gs2 @?= gsScore gs1
+      gsMoves gs2 @?= gsMoves gs1
+      gsCombo gs2 @?= 0
+      gsLastCleared gs2 @?= []
+      moveFx gs1 gs2 out @?= noFx
+      -- 即使前端不看 moveFx、仍读旧字段，也拿不到上一步的连击
+      assertBool "no stale combo in state" (gsCombo gs2 <= 1)
+
+-- | 非相邻 / 越界交换（InvalidSwap）同样清反馈，且规则状态不变。
+invalid_swap_resets_combo_feedback :: Assertion
+invalid_swap_resets_combo_feedback = withComboState $ \_ gs1 -> do
+  let (gs2, out) = trySwap (0, 0) (2, 2) gs1
+  out @?= InvalidSwap
+  assertBool "rules state unchanged" (gs2 == gs1)
+  gsCombo gs2 @?= 0
+  gsLastCleared gs2 @?= []
+  moveFx gs1 gs2 out @?= noFx
+  let (gs3, out3) = trySwap (7, 7) (7, 8) gs1
+  out3 @?= InvalidSwap
+  gsCombo gs3 @?= 0
+  moveFx gs1 gs3 out3 @?= noFx
+
+-- | 道具没有结算（锤子砸免疫格 / 次数用完、自由交换无匹配）也不重播上一步连击。
+booster_noop_resets_combo_feedback :: Assertion
+booster_noop_resets_combo_feedback = withComboState $ \_ gs1 -> do
+  -- 锤子砸饼干：免疫 → NoMatch，不扣次数
+  let gsCk = gs1 { gsBoard = setCell (gsBoard gs1) (0, 0) mkCookie }
+      (gsH, outH) = useHammer (0, 0) gsCk
+  outH @?= NoMatch
+  gsHammers gsH @?= gsHammers gsCk
+  gsCombo gsH @?= 0
+  gsLastCleared gsH @?= []
+  moveFx gsCk gsH outH @?= noFx
+  -- 锤子次数为 0 → InvalidSwap
+  let gsNo = gs1 { gsHammers = 0 }
+      (gsH0, outH0) = useHammer (3, 3) gsNo
+  outH0 @?= InvalidSwap
+  gsCombo gsH0 @?= 0
+  moveFx gsNo gsH0 outH0 @?= noFx
+  -- 自由交换无匹配 → NoMatch，不扣次数
+  case noMatchSwap gs1 of
+    Nothing -> assertFailure "need a no-match pair for free-swap"
+    Just (p1, p2) -> do
+      let (gsF, outF) = useFreeSwap p1 p2 gs1
+      outF @?= NoMatch
+      gsFreeSwaps gsF @?= gsFreeSwaps gs1
+      gsCombo gsF @?= 0
+      gsLastCleared gsF @?= []
+      moveFx gs1 gsF outF @?= noFx
+  -- 十字道具真正结算时 moveFx 取本步结果（不是上一步的）
+  let (gsX, outX) = useCrossClear (3, 3) gs1
+      fxX = moveFx gs1 gsX outX
+  fxCombo fxX @?= gsCombo gsX
+  fxCleared fxX @?= gsLastCleared gsX
+  assertBool "cross clear has its own sites" (not (null (fxCleared fxX)))
+
+-- | 撤销恢复的快照、洗牌后的盘面都不带「上一步」连击反馈。
+undo_shuffle_reset_combo_feedback :: Assertion
+undo_shuffle_reset_combo_feedback = withComboState $ \_ gs1 -> do
+  -- 再走一步（任意可行步），撤销回 gs1 的快照：gs1 自带连击，但撤销后不应再算本步反馈
+  case findHint (gsBoard gs1) of
+    Nothing -> assertFailure "need a follow-up move"
+    Just (p1, p2) -> do
+      let (gs2, _) = trySwap p1 p2 gs1
+      case undoMove gs2 of
+        Nothing -> assertFailure "undo should succeed"
+        Just gsU -> do
+          gsBoard gsU @?= gsBoard gs1
+          gsCombo gsU @?= 0
+          gsLastCleared gsU @?= []
+  let gsS = shuffleGame gs1
+  gsCombo gsS @?= 0
+  gsLastCleared gsS @?= []
+  -- 洗牌后紧接着无匹配交换，仍无特效
+  case noMatchSwap gsS of
+    Nothing -> pure ()
+    Just (p1, p2) -> do
+      let (gsS2, outS2) = trySwap p1 p2 gsS
+      moveFx gsS gsS2 outS2 @?= noFx
+
+-- | 已结束的局面 trySwap 原样返回旧 Outcome（旧 gsLastCleared / gsCombo 仍在）：
+-- moveFx 必须识别为「没有新的一步」，不重播终局前那一步的特效。
+move_fx_ignores_already_over :: Assertion
+move_fx_ignores_already_over = withComboState $ \_ gs1 -> do
+  let gsOverSt = gs1 { gsOver = Just (Won (gsScore gs1)) }
+  case findHint (gsBoard gsOverSt) of
+    Nothing -> assertFailure "need a hint pair"
+    Just (p1, p2) -> do
+      let (gs2, out) = trySwap p1 p2 gsOverSt
+      out @?= Won (gsScore gs1)
+      moveFx gsOverSt gs2 out @?= noFx

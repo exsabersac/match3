@@ -122,6 +122,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 | `MATCH3_ASSETS=/path/to/assets` | 指定资源目录 |
 | `MATCH3_LEVEL=16` | 从第 N 关开始（从 1 开始计数，方便截图） |
 | `MATCH3_SHOWCASE=1` | 展示盘面：一屏摆出所有宝石、特殊块、覆盖物、障碍、地砖（仅用于预览美术，不影响规则） |
+| `MATCH3_SEED=1` | 固定首局随机种子（只影响开局，重开 / 下一关仍随机），配合 xdotool 按固定坐标复现问题 |
 | `MATCH3_SCALE=2` | **测试用**：窗口按 N 倍（1..4）逻辑尺寸创建，在没有 HiDPI 的环境（Linux / Xvfb）里模拟 Retina；真 Mac 上不需要设置 |
 
 截图示例（无显示器）：

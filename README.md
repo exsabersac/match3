@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 205 通过
+stack test                            # 库测，无需显示器；期望 210 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -161,7 +161,7 @@ app/Main.hs   SDL2 前端
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）
-test/Spec.hs  tasty（205 命名用例）
+test/Spec.hs  tasty（210 命名用例）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
 ```
 
@@ -170,5 +170,5 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 ## 发布状态
 
 - 战役：**38** 关（地图 CH1–CH7），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **205**（Tasty + QuickCheck）
+- 测试：`stack test` **210**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

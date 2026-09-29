@@ -27,6 +27,7 @@ module Match3.Element.Registry
   , fallsWith
   , portalWith
   , drainsWith
+  , drainEdgesWith
   , directHitWith
   , chipOnHitWith
   , hitImmuneWith
@@ -41,6 +42,7 @@ module Match3.Element.Registry
   , blastWith
   , endRules
   , placeWith
+  , hitGroundWith
   , placeAllWith
   ) where
 
@@ -172,7 +174,11 @@ portalWith reg = edPortal . bodyDef reg
 
 -- | 本体落到底行被收走。
 drainsWith :: Registry -> Cell -> Bool
-drainsWith reg = edDrains . bodyDef reg
+drainsWith reg = not . null . edDrains . bodyDef reg
+
+-- | 本体会在哪些边被收走（段 2c：边缘收集方向可配）。
+drainEdgesWith :: Registry -> Cell -> [Edge]
+drainEdgesWith reg = edDrains . bodyDef reg
 
 -- | 直接命中：自上而下，第一个不是 HitPierce 的层决定；本体也 Pierce 则视为打不动。
 directHitWith :: Registry -> Cell -> HitResult
@@ -258,3 +264,22 @@ placeWith reg n args b0 ps = case lookupElement reg n of
 -- | 按顺序应用一张放置表。
 placeAllWith :: Registry -> Board -> [Placement] -> Board
 placeAllWith reg = foldl (\b (Place n args ps) -> placeWith reg n args b ps)
+
+-- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
+-- 返回（新地面层，按计数名的去层数）。只有注册为 SlotGround 且有 edGround 的名字会反应；
+-- 计数键取该定义的 edCounter，只有 CountNamed 进 gsElementCounts（其余键忽略）。
+hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(String, Int)])
+hitGroundWith reg hits = foldr one ([], [])
+  where
+    one (p, (n, layers)) (acc, counts)
+      | p `elem` hits
+      , Just d <- lookupElement reg n
+      , edSlot d == SlotGround
+      , Just react <- edGround d =
+          let after = react layers
+              removed = layers - maybe 0 id after
+              counts' = case edCounter d of
+                Just (CountNamed k) | removed > 0 -> (k, removed) : counts
+                _ -> counts
+          in (maybe acc (\l -> (p, (n, l)) : acc) after, counts')
+      | otherwise = ((p, (n, layers)) : acc, counts)

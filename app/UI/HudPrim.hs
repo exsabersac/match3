@@ -156,6 +156,7 @@ drawHud ren app = do
         GoalSafe _ -> V4 200 170 50 255
         GoalUfo _ -> V4 180 120 255 255
         GoalCarpet _ -> V4 180 100 160 255
+        GoalNamed _ _ -> V4 200 200 220 255
         GoalCollect col _ ->
           let (r, g, b) = colorRGB col in V4 r g b 255
   drawMeter ren 10 36 prog targ meterCol
@@ -218,6 +219,9 @@ drawHud ren app = do
       fillRect ren (Just (Rectangle (P (V2 208 50)) (V2 4 4)))
       fillRect ren (Just (Rectangle (P (V2 204 52)) (V2 4 4)))
       fillRect ren (Just (Rectangle (P (V2 212 52)) (V2 4 4)))
+    GoalNamed _ _ -> do
+      rendererDrawColor ren $= V4 200 200 220 255
+      fillRect ren (Just (Rectangle (P (V2 200 40)) (V2 20 20)))
     GoalCollect col _ -> do
       let (r, g, b) = colorRGB col
       rendererDrawColor ren $= V4 r g b 255

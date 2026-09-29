@@ -52,6 +52,7 @@ goalIcon g = case g of
   GoalSafe _ -> "safe"
   GoalUfo _ -> "ufo_c3"
   GoalCarpet _ -> "carpet_covered"
+  GoalNamed name _ -> name
 
 -- | HUD 目标进度（与窗口标题使用同一组计数器）。
 hudProgress :: GameState -> Int
@@ -68,6 +69,7 @@ hudProgress gs = case gsGoal gs of
   GoalSafe _ -> gsSafesOpened gs
   GoalUfo _ -> gsUfoCollected gs
   GoalCarpet _ -> gsCarpetsCovered gs
+  GoalNamed _ _ -> gsCollected gs
 
 goalTint :: LevelGoal -> V3 Word8
 goalTint g = case g of
@@ -83,6 +85,7 @@ goalTint g = case g of
   GoalSafe _ -> V3 200 180 90
   GoalUfo _ -> V3 170 130 255
   GoalCarpet _ -> V3 220 90 150
+  GoalNamed _ _ -> V3 200 200 220
 
 -- | 贴图版 HUD：关卡徽章、目标与进度条、步数、分数（回放中滚动）、道具次数、连击徽章 / 总结。
 drawHudArt :: Renderer -> Art -> App -> IO ()

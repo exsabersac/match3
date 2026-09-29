@@ -83,7 +83,7 @@ builtinDefs =
       }
   , (blocker "cookie" 9)
       { edPortal = True
-      , edDrains = True
+      , edDrains = [EdgeBottom]
       , edCounter = Just CountCookies
       , edVacatesCarpet = True
       , edPlace = \_ _ -> Just Cookie
@@ -101,7 +101,7 @@ builtinDefs =
           _ -> Nothing
       }
   , (fixed "snail" 13)
-      { edEnd = Just (EndRule PhaseMove 10 snailRun (const []))
+      { edEnd = Just (EndRule PhaseMove 10 snailRun (const []) (const []))
       , edPlace = \args _ -> case args of
           [AInt dr, AInt dc] -> Just (mkSnail dr dc)
           _ -> Nothing
@@ -148,7 +148,7 @@ builtinDefs =
       , edBlocksSwap = False
       , edPortal = True
       , edOnHit = const HitDestroy
-      , edEnd = Just (EndRule PhaseTick 10 tickRun explodeSeedsFor)
+      , edEnd = Just (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))
       , edPlace = \args cell -> case (args, cell) of
           ([AInt n], Gem col _ _ _) -> Just (mkCountdown col n)
           ([AInt n], Countdown col _) -> Just (mkCountdown col n)
@@ -282,7 +282,7 @@ peel con cell = case cell of
 
 -- | 蔓延：每只幸存的叠层向正交相邻的裸宝石长一格；记录 (来源, 新格)。
 spreadRule :: Int -> SpreadKind -> (Board -> Board) -> EndRule
-spreadRule order kind spread = EndRule PhaseSpread order run (const [])
+spreadRule order kind spread = EndRule PhaseSpread order run (const []) (const [])
   where
     run _ b =
       let b' = spread b

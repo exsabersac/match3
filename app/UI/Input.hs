@@ -536,4 +536,10 @@ collectMsg gs' = case gsGoal gs' of
       <> "/"
       <> T.pack (show n)
       <> "]"
+  GoalNamed name n ->
+    " [" <> T.pack name <> " "
+      <> T.pack (show (gsCollected gs'))
+      <> "/"
+      <> T.pack (show n)
+      <> "]"
   _ -> ""

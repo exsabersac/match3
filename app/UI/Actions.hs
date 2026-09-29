@@ -73,6 +73,8 @@ updateTitle window app = do
           "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
         GoalCarpet n ->
           "carpet=" ++ show (gsCarpetsCovered gs) ++ "/" ++ show n
+        GoalNamed name n ->
+          name ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
       title =
         T.pack $
           "L"

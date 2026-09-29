@@ -14,6 +14,7 @@ import qualified Spec.Obstacles.Features
 import qualified Spec.Boosters
 import qualified Spec.GoalsLevels
 import qualified Spec.Element
+import qualified Spec.Extension
 import qualified Spec.Engine
 import qualified Spec.UIEvents
 import qualified Spec.ReplayUndo
@@ -38,6 +39,7 @@ tests =
         , Spec.Boosters.tests
         , Spec.GoalsLevels.tests
         , Spec.Element.tests
+        , Spec.Extension.tests
         , Spec.Engine.tests
         , Spec.UIEvents.tests
         , Spec.ReplayUndo.tests

@@ -17,6 +17,7 @@ module Match3.Element.Types
   , EndPhase(..)
   , EndCtx(..)
   , EndRule(..)
+  , Edge(..)
   , Arg(..)
   , Placement(..)
   , ElementDef(..)
@@ -38,6 +39,7 @@ data Slot
   | SlotOverlay Int  -- ^ 宝石叠层（overlaySlot 编号）
   | SlotIce          -- ^ 宝石冰层
   | SlotCustom       -- ^ 自定义本体：Custom 名字 == edName
+  | SlotGround       -- ^ 地面层（段 2c）：GameState.gsGround 里名字 == edName 的格
   deriving (Eq, Show)
 
 -- | 直接命中（匹配 / 特殊块 / 道具种子落在本格）时这一层的反应。
@@ -87,13 +89,20 @@ data EndCtx = EndCtx
   }
 
 -- | 步末规则：erRun 返回（要记录的步末效果，新盘面）；erSeeds 在 PhaseTick 之后给出要引爆的种子
--- （倒计时归零的 3×3），其余阶段为 const []。
+-- （倒计时归零的 3×3），其余阶段为 const []；erHoles（段 2c）在全部步末阶段之后给出要挖空的格
+-- （步末补结算：挖空 → 沉降 / 边缘收集 → 补子 → 成消再连锁），内置规则都是 const []。
 data EndRule = EndRule
   { erPhase :: EndPhase
   , erOrder :: Int
   , erRun   :: EndCtx -> Board -> (Maybe EndEffect, Board)
   , erSeeds :: Board -> [Pos]
+  , erHoles :: Board -> [Pos]
   }
+
+-- | 边缘收集的方向（段 2c）：本体位于这条边上的格子在沉降时被收走。
+-- 收集顺序固定为 底 → 左 → 右 → 上，每条边内按行 / 列升序（只有底边时与旧「底行收饼干」逐位相同）。
+data Edge = EdgeBottom | EdgeLeft | EdgeRight | EdgeTop
+  deriving (Eq, Show)
 
 -- | 关卡放置参数（层数 / 回合数 / 颜色 / 方向分量）。
 data Arg = AInt Int | AColor Color
@@ -116,7 +125,7 @@ data ElementDef = ElementDef
   , edActivates     :: Cell -> Maybe Bool   -- ^ 特殊块能否点火：自上而下第一个 Just 决定（软锁纪律）
   , edFalls         :: Bool                 -- ^ 本体随重力下落（False = 固定格，把列分段）
   , edPortal        :: Bool                 -- ^ 本体可以穿过传送门
-  , edDrains        :: Bool                 -- ^ 本体落到底行时被收走（饼干）
+  , edDrains        :: [Edge]               -- ^ 边缘收集：本体到达这些边时被收走（内置饼干 = [EdgeBottom]；段 2c 起方向可配）
   , edOnHit         :: Cell -> HitResult    -- ^ 直接命中时这一层的反应
   , edAdjacent      :: Maybe AdjacentRule   -- ^ 邻格有真消除时的反应（削层 / 触发）
   , edStripOnClear  :: Bool                 -- ^ 叠层：本格真消除时随格清掉（草 / 藤 / 巧，否则会从空洞蔓延）
@@ -128,6 +137,7 @@ data ElementDef = ElementDef
   , edBlast         :: Maybe (Pos -> [Pos]) -- ^ 本体被消除且能点火时的爆炸范围（直线 / 炸弹）
   , edEnd           :: Maybe EndRule        -- ^ 步末规则（倒计时 / 蔓延 / 蜗牛）
   , edPlace         :: [Arg] -> Cell -> Maybe Cell  -- ^ 关卡放置：给出参数与原格，返回新格（Nothing = 不放）
+  , edGround        :: Maybe (Int -> Maybe Int)     -- ^ 地面层（SlotGround）：上方格子被消除一次时，层数 → 新层数（Nothing = 清掉）；每去掉一层按 edCounter 计 1
   }
 
 -- | 自定义本体的起点：挡交换、无色、会下落、打不动、洗牌保留、放置 = Custom 名字 状态值（缺省 1）。
@@ -143,7 +153,7 @@ baseDef name =
     , edActivates = const (Just False)
     , edFalls = True
     , edPortal = False
-    , edDrains = False
+    , edDrains = []
     , edOnHit = const HitImmune
     , edAdjacent = Nothing
     , edStripOnClear = False
@@ -155,6 +165,7 @@ baseDef name =
     , edBlast = Nothing
     , edEnd = Nothing
     , edPlace = \args _ -> Just (Custom name (case args of (AInt n : _) -> n; _ -> 1))
+    , edGround = Nothing
     }
 
 -- | 内置本体的编号：宝石按种类 0..4（Normal / LineH / LineV / Bomb / Rainbow），其余构造器 5..19；

@@ -4,7 +4,8 @@
 -- 提供构造器 / 谓词 / goalMet*；不含交换、连锁或 IO。
 -- specialActivates 定义软锁：多冰 / 锁链 / 窗帘下特殊块不点火。
 module Match3.Types
-  ( Color(..)
+  ( Ground
+  , Color(..)
   , GemKind(..)
   , CellOverlay(..)
   , CellContents(..)
@@ -652,6 +653,11 @@ data Outcome
   | LevelClear Score Int  -- score, next level index (0-based)
   deriving (Eq, Show, Generic)
 
+-- | 地面层（段 2c）：棋盘格之下的一层元素槽，按位置记（元素名, 层数），位置升序、稀疏。
+-- 不占格、不挡交换、不随重力 / 洗牌 / 皮带移动；上方格子被消除时受一次命中（规则见元素定义的 edGround）。
+-- 内置关卡恒为 []。
+type Ground = [(Pos, (String, Int))]
+
 -- | Level win condition (GoalCollect shape frozen; new goals are additive).
 data LevelGoal
   = GoalScore TargetScore
@@ -666,6 +672,7 @@ data LevelGoal
   | GoalSafe Int                       -- open N vaults / safes (保险箱)
   | GoalUfo Int                        -- collect N gems via UFO absorb (飞碟)
   | GoalCarpet Int                     -- cover N carpet / floor tiles (地毯)
+  | GoalNamed String Int               -- 段 2c：按元素名计数的目标（gsElementCounts 里该名字累计 ≥ N；扩展元素用）
   deriving (Eq, Show, Generic)
 
 -- | Whether the goal is satisfied given current score / primary collected count.
@@ -683,6 +690,7 @@ goalMet (GoalCake _) _ _ = False
 goalMet (GoalSafe _) _ _ = False
 goalMet (GoalUfo _) _ _ = False
 goalMet (GoalCarpet n) _ collected = collected >= n
+goalMet (GoalNamed _ n) _ collected = collected >= n
 
 -- | Full goal check: bag + stones/UFO/chests/honey/balloon/cookie/cake/safe counters.
 goalMetEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Bool
@@ -699,6 +707,7 @@ goalMetEx (GoalCookie n) _ _ _ _ _ _ _ _ cookies _ _ = cookies >= n
 goalMetEx (GoalCake n) _ _ _ _ _ _ _ _ _ cakes _ = cakes >= n
 goalMetEx (GoalSafe n) _ _ _ _ _ _ _ _ _ _ safes = safes >= n
 goalMetEx (GoalCarpet n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
+goalMetEx (GoalNamed _ n) _ collected _ _ _ _ _ _ _ _ _ = collected >= n
 
 lookupCount :: [(Color, Int)] -> Color -> Int
 lookupCount xs col = maybe 0 id (lookup col xs)
@@ -717,6 +726,7 @@ goalProgress (GoalCake _) _ collected = collected
 goalProgress (GoalSafe _) _ collected = collected
 goalProgress (GoalUfo _) _ collected = collected
 goalProgress (GoalCarpet _) _ collected = collected
+goalProgress (GoalNamed _ _) _ collected = collected
 
 goalProgressEx :: LevelGoal -> Score -> Int -> [(Color, Int)] -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int -> Int
 goalProgressEx (GoalScore _) score _ _ _ _ _ _ _ _ _ _ = score
@@ -732,6 +742,7 @@ goalProgressEx (GoalCookie _) _ _ _ _ _ _ _ _ cookies _ _ = cookies
 goalProgressEx (GoalCake _) _ _ _ _ _ _ _ _ _ cakes _ = cakes
 goalProgressEx (GoalSafe _) _ _ _ _ _ _ _ _ _ _ safes = safes
 goalProgressEx (GoalCarpet _) _ collected _ _ _ _ _ _ _ _ _ = collected
+goalProgressEx (GoalNamed _ _) _ collected _ _ _ _ _ _ _ _ _ = collected
 
 -- | Target number shown in HUD.
 goalTarget :: LevelGoal -> Int
@@ -747,6 +758,7 @@ goalTarget (GoalCake n) = n
 goalTarget (GoalSafe n) = n
 goalTarget (GoalUfo n) = n
 goalTarget (GoalCarpet n) = n
+goalTarget (GoalNamed _ n) = n
 
 data GameConfig = GameConfig
   { cfgMoves :: MovesLeft

@@ -138,6 +138,7 @@ pGoal g = case g of
   GoalSafe n -> "safe" ++ show n
   GoalUfo n -> "ufo" ++ show n
   GoalCarpet n -> "carpet" ++ show n
+  GoalNamed name n -> "named" ++ name ++ ":" ++ show n
 
 pBag :: [(Color, Int)] -> String
 pBag xs = concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- xs]

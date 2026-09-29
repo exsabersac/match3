@@ -26,6 +26,8 @@ module Match3.Board.Cascade
   , cascadeSeedsWith
   , cascadeAfterBeltWith
   , cascadeCountdownsWith
+  , cascadeAfterEndWith
+  , endHolesWith
     -- * 回放数据
   , CascadeWave(..)
     -- * 单轮
@@ -106,9 +108,16 @@ plusHits a b =
     (hBalloons a + hBalloons b) (hCookies a + hCookies b) (hCakes a + hCakes b)
     (addNamed (hNamed a) (hNamed b))
 
--- | 沉降时底行收走的饼干也计入饼干数。
-withCookies :: Int -> Hits -> Hits
-withCookies n h = h {hCookies = hCookies h + n}
+-- | 沉降时被边缘收走的格按各自的 edCounter 计数（内置只有饼干 → CountCookies，与旧「底行收饼干计入饼干数」相同）。
+withDrained :: Registry -> [(Pos, Cell)] -> Hits -> Hits
+withDrained reg drained h = foldl (\hh (_, cell) -> bumpHit (counterWith reg cell) hh) h drained
+
+-- | 把一组命中加进已有计数（皮带后沉降收走的格）。
+addHits :: Hits -> CascadeTally -> CascadeTally
+addHits h t =
+  t { ctStones = ctStones t + hStones h, ctChests = ctChests t + hChests h, ctHoney = ctHoney t + hHoney h
+    , ctBalloons = ctBalloons t + hBalloons h, ctCookies = ctCookies t + hCookies h, ctCakes = ctCakes t + hCakes h
+    , ctNamed = addNamed (ctNamed t) (hNamed h) }
 
 bumpNamed :: String -> Int -> [(String, Int)] -> [(String, Int)]
 bumpNamed k v [] = [(k, v)]
@@ -120,19 +129,21 @@ addNamed :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
 addNamed = foldl (\acc (k, v) -> bumpNamed k v acc)
 
 hitsOn :: Registry -> Board -> [Pos] -> Hits
-hitsOn reg b = foldl (\h p -> bump (counterWith reg (getCell b p)) h) noHits
-  where
-    bump Nothing h = h
-    bump (Just k) h = case k of
-      CountStones -> h {hStones = hStones h + 1}
-      CountChests -> h {hChests = hChests h + 1}
-      CountHoney -> h {hHoney = hHoney h + 1}
-      CountBalloons -> h {hBalloons = hBalloons h + 1}
-      CountCookies -> h {hCookies = hCookies h + 1}
-      CountCakes -> h {hCakes = hCakes h + 1}
-      CountSafes -> h   -- 保险箱 / 时间精灵按前后盘面差计（Game.Tally），不在清除格里计
-      CountSpirits -> h
-      CountNamed n -> h {hNamed = bumpNamed n 1 (hNamed h)}
+hitsOn reg b = foldl (\h p -> bumpHit (counterWith reg (getCell b p)) h) noHits
+
+-- | 一个格子的计数键加进命中。
+bumpHit :: Maybe Counter -> Hits -> Hits
+bumpHit Nothing h = h
+bumpHit (Just k) h = case k of
+  CountStones -> h {hStones = hStones h + 1}
+  CountChests -> h {hChests = hChests h + 1}
+  CountHoney -> h {hHoney = hHoney h + 1}
+  CountBalloons -> h {hBalloons = hBalloons h + 1}
+  CountCookies -> h {hCookies = hCookies h + 1}
+  CountCakes -> h {hCakes = hCakes h + 1}
+  CountSafes -> h   -- 保险箱 / 时间精灵按前后盘面差计（Game.Tally），不在清除格里计
+  CountSpirits -> h
+  CountNamed n -> h {hNamed = bumpNamed n 1 (hNamed h)}
 
 tallyHits :: CascadeTally -> Hits
 tallyHits t = Hits (ctStones t) (ctChests t) (ctHoney t) (ctBalloons t) (ctCookies t) (ctCakes t) (ctNamed t)
@@ -169,14 +180,15 @@ cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
       | otherwise =
           let (mb, n, pos) = clearMatchesDetailedWith reg pref b
               h1 = hitsOn reg b pos
-              (settled, cookiesFallen, cookSites) = settleBoardPortalsWith reg portals mb
+              (settled, cookiesFallen) = settleDrainWith reg portals mb
+              cookSites = map fst cookiesFallen
               (b', g') = refill g settled
               posD = nub (pos ++ cookSites)
               wave = maxW + 1
               w1 = CascadeWave b pos cookSites mb b' (scoreForWave wave n)
               score' = score + scoreForWave wave n
               tallies' = addColors reg tallies b posD
-              hits1 = hits `plusHits` withCookies cookiesFallen h1
+              hits1 = hits `plusHits` withDrained reg cookiesFallen h1
               (absorbed, ufos') = stepUfos b' ufos
           in if null absorbed
                then
@@ -186,14 +198,15 @@ cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
                  -- 飞碟吸收单独算一轮（波次 wave + 1）
                  let (mb2, n2, pos2) = clearUfoAbsorbedWith reg b' absorbed
                      h2 = hitsOn reg b' pos2
-                     (settled2, cokFall, cookSites2) = settleBoardPortalsWith reg portals mb2
+                     (settled2, cokFall) = settleDrainWith reg portals mb2
+                     cookSites2 = map fst cokFall
                      (b3, g3) = refill g' settled2
                      w2 = CascadeWave b' pos2 cookSites2 mb2 b3 (scoreForWave (wave + 1) n2)
                      score2 = score' + scoreForWave (wave + 1) n2
                      tallies2 = addColors reg tallies' b' pos2
                      uAbs' = uAbs + length [p | p <- absorbed, p `elem` pos2]
                  in go Nothing g3 b3 (cells + n + n2) score2 (wave + 1) tallies2
-                      (hits1 `plusHits` withCookies cokFall h2)
+                      (hits1 `plusHits` withDrained reg cokFall h2)
                       uAbs' ufos' (clearedAcc ++ posD ++ pos2 ++ cookSites2) (w2 : w1 : wavesAcc)
 
 --------------------------------------------------------------------------------
@@ -206,7 +219,8 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
   | otherwise =
       let (mb, n, pos) = clearFromSeedsDetailedWith reg prefer b seeds
           h0 = hitsOn reg b pos
-          (settled0, cookiesFall0, cookSites0) = settleBoardPortalsWith reg portals mb
+          (settled0, cookiesFall0) = settleDrainWith reg portals mb
+          cookSites0 = map fst cookiesFall0
           (b1, g1) = refill g settled0
           w0 = CascadeWave b pos cookSites0 mb b1 (scoreForWave 1 n)
           score0 = scoreForWave 1 n
@@ -218,11 +232,12 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
               else
                 let (mb2, n2, pos2) = clearUfoAbsorbedWith reg b1 absorbed
                     h2 = hitsOn reg b1 pos2
-                    (settled2, cokFall2, cookSitesU) = settleBoardPortalsWith reg portals mb2
+                    (settled2, cokFall2) = settleDrainWith reg portals mb2
+                    cookSitesU = map fst cokFall2
                     (b2u, g2u) = refill g1 settled2
                     t2 = [(col, countColorWith reg b1 pos2 col) | col <- allColors]
                 in ( [CascadeWave b1 pos2 cookSitesU mb2 b2u (if n2 > 0 then scoreForWave 2 n2 else 0)]
-                   , b2u, g2u, n2, withCookies cokFall2 h2, t2
+                   , b2u, g2u, n2, withDrained reg cokFall2 h2, t2
                    , length [p | p <- absorbed, p `elem` pos2], nub (pos2 ++ cookSitesU) )
           wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
           -- 续连锁：波次倍数接在起手轮之后
@@ -235,7 +250,7 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
               (score0 + (if nU > 0 then scoreForWave 2 nU else 0) + ctScore t2r)
               maxW
               (mergeColors (mergeColors tallies0 talliesU) (ctColors t2r))
-              (withCookies cookiesFall0 h0 `plusHits` hitsU `plusHits` tallyHits t2r)
+              (withDrained reg cookiesFall0 h0 `plusHits` hitsU `plusHits` tallyHits t2r)
               (uAbs0 + ctUfoAbsorbed t2r)
               (nub (pos ++ cookSites0 ++ posU ++ ctCleared t2r))
       in CascadeRun (crBoard rest) tally (crUfos rest) (w0 : wU ++ crWaves rest) (crGen rest)
@@ -249,7 +264,8 @@ cascadeAfterBeltWith reg ufos portals g boardBelt
   | hasAnyMatchWith reg boardBelt = cascadeMatchesWith reg Nothing ufos portals g boardBelt
   | otherwise =
       let mb = toM boardBelt
-          (settled, nCook, cookSites) = settleBoardPortalsWith reg portals mb
+          (settled, nCook) = settleDrainWith reg portals mb
+          cookSites = map fst nCook
           (b1, g1) = refill g settled
           settleWave =
             [ CascadeWave boardBelt [] cookSites mb b1 0
@@ -259,10 +275,37 @@ cascadeAfterBeltWith reg ufos portals g boardBelt
            then
              let r = cascadeMatchesWith reg Nothing ufos portals g1 b1
                  t = crTally r
-             in r { crTally = t {ctCookies = ctCookies t + nCook, ctCleared = nub (cookSites ++ ctCleared t)}
+             in r { crTally = (addHits (withDrained reg nCook noHits) t) {ctCleared = nub (cookSites ++ ctCleared t)}
                   , crWaves = settleWave ++ crWaves r }
            else
-             CascadeRun b1 zeroTally {ctCookies = nCook, ctCleared = cookSites} ufos settleWave g1
+             CascadeRun b1 (addHits (withDrained reg nCook noHits) zeroTally) {ctCleared = cookSites} ufos settleWave g1
+
+--------------------------------------------------------------------------------
+-- 核心：步末之后的补结算（段 2c）
+
+-- | 全部步末规则在终盘上声明的空洞（erHoles，去重，按规则顺序）。内置规则恒为 []。
+endHolesWith :: Registry -> Board -> [Pos]
+endHolesWith reg b = nub (concat [erHoles r b | ph <- [PhaseTick, PhaseSpread, PhaseMove], r <- endRules reg ph])
+
+-- | 步末补结算（统一路径）：把 holes 挖空，沉降（重力 / 边缘收集 / 传送门）+ 补子；盘面有变化或
+-- 收走了格时记一个只有沉降的轮次；之后成消则接普通连锁（波次从 1 起）。
+-- 没有空洞、边上也没有待收格时沉降是恒等、refill 不消耗随机数，结果等于旧的「成消才连锁」：
+-- 内置元素的步末从不留下空洞（38 关 × 多种子扫描确认，见 docs/testing.md），金标准因此不变。
+cascadeAfterEndWith :: RandomGen g => Registry -> [Pos] -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
+cascadeAfterEndWith reg holes ufos portals g b =
+  let mb = foldl (\m p -> setM m p Nothing) (toM b) holes
+      (settled, drained) = settleDrainWith reg portals mb
+      sites = map fst drained
+      (b1, g1) = refill g settled
+      settleWave = [CascadeWave b [] sites mb b1 0 | b1 /= b || not (null sites)]
+      settleHits = withDrained reg drained noHits
+  in if hasAnyMatchWith reg b1
+       then
+         let r = cascadeMatchesWith reg Nothing ufos portals g1 b1
+             t = crTally r
+         in r { crTally = (addHits settleHits t) {ctCleared = nub (sites ++ ctCleared t)}
+              , crWaves = settleWave ++ crWaves r }
+       else CascadeRun b1 (addHits settleHits zeroTally) {ctCleared = sites} ufos settleWave g1
 
 --------------------------------------------------------------------------------
 -- 核心：倒计时

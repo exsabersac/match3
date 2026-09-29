@@ -50,6 +50,10 @@ levelBelts 13 = [[(4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7)
 levelBelts 27 = [[(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]]
 levelBelts _ = []
 
+-- | 各关的地面层（段 2c 的扩展点；现有 38 关都没有地面层元素）。
+levelGround :: Int -> Ground
+levelGround _ = []
+
 -- | Bidirectional portal pairs for campaign levels.
 levelPortals :: Int -> [(Pos, Pos)]
 levelPortals 26 = [((0, 1), (7, 6)), ((0, 6), (7, 1))]
@@ -307,6 +311,7 @@ newGameAtLevel li cfg seed =
           , gsLastCleared = []
           , gsDaily = False
           , gsElementCounts = []
+          , gsGround = levelGround li
           }
   -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.
   in ensurePlayable gs0

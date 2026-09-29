@@ -24,17 +24,19 @@ import Data.List (nub)
 import Match3.Board.Cascade
   ( CascadeRun(..)
   , CascadeTally(..)
+  , CascadeWave(..)
   , cascadeAfterBeltWith
+  , cascadeAfterEndWith
+  , endHolesWith
   , cascadeCountdownsWith
   , cascadeMatchesWith
   , cascadeSeedsWith
   , stillRun
   )
-import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, endRules)
+import Match3.Element.Registry (Registry, endRules, hitGroundWith)
 import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Game.Outcome
@@ -74,7 +76,7 @@ resolveMoveWith reg kind start opening gs =
         OpenMatch prefer -> cascadeMatchesWith reg prefer (gsUfos gs) portals (gsGen gs) start
         OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds (gsUfos gs) portals (gsGen gs) start
       (segs, ends, board1, vacateAfter) =
-        if kind == KindSwap then swapEnd reg gs seg0 else boosterEnd reg seg0
+        if kind == KindSwap then swapEnd reg gs seg0 else boosterEnd reg portals seg0
       finalSeg = last segs
       tallies = map crTally segs
       ufosF = crUfos finalSeg
@@ -96,9 +98,15 @@ resolveMoveWith reg kind start opening gs =
       diffs = diffCountsWith reg (gsBoard gs) board1
       safesHit = sum [dcCount d | d <- diffs, dcCounter d == CountSafes]
       bonusMoves = sum (map dcBonus diffs)
+      -- 地面层（段 2c）：逐轮被上方消除命中（每轮每格一次）；内置关卡地面层为空，这里是恒等
+      (ground', groundCounts) =
+        foldl
+          (\(gr, acc) w -> let (gr', cs) = hitGroundWith reg (nub (cwCleared w ++ cwDrained w)) gr in (gr', acc ++ cs))
+          (gsGround gs, [])
+          (concatMap crWaves segs)
       namedCounts =
         foldl addNamed (gsElementCounts gs)
-          (concatMap ctNamed tallies ++ [(n, dcCount d) | d <- diffs, CountNamed n <- [dcCounter d], dcCount d > 0])
+          (concatMap ctNamed tallies ++ [(n, dcCount d) | d <- diffs, CountNamed n <- [dcCounter d], dcCount d > 0] ++ groundCounts)
       (carpetOpen', carpetHit) =
         coverCarpets (gsCarpetOpen gs) (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter)
       ufoCollected' = gsUfoCollected gs + uAbs
@@ -119,6 +127,7 @@ resolveMoveWith reg kind start opening gs =
         GoalCake _ -> cakes'
         GoalSafe _ -> safes'
         GoalCarpet _ -> carpets'
+        GoalNamed name _ -> maybe 0 id (lookup name namedCounts)
         GoalScore _ -> gsCollected gs
         GoalUfo _ -> ufoCollected'
       -- 步数与道具次数
@@ -152,6 +161,7 @@ resolveMoveWith reg kind start opening gs =
             , gsCarpetsCovered = carpets'
             , gsLastCleared = nub clearedAll
             , gsElementCounts = namedCounts
+            , gsGround = ground'
             }
       outcome = decideOutcome gs' gained
       gs'' = case outcome of
@@ -221,17 +231,17 @@ swapEnd reg gs seg0 =
       portalEnds = nub (concatMap (\(a, b) -> [a, b]) portals)
       (endSpread, boardSpread) = traceSpreadsWith reg nEnd boardBeltCas
       (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx beltCells portalEnds) nEnd boardSpread
-      -- 蜗牛推出的匹配再连锁一次（不再重复步末效果）
-      seg3 =
-        if hasAnyMatchWith reg boardSnail
-          then cascadeMatchesWith reg Nothing (crUfos seg2) portals (crGen seg2) boardSnail
-          else stillRun boardSnail (crUfos seg2) (crGen seg2)
+      -- 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁；
+      -- 不再重复步末效果。内置元素没有空洞时等于旧的「成消才连锁」。
+      seg3 = cascadeAfterEndWith reg (endHolesWith reg boardSnail) (crUfos seg2) portals (crGen seg2) boardSnail
       board1 = crBoard seg3
   in ([seg0, seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
 
 -- | 道具的步末：只有蔓延。地毯腾空比较用蔓延前的盘面（与旧实现一致）。
-boosterEnd :: Registry -> CascadeRun StdGen -> ([CascadeRun StdGen], [EndStep], Board, Board)
-boosterEnd reg seg0 =
+boosterEnd :: Registry -> [(Pos, Pos)] -> CascadeRun StdGen -> ([CascadeRun StdGen], [EndStep], Board, Board)
+boosterEnd reg portals seg0 =
   let boardH = crBoard seg0
-      (ends, board1) = traceSpreadsWith reg (length (crWaves seg0)) boardH
-  in ([seg0], ends, board1, boardH)
+      (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
+      -- 步末补结算（同交换的统一路径；蔓延不会造出匹配，内置元素没有空洞时恒等）
+      seg1 = cascadeAfterEndWith reg (endHolesWith reg boardSp) (crUfos seg0) portals (crGen seg0) boardSp
+  in ([seg0, seg1], ends, crBoard seg1, boardH)

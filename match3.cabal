@@ -128,6 +128,7 @@ test-suite match3-test
       Spec.Cascade
       Spec.Element
       Spec.Engine
+      Spec.Extension
       Spec.GoalsLevels
       Spec.Golden
       Spec.Gravity

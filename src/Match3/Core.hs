@@ -175,6 +175,14 @@ module Match3.Core
   , MoveFx(..)
   , moveFx
   , clearMoveFx
+  , MoveTrace(..)
+  , traceSwap
+  , traceFreeSwap
+  , traceHammer
+  , traceCrossClear
+  , CascadeWave(..)
+  , traceCascade
+  , traceCascadeFromSeeds
   , runMove
   , restart
   , restartLevel

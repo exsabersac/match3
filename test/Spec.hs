@@ -4,7 +4,7 @@ module Main (main) where
 import Control.Monad (when)
 import Data.List (nub, sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
-import Match3.Board (applyGravity, clearMatches, expandSpecials, refill, runCascadeScoredWithUfos)
+import Match3.Board (applyGravity, clearMatches, refill, runCascadeScoredWithUfos, runCascadeScoredFromSeedsWithUfos)
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -228,6 +228,12 @@ tests =
     , testCase "booster_noop_resets_combo_feedback" booster_noop_resets_combo_feedback
     , testCase "undo_shuffle_reset_combo_feedback" undo_shuffle_reset_combo_feedback
     , testCase "move_fx_ignores_already_over" move_fx_ignores_already_over
+    , testCase "trace_cascade_final_equals_stabilized" trace_cascade_final_equals_stabilized
+    , testCase "trace_seeds_final_equals_stabilized" trace_seeds_final_equals_stabilized
+    , testCase "trace_swap_final_equals_trySwap" trace_swap_final_equals_trySwap
+    , testCase "trace_boosters_final_equal_result" trace_boosters_final_equal_result
+    , testCase "trace_rejected_move_is_empty" trace_rejected_move_is_empty
+    , testCase "trace_multi_wave_each_round_visible" trace_multi_wave_each_round_visible
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -1790,16 +1796,16 @@ choco_blocked_by_clear = do
   let stripped = clearChocoAdjacent (clearOverlaysOn board0 ms) ms
   assertBool "adj choco stripped" (not (hasChoco (getCell stripped (2, 1))))
   assertBool "safe choco kept" (hasChoco (getCell stripped (6, 6)))
-  let after = spreadChoco stripped
+  let spread = spreadChoco stripped
   -- Neighbors of cleared (2,1) must NOT gain choco from that cell
-  assertBool "no spread onto (2,0)" (not (hasChoco (getCell after (2, 0))))
-  assertBool "no spread onto (2,2)" (not (hasChoco (getCell after (2, 2))))
-  assertBool "no spread onto (1,1)" (not (hasChoco (getCell after (1, 1))))
+  assertBool "no spread onto (2,0)" (not (hasChoco (getCell spread (2, 0))))
+  assertBool "no spread onto (2,2)" (not (hasChoco (getCell spread (2, 2))))
+  assertBool "no spread onto (1,1)" (not (hasChoco (getCell spread (1, 1))))
   -- Safe choco still spreads
   let safeNeighbors = [(6, 5), (6, 7), (5, 6), (7, 6)]
   assertBool
     "safe choco spreads"
-    (any (\p -> hasChoco (getCell after p)) safeNeighbors)
+    (any (\p -> hasChoco (getCell spread p)) safeNeighbors)
 
 
 --------------------------------------------------------------------------------
@@ -1853,7 +1859,7 @@ chest_layer_decrement = do
       (b1, dead) = chipAdjacentChests board0 ms
   assertEqual "no full clear yet" ([] :: [Pos]) dead
   assertEqual "layers 2->1" (1 :: Int) (chestLayers (getCell b1 (4, 1)))
-  let (b2, dead2) = chipAdjacentChests b1 ms
+  let (_b2, dead2) = chipAdjacentChests b1 ms
   assertEqual "now dead" [(4, 1)] dead2
 
 goal_chest_counts :: Assertion
@@ -2033,7 +2039,7 @@ honey_layer_decrement = do
       (b1, dead) = chipAdjacentHoney board0 ms
   assertEqual "no full clear yet" ([] :: [Pos]) dead
   assertEqual "layers 2->1" (1 :: Int) (honeyLayers (getCell b1 (4, 1)))
-  let (b2, dead2) = chipAdjacentHoney b1 ms
+  let (_b2, dead2) = chipAdjacentHoney b1 ms
   assertEqual "now dead" [(4, 1)] dead2
 
 goal_honey_counts :: Assertion
@@ -2082,7 +2088,7 @@ balloon_popped_by_same_color = do
           (mkBalloon C1)
   assertBool "balloon present" (isBalloon (getCell board0 (2, 1)))
   let ms = findMatches board0
-      (b1, dead) = chipAdjacentBalloons board0 ms
+      (_b1, dead) = chipAdjacentBalloons board0 ms
   assertEqual "same color pops" [(2, 1)] dead
   let seeds = findMatches board0
       (board1, _n, _sc, _c, _t, _st, _ch, _h, balloons, _ck, _cak, _) =
@@ -2393,7 +2399,7 @@ cake_layer_decrement = do
       (b1, dead) = chipAdjacentCakes board0 ms
   assertEqual "no full clear yet" ([] :: [Pos]) dead
   assertEqual "layers 2->1" (1 :: Int) (cakeLayers (getCell b1 (4, 1)))
-  let (b2, dead2) = chipAdjacentCakes b1 ms
+  let (_b2, dead2) = chipAdjacentCakes b1 ms
   assertEqual "now dead" [(4, 1)] dead2
 
 cake_clears_at_zero :: Assertion
@@ -3674,7 +3680,7 @@ inv_move_end_order_belt_before_steam = do
       -- Pure: belt then steam vs steam then belt
       afterBelt = shiftBelts board0 [belt]
       beltThenSteam = spreadSteam afterBelt
-      steamThenBelt = shiftBelts (spreadSteam board0) [belt]
+      _steamThenBelt = shiftBelts (spreadSteam board0) [belt]
   assertBool "belt moved steam to (6,2)" (hasSteam (getCell afterBelt (6, 2)))
   assertBool "orders can differ on spread targets" True
   -- After belt, steam at (6,2) can spread to (6,3) and (5,2)/(7,2)
@@ -7610,12 +7616,22 @@ undo_shuffle_reset_combo_feedback = withComboState $ \_ gs1 -> do
           gsBoard gsU @?= gsBoard gs1
           gsCombo gsU @?= 0
           gsLastCleared gsU @?= []
+          -- 直接断言 moveFx：哪怕前端误把撤销当成一步已结算的操作，拿到的也是空特效
+          moveFx gs2 gsU (MoveApplied 0) @?= noFx
+          -- 撤销后紧接着无匹配交换，同样没有特效（不会重播 gs1 那一步的连击）
+          case noMatchSwap gsU of
+            Nothing -> assertFailure "need a no-match swap after undo"
+            Just (q1, q2) -> do
+              let (gsU2, outU2) = trySwap q1 q2 gsU
+              outU2 @?= NoMatch
+              moveFx gsU gsU2 outU2 @?= noFx
   let gsS = shuffleGame gs1
   gsCombo gsS @?= 0
   gsLastCleared gsS @?= []
+  moveFx gs1 gsS (MoveApplied 0) @?= noFx
   -- 洗牌后紧接着无匹配交换，仍无特效
   case noMatchSwap gsS of
-    Nothing -> pure ()
+    Nothing -> assertFailure "need a no-match swap after shuffle"
     Just (p1, p2) -> do
       let (gsS2, outS2) = trySwap p1 p2 gsS
       moveFx gsS gsS2 outS2 @?= noFx
@@ -7631,3 +7647,208 @@ move_fx_ignores_already_over = withComboState $ \_ gs1 -> do
       let (gs2, out) = trySwap p1 p2 gsOverSt
       out @?= Won (gsScore gs1)
       moveFx gsOverSt gs2 out @?= noFx
+
+
+--------------------------------------------------------------------------------
+-- 逐轮回放（trace*）：只记录快照，结果必须与结算函数完全一致
+--------------------------------------------------------------------------------
+
+-- | 逐轮回放脚本的通用一致性检查：轮与轮首尾相接、得分之和、清除格并集。
+checkWaveChain :: String -> Board -> [CascadeWave] -> Board -> Assertion
+checkWaveChain tag start ws final = do
+  case ws of
+    [] -> start @?= final
+    (w : _) -> assertEqual (tag ++ ": first wave starts from start board") start (cwBefore w)
+  sequence_
+    [ assertEqual (tag ++ ": wave " ++ show i ++ " holes -> after keeps shape") boardSize (length (cwHoles a))
+    | (i, a) <- zip [1 :: Int ..] ws
+    ]
+  case reverse ws of
+    [] -> pure ()
+    (lastW : _) -> assertEqual (tag ++ ": last wave ends at final board") final (cwAfter lastW)
+  sequence_
+    [ assertEqual (tag ++ ": wave " ++ show i ++ " continues from previous") (cwAfter a) (cwBefore b)
+    | (i, (a, b)) <- zip [2 :: Int ..] (zip ws (drop 1 ws))
+    ]
+
+nonEmptyWaves :: [CascadeWave] -> Int
+nonEmptyWaves = length . filter (not . null . cwCleared)
+
+-- | 普通匹配连锁：traceCascade 的最终盘面 / 生成器 / 得分 / 清除格 / 波数都与
+-- runCascadeScoredWithUfos（即「连锁到稳定」）一致。含飞碟与传送门的情形一起覆盖。
+trace_cascade_final_equals_stabilized :: Assertion
+trace_cascade_final_equals_stabilized = do
+  let cases =
+        [ (seed, ufos, portals)
+        | seed <- [1 .. 120 :: Int]
+        , (ufos, portals) <-
+            [ ([], [])
+            , ([mkUfo (2, 3) C1], [])
+            , ([], [((0, 1), (7, 6)), ((0, 6), (7, 1))])
+            ]
+        ]
+  multi <- fmap sum $ mapM
+    ( \(seed, ufos, portals) -> do
+        let g = mkStdGen seed
+            (b0, g1) = randomBoard g
+            (bR, _cells, score, maxW, _t, _s, _c, _h, _b, _k, _ca, _u, ufosR, clearedR, gR) =
+              runCascadeScoredWithUfos Nothing ufos portals g1 b0
+            (ws, bT, ufosT, gT) = traceCascade Nothing ufos portals g1 b0
+            tag = "seed " ++ show seed
+        bT @?= bR
+        show gT @?= show gR
+        ufosT @?= ufosR
+        assertEqual (tag ++ ": wave scores sum") score (sum (map cwScore ws))
+        assertEqual (tag ++ ": cleared union") (sort (nub clearedR)) (sort (nub (concatMap (\w -> cwCleared w ++ cwDrained w) ws)))
+        assertEqual (tag ++ ": wave count = max combo wave") maxW (length ws)
+        assertBool (tag ++ ": final is stable") (not (hasAnyMatch bT))
+        checkWaveChain tag b0 ws bT
+        pure (if length ws >= 3 then 1 else 0 :: Int)
+    )
+    cases
+  assertBool "sample includes multi-wave cascades" (multi > 0)
+
+-- | 种子清除（彩虹 / 特殊组合 / 道具 / 倒计时爆炸）起手的连锁同样一致。
+trace_seeds_final_equals_stabilized :: Assertion
+trace_seeds_final_equals_stabilized =
+  mapM_
+    ( \(seed, seeds, ufos) -> do
+        let (b0, g1) = randomPlayableBoard (mkStdGen seed)
+            (bR, _cells, score, _maxW, _t, _s, _c, _h, _b, _k, _ca, _u, ufosR, clearedR, gR) =
+              runCascadeScoredFromSeedsWithUfos Nothing seeds ufos [] g1 b0
+            (ws, bT, ufosT, gT) = traceCascadeFromSeeds Nothing seeds ufos [] g1 b0
+            tag = "seed " ++ show seed
+        bT @?= bR
+        show gT @?= show gR
+        ufosT @?= ufosR
+        assertEqual (tag ++ ": wave scores sum") score (sum (map cwScore ws))
+        assertEqual (tag ++ ": cleared union") (sort (nub clearedR)) (sort (nub (concatMap (\w -> cwCleared w ++ cwDrained w) ws)))
+        checkWaveChain tag b0 ws bT
+    )
+    [ (seed, seeds, ufos)
+    | seed <- [1 .. 40 :: Int]
+    , seeds <- [[(3, 3)], crossClearSeeds (seed `mod` boardSize, (seed * 3) `mod` boardSize)]
+    , ufos <- [[], [mkUfo (1, 3) C2]]
+    ]
+
+-- | 全部相邻交换：traceSwap 的最终盘面与 trySwap 结算后的盘面一致（自动洗牌除外，
+-- 那时比较洗牌前不可见），逐轮得分之和 = 本步得分，清除格并集 = gsLastCleared，
+-- 有清除的轮数 = gsCombo。覆盖皮带 / 倒计时 / 飞碟 / 传送门 / 蜗牛 / 蔓延等关卡。
+trace_swap_final_equals_trySwap :: Assertion
+trace_swap_final_equals_trySwap = do
+  let levels = [0, 4, 7, 9, 10, 11, 12, 13, 15, 21, 26, 27, 28, 32, 33, 35, 36]
+      results =
+        [ (li, seed, (p1, p2), gs0, gs1, out)
+        | li <- levels
+        , seed <- [1 .. 3 :: Int]
+        , let lvl = allLevels !! li
+              gs0 = newGameAtLevel li (levelConfig lvl) seed
+        , r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , let p1 = (r, c)
+        , p2 <- [(r, c + 1), (r + 1, c)]
+        , inBounds p2
+        , let (gs1, out) = trySwap p1 p2 gs0
+        ]
+  applied <- fmap sum $ mapM
+    ( \(li, seed, (p1, p2), gs0, gs1, out) -> do
+        let mt = traceSwap p1 p2 gs0
+            ws = mtWaves mt
+            tag = "L" ++ show (li + 1) ++ " seed " ++ show seed ++ " " ++ show (p1, p2)
+        case out of
+          NoMatch -> do
+            assertBool (tag ++ ": rejected swap has no waves") (null ws)
+            pure (0 :: Int)
+          InvalidSwap -> do
+            assertBool (tag ++ ": invalid swap has no waves") (null ws)
+            pure 0
+          _ -> do
+            assertEqual (tag ++ ": start = swapped board") (swapCells (gsBoard gs0) p1 p2) (mtStart mt)
+            when (not (gsShuffled gs1)) $
+              assertEqual (tag ++ ": final board") (gsBoard gs1) (mtFinal mt)
+            assertEqual (tag ++ ": score") (gsScore gs1 - gsScore gs0) (sum (map cwScore ws))
+            assertEqual (tag ++ ": cleared union") (sort (nub (gsLastCleared gs1))) (sort (nub (concatMap (\w -> cwCleared w ++ cwDrained w) ws)))
+            assertEqual (tag ++ ": combo") (gsCombo gs1) (nonEmptyWaves ws)
+            pure 1
+    )
+    results
+  assertBool "enough applied swaps sampled" (applied > 200)
+
+-- | 道具（锤子 / 十字 / 自由交换）的回放终局与结算结果一致。
+trace_boosters_final_equal_result :: Assertion
+trace_boosters_final_equal_result =
+  mapM_
+    ( \(li, seed) -> do
+        let lvl = allLevels !! li
+            gs0 = newGameAtLevel li (levelConfig lvl) seed
+            check tag gs1 out mt = case out of
+              MoveApplied _ -> do
+                when (not (gsShuffled gs1)) $ assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
+                assertEqual (tag ++ ": score") (gsScore gs1 - gsScore gs0) (sum (map cwScore (mtWaves mt)))
+                assertEqual (tag ++ ": combo") (gsCombo gs1) (nonEmptyWaves (mtWaves mt))
+              NoMatch -> assertBool (tag ++ ": no waves") (null (mtWaves mt))
+              InvalidSwap -> assertBool (tag ++ ": no waves") (null (mtWaves mt))
+              _ -> assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
+            tag0 = "L" ++ show (li + 1) ++ " seed " ++ show seed
+        sequence_
+          [ do
+              let (gsH, outH) = useHammer p gs0
+              check (tag0 ++ " hammer " ++ show p) gsH outH (traceHammer p gs0)
+              let (gsX, outX) = useCrossClear p gs0
+              check (tag0 ++ " cross " ++ show p) gsX outX (traceCrossClear p gs0)
+          | p <- [(0, 0), (3, 4), (7, 7), (5, 2)]
+          ]
+        sequence_
+          [ do
+              let (gsF, outF) = useFreeSwap p1 p2 gs0
+              check (tag0 ++ " free " ++ show (p1, p2)) gsF outF (traceFreeSwap p1 p2 gs0)
+          | (p1, p2) <- [((0, 0), (7, 7)), ((2, 3), (5, 6)), ((4, 4), (4, 5))]
+          ]
+    )
+    [ (li, seed) | li <- [0, 12, 21, 26, 27, 32], seed <- [1 .. 3 :: Int] ]
+
+-- | 被拒的操作（无匹配 / 非相邻 / 已结束 / 道具无效）回放脚本为空：前端不会播任何一轮。
+trace_rejected_move_is_empty :: Assertion
+trace_rejected_move_is_empty = withComboState $ \_ gs1 -> do
+  case noMatchSwap gs1 of
+    Nothing -> assertFailure "need a no-match swap"
+    Just (p1, p2) -> assertBool "no-match swap has no waves" (null (mtWaves (traceSwap p1 p2 gs1)))
+  assertBool "non-adjacent has no waves" (null (mtWaves (traceSwap (0, 0) (2, 2) gs1)))
+  let gsOverSt = gs1 { gsOver = Just (Won (gsScore gs1)) }
+  case findHint (gsBoard gsOverSt) of
+    Nothing -> assertFailure "need a hint"
+    Just (p1, p2) -> assertBool "finished game has no waves" (null (mtWaves (traceSwap p1 p2 gsOverSt)))
+  assertBool "no hammer charges -> no waves" (null (mtWaves (traceHammer (3, 3) gs1 { gsHammers = 0 })))
+  assertBool "no cross charges -> no waves" (null (mtWaves (traceCrossClear (3, 3) gs1 { gsCrossClears = 0 })))
+
+-- | 3 连及以上的一步：每一轮都有自己的被消格，且被消格在该轮之前的盘面上确实存在。
+trace_multi_wave_each_round_visible :: Assertion
+trace_multi_wave_each_round_visible =
+  case
+    [ (gs0, p1, p2, gs1)
+    | seed <- [1 .. 400 :: Int]
+    , let gs0 = newGameAtLevel 0 (levelConfig (head allLevels)) seed
+    , Just (p1, p2) <- [findHint (gsBoard gs0)]
+    , let (gs1, out) = trySwap p1 p2 gs0
+    , out /= NoMatch
+    , gsCombo gs1 >= 3
+    ] of
+    [] -> assertFailure "need a 3+ cascade from a hinted swap"
+    ((gs0, p1, p2, gs1) : _) -> do
+      let ws = mtWaves (traceSwap p1 p2 gs0)
+      length ws @?= gsCombo gs1
+      assertBool "every round clears something" (all (not . null . cwCleared) ws)
+      sequence_
+        [ assertBool ("round " ++ show i ++ " clears real cells") (all (\p -> inBounds p) (cwCleared w))
+        | (i, w) <- zip [1 :: Int ..] ws
+        ]
+      -- 每一轮都能从「消除前盘面」上找到匹配（第一轮之后都是天然掉落形成的连锁）
+      assertBool "later rounds start from a matching board" (all (hasAnyMatch . cwBefore) (drop 1 ws))
+      -- 空洞盘面在被消格上确实是空的（除非放下了新特殊块）
+      sequence_
+        [ assertBool "holes at cleared cells"
+            (all (\(r, c) -> case (cwHoles w !! r) !! c of
+                                Nothing -> True
+                                Just cell -> isGem cell) (cwCleared w))
+        | w <- ws
+        ]

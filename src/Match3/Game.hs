@@ -13,6 +13,11 @@ module Match3.Game
   , MoveFx(..)
   , moveFx
   , clearMoveFx
+  , MoveTrace(..)
+  , traceSwap
+  , traceFreeSwap
+  , traceHammer
+  , traceCrossClear
   , restart
   , restartLevel
   , checkOutcome
@@ -43,6 +48,11 @@ import Match3.Board
   , runPostBeltCascade
   , resolveCountdowns
   , shufflePlayable
+  , CascadeWave(..)
+  , traceCascade
+  , traceCascadeFromSeeds
+  , tracePostBeltCascade
+  , traceCountdowns
   , swapCells
   , setCell
   , getCell
@@ -871,6 +881,105 @@ trySwap p1 p2 gs
 
 runMove :: Pos -> Pos -> GameState -> (GameState, Outcome)
 runMove = trySwap
+
+-- | 一步操作的逐轮回放脚本（纯数据，供前端分轮播放连锁）。
+-- 与对应的 trySwap / useFreeSwap / useHammer / useCrossClear 走相同的步骤与随机数，
+-- 但只记录盘面快照，不做任何结算。被拒的操作（NoMatch / InvalidSwap / 已结束）返回空脚本，
+-- 前端据此不会播放任何消除或连击。
+data MoveTrace = MoveTrace
+  { mtStart :: Board          -- ^ 第一轮之前的盘面（交换后 / 道具作用前）
+  , mtWaves :: [CascadeWave]  -- ^ 按时间顺序的每一轮（含倒计时爆炸 / 皮带 / 蜗牛后的续连锁）
+  , mtFinal :: Board          -- ^ 所有轮次与步末效果之后的盘面；未触发自动洗牌时 == 结算后的 gsBoard
+  } deriving (Eq, Show)
+
+emptyTrace :: GameState -> MoveTrace
+emptyTrace gs = MoveTrace (gsBoard gs) [] (gsBoard gs)
+
+-- | trySwap 的逐轮回放。步骤顺序与 trySwap 完全一致：
+-- 主连锁 → 倒计时 → 皮带 → 藤/巧/蒸汽蔓延 + 蜗牛 →（蜗牛成消）再连锁。
+-- 蔓延 / 蜗牛 / 倒计时减一这类「非消除」变化不单独成轮，体现在下一轮的 cwBefore 或 mtFinal 里。
+traceSwap :: Pos -> Pos -> GameState -> MoveTrace
+traceSwap p1 p2 gs
+  | isJust (gsOver gs) = emptyTrace gs
+  | not (inBounds p1 && inBounds p2) = emptyTrace gs
+  | not (adjacent p1 p2) = emptyTrace gs
+  | swapBlockedByStone (gsBoard gs) p1 p2 = emptyTrace gs
+  | not rainbow && not specialCombo && not (hasAnyMatch swapped) = emptyTrace gs
+  | otherwise =
+      let portals = gsPortals gs
+          (ws0, board0', ufos1, g0') =
+            if rainbow
+              then traceCascadeFromSeeds (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) portals (gsGen gs) swapped
+              else if specialCombo
+                then traceCascadeFromSeeds (Just p2) (comboClearSeeds swapped p1 p2) (gsUfos gs) portals (gsGen gs) swapped
+                else traceCascade (Just p2) (gsUfos gs) portals (gsGen gs) swapped
+          (ws1, boardCd, ufosCd, g1') = traceCountdowns ufos1 portals g0' board0'
+          boardBelt = shiftBelts boardCd (gsBelts gs)
+          (ws2, boardBeltCas, ufos2, g') =
+            if null (gsBelts gs)
+              then ([], boardCd, ufosCd, g1')
+              else tracePostBeltCascade ufosCd portals g1' boardBelt
+          beltCells = nub (concat (gsBelts gs))
+          portalEnds = nub (concatMap (\(a, b) -> [a, b]) portals)
+          boardSnail =
+            stepSnailsAvoidingBlocked beltCells portalEnds
+              (spreadSteam (spreadChoco (spreadVines boardBeltCas)))
+          (ws3, board1, _, _) =
+            if hasAnyMatch boardSnail
+              then traceCascade Nothing ufos2 portals g' boardSnail
+              else ([], boardSnail, ufos2, g')
+      in MoveTrace swapped (ws0 ++ ws1 ++ ws2 ++ ws3) board1
+  where
+    board0 = gsBoard gs
+    swapped = swapCells board0 p1 p2
+    rainbow = isRainbowSwap board0 p1 p2
+    specialCombo = isSpecialCombo board0 p1 p2
+
+-- | useFreeSwap 的逐轮回放（主连锁 + 蔓延；自由交换不触发倒计时 / 皮带 / 蜗牛）。
+traceFreeSwap :: Pos -> Pos -> GameState -> MoveTrace
+traceFreeSwap p1 p2 gs
+  | isJust (gsOver gs) = emptyTrace gs
+  | gsFreeSwaps gs <= 0 = emptyTrace gs
+  | not (inBounds p1 && inBounds p2) = emptyTrace gs
+  | p1 == p2 = emptyTrace gs
+  | swapBlockedByStone (gsBoard gs) p1 p2 = emptyTrace gs
+  | not rainbow && not specialCombo && not (hasAnyMatch swapped) = emptyTrace gs
+  | otherwise =
+      let (ws, boardF, _, _) =
+            if rainbow
+              then traceCascadeFromSeeds (Just p2) (rainbowClearSeeds swapped p1 p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
+              else if specialCombo
+                then traceCascadeFromSeeds (Just p2) (comboClearSeeds swapped p1 p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
+                else traceCascade (Just p2) (gsUfos gs) (gsPortals gs) (gsGen gs) swapped
+      in MoveTrace swapped ws (spreadSteam (spreadChoco (spreadVines boardF)))
+  where
+    board0 = gsBoard gs
+    swapped = swapCells board0 p1 p2
+    rainbow = isRainbowSwap board0 p1 p2
+    specialCombo = isSpecialCombo board0 p1 p2
+
+-- | useHammer 的逐轮回放。
+traceHammer :: Pos -> GameState -> MoveTrace
+traceHammer p gs
+  | isJust (gsOver gs) = emptyTrace gs
+  | gsHammers gs <= 0 = emptyTrace gs
+  | not (inBounds p) = emptyTrace gs
+  | hammerImmune (getCell (gsBoard gs) p) = emptyTrace gs
+  | otherwise = traceSeedsThenSpread [p] gs
+
+-- | useCrossClear 的逐轮回放。
+traceCrossClear :: Pos -> GameState -> MoveTrace
+traceCrossClear p gs
+  | isJust (gsOver gs) = emptyTrace gs
+  | gsCrossClears gs <= 0 = emptyTrace gs
+  | not (inBounds p) = emptyTrace gs
+  | otherwise = traceSeedsThenSpread (crossClearSeeds p) gs
+
+traceSeedsThenSpread :: [Pos] -> GameState -> MoveTrace
+traceSeedsThenSpread seeds gs =
+  let (ws, boardH, _, _) =
+        traceCascadeFromSeeds Nothing seeds (gsUfos gs) (gsPortals gs) (gsGen gs) (gsBoard gs)
+  in MoveTrace (gsBoard gs) ws (spreadSteam (spreadChoco (spreadVines boardH)))
 
 undoMove :: GameState -> Maybe GameState
 undoMove gs = case gsHistory gs of

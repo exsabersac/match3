@@ -3,10 +3,12 @@
 
 -- | SDL2 前端：窗口、输入、道具点选模式、选关地图、交换/下落动画与粒子。
 -- 规则一律经 Match3.Core；本模块不改写 trySwap 结果，只展示。
+-- 连锁按轮回放（高亮 → 消失 → 下落补子 → 下一轮），时间线与阶段机见 ComboFx。
 module Main (main) where
 
 import Control.Concurrent (threadDelay)
 import Art
+import ComboFx
 import Control.Monad (forM_, unless, void, when)
 import Data.Char (ord, toUpper)
 import Data.IORef
@@ -24,7 +26,7 @@ import qualified SDL.Internal.Types as SI
 import qualified SDL.Raw as Raw
 import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
-import System.Random (randomIO, randomRIO)
+import System.Random (StdGen, mkStdGen, randomIO, randomR)
 import Text.Read (readMaybe)
 
 cellPx, padPx, hudH, boardPx, winW, winH :: CInt
@@ -46,13 +48,14 @@ data Anim
       { asP1 :: Pos
       , asP2 :: Pos
       , asBefore :: Board
-      , asAfter :: Board
       , asFrame :: Int
+      , asNext :: Anim   -- ^ 交换播完之后接着播什么（逐轮连锁 / 轻落）
       }
   | AnimFall
       { afBoard :: Board
       , afFrame :: Int
       }
+  | AnimCascade Cascade  -- ^ 逐轮回放连锁（ComboFx 阶段机）
 
 -- | Simple rectangle particle (no textures).
 data Particle = Particle
@@ -83,7 +86,11 @@ data App = App
   , appFlash     :: [(Pos, Int)]
   , appPulse     :: Int
   , appAnim      :: Anim
-  , appComboShow :: Int  -- frames left to highlight combo
+  , appComboShow :: Int  -- ^ 连锁结束后 HUD「N 连击！」总结剩余帧数
+  , appComboBest :: Int  -- ^ 总结里显示的本步最高连击
+  , appPops      :: [TextPop]  -- ^ 「连击 xN」弹字 + 本轮得分浮字
+  , appShake     :: Int  -- ^ 震屏剩余帧数
+  , appShakeAmp  :: Int  -- ^ 震屏振幅（逻辑像素）
   , appParticles :: [Particle]
   , appTipFrames :: Int  -- first-level tip/highlight countdown
   , appHelpFrames :: Int -- brief help strip after start / unpause
@@ -144,6 +151,10 @@ main = do
         , appPulse = 0
         , appAnim = AnimNone
         , appComboShow = 0
+        , appComboBest = 0
+        , appPops = []
+        , appShake = 0
+        , appShakeAmp = 0
         , appParticles = []
         , appTipFrames = if startIdx == 0 && not showcase then 240 else 0
         , appHelpFrames = if showcase then 0 else 300
@@ -159,6 +170,7 @@ main = do
         }
   updateTitle window =<< readIORef ref
   let loop = do
+        t0 <- ticks
         -- 每帧同步倍率（两次查询很便宜）：窗口拖到不同 DPI 的显示器上也能立刻跟上
         syncScale window renderer ref
         events <- pollEvents
@@ -167,7 +179,10 @@ main = do
         app <- readIORef ref
         draw renderer app
         present renderer
-        threadDelay 16000
+        -- 固定步长 ≈ 60 fps：扣掉本帧已花的时间，保证动画时间线（按帧计）接近真实毫秒
+        t1 <- ticks
+        let spent = fromIntegral (t1 - t0) :: Int
+        threadDelay (max 1000 ((16 - spent) * 1000))
         unless shouldQuit loop
   loop
   destroyRenderer renderer
@@ -175,38 +190,90 @@ main = do
   quit
 
 tickAnim :: App -> App
-tickAnim app =
-  let paused = appPaused app
-      flash' =
-        if paused then appFlash app else [ (p, n - 1) | (p, n) <- appFlash app, n > 1 ]
-      combo' =
-        if paused then appComboShow app else max 0 (appComboShow app - 1)
-      tip' = if paused then appTipFrames app else max 0 (appTipFrames app - 1)
-      help' = if paused then appHelpFrames app else max 0 (appHelpFrames app - 1)
-      anim' =
-        if paused
-          then appAnim app
-          else case appAnim app of
-            AnimNone -> AnimNone
-            AnimSwap { asP1, asP2, asBefore, asAfter, asFrame }
-              | asFrame + 1 >= swapFrames ->
-                  AnimFall { afBoard = asAfter, afFrame = 0 }
-              | otherwise ->
-                  AnimSwap asP1 asP2 asBefore asAfter (asFrame + 1)
-            AnimFall { afBoard, afFrame }
-              | afFrame + 1 >= fallFrames -> AnimNone
-              | otherwise -> AnimFall afBoard (afFrame + 1)
-      parts' =
-        if paused then appParticles app else tickParticles (appParticles app)
-  in app
-       { appFlash = flash'
-       , appPulse = appPulse app + 1
-       , appAnim = anim'
-       , appComboShow = combo'
-       , appParticles = parts'
-       , appTipFrames = tip'
-       , appHelpFrames = help'
-       }
+tickAnim app
+  -- 暂停时一切冻结（只让呼吸光的 pulse 继续走）
+  | appPaused app = app {appPulse = appPulse app + 1}
+  | otherwise =
+      stepAnim
+        app
+          { appFlash = [(p, n - 1) | (p, n) <- appFlash app, n > 1]
+          , appPulse = appPulse app + 1
+          , appComboShow = max 0 (appComboShow app - 1)
+          , appPops = tickPops (appPops app)
+          , appShake = max 0 (appShake app - 1)
+          , appParticles = tickParticles (appParticles app)
+          , appTipFrames = max 0 (appTipFrames app - 1)
+          , appHelpFrames = max 0 (appHelpFrames app - 1)
+          }
+
+-- | 推进当前动画一帧；逐轮回放在阶段切换时触发弹字 / 粒子 / 震屏。
+stepAnim :: App -> App
+stepAnim app = case appAnim app of
+  AnimNone -> app
+  a@AnimSwap {asFrame, asNext}
+    | asFrame + 1 >= swapFrames -> app {appAnim = asNext}
+    | otherwise -> app {appAnim = a {asFrame = asFrame + 1}}
+  AnimFall {afBoard, afFrame}
+    | afFrame + 1 >= fallFrames -> app {appAnim = AnimNone}
+    | otherwise -> app {appAnim = AnimFall afBoard (afFrame + 1)}
+  AnimCascade c -> case stepPlayback c of
+    (Continue c', evs) -> foldl applyCascadeEvent app {appAnim = AnimCascade c'} evs
+    (Finished c', _) ->
+      app
+        { appAnim = if cShown c' == cFinal c' then AnimNone else AnimFall (cFinal c') 0
+          -- 连锁播完才亮 HUD 总结（最高连击 ≥ 2）
+        , appComboShow = if cBest c' >= 2 then comboSummaryFrames else 0
+        , appComboBest = cBest c'
+        }
+
+applyCascadeEvent :: App -> CascadeEvent -> App
+applyCascadeEvent app ev = case ev of
+  EvHighlight k w
+    | k >= 2 -> app {appPops = spawnComboPop k (cwCleared w) (appPops app)}
+    | otherwise -> app
+  EvVanish k w ->
+    let parts = burstParticles (appPulse app) (cwBefore w) (cwCleared w)
+        scorePop = [scorePopAt (cwScore w) k (cwCleared w) | cwScore w > 0]
+        st = comboStyle k
+    in app
+         { appParticles = parts ++ appParticles app
+         , appPops = scorePop ++ appPops app
+         , appShake = if k >= 2 then shakeFrames else appShake app
+         , appShakeAmp = if k >= 2 then csShake st else appShakeAmp app
+         }
+
+-- | 棋盘左上角（逻辑像素，Float）。
+boardTopF, boardLeftF, cellF :: Float
+boardTopF = fromIntegral (padPx + hudH)
+boardLeftF = fromIntegral padPx
+cellF = fromIntegral cellPx
+
+-- | 「连击 xN」弹字：放在本轮消除区域的上方（放不下就放下方），不挡住正在高亮的格子；
+-- 水平方向限制在棋盘内。新弹字出现时，旧的连击弹字加速淡出，屏幕上只保留一个主提示。
+spawnComboPop :: Int -> [Pos] -> [TextPop] -> [TextPop]
+spawnComboPop k cleared pops =
+  let (_, cc, rTop, rBot) = clearedAnchor cleared
+      h = fromIntegral (csHeight (comboStyle k)) :: Float
+      halfW = h * 1.7 -- 「连击」≈ 2h 宽 + 「xN」，放大到 1.3 倍时的一半
+      xRaw = boardLeftF + (cc + 0.5) * cellF
+      x = max (boardLeftF + halfW) (min (boardLeftF + fromIntegral boardPx - halfW) xRaw)
+      above = boardTopF + fromIntegral rTop * cellF - h * 0.75
+      below = boardTopF + fromIntegral (rBot + 1) * cellF + h * 0.75
+      boardBot = boardTopF + fromIntegral boardPx
+      y
+        | above - h * 0.65 >= boardTopF - 4 = above
+        | below + h * 0.65 <= boardBot + 4 = below
+        | otherwise = boardTopF + h * 0.7
+      fadeOld p = case tpKind p of
+        PopCombo _ -> p {tpAge = max (tpAge p) (tpLife p - 10)}
+        PopScore _ _ -> p
+  in TextPop (PopCombo k) x y 0 comboPopLife : map fadeOld pops
+
+-- | 本轮得分浮字：从消除区域中心飘起。
+scorePopAt :: Int -> Int -> [Pos] -> TextPop
+scorePopAt n k cleared =
+  let (cr, cc, _, _) = clearedAnchor cleared
+  in TextPop (PopScore n k) (boardLeftF + (cc + 0.5) * cellF) (boardTopF + (cr + 0.5) * cellF) 0 scorePopLife
 
 tickParticles :: [Particle] -> [Particle]
 tickParticles =
@@ -221,55 +288,57 @@ tickParticles =
             }
       )
 
--- | Spawn burst particles at cleared cell centers (colors from before-board).
-spawnBurst :: Board -> [Pos] -> IO [Particle]
-spawnBurst board positions =
-  fmap concat $
-    mapM
-      ( \pos -> do
-          let (ox, oy) = cellOrigin pos
-              cx = fromIntegral ox + fromIntegral cellPx / 2
-              cy = fromIntegral oy + fromIntegral cellPx / 2
-              (cr, cg, cb) = case getCell board pos of
-                    Stone _ -> (120, 120, 130)
-                    Chest _ -> (220, 170, 60)
-                    Honey _ -> (240, 180, 40)
-                    Balloon col -> colorRGB col
-                    Cookie -> (210, 160, 90)
-                    Cake _ -> (255, 140, 180)
-                    MagicHat -> (140, 90, 200)
-                    Maker col _ -> colorRGB col
-                    Snail _ _ -> (90, 160, 70)
-                    Safe _ -> (180, 150, 40)
-                    Flip f _ -> colorRGB f
-                    Surprise -> (255, 100, 160)
-                    Bottle col -> colorRGB col
-                    TimeSpirit -> (80, 220, 255)
-                    Countdown _ _ -> colorRGB (cellColor (getCell board pos))
-                    Gem _ _ _ _ -> colorRGB (cellColor (getCell board pos))
-          mapM
-            ( \_ -> do
-                ang <- randomRIO (0, 2 * pi :: Float)
-                spd <- randomRIO (1.2, 4.5 :: Float)
-                life <- randomRIO (18, 36 :: Int)
-                sz <- randomRIO (3, 7 :: Int)
-                pure
-                  Particle
-                    { pX = cx
-                    , pY = cy
-                    , pVX = cos ang * spd
-                    , pVY = sin ang * spd - 1.5
-                    , pLife = life
-                    , pMax = life
-                    , pR = cr
-                    , pG = cg
-                    , pB = cb
-                    , pSize = fromIntegral sz
-                    }
-            )
-            [1 .. 5 :: Int]
-      )
-      positions
+-- | 格子对应的粒子 / 退回画法颜色。
+cellRGB :: Cell -> (Word8, Word8, Word8)
+cellRGB cell = case cell of
+  Stone _ -> (120, 120, 130)
+  Chest _ -> (220, 170, 60)
+  Honey _ -> (240, 180, 40)
+  Balloon col -> colorRGB col
+  Cookie -> (210, 160, 90)
+  Cake _ -> (255, 140, 180)
+  MagicHat -> (140, 90, 200)
+  Maker col _ -> colorRGB col
+  Snail _ _ -> (90, 160, 70)
+  Safe _ -> (180, 150, 40)
+  Flip f _ -> colorRGB f
+  Surprise -> (255, 100, 160)
+  Bottle col -> colorRGB col
+  TimeSpirit -> (80, 220, 255)
+  Countdown _ _ -> colorRGB (cellColor cell)
+  Gem _ _ _ _ -> colorRGB (cellColor cell)
+
+-- | 被消格中心迸出的粒子（颜色取自消除前的盘面）。纯函数：随机数由 seed 派生，
+-- 这样可以在 tickAnim（纯）里按回放阶段生成。
+burstParticles :: Int -> Board -> [Pos] -> [Particle]
+burstParticles seed board positions = concat (zipWith one [0 :: Int ..] positions)
+  where
+    one i pos =
+      let (ox, oy) = cellOrigin pos
+          cx = fromIntegral ox + fromIntegral cellPx / 2
+          cy = fromIntegral oy + fromIntegral cellPx / 2
+          rgb = cellRGB (getCell board pos)
+      in go (5 :: Int) cx cy rgb (mkStdGen (seed * 7919 + i * 104729 + 17))
+    go 0 _ _ _ _ = []
+    go n cx cy rgb@(cr, cg, cb) g0 =
+      let (ang, g1) = randomR (0, 2 * pi :: Float) g0
+          (spd, g2) = randomR (1.2, 4.5 :: Float) g1
+          (life, g3) = randomR (18, 36 :: Int) g2
+          (sz, g4) = randomR (3, 7 :: Int) (g3 :: StdGen)
+          p =
+            Particle
+              { pX = cx
+              , pY = cy
+              , pVX = cos ang * spd
+              , pVY = sin ang * spd - 1.5
+              , pLife = life
+              , pMax = life
+              , pR = cr
+              , pG = cg
+              , pB = cb
+              , pSize = fromIntegral sz
+              }
+      in p : go (n - 1) cx cy rgb g4
 
 updateTitle :: Window -> App -> IO ()
 updateTitle window app = do
@@ -425,6 +494,9 @@ freshLevelUi gs app =
        , appFlash = []
        , appAnim = AnimNone
        , appComboShow = 0
+       , appComboBest = 0
+       , appPops = []
+       , appShake = 0
        , appParticles = []
        , appTipFrames = tip
        , appStartMoves = gsMoves gs
@@ -440,13 +512,10 @@ freshLevelUi gs app =
 -- | Apply hammer booster at pos with flash / particles / msg.
 applyHammer :: IORef App -> Window -> App -> Pos -> IO App
 applyHammer ref window app pos = do
-  let before = gsBoard (appGame app)
-      (gs', out) = useHammer pos (appGame app)
-      after = gsBoard gs'
+  let (gs', out) = useHammer pos (appGame app)
       -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
       fx = moveFx (appGame app) gs' out
-      changed = fxCleared fx
-      flash = [(p, 18) | p <- changed]
+      mt = traceHammer pos (appGame app)
       msg = case out of
         InvalidSwap -> "No hammers left"
         NoMatch -> "Hammer failed"
@@ -454,25 +523,17 @@ applyHammer ref window app pos = do
         LevelClear _ _ -> "Hammer cleared level!"
         Won _ -> "Hammer won!"
         Lost _ -> T.pack (loseHint (gsGoal gs'))
-  parts <-
-    if null flash
-      then pure (appParticles app)
-      else do
-        burst <- spawnBurst before changed
-        pure (burst ++ appParticles app)
   let app' =
         withUnlock
-          app
-            { appGame = gs'
-            , appSel = Nothing
-            , appTool = ToolNone
-            , appDragFrom = Nothing
-            , appMsg = msg
-            , appFlash = flash
-            , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-            , appComboShow = comboFxFrames fx
-            , appParticles = parts
-            }
+          ( withMovePlayback (appGame app) gs' fx mt Nothing
+              app
+                { appGame = gs'
+                , appSel = Nothing
+                , appTool = ToolNone
+                , appDragFrom = Nothing
+                , appMsg = msg
+                }
+          )
           out
   writeIORef ref app'
   updateTitle window app'
@@ -482,13 +543,10 @@ applyHammer ref window app pos = do
 -- | Apply cross-clear booster at pos with flash / particles / msg.
 applyCrossClear :: IORef App -> Window -> App -> Pos -> IO App
 applyCrossClear ref window app pos = do
-  let before = gsBoard (appGame app)
-      (gs', out) = useCrossClear pos (appGame app)
-      after = gsBoard gs'
+  let (gs', out) = useCrossClear pos (appGame app)
       -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
       fx = moveFx (appGame app) gs' out
-      changed = fxCleared fx
-      flash = [(p, 18) | p <- changed]
+      mt = traceCrossClear pos (appGame app)
       msg = case out of
         InvalidSwap -> "No cross-clears left"
         NoMatch -> "Cross failed"
@@ -496,25 +554,17 @@ applyCrossClear ref window app pos = do
         LevelClear _ _ -> "Cross cleared level!"
         Won _ -> "Cross won!"
         Lost _ -> T.pack (loseHint (gsGoal gs'))
-  parts <-
-    if null flash
-      then pure (appParticles app)
-      else do
-        burst <- spawnBurst before changed
-        pure (burst ++ appParticles app)
   let app' =
         withUnlock
-          app
-            { appGame = gs'
-            , appSel = Nothing
-            , appTool = ToolNone
-            , appDragFrom = Nothing
-            , appMsg = msg
-            , appFlash = flash
-            , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-            , appComboShow = comboFxFrames fx
-            , appParticles = parts
-            }
+          ( withMovePlayback (appGame app) gs' fx mt Nothing
+              app
+                { appGame = gs'
+                , appSel = Nothing
+                , appTool = ToolNone
+                , appDragFrom = Nothing
+                , appMsg = msg
+                }
+          )
           out
   writeIORef ref app'
   updateTitle window app'
@@ -522,13 +572,10 @@ applyCrossClear ref window app pos = do
 
 applyFreeSwap :: IORef App -> Window -> App -> Pos -> Pos -> IO ()
 applyFreeSwap ref window app p1 p2 = do
-  let before = gsBoard (appGame app)
-      (gs', out) = useFreeSwap p1 p2 (appGame app)
-      after = gsBoard gs'
+  let (gs', out) = useFreeSwap p1 p2 (appGame app)
       -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
       fx = moveFx (appGame app) gs' out
-      changed = fxCleared fx
-      flash = [(p, 18) | p <- changed]
+      mt = traceFreeSwap p1 p2 (appGame app)
       msg = case out of
         InvalidSwap -> "Free-swap invalid / empty"
         NoMatch -> "Free-swap: no match; not spent"
@@ -541,25 +588,17 @@ applyFreeSwap ref window app p1 p2 = do
         NoMatch -> ToolFreeSwap Nothing
         InvalidSwap -> ToolNone
         _ -> ToolNone
-  parts <-
-    if null flash
-      then pure (appParticles app)
-      else do
-        burst <- spawnBurst before changed
-        pure (burst ++ appParticles app)
   let app' =
         withUnlock
-          app
-            { appGame = gs'
-            , appSel = Nothing
-            , appTool = tool'
-            , appDragFrom = Nothing
-            , appMsg = msg
-            , appFlash = flash
-            , appAnim = if null flash then AnimNone else AnimFall { afBoard = after, afFrame = 0 }
-            , appComboShow = comboFxFrames fx
-            , appParticles = parts
-            }
+          ( withMovePlayback (appGame app) gs' fx mt (Just (p1, p2))
+              app
+                { appGame = gs'
+                , appSel = Nothing
+                , appTool = tool'
+                , appDragFrom = Nothing
+                , appMsg = msg
+                }
+          )
           out
   writeIORef ref app'
   updateTitle window app'
@@ -570,11 +609,74 @@ animBusy app = case appAnim app of
   AnimNone -> False
   _ -> True
 
--- | 连击（爆击）特效持续帧数。只由本次操作的 MoveFx 决定（边沿触发）：
+-- | 连击（爆击）总结帧数。只由本次操作的 MoveFx 决定（边沿触发）：
 -- 旧实现直接读 gsCombo，无匹配回滚后 gsCombo 仍是上一步的值，于是又置 120 帧重播。
 -- 清除格 fxCleared 已排除传送带 / 蜗牛挪位噪声（见 gsLastCleared）。
 comboFxFrames :: MoveFx -> Int
-comboFxFrames fx = if fxCombo fx > 1 then 120 else 0
+comboFxFrames fx = if fxCombo fx > 1 then comboSummaryFrames else 0
+
+noMoveFx :: MoveFx
+noMoveFx = MoveFx 0 []
+
+-- | 一步操作之后的表现编排。只看本次调用的 MoveFx（边沿触发）：
+--
+-- * fx 为空（NoMatch / InvalidSwap / 操作前已结束）：不回放、不闪光，并清掉残留的连击弹字
+--   与 HUD 总结 —— 绝不重播上一步的连击特效（回归：failed_swap_resets_combo_feedback）。
+-- * 有回放脚本（MoveTrace）：交换动画 → 逐轮回放（高亮 → 消失 → 下落补子 → 下一轮），
+--   连击弹字 / 得分浮字 / 震屏 / 粒子都在回放阶段切换时产生，HUD 总结在全部播完后才亮。
+-- * 兜底（理论上不会发生：结算过却没有轮次）：沿用旧的「闪光 + 粒子 + 轻落」。
+withMovePlayback :: GameState -> GameState -> MoveFx -> MoveTrace -> Maybe (Pos, Pos) -> App -> App
+withMovePlayback before after fx mt swapPair app
+  | fx == noMoveFx =
+      app {appFlash = [], appAnim = AnimNone, appComboShow = 0, appComboBest = 0, appPops = []}
+  | null (mtWaves mt) =
+      let changed = fxCleared fx
+          fall = AnimFall (gsBoard after) 0
+      in app
+           { appFlash = [(p, 18) | p <- changed]
+           , appAnim = viaSwap fall
+           , appParticles = burstParticles (appPulse app) (gsBoard before) changed ++ appParticles app
+           , appComboShow = comboFxFrames fx
+           , appComboBest = fxCombo fx
+           , appPops = []
+           }
+  | otherwise =
+      app
+        { appFlash = []
+        , appAnim = viaSwap (AnimCascade (newCascade mt (gsBoard after) (gsScore before)))
+        , appComboShow = 0
+        , appComboBest = 0
+        , appPops = []
+        }
+  where
+    viaSwap next = case swapPair of
+      Just (p1, p2) -> AnimSwap p1 p2 (gsBoard before) 0 next
+      Nothing -> next
+
+-- | 点击 / 空格加速正在播放的连锁回放（输入本身仍被锁定，不会误触下一步）。
+accelerate :: Anim -> Anim
+accelerate a = case a of
+  AnimCascade c -> AnimCascade c {cFast = True}
+  AnimSwap {asNext} -> a {asNext = accelerate asNext}
+  _ -> a
+
+-- | 当前（或交换之后）的逐轮回放。
+playingCascade :: App -> Maybe Cascade
+playingCascade app = case appAnim app of
+  AnimCascade c -> Just c
+  AnimSwap {asNext = AnimCascade c} -> Just c
+  _ -> Nothing
+
+-- | 回放中按下鼠标 / 空格：加速并提示。
+speedUp :: IORef App -> Window -> IO ()
+speedUp ref window = do
+  app <- readIORef ref
+  case playingCascade app of
+    Just c | not (cFast c) -> do
+      let app' = app {appAnim = accelerate (appAnim app), appMsg = "Fast-forward combo"}
+      writeIORef ref app'
+      updateTitle window app'
+    _ -> pure ()
 
 -- | Bump map unlock after LevelClear / Won (daily Won must not unlock campaign).
 withUnlock :: App -> Outcome -> App
@@ -651,19 +753,24 @@ handleEvent ref window ev = case eventPayload ev of
                             , appFlash = []
                               -- 洗牌不是消除：收掉仍在播的连击角标 / 弹字
                             , appComboShow = 0
+                            , appComboBest = 0
+                            , appPops = []
                             , appAnim = AnimFall { afBoard = gsBoard gs, afFrame = 0 }
                             }
                     writeIORef ref app'
                     updateTitle window app'
                   pure False
                 KeycodeN -> do
-                  advanceOrMsg ref window
+                  busy <- animBusy <$> readIORef ref
+                  if busy then speedUp ref window else advanceOrMsg ref window
                   pure False
                 KeycodeReturn -> do
-                  advanceOrMsg ref window
+                  busy <- animBusy <$> readIORef ref
+                  if busy then speedUp ref window else advanceOrMsg ref window
                   pure False
                 KeycodeSpace -> do
-                  advanceOrMsg ref window
+                  busy <- animBusy <$> readIORef ref
+                  if busy then speedUp ref window else advanceOrMsg ref window
                   pure False
                 KeycodeU -> do
                   app <- readIORef ref
@@ -682,6 +789,8 @@ handleEvent ref window ev = case eventPayload ev of
                                 , appFlash = []
                                 , appAnim = AnimNone
                                 , appComboShow = 0
+                                , appComboBest = 0
+                                , appPops = []
                                 , appParticles = []
                                 }
                         writeIORef ref app'
@@ -809,25 +918,10 @@ handleEvent ref window ev = case eventPayload ev of
               case pixelToCell mx my of
                 Just p2 | p1 /= p2 && adjacent p1 p2 -> do
                   app <- readIORef ref
-                  let before = gsBoard (appGame app)
-                      (gs', out) = trySwap p1 p2 (appGame app)
-                      after = gsBoard gs'
+                  let (gs', out) = trySwap p1 p2 (appGame app)
                       -- 无匹配回滚：fx 为空，不闪光、不播连击（修复重播上一步爆击特效）
                       fx = moveFx (appGame app) gs' out
-                      changed = fxCleared fx
-                      flash = [(p, 18) | p <- changed]
-                      anim = case out of
-                        MoveApplied _ -> AnimSwap p1 p2 before after 0
-                        Won _ -> AnimSwap p1 p2 before after 0
-                        Lost _ -> AnimSwap p1 p2 before after 0
-                        LevelClear _ _ -> AnimSwap p1 p2 before after 0
-                        _ -> AnimNone
-                  parts <-
-                    if null flash
-                      then pure (appParticles app)
-                      else do
-                        burst <- spawnBurst before changed
-                        pure (burst ++ appParticles app)
+                      mt = traceSwap p1 p2 (appGame app)
                   let msg = case out of
                         NoMatch -> "No match; rolled back"
                         InvalidSwap -> "Need adjacent"
@@ -837,17 +931,15 @@ handleEvent ref window ev = case eventPayload ev of
                         Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal (appGame app)))
                       app' =
                         withUnlock
-                          app
-                            { appGame = gs'
-                            , appSel = Nothing
-                            , appDragFrom = Nothing
-                            , appMsg = msg
-                            , appFlash = flash
-                            , appAnim = anim
-                            , appComboShow = comboFxFrames fx
-                            , appParticles = parts
-                            , appTipFrames = 0
-                            }
+                          ( withMovePlayback (appGame app) gs' fx mt (Just (p1, p2))
+                              app
+                                { appGame = gs'
+                                , appSel = Nothing
+                                , appDragFrom = Nothing
+                                , appMsg = msg
+                                , appTipFrames = 0
+                                }
+                          )
                           out
                   writeIORef ref app'
                   updateTitle window app'
@@ -889,8 +981,13 @@ handleEvent ref window ev = case eventPayload ev of
               writeIORef ref app'
               updateTitle window app'
               pure False
-          else if appPaused app0 || animBusy app0
+          else if appPaused app0
           then pure False
+          else if animBusy app0
+          then do
+            -- 回放中点击：加速（不接受新操作）
+            speedUp ref window
+            pure False
           else do
             let P (V2 mx my) = mouseButtonEventPos me
             -- Click anywhere on overlay advances / retries
@@ -977,13 +1074,10 @@ handleEvent ref window ev = case eventPayload ev of
                                 updateTitle window app'
                                 pure False
                             | otherwise -> do
-                            let before = gsBoard (appGame app)
-                                (gs', out) = trySwap p1 pos (appGame app)
-                                after = gsBoard gs'
+                            let (gs', out) = trySwap p1 pos (appGame app)
                                 -- 无匹配回滚 / 非相邻：fx 为空，不闪光、不播连击（修复重播上一步爆击特效）
                                 fx = moveFx (appGame app) gs' out
-                                changed = fxCleared fx
-                                flash = [(p, 18) | p <- changed]
+                                mt = traceSwap p1 pos (appGame app)
                                 shuffledMsg =
                                   if gsShuffled gs' then " (auto-shuffled)" else ""
                                 comboMsg =
@@ -1078,35 +1172,19 @@ handleEvent ref window ev = case eventPayload ev of
                                       <> T.pack (show (n + 1))
                                       <> " (N/Space/click)"
                                   Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal (appGame app))) <> " — R/click"
-                                anim = case out of
-                                  MoveApplied _ ->
-                                    AnimSwap p1 pos before after 0
-                                  Won _ -> AnimSwap p1 pos before after 0
-                                  Lost _ -> AnimSwap p1 pos before after 0
-                                  LevelClear _ _ -> AnimSwap p1 pos before after 0
-                                  _ -> AnimNone
                                 -- Combo SFX placeholder: when audio lands, play a rising
-                                -- pitched blip for fxCombo fx >= 2 (cascade wave cheer).
-                                comboShow = comboFxFrames fx
-                            parts <-
-                              if null flash
-                                then pure (appParticles app)
-                                else do
-                                  burst <- spawnBurst before changed
-                                  pure (burst ++ appParticles app)
+                                -- pitched blip on each EvHighlight k >= 2 (cascade wave cheer).
                             let app' =
                                   withUnlock
-                                    app
-                                      { appGame = gs'
-                                      , appSel = Nothing
-                                      , appDragFrom = Nothing
-                                      , appMsg = msg
-                                      , appFlash = flash
-                                      , appAnim = anim
-                                      , appComboShow = comboShow
-                                      , appParticles = parts
-                                      , appTipFrames = 0
-                                      }
+                                    ( withMovePlayback (appGame app) gs' fx mt (Just (p1, pos))
+                                        app
+                                          { appGame = gs'
+                                          , appSel = Nothing
+                                          , appDragFrom = Nothing
+                                          , appMsg = msg
+                                          , appTipFrames = 0
+                                          }
+                                    )
                                     out
                             writeIORef ref app'
                             updateTitle window app'
@@ -1171,9 +1249,10 @@ draw ren app = do
     Just art -> do
       forM_ (artBg art) $ \bg -> copy ren bg Nothing Nothing
       drawHudArt ren art app
-      drawBoard ren app
-      drawParticlesAny ren app
-      drawComboPopArt ren art app
+      withShake ren app $ do
+        drawBoard ren app
+        drawParticlesAny ren app
+        drawPopsArt ren art app
       drawTipBannerArt ren art app
       drawToolBannerArt ren art app
       drawHelpStripArt ren art app
@@ -1183,9 +1262,10 @@ draw ren app = do
     -- 回退：无资源时沿用原有矩形 / 位图字绘制
     Nothing -> do
       drawHud ren app
-      drawBoard ren app
-      drawParticlesAny ren app
-      drawComboPop ren app
+      withShake ren app $ do
+        drawBoard ren app
+        drawParticlesAny ren app
+        drawPopsPrim ren app
       drawTipBanner ren app
       drawHelpStrip ren app
       drawOverlay ren app
@@ -1505,17 +1585,29 @@ drawHud ren app = do
         drawBannerWord ren (hx) 72 2 (V4 240 140 240 255) "CROSS"
       ToolNone -> pure ()
 
-  -- Combo badge (连击反馈)
-  when (gsCombo gs > 1 && appComboShow app > 0) $ do
-    let intensity = min 255 (140 + gsCombo gs * 25)
+  -- Combo badge (连击反馈)：回放中显示当前轮连击，播完后短暂显示本步最高连击
+  let badge = case playingCascade app of
+        Just c | cCombo c >= 2 -> Just (cCombo c, False)
+        Just _ -> Nothing
+        Nothing
+          | appComboShow app > 0 && appComboBest app >= 2 -> Just (appComboBest app, True)
+          | otherwise -> Nothing
+  forM_ badge $ \(n, summary) -> do
+    let (cr, cg, cb) = styleRGB (comboStyle n) (appPulse app)
         pulseBright = fromIntegral (200 + (appPulse app `mod` 40)) :: Word8
-        badgeCol = V4 255 (fromIntegral intensity) 40 255
+        badgeCol = V4 cr cg cb 255
     rendererDrawColor ren $= V4 50 20 10 255
     fillRect ren (Just (Rectangle (P (V2 (winW - 130) 30)) (V2 110 50)))
     rendererDrawColor ren $= badgeCol
     drawRect ren (Just (Rectangle (P (V2 (winW - 130) 30)) (V2 110 50)))
-    drawBannerWord ren (winW - 124) 34 2 (V4 255 pulseBright 80 255) "COMBO"
-    drawNumber ren (winW - 70) 52 3 badgeCol (gsCombo gs)
+    if summary
+      then do
+        -- 「N COMBO!」总结
+        drawNumber ren (winW - 124) 38 4 badgeCol n
+        drawBannerWord ren (winW - 96) 42 2 (V4 255 pulseBright 80 255) "COMBO!"
+      else do
+        drawBannerWord ren (winW - 124) 34 2 (V4 255 pulseBright 80 255) "COMBO"
+        drawNumber ren (winW - 70) 52 3 badgeCol n
 
   -- Status strip
   case gsOver gs of
@@ -1528,33 +1620,37 @@ drawHud ren app = do
   fillRect ren (Just (Rectangle (P (V2 (winW - 24) 8)) (V2 16 (hudH - 16))))
 
 
--- | Floating 连击 pop over the board center (voice-style visual shout).
-drawComboPop :: Renderer -> App -> IO ()
-drawComboPop ren app
-  | appMapOpen app = pure ()
-  | appPaused app = pure ()
-  | gsCombo (appGame app) <= 1 = pure ()
-  | appComboShow app <= 0 = pure ()
-  | otherwise = do
-      let combo = gsCombo (appGame app)
-          life = appComboShow app
-          -- Rise and fade over the show window
-          yOff = fromIntegral ((120 - min 120 life) `div` 2) :: CInt
-          alphaPulse = fromIntegral (180 + (appPulse app `mod` 50)) :: Word8
-          cx = padPx + boardPx `div` 2 - 70
-          cy = hudH + padPx + boardPx `div` 2 - 40 - yOff
-          col =
-            if combo >= 5
-              then V4 255 80 200 alphaPulse
-              else if combo >= 3
-                then V4 255 160 40 alphaPulse
-                else V4 255 220 80 alphaPulse
-      rendererDrawColor ren $= V4 20 10 5 180
-      fillRect ren (Just (Rectangle (P (V2 (cx - 8) (cy - 8))) (V2 160 56)))
-      rendererDrawColor ren $= col
-      drawRect ren (Just (Rectangle (P (V2 (cx - 8) (cy - 8))) (V2 160 56)))
-      drawBannerWord ren cx cy 3 col "COMBO"
-      drawNumber ren (cx + 100) (cy + 8) 4 col combo
+-- | 退回画法（无贴图）的浮字：「COMBO N」+ 本轮得分「+N」，同样放大弹出再淡出。
+drawPopsPrim :: Renderer -> App -> IO ()
+drawPopsPrim ren app
+  | appMapOpen app || appPaused app = pure ()
+  | otherwise =
+      forM_ (reverse (appPops app)) $ \p -> do
+        let a = popAlpha p
+            cx = round (tpX p) :: CInt
+            cy = round (tpY p - popRise p) :: CInt
+        case tpKind p of
+          PopCombo k -> do
+            let st = comboStyle k
+                (r, g, b) = styleRGB st (appPulse app)
+                px = max 2 (round (fromIntegral (csHeight st) * comboPopScale (tpAge p) / 7 :: Double)) :: CInt
+                w = 5 * 5 * px + 2 * px + 4 * px * fromIntegral (length (show k))
+                x0 = popLeft w cx
+            rendererDrawColor ren $= V4 20 10 5 (a `div` 2 + a `div` 4)
+            fillRect ren (Just (Rectangle (P (V2 (x0 - 8) (cy - 3 * px - 6))) (V2 (w + 16) (5 * px + 12))))
+            drawBannerWord ren x0 (cy - 3 * px) px (V4 r g b a) "COMBO"
+            drawNumber ren (x0 + 5 * 5 * px + 2 * px) (cy - 3 * px) px (V4 r g b a) k
+          PopScore n k -> do
+            let (r, g, b) = if k >= 2 then styleRGB (comboStyle k) (appPulse app) else (255, 244, 200)
+                px = 3 :: CInt
+                w = 4 * px * fromIntegral (length (show n) + 1)
+                x0 = popLeft w cx
+                col = V4 r g b a
+            rendererDrawColor ren $= col
+            -- 「+」
+            fillRect ren (Just (Rectangle (P (V2 x0 (cy + px))) (V2 (3 * px) px)))
+            fillRect ren (Just (Rectangle (P (V2 (x0 + px) cy)) (V2 px (3 * px))))
+            drawNumber ren (x0 + 4 * px) (cy - px) px col n
 
 -- | Chapter boundaries (0-based level index starts). Light map separators.
 chapterStarts :: [Int]
@@ -1689,7 +1785,13 @@ drawMeter ren x y value cap col = do
 --------------------------------------------------------------------------------
 
 drawOverlay :: Renderer -> App -> IO ()
-drawOverlay ren app = case gsOver (appGame app) of
+drawOverlay ren app
+  -- 结算面板等连锁回放播完再出，别挡住最后几轮
+  | animBusy app = pure ()
+  | otherwise = drawOverlayNow ren app
+
+drawOverlayNow :: Renderer -> App -> IO ()
+drawOverlayNow ren app = case gsOver (appGame app) of
   Nothing -> pure ()
   Just outcome -> do
     -- Dim board
@@ -2310,8 +2412,156 @@ drawBoard ren app = case appAnim app of
     drawSwap ren app asBefore asP1 asP2 asFrame
   AnimFall { afBoard, afFrame } ->
     drawFall ren app afBoard afFrame
+  AnimCascade c ->
+    drawCascade ren app c
   AnimNone ->
     drawStatic ren app (gsBoard (appGame app)) 0
+
+--------------------------------------------------------------------------------
+-- 逐轮连锁回放绘制（阶段机见 ComboFx）
+--------------------------------------------------------------------------------
+
+-- | 震屏：把整个棋盘层（棋盘 / 粒子 / 弹字）的视口平移几像素，振幅线性衰减。HUD 不动。
+withShake :: Renderer -> App -> IO () -> IO ()
+withShake ren app act
+  | appShake app <= 0 || appShakeAmp app <= 0 || appPaused app = act
+  | otherwise = do
+      let k = fromIntegral (appShake app) / fromIntegral shakeFrames :: Double
+          amp = fromIntegral (appShakeAmp app) * k
+          ph = fromIntegral (appPulse app) :: Double
+          dx = round (amp * sin (ph * 2.3)) :: CInt
+          dy = round (amp * cos (ph * 3.1)) :: CInt
+      rendererViewport ren $= Just (rect dx dy winW winH)
+      act
+      rendererViewport ren $= Nothing
+
+boardRect :: Rectangle CInt
+boardRect = rect padPx (padPx + hudH) boardPx boardPx
+
+allCells :: [Pos]
+allCells = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+
+-- | 棋盘底层（格子 / 地毯 / 传送带 / 传送门），不画棋子。
+drawBoardBase :: Renderer -> App -> IO ()
+drawBoardBase ren app = case appArt app of
+  Just art -> drawBoardBgArt ren art app
+  Nothing ->
+    forM_ allCells $ \pos@(r, c) -> do
+      let (x, y) = cellOrigin pos
+      rendererDrawColor ren $= if even (r + c) then V4 36 36 48 255 else V4 28 28 40 255
+      fillRect ren (Just (cellRect x y))
+
+-- | 高亮 / 光圈颜色：第 1 轮柔白，连击轮用等级色。
+waveTint :: App -> Int -> V3 Word8
+waveTint app k
+  | k <= 1 = V3 255 250 220
+  | otherwise = let (r, g, b) = styleRGB (comboStyle k) (appPulse app) in V3 r g b
+
+drawCascade :: Renderer -> App -> Cascade -> IO ()
+drawCascade ren app c = case cWaves c of
+  [] -> drawStatic ren app (cFinal c) 0
+  (w : _) -> case cPhase c of
+    PhStart -> drawStatic ren app (cwBefore w) 0
+    PhFlash -> drawWaveFlash ren app c w
+    PhPop -> drawWavePop ren app c w
+    PhFall -> drawWaveFall ren app c w
+    PhRest -> drawStatic ren app (cwAfter w) 0
+
+-- | 高亮：整盘压暗，被消格提到暗幕之上，闪两下 + 轻微弹跳 + 等级色光圈。
+drawWaveFlash :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
+drawWaveFlash ren app c w = do
+  let t = phaseT c
+      tint@(V3 tr tg tb) = waveTint app (cCombo c)
+      veilA = round (min 1 (t * 4) * 120 :: Double) :: Word8
+      blink = 0.5 + 0.5 * cos (t * 2 * pi * 2) :: Double
+      bounce = round (3 * sin (t * pi) :: Double) :: CInt
+  drawStatic ren app (cwBefore w) 0
+  rendererDrawColor ren $= V4 8 6 24 veilA
+  fillRect ren (Just boardRect)
+  forM_ (cwCleared w) $ \pos -> do
+    let (x, y0) = cellOrigin pos
+        y = y0 - bounce
+        cell = getCell (cwBefore w) pos
+    case appArt app of
+      Just art -> do
+        void (drawSpriteAdd ren art "spark" (rect (x - 12) (y - 12) (cellPx + 24) (cellPx + 24)) tint (round (90 + 120 * blink)))
+        drawCellArt ren art (appPulse app) x y cell False
+        void (drawSpriteAdd ren art "spark" (cellRect x y) (V3 255 255 255) (round (80 * blink)))
+        void (drawSpriteMod ren art "sel_ring" (rect (x - 2) (y - 2) (cellPx + 4) (cellPx + 4)) tint 235)
+      Nothing -> do
+        rendererDrawColor ren $= V4 60 54 84 255
+        fillRect ren (Just (cellRect x y))
+        drawGemAt ren x y cell (blink > 0.5)
+        rendererDrawColor ren $= V4 tr tg tb 255
+        drawRect ren (Just (cellRect x y))
+        drawRect ren (Just (rect (x + 1) (y + 1) (cellPx - 2) (cellPx - 2)))
+
+-- | 消失：被消格缩小淡出 + 光环外扩；本轮生成的特殊块从中心放大出现；其它格保持不动。
+drawWavePop :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
+drawWavePop ren app c w = do
+  let t = phaseT c
+      tint = waveTint app (cCombo c)
+      holes = cwHoles w
+      cleared = cwCleared w
+      holeAt (r, cc) = (holes !! r) !! cc
+      veilA = round ((1 - t) * 120) :: Word8
+  drawBoardBase ren app
+  forM_ allCells $ \pos -> do
+    let (x, y) = cellOrigin pos
+    case holeAt pos of
+      Just cell | pos `notElem` cleared -> drawCellAny ren app x y cell False
+      _ -> pure ()
+  rendererDrawColor ren $= V4 8 6 24 veilA
+  fillRect ren (Just boardRect)
+  forM_ cleared $ \pos -> do
+    let (x, y) = cellOrigin pos
+        cx = x + cellPx `div` 2
+        cy = y + cellPx `div` 2
+        s = 1.1 * (1 - t) * (1 - t) + 0.02
+        a = round (255 * (1 - t)) :: Word8
+        ring = round (fromIntegral cellPx * (1 + 0.9 * t)) :: CInt
+    forM_ (appArt app) $ \art ->
+      void (drawSpriteAdd ren art "spark" (rect (cx - ring `div` 2) (cy - ring `div` 2) ring ring) tint a)
+    drawCellScaled ren app cx cy s a (getCell (cwBefore w) pos)
+    case holeAt pos of
+      Just cell -> drawCellScaled ren app cx cy (max 0.05 t) 255 cell
+      Nothing -> pure ()
+
+-- | 下落 + 补子：按列复现重力（ComboFx.fallTable），加速度下落；新格从棋盘上沿外落入（裁剪）。
+drawWaveFall :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
+drawWaveFall ren app c w = do
+  let t = phaseT c
+      e = t * t
+      table = fallTable w
+  drawBoardBase ren app
+  rendererClipRect ren $= Just boardRect
+  forM_ allCells $ \pos@(r, cc) -> do
+    let (d, _new) = (table !! r) !! cc
+        (x, y) = cellOrigin pos
+        off = round (fromIntegral (fromIntegral d * cellPx) * (1 - e)) :: CInt
+    drawCellAny ren app x (y - off) (getCell (cwAfter w) pos) False
+  rendererClipRect ren $= Nothing
+
+-- | 以格子中心 (cx, cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记）。
+drawCellScaled :: Renderer -> App -> CInt -> CInt -> Double -> Word8 -> Cell -> IO ()
+drawCellScaled ren app cx cy s a cell
+  | s <= 0.03 || a == 0 = pure ()
+  | otherwise = do
+      let sz = max 1 (round (fromIntegral cellPx * s)) :: CInt
+          dst = rect (cx - sz `div` 2) (cy - sz `div` 2) sz sz
+          white = V3 255 255 255
+      case appArt app of
+        Just art | hasSprite art (primarySprite cell) -> do
+          void (drawSpriteMod ren art (primarySprite cell) dst white a)
+          case cell of
+            Gem _ LineH _ _ -> void (drawSpriteMod ren art "line_h" dst white a)
+            Gem _ LineV _ _ -> void (drawSpriteMod ren art "line_v" dst white a)
+            Gem _ Bomb _ _ -> void (drawSpriteMod ren art "bomb_mark" dst white a)
+            _ -> pure ()
+        _ -> do
+          let (r, g, b) = cellRGB cell
+          rendererDrawColor ren $= V4 r g b a
+          fillRect ren (Just dst)
 
 drawStatic :: Renderer -> App -> Board -> CInt -> IO ()
 drawStatic ren app board yOff = case appArt app of
@@ -2985,16 +3235,49 @@ drawHudArt ren art app = do
         | otherwise = V3 90 165 255
   _ <- drawSprite ren art "icon_moves" (rect 13 77 24 24)
   meterA ren art 42 79 332 mv (max 1 moveCap) tintMv (show mv)
-  -- 右下：连击优先，否则得分
-  if gsCombo gs > 1 && appComboShow app > 0
-    then do
-      _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
-      zhAC ren art "zh_combo" 424 56 18
-      textAC ren art 424 76 3 gold ("x" ++ show (gsCombo gs))
-    else do
-      _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
-      zhAC ren art (if gsShuffled gs then "zh_shuffle" else "zh_score") 424 56 18
-      textAC ren art 424 76 3 gold (show (gsScore gs))
+  -- 右下：回放中显示当前轮「连击 xN」；播完后短暂显示本步总结「N 连击！」；否则得分。
+  -- 回放期间分数随每一轮消失逐步滚动上涨（结算值早已写入 gsScore，这里只是显示）。
+  case playingCascade app of
+    Just c
+      | cCombo c >= 2 -> do
+          let (r, g, b) = styleRGB (comboStyle (cCombo c)) (appPulse app)
+          _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
+          zhAC ren art "zh_combo" 424 56 18
+          textAC ren art 424 76 3 (V4 r g b 255) ("x" ++ show (cCombo c))
+      | otherwise -> do
+          _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
+          zhAC ren art "zh_score" 424 56 18
+          textAC ren art 424 76 3 gold (show (cBase c + cGain c))
+    Nothing
+      | appComboShow app > 0 && appComboBest app >= 2 -> drawComboSummaryArt ren art app
+      | otherwise -> do
+          _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
+          zhAC ren art (if gsShuffled gs then "zh_shuffle" else "zh_score") 424 56 18
+          textAC ren art 424 76 3 gold (show (gsScore gs))
+
+-- | HUD 右下「N 连击！」总结：放大弹入 + 等级色光晕，最后 16 帧淡出（回到得分）。
+drawComboSummaryArt :: Renderer -> Art -> App -> IO ()
+drawComboSummaryArt ren art app = do
+  let n = appComboBest app
+      age = comboSummaryFrames - appComboShow app
+      s = comboPopScale age
+      left = appComboShow app
+      a = if left >= 16 then 255 else fromIntegral (left * 255 `div` 16) :: Word8
+      (r, g, b) = styleRGB (comboStyle n) (appPulse app)
+      h = round (20 * s) :: CInt
+      gh = round (26 * s) :: CInt
+      num = show n
+      nw = glyphTextW gh num
+      zw = zhW art "zh_combo_end" h
+      gap = 2 :: CInt
+      total = nw + gap + zw
+      cx = 424
+      cy = 76
+      x0 = cx - total `div` 2
+  _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
+  void (drawSpriteAdd ren art "spark" (rect (cx - 60) (cy - 34) 120 68) (V3 r g b) (a `div` 2))
+  glyphText ren art x0 (cy - gh `div` 2) gh (V4 r g b a) num
+  void (drawSpriteMod ren art "zh_combo_end" (rect (x0 + nw + gap) (cy - h `div` 2) zw h) (V3 255 255 255) a)
 
 -- | 首关提示横幅（棋盘上沿）。
 drawTipBannerArt :: Renderer -> Art -> App -> IO ()
@@ -3076,7 +3359,13 @@ drawPauseHelpArt ren art app
 
 -- | 结算面板：过关 / 胜利 / 失败 + 星级 + 分数 + 下一步提示。
 drawOverlayArt :: Renderer -> Art -> App -> IO ()
-drawOverlayArt ren art app = case gsOver (appGame app) of
+drawOverlayArt ren art app
+  -- 结算面板等连锁回放播完再出，别挡住最后几轮
+  | animBusy app = pure ()
+  | otherwise = drawOverlayArtNow ren art app
+
+drawOverlayArtNow :: Renderer -> Art -> App -> IO ()
+drawOverlayArtNow ren art app = case gsOver (appGame app) of
   Nothing -> pure ()
   Just outcome -> do
     rendererDrawColor ren $= V4 10 8 24 170
@@ -3118,26 +3407,67 @@ drawOverlayArt ren art app = case gsOver (appGame app) of
         zhAC ren art "zh_retry" cx (py0 + 130) 26
       _ -> pure ()
 
--- | 棋盘中央浮起的「连击 xN」。
-drawComboPopArt :: Renderer -> Art -> App -> IO ()
-drawComboPopArt ren art app
+-- | 任意字高的描边字形（贴图 g_<码点> 及其 @变体）；每字宽 = 高 × 2/3，与 textA 一致。
+-- 缺字形时退回位图字。
+glyphText :: Renderer -> Art -> CInt -> CInt -> CInt -> V4 Word8 -> String -> IO ()
+glyphText ren art x0 y0 h col@(V4 r g b a) s =
+  forM_ (zip [0 :: CInt ..] s) $ \(i, ch0) -> do
+    let ch = if ch0 == 'x' then 'x' else toUpper ch0
+        w = glyphW1 h
+        x = x0 + i * w
+    unless (ch == ' ') $ do
+      ok <- drawSpriteMod ren art ("g_" ++ show (ord ch)) (rect x y0 w h) (V3 r g b) a
+      unless ok $ drawGlyph ren x (y0 + h `div` 6) (max 1 (h `div` 6)) col (toUpper ch)
+
+glyphW1 :: CInt -> CInt
+glyphW1 h = h * 2 `div` 3
+
+glyphTextW :: CInt -> String -> CInt
+glyphTextW h s = glyphW1 h * fromIntegral (length s)
+
+-- | 浮字：「连击 xN」放大弹出（等级越高字越大、颜色越暖、x5+ 彩色流转）+ 本轮得分「+N」飘起。
+drawPopsArt :: Renderer -> Art -> App -> IO ()
+drawPopsArt ren art app
   | appMapOpen app || appPaused app = pure ()
-  | gsCombo (appGame app) <= 1 || appComboShow app <= 0 = pure ()
-  | otherwise = do
-      let combo = gsCombo (appGame app)
-          life = appComboShow app
-          yOff = fromIntegral ((120 - min 120 life) `div` 2) :: CInt
-          cx = padPx + boardPx `div` 2
-          cy = hudH + padPx + boardPx `div` 2 - 40 - yOff
-          col
-            | combo >= 5 = V4 255 120 220 255
-            | combo >= 3 = V4 255 180 60 255
-            | otherwise = V4 255 230 110 255
-          s = "x" ++ show combo
-          w = zhW art "zh_combo" 34 + 12 + textW 5 s
-      _ <- drawPanel ren art "panel_gold" (rect (cx - w `div` 2 - 16) (cy - 8) (w + 32) 52) 16
-      wz <- zhA ren art "zh_combo" (cx - w `div` 2) (cy + 1) 34
-      textA ren art (cx - w `div` 2 + wz + 12) (cy + 3) 5 col s
+  | otherwise =
+      forM_ (reverse (appPops app)) $ \p -> do
+        let a = popAlpha p
+            cx = round (tpX p) :: CInt
+            cy = round (tpY p - popRise p) :: CInt
+        case tpKind p of
+          PopCombo k -> do
+            let st = comboStyle k
+                (r, g, b) = styleRGB st (appPulse app)
+                sc = comboPopScale (tpAge p)
+                h = round (fromIntegral (csHeight st) * sc) :: CInt
+                gh = round (fromIntegral h * 1.2 :: Double) :: CInt
+                numS = "x" ++ show k
+                zw = zhW art "zh_combo" h
+                nw = glyphTextW gh numS
+                gap = h `div` 6
+                total = zw + gap + nw
+                x0 = popLeft total cx
+                hx = x0 + total `div` 2
+                haloW = total + h * 2
+                haloH = h * 3
+            -- 柔光底：等级色，让文字在任何宝石颜色上都读得清
+            void (drawSpriteMod ren art "spark" (rect (hx - haloW `div` 2) (cy - haloH `div` 2) haloW haloH) (V3 20 10 40) (a `div` 2 + a `div` 4))
+            void (drawSpriteAdd ren art "spark" (rect (hx - haloW `div` 2) (cy - haloH `div` 2) haloW haloH) (V3 r g b) (a `div` 3))
+            void (drawSpriteMod ren art "zh_combo" (rect x0 (cy - h `div` 2) zw h) (V3 r g b) a)
+            glyphText ren art (x0 + zw + gap) (cy - gh `div` 2) gh (V4 r g b a) numS
+          PopScore n k -> do
+            let (r, g, b) = if k >= 2 then styleRGB (comboStyle k) (appPulse app) else (255, 244, 200)
+                h = round ((20 + 2 * fromIntegral (min 4 (max 0 (k - 1)))) * scorePopScale (tpAge p) :: Double) :: CInt
+                str = "+" ++ show n
+                w = glyphTextW h str
+            glyphText ren art (popLeft w cx) (cy - h `div` 2) h (V4 r g b a) str
+
+-- | 浮字左边界：以 cx 居中，但整体夹在棋盘左右边框内（放大到峰值时也不出窗口）。
+popLeft :: CInt -> CInt -> CInt
+popLeft w cx =
+  let lo = padPx + 4
+      hi = padPx + boardPx - 4 - w
+  in if hi < lo then lo else max lo (min hi (cx - w `div` 2))
 
 -- | 贴图版选关地图（节点坐标 / 点击判定与原版一致）。
 drawLevelMapArt :: Renderer -> Art -> App -> IO ()

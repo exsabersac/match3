@@ -97,7 +97,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 脚本会生成：
 
-- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2024 + 1024×158），共 393 个贴图（含尺寸变体）
+- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×1994 + 1024×602），共 434 个贴图（含尺寸变体）
 - `assets/atlas.txt`：索引文件，每行 `name x y w h page`（第 6 列页号；旧的 5 列格式视为第 0 页）
 - `assets/background.bmp`：窗口背景（960×1176，即 480×588 的 2 倍，24 位不透明）
 - `docs/images/legend.png`：图例
@@ -140,6 +140,61 @@ Xvfb :98 -screen 0 1400x1300x24 &
 DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 ```
 
+## 连击表现（逐轮回放）
+
+实现：纯逻辑在 `app/ComboFx.hs`（阶段机、时间线常量、等级样式、下落映射），绘制与事件在 `app/Main.hs`（`AnimCascade`、`drawCascade`、`drawPopsArt` / `drawPopsPrim`、`drawComboSummaryArt`）。核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game`，底层是 `Match3.Board.traceCascade*`），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
+
+### 时间线（60 fps，1 帧 ≈ 16.7 ms）
+
+一次成功交换：交换动画 `swapFrames` = 10 帧，然后每一轮依次播放：
+
+| 阶段 | 帧数 | 约 | 画面 |
+|------|------|----|------|
+| ① 高亮 `PhFlash` | `waveFlashFrames` = 12 | 200 ms | 棋盘其余部分压暗；被消格提到暗幕之上，带等级色光圈、`spark` 闪光、轻微弹跳。第 2 轮起在这一刻弹出「连击 xN」 |
+| ② 消失 `PhPop` | `wavePopFrames` = 6 | 100 ms | 被消格缩小淡出，光环外扩，爆出粒子；从消除区域飘出本轮得分「+N」；第 2 轮起轻微震屏；新生成的特殊块放大出现 |
+| ③ 下落 `PhFall` | `fallFramesFor d` = clamp 8..14 (6 + 最大落差 d) | 130–230 ms | 上方的宝石按列掉进空洞（t² 加速），新宝石从棋盘顶上方落入（裁剪在棋盘内） |
+| ④ 落定 `PhRest` | `waveRestFrames` = 4 | 70 ms | 停顿一下再进入下一轮 |
+
+每轮约 30～36 帧（0.5～0.6 s），实测 4 连锁全程约 2.2 s，5 连锁约 2.8 s（从松开鼠标到最后一轮落定）。连锁结束后，结算时发生的步末效果（巧克力 / 藤蔓蔓延、蜗牛爬行等）直接切到最终盘面（`AnimFall`）。
+
+- **点击加速**：回放期间点击鼠标，或按空格 / 回车 / `N`，阶段机改为每帧推进 `fastStep` = 3 帧（整体约快 3 倍），各轮依旧逐个可见；标题栏提示 `Fast-forward combo`。回放期间不接受新的交换或道具输入。
+- **不会重播**：回放只由本次调用返回的 `MoveTrace` / `MoveFx` 驱动。`NoMatch` / `InvalidSwap` / 被拒的道具返回空脚本，此时会清掉旧的弹字和 HUD 总结，不播任何东西（`failed_swap_resets_combo_feedback`、`trace_rejected_move_is_empty`、`undo_shuffle_reset_combo_feedback` 锁定）。撤销 / 洗牌也会清空弹字和总结。
+
+### 连击等级样式（`comboStyle`）
+
+| 等级 | 颜色 | 弹字「连击」字高 | 震屏振幅 |
+|------|------|------------------|----------|
+| 第 1 轮 | 不弹连击字，只有得分浮字（暖白） | — | 0 |
+| x2 | 浅金 (255, 238, 150) | 30 px | 2 px |
+| x3 | 橙 (255, 164, 52) | 36 px | 3 px |
+| x4 | 红 (255, 76, 64) | 42 px | 4 px |
+| x5 及以上 | 紫 (214, 120, 255)，色相随时间彩虹流转 | 48 px | 5 px |
+
+- **「连击 xN」弹字**：寿命 `comboPopLife` = 54 帧（0.9 s）。缩放 0.35 → 1.3（过冲）→ 1.0，最后 1/3 边上浮边淡出；背后有一层深色柔光加一层等级色辉光，压在任何颜色的宝石上都看得清。位置放在本轮消除区域上方（上方放不下就放到下方），并夹在棋盘左右边框内；下一轮弹字出现时，上一轮的弹字会加速淡出，避免叠字。
+- **得分浮字「+N」**：寿命 `scorePopLife` = 48 帧（0.8 s），从本轮消除格的中心飘起，颜色跟本轮等级色，字号随等级略增。
+- **震屏**：`shakeFrames` = 10 帧，振幅按上表线性衰减，只偏移棋盘、粒子和浮字（通过 `rendererViewport`），HUD 不动。
+- **HUD 右下角**：回放期间显示当前轮「连击 xN」（等级色），第 1 轮显示滚动上涨的分数。连锁结束后，如果最高连击 ≥ 2，显示总结「N 连击！」`comboSummaryFrames` = 96 帧（1.6 s）：先弹入放大，带光晕，然后淡出。
+
+### 贴图与降级
+
+- 新增 / 扩充的文字贴图（`tools/gen_assets.py`，全部 2x 烘焙）：`zh_combo` 增加 `@48 / @88 / @128` 变体（弹字用，原有 `@36 / @68`）；新增 `zh_combo_end`「连击！」（20 / 28 px，对应 `@40 / @56`）；数字 `0-9`、`x`、`+` 增加 7 / 9 / 12 号大字形（`g_<码点>@84 / @108 / @144`），弹字放大到峰值时也不会发糊。
+- 缺图时的退回画法：弹字用像素字「COMBO」加数字、同样的等级色和缩放；得分用像素数字；HUD 徽章在回放中显示当前轮，结束后显示「N COMBO!」。
+
+### 复现 / 截图
+
+第 5 关（进阶，目标 700 分，不会被一次连锁直接过关挡住画面），种子 10，交换 (4,2)↔(5,2)，会触发 5 连锁（x2…x5 全部出现）。格子中心的逻辑坐标是 `x = 16 + c·56 + 28`、`y = 124 + r·56 + 28`，`MATCH3_SCALE=2` 时再乘 2，最后加上窗口在屏幕上的偏移（`xwininfo -root -tree` 查看）：
+
+```bash
+Xvfb :98 -screen 0 1400x1300x24 &
+export DISPLAY=:98
+MATCH3_LEVEL=5 MATCH3_SEED=10 MATCH3_SCALE=2 stack exec match3-sdl &
+# 窗口在 +220+62 时：
+ffmpeg -f x11grab -framerate 60 -video_size 960x1176 -i :98.0+220,62 -t 6 rec.mkv &
+xdotool mousemove 532 814 click 1; sleep 0.15; xdotool mousemove 532 926 click 1
+```
+
+其他候选（第 1 关）：`MATCH3_SEED=4` 交换 (1,4)↔(1,5) 是 4 连锁（但会直接达成 300 分目标，弹出过关面板）；可以用 `test/Spec.hs` 里 `trace_multi_wave_each_round_visible` 的查找方式换关卡或种子。
+
 ## 高分屏 / Retina
 
 ### 倍率怎么检测
@@ -155,7 +210,7 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 ### 倍率怎么应用
 
 - **游戏布局和所有绘制坐标仍是 480×588 逻辑单位**，代码里没有任何地方手动乘倍率；SDL 的渲染缩放把目标矩形乘到物理像素。
-- **贴图选择**：`Art` 按「目标逻辑高度 × 倍率」在同名变体里挑最小的够用尺寸。文字 / 标签按实际使用高度烘焙了 2x 版本（如「连击」在 HUD 里 18 px、在棋盘中央 34 px，分别有 36 px 和 68 px 两个贴图），所以 Retina 上是精确的 1:1，不经过任何缩放。
+- **贴图选择**：`Art` 按「目标逻辑高度 × 倍率」在同名变体里挑最小的够用尺寸。文字 / 标签按实际使用高度烘焙了 2x 版本（如「连击」在 HUD 里 18 px、弹字 24 / 34 / 44 / 64 px，对应 36～128 px 的贴图），所以 Retina 上是精确的 1:1 或从更大的变体线性缩小，不会放大发糊。
 - **纹理过滤**：创建渲染器 / 纹理前设置 `HintRenderScaleQuality = ScaleLinear`，2x 贴图在 1x 屏上按 2:1 线性缩小，边缘平滑、没有锯齿。缩小超过 2 倍的地方（HUD 目标小图标、双面块角标）有 `@56` 半尺寸变体，九宫格面板小圆角有 `@80` 变体。
 - **鼠标**：SDL 给的鼠标坐标是**窗口坐标**。macOS Retina 上窗口坐标就是逻辑点（鼠标倍率 1，原样使用）；`MATCH3_SCALE=N` 时窗口本身放大了 N 倍，窗口坐标 = 物理像素，事件在进入处理逻辑之前统一除以 N。换算只在 `foldEvents` 一处完成，所以点选、拖拽交换、道具点格、选关地图节点、结算面板点击都自动正确。
 

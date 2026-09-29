@@ -39,6 +39,13 @@ module Match3.Board
   , applyPortalTeleports
   , settleBoardPortals
   , expandSpecials
+    -- * 逐轮回放（仅供表现层；不参与结算）
+  , CascadeWave(..)
+  , traceCascade
+  , traceCascadeFromWave
+  , traceCascadeFromSeeds
+  , tracePostBeltCascade
+  , traceCountdowns
   ) where
 
 import Data.List (foldl', nub)
@@ -873,3 +880,121 @@ findHint b =
                || hasFreeze (getCell b p1) || hasFreeze (getCell b p2))
       , isSpecialCombo b p1 p2
       ]
+
+
+--------------------------------------------------------------------------------
+-- 逐轮回放（纯函数，仅供前端表现层）
+--
+-- runCascade* 只返回「连锁结束后的稳定盘面 + 累计计数」，前端没法让玩家看清每一轮消了
+-- 哪些格。下面这组 trace* 函数与对应的 runCascade* 走**完全相同**的步骤（同一组
+-- clear / settle / refill / stepUfos 调用、同样的随机数消耗顺序），额外记录每一轮的
+-- 中间快照。它们不改变任何已有函数；结算仍以 runCascade* / trySwap 为准。
+-- 一致性由测试保证：最终盘面、随机数生成器、逐轮得分之和、清除格并集都与原函数一致。
+--------------------------------------------------------------------------------
+
+-- | 连锁中的一轮（一次「消除 → 下落 → 补子」）。
+data CascadeWave = CascadeWave
+  { cwBefore  :: Board           -- ^ 本轮消除前的盘面
+  , cwCleared :: [Pos]           -- ^ 本轮被消掉的格（真消除 + 被打碎的障碍）；可能为空（仅沉降）
+  , cwDrained :: [Pos]           -- ^ 沉降途中底行被收走的饼干位
+  , cwHoles   :: [[Maybe Cell]]  -- ^ 消除并放下新特殊块之后、下落之前（Nothing = 空洞）
+  , cwAfter   :: Board           -- ^ 重力 / 传送门 / 补子之后
+  , cwScore   :: Score           -- ^ 本轮得分（与 runCascade* 的波次计分相同）
+  } deriving (Eq, Show)
+
+-- | 一轮沉降：settle + refill（与 stepCascadeDetailed / 种子清除用的完全相同）。
+settleRefill :: RandomGen g => [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)
+settleRefill portals g mb =
+  let (settled, _cookies, cookSites) = settleBoardPortals portals mb
+      (b', g') = refill g settled
+  in (b', cookSites, g')
+
+-- | 与 runCascadeScoredWithUfos 相同的连锁，返回每一轮快照 + 最终盘面 / 飞碟 / 生成器。
+traceCascade
+  :: RandomGen g
+  => Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board
+  -> ([CascadeWave], Board, [Ufo], g)
+traceCascade = traceCascadeFromWave 0
+
+-- | 与 runCascadeScoredWithUfosFromWave 相同（波次编号从 startW 之后继续）。
+traceCascadeFromWave
+  :: RandomGen g
+  => Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board
+  -> ([CascadeWave], Board, [Ufo], g)
+traceCascadeFromWave startW prefer0 ufos0 portals g0 b0 = go prefer0 g0 b0 startW ufos0
+  where
+    go pref g b maxW ufos
+      | not (hasAnyMatch b) = ([], b, ufos, g)
+      | otherwise =
+          let (mb, n, pos) = clearMatchesDetailed pref b
+              (b', cookSites, g') = settleRefill portals g mb
+              wave = maxW + 1
+              w1 = CascadeWave b pos cookSites mb b' (scoreForWave wave n)
+              (absorbed, ufos') = stepUfos b' ufos
+          in if null absorbed
+               then
+                 let (ws, bF, uF, gF) = go Nothing g' b' wave ufos'
+                 in (w1 : ws, bF, uF, gF)
+               else
+                 -- 飞碟吸收单独算一轮（与 runCascadeScoredWithUfosFromWave 的 wave + 1 一致）
+                 let (mb2, n2, pos2) = clearUfoAbsorbed b' absorbed
+                     (b3, cook2, g3) = settleRefill portals g' mb2
+                     w2 = CascadeWave b' pos2 cook2 mb2 b3 (scoreForWave (wave + 1) n2)
+                     (ws, bF, uF, gF) = go Nothing g3 b3 (wave + 1) ufos'
+                 in (w1 : w2 : ws, bF, uF, gF)
+
+-- | 与 runCascadeScoredFromSeedsWithUfos 相同：第一轮清种子（彩虹 / 特殊组合 / 道具 / 倒计时爆炸），
+-- 可选飞碟吸收一轮，再接普通匹配连锁。
+traceCascadeFromSeeds
+  :: RandomGen g
+  => Maybe Pos -> [Pos] -> [Ufo] -> [(Pos, Pos)] -> g -> Board
+  -> ([CascadeWave], Board, [Ufo], g)
+traceCascadeFromSeeds prefer seeds ufos0 portals g b
+  | null seeds = traceCascade prefer ufos0 portals g b
+  | otherwise =
+      let (mb, n, pos) = clearFromSeedsDetailed prefer b seeds
+          (b1, cook0, g1) = settleRefill portals g mb
+          w0 = CascadeWave b pos cook0 mb b1 (scoreForWave 1 n)
+          (absorbed, ufos1) = stepUfos b1 ufos0
+          (wU, nU, b1', g1') =
+            if null absorbed
+              then ([], 0, b1, g1)
+              else
+                let (mb2, n2, pos2) = clearUfoAbsorbed b1 absorbed
+                    (b2u, cookU, g2u) = settleRefill portals g1 mb2
+                in ([CascadeWave b1 pos2 cookU mb2 b2u (if n2 > 0 then scoreForWave 2 n2 else 0)], n2, b2u, g2u)
+          wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
+          (ws, bF, uF, gF) = traceCascadeFromWave wavesDone Nothing ufos1 portals g1' b1'
+      in (w0 : wU ++ ws, bF, uF, gF)
+
+-- | 与 runPostBeltCascade 相同：皮带移位后有匹配就连锁；否则先沉降（收饼干），沉降后成消再连锁。
+tracePostBeltCascade
+  :: RandomGen g
+  => [Ufo] -> [(Pos, Pos)] -> g -> Board
+  -> ([CascadeWave], Board, [Ufo], g)
+tracePostBeltCascade ufos portals g boardBelt
+  | hasAnyMatch boardBelt = traceCascade Nothing ufos portals g boardBelt
+  | otherwise =
+      let mb = toM boardBelt
+          (b1, cookSites, g1) = settleRefill portals g mb
+          settleWave =
+            [ CascadeWave boardBelt [] cookSites mb b1 0
+            | b1 /= boardBelt || not (null cookSites)
+            ]
+      in if hasAnyMatch b1
+           then
+             let (ws, bF, uF, gF) = traceCascade Nothing ufos portals g1 b1
+             in (settleWave ++ ws, bF, uF, gF)
+           else (settleWave, b1, ufos, g1)
+
+-- | 与 resolveCountdowns 相同：倒计时 -1，归零的 3×3 爆炸后连锁。
+-- 返回的最终盘面在没有爆炸时就是 tick 之后的盘面（数字减一，不产生回放轮次）。
+traceCountdowns
+  :: RandomGen g
+  => [Ufo] -> [(Pos, Pos)] -> g -> Board
+  -> ([CascadeWave], Board, [Ufo], g)
+traceCountdowns ufos0 portals g b =
+  let bTick = tickCountdowns b
+  in if null (countdownsAtZero bTick)
+       then ([], bTick, ufos0, g)
+       else traceCascadeFromSeeds Nothing (explodeSeedsFor bTick) ufos0 portals g bTick

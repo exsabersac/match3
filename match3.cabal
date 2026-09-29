@@ -57,6 +57,7 @@ executable match3-sdl
   main-is: Main.hs
   other-modules:
       Art
+      ComboFx
       Paths_match3
   autogen-modules:
       Paths_match3

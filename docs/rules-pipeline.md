@@ -108,4 +108,6 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 `app/Main.hs` 在调用 `trySwap` / 道具 API **之后**播放交换/下落动画与粒子；规则结果不依赖帧。暂停（`P`）冻结动画并清拖拽，不改 `GameState` 规则字段。
 
-**特效是边沿触发**：前端用 `moveFx before after outcome` 取本次操作的 `MoveFx`（`fxCombo` 连击波数、`fxCleared` 清除格），只有这次调用真正结算了一步才非空；`NoMatch` / `InvalidSwap` / 操作前已终局一律为空。闪光、粒子、连击（爆击）弹字的 120 帧计时都只看 `MoveFx`，不再直接读持久字段 `gsCombo`——旧实现里无匹配回滚后 `gsCombo` 仍是上一步的值，会把上一步的连击特效再播一遍。
+**特效是边沿触发**：前端用 `moveFx before after outcome` 取本次操作的 `MoveFx`（`fxCombo` 连击波数、`fxCleared` 清除格），只有这次调用真正结算了一步才非空；`NoMatch` / `InvalidSwap` / 操作前已终局一律为空。闪光、粒子、连击弹字和 HUD 总结都只看 `MoveFx` 和本次操作的 `MoveTrace`，不再直接读持久字段 `gsCombo`——旧实现里无匹配回滚后 `gsCombo` 仍是上一步的值，会把上一步的连击特效再播一遍。
+
+**逐轮回放用的纯函数**：`traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（Game）以及 `traceCascade` / `traceCascadeFromWave` / `traceCascadeFromSeeds` / `tracePostBeltCascade` / `traceCountdowns`（Board）按和 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 完全相同的顺序（包括随机数的消耗顺序）逐轮重算，返回 `MoveTrace`：每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮），`mtFinal` 就是 `trySwap` / 道具 API 的结果状态。它们只**新增**，不改已有函数的语义；`trace_*_final_equals_*` 系列测试保证两边完全一致。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)。

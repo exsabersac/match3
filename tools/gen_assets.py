@@ -1299,11 +1299,15 @@ def zh_label(s, h=20, color=(255, 255, 255), outline=(16, 12, 36), ts=TS):
 
 GLYPH_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!+-/?:x"
 GLYPH_PX = (3, 4, 5)   # textA 用到的字号；3 为基名 g_<码点>，其余为 g_<码点>@<像素高>
+# 连击弹字「x2」「x5」、得分浮字「+120」、HUD 总结「4 连击！」要放大弹出（最高约 75 逻辑像素高），
+# 数字 / x / + 额外烘焙大号变体（同样 2x），运行时按目标高度自动挑选，放大时也不糊。
+BIG_GLYPH_CHARS = "0123456789x+"
+BIG_GLYPH_PX = (7, 9, 12)
 
 # 中文标签在游戏内的逻辑高度（与 app/Main.hs 的 zhA / zhAC 调用一致）；第一个是基名，其余生成 @变体。
 # 未列出的默认 20。改了 Main.hs 里的高度，记得同步这里，否则会被非整数倍缩放（略糊但仍可用）。
 ZH_SIZES = {
-    "daily": [22], "combo": [18, 34], "shuffle": [18], "score": [18], "help_more": [16],
+    "daily": [22], "combo": [18, 24, 34, 44, 64], "combo_end": [20, 28], "shuffle": [18], "score": [18], "help_more": [16],
     "pause": [32], "clear": [38], "win": [38], "lose": [38], "next": [22], "retry": [26],
     "map": [32], "map_hint": [18],
     "ch1": [14], "ch2": [14], "ch3": [14], "ch4": [14], "ch5": [14], "ch6": [14], "ch7": [14],
@@ -1314,7 +1318,7 @@ NAME_SIZES = [24]      # 关卡名 name_<i>
 ZH = {
     "moves": "步数", "goal": "目标", "score": "得分", "pause": "暂停", "map": "选关地图",
     "clear": "过关！", "win": "胜利！", "lose": "失败", "next": "下一关", "retry": "按 R 重试",
-    "combo": "连击", "tip": "按 H 查看提示", "daily": "每日挑战", "shuffle": "已洗牌",
+    "combo": "连击", "combo_end": "连击！", "tip": "按 H 查看提示", "daily": "每日挑战", "shuffle": "已洗牌",
     "tool_hammer": "锤子：点一格", "tool_swap": "交换：点两格", "tool_cross": "十字：点一格",
     "k_hint": "提示", "k_hammer": "锤子", "k_swap": "自由交换", "k_cross": "十字消", "k_undo": "撤销",
     "k_shuffle": "洗牌", "k_daily": "每日挑战", "k_map": "选关地图", "k_retry": "重开本关", "k_next": "下一关",
@@ -1499,6 +1503,10 @@ def build_sprites():
         for j, px in enumerate(GLYPH_PX):
             im = glyph(ch, px)
             sp["g_%d" % ord(ch) + ("" if j == 0 else "@%d" % im.size[1])] = im
+    for ch in BIG_GLYPH_CHARS:
+        for px in BIG_GLYPH_PX:
+            im = glyph(ch, px)
+            sp["g_%d@%d" % (ord(ch), im.size[1])] = im
     for k, s in ZH.items():
         for j, h in enumerate(ZH_SIZES.get(k, [20])):
             sp["zh_" + k + ("" if j == 0 else "@%d" % (h * TS))] = zh_label(s, h)

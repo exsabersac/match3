@@ -56,8 +56,8 @@
 
 每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
-1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `edOpen`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵，触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
-2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4：`HookTeleport`，内置 = `portalTeleport`）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `edDrains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `edCounter` 计数；地面层（`gsGround`）在每轮的真清除格 + 收集格上各削一层。
+1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `edOpen`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
+2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4：`HookTeleport`，内置 = `portalTeleport`）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `edDrains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `edCounter` 计数；地面层（`gsGround`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
 3. `refill` 补随机普通宝石。
 4. 飞碟吸收（段 4：注册表关卡级元素 `HookAbsorb`，内置 = `stepUfos`；去掉 `ufo` 即不吸收）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 

@@ -17,6 +17,7 @@ module UI.Layout
   , colorRGB
   , spreadRGB
   , elementRGBTable
+  , namedRGB
   , cellRGB
   , pixelToCell
   , cellOrigin
@@ -60,12 +61,19 @@ colorRGB C5 = (172, 88, 236)  -- 紫·三角
 spreadRGB :: SpreadKind -> (Word8, Word8, Word8)
 spreadRGB k = maybe (255, 255, 255) id (lookup (endEffectElement (EndSpread k [])) elementRGBTable)
 
--- | 步末效果按元素名取色（事件 evElement / endEffectElement 的键）：藤 / 巧 / 蒸汽的蔓延色。
+-- | GoalNamed 目标 / 自定义元素按名字取色；表里没有的名字为灰蓝。
+namedRGB :: String -> (Word8, Word8, Word8)
+namedRGB n = maybe (200, 200, 220) id (lookup n elementRGBTable)
+
+-- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色；
+-- 段 5 起也给 GoalNamed 目标与自定义格取色（果冻 / 气泡，见 namedRGB）。
 elementRGBTable :: [(String, (Word8, Word8, Word8))]
 elementRGBTable =
   [ ("vine", (110, 220, 90))
   , ("choco", (150, 90, 45))
   , ("steam", (225, 225, 235))
+  , ("jelly", (240, 110, 180))
+  , ("bubble", (150, 215, 250))
   ]
 
 -- | 格子对应的粒子 / 退回画法颜色。
@@ -87,7 +95,7 @@ cellRGB cell = case cell of
   TimeSpirit -> (80, 220, 255)
   Countdown _ _ -> colorRGB (cellColor cell)
   Gem _ _ _ _ -> colorRGB (cellColor cell)
-  Custom _ _ -> (160, 160, 170)
+  Custom n _ -> maybe (160, 160, 170) id (lookup n elementRGBTable)
 
 -- | 逻辑坐标 → 棋盘格；棋盘外返回 Nothing。
 pixelToCell :: Int32 -> Int32 -> Maybe Pos

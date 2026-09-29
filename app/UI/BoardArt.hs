@@ -42,10 +42,11 @@ import SDL hiding (Normal)
 import UI.BoardPrim
 import UI.Cell.Art (breathe, colorKey, drawBadgeAt, drawLayerBadge, gemSprite)
 import UI.CellTable (CellRenderer (..), cellRenderer, primarySprite)
+import UI.Ground (drawGroundArtAt, groundAt)
 import UI.Layout
 import UI.Types
 
--- | 棋盘底层（格子 / 地毯 / 传送带 / 传送门），不画棋子。
+-- | 棋盘底层（格子 / 地毯 / 地面层 / 传送带 / 传送门），不画棋子。
 drawBoardBase :: Renderer -> App -> IO ()
 drawBoardBase ren app = case appArt app of
   Just art -> drawBoardBgArt ren art app
@@ -130,7 +131,7 @@ beltAngles belt = go Nothing (zip belt (drop 1 belt ++ take 1 belt))
       | c1 == c2 && r2 == r1 - 1 = Just 270
       | otherwise = Nothing
 
--- | 棋盘底层：圆角框 + 棋盘格 + 地毯 + 传送带 + 传送门（都在棋子下面）。
+-- | 棋盘底层：圆角框 + 棋盘格 + 地毯 + 地面层（果冻）+ 传送带 + 传送门（都在棋子下面）。
 drawBoardBgArt :: Renderer -> Art -> App -> IO ()
 drawBoardBgArt ren art app = do
   let gs = appGame app
@@ -143,6 +144,8 @@ drawBoardBgArt ren art app = do
     void (drawSprite ren art (if even (r + c) then "tile_a" else "tile_b") (cellRect x y))
     when carpetCovered $ void (drawSprite ren art "carpet_covered" (cellRect x y))
     when carpetOpen $ void (drawSprite ren art "carpet_open" (cellRect x y))
+    -- 地面层（段 5：双层果冻）：棋盘格之上、棋子之下
+    mapM_ (drawGroundArtAt ren art x y) (groundAt gs pos)
   forM_ (gsBelts gs) $ \belt ->
     forM_ (beltAngles belt) $ \(pos, ang) -> do
       let (x, y) = cellOrigin pos

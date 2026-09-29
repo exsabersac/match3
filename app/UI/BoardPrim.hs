@@ -24,6 +24,7 @@ import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import UI.CellTable (CellRenderer (..), cellRenderer)
+import UI.Ground (drawGroundPrimAt, groundAt)
 import UI.Layout
 import UI.Types
 
@@ -94,6 +95,8 @@ drawStaticPrim ren app board yOff = do
             rendererDrawColor ren $= V4 255 200 230 180
             drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
         drawGemAt ren x0 y cell flashing
+        -- 地面层（段 5：双层果冻）：几何版画在棋子之上（框），否则会被整格的色块盖住
+        mapM_ (drawGroundPrimAt ren x0 y) (groundAt (appGame app) pos)
         when (sel == Just pos) $ do
           let bright = fromIntegral (180 + (pulse `mod` 40) * 2) :: Word8
               (sr, sg, sb) = case appTool app of

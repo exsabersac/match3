@@ -85,7 +85,7 @@ goalTint g = case g of
   GoalSafe _ -> V3 200 180 90
   GoalUfo _ -> V3 170 130 255
   GoalCarpet _ -> V3 220 90 150
-  GoalNamed _ _ -> V3 200 200 220
+  GoalNamed name _ -> let (r, gg, b) = namedRGB name in V3 r gg b
 
 -- | 贴图版 HUD：关卡徽章、目标与进度条、步数、分数（回放中滚动）、道具次数、连击徽章 / 总结。
 drawHudArt :: Renderer -> Art -> App -> IO ()
@@ -104,8 +104,10 @@ drawHudArt ren art app = do
     then zhA ren art "zh_daily" 66 12 22
     else zhA ren art ("name_" ++ show li) 66 11 24
   -- 关卡进度点：已过绿、当前金、未解锁暗
+  -- 间距 6（38 关时与段 5 之前逐像素相同）；关卡更多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
+  let dotStep = min 6 (228 `div` max 1 (length allLevels)) :: Int
   forM_ [0 .. length allLevels - 1] $ \i -> do
-    let xD = 66 + fromIntegral i * 6
+    let xD = 66 + fromIntegral (i * dotStep)
         (col, yy, hh)
           | i == li = (V4 255 214 90 255, 38, 10)
           | i < li = (V4 90 210 130 255, 40, 6)

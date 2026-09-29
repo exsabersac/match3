@@ -7,6 +7,7 @@
 -- 依赖：UI.Layout（格子尺寸 / 颜色）、Match3.Core、SDL。没有贴图时使用，保证缺图时仍可玩。
 module UI.Cell.Prim
   ( primCustom
+  , primBubble
   , primStone
   , primChest
   , primHoney
@@ -43,6 +44,19 @@ primCustom ren x y cell flashing = case cell of
         v = if flashing then 230 else 150
     rendererDrawColor ren $= V4 v v (v + 10) 255
     fillRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))))
+  _ -> pure ()
+
+-- | 几何版：气泡（段 5）——浅蓝方块 + 亮边 + 左上高光（无颜色徽记）。
+primBubble :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
+primBubble ren x y cell flashing = case cell of
+  Custom _ _ -> do
+    let gap = 6 :: CInt
+        body = Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))
+    rendererDrawColor ren $= if flashing then V4 235 250 255 230 else V4 120 190 240 130
+    fillRect ren (Just body)
+    rendererDrawColor ren $= V4 200 240 255 255
+    drawRect ren (Just body)
+    fillRect ren (Just (Rectangle (P (V2 (x + gap + 6) (y + gap + 6))) (V2 10 6)))
   _ -> pure ()
 
 -- | 几何版：石头。

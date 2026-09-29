@@ -40,6 +40,7 @@ import Match3.Obstacles
   , chipAdjacentStonesExcept
   , chipAdjacentTimeSpiritsExcept
   , openSurprises
+  , orthoNeighbors
   , triggerAdjacentBottlesBy
   , triggerAdjacentHatsBy
   )
@@ -186,7 +187,47 @@ builtinDefs =
           ([AInt n], Countdown col _) -> Just (mkCountdown col n)
           _ -> Nothing
       }
+  , jellyDef
+  , bubbleDef
   ]
+
+--------------------------------------------------------------------------------
+-- 段 5：只经注册表 + 白名单钩子接入的两个元素（设定见 docs/domain.md「双层果冻与气泡」）。
+
+-- | 双层果冻：地面层（SlotGround，在 gsGround 里，不占格、不挡交换 / 匹配、不随重力 / 洗牌移动）。
+-- 上方格子每被消除（或被边缘收走）一次去一层；每去一层按 CountNamed "jelly" 计 1（GoalNamed "jelly" 按层计）。
+jellyDef :: ElementDef
+jellyDef =
+  (baseDef "jelly")
+    { edSlot = SlotGround
+    , edGround = Just (\n -> if n > 1 then Just (n - 1) else Nothing)
+    , edCounter = Just (CountNamed "jelly")
+    , edPlace = \_ _ -> Nothing
+    }
+
+-- | 气泡：占格本体 Custom "bubble" 1。无色（不参与匹配）、挡交换、随重力下落、不穿传送门、洗牌保留；
+-- 邻格有真消除（任意颜色）即破，直接命中（锤子 / 十字 / 爆炸 / 直线）也破；破掉计 CountNamed "bubble"。
+bubbleDef :: ElementDef
+bubbleDef =
+  (baseDef "bubble")
+    { edOnHit = const HitDestroy
+    , edAdjacent = Just (AdjacentRule 170 bubbleAdjacent)
+    , edCounter = Just (CountNamed "bubble")
+    }
+  where
+    isBubble cell = case cell of
+      Custom "bubble" _ -> True
+      _ -> False
+    bubbleAdjacent ctx b =
+      let popped =
+            [ q
+            | q <- nubOrd [q' | p <- acTrue ctx, q' <- orthoNeighbors p, inBounds q']
+            , q `notElem` acDirect ctx
+            , q `notElem` acTrue ctx
+            , isBubble (getCell b q)
+            ]
+      in AdjOut b popped []
+    nubOrd = foldr (\x acc -> if x `elem` acc then acc else x : acc) []
 
 --------------------------------------------------------------------------------
 -- 模板

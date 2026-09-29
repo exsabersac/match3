@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
--- | 领域类型与关卡表：颜色、宝石种类、叠层、单元格内容、目标、结局、38 关配置。
+-- | 领域类型与关卡表：颜色、宝石种类、叠层、单元格内容、目标、结局、40 关配置（段 5 在 38 关之后追加果冻 / 气泡两关）。
 -- 提供构造器 / 谓词 / goalMet*；不含交换、连锁或 IO。
 -- specialActivates 定义软锁：多冰 / 锁链 / 窗帘下特殊块不点火。
 module Match3.Types
@@ -775,7 +775,7 @@ data Level = Level
   , lvlGoal  :: LevelGoal
   } deriving (Eq, Show)
 
--- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / time-spirit / steam / carpet / hazards; difficulty ramps.
+-- | Mixed campaign: score / collect / stone / chest / honey / balloon / cookie / cake / hat / chain / maker / portal / UFO / snail / freeze / curtain / safe / flip / surprise / bottle / time-spirit / steam / carpet / hazards / jelly / bubble (段 5); difficulty ramps.
 allLevels :: [Level]
 allLevels =
   [ Level 0  "入门"   30 (GoalScore 300)
@@ -816,6 +816,9 @@ allLevels =
   , Level 35 "蒸汽"   22 (GoalCollect C2 16)
   , Level 36 "地毯"   24 (GoalCarpet 8)
   , Level 37 "织毯"   24 (GoalCarpet 12)
+    -- 段 5：追加在 38 关之后（前 38 关不变）；目标按元素名计数（GoalNamed）
+  , Level 38 "果冻"   24 (GoalNamed "jelly" 32)
+  , Level 39 "气泡"   22 (GoalNamed "bubble" 12)
   ]
 
 levelConfig :: Level -> GameConfig

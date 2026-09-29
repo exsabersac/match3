@@ -321,12 +321,17 @@ runGame tag gs0 n = (tag ++ " start " ++ pState (startHistory gs0) ++ " board=" 
           let (ls, next) = stepLines tag i gs
           in ls ++ maybe [tag ++ " #" ++ pad2 i ++ " end"] (go (i + 1)) next
 
+-- | 前 2344 行覆盖的关卡数：段 5 起关卡表在其后追加（第 39 / 40 关），原有各段只跑前 38 关，
+-- 新关卡的行统一追加在文件末尾（seg5Lines），原有行逐字不变。
+campaign38 :: Int
+campaign38 = 38
+
 -- | 全部行：38 关 × 种子 {1,2} × 15 步、2 个每日式开局、手工局面、连锁 API、开局，最后是 H4–H6（段 1 追加）。
 goldenLines :: [String]
 goldenLines =
   concat
     [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (newGameAtLevel li (levelConfig (allLevels !! li)) seed) 15
-    | li <- [0 .. length allLevels - 1]
+    | li <- [0 .. campaign38 - 1]
     , seed <- [1, 2 :: Int]
     ]
     ++ concat
@@ -337,6 +342,7 @@ goldenLines =
     ++ cascadeLines
     ++ levelLines
     ++ handmade2
+    ++ seg5Lines
 
 -- | 手工局面（护栏测试用到的几个）：蜗牛撞墙 / 推格、巧克力关无匹配交换、首个 3 连锁。
 handmade :: [String]
@@ -402,7 +408,7 @@ cascadeLines =
 levelLines :: [String]
 levelLines =
   [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
-  | li <- [0 .. length allLevels - 1]
+  | li <- [0 .. campaign38 - 1]
   , s <- [0, 5, 99 :: Int]
   , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
   ]
@@ -529,3 +535,35 @@ handmade2 =
   runGame "H4-spread" h4Gs 10 ++ allSwapsOf "H4-spread" h4Gs
     ++ runGame "H5-layers" h5Gs 10 ++ allSwapsOf "H5-layers" h5Gs
     ++ h6Lines
+
+--------------------------------------------------------------------------------
+-- 段 5 追加（golden.txt 末尾，前 2344 行不动）：第 39 关（双层果冻）/ 第 40 关（气泡）。
+-- 与 L01–L38 同一走法（stepLines）× 种子 {1,2} × 15 步；每步后多一行 ext：地面层与具名计数
+-- （pState 不含这两个字段，为了不改旧行，只在新行里补）。再加开局行（同 levelLines 的 G 行格式）。
+
+pExt :: History GameState -> String
+pExt h = "gnd=" ++ show (gsGround (histNow h)) ++ " named=" ++ show (gsElementCounts (histNow h))
+
+runGame5 :: String -> GameState -> Int -> [String]
+runGame5 tag gs0 n =
+  (tag ++ " start " ++ pState h0 ++ " " ++ pExt h0 ++ " board=" ++ pBoard (gsBoard gs0)) : go 0 h0
+  where
+    h0 = startHistory gs0
+    go i h
+      | i >= n = []
+      | otherwise =
+          let (ls, next) = stepLines tag i h
+          in ls ++ maybe [tag ++ " #" ++ pad2 i ++ " end"] (\h1 -> (tag ++ " #" ++ pad2 i ++ " ext " ++ pExt h1) : go (i + 1) h1) next
+
+seg5Lines :: [String]
+seg5Lines =
+  concat
+    [ runGame5 ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (newGameAtLevel li (levelConfig (allLevels !! li)) seed) 15
+    | li <- [campaign38 .. length allLevels - 1]
+    , seed <- [1, 2 :: Int]
+    ]
+    ++ [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " " ++ pExt (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
+       | li <- [campaign38 .. length allLevels - 1]
+       , s <- [0, 5, 99 :: Int]
+       , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
+       ]

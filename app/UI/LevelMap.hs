@@ -142,7 +142,7 @@ drawLevelMap ren app
               GoalSafe _ -> V4 200 170 50 255
               GoalUfo _ -> V4 180 120 255 255
               GoalCarpet _ -> V4 180 100 160 255
-              GoalNamed _ _ -> V4 200 200 220 255
+              GoalNamed name _ -> let (r, g, b) = namedRGB name in V4 r g b 255
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
 

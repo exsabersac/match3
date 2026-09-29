@@ -97,7 +97,7 @@ resolveMoveWith reg kind start opening gs =
       diffs = diffCountsWith reg (gsBoard gs) board1
       safesHit = sum [dcCount d | d <- diffs, dcCounter d == CountSafes]
       bonusMoves = sum (map dcBonus diffs)
-      -- 地面层（段 2c）：逐轮被上方消除命中（每轮每格一次）；内置关卡地面层为空，这里是恒等
+      -- 地面层（段 2c）：逐轮被上方消除命中（每轮每格一次）；段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
       (ground', groundCounts) =
         foldl
           (\(gr, acc) w -> let (gr', cs) = hitGroundWith reg (nub (cwCleared w ++ cwDrained w)) gr in (gr', acc ++ cs))

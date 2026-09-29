@@ -980,6 +980,39 @@ def carpet(covered):
     return img
 
 
+def jelly(n):
+    """双层果冻（段 5，地面层）：半透明粉色果冻块，画在棋子下面。n=2 为双层（更厚、带一道层线），n=1 为单层。"""
+    img = new()
+    m = rrect_mask((U(0.05), U(0.05), U(0.95), U(0.95)), U(0.16))
+    if n >= 2:
+        img = comp(img, fill_layer(m, ("v", (255, 120, 190), (200, 50, 130)), 0.78))
+        inner = rrect_mask((U(0.16), U(0.16), U(0.84), U(0.84)), U(0.12))
+        seam = sub_mask(inner, erode(inner, U(0.025)))
+        img = comp(img, fill_layer(seam, (255, 225, 240), 0.85))
+        rim = sub_mask(m, erode(m, U(0.035)))
+        img = comp(img, fill_layer(rim, (140, 20, 80), 0.9))
+    else:
+        img = comp(img, fill_layer(m, ("v", (255, 170, 215), (235, 110, 175)), 0.5))
+        rim = sub_mask(m, erode(m, U(0.03)))
+        img = comp(img, fill_layer(rim, (200, 60, 130), 0.75))
+    img = gloss(img, m, (U(0.1), U(0.06), U(0.6), U(0.3)), 0.35, 0.03)
+    return img
+
+
+def bubble():
+    """气泡（段 5）：透明水泡，蓝青色边缘 + 虹彩 + 高光；无颜色徽记（不参与匹配）。"""
+    img = new()
+    disc = ellipse_mask((U(0.1), U(0.1), U(0.9), U(0.9)))
+    img = comp(img, fill_layer(disc, ("r", (200, 240, 255), (90, 170, 235), (0.4, 0.35)), 0.38))
+    ring = sub_mask(disc, erode(disc, U(0.06)))
+    img = comp(img, fill_layer(blur(ring, U(0.01)), ("h", (150, 230, 255), (230, 170, 255)), 0.95))
+    rim = sub_mask(disc, erode(disc, U(0.018)))
+    img = comp(img, fill_layer(rim, (40, 110, 180), 0.9))
+    img = gloss(img, disc, (U(0.24), U(0.18), U(0.52), U(0.4)), 0.8, 0.012)
+    img = sparkle(img, U(0.68), U(0.68), U(0.07), 0.8)
+    return img
+
+
 def belt():
     """传送带：整格履带 + 上下两条轨道（露在宝石外圈），箭头指向运动方向（朝右，运行时旋转）。"""
     img = new()
@@ -1484,6 +1517,9 @@ def build_sprites():
     sp["tile_b"] = down(tile(False))
     sp["carpet_open"] = down(carpet(False))
     sp["carpet_covered"] = down(carpet(True))
+    sp["jelly"] = down(jelly(1))
+    sp["jelly_2"] = down(jelly(2))
+    sp["bubble"] = down(bubble())
     sp["belt"] = down(belt())
     sp["portal"] = down(portal())
     sp["sel_ring"] = down(sel_ring())
@@ -1534,12 +1570,12 @@ LEGEND = [
                         ("chest", "宝箱", "Chest n"), ("honey", "蜂蜜罐", "Honey n"), ("cake_1", "蛋糕 1", "Cake 1"),
                         ("cake_2", "蛋糕 2", "Cake 2"), ("cake_3", "蛋糕 3+", "Cake 3+"), ("safe", "保险箱", "Safe n"),
                         ("cookie", "饼干", "Cookie"), ("magic_hat", "魔法帽", "Magic hat"), ("snail", "蜗牛", "Snail"),
-                        ("surprise", "彩蛋", "Surprise"), ("time_spirit", "时间精灵", "Time spirit")]),
+                        ("surprise", "彩蛋", "Surprise"), ("time_spirit", "时间精灵", "Time spirit"), ("bubble", "气泡", "Bubble")]),
     ("带颜色的障碍 Colored（同样用形状徽记）", [("balloon_" + k, "气球", "Balloon " + k.upper()) for k in GEMS]
      + [("bottle_" + k, "染色瓶", "Bottle " + k.upper()) for k in GEMS]
      + [("maker_" + k, "果汁机", "Maker " + k.upper()) for k in GEMS] + [("ufo_" + k, "飞碟", "UFO " + k.upper()) for k in GEMS]),
     ("地面与标记 Floor & UI", [("@tiles", "棋盘格", "Cells"), ("carpet_open", "地毯目标", "Carpet target"), ("carpet_covered", "已铺地毯", "Carpet"),
-                             ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("sel_ring", "选中框", "Selection"),
+                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("sel_ring", "选中框", "Selection"),
                              ("hint_glow", "提示光", "Hint"), ("@badge", "层数角标", "Layer badge")]),
 ]
 

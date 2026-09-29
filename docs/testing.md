@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**244** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
+- 期望：**252** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 244）：
+- 目录（用例数合计 252）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -48,6 +48,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 6 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌（样例元素苔藓 / 风筝 / 陷坑 / 浮尘只定义在该模块里） |
 | `test/Spec/Branches.hs` | 8 | 段 4 专门分支收编护栏：测试专用成对交换规则（拉杆）/ 开启规则（豆荚）/ 可推动（小车）只经注册表生效；内置改色 / 推动谓词与原写死谓词相同；关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）去掉后不生效（含 38 关实测）；主流程源码扫描 |
+| `test/Spec/JellyBubble.hs` | 8 | 段 5 双层果冻 / 气泡：按层计数与目标、洗牌 / 撤销、气泡邻消 / 直接命中即破、挡交换 / 无色 / 下落、第 39 / 40 关、主流程源码扫描 |
 | `test/Spec/Engine.hs` | 5 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描） |
 | `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
@@ -92,7 +93,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `trace_boosters_final_equal_result` | 锤子 / 十字 / 自由交换：终盘、得分、连击数一致（终局分支也比对得分和连击） |
 | `trace_rejected_move_is_empty` | 无匹配 / 非相邻 / 已结束 / 道具无效：`mtWaves` 与 `mtEnd` 都为空，前端什么都不播 |
 | `trace_multi_wave_each_round_visible` | 3 连锁及以上：每一轮都有自己的被消格，且这些格在该轮之前的盘面上确实存在 |
-| `trace_end_steps_replay_to_trySwap_final` | 全部 38 关 × 种子 1–3 的每个成功交换按「轮 → 步末 → 轮」时间线重放：每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，终盘等于 `trySwap`（未洗牌时）；抽样必须覆盖 tick / belt / SpreadVine / SpreadChoco / SpreadSteam / snail 六种效果 |
+| `trace_end_steps_replay_to_trySwap_final` | 全部关卡（段 5 起 40 关）× 种子 1–3 的每个成功交换按「轮 → 步末 → 轮」时间线重放：每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，终盘等于 `trySwap`（未洗牌时）；抽样必须覆盖 tick / belt / SpreadVine / SpreadChoco / SpreadSteam / snail 六种效果 |
 | `trace_end_steps_boosters_replay` | 道具只有蔓延类步末效果，重放后同样到达终盘 |
 | `trace_end_snail_push_and_turn` | 蜗牛碰壁原地掉头（`smFrom == smTo`、朝向反转）；前方是宝石则爬过去、宝石换到原格 |
 | `trace_shuffle_step_replays` | 洗牌步逐帧比对（见下） |
@@ -100,11 +101,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 **底线**：`trace_swap_final_equals_trySwap` 要求「未洗牌、实际比对终盘的步数 > 400」，失败信息会打印比对数和因自动洗牌跳过的步数（当前样本约 517 比对 / 9 跳过），防止抽样悄悄缩水、测试名存实亡。
 
-**洗牌步（第二刀补上）**：`MoveTrace` 新增 `mtGen`（洗牌前的生成器）与 `mtShuffle`（洗牌后的盘面）。`trace_shuffle_step_replays` 对全部 38 关 × 种子 1–3 × 开局全部成交交换（每条再沿首个成交交换走 2 手）逐帧比对：时间线重放到 `mtFinal`，再从 `(mtFinal, mtGen)` 重放 `ensurePlayable` 必须到达结算后的 `gsBoard` / `gsGen`；未洗牌的步要求 `mtFinal == gsBoard`、`mtGen == gsGen`。当前 **3801** 个成交步逐帧比对，其中 **29** 个自动洗牌步；底线 > 3000 / > 20。
+**洗牌步（第二刀补上）**：`MoveTrace` 新增 `mtGen`（洗牌前的生成器）与 `mtShuffle`（洗牌后的盘面）。`trace_shuffle_step_replays` 对全部关卡（段 5 起 40 关）× 种子 1–3 × 开局全部成交交换（每条再沿首个成交交换走 2 手）逐帧比对：时间线重放到 `mtFinal`，再从 `(mtFinal, mtGen)` 重放 `ensurePlayable` 必须到达结算后的 `gsBoard` / `gsGen`；未洗牌的步要求 `mtFinal == gsBoard`、`mtGen == gsGen`。38 关时 **3801** 个成交步逐帧比对，其中 **29** 个自动洗牌步；底线 > 3000 / > 20。
 
 ## 行为金标准（golden）
 
-`test/golden/Golden.hs` 把固定种子下的规则结果投影成稳定文本，入库为 `test/golden/golden.txt`（2344 行：前 2186 行自 `4fbcefc` 起逐字不变，第 2187–2344 行是段 1 追加的 H4–H6），`golden_behaviour_snapshot` 在 `stack test` 里逐行比对，失败时报告第一处分叉的行号。
+`test/golden/Golden.hs` 把固定种子下的规则结果投影成稳定文本，入库为 `test/golden/golden.txt`（2534 行：前 2186 行自 `4fbcefc` 起逐字不变，第 2187–2344 行是段 1 追加的 H4–H6，第 2345–2534 行是段 5 追加的第 39 / 40 关），`golden_behaviour_snapshot` 在 `stack test` 里逐行比对，失败时报告第一处分叉的行号。
 
 - **覆盖**：38 关 × 种子 {1, 2} × 最多 15 步（每步：成交的交换、结局、完整计数、`gsCombo` / `gsLastCleared`、随机数状态、`traceSwap` 回放；辅助列：撤销 / 提示 / 洗牌 / 自动洗牌 / 结局判定 / 被拒交换；每 3 步三种道具的有次数 / 无次数结果与回放）、2 个每日式开局、6 个手工局面（H1–H3：护栏里的蜗牛撞墙推格、巧克力关、首个 3 连锁；H4–H6 见下；另含该局面全部成交交换）、连锁 API（`Match3.Board.Cascade` 的 `cascadeMatches` / `cascadeSeeds`）的普通 / 种子连锁 × 飞碟 / 传送门、各关开局 / 重开 / 下一关。
 - **H4–H6（段 1 追加，第 2187–2344 行）**：仓库与文档里没有 H4–H6 的现成定义，按下面三类代表性手工局面补齐：
@@ -116,6 +117,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - **投影**：格子短码（如 `2hi1+K2` = 颜色 2、横向直线、1 层冰、2 层锁链）、具名计数、`StdGen` 的 `show`；盘面与回放脚本（`mtWaves` / `mtEnd` 投影文本）用手写 FNV-1a 64 压缩。不对内部类型直接 `show`。
 - **取数路径**：入库时（`4fbcefc`）取数只经过门面 `Match3.Board` / `Match3.Game`，同一份代码在 `3bd26d8` 与 `5eef3e3` 上原样编译、输出全等（md5 `b792e77a…`）。第三刀删掉了这两个门面和元组兼容层，`Golden.hs` 改为直接 import `Match3.Board.*` / `Match3.Game.*` 子模块、从 `CascadeRun` 记录取连锁字段，盘面经 `boardRows` 投影——**它今后不能在 `51b1cfa` 及更早的提交上编译**；要和旧提交比对，把 `4fbcefc` 版的 `Golden.hs` 拿到旧提交上跑（输出与 `golden.txt` 逐字相同）。
 - **耗时**：第三刀把 `Board` 换成数组（`getCell` O(1)）后，`golden_behaviour_snapshot` 在 box 上约 6.05 s → 4.3–4.5 s（单独运行 `-p golden_behaviour_snapshot`）。
+- **段 5 追加（第 2345–2534 行）**：关卡表在第 38 关之后追加了两关，原有各段（L / G 行）改为只跑前 `campaign38 = 38` 关，保证前 2344 行逐字不变（追加前后用 `head -2344` 与旧文件 `cmp` 相同）；新关卡的行在末尾：第 39 / 40 关 × 种子 {1,2} × 15 步（与 L 行同一走法），每步后多一行 `ext`（`gnd=` 地面层、`named=` 具名计数——旧的 `pState` 不含这两个字段，只在新行里补），再加 G39 / G40 开局行。
 - **维护纪律**：内部表示变了只改投影函数，`golden.txt` 一个字都不动；确需重录（规则行为有意变化，机制刀停期间不应发生）用 `test/golden/regen.sh`，并在提交说明里写明原因。
 
 ## 元素框架验收
@@ -126,7 +128,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 |------|------|
 | `element_registry_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在测试里：`test/Spec/Support.hs` 的 `crateDef`**：以 `baseDef` 为底，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：注册表多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`gsElementCounts == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultRegistry` 下它是惰性占格（不被波及、锤子免疫、不计数）；核心 16 个源文件里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
 | `element_registry_matches_legacy_predicates` | 全部内置本体 × 宝石种类 × 冰层 × 叠层：注册表的挡交换 / 锤子免疫 / 固定格 / 点火 / 匹配色 / 洗牌保留与第二刀之前按构造器写死的谓词逐格相等；直接命中的几条代表（冰、锁链、保险箱、翻转、石头）与旧口径一致 |
-| `trace_events_consistent_with_trace` | 38 关 × 种子 1–2 × 前 3 个成交交换：`EvScore` 之和 = 本步得分；`EvClear` 的格 = 各轮清除格并集；步末事件数 = `mtEnd` 长度；`EvShuffle` ⇔ `mtShuffle`；`EvBlast` 只来自直线 / 炸弹；**逐轮严格相等**（第三刀，前端波次界面改读事件后加）：该轮 EvClear 的格按事件顺序拼接 = `cwCleared`（顺序也相同），该轮 EvScore 之和 = `cwScore` |
+| `trace_events_consistent_with_trace` | 全部关卡（段 5 起 40 关）× 种子 1–2 × 前 3 个成交交换：`EvScore` 之和 = 本步得分；`EvClear` 的格 = 各轮清除格并集；步末事件数 = `mtEnd` 长度；`EvShuffle` ⇔ `mtShuffle`；`EvBlast` 只来自直线 / 炸弹；**逐轮严格相等**（第三刀，前端波次界面改读事件后加）：该轮 EvClear 的格按事件顺序拼接 = `cwCleared`（顺序也相同），该轮 EvScore 之和 = `cwScore` |
 
 ## 扩展钩子验收（段 2c）
 
@@ -160,6 +162,23 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 段 4 的等价性依据：金标准 2344 行全等；showcase / l28 / l1map 三场景截图与 `51b1cfa` 基线 AE=0。
 
+## 双层果冻与气泡验收（段 5）
+
+`test/Spec/JellyBubble.hs`；设定见 [domain.md](domain.md#双层果冻与气泡段-5)。
+
+| 用例 | 断言 |
+|------|------|
+| `jb_jelly_two_layers_counted_per_layer` | 上方格子被消除一次去一层、每层计 1（`gsElementCounts` / `gsCollected`）；没被消到的果冻不动；不占格（盘面与无果冻时相同）；第二次消除清掉该格；`gameStep` 入口结果相同 |
+| `jb_jelly_goal_wins_on_last_layer` | `GoalNamed "jelly" 2`：去第一层未过关，去最后一层过关、地面层清空 |
+| `jb_jelly_keeps_on_shuffle_and_undo` | 第 39 关开局 16 格双层；手动洗牌不动地面层；走一步再撤销恢复层数 |
+| `jb_bubble_pops_on_adjacent_clear` | 与真消除格相邻的气泡在首轮被清、计数、达成 `GoalNamed "bubble" 1`；不相邻的不动 |
+| `jb_bubble_pops_on_direct_hit` | 锤子直接命中即破并计数 |
+| `jb_bubble_blocks_swap_falls_no_match` | 三个气泡连成一排不算匹配；与气泡交换被拒；列里没有消除时不动；下方格被清掉后下落一格 |
+| `jb_levels_appended` | 共 40 关；第 39 / 40 关目标为 `GoalNamed "jelly" 32` / `GoalNamed "bubble" 12`，种子 1–3 开局层数 / 气泡数等于目标且有可走步；前 38 关开局没有地面层、没有气泡 |
+| `jb_main_flow_untouched_scan` | `Board.*`、`Game.{Resolve,Move,Boosters,Trace,Tally,Shuffle,State,Outcome}`、`Element.{Registry,Types,Event}`、`Match3.Engine`、`Engine.*` 源码里没有 `jelly` / `bubble`；两者定义在 `Element.Builtin` 并已注册 |
+
+改动了的旧测试（名字不变）：7 个用例里的「关卡数 = 38」断言改为 40（`surprise_opens_to_special`、`chain_layer_decrement`、`freeze_layer_decrement`、`curtain_layer_decrement`、`steam_spreads_after_move`、`goal_carpet_counts`、`campaign_levels_batch_ok`）。
+
 ## 多游戏接口验收（第三刀）
 
 接口见 [architecture.md](architecture.md#多游戏接口)。
@@ -180,7 +199,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 244，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 252，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 244 通过
+stack test                            # 库测，无需显示器；期望 252 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -59,10 +59,12 @@ stack build && stack exec match3-sdl
 - **道具**：`1` 锤子；`2` 任意两格交换；`3` 十字清除（行+列）；有限次数；先选格再按 1/3 仍可用；锤/十字对锁链/窗帘揭一层、对石头削一层（≠ 一击清空）
 - **传送带**（`Belt`）：循环移位；步末移位后可再触发连锁
 - **倒计时炸弹**（`Countdown`）：步末 −1；归零 3×3；匹配/特殊可解除
-- **目标**：分数 / 单色收集 / 多色收集 / 碎石 / 开宝箱 / 砸蜂蜜 / 爆气球 / 收饼干 / 清蛋糕 / 开保险箱 / 飞碟吸收 / 铺地毯
+- **目标**：分数 / 单色收集 / 多色收集 / 碎石 / 开宝箱 / 砸蜂蜜 / 爆气球 / 收饼干 / 清蛋糕 / 开保险箱 / 飞碟吸收 / 铺地毯 / 按元素名计数（`GoalNamed`：果冻层数、气泡）
 - **飞碟**（`Ufo`）：每波连锁末 `stepUfo` 吸正交同色再移格；目标 `GoalUfo`
 - **每日挑战**（`D`）：日期种子盘面 + **10** 种轮换目标；障碍类目标会自动补装饰；通关为 **Won**（不进战役 `LevelClear`/解锁）；三星按**关卡印制步数**剩余比例（携带不抬高分母）
-- 连击波次计分、提示、撤销、自动洗牌、**38** 关战役地图（CH1–CH7 章节分隔）
+- **双层果冻**（地面层 `jelly`，段 5）：铺在格子下面，上方每被消除一次去一层（2 → 1 → 清掉），按层计目标；不占格、不随重力 / 洗牌移动
+- **气泡**（`Custom "bubble"`，段 5）：无色、挡交换、随重力下落；邻格有任意颜色的消除或被直接命中即破
+- 连击波次计分、提示、撤销、自动洗牌、**40** 关战役地图（CH1–CH7 章节分隔）
 - HUD、道具次数、粒子、交换/下落补间、连锁逐轮回放与连击分级（见下节）、藤蔓蔓延提示、飞碟叠层、暂停帮助、过关/胜利/失败叠层
 
 ## 画面与反馈
@@ -122,6 +124,8 @@ stack build && stack exec match3-sdl
 | 36 | 蒸汽 | 22 | 收集 16× 绿 | 蒸汽 + 巧克力 |
 | 37 | 地毯 | 24 | 铺 8 地毯 | 地毯 + 巧克力 |
 | 38 | 织毯 | 24 | 铺 12 地毯 | 地毯 + 巧克力 + 迷雾 |
+| 39 | 果冻 | 24 | 去 32 层果冻 | 16 格双层果冻（段 5） |
+| 40 | 气泡 | 22 | 破 12 气泡 | 气泡（段 5；终章） |
 
 按 `D` 进入**每日**挑战（日历日期作种子）。
 
@@ -180,14 +184,14 @@ src/Match3/Element/ Types Registry Builtin Event（元素框架：定义 / 注�
 app/Main.hs   SDL2 前端入口（读环境变量 → runShell）
 app/Shell/    Loop（通用 SDL 外壳：窗口 / 固定步长主循环 / 插件钩子；不依赖 Match3）
 app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw Cascade EndStage
-              BoardArt BoardPrim CellTable HudArt HudPrim TextArt Glyph LevelMap
+              BoardArt BoardPrim CellTable Ground HudArt HudPrim TextArt Glyph LevelMap
 app/UI/Cell/  Prim Art（每种元素一个几何 / 贴图渲染函数，经 CellTable 查表）
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
 app/ComboFx.hs 连锁逐轮回放 / 步末动画的纯阶段机与时间线常量
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；244 命名用例）
-test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Obstacles.* / Boosters / GoalsLevels / Element / Extension / Branches / Engine / UIEvents / ReplayUndo / Golden / Properties）与共用辅助 Support
+test/Spec.hs  测试入口（只汇总；252 命名用例）
+test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Obstacles.* / Boosters / GoalsLevels / Element / Extension / Branches / JellyBubble / Engine / UIEvents / ReplayUndo / Golden / Properties）与共用辅助 Support
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
@@ -197,6 +201,6 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 
 ## 发布状态
 
-- 战役：**38** 关（地图 CH1–CH7），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **244**（Tasty + QuickCheck）
+- 战役：**40** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡），批量可构造 / 可玩 / 装饰与目标对齐
+- 测试：`stack test` **252**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

@@ -30,6 +30,7 @@ module UI.Cell.Art
   , artTimeSpirit
   , artCountdown
   , artCustom
+  , artBubble
   ) where
 
 import Art
@@ -244,6 +245,14 @@ artCountdown ren art pulse x y cell = case cell of
   Countdown c n -> do
     spr (gemSprite c)
     spr ("countdown_" ++ show (clampI 1 9 n))
+  _ -> pure ()
+  where
+    Kit {..} = cellKit ren art pulse x y
+
+-- | 贴图版：气泡（段 5）——一张贴图，轻微浮动，不画层数角标。
+artBubble :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
+artBubble ren art pulse x y cell = case cell of
+  Custom _ _ -> sprBob "bubble"
   _ -> pure ()
   where
     Kit {..} = cellKit ren art pulse x y

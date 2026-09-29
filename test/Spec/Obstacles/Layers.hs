@@ -490,7 +490,7 @@ chain_layer_decrement = do
           , hasChain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor chain >= 8, got " ++ show nChain) (nChain >= 8)
-  assertEqual "campaign levels" (38 :: Int) (length allLevels)
+  assertEqual "campaign levels" (40 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Freeze / 火箭冰冻 (blocks swap only; adjacent peel; ≠ Ice match-chip)
@@ -579,7 +579,7 @@ freeze_layer_decrement = do
           , hasFreeze (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor freeze >= 8, got " ++ show nFreeze) (nFreeze >= 8)
-  assertEqual "campaign levels" (38 :: Int) (length allLevels)
+  assertEqual "campaign levels" (40 :: Int) (length allLevels)
 
 --------------------------------------------------------------------------------
 -- Curtain / 窗帘 (blocks match; adjacent peel; ≠ Fog soft cloud)
@@ -649,7 +649,7 @@ curtain_layer_decrement = do
           , hasCurtain (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor curtain >= 8, got " ++ show nCurt) (nCurt >= 8)
-  assertEqual "campaign levels" (38 :: Int) (length allLevels)
+  assertEqual "campaign levels" (40 :: Int) (length allLevels)
 
 steam_blocks_match :: Assertion
 steam_blocks_match = do
@@ -701,7 +701,7 @@ steam_spreads_after_move = do
           , hasSteam (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor steam >= 8, got " ++ show nSt) (nSt >= 8)
-  assertEqual "campaign levels" (38 :: Int) (length allLevels)
+  assertEqual "campaign levels" (40 :: Int) (length allLevels)
 
 -- | Same clear peels an adjacent Chain and an adjacent Freeze.
 -- Locks Chain+Freeze: independent overlays on different cells both respond.

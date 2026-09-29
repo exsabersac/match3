@@ -94,6 +94,7 @@ executable match3-sdl
       UI.EndStage
       UI.Env
       UI.Glyph
+      UI.Ground
       UI.HudArt
       UI.HudPrim
       UI.Input
@@ -135,6 +136,7 @@ test-suite match3-test
       Spec.Golden
       Spec.Gravity
       Spec.GridMatch
+      Spec.JellyBubble
       Spec.Obstacles.Body
       Spec.Obstacles.Features
       Spec.Obstacles.Layers

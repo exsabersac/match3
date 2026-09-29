@@ -72,6 +72,7 @@
 | `time_spirit` | `TimeSpirit` | 带光环的小精灵，标着「+2」，会上下浮动 |
 | `countdown_1..9` | `Countdown c n` | 宝石上叠一个红色倒计时炸弹，中间写剩余步数 |
 | `ufo_c1..c5` | 飞碟 `Ufo` | 对应颜色的飞碟，悬停在格子上方 |
+| `bubble` | 气泡 `Custom "bubble" 1`（段 5） | 透明水泡：蓝青边缘 + 虹彩 + 高光，无颜色徽记，轻微上下浮动。按 Custom 名字经 `UI.CellTable.customTable` 分派（不画层数角标）；几何降级版 `primBubble`：浅蓝方块 + 亮边 + 左上高光 |
 
 ### 地砖（宝石之下）
 
@@ -81,6 +82,7 @@
 | `carpet_open` / `carpet_covered` | 地毯目标格：虚线品红框表示未铺，编织纹品红地毯表示已铺 |
 | `belt` | 传送带：青色边轨 + 箭头，箭头朝向就是移动方向 |
 | `portal` | 紫色旋转传送门环 |
+| `jelly_2` / `jelly` | 双层果冻（地面层 `gsGround`，段 5）：双层为深粉果冻块 + 一道白色层线；单层为淡粉半透明。经 `UI.Ground.groundTable` 按名字分派，画在棋盘格之上、棋子之下。几何降级版画在**棋子之上**（整格色块会盖住底层）：双层粗粉框 + 内框，单层细框 |
 
 ### 交互 / HUD
 
@@ -97,7 +99,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 脚本会生成：
 
-- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×1994 + 1024×602），共 434 个贴图（含尺寸变体）
+- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2014 + 1024×658），共 442 个贴图（含尺寸变体；段 5 新增 `jelly` / `jelly_2` / `bubble` 及其 `@56`，另有第 39 / 40 关的关卡名 `name_38` / `name_39`）
 - `assets/atlas.txt`：索引文件，每行 `name x y w h page`（第 6 列页号；旧的 5 列格式视为第 0 页）
 - `assets/background.bmp`：窗口背景（960×1176，即 480×588 的 2 倍，24 位不透明）
 - `docs/images/legend.png`：图例

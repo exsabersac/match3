@@ -116,7 +116,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `UI.EndStage` | 步末阶段绘制：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌 |
 | `UI.BoardArt` | 棋盘贴图绘制与分派（`drawCellAny` / `drawCellArt` / `drawStatic` 等）、回放共用的底盘部件 |
 | `UI.BoardPrim` | 棋盘几何降级绘制（`drawGemAt` 查表分派、底盘 / 传送门 / 飞碟 / 皮带 / 蔓延预告 / 粒子） |
-| `UI.CellTable` | 单格绘制的元素查表：元素名（注册表）→ `CellRenderer{crPrim, crArt, crSprite}`；宝石 5 个名字共用一个渲染器，`Custom` 走自定义渲染器 |
+| `UI.CellTable` | 单格绘制的元素查表：元素名（注册表）→ `CellRenderer{crPrim, crArt, crSprite}`；宝石 5 个名字共用一个渲染器；`Custom` 先查按名字的 `customTable`（段 5：气泡），查不到走自定义渲染器 |
+| `UI.Ground` | 段 5：地面层（`gsGround`）的绘制查表：名字 → 几何版 / 贴图名(层数)；贴图版画在棋子之下，几何版画在棋子之上（框） |
 | `UI.Cell.Prim` / `UI.Cell.Art` | 每种元素一个几何 / 贴图渲染函数（从原 `drawGemAt` / `drawCellArt` 的大 case 逐字拆出）；`Cell.Art` 另含 `colorKey` / `gemSprite` / `breathe` / 角标 |
 | `UI.HudArt` / `UI.HudPrim` | HUD、横幅、键位条、暂停帮助、结算面板、弹字的贴图版 / 几何降级版 |
 | `UI.TextArt` / `UI.Glyph` | 烘焙文字 / 中文标签贴图的排版；缺字形时的像素字 |
@@ -206,6 +207,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 60 | magic_hat | 140 | bottle |
 | 70 | fog | 150 | choco |
 | 80 | chain | 160 | steam |
+|  |  | 170 | bubble（段 5：邻格真消除即破） |
 
 步末规则：countdown（`PhaseTick`）；vine 10 / choco 20 / steam 30（`PhaseSpread`）；snail（`PhaseMove`）。
 
@@ -246,10 +248,11 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 1. 选层：本体用 `Custom "名字" 值`（值自定义，例如耐久）；格子下面的层用 `SlotGround`（放进 `gsGround`）；需要新的内置层时才动 `Types`。
 2. 写定义：从 `baseDef "名字"` 起，只改需要的字段（例如 `edOnHit`、`edAdjacent`、`edCounter`、`edFalls`、`edDrains`、`edGround`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。
    - 只经注册表即可接入的类别（白名单）：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留）、叠层与冰的命中规则、地面层 `SlotGround`、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素；段 4 起还有：成对交换规则（`edSwap`）、开启类元素（`edOpen`）、可被改色 / 推动（`edRecolorable` / `edPushable`）。
+   - 段 5 的双层果冻（地面层 + `edGround` + `CountNamed`）与气泡（`Custom` + `edOnHit` + `edAdjacent` + `CountNamed`）就是按这份白名单接入的内置元素：规则只在 `Element.Builtin` 的定义里，关卡数据在 `Types.allLevels` / `Game.Level` 的放置 / 地面表里，主流程没有改动（`jb_main_flow_untouched_scan`）。
    - 仍需改主流程的：可匹配的有色宝石、新**种类**的关卡级元素（需要 `GameState` 新字段 + 新 `LevelHook` 构造器，见下节「残留」）。
 3. 注册：`register def defaultRegistry`，把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 `edPlace` 落格。
-5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；步末有新效果时在前端各查找表里加一行。
+5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Layout.elementRGBTable`（HUD 目标 / 地图 / 几何版共用）；步末有新效果时在前端各查找表里加一行。
 6. 测试：参照 `element_registry_custom_crate_extensibility` 与 `test/Spec/Extension.hs`（测试专用「木箱」只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
 ### 专门分支的收编（段 4）

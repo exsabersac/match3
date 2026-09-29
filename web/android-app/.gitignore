@@ -1,0 +1,5 @@
+node_modules/
+# prepare-www.mjs 从 web/dist 生成
+www/
+# build-apk.sh 的输出
+out/

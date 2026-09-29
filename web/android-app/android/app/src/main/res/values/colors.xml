@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 游戏背景色，与 web/www/index.html 的 #1c1630 一致：窗口底色、启动画面、系统栏留白处都用它 -->
+    <color name="game_bg">#1C1630</color>
+</resources>

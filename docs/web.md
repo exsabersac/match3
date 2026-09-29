@@ -37,6 +37,24 @@
 依赖方向与桌面版相同：接口层只依赖核心和 `ComboFx`，不依赖 SDL。`Api.hs` / `Anim.hs` 没有 JSFFI，
 原生 GHC 也能编，这是原生 / wasm 对比测试的基础。
 
+### 2.0 元素框架在 wasm 里
+
+main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class Element`（本体）/ `Modifier`（冰层、叠层）/
+`LevelElement`（飞碟、皮带、传送门、地毯等关卡级机制）及对应的存在类型 `SomeElement` / `SomeModifier` / `SomeLevel`，
+`Match3.Element.Message` 是主流程发给元素的消息（xmonad 风格：`Refilled` / `Absorbed` / `EndTicked` / `Shifted` …）；
+内置元素按功能分到 `Match3.Element.Builtin.{Gem,Layer,Obstacle,Collectible,Actor,Ground,Level,Common}`，
+`Match3.Element.Builtin` 仍导出 `builtinDefs` / `builtinLevelDefs` / `defaultRegistry`；注册表是「元素名 → 构造器」。
+
+对网页版的影响：
+
+- 这些模块全部是纯 Haskell（只多了 `ExistentialQuantification`），原样编进 wasm；`web/match3-web.cabal` 的模块清单与
+  `package.yaml` 同步（`build.sh` 第 1 步会核对）；
+- 网页接口层**不直接用元素框架**：`Api.hs` 只走 `gameStep match3Shell`，盘面编码按 `Match3.Types` 的 `Cell` 构造器
+  （宝石 / 各障碍 / `Custom 名字 值`）输出，而 `Cell` 类型没有变；`Anim.hs` 只用 `ComboFx` 和效果事件；
+- 因此 JSON 形状、`cells.js`（CellTable 移植）的映射都不用改。合入前后 22 组一致性输出（原生与 wasm 各一份）逐字节相同，
+  说明规则行为与编码都没变。新增元素时：元素框架里注册即可生效，网页端只在它引入新的 `Cell` 构造器或新贴图时才要改
+  `Api.hs` 的 `encodeCell` 与 `cells.js`。
+
 ### 2.1 wasm 导出（`WebMain.hs`）
 
 全部是同步 JSFFI（`foreign export javascript "… sync"`），参数是整数，返回 JSON 字符串；异常兜底成 `{ok:false,error}`。
@@ -101,7 +119,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-09-29）：wasm `-Oz` 后 1.67 MB（gzip 649 KB）；dist 合计 2.12 MB，逐文件 gzip 约 1.02 MB。
+体积（2026-09-29，合入元素类之后）：wasm `-Oz` 后 1.74 MB（gzip 675 KB）；dist 合计 2.20 MB，逐文件 gzip 约 1.05 MB。
 
 ## 3. 工具链与构建
 
@@ -129,7 +147,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 252 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 262 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -215,12 +233,12 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（252 个） | `make test-native` |
+| `stack test` | 核心规则（262 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（12 组） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（10 组） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `make e2e` |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-29）：`stack test` 252 通过；状态一致性 12 组、动画一致性 10 组全部一致；e2e 33 项全过。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-29，合入 main 2121bf8 后）：`stack test` 262 通过；状态一致性 12 组、动画一致性 10 组全部一致；e2e 33 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32，外加 `report.json`）。
 
 ## 8. 已知限制

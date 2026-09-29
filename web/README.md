@@ -64,7 +64,7 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 252 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 262 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -111,7 +111,8 @@ make size            # 事后单独看体积
 
 `web/build.sh` 会：
 1. 检查 `match3-web.cabal` 里的核心模块清单（`Engine.*` + `Match3.*`）与 `package.yaml` 的 `library.exposed-modules` 是否一致
-   （核心新增模块时要同步到 cabal 文件，否则会打印警告）；
+   （核心新增模块时要同步到 cabal 文件，否则会打印警告；例如 main 2121bf8 新增的 `Match3.Element.Class` / `Message` /
+   `Builtin.{Common,Gem,Layer,Obstacle,Collectible,Actor,Ground,Level}` 已同步）；
 2. `wasm32-wasi-cabal build exe:match3-web`，链接为 WASI **reactor** 模块；
 3. `wasm-opt -Oz` 压体积；用 GHC 自带的 `post-link.mjs` 生成 JSFFI 胶水 `ghc_wasm_jsffi.js`；
 4. 下载并缓存浏览器 WASI 垫片 `@bjorn3/browser_wasi_shim@0.4.2`（MIT/Apache-2.0，约 96 KB）；
@@ -122,8 +123,9 @@ make size            # 事后单独看体积
 图集：107 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
 1024×1300，WebP 约 315 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-09-29）：wasm 原始 3,722,184 B → `-Oz` 1,667,301 B（gzip 649,358 B）；
-dist 合计 2,124,656 B，逐文件 gzip 合计约 1.02 MB（WebP 已压缩，gzip 基本无收益）。
+当前体积（2026-09-29，合入 main 2121bf8 元素类之后）：wasm 原始 4,076,596 B → `-Oz` 1,738,656 B（gzip 674,788 B）；
+dist 合计 2,196,011 B，逐文件 gzip 合计约 1.05 MB（WebP 已压缩，gzip 基本无收益）。
+元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 lts-21.25 相同的版本
 （1.2.1.1 / 0.1.0.5，后者放宽了 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**

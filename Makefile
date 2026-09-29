@@ -59,7 +59,7 @@ run: ## 运行桌面版（stack run match3-sdl；需要显示器，环境变量�
 	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
 	cd "$(ROOT)" && exec $(NATIVE_ENV) stack run $(EXE)
 
-test-native: ## 核心规则测试（stack test，252 个；与桌面版共用）
+test-native: ## 核心规则测试（stack test；与桌面版共用）
 	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
 	cd "$(ROOT)" && $(NATIVE_ENV) stack test
 

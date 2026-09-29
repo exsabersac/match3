@@ -70,6 +70,8 @@ library:
   - Match3.Element.Registry
   - Match3.Element.Builtin
   - Match3.Element.Event
+  - Match3.Element.Class
+  - Match3.Element.Prototype
 
 executables:
   match3-sdl:

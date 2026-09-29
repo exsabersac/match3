@@ -57,6 +57,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element.Types` | `ElementDef`（一个元素的全部钩子）、`Slot`、`HitResult`、`AdjacentRule`、`EndRule`、`Counter`、`Placement`、`baseDef` | 调用顺序 |
 | `Match3.Element.Registry` | `Registry`（按层数组 O(1) 分派 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、各钩子的查询函数 `*With` | 具体元素 |
 | `Match3.Element.Builtin` | 全部内置元素的 `ElementDef` 与 `defaultRegistry` | 流水线 |
+| `Match3.Element.Class` | 元素类（xmonad LayoutClass 风格）：`Element`（带默认实现的能力方法，默认由 `archetype` 推出）、`SomeElement`、修饰器 `Modifier` / `Modified`、开放消息 `SomeMessage` / `fromMessage` | 具体元素 |
+| `Match3.Element.Prototype` | 阶段 1 原型：宝石 / 彩蛋 / 冰层的 instance 与解码、适配层 `bridgeBody` / `bridgeModifier`（instance → 旧 `ElementDef`） | 注册表 |
 | `Match3.Element.Event` | `EndEffect` / `SpreadKind` / `SnailMove`、`applyEndEffect`、效果事件 `EventKind` / `Event` | 帧与样式 |
 | `Match3.Core` | 再导出公共 API | 自身几乎无逻辑 |
 | `Match3.Board.Grid` | 坐标边界、读写格（`getCell` = `boardAt`，O(1)）、交换、相邻、可空盘面 `MBoard`（仍是行列表，只在一轮消除 / 沉降内部使用）、`randomColor` | 任何规则 |
@@ -286,6 +288,17 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Rainbow` / `Combos` / `Obstacles` / `Snail` 里的规则实现本身 | 实现仍在各自模块，只是改由 `Element.Builtin` 引用；旧的 `*Except` / `stepSnailAtBlocked` 保留为 `By isGem` / `By pushable` 的包装（测试与 `Board.Default` 在用） |
 | `LevelGoal` / `SpreadKind` | 封闭 ADT，被关卡表、目标判定、HUD / 标题文案穷举匹配；新元素用 `GoalNamed 名字 N` 作目标，不必再加构造器 |
 | 自定义元素不能是可匹配的有色宝石 | 需要让 `Custom` 参与匹配与补子生成，是新玩法，机制刀停期间不做 |
+
+### 元素类原型（阶段 1）
+
+元素框架正在从扁平的 `ElementDef` 记录改成 xmonad `LayoutClass` 风格的类型类（`Match3.Element.Class`）。阶段 1 只让三种元素走新机制，其余仍是旧记录，两者经适配层并存：
+
+- **宝石**（`PlainGem`，5 种里的普通宝石）：除 `name` / `toCell` 外全用默认方法——默认实现由 `archetype`（`Piece` / `Blocker` / `Fixed`，对应旧的 `gemDef` / `blocker` / `fixed` 模板）推出，颜色缺省取自写回的格子。直线 / 炸弹 / 彩虹是 `SpecialGem`，只覆盖洗牌保留、爆炸范围、成对交换规则与 `hintable`（彩虹不进普通匹配提示，阶段 2 用它替掉 `findHint` 里的 `isRainbow`）。
+- **彩蛋**（`SurpriseEgg`）：`archetype = Blocker`、`onHit = Destroy`、`open = 开启规则`。现行规则里彩蛋开一次就开出，没有跨轮状态，`GameState` 里也没有彩蛋专用字段，所以没有字段可以移进元素值；「状态在元素值里、受击返回新值」由测试专用元素「鸟窝」（剩余命中数）演示（`ec_state_lives_in_element_value`）。`GameState` 里真正的专用字段属于关卡级元素（飞碟 / 皮带 / 传送门 / 地毯），阶段 2 处理。
+- **冰层**（`Ice n`）：修饰器（`Modifier`，对应 LayoutModifier），`Modified` 把修饰器和里面的元素合成一个元素，组合规则与注册表逐层询问一致（挡匹配 / 挡交换任一层即挡，点火与命中自上而下第一个有意见的层决定，名字 / 颜色 / 计数取本体）。
+- **适配层**：`bridgeBody` / `bridgeModifier` 把 instance 桥接成旧 `ElementDef`（类型级字段取原型值，逐格字段先把格子解码成元素值再问），`builtinDefs` 按名字把这 7 个定义换成桥接版；旧记录留在 `legacyBuiltinDefs` 作对照。盘面仍以 `Cell` 存储，`toCell` 写回，解码函数是阶段 2「名字 → 构造器」注册表的雏形。
+
+等价性依据：金标准 2534 行全等；`ec_bridge_*` 逐字段 / 逐规则比对桥接版与旧记录；`ec_registry_paths_agree_in_play` 用旧记录注册表与新注册表在 40 关 × 种子 1–2 × 12 手上逐手比对提示、锤子与交换结果。
 
 ## 多游戏接口
 

@@ -10,13 +10,16 @@
 module Match3.Element.Builtin
   ( defaultRegistry
   , builtinDefs
+  , legacyBuiltinDefs
   , builtinLevelDefs
   , traceSnails
   ) where
 
 import Match3.Board.Grid (getCell, inBounds)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
+import Data.Maybe (fromMaybe)
 import Match3.Element.Event
+import Match3.Element.Prototype (prototypeDefs)
 import Match3.Element.Registry
 import Match3.Element.Types
 import Match3.Grass
@@ -66,9 +69,16 @@ builtinLevelDefs =
   , LevelDef "carpet" (HookCover coverCarpets)
   ]
 
--- | 全部内置定义（注册顺序 = 文档里的清单顺序）。
+-- | 全部内置定义（注册顺序 = 文档里的清单顺序）。元素类原型（阶段 1）：宝石 5 种、冰层、彩蛋
+-- 换成新机制经适配层桥接出的记录（Element.Prototype），其余仍是旧记录。
 builtinDefs :: [ElementDef]
-builtinDefs =
+builtinDefs = map swapIn legacyBuiltinDefs
+  where
+    swapIn d = fromMaybe d (lookup (edName d) [(edName p, p) | p <- prototypeDefs])
+
+-- | 旧的扁平记录（阶段 1 保留作对照：test/Spec/ElementClass.hs 比对新旧两条路径）。
+legacyBuiltinDefs :: [ElementDef]
+legacyBuiltinDefs =
   [ gemDef "gem" Normal Nothing
   , (gemDef "line_h" LineH (Just (\(r, _) -> [(r, c) | c <- [0 .. boardSize - 1]])))
       { -- 特殊 × 特殊合成（段 4 成对交换规则）：挂在直线上，规则本身检查两端（直线 / 炸弹 / 彩虹的组合）

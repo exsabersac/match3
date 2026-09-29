@@ -6,11 +6,13 @@
 --     与桌面版 SDL 外壳（app/UI/Plugin.hs）是同一条路径：前端只调 gameStep，这里只做序列化。
 --   * 每一步的表现数据全部来自 stepReport（Played）：回放脚本 pdTrace、效果事件 pdEvents、Outcome；
 --     规则只算一次（不再像 spike 初版那样 traceSwap + trySwap 各算一遍）。
---   * 输出是手写的最小 JSON（不引入 aeson，减小 wasm 体积与依赖面）。
+--   * 输出是手写的最小 JSON（Match3Web.Json，不引入 aeson，减小 wasm 体积与依赖面）。
+--   * 逐轮回放（ComboFx 阶段机）见 Match3Web.Anim；apiSwapAnim 额外返回建立回放所需的 AnimSeed。
 module Match3Web.Api
   ( WebGame
   , apiNew
   , apiSwap
+  , apiSwapAnim
   , apiUndo
   , apiState
   , apiLevels
@@ -22,16 +24,14 @@ module Match3Web.Api
   , jsonString
   ) where
 
-import Data.Char (ord)
-import Data.List (intercalate)
-import Numeric (showHex)
-
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
 import Match3.Core
 import Match3.Element.Event (Event(..))
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
 import Match3.Game.Trace (emptyTrace)
+import Match3Web.Anim (AnimSeed, seedOf)
+import Match3Web.Json
 
 -- ---------------------------------------------------------------------------
 -- 对外接口（被 WebMain 的 JSFFI 导出包装）
@@ -54,14 +54,18 @@ apiNew li seed =
 --   { ok, accepted, outcome, trace:{start,waves,end,final,shuffle}, events:[...], state }
 -- 被拒（NoMatch / InvalidSwap / 已结束）时 accepted=false、trace.waves 与 events 为空，状态不变（NoMatch 也不扣步）。
 apiSwap :: Pos -> Pos -> WebGame -> (WebGame, String)
-apiSwap p1 p2 = runStep (Act (Swap p1 p2))
+apiSwap p1 p2 h = let (h', _, j) = apiSwapAnim p1 p2 h in (h', j)
+
+-- | 同 apiSwap，另返回本步的回放输入（本步不需要回放时 Nothing，见 Match3Web.Anim.seedOf）。
+apiSwapAnim :: Pos -> Pos -> WebGame -> (WebGame, Maybe AnimSeed, String)
+apiSwapAnim p1 p2 = runStep (Act (Swap p1 p2))
 
 -- | 撤销一步（终局后也可撤销；没有历史时 accepted=false、状态不变）。JSON 形状同 apiSwap。
 apiUndo :: WebGame -> (WebGame, String)
-apiUndo = runStep Undo
+apiUndo h = let (h', _, j) = runStep Undo h in (h', j)
 
 -- | 执行一个动作：只调 gameStep，表现数据取自 stepReport。
-runStep :: Undoable Action -> WebGame -> (WebGame, String)
+runStep :: Undoable Action -> WebGame -> (WebGame, Maybe AnimSeed, String)
 runStep act h =
   let st = gameStep match3Shell h act
       h' = stepState st
@@ -74,6 +78,7 @@ runStep act h =
       -- 撤销没有报告：给一个「盘面不动」的空脚本，前端无需特判
       trace = encodeTrace (maybe (emptyTrace gs') pdTrace rep)
   in ( h'
+     , rep >>= seedOf (histNow h)
      , obj
          [ ("ok", "true")
          , ("accepted", bool (stepAccepted st))
@@ -122,6 +127,12 @@ encodeState h =
     , ("hint", maybe "null" encodePair (findHint (gsBoard gs)))
     , ("lastCleared", arr (map encodePos (gsLastCleared gs)))
     , ("ground", arr [obj [("p", encodePos p), ("name", str n), ("layers", int k)] | (p, (n, k)) <- gsGround gs])
+      -- 关卡级元素（棋盘底层 / 飞碟），渲染层按它们画传送带、传送门、地毯与飞碟
+    , ("belts", arr [arr (map encodePos b) | b <- gsBelts gs])
+    , ("portals", arr (map encodePair (gsPortals gs)))
+    , ("ufos", arr [obj [("p", encodePos (ufoCell u)), ("c", int (colorNum (ufoColor u)))] | u <- gsUfos gs])
+    , ("carpets", arr (map encodePos (levelCarpets (gsLevel gs))))
+    , ("carpetOpen", arr (map encodePos (gsCarpetOpen gs)))
     , ("board", encodeBoard (gsBoard gs))
     ]
   where
@@ -228,33 +239,61 @@ encodeEvent e =
     ]
 
 -- ---------------------------------------------------------------------------
--- 盘面编码：Board 按 boardRows 展开成行列表（行优先，8×8）
---   宝石：{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物或 null}
---   其他格：{"t":"X","s":"<核心 show 文本>","c":颜色或 0}
--- 渲染层只需按 t/c/k 画色块；非宝石格先用文字占位，完整版再逐种出图。
+-- 盘面编码：Board 按 boardRows 展开成行列表（行优先，8×8），每格一个结构化对象：
+--   宝石  {"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名或 null,"n":覆盖物层数}
+--         覆盖物名：grass / vine / choco / fog / chain / freeze / curtain / steam（无层数的为 0）
+--   其他  {"t":<元素>, ...}：stone/chest/honey/cake/safe {"n"}；balloon/bottle {"c"}；cookie / hat / surprise / spirit；
+--         maker {"c","n"}；snail {"dr","dc"}；flip {"c":正面,"b":背面}；countdown {"c","n"}；custom {"name","v"}
+--   每格另带 "s"（核心 show 文本，调试 / 未知元素占位用）。渲染层按 t 查表（www/cells.js，对应桌面 UI.CellTable）。
 
 encodeBoard :: Board -> String
 encodeBoard b = arr [arr (map encodeCell row) | row <- boardRows b]
 
 encodeCell :: Cell -> String
-encodeCell cell = case cell of
-  Gem c k ice ov ->
-    obj
-      [ ("t", str "G")
-      , ("c", int (colorNum c))
-      , ("k", str (kindCode k))
-      , ("i", int ice)
-      , ("o", maybe "null" (str . show) ov)
-      ]
-  Countdown c n -> other (colorNum c) ("Countdown " ++ show n)
-  Flip f _ -> other (colorNum f) (show cell)
-  Balloon c -> other (colorNum c) (show cell)
-  Bottle c -> other (colorNum c) (show cell)
-  Maker c _ -> other (colorNum c) (show cell)
-  Custom name v -> obj [("t", str "X"), ("c", int 0), ("s", str (name ++ " " ++ show v)), ("name", str name), ("v", int v)]
-  _ -> other 0 (show cell)
+encodeCell cell = obj (fields ++ [("s", str (show cell))])
   where
-    other c s = obj [("t", str "X"), ("c", int c), ("s", str s)]
+    t x = ("t", str x)
+    n k = ("n", int k)
+    col c = ("c", int (colorNum c))
+    fields = case cell of
+      Gem c k ice ov ->
+        [ t "G", col c, ("k", str (kindCode k)), ("i", int ice)
+        , ("o", maybe "null" (str . overlayName) ov), ("n", int (maybe 0 overlayLayers ov)) ]
+      Stone k -> [t "stone", n k]
+      Chest k -> [t "chest", n k]
+      Honey k -> [t "honey", n k]
+      Balloon c -> [t "balloon", col c]
+      Cookie -> [t "cookie"]
+      Cake k -> [t "cake", n k]
+      MagicHat -> [t "hat"]
+      Maker c k -> [t "maker", col c, n k]
+      Snail dr dc -> [t "snail", ("dr", int dr), ("dc", int dc)]
+      Safe k -> [t "safe", n k]
+      Flip f b -> [t "flip", col f, ("b", int (colorNum b))]
+      Surprise -> [t "surprise"]
+      Bottle c -> [t "bottle", col c]
+      TimeSpirit -> [t "spirit"]
+      Countdown c k -> [t "countdown", col c, n k]
+      Custom name v -> [t "custom", ("name", str name), ("v", int v)]
+
+overlayName :: CellOverlay -> String
+overlayName ov = case ov of
+  Grass -> "grass"
+  Vine -> "vine"
+  Choco -> "choco"
+  Fog _ -> "fog"
+  Chain _ -> "chain"
+  Freeze _ -> "freeze"
+  Curtain _ -> "curtain"
+  Steam -> "steam"
+
+overlayLayers :: CellOverlay -> Int
+overlayLayers ov = case ov of
+  Fog k -> k
+  Chain k -> k
+  Freeze k -> k
+  Curtain k -> k
+  _ -> 0
 
 colorNum :: Color -> Int
 colorNum c = fromEnum c + 1
@@ -272,35 +311,3 @@ encodePos (r, c) = arr [int r, int c]
 
 encodePair :: (Pos, Pos) -> String
 encodePair (a, b) = arr [encodePos a, encodePos b]
-
--- ---------------------------------------------------------------------------
--- 极简 JSON 构造器
-
-obj :: [(String, String)] -> String
-obj kvs = "{" ++ intercalate "," [str k ++ ":" ++ v | (k, v) <- kvs] ++ "}"
-
-arr :: [String] -> String
-arr xs = "[" ++ intercalate "," xs ++ "]"
-
-int :: Int -> String
-int = show
-
-bool :: Bool -> String
-bool True = "true"
-bool False = "false"
-
--- | 对外暴露的 JSON 字符串编码（WebMain 的错误信息用）。
-jsonString :: String -> String
-jsonString = str
-
--- | JSON 字符串转义；非 ASCII（中文关卡名等）原样输出，由 toJSString 负责 UTF-8。
-str :: String -> String
-str s = "\"" ++ concatMap esc s ++ "\""
-  where
-    esc '"' = "\\\""
-    esc '\\' = "\\\\"
-    esc '\n' = "\\n"
-    esc ch
-      | ord ch < 0x20 = "\\u" ++ pad4 (showHex (ord ch) "")
-      | otherwise = [ch]
-    pad4 h = replicate (4 - length h) '0' ++ h

@@ -11,9 +11,14 @@ build-type:         Simple
 
 executable match3-web
   main-is:          WebMain.hs
-  hs-source-dirs:   hs ../src
+  -- ../app 只取纯模块 ComboFx（逐轮回放阶段机，不依赖 SDL）；其余 app/ 模块不参与编译
+  hs-source-dirs:   hs ../src ../app
   other-modules:
     Match3Web.Api
+    Match3Web.Anim
+    Match3Web.Json
+    -- 桌面前端的纯表现逻辑（../app/ComboFx.hs）：网页与桌面共用同一条回放时间线
+    ComboFx
     -- 以下为核心模块（../src），与 package.yaml 的 library.exposed-modules 一致（通用层 Engine.* + 三消 Match3.*）
     Engine.Game
     Engine.Effect
@@ -66,4 +71,4 @@ executable match3-web
     -Wall -O2
     -no-hs-main
     -optl-mexec-model=reactor
-    "-optl-Wl,--export=m3New,--export=m3Swap,--export=m3Undo,--export=m3State,--export=m3Levels"
+    "-optl-Wl,--export=m3New,--export=m3Swap,--export=m3Undo,--export=m3State,--export=m3AnimStart,--export=m3AnimTick,--export=m3Levels"

@@ -50,6 +50,16 @@ fi
 "$(wasm32-wasi-ghc --print-libdir)/post-link.mjs" -i "$WASM_RAW" -o "$DIST/ghc_wasm_jsffi.js"
 cp "$HERE/www/"* "$DIST/"
 
+# 3b) 网页图集：从桌面资源 assets/ 重新打包成 2x WebP（atlas.webp + atlas.json + background.webp），
+#     资源或生成器变了才重新生成（约 9 秒），结果缓存在 web/.cache/art/。需要 Pillow（带 WebP）。
+ART="$HERE/.cache/art"
+if [ ! -f "$ART/atlas.webp" ] || [ ! -f "$ART/atlas.json" ] || [ ! -f "$ART/background.webp" ] \
+   || [ "$HERE/tools/gen_web_atlas.py" -nt "$ART/atlas.webp" ] \
+   || [ -n "$(find "$ROOT/assets" -newer "$ART/atlas.webp" -type f 2>/dev/null)" ]; then
+  python3 "$HERE/tools/gen_web_atlas.py" --assets "$ROOT/assets" --out "$ART"
+fi
+cp "$ART/atlas.webp" "$ART/atlas.json" "$ART/background.webp" "$DIST/"
+
 # 4) 浏览器 WASI 垫片（首次联网下载，之后用缓存）
 CACHE="$HERE/.cache/browser_wasi_shim-$WASI_SHIM_VERSION"
 if [ ! -f "$CACHE/index.js" ]; then
@@ -66,6 +76,11 @@ cp "$CACHE"/* "$DIST/vendor/browser_wasi_shim/"
 raw=$(stat -c %s "$WASM_RAW"); rawgz=$(gzip -9 -c "$WASM_RAW" | wc -c)
 opt=$(stat -c %s "$DIST/match3-web.wasm"); gz=$(gzip -9 -c "$DIST/match3-web.wasm" | wc -c)
 echo "wasm 原始 $raw 字节（gzip -9 后 $rawgz）；wasm-opt -Oz 后 $opt 字节（gzip -9 后 $gz）"
+total=0; totalgz=0
+while IFS= read -r f; do
+  total=$((total + $(stat -c %s "$f"))); totalgz=$((totalgz + $(gzip -9 -c "$f" | wc -c)))
+done < <(find "$DIST" -type f)
+echo "dist 合计 $total 字节（逐文件 gzip -9 后合计 $totalgz；WebP 本身已压缩，gzip 几乎无收益）"
 echo "产物在 $DIST"
 
 if [ "${1:-}" = "--serve" ]; then

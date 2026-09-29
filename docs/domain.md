@@ -1,6 +1,6 @@
 # 领域词汇（中英对照）
 
-与 `src/Match3/Types.hs`、`GameState` 及机制模块对齐。标识符保持英文；阅读文档时可用下表对照。
+与 `src/Match3/Types.hs`（第 6 刀起是 `Types/*.hs` 的门面）、`GameState`、关卡记录（`src/Match3/Levels/`）及机制模块对齐。标识符保持英文；阅读文档时可用下表对照。
 
 ## 棋盘与基本单位
 
@@ -125,7 +125,8 @@
 
 | 中文 | API | 说明 |
 |------|-----|------|
-| 关卡表 | `allLevels`（40：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」） | 名称中文；见 README 表；第 40 关是终章（过关为 `Won`） |
+| 关卡表 | `allLevels`（40：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」；`Match3.Levels.Campaign`） | 名称中文；见 README 表；第 40 关是终章（过关为 `Won`）；按下标取关用 `lookupLevel`（`Maybe`） |
+| 关卡记录 | `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` / `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`） | 第 6 刀：一关的全部数据（步数、目标、装饰放置表、皮带、传送门、飞碟、地毯、地面层）在同一条记录里 |
 | 选关解锁 | `unlockAfterOutcome` | 每日 `Won` **不**抬地图进度 |
 | 每日 | `newDailyGame` / `dailySeed` | 日期种子；10 种目标轮换 |
 | 三星 | `starRating start left` | ≥40% 印制步剩余 → 3★；≥15% → 2★；否则 1★ |

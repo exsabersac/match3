@@ -57,6 +57,7 @@ module Match3.Element.Registry
   , blastWith
   , hintableWith
   , endRules
+  , PlaceError(..)
   , placeWith
   , hitGroundWith
   , placeAllWith
@@ -78,6 +79,7 @@ module Match3.Element.Registry
   , coverWith
   ) where
 
+import Control.Monad (foldM)
 import Data.Array (Array, accumArray, bounds, inRange, (!))
 import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
@@ -420,15 +422,26 @@ hintableWith reg = hintable . bodyOf reg
 endRules :: Registry -> EndPhase -> [EndRule]
 endRules reg ph = [r | r <- regEnd reg, erPhase r == ph]
 
--- | 按名字放置一个元素到若干格（未注册的名字报错，关卡表写错名字应当立刻暴露）。
-placeWith :: Registry -> ElementName -> [Arg] -> Board -> [Pos] -> Board
-placeWith reg n args b0 ps = case lookupElement reg n of
-  Nothing -> error ("placeWith: unknown element " ++ n)
-  Just d -> foldl (\b p -> maybe b (setCell b p) (entryPlace d args (getCell b p))) b0 ps
+-- | 放置失败的原因（第 6 刀：placeWith 不再直接 error）。
+data PlaceError
+  = UnknownElement ElementName          -- ^ 注册表里没有这个名字
+  | PlaceOutOfBounds ElementName Pos    -- ^ 放置格不在盘面内
+  deriving (Eq, Show)
 
--- | 按顺序应用一张放置表。
-placeAllWith :: Registry -> Board -> [Placement] -> Board
-placeAllWith reg = foldl (\b (Place n args ps) -> placeWith reg n args b ps)
+-- | 按名字放置一个元素到若干格（按列表顺序逐格；元素的放置函数对某格返回 Nothing 时该格不变）。
+-- 未注册的名字 / 越界格返回 Left（静态关卡数据由 Game.Level.placeStatic 统一转成带关卡名的 error）。
+placeWith :: Registry -> ElementName -> [Arg] -> Board -> [Pos] -> Either PlaceError Board
+placeWith reg n args b0 ps = case lookupElement reg n of
+  Nothing -> Left (UnknownElement n)
+  Just d -> foldM (one d) b0 ps
+  where
+    one d b p
+      | not (inRange (bounds (boardArray b)) p) = Left (PlaceOutOfBounds n p)
+      | otherwise = Right (maybe b (setCell b p) (entryPlace d args (getCell b p)))
+
+-- | 按顺序应用一张放置表（遇到第一处失败即返回 Left）。
+placeAllWith :: Registry -> Board -> [Placement] -> Either PlaceError Board
+placeAllWith reg = foldM (\b (Place n args ps) -> placeWith reg n args b ps)
 
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
 -- 返回（新地面层，按计数名的去层数）。只有注册为地面层、且原型值有 'ground' 的名字会反应；

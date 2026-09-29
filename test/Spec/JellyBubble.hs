@@ -67,7 +67,7 @@ jb_jelly_goal_wins_on_last_layer = do
 -- | 洗牌不动果冻，撤销恢复层数。
 jb_jelly_keeps_on_shuffle_and_undo :: Assertion
 jb_jelly_keeps_on_shuffle_and_undo = do
-  let gs0 = newGameAtLevel 38 (levelConfig (allLevels !! 38)) 3
+  let gs0 = levelGame 38 3
       g0 = gsGround gs0
   assertEqual "16 double-layer tiles" 16 (length [() | (_, ("jelly", 2)) <- g0])
   let stS = gameStep M3E.match3Game gs0 M3E.Shuffle
@@ -129,8 +129,8 @@ jb_bubble_blocks_swap_falls_no_match = do
 jb_levels_appended :: Assertion
 jb_levels_appended = do
   assertEqual "40 levels" 40 (length allLevels)
-  let l39 = allLevels !! 38
-      l40 = allLevels !! 39
+  let l39 = levelAt 38
+      l40 = levelAt 39
   assertEqual "L39 goal" (goalCount (CountNamed "jelly") 32) (lvlGoal l39)
   assertEqual "L40 goal" (goalCount (CountNamed "bubble") 12) (lvlGoal l40)
   forM_ [1, 2, 3 :: Int] $ \seed -> do
@@ -140,8 +140,8 @@ jb_levels_appended = do
     assertEqual "L40 bubbles = goal" 12 (length (bubblesOn (gsBoard g40)))
     assertBool "L39 playable" (findHintWith defaultRegistry (gsBoard g39) /= Nothing)
     assertBool "L40 playable" (findHintWith defaultRegistry (gsBoard g40) /= Nothing)
-  assertBool "earlier levels have no ground" (all (\li -> null (gsGround (newGameAtLevel li (levelConfig (allLevels !! li)) 1))) [0 .. 37])
-  assertBool "earlier levels have no bubbles" (all (\li -> null (bubblesOn (gsBoard (newGameAtLevel li (levelConfig (allLevels !! li)) 1)))) [0 .. 37])
+  assertBool "earlier levels have no ground" (all (\li -> null (gsGround (levelGame li 1))) [0 .. 37])
+  assertBool "earlier levels have no bubbles" (all (\li -> null (bubblesOn (gsBoard (levelGame li 1)))) [0 .. 37])
 
 -- | 主流程没有为这两个元素改代码：规则流水线与通用层源码里没有 "jelly" / "bubble"；它们只出现在
 -- 元素定义（Element.Builtin）和关卡数据（Types 的关卡表、Game.Level 的放置 / 地面表）里。

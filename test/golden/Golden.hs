@@ -22,6 +22,7 @@ import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint)
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
 import Match3.Counts (CounterKey(..), colorBag, countOf, namedCounts)
@@ -39,6 +40,8 @@ import Match3.Game.Outcome
 import Match3.Game.Shuffle
 import Match3.Game.State
 import Match3.Game.Trace
+import Match3.Levels.Campaign (allLevels, lookupLevel)
+import Match3.Levels.Level (Level, levelConfig)
 import Match3.Types
 import Match3.Ufo (Ufo(..), mkUfo)
 import Numeric (showHex)
@@ -47,9 +50,11 @@ import System.Random (StdGen, mkStdGen)
 -- | 生成器入口：ghc -main-is Golden（见 regen.sh）。
 -- | 战役第 1 关（关卡表为空时直接报错）。
 firstLevel :: Level
-firstLevel = case allLevels of
-  (l : _) -> l
-  [] -> error "firstLevel: allLevels is empty"
+firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
+
+-- | 第 li 关（0 基）按该关步数与目标、给定种子开局；没有这一关直接报错（第 6 刀：取代 allLevels !! li）。
+levelGame :: Int -> Int -> GameState
+levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
 main :: IO ()
 main = mapM_ putStrLn goldenLines
@@ -339,7 +344,7 @@ campaign38 = 38
 goldenLines :: [String]
 goldenLines =
   concat
-    [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (newGameAtLevel li (levelConfig (allLevels !! li)) seed) 15
+    [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
     | li <- [0 .. campaign38 - 1]
     , seed <- [1, 2 :: Int]
     ]
@@ -358,7 +363,7 @@ handmade :: [String]
 handmade =
   let base = newGame defaultConfig 7
       snailGs = base {gsBoard = setCell (setCell (gsBoard base) (0, 0) (Snail 0 (-1))) (3, 3) (Snail 0 1)}
-      chocoGs = newGameAtLevel 4 (levelConfig (allLevels !! 4)) 1
+      chocoGs = levelGame 4 1
       comboGs =
         case [ gs0 | seed <- [1 .. 400 :: Int], let gs0 = newGameAtLevel 0 (levelConfig firstLevel) seed
              , Just (p1, p2) <- [findHint (gsBoard gs0)], let (gs1, out) = trySwap p1 p2 gs0, out /= NoMatch, gsCombo gs1 >= 3 ] of
@@ -420,11 +425,11 @@ levelLines =
   [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
   | li <- [0 .. campaign38 - 1]
   , s <- [0, 5, 99 :: Int]
-  , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
+  , let gs = levelGame li s
   ]
-    ++ [ "R" ++ pad2 (li + 1) ++ " s" ++ show s ++ " restart " ++ pState (startHistory (restartLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) s))
+    ++ [ "R" ++ pad2 (li + 1) ++ " s" ++ show s ++ " restart " ++ pState (startHistory (restartLevel (levelGame li 1) s))
        | li <- [0, 10, 27, 35], s <- [4, 8 :: Int] ]
-    ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (startHistory (nextLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) 4))
+    ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (startHistory (nextLevel (levelGame li 1) 4))
        | li <- [0, 10, 27] ]
 
 --------------------------------------------------------------------------------
@@ -450,7 +455,7 @@ longRun gs = gs {gsGoal = goalScore 100000, gsMoves = 30}
 -- 蜗牛、将归零的倒计时和饼干）。锁住「步末之后是否还要补结算」这一处的现有行为。
 h4Gs :: GameState
 h4Gs =
-  let base = longRun (newGameAtLevel 27 (levelConfig (allLevels !! 27)) 3)
+  let base = longRun (levelGame 27 3)
       b0 = gsBoard base
       cells =
         [ layered b0 (5, 1) C1 0 (Just Vine), layered b0 (5, 2) C2 0 (Just Vine)
@@ -465,7 +470,7 @@ h4Gs =
 -- | H5：多种叠层同格（冰 × 锁链 / 草 / 迷雾 / 冰冻 / 窗帘 / 藤 / 巧 / 蒸汽，含特殊块），压在第 37 关的地毯上。
 h5Gs :: GameState
 h5Gs =
-  let base = longRun (newGameAtLevel 36 (levelConfig (allLevels !! 36)) 3)
+  let base = longRun (levelGame 36 3)
       b0 = gsBoard base
       cells =
         [ layered b0 (3, 2) C1 2 (Just (Chain 1)), layered b0 (3, 3) C2 1 (Just Grass)
@@ -481,7 +486,7 @@ h5Gs =
 -- | H6 的开局：第 28 关再放直线 / 炸弹 / 冰宝石 / 石头（洗牌必须原样保留的格）。
 h6Gs :: GameState
 h6Gs =
-  let base = longRun (newGameAtLevel 27 (levelConfig (allLevels !! 27)) 5)
+  let base = longRun (levelGame 27 5)
       b0 = gsBoard base
       cells =
         [ ((2, 2), Gem C1 LineH 0 Nothing), ((5, 5), Gem C2 Bomb 0 Nothing)
@@ -568,12 +573,12 @@ runGame5 tag gs0 n =
 seg5Lines :: [String]
 seg5Lines =
   concat
-    [ runGame5 ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (newGameAtLevel li (levelConfig (allLevels !! li)) seed) 15
+    [ runGame5 ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
     | li <- [campaign38 .. length allLevels - 1]
     , seed <- [1, 2 :: Int]
     ]
     ++ [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " " ++ pExt (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
        | li <- [campaign38 .. length allLevels - 1]
        , s <- [0, 5, 99 :: Int]
-       , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
+       , let gs = levelGame li s
        ]

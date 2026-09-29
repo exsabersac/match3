@@ -72,7 +72,7 @@ mapHitTest :: Int32 -> Int32 -> Maybe Int
 mapHitTest mx my =
   let hits =
         [ i
-        | i <- [0 .. length allLevels - 1]
+        | i <- [0 .. levelCount - 1]
         , let (nx, ny) = mapNodePos i
               r = 22 :: CInt
         , fromIntegral mx >= nx - r
@@ -103,7 +103,7 @@ drawLevelMap ren app
           drawBannerWord ren 20 (ny - 32) 2 (V4 160 190 220 255) lab
       -- Path lines between consecutive nodes (skip visual break at chapter edges)
       rendererDrawColor ren $= V4 60 80 100 255
-      forM_ [0 .. length allLevels - 2] $ \i -> do
+      forM_ [0 .. levelCount - 2] $ \i -> do
         let (x0, y0) = mapNodePos i
             (x1, y1) = mapNodePos (i + 1)
         drawLine ren (P (V2 x0 y0)) (P (V2 x1 y1))
@@ -147,7 +147,7 @@ drawLevelMapArt ren art app
         rendererDrawColor ren $= V4 110 100 190 160
         fillRect ren (Just (rect 16 (ny - 36) (winW - 32) 1))
       rendererDrawColor ren $= V4 140 130 220 200
-      forM_ [0 .. length allLevels - 2] $ \i -> do
+      forM_ [0 .. levelCount - 2] $ \i -> do
         let (x0, y0) = mapNodePos i
             (x1, y1) = mapNodePos (i + 1)
         forM_ [-1, 0, 1] $ \d -> drawLine ren (P (V2 x0 (y0 + d))) (P (V2 x1 (y1 + d)))

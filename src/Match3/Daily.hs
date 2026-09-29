@@ -8,6 +8,7 @@ module Match3.Daily
   ) where
 
 import Match3.Counts (CounterKey(..))
+import Match3.Levels.Level (Level, level)
 import Match3.Types
 
 -- | Deterministic seed from YYYY-MM-DD (local calendar ints).
@@ -35,12 +36,7 @@ dailyConfig year month day =
 dailyLevel :: Int -> Int -> Int -> Level
 dailyLevel year month day =
   let cfg = dailyConfig year month day
-  in Level
-       { lvlIndex = 0
-       , lvlName = "每日"
-       , lvlMoves = cfgMoves cfg
-       , lvlGoal = cfgGoal cfg
-       }
+  in level 0 "每日" (cfgMoves cfg) (cfgGoal cfg)
 
 -- | Stars from moves left vs starting moves (3 = plenty left, 1 = clutch).
 -- Optional 开心消消乐-style clear rating; pure, no API shape change.

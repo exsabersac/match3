@@ -39,8 +39,8 @@ import UI.Types
 drawHudArt :: Renderer -> Art -> App -> IO ()
 drawHudArt ren art app = do
   let gs = appGame app
-      li = min (gsLevel gs) (length allLevels - 1)
-      lvl = allLevels !! li
+      li = min (gsLevel gs) (levelCount - 1)
+      mlvl = lookupLevel li
       white = V4 245 245 255 255
       dim = V4 150 145 190 255
       gold = V4 255 214 90 255
@@ -53,8 +53,8 @@ drawHudArt ren art app = do
     else zhA ren art ("name_" ++ show li) 66 11 24
   -- 关卡进度点：已过绿、当前金、未解锁暗
   -- 间距 6（38 关时与段 5 之前逐像素相同）；关卡更多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
-  let dotStep = min 6 (228 `div` max 1 (length allLevels)) :: Int
-  forM_ [0 .. length allLevels - 1] $ \i -> do
+  let dotStep = min 6 (228 `div` max 1 levelCount) :: Int
+  forM_ [0 .. levelCount - 1] $ \i -> do
     let xD = 66 + fromIntegral (i * dotStep)
         (col, yy, hh)
           | i == li = (V4 255 214 90 255, 38, 10)
@@ -82,7 +82,7 @@ drawHudArt ren art app = do
   meterA ren art 42 53 332 prog targ (goalTint goal) (show prog ++ "/" ++ show targ)
   -- 步数条（≤5 步时变红并闪烁）
   let mv = gsMoves gs
-      moveCap = max mv (lvlMoves lvl)
+      moveCap = max mv (maybe mv lvlMoves mlvl)
       low = mv <= 5
       tintMv
         | low = let k = round (160 + 95 * breathe (appPulse app) 40) :: Int in V3 255 (fromIntegral (k `div` 2)) 80

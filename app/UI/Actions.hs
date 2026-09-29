@@ -40,7 +40,7 @@ import UI.Types
 updateTitle :: Window -> App -> IO ()
 updateTitle window app = do
   let gs = appGame app
-      lvl = allLevels !! min (gsLevel gs) (length allLevels - 1)
+      levelName = maybe "?" lvlName (lookupLevel (min (gsLevel gs) (levelCount - 1)))
       status = case gsOver gs of
         Just (Won s) -> " CLEAR! score=" <> show s
         Just (LevelClear s n) -> " LEVEL UP ->" <> show (n + 1) <> " score=" <> show s
@@ -64,7 +64,7 @@ updateTitle window app = do
           "L"
             ++ show (gsLevel gs + 1)
             ++ " "
-            ++ lvlName lvl
+            ++ levelName
             ++ "  "
             ++ goalBits
             ++ "  moves="
@@ -244,7 +244,7 @@ advanceOrMsg ref window = do
     Just (LevelClear _ n) -> do
       let gs = nextLevel (appGame app) seed
           -- Stars rate vs printed level moves; carry must not inflate the denominator.
-          baseMoves = lvlMoves (allLevels !! gsLevel gs)
+          baseMoves = maybe (gsMoves gs) lvlMoves (lookupLevel (gsLevel gs))
           app' =
             (freshLevelUi gs app)
               { appMsg = "Next level!"
@@ -253,14 +253,13 @@ advanceOrMsg ref window = do
               }
       writeIORef ref app'
       updateTitle window app'
-    Just (Won _) -> case allLevels of
+    Just (Won _) -> case campaignGame 0 seed of
       -- 通关后从第 1 关重开（关卡表恒非空；空表时不动）
-      lvl0 : _ -> do
-        let gs = newGameAtLevel 0 (levelConfig lvl0) seed
-            app' = (freshLevelUi gs app) { appMsg = "New campaign" }
+      Just gs -> do
+        let app' = (freshLevelUi gs app) { appMsg = "New campaign" }
         writeIORef ref app'
         updateTitle window app'
-      [] -> pure ()
+      Nothing -> pure ()
     Just (Lost _) -> do
       let gs0 = appGame app
           gs =

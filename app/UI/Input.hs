@@ -356,17 +356,16 @@ mapClick ref window app0 mx0 my0 =
   case mapHitTest mx0 my0 of
     Just li ->
       case mapClickJump (gsLevel (appGame app0)) (appMaxReached app0) li of
-        Just jump -> do
+        Just jump | Just lvl <- lookupLevel jump -> do
           seed <- randomIO
-          let lvl = allLevels !! jump
-              gs = newGameAtLevel jump (levelConfig lvl) seed
+          let gs = newGameAtLevel jump (levelConfig lvl) seed
           commit ref window
             (freshLevelUi gs app0)
               { appMapOpen = False
               , appMsg = "Map -> L" <> T.pack (show (jump + 1)) <> " " <> T.pack (lvlName lvl)
               , appMaxReached = max (appMaxReached app0) jump
               }
-        Nothing ->
+        _ ->
           -- Same level / locked: close map and resume (keep mid-level progress)
           commit ref window app0 { appMapOpen = False, appMsg = helpKeysMsg }
     Nothing ->

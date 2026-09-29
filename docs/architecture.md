@@ -30,7 +30,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
                                             ▼
  Match3.Element（元素框架：Types / Registry / Builtin / Event；默认注册表 defaultRegistry）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
- Match3.Types（类型 / 关卡表；Board = Array 盘面）  Match3.Goal（目标数据，第 5 刀）
+ Match3.Levels.Campaign（40 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
+ Match3.Types（门面，再导出 Types.Cell / Overlay / Body / Board / Game；第 6 刀拆分）  Match3.Goal（目标数据，第 5 刀）
    └─ Match3.Counts（计数键与 Counts，第 4 刀） ← Match3.Color（颜色，第 5 刀从 Types 拆出）
  （纯函数机制模块；无 IO）
 
@@ -44,6 +45,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 - `Core` 把各子模块符号汇总导出，便于前端与测试只 import 一处。第三刀删掉了 `Match3.Board` / `Match3.Game` 两个外观模块：Game 子模块、`Core`、测试直接 import 各子模块。
 - 子模块之间单向依赖、无环（下文 `A ← B` 表示 B 依赖 A）：Board 内 `Grid ← Match ← Clear`、`Grid ← Gravity`、`Match ← Random`，`Cascade` 依赖 Grid / Match / Clear / Gravity；Game 内 `State ← Outcome / Shuffle / Trace`、`Shuffle ← Level`，`Resolve`（公共结算）依赖 State / Tally / Outcome / Shuffle / Trace，`Move` / `Boosters` 只做校验与起手选择、依赖 `Resolve`。Game 子模块直接 import 所需的 Board 子模块。
 - 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types`、`Element.Message` → `Element.Class`（元素类）→ `Element.Registry` → `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过注册表查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
+- 类型层（第 6 刀拆分）：`Match3.Color ← Types.Cell ← Types.Overlay / Types.Body`、`Types.Cell ← Types.Board ← Types.Game`（`Types.Game` 另依赖 `Match3.Goal`），`Match3.Types` 只再导出这五个模块（导出列表与拆分前相同，只少了移走的关卡表）；关卡层 `Levels.Level ← Levels.Campaign` 在 `Types` / `Element.Types`（放置表）/ `Ufo` / `Conveyor`（`Belt`）之上、`Game.Level` / `Daily` / `Game.Outcome` 之下。
 - 机制子模块（障碍、彩虹、合成、冰、草系、地毯、蜗牛、飞碟、倒计时、传送带、道具种子、每日）尽量只依赖 `Types`（及彼此必要的窄依赖），由 `Board.*` / `Game.*` 编排调用顺序。
 - 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/ComboFx.hs`（纯阶段机，按时间线把它拆成帧）→ `UI.Playback`（阶段事件 → 弹字 / 粒子 / 震屏）→ `UI.Cascade` / `UI.EndStage`（绘制）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
 
@@ -53,7 +55,14 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
-| `Match3.Types` | `Color`（定义在 `Match3.Color`，这里再导出） / `GemKind` / `CellOverlay` / `CellContents`（含 `Custom 名字 值`，供注册表扩展元素）、构造器与谓词、`Outcome` / `allLevels`（关卡目标用 `Match3.Goal` 的构造函数写，并再导出其 API）；`Board = Board (Array (Int,Int) Cell)`（O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard` 等；`Show` 按行列表打印，与旧列表盘输出相同） | 连锁、交换、IO |
+| `Match3.Types` | 门面（第 6 刀起无实现）：再导出下面五个 `Types.*` 模块、`Match3.Color` 与 `Match3.Goal` 的 API，导出列表与拆分前相同（关卡表移到 `Match3.Levels.*`） | 连锁、交换、IO |
+| `Match3.Types.Cell` | `GemKind` / `CellOverlay` / `CellContents`（含 `Custom 名字 值`，供注册表扩展元素）/ `Cell`，宝石构造与格子取值（`mkGem` / `cellColor` / `cellKind` / `isGem` / `isCustom` …） | 叠层与本体的具体构造器 |
+| `Match3.Types.Overlay` | 叠层（草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）的构造、谓词与层数，`setOverlay` / `clearOverlay` | 叠层的清除与蔓延（`Match3.Grass`） |
+| `Match3.Types.Body` | 本体（石头 / 宝箱 / 蜂蜜 / 气球 / 饼干 / 蛋糕 / 魔法帽 / 果汁机 / 蜗牛 / 保险箱 / 双面 / 彩蛋 / 瓶子 / 精灵 / 倒计时）的构造、谓词与层数 | 本体的反应（`Element.Builtin.*`） |
+| `Match3.Types.Board` | `Pos`、`Board = Board (Array (Int,Int) Cell)`（O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard` 等；`Show` 按行列表打印，与旧列表盘输出相同）、`boardSize` | 可变盘（`Board.Grid`） |
+| `Match3.Types.Game` | `Score` / `MovesLeft` / `TargetScore`、`Outcome`、地面层 `Ground`、`GameConfig` / `defaultConfig` | 关卡表 |
+| `Match3.Levels.Level` | 第 6 刀：关卡记录 `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` 与原先分散在按下标 case 的并行表里的 `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`）、`level`（不带装饰的关）、`levelConfig`、放置表辅助 `placeEach` / `layersAt` | 放置表的解释（`Game.Level`） |
+| `Match3.Levels.Campaign` | 第 6 刀：40 关 `allLevels`（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
@@ -84,7 +93,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Game.Tally` | 结算计数辅助：颜色袋、保险箱 / 时间精灵计数、地毯腾空格 | 结局判定 |
 | `Match3.Game.Outcome` | 目标满足、`decideOutcome`、`checkOutcome`、选关解锁、地图跳转、失败提示 | 盘面 |
 | `Match3.Game.Shuffle` | 保装饰洗牌 `shuffleGame`、自动洗牌 `ensurePlayable` | 回放（洗牌不在 `mtEnd`） |
-| `Match3.Game.Level` | 开局 / 每日 / 重开 / 下一关、战役装饰 `decorateLevel`、皮带 / 传送门 / 飞碟布局、步数携带 | 走步 |
+| `Match3.Game.Level` | 开局 / 每日 / 重开 / 下一关（越界的关卡下标夹到关卡表范围）、`campaignGame :: Int -> Int -> Maybe GameState`、按关卡记录铺装饰 `decorateLevel`（皮带 / 传送门 / 飞碟 / 地毯 / 地面层取自记录）、目标补齐 `ensureGoalDecor`、步数携带；放置表返回 `Either PlaceError`，静态数据在 `placeStatic` 这一处转成带关卡名的 error | 关卡数据（`Levels.Campaign`）、走步 |
 | `Match3.Game.Trace` | `MoveTrace`（含 `mtGen` / `mtShuffle`）/ `EndStep`（`EndEffect` 等再导出自 `Element.Event`）、`traceSpreads`（跑注册表的蔓延规则）、`beltMoves`（再导出自 `Conveyor`）、效果事件 `traceEvents` | 结算 |
 | `Match3.Game.Resolve` | 交换与三种道具的**公共结算** `resolveMove`：主连锁 → 步末（交换：倒计时 / 皮带 / 蔓延 / 蜗牛 / 再连锁；道具：蔓延）→ 计数与目标 → 结局 → 自动洗牌，同时产出 `MoveTrace` | 入口校验（在 `Move` / `Boosters`） |
 | `Match3.Game.Move` | `resolveSwap`（校验 + 起手选择）及其投影 `trySwap`（= `runMove`）/ `traceSwap` | 道具 |
@@ -94,7 +103,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Combos` | 特殊×特殊合成种子 | 普通三消 |
 | `Match3.Ice` | 匹配时削冰层 | overlay（Freeze/Chain…） |
 | `Match3.Grass` | 草/藤/巧/雾/链/冻/帘/蒸汽的清除与蔓延 | 蜗牛爬行 |
-| `Match3.Carpet` | 地毯覆盖计数、关卡地毯布局 | 饼干底行收集逻辑（在 `Board.Gravity` / `Game.Tally`） |
+| `Match3.Carpet` | 地毯覆盖计数（各关的地毯布局第 6 刀起在关卡记录 `lvlCarpets` 里） | 饼干底行收集逻辑（在 `Board.Gravity` / `Game.Tally`） |
 | `Match3.Snail` | 蜗牛一步爬行 / 掉头 | 步末其它效果编排 |
 | `Match3.Ufo` | 飞碟吸色目标与移格 | 棋盘清除（由 `Board.Clear` 掩码后清） |
 | `Match3.Countdown` | 倒计时 tick / 归零爆炸种子 | 爆炸后连锁（`Board.Cascade`） |
@@ -222,7 +231,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 **修饰器**（`Modifier`，对应 xmonad 的 `LayoutModifier`）：冰层（`Ice 层数`）和八种叠层（`GrassL` / `VineL` / `ChocoL` / `FogL` / `ChainL` / `FreezeL` / `CurtainL` / `SteamL`）。`Modified` 把修饰器和里面的元素合成一个元素：挡匹配 / 挡交换任一层即挡；点火与命中自上而下第一个有意见的层决定；名字 / 颜色 / 计数 / 下落等取本体；有上层就洗牌保留。一格解码为「冰 → 叠层 → 本体」的嵌套 `Modified`。
 
-**注册表条目**（`Registry.Entry`，名字 → 构造器）：`bodyEntry 原型 解码 放置`（内置本体；槽号由原型推导 = `cellSlot (toCell 原型)`）、`customEntry 原型 (Int → 元素)`（`Custom 名字 k`）、`modifierEntry 原型 解码 放置`（冰 / 叠层；槽位由原型写到裸宝石上的结果推导：叠层 → `SlotOverlay (overlaySlot …)`，冰 → `SlotIce`）、`groundEntry 原型`（地面层）、`inertEntry 名字`（`Inert`：挡交换、无色、会下落、打不动、洗牌保留的惰性占格，即旧 `baseDef` 的等价物；未注册的 `Custom` 名字也按它处理）。建表：`mkRegistry`（总函数：同名 / 同槽以后出现的为准，分派数组边界由条目的槽号算出，查不到的槽号退回惰性占格）；`mkRegistryChecked :: [Entry] -> Either [RegistryError] Registry` 把重名（`DuplicateName`）、槽位冲突（`DuplicateSlot`）、推不出槽位（`NoSlot`，原型写回 `Custom` 或修饰器不落任何层）暴露成值，内置条目表由测试 `ec_registry_checked_slots` 保证通过检查。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）。
+**注册表条目**（`Registry.Entry`，名字 → 构造器）：`bodyEntry 原型 解码 放置`（内置本体；槽号由原型推导 = `cellSlot (toCell 原型)`）、`customEntry 原型 (Int → 元素)`（`Custom 名字 k`）、`modifierEntry 原型 解码 放置`（冰 / 叠层；槽位由原型写到裸宝石上的结果推导：叠层 → `SlotOverlay (overlaySlot …)`，冰 → `SlotIce`）、`groundEntry 原型`（地面层）、`inertEntry 名字`（`Inert`：挡交换、无色、会下落、打不动、洗牌保留的惰性占格，即旧 `baseDef` 的等价物；未注册的 `Custom` 名字也按它处理）。建表：`mkRegistry`（总函数：同名 / 同槽以后出现的为准，分派数组边界由条目的槽号算出，查不到的槽号退回惰性占格）；`mkRegistryChecked :: [Entry] -> Either [RegistryError] Registry` 把重名（`DuplicateName`）、槽位冲突（`DuplicateSlot`）、推不出槽位（`NoSlot`，原型写回 `Custom` 或修饰器不落任何层）暴露成值，内置条目表由测试 `ec_registry_checked_slots` 保证通过检查。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）；第 6 刀起 `placeWith` / `placeAllWith` 返回 `Either PlaceError Board`（`UnknownElement 名字` / `PlaceOutOfBounds 名字 格`），内置关卡与每日挑战全部放置成功由 `level_placements_all_right` / `daily_placements_all_right` 锁定。
 
 **关卡级元素**（`LevelElement`：`levelName`、`levelReply :: l -> SomeMessage -> Maybe SomeMessage`）：飞碟 / 皮带 / 传送门 / 地毯。主流程在固定的流水线节拍上发消息，关卡级元素自己决定回复哪条（`Registry.askLevel`，取第一个类型对得上的回复）：
 
@@ -278,7 +287,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 |------|-------------|------|------|
 | 注册表下传到底 | `Board.*With reg`；旧名在 `Board.Default` | Board 层不依赖内置表 | `ext_board_modules_take_registry`（源码扫描） |
 | 按名字的目标 | `LevelGoal` 新增 `GoalNamed 名字 N`（第 5 刀起写作 `goalCount (CountNamed 名字) N`；读 `gsCount (CountNamed 名字)`，由 `counter` / `diffCounter = CountNamed 名字` 累加）；HUD / 标题 / 失败提示 / 选关已接 | 自定义元素当关卡目标 | `ext_goal_named_counts_crate` |
-| 地面层 | `SlotGround` + `groundRule` + `gsGround`（`Level.levelGround`） | 果冻类「格子下面的层」 | `ext_ground_layer_test_element` |
+| 地面层 | `SlotGround` + `groundRule` + `gsGround`（关卡记录的 `lvlGround`） | 果冻类「格子下面的层」 | `ext_ground_layer_test_element` |
 | 边缘收集 | `drains :: e -> [Edge]` | 任意方向的收集物 | `ext_edge_drain_side_collectible` |
 | 步末补结算 | `EndRule.erHoles` + `Cascade.cascadeAfterWith (AfterEnd …)` | 步末阶段挖掉格子后的沉降 / 补子 / 再连锁 | `ext_post_end_settle_hole_element` |
 | 洗牌走注册表 | `Game.Shuffle.shuffleGameWith reg`、`Game.State.applyHintWith reg`（`Engine.playWith` 的 Shuffle / Hint 分支） | 自定义元素的洗牌保留 / 提示 | `ext_manual_shuffle_keeps_crate_via_engine` |
@@ -290,7 +299,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 1. 选层：本体用 `Custom "名字" 值`（值自定义，例如耐久；存储编码只能是一个 `Int`）；格子下面的层用 `SlotGround`（放进 `gsGround`）；需要新的内置层时才动 `Types`。
 2. 写 instance：定义一个类型（状态放在值里），写 `instance Element 类型`（测试 / 扩展元素写在自己的模块里；新的**内置**元素放进 `src/Match3/Element/Builtin/` 下功能最接近的分组文件——宝石 `Gem`、冰 / 叠层 `Layer`、打破型障碍 `Obstacle`、收集计数 `Collectible`、会动 / 会生成的 `Actor`、地面层 `Ground`、关卡级 `Level`——条目函数写在同一文件，跨分组共用的辅助放 `Common`；再在 `Element.Builtin.builtinDefs` 末尾追加条目，已有条目不要重排），只写 `name` / `toCell` 和要改的方法（例如 `archetype`、`onHit`、`adjacentRule`、`counter`、`falls`、`drains`、`groundRule`、`color`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层类写 `instance Modifier`；不在格子里的机制写 `instance LevelElement`，回复流水线节拍消息（或自定义新消息）。
    - 只经注册表即可接入的类别：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留，也可以是按颜色匹配的有色棋子：给 `color`、原型 `Piece`，见 `ec_custom_matchable_gem`）、叠层与冰的命中规则、地面层、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素、成对交换规则（`swapRule`）、开启类元素（`openRule`）、可被改色 / 推动（`recolorable` / `pushable`）、不进普通匹配提示（`hintable`）、在已有节拍上反应的关卡级元素（`LevelElement`，见 `ec_level_elements_by_message`）。
-   - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：地面层 + `groundRule` + `CountNamed`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` + `onHit` + `adjacentRule` + `CountNamed`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Types.allLevels` / `Game.Level` 的放置 / 地面表里，主流程没有改动（`jb_main_flow_untouched_scan`）。
+   - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：地面层 + `groundRule` + `CountNamed`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` + `onHit` + `adjacentRule` + `CountNamed`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。
    - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）、补子时生成自定义棋子。
 3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 里加一行（关卡级元素加进 `builtinLevelDefs`）；测试 / 扩展元素 = `register (customEntry 原型 (Int → 元素)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevel 值)`），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由条目的放置函数落格（`customEntry` 缺省 = `Custom 名字 第一个整数参数`；要别的解析用 `customEntryWith`）。

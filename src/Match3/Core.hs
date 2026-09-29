@@ -154,7 +154,11 @@ module Match3.Core
   , GameConfig(..)
   , defaultConfig
   , Level(..)
+  , level
   , allLevels
+  , lookupLevel
+  , levelCount
+  , clampLevelIndex
   , levelConfig
   , getCell
   , setCell
@@ -190,6 +194,7 @@ module Match3.Core
   , colorBag
   , newGame
   , newGameAtLevel
+  , campaignGame
   , newDailyGame
   , trySwap
   , MoveFx(..)
@@ -295,7 +300,9 @@ import Match3.Grass
   , spreadChoco
   , spreadSteam
   )
-import Match3.Carpet (coverCarpets, levelCarpets)
+import Match3.Carpet (coverCarpets)
+import Match3.Levels.Campaign (allLevels, clampLevelIndex, levelCarpets, levelCount, lookupLevel)
+import Match3.Levels.Level (Level(..), level, levelConfig)
 import Match3.Snail
   ( stepSnails
   , stepSnailsAvoiding

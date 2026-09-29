@@ -102,7 +102,7 @@ envStartLevel :: IO Int
 envStartLevel = do
   v <- lookupEnv "MATCH3_LEVEL"
   pure $ case v >>= readMaybe of
-    Just n | n >= 1 && n <= length allLevels -> n - 1
+    Just n | n >= 1 && n <= levelCount -> n - 1
     _ -> 0
 
 -- | 开发 / 复现用：MATCH3_SEED=N 固定开局随机种子（便于 Xvfb 下按固定坐标复现问题）；

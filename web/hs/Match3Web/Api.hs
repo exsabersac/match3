@@ -47,7 +47,7 @@ webState = histNow
 -- | 新开一局：关卡序号（0 起）+ 随机种子。越界关卡号夹到合法范围。
 apiNew :: Int -> Int -> (WebGame, String)
 apiNew li seed =
-  let i = max 0 (min (length allLevels - 1) li)
+  let i = clampLevelIndex li
       h = gameNew match3Shell (Campaign i) seed
   in (h, obj [("ok", "true"), ("state", encodeState h)])
 
@@ -138,9 +138,7 @@ encodeState h =
     ]
   where
     gs = histNow h
-    levelName i = case [lvlName l | l <- allLevels, lvlIndex l == i] of
-      (n : _) -> n
-      [] -> "?"
+    levelName i = maybe "?" lvlName (lookupLevel i)
 
 -- | 目标进度（第 5 刀：即核心 gsProgress，与桌面 HUD / 标题同一个数；由目标数据统一算）。
 progress :: GameState -> Int

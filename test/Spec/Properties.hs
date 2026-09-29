@@ -24,6 +24,7 @@ import Match3.Core
 import Match3.Counts (bumpCount, noCounts, plusCounts)
 import Match3.Element
 import Match3.Element.Class (toCell)
+import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -672,7 +673,7 @@ qc_find_hint_local_matches_reference =
         , do
             li <- choose (0, length allLevels - 1)
             seed <- choose (1, 100000)
-            pure (gsBoard (newGameAtLevel li (levelConfig (allLevels !! li)) seed))
+            pure (gsBoard (levelGame li seed))
         , do
             seed <- choose (1, 100000)
             pure (gsBoard (newGame defaultConfig seed))

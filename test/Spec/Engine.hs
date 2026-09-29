@@ -13,6 +13,7 @@ import Data.Maybe (isJust)
 import Data.Word (Word64)
 import Engine.History (History(..), Undoable(..), historyDepth, startHistory)
 import Numeric (showHex)
+import Spec.Support (levelGame)
 import Spec.Support.Source (importsOf, mentionsIdent, sourcesUnder, sourcesUnderAll)
 import Match3.Core
 import Match3.Game.Trace (traceEvents)
@@ -103,7 +104,7 @@ engine_match3_instance_matches_direct_api = do
   forM_' [(li, seed) | li <- [0, 6, 12, 27], seed <- [1, 2]] $ \(li, seed) -> do
     let s0 = gameNew g (M3E.Campaign li) seed
         tag = "L" ++ show li ++ " s" ++ show seed
-    assertBool (tag ++ " new") (sameGs s0 (newGameAtLevel li (levelConfig (allLevels !! li)) seed))
+    assertBool (tag ++ " new") (sameGs s0 (levelGame li seed))
     let acts = take 3 (gameActions g s0)
     assertBool (tag ++ " has actions") (not (null acts))
     forM_' acts $ \a -> case a of
@@ -168,7 +169,7 @@ engine_undo_after_terminal_matches_legacy_play =
   where
     g = M3E.match3Shell
     one (sc@(li, seed, mv, easy), over, rows) = do
-      let base = (newGameAtLevel li (levelConfig (allLevels !! li)) seed) {gsMoves = mv}
+      let base = (levelGame li seed) {gsMoves = mv}
           s0 = startHistory (if easy then base {gsGoal = goalScore 1} else base)
           go h
             | isJust (gsOver (histNow h)) = h

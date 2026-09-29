@@ -220,7 +220,7 @@ br_level_hooks_builtin_and_removable = do
 br_level_hooks_removed_in_play :: Assertion
 br_level_hooks_removed_in_play = do
   let bare = foldr removeLevel defaultRegistry ["ufo", "belt", "portal", "carpet"]
-      play reg li = go (6 :: Int) (newGameAtLevel li (levelConfig (allLevels !! li)) 1) []
+      play reg li = go (6 :: Int) (levelGame li 1) []
         where
           go 0 gs acc = (gs, reverse acc)
           go n gs acc
@@ -229,18 +229,18 @@ br_level_hooks_removed_in_play = do
                 Nothing -> (gs, reverse acc)
                 Just (a, b) -> let (gs', _, mt) = resolveSwapWith reg a b gs in go (n - 1) gs' ((gs, gs', mt) : acc)
       beltShifts steps = [() | (_, _, mt) <- steps, EndStep {esEffect = EndBeltShift (_ : _)} <- mtEnd mt]
-      levelsWith f = [li | li <- [0 .. length allLevels - 1], not (f (newGameAtLevel li (levelConfig (allLevels !! li)) 1))]
+      levelsWith f = [li | li <- [0 .. length allLevels - 1], not (f (levelGame li 1))]
       ufoLv = levelsWith (null . gsUfos)
       beltLv = levelsWith (null . gsBelts)
       carpetLv = levelsWith (null . gsCarpetOpen)
   assertBool "campaign has ufo / belt / carpet levels" (not (null ufoLv || null beltLv || null carpetLv))
   forM_ ufoLv $ \li -> do
     let (gsE, steps) = play bare li
-        gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) 1
+        gs0 = levelGame li 1
     assertEqual ("L" ++ show li ++ " bare: ufos unchanged") (gsUfos gs0) (gsUfos gsE)
     assertEqual ("L" ++ show li ++ " bare: no ufo absorb") 0 (gsCount CountUfo gsE)
     assertBool ("L" ++ show li ++ " bare: played") (not (null steps))
-  assertBool "default: some ufo moved" (or [gsUfos gsE /= gsUfos (newGameAtLevel li (levelConfig (allLevels !! li)) 1) | li <- ufoLv, let gsE = fst (play defaultRegistry li)])
+  assertBool "default: some ufo moved" (or [gsUfos gsE /= gsUfos (levelGame li 1) | li <- ufoLv, let gsE = fst (play defaultRegistry li)])
   forM_ beltLv $ \li ->
     assertEqual ("L" ++ show li ++ " bare: no belt shift") 0 (length (beltShifts (snd (play bare li))))
   assertBool "default: belts shifted" (sum [length (beltShifts (snd (play defaultRegistry li))) | li <- beltLv] > 0)

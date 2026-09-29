@@ -241,7 +241,7 @@ trace_events_consistent_with_trace = do
         [ (li, gs, p1, p2)
         | li <- [0 .. length allLevels - 1]
         , s <- [1, 2]
-        , let lvl = allLevels !! li
+        , let lvl = levelAt li
               gs = newGameAtLevel li (levelConfig lvl) s
         , (p1, p2) <- take 3 [(a, b) | (a, b) <- allSwapsSpec, moveApplied (snd (trySwap a b gs))]
         ]

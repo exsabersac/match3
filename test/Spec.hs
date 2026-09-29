@@ -15,6 +15,7 @@ import qualified Spec.Builtin.Layer
 import qualified Spec.Builtin.Level
 import qualified Spec.Boosters
 import qualified Spec.GoalsLevels
+import qualified Spec.Levels
 import qualified Spec.Element
 import qualified Spec.Extension
 import qualified Spec.Branches
@@ -46,6 +47,7 @@ tests =
         , Spec.Builtin.Level.tests
         , Spec.Boosters.tests
         , Spec.GoalsLevels.tests
+        , Spec.Levels.tests
         , Spec.Element.tests
         , Spec.Extension.tests
         , Spec.Branches.tests

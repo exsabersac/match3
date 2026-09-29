@@ -132,7 +132,7 @@ time_spirit_awards_moves = do
   assertBool "spirit cleared" (not (isTimeSpirit (getCell (gsBoard gs1) (1, 1))))
   -- spent 1 move, gained +2 → net +1 from 10 → 11
   assertEqual "moves +2 net" (11 :: Int) (gsMoves gs1)
-  let gsL = newGameAtLevel 34 (levelConfig (allLevels !! 34)) 42
+  let gsL = levelGame 34 42
       nSp =
         length
           [ ()

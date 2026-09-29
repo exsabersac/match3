@@ -394,7 +394,7 @@ fog_layer_decrement = do
   assertEqual "now fully peeled" (1 :: Int) cleared2
   assertBool "fog gone" (not (hasFog (getCell b2 (4, 1))))
   -- Campaign décor includes fog on 巧饼 / 终章
-  let gs = newGameAtLevel 22 (levelConfig (allLevels !! 22)) 42
+  let gs = levelGame 22 42
       nFog =
         length
           [ ()
@@ -482,7 +482,7 @@ chain_layer_decrement = do
   let (b2, cleared2) = chipAdjacentChain b1 ms
   assertEqual "now unlocked" (1 :: Int) cleared2
   assertBool "chain gone" (not (hasChain (getCell b2 (4, 1))))
-  let gs = newGameAtLevel 25 (levelConfig (allLevels !! 25)) 42
+  let gs = levelGame 25 42
       nChain =
         length
           [ ()
@@ -571,7 +571,7 @@ freeze_layer_decrement = do
   let iced = mkIceGem C1 2
   assertEqual "ice layers" (2 :: Int) (iceLayers iced)
   assertBool "ice is not freeze overlay" (not (hasFreeze iced))
-  let gs = newGameAtLevel 29 (levelConfig (allLevels !! 29)) 42
+  let gs = levelGame 29 42
       nFreeze =
         length
           [ ()
@@ -641,7 +641,7 @@ curtain_layer_decrement = do
   let (b2, cleared2) = chipAdjacentCurtain b1 ms
   assertEqual "now clear" (1 :: Int) cleared2
   assertBool "curtain gone" (not (hasCurtain (getCell b2 (4, 1))))
-  let gs = newGameAtLevel 30 (levelConfig (allLevels !! 30)) 42
+  let gs = levelGame 30 42
       nCurt =
         length
           [ ()
@@ -693,7 +693,7 @@ steam_spreads_after_move = do
   assertBool "neighbor bare" (cellOverlay (getCell board0 (3, 4)) == Nothing)
   let b1 = spreadSteam board0
   assertBool "steam spread" (hasSteam (getCell b1 (3, 4)))
-  let gs = newGameAtLevel 35 (levelConfig (allLevels !! 35)) 42
+  let gs = levelGame 35 42
       nSt =
         length
           [ ()

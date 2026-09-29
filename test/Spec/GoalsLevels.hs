@@ -348,7 +348,7 @@ goal_chest_counts = do
     "campaign has GoalChest"
     (any (\g -> case goalView g of ViewCount CountChests _ -> True; _ -> False) (map lvlGoal allLevels))
   -- Level 16 décor places chests
-  let gs = newGameAtLevel 16 (levelConfig (allLevels !! 16)) 42
+  let gs = levelGame 16 42
       nChests =
         length
           [ ()
@@ -368,7 +368,7 @@ goal_honey_counts = do
   assertBool
     "campaign has GoalHoney"
     (any (\g -> case goalView g of ViewCount CountHoney _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 18 (levelConfig (allLevels !! 18)) 42
+  let gs = levelGame 18 42
       nHoney =
         length
           [ ()
@@ -389,7 +389,7 @@ goal_balloon_counts = do
   assertBool
     "campaign has GoalBalloon"
     (any (\g -> case goalView g of ViewCount CountBalloons _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 20 (levelConfig (allLevels !! 20)) 42
+  let gs = levelGame 20 42
       nBal =
         length
           [ ()
@@ -409,7 +409,7 @@ goal_cookie_counts = do
   assertBool
     "campaign has GoalCookie"
     (any (\g -> case goalView g of ViewCount CountCookies _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 21 (levelConfig (allLevels !! 21)) 42
+  let gs = levelGame 21 42
       nCookie =
         length
           [ ()
@@ -429,7 +429,7 @@ goal_cake_counts = do
   assertBool
     "campaign has GoalCake"
     (any (\g -> case goalView g of ViewCount CountCakes _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 23 (levelConfig (allLevels !! 23)) 42
+  let gs = levelGame 23 42
       nCake =
         length
           [ ()
@@ -438,7 +438,7 @@ goal_cake_counts = do
           , isCake (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor cake >= 6, got " ++ show nCake) (nCake >= 6)
-  let gsHat = newGameAtLevel 24 (levelConfig (allLevels !! 24)) 42
+  let gsHat = levelGame 24 42
       nHat =
         length
           [ ()
@@ -457,7 +457,7 @@ goal_safe_counts = do
   assertBool
     "campaign has GoalSafe"
     (any (\g -> case goalView g of ViewCount CountSafes _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 31 (levelConfig (allLevels !! 31)) 42
+  let gs = levelGame 31 42
       nSafes =
         length
           [ ()
@@ -493,21 +493,21 @@ goal_carpet_counts = do
   -- Campaign includes GoalCarpet
   assertBool "campaign has GoalCarpet" $
     any (\g -> case goalView g of ViewCount CountCarpets _ -> True; _ -> False) (map lvlGoal allLevels)
-  let gs = newGameAtLevel 36 (levelConfig (allLevels !! 36)) 42
+  let gs = levelGame 36 42
   assertEqual "level 36 carpet open" (8 :: Int) (length (gsCarpetOpen gs))
   assertEqual "goal" (goalCount CountCarpets 8) (gsGoal gs)
   assertEqual "campaign levels" (40 :: Int) (length allLevels)
 
 carry_moves_on_next_level :: Assertion
 carry_moves_on_next_level = do
-  let cfg0 = levelConfig (allLevels !! 0)
+  let cfg0 = levelConfig (levelAt 0)
       gs0 =
         (newGameAtLevel 0 cfg0 1)
           { gsOver = Just (LevelClear 100 1)
           , gsMoves = 5  -- leftover
           }
       gs1 = nextLevel gs0 99
-      base = lvlMoves (allLevels !! 1)
+      base = lvlMoves (levelAt 1)
   assertEqual "level advanced" (1 :: Int) (gsLevel gs1)
   assertEqual "carried min(3,left)" (base + 3) (gsMoves gs1)  -- cap 3
   let gs2 =
@@ -592,12 +592,12 @@ campaign_levels_batch_ok = do
 -- | Finale / high-pressure levels keep a reasonable move budget.
 finale_and_pressure_moves_reasonable :: Assertion
 finale_and_pressure_moves_reasonable = do
-  let finale = allLevels !! 27
-      master = allLevels !! 15
-      pressure = allLevels !! 14
-      steam = allLevels !! 35
-      carpet = allLevels !! 36
-      weave = allLevels !! 37
+  let finale = levelAt 27
+      master = levelAt 15
+      pressure = levelAt 14
+      steam = levelAt 35
+      carpet = levelAt 36
+      weave = levelAt 37
   assertEqual "终章 name" "终章" (lvlName finale)
   assertBool "终章 moves >= 24" (lvlMoves finale >= 24)
   assertBool "大师 moves >= 22" (lvlMoves master >= 22)
@@ -646,15 +646,15 @@ daily_obstacle_goal_spawns_decor = do
 map_select_no_carry_moves :: Assertion
 map_select_no_carry_moves = do
   let gsPrev =
-        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 1)
+        (levelGame 0 1)
           { gsOver = Just (LevelClear 100 1)
           , gsMoves = 9
           }
       carried = nextLevel gsPrev 2
-      base1 = lvlMoves (allLevels !! 1)
+      base1 = lvlMoves (levelAt 1)
   assertEqual "carry path adds bonus" (base1 + 3) (gsMoves carried)
   -- Map-like jump / restart: fresh allotment
-  let gsMap = newGameAtLevel 1 (levelConfig (allLevels !! 1)) 3
+  let gsMap = levelGame 1 3
       gsRestart = restartLevel gsPrev { gsLevel = 1, gsOver = Nothing } 4
   assertEqual "map select no carry" base1 (gsMoves gsMap)
   assertEqual "restart no carry" base1 (gsMoves gsRestart)
@@ -669,12 +669,12 @@ star_rating_vs_carry_base = do
   assertEqual "inflated start would wrongly drop to 2★" (2 :: Int) (starRating (base + carry) left)
   -- After nextLevel, gsMoves is printed+carry; UI must rate vs printed (Main advanceOrMsg).
   let gsPrev =
-        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 1)
+        (levelGame 0 1)
           { gsOver = Just (LevelClear 50 1)
           , gsMoves = 5
           }
       gsNext = nextLevel gsPrev 9
-      printed = lvlMoves (allLevels !! gsLevel gsNext)
+      printed = lvlMoves (levelAt (gsLevel gsNext))
   assertEqual "carry cap on gsMoves" (printed + 3) (gsMoves gsNext)
   assertEqual "skill tier vs printed still 3★ at 40%" (3 :: Int) (starRating printed (printed * 2 `div` 5))
   assertEqual "skill tier vs inflated would be 2★" (2 :: Int) (starRating (gsMoves gsNext) (printed * 2 `div` 5))

@@ -179,7 +179,7 @@ maker_produces_bomb = do
   assertBool "became gem" (isGem (getCell b1 (2, 1)))
   assertEqual "bomb kind" (Just Bomb) (cellKind (getCell b1 (2, 1)))
   assertEqual "bomb color" (Just C1) (cellColor (getCell b1 (2, 1)))
-  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
+  let gs = levelGame 26 42
       nMaker =
         length
           [ ()
@@ -221,7 +221,7 @@ bottle_dyes_neighbors = do
       b1 = triggerAdjacentBottles board0 ms
   assertBool "bottle stays" (isBottle (getCell b1 (2, 1)))
   assertEqual "dyed neighbor" (Just C3) (cellColor (getCell b1 (2, 2)))
-  let gs = newGameAtLevel 33 (levelConfig (allLevels !! 33)) 42
+  let gs = levelGame 33 42
       nBot =
         length
           [ ()
@@ -701,7 +701,7 @@ snail_moves_after_move = do
       edge1 = stepSnailAt edgeB (0, 7)
   assertEqual "reversed at edge" (0, -1) (snailDir (getCell edge1 (0, 7)))
   assertBool "still at edge" (isSnail (getCell edge1 (0, 7)))
-  let gsL = newGameAtLevel 28 (levelConfig (allLevels !! 28)) 42
+  let gsL = levelGame 28 42
       nSnail =
         length
           [ ()

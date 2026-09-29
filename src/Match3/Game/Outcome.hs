@@ -16,6 +16,7 @@ module Match3.Game.Outcome
   ) where
 
 import Match3.Counts (CounterKey(..))
+import Match3.Levels.Campaign (levelCount)
 import Match3.Types
 import Match3.Game.State
 
@@ -39,7 +40,7 @@ decideOutcome gs gained
         then Won (gsScore gs)  -- daily complete ≠ campaign LevelClear
         else
           let nextIdx = gsLevel gs + 1
-          in if nextIdx < length allLevels
+          in if nextIdx < levelCount
                then LevelClear (gsScore gs) nextIdx
                else Won (gsScore gs)
   | gsMoves gs <= 0 = Lost (gsScore gs)
@@ -48,7 +49,7 @@ decideOutcome gs gained
 -- | Map unlock index after a terminal outcome (LevelClear unlocks through nextIdx).
 unlockAfterClear :: Int -> Outcome -> Int
 unlockAfterClear reached (LevelClear _ n) = max reached n
-unlockAfterClear reached (Won _) = max reached (length allLevels - 1)
+unlockAfterClear reached (Won _) = max reached (levelCount - 1)
 unlockAfterClear reached _ = reached
 
 -- | Like unlockAfterClear, but daily challenges never bump campaign map progress

@@ -14,6 +14,7 @@ module UI.Plugin
   , match3ShellConfig
   ) where
 
+import Data.Maybe (fromMaybe)
 import Engine.History (startHistory)
 import Art
 import Data.IORef
@@ -68,8 +69,8 @@ initialApp :: Match3Opts -> Maybe Art -> App
 initialApp o art =
   let startIdx = moStart o
       showcase = moShowcase o
-      lvl = allLevels !! startIdx
-      gs0 = newGameAtLevel startIdx (levelConfig lvl) (moSeed o)
+      -- MATCH3_LEVEL 已在 envStartLevel 校验过范围；万一没有这一关就按默认配置开局
+      gs0 = fromMaybe (newGameAtLevel startIdx defaultConfig (moSeed o)) (campaignGame startIdx (moSeed o))
       (gsHinted0, _) = applyHint gs0
       gsHinted = if showcase then showcaseState gsHinted0 else gsHinted0
   in App
@@ -88,7 +89,7 @@ initialApp o art =
        , appTipFrames = if startIdx == 0 && not showcase then 240 else 0
        , appHelpFrames = if showcase then 0 else 300
        , appPaused = False
-       , appStartMoves = lvlMoves lvl
+       , appStartMoves = gsMoves gs0  -- 开局步数 = 该关印制步数
        , appDragFrom = Nothing
        , appTool = ToolNone
        , appMapOpen = False

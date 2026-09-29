@@ -153,7 +153,7 @@ ec_state_lives_in_element_value = do
   assertEqual "second hit" (Custom "nest" 1) (getCell (gsBoard gs2) p)
   assertBool "third hit breaks it" (not (isNest (getCell (gsBoard gs3) p)))
   assertEqual "counted once" [("nest", 1)] (namedCounts (gsCounts gs3))
-  assertEqual "placed via the constructor" (Custom "nest" 2) (getCell (placeWith reg "nest" [AInt 2] stableBoard [p]) p)
+  assertEqual "placed via the constructor" (Right (Custom "nest" 2)) (getCell <$> placeWith reg "nest" [AInt 2] stableBoard [p] <*> pure p)
   where
     isNest cell = case cell of
       Custom "nest" _ -> True

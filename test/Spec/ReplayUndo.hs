@@ -147,7 +147,7 @@ shuffle_preserves_decor = do
   assertBool "freeze present before shuffle" (not (null freezeBefore))
   assertEqual "freeze survive shuffle" (sort freezeBefore) (sort freezeAfter)
   -- Carpet open cells are unchanged by shuffle (count + positions)
-  let gsCa = newGameAtLevel 36 (levelConfig (allLevels !! 36)) 77
+  let gsCa = levelGame 36 77
       openBefore = sort (gsCarpetOpen gsCa)
       gsCa' = shuffleGame gsCa
   assertBool "carpet open cells present" (not (null openBefore))
@@ -159,7 +159,7 @@ shuffle_preserves_decor = do
 undo_restores_carry_moves :: Assertion
 undo_restores_carry_moves = do
   let gs0 =
-        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 42)
+        (levelGame 0 42)
           { gsMoves = 7 }
   case findMatchPair (gsBoard gs0) of
     Nothing -> assertFailure "need match"
@@ -173,7 +173,7 @@ undo_restores_carry_moves = do
           -- nextLevel carry still caps at 3 from leftover
           let gsClear = gsU { gsOver = Just (LevelClear 10 1), gsMoves = 7 }
               gsNext = nextLevel gsClear 99
-              base = lvlMoves (allLevels !! 1)
+              base = lvlMoves (levelAt 1)
           assertEqual "carry cap 3" (base + 3) (gsMoves gsNext)
 
 -- | Shuffle / ensurePlayable must not wipe goal tallies.
@@ -302,7 +302,7 @@ trace_swap_final_equals_trySwap = do
         [ (li, seed, (p1, p2), gs0, gs1, out)
         | li <- levels
         , seed <- [1 .. 3 :: Int]
-        , let lvl = allLevels !! li
+        , let lvl = levelAt li
               gs0 = newGameAtLevel li (levelConfig lvl) seed
         , r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
@@ -345,7 +345,7 @@ trace_boosters_final_equal_result :: Assertion
 trace_boosters_final_equal_result =
   mapM_
     ( \(li, seed) -> do
-        let lvl = allLevels !! li
+        let lvl = levelAt li
             gs0 = newGameAtLevel li (levelConfig lvl) seed
             check tag gs1 out mt = case out of
               MoveApplied _ -> do
@@ -397,7 +397,7 @@ trace_rejected_move_is_empty = withComboState $ \_ gs1 -> do
     Nothing -> assertFailure "need a no-match swap"
     Just (p1, p2) -> assertBool "no-match swap has no end steps" (null (mtEnd (traceSwap p1 p2 gs1)))
   -- 带巧克力的关卡里无匹配交换同样不蔓延
-  let gsC = newGameAtLevel 4 (levelConfig (allLevels !! 4)) 1
+  let gsC = levelGame 4 1
   case findNoMatchPair (gsBoard gsC) of
     Nothing -> assertFailure "need a no-match pair on choco level"
     Just (p1, p2) -> do
@@ -449,7 +449,7 @@ trace_end_steps_replay_to_trySwap_final = do
         pure ks
     | li <- [0 .. length allLevels - 1]
     , seed <- [1 .. 3 :: Int]
-    , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+    , let gs0 = levelGame li seed
     , r <- [0 .. boardSize - 1]
     , c <- [0 .. boardSize - 1]
     , let p1 = (r, c)
@@ -477,7 +477,7 @@ trace_end_steps_boosters_replay = do
         pure ks
     | li <- [4, 9, 15, 27, 35]
     , seed <- [1 .. 2 :: Int]
-    , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+    , let gs0 = levelGame li seed
     , (name, (gs1, out), mt) <-
         [ ("hammer " ++ show p, useHammer p gs0, traceHammer p gs0) | p <- [(0, 0), (3, 4), (5, 2)] ]
           ++ [ ("cross " ++ show p, useCrossClear p gs0, traceCrossClear p gs0) | p <- [(2, 2), (6, 5)] ]
@@ -530,7 +530,7 @@ trace_end_spread_from_adjacent_source = do
         [ (kind, pairs)
         | li <- [4, 9]
         , seed <- [1 .. 3 :: Int]
-        , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+        , let gs0 = levelGame li seed
         , Just (p1, p2) <- [findHint (gsBoard gs0)]
         , e <- mtEnd (traceSwap p1 p2 gs0)
         , EndSpread kind pairs <- [esEffect e]
@@ -570,7 +570,7 @@ trace_shuffle_step_replays = do
         [ (li, seed, st)
         | li <- [0 .. length allLevels - 1]
         , seed <- [1 .. 3 :: Int]
-        , st <- chains (newGameAtLevel li (levelConfig (allLevels !! li)) seed)
+        , st <- chains (levelGame li seed)
         ]
   counts <- mapM
     ( \(li, seed, (gs0, p1, p2, gs1)) -> do

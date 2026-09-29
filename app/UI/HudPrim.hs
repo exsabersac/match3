@@ -123,7 +123,7 @@ drawPauseHelp ren app
 drawHud :: Renderer -> App -> IO ()
 drawHud ren app = do
   let gs = appGame app
-      lvl = allLevels !! min (gsLevel gs) (length allLevels - 1)
+      mlvl = lookupLevel (min (gsLevel gs) (levelCount - 1))
       white = V4 230 230 245 255 :: V4 Word8
       dim = V4 140 140 170 255
       _accent = V4 255 200 80 255 :: V4 Word8
@@ -217,7 +217,7 @@ drawHud ren app = do
     _ -> pure ()  -- 分数 / 多色 / 石块 / 其余：无色块
 
   -- Moves meter
-  let moveCap = max (gsMoves gs) (lvlMoves lvl)
+  let moveCap = max (gsMoves gs) (maybe (gsMoves gs) lvlMoves mlvl)
   drawMeter ren 10 68 (gsMoves gs) (max 1 moveCap) (V4 100 160 240 255)
   drawNumber ren 10 72 2 white (gsMoves gs)
 

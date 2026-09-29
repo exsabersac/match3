@@ -192,7 +192,7 @@ portal_teleports_gem = do
       assertEqual "teleported color" (Just C1) (cellColor cell)
     Nothing -> assertFailure "expected gem at exit"
   assertBool "identity on full board" (applyPortalTeleports portals mb0 == mb0)
-  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
+  let gs = levelGame 26 42
   assertEqual "two portal pairs" (2 :: Int) (length (gsPortals gs))
 
 -- UFO / 飞碟 (absorb same-color neighbors; move each cascade wave)
@@ -714,7 +714,7 @@ portal_endpoints_not_immortal_blocked = do
   let portalLevels =
         [ (li, gs)
         | li <- [0 .. length allLevels - 1]
-        , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) 42
+        , let gs = levelGame li 42
         , not (null (gsPortals gs))
         ]
   assertBool "campaign has portal levels" (not (null portalLevels))
@@ -770,7 +770,7 @@ belt_cells_not_stuck_immortal = do
   let beltLevels =
         [ (li, gs)
         | li <- [0 .. length allLevels - 1]
-        , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) 42
+        , let gs = levelGame li 42
         , not (null (gsBelts gs))
         ]
   assertBool "campaign has belt levels" (not (null beltLevels))

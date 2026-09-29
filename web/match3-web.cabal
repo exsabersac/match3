@@ -27,6 +27,13 @@ executable match3-web
     Match3.Core
     Match3.Engine
     Match3.Types
+    Match3.Types.Cell
+    Match3.Types.Overlay
+    Match3.Types.Body
+    Match3.Types.Board
+    Match3.Types.Game
+    Match3.Levels.Level
+    Match3.Levels.Campaign
     Match3.Color
     Match3.Counts
     Match3.Goal

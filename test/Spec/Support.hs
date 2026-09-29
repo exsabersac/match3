@@ -13,6 +13,8 @@ module Spec.Support
   , tripleMove
   , isWin
   , firstLevel
+  , levelAt
+  , levelGame
   , firstWave
     -- * 原有助手
   , findNoMatchPair
@@ -39,6 +41,7 @@ module Spec.Support
 
 import Control.Monad (foldM)
 import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import Match3.Core
 import Match3.Board.Grid (mboardRows)
 import Match3.Element (Entry, AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
@@ -84,10 +87,16 @@ isWin o = case o of
   _ -> False
 
 -- | 战役第 1 关（allLevels 的第一项；关卡表为空时直接报错）。
-firstLevel :: Level
-firstLevel = case allLevels of
-  (l : _) -> l
-  [] -> error "firstLevel: allLevels is empty"
+firstLevel :: HasCallStack => Level
+firstLevel = levelAt 0
+
+-- | 第 li 关（0 基）的关卡记录；没有这一关直接报错（第 6 刀：测试里取代 allLevels !! li）。
+levelAt :: HasCallStack => Int -> Level
+levelAt li = fromMaybe (error ("levelAt: no level " ++ show li)) (lookupLevel li)
+
+-- | 第 li 关按该关步数与目标、给定种子开局（= newGameAtLevel li (levelConfig (levelAt li)) seed）。
+levelGame :: HasCallStack => Int -> Int -> GameState
+levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
 -- | 走步报告的第一轮连锁；没有任何一轮时断言失败。
 firstWave :: HasCallStack => MoveTrace -> IO CascadeWave

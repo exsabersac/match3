@@ -11,15 +11,18 @@ module ElementQueries
 
 import Data.Bits (xor)
 import Data.Char (ord)
+import Data.Maybe (fromMaybe)
 import Data.Word (Word64)
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Board.Match (findHintWith)
 import Match3.Element
 import Match3.Element.Class (levelNameOf)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveHammerWith)
-import Match3.Game.Level (newGameAtLevel)
+import Match3.Game.Level (campaignGame, newGameAtLevel)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.State
+import Match3.Levels.Campaign (allLevels, lookupLevel)
+import Match3.Levels.Level (Level, levelConfig)
 import Match3.Types
 import Numeric (showHex)
 
@@ -28,9 +31,11 @@ main = mapM_ putStrLn queryLines
 
 -- | 战役第 1 关（关卡表为空时直接报错）。
 firstLevel :: Level
-firstLevel = case allLevels of
-  (l : _) -> l
-  [] -> error "firstLevel: allLevels is empty"
+firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
+
+-- | 第 li 关（0 基）按该关步数与目标、给定种子开局；没有这一关直接报错（第 6 刀：取代 allLevels !! li）。
+levelGame :: Int -> Int -> GameState
+levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
 reg :: Registry
 reg = defaultRegistry
@@ -121,7 +126,7 @@ placeNames =
 
 placeLines :: [String]
 placeLines =
-  [ "P " ++ n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ show (getCell (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)]) (4, 4))
+  [ "P " ++ n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ show (getCell (either (error . show) id (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])) (4, 4))
   | n <- placeNames
   , args <- [[], [AInt 1], [AInt 3], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 0, AInt (-1)]]
   , cell <- [mkGem C2, Gem C3 LineH 1 (Just Grass), Stone 1, Countdown C4 2, Custom "bubble" 1]
@@ -164,7 +169,7 @@ boardText b = show [getCell b (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boa
 -- | 逐手对局：全部关卡 × 种子 1–2 × 12 手（走提示），每手前试锤子与十字，按关卡 / 种子给一行散列。
 playLines :: [String]
 playLines =
-  [ "M " ++ show (li + 1) ++ " " ++ show seed ++ " " ++ hash (concat (go 12 (newGameAtLevel li (levelConfig (allLevels !! li)) seed)))
+  [ "M " ++ show (li + 1) ++ " " ++ show seed ++ " " ++ hash (concat (go 12 (levelGame li seed)))
   | li <- [0 .. length allLevels - 1]
   , seed <- [1, 2]
   ]

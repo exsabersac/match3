@@ -597,7 +597,7 @@ surprise_opens_to_special = do
   let cell = getCell b1 (4, 0)
   assertBool "became special gem" (isGem cell && cellKind cell /= Just Normal)
   assertEqual "LineH" (Just LineH) (cellKind cell)
-  let gs = newGameAtLevel 32 (levelConfig (allLevels !! 32)) 42
+  let gs = levelGame 32 42
       nSur =
         length
           [ ()

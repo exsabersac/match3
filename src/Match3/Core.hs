@@ -125,6 +125,11 @@ module Match3.Core
   , cellKind
   , Pos
   , Board
+  , boardFromRows
+  , boardRows
+  , boardCells
+  , boardAssocs
+  , mapBoard
   , boardSize
   , numColors
   , allColors

@@ -32,7 +32,7 @@ import Match3.Board.Cascade
   )
 import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Carpet (coverCarpets)
-import Match3.Conveyor (shiftBelts)
+import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, endRules)
 import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
@@ -202,13 +202,13 @@ swapEnd reg gs seg0 =
       (endTick, _) = runPhase reg PhaseTick (EndCtx [] []) (length ws0) board0'
       -- 皮带：移位后连锁 / 沉降（收皮带送到底行的饼干）
       boardCd = crBoard seg1
-      boardBelt = shiftBelts boardCd belts
+      mvBelt = beltMoves belts
+      boardBelt = applyBeltMoves boardCd mvBelt
       nBelt = length ws0 + length (crWaves seg1)
       endBelt =
-        [ EndStep nBelt boardCd boardBelt (EndBeltShift mv)
+        [ EndStep nBelt boardCd boardBelt (EndBeltShift mvBelt)
         | not (null belts)
-        , let mv = beltMoves belts
-        , not (null mv)
+        , not (null mvBelt)
         ]
       seg2 =
         if null belts

@@ -24,6 +24,7 @@ module Match3.Element.Event
   ) where
 
 import Match3.Board.Grid (getCell, inBounds, setCell)
+import Match3.Conveyor (applyBeltMoves)
 import Match3.Types
 
 -- | 步末效果的种类与播放所需的细节（只描述「变了什么」，规则仍由元素定义计算）。
@@ -51,7 +52,7 @@ data SnailMove = SnailMove
 applyEndEffect :: EndEffect -> Board -> Board
 applyEndEffect eff b0 = case eff of
   EndCountdownTick ps -> foldl tick b0 ps
-  EndBeltShift moves -> foldl (\b (o, d) -> setCell b d (getCell b0 o)) b0 moves
+  EndBeltShift moves -> applyBeltMoves b0 moves
   EndSpread kind pairs -> foldl (\b (_, q) -> plant (spreadOverlay kind) b q) b0 pairs
   EndSnail moves -> foldl snail b0 moves
   where

@@ -99,7 +99,7 @@ pCell cell = case cell of
   Custom n v -> "E" ++ n ++ ":" ++ show v
 
 pBoard :: Board -> String
-pBoard = intercalate "/" . map (intercalate "," . map pCell)
+pBoard = intercalate "/" . map (intercalate "," . map pCell) . boardRows
 
 pHoles :: [[Maybe Cell]] -> String
 pHoles = intercalate "/" . map (intercalate "," . map (maybe "_" pCell))

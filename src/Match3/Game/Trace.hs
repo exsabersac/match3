@@ -1,6 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
--- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreads / beltMoves，
+-- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreads（beltMoves 再导出自 Conveyor），
 -- 以及从回放脚本派生效果事件的 traceEvents。
 --
 -- 第二刀 2b：EndEffect / SpreadKind / SnailMove / applyEndEffect / spreadPairs 搬到 Match3.Element.Event，
@@ -34,7 +34,7 @@ module Match3.Game.Trace
 
 import Match3.Board.Cascade (CascadeWave(..))
 import Match3.Board.Grid (getCell)
-import Match3.Conveyor (Belt)
+import Match3.Conveyor (beltMoves)
 import Data.List (nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)
 import Match3.Element.Event
@@ -90,21 +90,6 @@ traceSpreadsWith reg k b0 = foldl one ([], b0) (endRules reg PhaseSpread)
     one (acc, before) rule =
       let (eff, after) = erRun rule (EndCtx [] []) before
       in (acc ++ [EndStep k before after e | Just e <- [eff]], after)
-
--- | 多条皮带按顺序移位后的 (原格, 新格) 映射（只列位置变了的格）。
-beltMoves :: [Belt] -> [(Pos, Pos)]
-beltMoves belts =
-  let cells = nub (concat belts)
-      origin0 = [(p, p) | p <- cells]
-      shiftOne orig ps
-        | length ps < 2 = orig
-        | otherwise =
-            let prevOf = zip ps (last ps : init ps)
-            in [ (p, maybe o (\q -> maybe q id (lookup q orig)) (lookup p prevOf))
-               | (p, o) <- orig
-               ]
-      final = foldl shiftOne origin0 belts
-  in [(o, d) | (d, o) <- final, o /= d]
 
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。
 emptyTrace :: GameState -> MoveTrace

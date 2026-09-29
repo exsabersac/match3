@@ -229,7 +229,7 @@ diffDefs = regDiff
 
 -- | 盘上本体为该元素的格数。
 countElementWith :: Registry -> ElementName -> Board -> Int
-countElementWith reg n b = length [() | row <- b, cell <- row, elementName reg cell == n]
+countElementWith reg n b = length [() | cell <- boardCells b, elementName reg cell == n]
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
 vacatesCarpetWith :: Registry -> Cell -> Bool

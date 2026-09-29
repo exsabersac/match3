@@ -127,7 +127,7 @@ showcaseState gs =
     }
 
 showcaseBoard :: Board
-showcaseBoard =
+showcaseBoard = boardFromRows
   [ [mkGem C1, mkGem C2, mkGem C3, mkGem C4, mkGem C5, Gem C1 LineH 0 Nothing, Gem C2 LineV 0 Nothing, Gem C3 Bomb 0 Nothing]
   , [Gem C4 Rainbow 0 Nothing, mkFlip C1 C3, mkCountdown C2 3, mkIceGem C5 1, mkIceGem C1 2, mkIceGem C2 3, mkGrassGem C3, mkVineGem C4]
   , [mkChocoGem C5, mkFogGem C1 1, mkFogGem C2 3, mkChainGem C3 1, mkChainGem C4 2, mkFreezeGem C5 1, mkFreezeGem C1 2, mkCurtainGem C2 1]

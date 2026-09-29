@@ -151,7 +151,7 @@ settleBoardPortalsWith reg portals mb =
 refill :: RandomGen g => g -> MBoard -> (Board, g)
 refill g0 mb =
   let (filled, g') = fillList g0 (concat mb)
-  in (chunk boardSize (map (maybe (error "refill: hole") id) filled), g')
+  in (boardFromRows (chunk boardSize (map (maybe (error "refill: hole") id) filled)), g')
   where
     fillList g [] = ([], g)
     fillList g (Nothing : xs) =

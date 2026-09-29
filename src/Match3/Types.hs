@@ -92,6 +92,14 @@ module Match3.Types
   , cellKind
   , Pos
   , Board
+  , boardFromRows
+  , boardRows
+  , boardCells
+  , boardAssocs
+  , boardAt
+  , boardSet
+  , boardSetMany
+  , mapBoard
   , boardSize
   , numColors
   , allColors
@@ -113,6 +121,7 @@ module Match3.Types
   , levelConfig
   ) where
 
+import Data.Array (Array, assocs, bounds, elems, listArray, (!), (//))
 import GHC.Generics (Generic)
 
 data Color = C1 | C2 | C3 | C4 | C5
@@ -577,7 +586,55 @@ allColors :: [Color]
 allColors = [minBound .. maxBound]
 
 type Pos = (Int, Int)
-type Board = [[Cell]]
+-- | 盘面：以 (行, 列) 为下标的二维数组（第三刀起；之前是 [[Cell]]，读格要走两次 (!!)）。
+-- 读格 boardAt 为 O(1)；写格 boardSet 复制一次数组（64 格，与原来重建行列表同量级）。
+-- 与行列表互转用 boardFromRows / boardRows（行主序，与旧表示逐格一一对应；Show 仍按行列表打印）。
+newtype Board = Board (Array (Int, Int) Cell)
+  deriving (Eq)
+
+instance Show Board where
+  showsPrec d b = showsPrec d (boardRows b)
+
+-- | 由行列表建盘（每行等长；空列表 = 0×0 盘）。
+boardFromRows :: [[Cell]] -> Board
+boardFromRows rows =
+  let nr = length rows
+      nc = case rows of
+        [] -> 0
+        (r0 : _) -> length r0
+  in if any ((/= nc) . length) rows
+       then error "boardFromRows: rows of unequal length"
+       else Board (listArray ((0, 0), (nr - 1, nc - 1)) (concat rows))
+
+-- | 行列表视图（行主序）。
+boardRows :: Board -> [[Cell]]
+boardRows (Board a) =
+  let ((r0, c0), (r1, c1)) = bounds a
+  in [[a ! (r, c) | c <- [c0 .. c1]] | r <- [r0 .. r1]]
+
+-- | 全部格子，行主序。
+boardCells :: Board -> [Cell]
+boardCells (Board a) = elems a
+
+-- | 全部 (坐标, 格子)，行主序。
+boardAssocs :: Board -> [(Pos, Cell)]
+boardAssocs (Board a) = assocs a
+
+-- | 读一格，O(1)；越界报错（与旧 (!!) 相同）。
+boardAt :: Board -> Pos -> Cell
+boardAt (Board a) p = a ! p
+
+-- | 写一格，返回新盘面。
+boardSet :: Board -> Pos -> Cell -> Board
+boardSet (Board a) p v = Board (a // [(p, v)])
+
+-- | 一次写多格（后写的覆盖先写的）。
+boardSetMany :: Board -> [(Pos, Cell)] -> Board
+boardSetMany (Board a) kvs = Board (a // kvs)
+
+-- | 逐格变换。
+mapBoard :: (Cell -> Cell) -> Board -> Board
+mapBoard f (Board a) = Board (fmap f a)
 
 boardSize :: Int
 boardSize = 8

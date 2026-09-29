@@ -321,12 +321,12 @@ match_line_ge3 = do
   let fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C5, C2]
-      b = take 3 b0 ++ [row3] ++ drop 4 b0
+      b = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
       ms = findMatches b
   assertBool "(3,0)" ((3, 0) `elem` ms)
   assertBool "(3,1)" ((3, 1) `elem` ms)
   assertBool "(3,2)" ((3, 2) `elem` ms)
-  let colBoard =
+  let colBoard = boardFromRows $
         [ [ if c == 1 && r >= 2 && r <= 4 then mkGem C3 else mkGem C5
           | c <- [0 .. boardSize - 1]
           ]
@@ -338,7 +338,7 @@ match_line_ge3 = do
   assertBool "vert (4,1)" ((4, 1) `elem` vs)
 
   -- Negatives on an explicit stable board (no incidental 3-runs)
-  let stable =
+  let stable = boardFromRows $
         [ map mkGem [C1, C2, C3, C4, C5, C1, C2, C3]
         , map mkGem [C2, C3, C4, C5, C1, C2, C3, C4]
         , map mkGem [C3, C4, C5, C1, C2, C3, C4, C5]
@@ -373,7 +373,7 @@ match_line_ge3 = do
 
 gravity_then_refill :: Assertion
 gravity_then_refill = do
-  let b =
+  let b = boardFromRows $
         [ [ if c == 0
               then if r >= 5 then mkGem C1 else mkGem (toEnum (r `mod` 5))
               else mkGem C5
@@ -396,8 +396,8 @@ gravity_then_refill = do
   assertBool "gravity: holes on top" colsOk
   let g = mkStdGen 7
       (b', _) = refill g fallen
-  assertEqual "rows" boardSize (length b')
-  assertBool "full rows" (all ((== boardSize) . length) b')
+  assertEqual "rows" boardSize (length (boardRows b'))
+  assertBool "full rows" (all ((== boardSize) . length) (boardRows b'))
 
 cascade_until_stable :: Assertion
 cascade_until_stable = do
@@ -459,7 +459,7 @@ qc_findMatches_ge3 =
             [ if c >= c0 && c < c0 + 3 then mkGem C1 else mkGem C5
             | c <- [0 .. boardSize - 1]
             ]
-          b = take r b0 ++ [row] ++ drop (r + 1) b0
+          b = boardFromRows $ take r b0 ++ [row] ++ drop (r + 1) b0
           ms = findMatches b
       in (r, c0) `elem` ms
            && (r, c0 + 1) `elem` ms
@@ -471,7 +471,7 @@ special_line_from_4 = do
   let fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row2 = map mkGem [C1, C1, C1, C1, C2, C3, C4, C2]
-      b = take 2 b0 ++ [row2] ++ drop 3 b0
+      b = boardFromRows $ take 2 b0 ++ [row2] ++ drop 3 b0
       (mb, n) = clearMatches b
   assertBool "cleared" (n >= 4)
   let specials =
@@ -490,7 +490,7 @@ special_rainbow_from_5 = do
   let fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row1 = map mkGem [C1, C1, C1, C1, C1, C2, C3, C2]
-      b = take 1 b0 ++ [row1] ++ drop 2 b0
+      b = boardFromRows $ take 1 b0 ++ [row1] ++ drop 2 b0
       (mb, _) = clearMatches b
       rainbows =
         [ (r, c)
@@ -551,7 +551,7 @@ shuffle_when_no_moves = do
 
 -- | Cyclic (r+c) mod 5 board: stable and no valid adjacent swap.
 stuckNoMoveBoard :: Board
-stuckNoMoveBoard =
+stuckNoMoveBoard = boardFromRows $
   [ [ mkGem (toEnum ((r + c) `mod` 5))
     | c <- [0 .. boardSize - 1]
     ]
@@ -577,7 +577,7 @@ combo_wave_scoring = do
   let fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
-      b = take 3 b0 ++ [row3] ++ drop 4 b0
+      b = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
       CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = combo, ctColors = tallies}} = cascadeMatches Nothing [] [] (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
@@ -602,7 +602,7 @@ collect_goal_progress = do
       -- Simpler: board already has match of three C1 — but then newGame uses random board.
       -- Override board after newGame, then force a matching swap.
       row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
-      board = take 3 b0 ++ [row3] ++ drop 4 b0
+      board = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
       -- Swap (3,2)=C2 with (3,3)=C1 → row becomes C1 C1 C1 C2 ... match!
       gs0 =
         (newGame cfg 55)
@@ -629,7 +629,7 @@ collect_goal_clears_level = do
       fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
-      board = take 3 b0 ++ [row3] ++ drop 4 b0
+      board = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
       -- Level 0 so LevelClear (not Won)
       gs0 =
         (newGameAtLevel 0 cfg 55)
@@ -654,7 +654,7 @@ collect_goal_lose_on_moves = do
       fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
-      board = take 3 b0 ++ [row3] ++ drop 4 b0
+      board = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
       gs0 =
         (newGameAtLevel 0 cfg 55)
           { gsBoard = board
@@ -716,7 +716,7 @@ score_goal_ignores_collect = do
 
 -- | Stable board with no accidental 3-runs.
 stableBoard :: Board
-stableBoard =
+stableBoard = boardFromRows $
   [ map mkGem [C1, C2, C3, C4, C5, C1, C2, C3]
   , map mkGem [C2, C3, C4, C5, C1, C2, C3, C4]
   , map mkGem [C3, C4, C5, C1, C2, C3, C4, C5]
@@ -3539,8 +3539,8 @@ campaign_levels_batch_ok = do
               assertBool ("goal>0 L" ++ show i) (goalTarget (lvlGoal lvl) > 0)
               let gs = newGameAtLevel i (levelConfig lvl) (seed + i * 17)
                   b = gsBoard gs
-              assertEqual ("rows L" ++ show i) boardSize (length b)
-              assertBool ("cols L" ++ show i) (all ((== boardSize) . length) b)
+              assertEqual ("rows L" ++ show i) boardSize (length (boardRows b))
+              assertBool ("cols L" ++ show i) (all ((== boardSize) . length) (boardRows b))
               assertEqual ("cfg moves L" ++ show i) (lvlMoves lvl) (gsMoves gs)
               assertBool ("playable L" ++ show i ++ " s=" ++ show seed) (hasValidMove b)
               case lvlGoal lvl of
@@ -4403,7 +4403,7 @@ release_core_invariants_green = do
     checkTrySwapPair p1 p2 gs =
       case trySwap p1 p2 gs of
         (gs1, out) -> do
-          assertEqual "board rows" boardSize (length (gsBoard gs1))
+          assertEqual "board rows" boardSize (length (boardRows (gsBoard gs1)))
           assertBool "Outcome is a real constructor" $
             case out of
               InvalidSwap -> True
@@ -4807,7 +4807,7 @@ freeze_blocks_freeswap_and_swap = do
 -- multipliers (bug: fromSeeds restarted at 1x so score == cells*10).
 combo_seed_continues_wave_score :: Assertion
 combo_seed_continues_wave_score = do
-  let bSafe =
+  let bSafe = boardFromRows $
         [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
         | r <- [0 .. 7]
         ]
@@ -4844,7 +4844,7 @@ combo_seed_continues_wave_score = do
 -- | Dye bottle recolors neighbors mid-clear; a new match must cascade (not stall).
 bottle_dye_followup_match :: Assertion
 bottle_dye_followup_match = do
-  let bSafe =
+  let bSafe = boardFromRows $
         [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
         | r <- [0 .. 7]
         ]
@@ -4876,7 +4876,7 @@ bottle_dye_followup_match = do
 -- | Magic hat recolor of neighbors can create a match; cascade must clear it.
 hat_recolor_followup_match :: Assertion
 hat_recolor_followup_match = do
-  let bSafe =
+  let bSafe = boardFromRows $
         [ [mkGem (toEnum ((r * 3 + c) `mod` 5)) | c <- [0 .. 7]]
         | r <- [0 .. 7]
         ]
@@ -5059,7 +5059,7 @@ map_click_same_level_resumes = do
 ufo_skips_peel_locks :: Assertion
 ufo_skips_peel_locks = do
   let row = replicate boardSize (mkGem C5)
-      base = replicate boardSize row
+      base = boardFromRows $ replicate boardSize row
       u = mkUfo (7, 3) C1
       near lock =
         setCell (setCell base (7, 3) (mkGem C5)) (7, 4) lock
@@ -6980,7 +6980,7 @@ carpet_covers_on_safe_open = do
 ufo_absorb_no_special_expand :: Assertion
 ufo_absorb_no_special_expand = do
   let paint (r, c) = if even (r + c) then mkGem C4 else mkGem C5
-      base =
+      base = boardFromRows $
         [[paint (r, c) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
       boardBomb =
         setCell

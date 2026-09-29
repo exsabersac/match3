@@ -16,13 +16,10 @@ import Data.List (sort)
 import Match3.Types
 
 at :: Board -> Pos -> Cell
-at b (r, c) = (b !! r) !! c
+at = boardAt
 
 setAt :: Board -> Pos -> Cell -> Board
-setAt b (r, c) v =
-  take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-  where
-    row = b !! r
+setAt = boardSet
 
 inBoard :: Pos -> Bool
 inBoard (r, c) =

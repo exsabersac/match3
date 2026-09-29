@@ -32,7 +32,7 @@ isRainbowSwap b p1 p2 =
     (Flip _ _, Gem _ Rainbow _ _) -> specialActivates c2
     _ -> False
   where
-    at board (r, c) = (board !! r) !! c
+    at = boardAt
     c1 = at b p1
     c2 = at b p2
 
@@ -43,7 +43,7 @@ rainbowClearSeeds :: Board -> Pos -> Pos -> [Pos]
 rainbowClearSeeds b p1 p2 =
   nub (rainbows ++ targets)
   where
-    at board (r, c) = (board !! r) !! c
+    at = boardAt
     c1 = at b p1
     c2 = at b p2
     rainbows =
@@ -71,7 +71,7 @@ colorPositions b col =
   [ (r, c)
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
-  , case (b !! r) !! c of
+  , case boardAt b (r, c) of
       Gem col' _ _ _ -> col' == col
       Countdown col' _ -> col' == col
       Stone _ -> False

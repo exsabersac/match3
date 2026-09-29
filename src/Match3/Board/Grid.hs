@@ -26,16 +26,13 @@ import System.Random (RandomGen, randomR)
 inBounds :: Pos -> Bool
 inBounds (r, c) = r >= 0 && r < boardSize && c >= 0 && c < boardSize
 
--- | 读一格（调用方保证 inBounds；越界会直接报错）。
+-- | 读一格，O(1)（Board 是二维数组；调用方保证 inBounds，越界会直接报错）。
 getCell :: Board -> Pos -> Cell
-getCell b (r, c) = (b !! r) !! c
+getCell = boardAt
 
 -- | 写一格，返回新盘面（纯函数，不修改原盘）。
 setCell :: Board -> Pos -> Cell -> Board
-setCell b (r, c) v =
-  take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-  where
-    row = b !! r
+setCell = boardSet
 
 -- | 交换两格内容；不做任何合法性检查（门禁在 trySwap / useFreeSwap）。
 swapCells :: Board -> Pos -> Pos -> Board
@@ -53,7 +50,7 @@ adjacent (r1, c1) (r2, c2) =
 type MBoard = [[Maybe Cell]]
 
 toM :: Board -> MBoard
-toM = map (map Just)
+toM = map (map Just) . boardRows
 
 setM :: MBoard -> Pos -> Maybe Cell -> MBoard
 setM b (r, c) v =

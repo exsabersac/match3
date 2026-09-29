@@ -16,16 +16,11 @@ import Match3.Types
 
 -- | Place a countdown bomb on the board (level / test spawn helper).
 spawnCountdown :: Board -> Pos -> Color -> Int -> Board
-spawnCountdown b (r, c) col n =
-  take r b
-    ++ [take c row ++ [mkCountdown col n] ++ drop (c + 1) row]
-    ++ drop (r + 1) b
-  where
-    row = b !! r
+spawnCountdown b p col n = boardSet b p (mkCountdown col n)
 
 -- | Decrement every countdown by 1 (floor at 0).
 tickCountdowns :: Board -> Board
-tickCountdowns = map (map tickCell)
+tickCountdowns = mapBoard tickCell
   where
     tickCell (Countdown col n) = Countdown col (max 0 (n - 1))
     tickCell x = x
@@ -36,7 +31,7 @@ countdownsAtZero b =
   [ (r, c)
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
-  , case (b !! r) !! c of
+  , case boardAt b (r, c) of
       Countdown _ 0 -> True
       _ -> False
   ]

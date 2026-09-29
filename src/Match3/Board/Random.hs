@@ -20,7 +20,7 @@ import Match3.Board.Match
 randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard g0 =
   let (cells, g') = go (boardSize * boardSize) g0
-  in (chunk boardSize cells, g')
+  in (boardFromRows (chunk boardSize cells), g')
   where
     go 0 g = ([], g)
     go n g =

@@ -14,7 +14,7 @@ import Match3.Rainbow (rainbowClearSeeds)
 import Match3.Types
 
 at :: Board -> Pos -> Cell
-at b (r, c) = (b !! r) !! c
+at = boardAt
 
 isLine :: GemKind -> Bool
 isLine LineH = True

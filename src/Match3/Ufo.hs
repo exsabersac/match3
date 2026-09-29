@@ -30,7 +30,7 @@ ortho (r, c) =
   filter inBoard [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
 
 at :: Board -> Pos -> Cell
-at b (r, c) = (b !! r) !! c
+at = boardAt
 
 -- | True if UFO can absorb this cell as a *full clear* of target color.
 -- Skip peel-locks (Chain/Curtain/Fog/Steam), multi-ice (chip-only), and Flip

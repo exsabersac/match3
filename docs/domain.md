@@ -6,7 +6,7 @@
 
 | 中文 | 英文 / 类型 | 说明 |
 |------|-------------|------|
-| 棋盘 | `Board` = `[[Cell]]` | 固定 `boardSize = 8`（8×8） |
+| 棋盘 | `Board`（`Array (Int,Int) Cell`，`boardFromRows` / `boardRows` 与行列表互转） | 固定 `boardSize = 8`（8×8）；读格 O(1) |
 | 格 / 坐标 | `Pos` = `(Int, Int)` | 行、列，左上为原点 |
 | 单元格内容 | `Cell` / `CellContents` | 宝石、障碍、装饰等之和类型 |
 | 颜色 | `Color` = `C1`…`C5` | 五色；UI 常映射为红/绿/蓝等 |
@@ -119,3 +119,18 @@
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |
 | 回放加速 | 点击 / 空格 / 回车 / `N` | 每帧推进 3 帧（`fastStep`）；播放期间锁定交换、道具、撤销、洗牌 |
+| 波次视图 | `ComboFx.WaveView { wvWave, wvEvents }`、`wvCleared` / `wvScore` | 一轮的底图快照 + 本轮效果事件；高亮 / 消失 / 粒子 / 得分浮字读事件 |
+
+## 多游戏接口
+
+与三消无关的通用词条（见 [architecture.md](architecture.md#多游戏接口)）。
+
+| 中文 | 类型 / API | 说明 |
+|------|------------|------|
+| 游戏 | `Engine.Game.Game cfg s a e o` | 一条函数记录：开局 / 推进一步 / 结局判定 / 候选动作 / 状态摘要 / 效果映射 |
+| 一步结果 | `Step { stepState, stepEvents, stepOutcome, stepAccepted }` | 被拒时状态不变、没有事件 |
+| 种子 | `Seed = Int` | 只在开局 `gameNew` 用；之后随机数只来自状态 |
+| 通用效果 | `Engine.Effect.Effect { efBeat, efKind, efSubject, efSpots, efAmount }` | 播放层只认它；同一节拍的效果同时播 |
+| 阶段机 / 播放器 | `Engine.Playback.Stages`、`Player { plStage, plFrame, plFast }` | 游戏给出阶段长度与后继，播放器管帧号与加速 |
+| 外壳 / 插件 | `Shell.Loop.runShell`、`Plugin` | SDL 窗口与固定步长主循环；具体游戏的输入映射与绘制作为插件接入 |
+| 三消动作 | `Match3.Engine.Action` = `Swap` / `Hammer` / `FreeSwap` / `CrossClear` / `Undo` / `Hint` / `Shuffle` | `play` 一次结算得到状态、`Outcome`、回放脚本、`MoveFx`、事件 |

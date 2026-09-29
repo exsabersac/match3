@@ -4,12 +4,13 @@
 
 | 文档 | 内容 |
 |------|------|
-| [architecture.md](architecture.md) | 分层架构、[模块地图](architecture.md#模块地图)（核心库 `Match3.Board.*` / `Match3.Game.*` 子模块与外观、前端 `app/UI/*`）、依赖方向（含 `trace*` → `ComboFx` → `UI.Playback` → `UI.Cascade`）、[逐轮回放与规则的同步](architecture.md#逐轮回放与规则的同步)、Stack / GHC |
+| [architecture.md](architecture.md) | 分层架构、[模块地图](architecture.md#模块地图)（核心库 `Match3.Board.*` / `Match3.Game.*` 子模块、通用层 `Engine.*`、前端 `app/Shell` / `app/UI/*`）、依赖方向（含 `trace*` → `ComboFx` → `UI.Playback` → `UI.Cascade`）、[逐轮回放与规则的同步](architecture.md#逐轮回放与规则的同步)、[仍保留专门分支的元素](architecture.md#仍保留专门分支的元素)、Stack / GHC |
+| [architecture.md § 多游戏接口](architecture.md#多游戏接口) | 通用层 / 三消实现 / SDL 外壳的分层图、`Game` / `Step` / `Effect` / `Stages` / `Player` / `Plugin` 字段说明、record-of-functions 的取舍与种子约定、三消动作映射、接入新游戏的步骤清单 |
 | [domain.md](domain.md) | 领域词汇中英对照（与 `Types` / `GameState` 对齐），含[回放与表现](domain.md#回放与表现)词条 |
 | [rules-pipeline.md](rules-pipeline.md) | `trySwap` / 稳定化 / 连锁波次流水线（据实描述代码）；[与前端的边界](rules-pipeline.md#8-与前端的边界)：`MoveFx`、`MoveTrace`、`mtEnd` |
-| [testing.md](testing.md) | 如何跑测、覆盖面、合并门禁；[逐轮回放护栏](testing.md#逐轮回放护栏)（`trace_*` / `trace_end_*`、比对底线、洗牌步缺口） |
+| [testing.md](testing.md) | 如何跑测、覆盖面、合并门禁（含截图 AE=0 比对）；[逐轮回放护栏](testing.md#逐轮回放护栏)（`trace_*` / `trace_end_*`、比对底线、洗牌步缺口）；[行为金标准](testing.md#行为金标准golden)；[多游戏接口验收](testing.md#多游戏接口验收第三刀) |
 | [ui-controls.md](ui-controls.md) | SDL 键位与道具点选流（前端 `app/UI/Input.hs` / `Actions.hs`）；回放加速键与[播放锁定](ui-controls.md#播放锁定animbusy) |
 | [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |
 | [ui-art.md § 连击表现](ui-art.md#连击表现逐轮回放) | 连锁逐轮回放时间线、[步末阶段（PhEnd）](ui-art.md#步末阶段phend)、[连击等级样式](ui-art.md#连击等级样式combostyle)、截图与复现 seed |
 
-根目录 [`README.md`](../README.md) 是玩家向上手说明（含目录结构）；本目录偏实现与规则。源码按职责分在 `src/Match3/Board/`、`src/Match3/Game/`（`Board.hs` / `Game.hs` 为再导出外观）与 `app/UI/`，对应关系见 architecture.md。许可证见 [`LICENSE`](../LICENSE)（法律原文不译）。
+根目录 [`README.md`](../README.md) 是玩家向上手说明（含目录结构）；本目录偏实现与规则。源码按职责分在 `src/Engine/`（多游戏通用层）、`src/Match3/Board/`、`src/Match3/Game/`、`src/Match3/Engine.hs`（三消实例）与 `app/Shell/`（通用外壳）、`app/UI/`（三消插件），对应关系见 architecture.md。许可证见 [`LICENSE`](../LICENSE)（法律原文不译）。

@@ -170,19 +170,24 @@ Stackage：**lts-21.25** / GHC **9.4.8**（`stack.yaml` 已 `system-ghc: true`�
 ## 目录结构
 
 ```
-src/Match3/   Types Core Board Game Obstacles Rainbow Combos Ice
+src/Engine/   Game Effect Playback（多游戏通用层：接口 / 通用效果 / 纯播放层；不依赖 Match3）
+src/Match3/   Types Core Engine Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
-src/Match3/Board/  Grid Match Clear Gravity Cascade Random（Board.hs 为再导出外观）
-src/Match3/Game/   State Tally Outcome Shuffle Level Trace Resolve Move Boosters（Game.hs 为再导出外观）
+              （Engine = 三消作为通用接口的第一个实现）
+src/Match3/Board/  Grid Match Clear Gravity Cascade Random
+src/Match3/Game/   State Tally Outcome Shuffle Level Trace Resolve Move Boosters
 src/Match3/Element/ Types Registry Builtin Event（元素框架：定义 / 注册表 / 内置元素 / 效果事件；Element.hs 为再导出外观）
-app/Main.hs   SDL2 前端入口与主循环
-app/UI/       前端模块：Types Layout Env Input Actions Playback Draw Cascade EndStage
-              BoardArt BoardPrim HudArt HudPrim TextArt Glyph LevelMap
+app/Main.hs   SDL2 前端入口（读环境变量 → runShell）
+app/Shell/    Loop（通用 SDL 外壳：窗口 / 固定步长主循环 / 插件钩子；不依赖 Match3）
+app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw Cascade EndStage
+              BoardArt BoardPrim CellTable HudArt HudPrim TextArt Glyph LevelMap
+app/UI/Cell/  Prim Art（每种元素一个几何 / 贴图渲染函数，经 CellTable 查表）
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
 app/ComboFx.hs 连锁逐轮回放 / 步末动画的纯阶段机与时间线常量
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）
 test/Spec.hs  tasty（228 命名用例）
+test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
 ```

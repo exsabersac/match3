@@ -116,7 +116,7 @@ match3GameWith reg =
     , gameOutcome = gsOver
     , gameActions = \s ->
         [ Swap p q
-        | isJust (gsOver s) == False
+        | not (isJust (gsOver s))
         , r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , let p = (r, c)

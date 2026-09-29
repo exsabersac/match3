@@ -13,13 +13,13 @@
 交换两格 → 是否彩虹交换 / 特殊合成 / 普通三消？
     │ 否 → NoMatch（回滚，盘面不变）
     ▼
-主连锁 runCascade*（匹配清除 → 特殊扩展 → 邻障削层 → 重力/饼干底收/传送门 → 补子 → UFO）
+主连锁 cascadeMatches / cascadeSeeds（匹配清除 → 特殊扩展 → 邻障削层 → 重力/饼干底收/传送门 → 补子 → UFO）
     │
     ▼
-倒计时 resolveCountdowns（tick；归零则 3×3 种子再连锁）
+倒计时 cascadeCountdowns（tick；归零则 3×3 种子再连锁）
     │
     ▼
-传送带 shiftBelts → runPostBeltCascade（有匹配则连锁；无匹配仍 settle 收底行饼干）
+传送带 beltMoves → applyBeltMoves → cascadeAfterBelt（有匹配则连锁；无匹配仍 settle 收底行饼干）
     │
     ▼
 蔓延 spreadVines → spreadChoco → spreadSteam
@@ -40,7 +40,7 @@
 
 1. 已有 `gsOver` → 原样返回该结局。
 2. 坐标越界或不相邻 → `InvalidSwap`。
-3. `swapBlockedByStone`（石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
+3. `swapBlockedWith reg`（注册表的 `edBlocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
 4. `swapCells` 后：若非 `isRainbowSwap`、非 `isSpecialCombo`、且 `not hasAnyMatch` → `NoMatch`。
 
 2–4 返回的状态盘面 / 分数 / 步数不变，但会经 `clearMoveFx` 把 `gsCombo`、`gsLastCleared` 清零（这两个字段只描述最近一次**真正结算**的一步）。道具被拒（锤免疫、次数用完、自由交换无匹配）、`undoMove`、`shuffleGame` 同样清零。
@@ -49,9 +49,9 @@
 
 ## 2. 主连锁（`Match3.Board.Cascade`）
 
-### 2.1 普通匹配路径 — `runCascadeScoredWithUfos`
+### 2.1 普通匹配路径 — `cascadeMatches` / `cascadeMatchesFrom`
 
-循环 `stepCascadeDetailed`，直至无匹配：
+每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
 1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay，邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵，触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
 2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送 → 再重力/收集（循环至稳）。
@@ -60,11 +60,11 @@
 
 波次分：`scoreForWave wave n`。
 
-### 2.2 种子路径 — `runCascadeScoredFromSeedsWithUfos`
+### 2.2 种子路径 — `cascadeSeeds`
 
 彩虹 / 特殊合成 / 倒计时爆炸 / 道具：先 `clearFromSeedsDetailed`（对种子做特殊扩展与邻障处理），再 UFO，再转入普通匹配连锁（波次编号衔接）。
 
-## 3. 倒计时（`resolveCountdowns`）
+## 3. 倒计时（`cascadeCountdowns`）
 
 1. `tickCountdowns`：所有倒计时 −1。
 2. 若有归零：`explodeSeedsFor` → 种子连锁（仍带 UFO + 传送门）。
@@ -72,9 +72,9 @@
 
 **注意**：`useFreeSwap` 不走 tick（不耗步、不推进倒计时）；普通 `trySwap` 成功后才 tick。
 
-## 4. 传送带（`shiftBelts` + `runPostBeltCascade`）
+## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterBelt`）
 
-- 有皮带：沿每条 `Belt` 环向移位一格。
+- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves` 给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用这一份。
 - 移位后有匹配 → 全连锁。
 - **无匹配**仍 `settleBoardPortals`：皮带把饼干送到底行时也要收集；settle 后若出现匹配再连锁。
 
@@ -89,7 +89,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 - 本步已清除的藤/巧/蒸汽不蔓延。
 - 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。
-- 蜗牛推动后若形成匹配：再 `runCascadeScoredWithUfos` 一次；**不再**重复倒计时/皮带/蜗牛/蔓延。
+- 蜗牛推动后若形成匹配：再 `cascadeMatches` 一次；**不再**重复倒计时/皮带/蜗牛/蔓延。
 
 ## 6. 结算
 
@@ -112,10 +112,10 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 ## 8. 与前端的边界
 
-前端（`app/UI/Actions.hs` / `UI.Input`）在调用 `trySwap` / 道具 API **之后**经 `UI.Playback` 播放交换/下落动画与粒子；规则结果不依赖帧。暂停（`P`）冻结动画并清拖拽，不改 `GameState` 规则字段。
+前端（`app/UI/Actions.hs` / `UI.Input`）经 `Match3.Engine.play` 执行交换 / 道具（一次结算，结果与 `trySwap` / 道具 API 逐位相同）**之后**经 `UI.Playback` 播放交换/下落动画与粒子；规则结果不依赖帧。暂停（`P`）冻结动画并清拖拽，不改 `GameState` 规则字段。
 
 **特效是边沿触发**：前端用 `moveFx before after outcome` 取本次操作的 `MoveFx`（`fxCombo` 连击波数、`fxCleared` 清除格），只有这次调用真正结算了一步才非空；`NoMatch` / `InvalidSwap` / 操作前已终局一律为空。闪光、粒子、连击弹字和 HUD 总结都只看 `MoveFx` 和本次操作的 `MoveTrace`，不再直接读持久字段 `gsCombo`——旧实现里无匹配回滚后 `gsCombo` 仍是上一步的值，会把上一步的连击特效再播一遍。
 
-**逐轮回放用的纯函数**：`traceSwap`（`Match3.Game.Move`）/ `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Boosters`）与对应的结算 API 是同一次 `resolveMove` 计算的两个投影；连锁层同理，`Match3.Board.Cascade` 的记录版 `cascade*` 同时产出计数（`CascadeTally`）与每一轮（`CascadeWave`），旧的 `runCascade*` / `traceCascade*` 都是它的投影。`MoveTrace` 含每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮）；`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器，没有自动洗牌时就等于结算结果的 `gsBoard` / `gsGen`，洗牌时 `mtShuffle` 记下洗牌后的盘面。`trace_*` 系列测试保留作回归，现在天然成立。
+**逐轮回放用的纯函数**：`traceSwap`（`Match3.Game.Move`）/ `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Boosters`）与对应的结算 API 是同一次 `resolveMove` 计算的两个投影；连锁层同理，`Match3.Board.Cascade` 的记录版 `cascade*` 同时产出计数（`CascadeTally`）与每一轮（`CascadeWave`），调用方直接读 `CascadeRun` 的字段（第三刀删掉了旧的元组 API `runCascade*` / `traceCascade*`）。`MoveTrace` 含每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮）；`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器，没有自动洗牌时就等于结算结果的 `gsBoard` / `gsGen`，洗牌时 `mtShuffle` 记下洗牌后的盘面。`trace_*` 系列测试保留作回归，现在天然成立。
 
 `mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EndCountdownTick`）→ 皮带移位（`EndBeltShift`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EndSpread`，带来源格）→ 蜗牛爬行（`EndSnail`，每只的起点、终点、朝向和被推的格子）。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。

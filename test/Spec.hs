@@ -7663,8 +7663,9 @@ checkWaveChain tag start ws final = do
 nonEmptyWaves :: [CascadeWave] -> Int
 nonEmptyWaves = length . filter (not . null . cwCleared)
 
--- | 普通匹配连锁：traceCascade 的最终盘面 / 生成器 / 得分 / 清除格 / 波数都与
--- runCascadeScoredWithUfos（即「连锁到稳定」）一致。含飞碟与传送门的情形一起覆盖。
+-- | 普通匹配连锁：cascadeMatches 的逐轮回放（crWaves）与结算计数（crTally）一致——各轮得分之和、
+-- 清除格并集、波数，终盘稳定且逐轮首尾相接（元组 API 已删，两个投影直接取同一 CascadeRun 的字段）。
+-- 含飞碟与传送门的情形一起覆盖。
 trace_cascade_final_equals_stabilized :: Assertion
 trace_cascade_final_equals_stabilized = do
   let cases =

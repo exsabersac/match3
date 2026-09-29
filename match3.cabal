@@ -24,7 +24,11 @@ source-repository head
 
 library
   exposed-modules:
+      Engine.Game
+      Engine.Effect
+      Engine.Playback
       Match3.Core
+      Match3.Engine
       Match3.Types
       Match3.Board.Grid
       Match3.Board.Match
@@ -114,6 +118,7 @@ test-suite match3-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Toy
       Golden
       Paths_match3
   autogen-modules:

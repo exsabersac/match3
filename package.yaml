@@ -30,7 +30,11 @@ ghc-options:
 library:
   source-dirs: src
   exposed-modules:
+  - Engine.Game
+  - Engine.Effect
+  - Engine.Playback
   - Match3.Core
+  - Match3.Engine
   - Match3.Types
   - Match3.Board.Grid
   - Match3.Board.Match

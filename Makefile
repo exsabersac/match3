@@ -1,5 +1,6 @@
-# 网页版（GHC wasm）自动化任务。在 web/ 下运行 `make <目标>`，或在仓库根目录 `make -C web <目标>`。
-# 不带目标时显示帮助。兼容 GNU make 3.81+（macOS 自带版本即可）；配方只用 POSIX sh。
+# 仓库自动化任务入口（仓库根目录运行 `make <目标>`）：桌面版（Stack）+ 网页版（GHC wasm，web/）。
+# 不带目标时显示帮助（按分组列出）。兼容 GNU make 3.81+（macOS 自带版本即可）；配方只用 POSIX sh。
+# 桌面版目标只是 Stack 常用命令的薄包装，日常直接用 stack 也完全一样。
 #
 # 常用变量（命令行覆盖，例如 `make serve PORT=9000 BIND=127.0.0.1`）：
 #   PORT / BIND        serve 与 deploy-* 的端口 / 监听地址
@@ -13,8 +14,9 @@ SHELL := /bin/sh
 .DEFAULT_GOAL := help
 .NOTPARALLEL:
 
-WEB             := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-ROOT            := $(patsubst %/,%,$(dir $(WEB)))
+ROOT            := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+WEB             := $(ROOT)/web
+EXE             := match3-sdl
 GHC_WASM_PREFIX ?= $(HOME)/.ghc-wasm
 FLAVOUR         ?= 9.14
 PORT            ?= 8080
@@ -35,16 +37,33 @@ NEED_DIST = @[ -f "$(WEB)/dist/match3-web.wasm" ] || { echo "没有 web/dist，�
 # 原生 stack 不能带着 ~/.ghc-wasm/env 的编译器变量
 NATIVE_ENV = env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP
 
-.PHONY: help build atlas serve test-native parity anim-parity e2e test check size pack \
+.PHONY: help desktop-build run test-native build atlas serve parity anim-parity e2e test check size pack \
         deploy-install deploy-start deploy-stop deploy-status clean toolchain doctor
 
+##@ 通用
+
 help: ## 显示本帮助（默认目标）
-	@echo "用法：make <目标> [变量=值]（仓库根目录用 make -C web <目标>）"
-	@echo
-	@awk 'BEGIN { FS = ":[^#]*## " } /^[a-z][a-z0-9-]*:.*## / { printf "  %-16s %s\n", $$1, $$2 }' "$(WEB)/Makefile"
+	@echo "用法：make <目标> [变量=值]（在仓库根目录运行）"
+	@awk 'BEGIN { FS = ":[^#]*## " } /^##@ / { printf "\n%s\n", substr($$0, 5); next } /^[a-z][a-z0-9-]*:.*## / { printf "  %-16s %s\n", $$1, $$2 }' "$(ROOT)/Makefile"
 	@echo
 	@echo "变量：PORT=$(PORT) BIND=$(BIND) DEST=$(DEST)"
 	@echo "      GHC_WASM_PREFIX=$(GHC_WASM_PREFIX) FLAVOUR=$(FLAVOUR) SHOTS=$(SHOTS)"
+
+##@ 桌面版（Stack，SDL2）
+
+desktop-build: ## 构建桌面版（stack build；首次需系统 SDL2，见根目录 README）
+	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
+	cd "$(ROOT)" && $(NATIVE_ENV) stack build
+
+run: ## 运行桌面版（stack run match3-sdl；需要显示器，环境变量原样传给游戏）
+	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
+	cd "$(ROOT)" && exec $(NATIVE_ENV) stack run $(EXE)
+
+test-native: ## 核心规则测试（stack test，252 个；与桌面版共用）
+	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
+	cd "$(ROOT)" && $(NATIVE_ENV) stack test
+
+##@ 网页版：构建与运行（web/，GHC wasm）
 
 build: ## 构建 wasm + 页面 + 图集到 web/dist（web/build.sh）
 	@[ -f "$(GHC_WASM_PREFIX)/env" ] || { echo "找不到 $(GHC_WASM_PREFIX)/env：先 make toolchain（或 make doctor 看缺什么）" >&2; exit 1; }
@@ -60,9 +79,7 @@ serve: ## 用 serve.py 起本地 / 局域网服务器（PORT、BIND 可改；不
 	$(NEED_DIST)
 	exec python3 "$(WEB)/serve.py" --dir "$(WEB)/dist" --port "$(PORT)" --bind "$(BIND)"
 
-test-native: ## 核心规则测试（仓库根目录 stack test）
-	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
-	cd "$(ROOT)" && $(NATIVE_ENV) stack test
+##@ 网页版：测试
 
 parity: ## 状态一致性：原生 Parity.hs 与 wasm 每步 JSON 逐字节相同（STEPS、CASES 可改）
 	$(NEED_DIST)
@@ -77,17 +94,19 @@ e2e: ## 无头 Chrome 端到端测试，截图与 report.json 写到 SHOTS
 	@[ -x "$(CHROME)" ] || { echo "找不到 Chrome：$(CHROME)；设 CHROME=/path/to/chromium" >&2; exit 1; }
 	NODE_PATH="$(dir $(NODE))../lib/node_modules" "$(NODE)" "$(WEB)/test/e2e.mjs" "$(SHOTS)"
 
-test: test-native parity anim-parity e2e ## 全部测试（stack test + 两组一致性 + e2e）
+test: test-native parity anim-parity e2e ## 全部测试（stack test + 网页两组一致性 + e2e）
 	@echo "== 全部测试通过"
 
-check: ## CI 用：构建后跑全部测试
-	$(MAKE) -f "$(WEB)/Makefile" build
-	$(MAKE) -f "$(WEB)/Makefile" test
-	$(MAKE) -f "$(WEB)/Makefile" size
+check: ## CI 用：构建网页版后跑全部测试并报告体积
+	$(MAKE) -f "$(ROOT)/Makefile" build
+	$(MAKE) -f "$(ROOT)/Makefile" test
+	$(MAKE) -f "$(ROOT)/Makefile" size
 
 size: ## 体积报告：wasm 原始 / 优化后、dist 各文件与合计（含 gzip -9）
 	$(NEED_DIST)
 	@"$(WEB)/tools/size.sh"
+
+##@ 网页版：打包与部署（deploy-start/stop 仅 macOS）
 
 pack: ## 打包 dist + serve.py + 部署脚本为 TGZ（默认 web/match3-web-dist.tgz）
 	$(NEED_DIST)
@@ -106,9 +125,13 @@ deploy-stop: ## macOS：停止 launchd 代理
 deploy-status: ## 查看部署状态（launchd、lsof 端口监听、curl 自检）
 	"$(WEB)/deploy-mac.sh" status
 
-clean: ## 删除 web/dist、网页构建缓存（dist-newstyle、.cache）和 tgz；不碰 ~/.ghc-wasm
+##@ 网页版：清理
+
+clean: ## 只清网页版：web/dist、web/dist-newstyle、web/.cache、web/*.tgz；不碰 ~/.ghc-wasm 与 .stack-work
 	rm -rf "$(WEB)/dist" "$(WEB)/dist-newstyle" "$(WEB)/.cache"
 	rm -f "$(WEB)"/*.tgz
+
+##@ 环境（前置检查与网页版工具链）
 
 toolchain: ## 安装或校验 ghc-wasm-meta（FLAVOUR=9.14）；已安装则只校验，FORCE=1 重跑安装
 	@if [ -f "$(GHC_WASM_PREFIX)/env" ] && [ -z "$(FORCE)" ]; then \

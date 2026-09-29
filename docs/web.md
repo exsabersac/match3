@@ -114,19 +114,22 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 
 ### 3.1 make 目标
 
-`web/Makefile` 是日常入口（放在 `web/`，不与 main 上的游戏本体冲突；根目录用 `make -C web <目标>`）。
+仓库根目录的 `Makefile` 是日常入口，**在仓库根目录运行 `make <目标>`**；`make help` 按分组列出
+（通用 / 桌面版 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境）。桌面版目标只是 Stack 命令的薄包装。
 第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；CI 用 `make check`。
 在 box 上从 `make clean` 开始跑 `make check`（完整重编 wasm + 四组测试 + 体积）约 2 分 45 秒。
 
 | 目标 | 作用 |
 | --- | --- |
-| `make` / `make help` | 列出全部目标与当前变量（默认目标） |
+| `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
+| `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
+| `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
 | `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | 仓库根目录 `stack test` |
+| `make test-native` | `stack test`（核心 252 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -136,14 +139,14 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |
 | `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
 | `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
-| `make clean` | 删 `web/dist`、`web/dist-newstyle`、`web/.cache` 和 `web/*.tgz`；不碰 `~/.ghc-wasm` |
+| `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（桌面版用 `stack clean`） |
 
 ## 4. 本地运行
 
 ```sh
-web/build.sh --serve              # 构建后用 web/serve.py 起服务器（默认 0.0.0.0:8080）
-python3 web/serve.py              # 已构建过：直接起，默认目录 web/dist
-python3 web/serve.py --port 9000 --bind 127.0.0.1 --dir /path/to/dist --quiet
+make build serve                    # 仓库根目录：构建后用 web/serve.py 起服务器（默认 0.0.0.0:8080）
+make serve PORT=9000 BIND=127.0.0.1 # 已构建过：直接起；改端口 / 只给本机
+# 底层等价：web/build.sh --serve，或 python3 web/serve.py [--port --bind --dir --quiet]
 ```
 
 `web/serve.py` 只用 Python 3 标准库（3.7+，macOS 自带的 python3 即可），它：
@@ -167,14 +170,17 @@ python3 web/serve.py --port 9000 --bind 127.0.0.1 --dir /path/to/dist --quiet
 ### 5.1 Mac 上常驻（`web/deploy-mac.sh`）
 
 ```sh
-# 构建机上
-web/build.sh && web/deploy-mac.sh pack            # → web/match3-web-dist.tgz（dist + serve.py + 脚本）
-# 把 tgz 拷到 Mac 后，在 Mac 上
-bash deploy-mac.sh install match3-web-dist.tgz    # 默认装到 /Users/yubin/Documents/dev/haskell/match3-web
+# 构建机上（仓库根目录）
+make build pack                                   # → web/match3-web-dist.tgz（dist + serve.py + 脚本）
+# 把 tgz 拷到 Mac 后。Mac 上有仓库时在仓库根目录：
+make deploy-install TGZ=~/Downloads/match3-web-dist.tgz   # 默认 DEST=/Users/yubin/Documents/dev/haskell/match3-web
+make deploy-start                                 # 交给 launchd 后台常驻（DEST、PORT、BIND 可改）
+make deploy-status                                # launchd 状态 + lsof -i :8080 + curl 自检
+make deploy-stop                                  # 停止
+# Mac 上没有仓库时，用包里自带的脚本（子命令一一对应）：
+bash deploy-mac.sh install match3-web-dist.tgz    # 安装
 bash deploy-mac.sh run                            # 前台运行（exec），Ctrl-C 停
-bash deploy-mac.sh start                          # 或：交给 launchd 后台常驻
-bash deploy-mac.sh status                         # launchd 状态 + lsof -i :8080 + curl 自检
-bash deploy-mac.sh stop [--remove]                # 停止（--remove 同时删 plist）
+bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 / 停止（--remove 同时删 plist）
 ```
 
 注意事项：

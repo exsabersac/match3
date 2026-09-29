@@ -14,4 +14,4 @@
 | [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |
 | [ui-art.md § 连击表现](ui-art.md#连击表现逐轮回放) | 连锁逐轮回放时间线、[步末阶段（PhEnd）](ui-art.md#步末阶段phend)、[连击等级样式](ui-art.md#连击等级样式combostyle)、截图与复现 seed |
 
-根目录 [`README.md`](../README.md) 是玩家向上手说明（含目录结构）；本目录偏实现与规则。源码按职责分在 `src/Engine/`（多游戏通用层）、`src/Match3/Board/`、`src/Match3/Game/`、`src/Match3/Engine.hs`（三消实例）与 `app/Shell/`（通用外壳）、`app/UI/`（三消插件），对应关系见 architecture.md。许可证见 [`LICENSE`](../LICENSE)（法律原文不译）。
+根目录 [`README.md`](../README.md) 是玩家向上手说明（含目录结构）；根目录 `Makefile` 收了常用任务（`make help`：桌面版 `desktop-build` / `run` / `test-native`，网页版构建、测试、部署，详见 [web.md § make 目标](web.md#31-make-目标)）；本目录偏实现与规则。源码按职责分在 `src/Engine/`（多游戏通用层）、`src/Match3/Board/`、`src/Match3/Game/`、`src/Match3/Engine.hs`（三消实例）与 `app/Shell/`（通用外壳）、`app/UI/`（三消插件），对应关系见 architecture.md。许可证见 [`LICENSE`](../LICENSE)（法律原文不译）。

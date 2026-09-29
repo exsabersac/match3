@@ -5,10 +5,10 @@
 （动画状态机 `app/UI/ComboFx.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
+日常任务用**仓库根目录**的 `Makefile`（`make help`），见 §0。
 
 ```
 web/
-├── Makefile              常用任务入口（make help 列出全部目标）
 ├── build.sh              构建脚本（→ web/dist/），--serve 构建后用 serve.py 起服务器
 ├── serve.py              本地静态服务器（Python 3 标准库；正确 MIME、开发期 no-cache、打印局域网地址）
 ├── serve.sh              serve.py 的薄包装
@@ -43,8 +43,8 @@ web/
 
 ## 0. 常用命令（make）
 
-`web/Makefile` 把下面各节的命令收成目标；在 `web/` 下 `make <目标>`，或在仓库根目录 `make -C web <目标>`
-（放在 `web/` 而不是仓库根目录，避免与 main 上的游戏本体改动冲突；仓库根目录目前没有 Makefile）。
+仓库根目录的 `Makefile` 把下面各节的命令收成目标，**一律在仓库根目录运行 `make <目标>`**；
+`make`（即 `make help`）按分组列出：通用 / 桌面版 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境。
 
 ```sh
 make doctor          # 先看缺什么
@@ -56,13 +56,15 @@ make check           # CI：构建 + 全部测试 + 体积
 
 | 目标 | 作用 |
 | --- | --- |
-| `make` / `make help` | 列出全部目标与当前变量（默认目标） |
+| `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
+| `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
+| `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
 | `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.4.8、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | 仓库根目录 `stack test` |
+| `make test-native` | `stack test`（核心 252 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -72,7 +74,7 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |
 | `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
 | `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
-| `make clean` | 删 `web/dist`、`web/dist-newstyle`、`web/.cache` 和 `web/*.tgz`；不碰 `~/.ghc-wasm` |
+| `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（桌面版用 `stack clean`） |
 
 ## 1. 安装工具链（一次性，约 6.4 GB，装在 ~/.ghc-wasm）
 
@@ -80,6 +82,9 @@ make check           # CI：构建 + 全部测试 + 体积
 选 `9.14` 分支（GHC 9.14 是 LTS 系列，也是 ghc-wasm-meta 当前默认 flavour，JSFFI 已稳定）：
 
 ```sh
+make toolchain       # 已安装则只校验；没装则检查依赖后执行下面的官方安装脚本
+
+# 等价的手动步骤：
 # 安装脚本依赖（Debian/Ubuntu）；缺 xz 或 make 会在解包 / make install 阶段失败
 sudo apt-get install -y curl jq unzip zstd xz-utils make
 
@@ -100,11 +105,11 @@ wasi-sdk、binaryen（`wasm-opt`）、wasmtime、node（自带 playwright-core�
 ## 2. 构建
 
 ```sh
-cd web
-./build.sh
+make build           # 仓库根目录；等价于 web/build.sh
+make size            # 事后单独看体积
 ```
 
-它会：
+`web/build.sh` 会：
 1. 检查 `match3-web.cabal` 里的核心模块清单（`Engine.*` + `Match3.*`）与 `package.yaml` 的 `library.exposed-modules` 是否一致
    （核心新增模块时要同步到 cabal 文件，否则会打印警告）；
 2. `wasm32-wasi-cabal build exe:match3-web`，链接为 WASI **reactor** 模块；
@@ -127,11 +132,13 @@ dist 合计 2,124,656 B，逐文件 gzip 合计约 1.02 MB（WebP 已压缩，gz
 ## 3. 本地试玩
 
 ```sh
-cd web
-./build.sh --serve                 # 构建后起 serve.py（默认 0.0.0.0:8080），其余参数原样传给 serve.py
-./serve.sh                         # 已构建过就直接起；等价于 python3 serve.py
-python3 serve.py --port 9000 --bind 127.0.0.1 --dir /path/to/dist --quiet
+make serve                          # 仓库根目录；已构建过就直接起（默认 0.0.0.0:8080）
+make serve PORT=9000 BIND=127.0.0.1 # 改端口 / 只给本机
 # 浏览器打开 http://127.0.0.1:8080/?level=0&seed=42
+
+# 底层等价命令：
+web/build.sh --serve                # 构建后起 serve.py，其余参数原样传给 serve.py
+python3 web/serve.py --port 9000 --bind 127.0.0.1 --dir /path/to/dist --quiet
 ```
 
 `serve.py`（Python 3.7+ 标准库，macOS 自带 python3 即可）：
@@ -144,10 +151,12 @@ python3 serve.py --port 9000 --bind 127.0.0.1 --dir /path/to/dist --quiet
 部署到 Mac（目标机只需 python3，不需要工具链）：
 
 ```sh
-./build.sh && ./deploy-mac.sh pack                 # → web/match3-web-dist.tgz
-# 拷到 Mac 后：
-bash deploy-mac.sh install match3-web-dist.tgz     # 默认目标 /Users/yubin/Documents/dev/haskell/match3-web（TARGET 可改）
-bash deploy-mac.sh run                             # 前台运行；或 start 交给 launchd 常驻，stop 停止，status 查看
+make build pack                                    # 仓库根目录 → web/match3-web-dist.tgz
+# 拷到 Mac 后（Mac 上有仓库时同样在根目录用 make）：
+make deploy-install TGZ=~/Downloads/match3-web-dist.tgz   # 默认 DEST=/Users/yubin/Documents/dev/haskell/match3-web
+make deploy-start                                  # launchd 常驻；deploy-stop 停止，deploy-status 查看
+# Mac 上没有仓库时，直接用包里的脚本：
+bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前台运行
 ```
 
 注意：不要在一次性会话里 `nohup … &`（会话结束进程就被杀）；Mac 睡眠时不响应、重启后前台进程不会自己回来；
@@ -186,7 +195,8 @@ bash deploy-mac.sh run                             # 前台运行；或 start �
 
 ## 4. 测试
 
-一般直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；下面是各自的底层命令。
+一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
+下面是各自的底层命令。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json

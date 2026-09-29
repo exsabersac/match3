@@ -9,10 +9,11 @@
 -- * "Match3.Game.Shuffle"  —— 保装饰洗牌、自动洗牌 ensurePlayable
 -- * "Match3.Game.Level"    —— 开局、战役装饰、每日、重开 / 下一关、步数携带
 -- * "Match3.Game.Trace"    —— 回放脚本类型 MoveTrace / EndStep、applyEndEffect、步末记录
--- * "Match3.Game.Move"     —— trySwap（= runMove）与 traceSwap
--- * "Match3.Game.Boosters" —— 锤子 / 自由交换 / 十字清除及其回放
+-- * "Match3.Game.Resolve"  —— 交换与三种道具共用的结算 resolveMove（同时产出 MoveTrace）
+-- * "Match3.Game.Move"     —— trySwap（= runMove）与 traceSwap（resolveSwap 的两个投影）
+-- * "Match3.Game.Boosters" —— 锤子 / 自由交换 / 十字清除及其回放（resolve* 的投影）
 --
--- 编排顺序「主连锁 → 倒计时 → 皮带 → 蔓延 → 蜗牛 → 可选再连锁」见 Match3.Game.Move；
+-- 编排顺序「主连锁 → 倒计时 → 皮带 → 蔓延 → 蜗牛 → 可选再连锁」见 Match3.Game.Resolve；
 -- 每日通关为 Won，不推进战役解锁。
 module Match3.Game
   ( GameState(..)

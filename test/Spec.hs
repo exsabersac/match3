@@ -240,6 +240,7 @@ tests =
     , testCase "trace_end_snail_push_and_turn" trace_end_snail_push_and_turn
     , testCase "trace_end_spread_from_adjacent_source" trace_end_spread_from_adjacent_source
     , testCase "golden_behaviour_snapshot" golden_behaviour_snapshot
+    , testCase "trace_shuffle_step_replays" trace_shuffle_step_replays
     ]
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
@@ -8055,3 +8056,61 @@ golden_behaviour_snapshot = do
     ((i, e, a) : _) ->
       assertFailure ("golden line " ++ show i ++ " differs (" ++ show (length diffs) ++ " lines differ)\nexpected: " ++ take 400 e ++ "\nactual:   " ++ take 400 a)
     [] -> assertEqual "golden line count" (length expected) (length actual)
+
+-- | 补上「自动洗牌步」的逐帧比对缺口（第二刀：MoveTrace 新增 mtGen / mtShuffle）。
+-- 全部 38 关 × 种子 1–3 × 全部相邻交换（开局状态）+ 每个成交交换之后再走 2 手：每个成交步都按
+-- 「轮 → 步末 → 轮」时间线重放到 mtFinal，再从 (mtFinal, mtGen) 重放 ensurePlayable，必须到达结算后的
+-- gsBoard / gsGen（没洗牌时 mtFinal == gsBoard、mtGen == gsGen，mtShuffle == Nothing）。
+-- 底线：逐帧比对的成交步 > 3000，其中洗牌步 > 20（当前 3801 / 29；失败信息打印实际数）。
+trace_shuffle_step_replays :: Assertion
+trace_shuffle_step_replays = do
+  let pairs =
+        [ ((r, c), p2)
+        | r <- [0 .. boardSize - 1]
+        , c <- [0 .. boardSize - 1]
+        , p2 <- [(r, c + 1), (r + 1, c)]
+        , inBounds p2
+        ]
+      firstApplied gs = [ (p1, p2, g) | (p1, p2) <- pairs, let (g, o) = trySwap p1 p2 gs, o /= NoMatch && o /= InvalidSwap ]
+      -- 开局的全部成交交换，外加每条之后沿「第一手成交」再走两手
+      chains gs0 =
+        concat
+          [ (gs0, p1, p2, gs1) : follow (2 :: Int) gs1
+          | (p1, p2, gs1) <- firstApplied gs0
+          ]
+      follow 0 _ = []
+      follow n gs
+        | isJust (gsOver gs) = []
+        | otherwise = case firstApplied gs of
+            ((p1, p2, g) : _) -> (gs, p1, p2, g) : follow (n - 1) g
+            [] -> []
+      cases =
+        [ (li, seed, st)
+        | li <- [0 .. length allLevels - 1]
+        , seed <- [1 .. 3 :: Int]
+        , st <- chains (newGameAtLevel li (levelConfig (allLevels !! li)) seed)
+        ]
+  counts <- mapM
+    ( \(li, seed, (gs0, p1, p2, gs1)) -> do
+        let mt = traceSwap p1 p2 gs0
+            tag = "L" ++ show (li + 1) ++ " seed " ++ show seed ++ " " ++ show (p1, p2)
+        _ <- replayTimeline tag mt
+        let replay = ensurePlayable gs1 {gsBoard = mtFinal mt, gsGen = mtGen mt, gsShuffled = False}
+        if gsShuffled gs1
+          then do
+            assertEqual (tag ++ ": mtShuffle = settled board") (Just (gsBoard gs1)) (mtShuffle mt)
+            assertEqual (tag ++ ": shuffle replays from (mtFinal, mtGen)") (gsBoard gs1) (gsBoard replay)
+            assertEqual (tag ++ ": shuffle generator") (show (gsGen gs1)) (show (gsGen replay))
+            pure (1 :: Int, 1 :: Int)
+          else do
+            assertEqual (tag ++ ": final board") (gsBoard gs1) (mtFinal mt)
+            assertEqual (tag ++ ": mtGen = settled generator") (show (gsGen gs1)) (show (mtGen mt))
+            assertEqual (tag ++ ": no shuffle recorded") Nothing (mtShuffle mt)
+            pure (1, 0)
+    )
+    cases
+  let compared = sum (map fst counts)
+      shuffled = sum (map snd counts)
+  assertBool
+    ("frame-compared applied swaps " ++ show compared ++ ", of which auto-shuffle steps " ++ show shuffled)
+    (compared > 3000 && shuffled > 20)

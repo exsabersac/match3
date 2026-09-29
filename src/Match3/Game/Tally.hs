@@ -2,9 +2,8 @@
 
 -- | 结算计数辅助：颜色袋累加、保险箱 / 时间精灵计数、地毯可覆盖的腾空格。
 --
--- 依赖：Match3.Types、Match3.Board。被 trySwap 与三种道具共同使用。
--- 同步：新增需要「按前后盘面差计数」的目标时，trySwap / useHammer / useFreeSwap / useCrossClear
--- 四处结算都要接上（第二刀计划把四处结算合并）。
+-- 依赖：Match3.Types、Match3.Board。被公共结算 Match3.Game.Resolve.resolveMove 使用
+-- （交换与三种道具共用一处，新增「按前后盘面差计数」的目标只需接这一处）。
 module Match3.Game.Tally
   ( lookupColor
   , mergeTallies

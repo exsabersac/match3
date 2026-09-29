@@ -40,6 +40,7 @@ library
       Match3.Game.Shuffle
       Match3.Game.Level
       Match3.Game.Trace
+      Match3.Game.Resolve
       Match3.Game.Move
       Match3.Game.Boosters
       Match3.Obstacles

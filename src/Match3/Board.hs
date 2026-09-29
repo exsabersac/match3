@@ -7,7 +7,7 @@
 -- * "Match3.Board.Match"   —— 匹配检测、findHint / hasValidMove
 -- * "Match3.Board.Clear"   —— 一轮消除、特殊扩展 / 生成、邻格削层、飞碟吸收、计分
 -- * "Match3.Board.Gravity" —— 重力、底行饼干、传送门沉降、补子
--- * "Match3.Board.Cascade" —— 连锁 runCascade* 与逐轮回放 traceCascade*（放在一起便于同步）
+-- * "Match3.Board.Cascade" —— 连锁的单一实现（记录版 cascade* 同时产出计数与逐轮回放；runCascade* / traceCascade* 为兼容投影）
 -- * "Match3.Board.Random"  —— 随机 / 稳定 / 可玩盘面与洗牌
 --
 -- 不拥有：步数与目标结算、道具扣次、战役装饰（见 Match3.Game）。
@@ -47,7 +47,17 @@ module Match3.Board
   , applyPortalTeleports
   , settleBoardPortals
   , expandSpecials
-    -- * 逐轮回放（仅供表现层；不参与结算）
+    -- * 连锁（记录版，单一实现）
+  , CascadeTally(..)
+  , zeroTally
+  , CascadeRun(..)
+  , cascadeMatches
+  , cascadeMatchesFrom
+  , cascadeSeeds
+  , cascadeAfterBelt
+  , cascadeCountdowns
+  , stillRun
+    -- * 逐轮回放（兼容投影）
   , CascadeWave(..)
   , traceCascade
   , traceCascadeFromWave

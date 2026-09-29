@@ -5,9 +5,8 @@
 -- 飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbed：吸走 ≠ 引爆）以及计分公式。
 --
 -- 依赖：Grid、Match、Ice、Grass、Obstacles。
--- 同步：这里的函数同时被 runCascade*（结算）和 traceCascade*（回放）调用，
--- 两边共享同一份实现，所以改这里不会造成两条路径分叉；但返回的计数元组被 Cascade 按位置解构，
--- 增减字段必须同时改 Match3.Board.Cascade 的所有调用点。
+-- 同步：这里的函数只被 Match3.Board.Cascade 的单一连锁实现调用（结算与回放同一次计算），
+-- 返回 (挖空后盘面, 清除数, 清除格)；Cascade 再按清除格在消除前盘面上统计障碍计数。
 module Match3.Board.Clear
   ( expandSpecials
   , spawnSpecials

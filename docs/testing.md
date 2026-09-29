@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**221** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
+- 期望：**222** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -54,7 +54,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 逐轮回放护栏
 
-前端的连锁逐轮回放和步末动画只播 `trace*` 返回的 `MoveTrace`，这组测试保证它和真实规则结果一致（同步关系见 [architecture.md](architecture.md#逐轮回放与规则的同步)）：
+前端的连锁逐轮回放和步末动画只播 `trace*` 返回的 `MoveTrace`。第二刀起结算与回放是同一次计算的两个投影，这组测试天然成立，保留作回归（同步关系见 [architecture.md](architecture.md#逐轮回放与规则的同步)）：
 
 | 用例 | 锁定的内容 |
 |------|------------|
@@ -67,11 +67,12 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `trace_end_steps_replay_to_trySwap_final` | 全部 38 关 × 种子 1–3 的每个成功交换按「轮 → 步末 → 轮」时间线重放：每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，终盘等于 `trySwap`（未洗牌时）；抽样必须覆盖 tick / belt / SpreadVine / SpreadChoco / SpreadSteam / snail 六种效果 |
 | `trace_end_steps_boosters_replay` | 道具只有蔓延类步末效果，重放后同样到达终盘 |
 | `trace_end_snail_push_and_turn` | 蜗牛碰壁原地掉头（`smFrom == smTo`、朝向反转）；前方是宝石则爬过去、宝石换到原格 |
+| `trace_shuffle_step_replays` | 洗牌步逐帧比对（见下） |
 | `trace_end_spread_from_adjacent_source` | 巧克力 / 藤蔓的新占格都能在之前的盘面找到正交相邻的同类来源（前端据此决定从哪边「长出」） |
 
 **底线**：`trace_swap_final_equals_trySwap` 要求「未洗牌、实际比对终盘的步数 > 400」，失败信息会打印比对数和因自动洗牌跳过的步数（当前样本约 517 比对 / 9 跳过），防止抽样悄悄缩水、测试名存实亡。
 
-**已知缺口**：发生自动洗牌（`gsShuffled`）的步只比对得分、清除格和连击数，**暂不逐帧比对终盘**。`mtFinal` 是洗牌前的盘面，洗牌用的生成器状态没有进 `MoveTrace`；等给 `MoveTrace` 加上 `mtGen`、机制刀重开时再补上洗牌步的逐帧比对。前端洗牌动画（`StShuffle`）直接以结算后的 `gsBoard` 为终点，不受影响。
+**洗牌步（第二刀补上）**：`MoveTrace` 新增 `mtGen`（洗牌前的生成器）与 `mtShuffle`（洗牌后的盘面）。`trace_shuffle_step_replays` 对全部 38 关 × 种子 1–3 × 开局全部成交交换（每条再沿首个成交交换走 2 手）逐帧比对：时间线重放到 `mtFinal`，再从 `(mtFinal, mtGen)` 重放 `ensurePlayable` 必须到达结算后的 `gsBoard` / `gsGen`；未洗牌的步要求 `mtFinal == gsBoard`、`mtGen == gsGen`。当前 **3801** 个成交步逐帧比对，其中 **29** 个自动洗牌步；底线 > 3000 / > 20。
 
 ## 行为金标准（golden）
 
@@ -91,4 +92,4 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 221，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 222，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。

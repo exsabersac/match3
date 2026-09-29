@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 221 通过
+stack test                            # 库测，无需显示器；期望 222 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -181,7 +181,7 @@ app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
 app/ComboFx.hs 连锁逐轮回放 / 步末动画的纯阶段机与时间线常量
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）
-test/Spec.hs  tasty（221 命名用例）
+test/Spec.hs  tasty（222 命名用例）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
 ```
@@ -191,5 +191,5 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 ## 发布状态
 
 - 战役：**38** 关（地图 CH1–CH7），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **221**（Tasty + QuickCheck）
+- 测试：`stack test` **222**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

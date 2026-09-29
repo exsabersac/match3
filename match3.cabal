@@ -85,6 +85,9 @@ executable match3-sdl
       UI.BoardArt
       UI.BoardPrim
       UI.Cascade
+      UI.Cell.Art
+      UI.Cell.Prim
+      UI.CellTable
       UI.Draw
       UI.EndStage
       UI.Env

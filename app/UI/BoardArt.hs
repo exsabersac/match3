@@ -5,7 +5,10 @@
 -- 以及「有贴图画贴图、否则退回几何」的分派函数（drawCellAny / drawStatic / drawUfosAny / drawParticlesAny），
 -- 和回放 / 步末绘制共用的底盘与格子部件（drawBoardBase / drawCellsExcept / drawCellScaled / waveTint）。
 --
--- 依赖：UI.BoardPrim（降级）、Art、UI.Types、UI.Layout。
+-- 单格绘制经 UI.CellTable 按元素名分派到 UI.Cell.Art（贴图）/ UI.Cell.Prim（几何）；colorKey / gemSprite /
+-- breathe / 角标 / primarySprite 从那里再导出，原调用方不变。
+--
+-- 依赖：UI.BoardPrim（降级）、UI.CellTable、UI.Cell.Art、Art、UI.Types、UI.Layout。
 module UI.BoardArt
   ( drawBoardBase
   , waveTint
@@ -37,6 +40,8 @@ import Foreign.C.Types (CDouble, CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import UI.BoardPrim
+import UI.Cell.Art (breathe, colorKey, drawBadgeAt, drawLayerBadge, gemSprite)
+import UI.CellTable (CellRenderer (..), cellRenderer, primarySprite)
 import UI.Layout
 import UI.Types
 
@@ -92,127 +97,21 @@ drawStatic ren app board yOff = case appArt app of
   Just art -> drawStaticArt ren art app board yOff
   Nothing -> drawStaticPrim ren app board yOff
 
--- | 颜色 → 贴图后缀（c1..c5）。
-colorKey :: Color -> String
-colorKey C1 = "c1"
-colorKey C2 = "c2"
-colorKey C3 = "c3"
-colorKey C4 = "c4"
-colorKey C5 = "c5"
-
-gemSprite :: Color -> String
-gemSprite c = "gem_" ++ colorKey c
-
--- | 0..1 正弦呼吸，周期约 period 帧。
-breathe :: Int -> Double -> Double
-breathe pulse period = 0.5 + 0.5 * sin (fromIntegral pulse * 2 * pi / period)
-
 -- | 单格绘制入口：有贴图走精灵，否则走原矩形版。
 drawCellAny :: Renderer -> App -> CInt -> CInt -> Cell -> Bool -> IO ()
 drawCellAny ren app x y cell flashing = case appArt app of
   Just art -> drawCellArt ren art (appPulse app) x y cell flashing
   Nothing -> drawGemAt ren x y cell flashing
 
--- | 该格的主贴图名（用于检测资源缺失时逐格回退）。
-primarySprite :: Cell -> String
-primarySprite cell = case cell of
-  Gem c k _ _ -> if k == Rainbow then "rainbow" else gemSprite c
-  Stone _ -> "stone_3"
-  Chest _ -> "chest"
-  Honey _ -> "honey"
-  Balloon c -> "balloon_" ++ colorKey c
-  Cookie -> "cookie"
-  Cake _ -> "cake_1"
-  MagicHat -> "magic_hat"
-  Maker c _ -> "maker_" ++ colorKey c
-  Snail _ _ -> "snail"
-  Safe _ -> "safe"
-  Flip f _ -> gemSprite f
-  Surprise -> "surprise"
-  Bottle c -> "bottle_" ++ colorKey c
-  TimeSpirit -> "time_spirit"
-  Countdown c _ -> gemSprite c
-  Custom n _ -> n  -- 自定义元素：贴图名 = 元素名（缺图时逐格回退到几何画法）
-
--- | 精灵版单格：底层宝石 / 障碍 → 特殊标记 → 冰 → 覆盖层 → 层数角标 → 闪白。
+-- | 精灵版单格：按元素名查 UI.CellTable 交给该元素的贴图渲染器（UI.Cell.Art），再统一闪白；
+-- 主贴图缺失时逐格退回几何版。
 drawCellArt :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> Bool -> IO ()
 drawCellArt ren art pulse x y cell flashing
   | not (hasSprite art (primarySprite cell)) = drawGemAt ren x y cell flashing
   | otherwise = do
-      let dst = cellRect x y
-          spr n = void (drawSprite ren art n dst)
-          -- 气球 / 精灵轻微上下浮动
-          bob = round (2 * sin (fromIntegral pulse / 9 :: Double)) :: CInt
-          sprBob n = void (drawSprite ren art n (cellRect x (y + bob)))
-          badge = drawLayerBadge ren art x y
-      case cell of
-        Gem col kind ice ov -> do
-          -- 炸弹：身后橙色呼吸光晕
-          when (kind == Bomb) $ do
-            let a = round (140 + 110 * breathe pulse 50) :: Int
-            void (drawSpriteMod ren art "bomb_glow" dst (V3 255 255 255) (fromIntegral a))
-          if kind == Rainbow
-            then void (drawSpriteEx ren art "rainbow" dst (fromIntegral (pulse * 2 `mod` 360) :: CDouble) False)
-            else spr (gemSprite col)
-          case kind of
-            LineH -> spr "line_h"
-            LineV -> spr "line_v"
-            Bomb -> spr "bomb_mark"
-            _ -> pure ()
-          when (ice > 0) $ spr ("ice_" ++ show (clampI 1 3 ice))
-          layers <- case ov of
-            Just Grass -> spr "grass" >> pure 0
-            Just Vine -> spr "vine" >> pure 0
-            Just Choco -> spr "choco" >> pure 0
-            Just (Fog n) -> spr ("fog_" ++ show (clampI 1 2 n)) >> pure n
-            Just (Chain n) -> spr ("chain_" ++ show (clampI 1 2 n)) >> pure n
-            Just (Freeze n) -> spr ("freeze_" ++ show (clampI 1 2 n)) >> pure n
-            Just (Curtain n) -> spr ("curtain_" ++ show (clampI 1 2 n)) >> pure n
-            Just Steam -> spr "steam" >> pure 0
-            Nothing -> pure 0
-          badge (if layers > 0 then layers else ice)
-        Stone n -> spr ("stone_" ++ show (clampI 1 3 n)) >> badge n
-        Chest n -> spr "chest" >> badge n
-        Honey n -> spr "honey" >> badge n
-        Balloon c -> sprBob ("balloon_" ++ colorKey c)
-        Cookie -> spr "cookie"
-        Cake n -> spr ("cake_" ++ show (clampI 1 3 n)) >> badge n
-        MagicHat -> spr "magic_hat"
-        Maker c n -> do
-          spr ("maker_" ++ colorKey c)
-          -- 果汁机是计数器：剩余次数始终显示
-          drawBadgeAt ren art x y (max 1 n)
-        Snail dr dc -> do
-          -- 贴图朝右；按爬行方向旋转 / 翻转
-          let (ang, flipH)
-                | abs dc >= abs dr && dc >= 0 = (0, False)
-                | abs dc >= abs dr = (0, True)
-                | dr > 0 = (90, False)
-                | otherwise = (-90, False)
-          void (drawSpriteEx ren art "snail" dst ang flipH)
-        Safe n -> spr "safe" >> badge n
-        Flip f b -> do
-          spr (gemSprite f)
-          -- 右上角小图 = 翻面后的颜色；左下角双箭头标记
-          void (drawSprite ren art (gemSprite b) (rect (x + cellPx - 25) (y + 1) 24 24))
-          spr "flip_mark"
-        Surprise -> spr "surprise"
-        Bottle c -> spr ("bottle_" ++ colorKey c)
-        TimeSpirit -> sprBob "time_spirit"
-        Countdown c n -> do
-          spr (gemSprite c)
-          spr ("countdown_" ++ show (clampI 1 9 n))
-        Custom n k -> spr n >> badge k
+      crArt (cellRenderer cell) ren art pulse x y cell
       when flashing $
         void (drawSpriteAdd ren art "spark" (rect (x - 10) (y - 10) (cellPx + 20) (cellPx + 20)) (V3 255 255 230) 210)
-
--- | 层数 ≥ 2 时右下角数字角标。
-drawLayerBadge :: Renderer -> Art -> CInt -> CInt -> Int -> IO ()
-drawLayerBadge ren art x y n = when (n >= 2) $ drawBadgeAt ren art x y n
-
-drawBadgeAt :: Renderer -> Art -> CInt -> CInt -> Int -> IO ()
-drawBadgeAt ren art x y n =
-  void (drawSprite ren art ("badge_" ++ show (clampI 1 9 n)) (rect (x + cellPx - 23) (y + cellPx - 23) 23 23))
 
 -- | 传送带每格的朝向角度（右 0 / 下 90 / 左 180 / 上 270）。
 beltAngles :: [Pos] -> [(Pos, CDouble)]

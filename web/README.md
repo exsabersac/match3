@@ -2,7 +2,7 @@
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
 在浏览器里用桌面版同一套美术（2x 精灵图集）把 40 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
-（动画状态机 `app/UI/ComboFx.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
+（动画状态机 `app/ComboFx.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
 日常任务用**仓库根目录**的 `Makefile`（`make help`），见 §0。
@@ -123,8 +123,8 @@ make size            # 事后单独看体积
 图集：107 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
 1024×1300，WebP 约 315 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-09-29，合入 main 2121bf8 元素类之后）：wasm 原始 4,076,596 B → `-Oz` 1,738,656 B（gzip 674,788 B）；
-dist 合计 2,196,011 B，逐文件 gzip 合计约 1.05 MB（WebP 已压缩，gzip 基本无收益）。
+当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
+dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本

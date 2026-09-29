@@ -1,11 +1,11 @@
 # 网页版（GHC WebAssembly）
 
-> 分支 `web-wasm-spike` 上的技术验证，尚未合入 main。操作细节（命令、参数）以 [`web/README.md`](../web/README.md) 为准，
+> 技术验证，最初在分支 `web-wasm-spike` 上开发，已合入 main（`59f1e53`）。操作细节（命令、参数）以 [`web/README.md`](../web/README.md) 为准，
 > 本文讲结构与取舍，供评审阅读。
 
 ## 1. 一句话
 
-用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/UI/ComboFx.hs`）
+用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/ComboFx.hs`）
 编成一个 `.wasm`，浏览器里的 JS 只做三件事：**加载、画、收输入**。规则判定、连锁时间轴、帧数都在 Haskell 里算，
 所以同关卡同种子，网页版与桌面版的每一步结果、每一帧动画相位都逐字节一致（有测试守着，见 §7）。
 
@@ -119,7 +119,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-09-29，合入元素类之后）：wasm `-Oz` 后 1.74 MB（gzip 675 KB）；dist 合计 2.20 MB，逐文件 gzip 约 1.05 MB。
+体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm `-Oz` 后 1,737,478 B ≈ 1.74 MB（gzip 674,329 B）；dist 合计 2,194,833 B ≈ 2.19 MB，逐文件 gzip 约 1.05 MB。
 
 ## 3. 工具链与构建
 

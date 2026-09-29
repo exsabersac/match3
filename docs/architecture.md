@@ -152,7 +152,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ## 网页版（技术验证）
 
-分支 `web-wasm-spike` 上的 `web/` 目录用 GHC wasm 后端把核心（`Engine.*` / `Match3.*`）和 `ComboFx` 编成 wasm，
+`web/` 目录（已合入 main，`59f1e53`）用 GHC wasm 后端把核心（`Engine.*` / `Match3.*`）和 `ComboFx` 编成 wasm，
 接口层 `web/hs/Match3Web/Api.hs` 与桌面外壳一样只调 `gameStep match3Shell`，JS 只负责绘制与输入，核心源码不改。
 元素框架（`Match3.Element.Class` 的 `Element` / `Modifier` / `LevelElement` 与 `SomeElement` 等存在类型、`Match3.Element.Message`、
 `Match3.Element.Builtin.*` 分文件）整体编进 wasm；网页接口层不直接调用元素类，盘面按 `Cell` 构造器编码成 JSON，

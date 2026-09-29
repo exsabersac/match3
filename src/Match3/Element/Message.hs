@@ -2,17 +2,18 @@
 -- | 开放消息（同 xmonad 的 Message / SomeMessage / fromMessage）：任何 Typeable 类型声明一个空 instance
 -- 就能当消息发，收的一方用 'fromMessage' 按类型认领。
 --
--- 另含主流程在流水线节拍上发给关卡级元素的四条内置消息及其回复（取代段 4 的封闭钩子 LevelHook）：
+-- 另含主流程在流水线节拍上发给关卡级元素的内置消息及其回复（取代段 4 的封闭钩子 LevelHook）：
 -- 主流程只在节拍上发消息、按类型收回复；谁在哪个节拍反应由关卡级元素自己决定（见 Match3.Element.Class 的
 -- 'LevelElement'）。
 --
--- 依赖：Match3.Types、Board.Grid（MBoard）。
+-- 依赖：Match3.Types、Board.Grid（MBoard）、Board.Refill（补子策略）。
 module Match3.Element.Message
   ( Message
   , SomeMessage(..)
   , fromMessage
     -- * 流水线节拍（关卡级元素）
   , Refilled(..)
+  , Refilling(..)
   , EndTicked(..)
   , Settling(..)
   , Covering(..)
@@ -23,6 +24,7 @@ module Match3.Element.Message
 
 import Data.Typeable (Typeable, cast)
 import Match3.Board.Grid (MBoard)
+import Match3.Board.Refill (RefillPolicy)
 import Match3.Types
 
 -- | 消息：任何 Typeable 类型声明一个空 instance 即可。
@@ -41,6 +43,10 @@ fromMessage (SomeMessage m) = cast m
 
 -- | 每轮补子之后（飞碟节拍）：补子后的盘面、已被吸走的格（回复者追加自己吸走的格）。
 data Refilled = Refilled Board [Pos]
+
+-- | 查询（第 8 刀，补子节拍）：本关用的补子策略（初值 = 注册表的策略；回复者可以换掉或包一层再交回）。
+-- 没有元素回复 = 用注册表的策略。
+newtype Refilling = Refilling RefillPolicy
 
 -- | 玩家交换的步末、倒计时（PhaseTick）之后、蔓延之前（皮带节拍）：「原格 → 新格」移位（回复者追加）。
 -- 没有元素回复 = 没有皮带（也没有皮带后的再连锁）。
@@ -63,6 +69,7 @@ newtype AvoidCells = AvoidCells [Pos]
 newtype WallCells = WallCells [Pos]
 
 instance Message Refilled
+instance Message Refilling
 instance Message EndTicked
 instance Message Settling
 instance Message Covering

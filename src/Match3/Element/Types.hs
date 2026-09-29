@@ -1,4 +1,5 @@
--- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数。
+-- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数；
+-- 第 8 刀加特殊块形状规则（ShapeRule，连线 MatchRun 也移到这里）与组合规则（ComboRule）。
 -- 元素本身是类型类（Match3.Element.Class 的 Element / Modifier / LevelElement），主流程（匹配、挡交换、
 -- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经注册表
 -- （Match3.Element.Registry）问它们，不按构造器写死分支。
@@ -25,6 +26,10 @@ module Match3.Element.Types
   , Placement(..)
   , SwapRule(..)
   , OpenRule(..)
+  , MatchRun(..)
+  , ShapeCtx(..)
+  , ShapeRule(..)
+  , ComboRule(..)
   , cellSlot
   , overlaySlot
   , kindSlot
@@ -125,6 +130,41 @@ data SwapRule = SwapRule
 -- orOpen 盘面 本批前沿 = (开启后盘面, 要展开的爆炸种子, 开出后本轮必须坐住的格)。
 newtype OpenRule = OpenRule
   { orOpen :: Board -> [Pos] -> (Board, [Pos], [Pos])
+  }
+
+-- | 一条 ≥3 的同色连线（石头等挡匹配的格打断连线）。第 8 刀从 Match3.Board.Match 移到这里（形状规则要用；
+-- Board.Match 原名再导出）。
+data MatchRun = MatchRun
+  { runColor :: Color
+  , runPos   :: [Pos]
+  , runIsH   :: Bool  -- True = horizontal
+  } deriving (Eq, Show)
+
+-- | 形状规则的上下文（第 8 刀）：scPrefer = 玩家交换落点（优先放在这里）；scRuns = 本轮全部连线
+-- （L / T 这类跨连线的形状要看别的连线）；scClearable = 本轮真正挖空的格（特殊块只放在这些格上）。
+data ShapeCtx = ShapeCtx
+  { scPrefer    :: Maybe Pos
+  , scRuns      :: [MatchRun]
+  , scClearable :: [Pos]
+  }
+
+-- | 特殊块形状规则（第 8 刀）：匹配形状 → 生成哪种特殊块。规则表是有序的：每条连线按表顺序问各规则，
+-- 取第一条认领它的（Just，可以是空列表 = 认领但不生成）；Nothing = 这条规则不管，问下一条；
+-- 全不认领 = 不生成。每条连线的产出按连线顺序依次写回，后写的覆盖先写的（与旧 spawnSpecials 相同）。
+data ShapeRule = ShapeRule
+  { shapeName  :: String
+  , shapeSpawn :: ShapeCtx -> MatchRun -> Maybe [(Pos, Cell)]
+  }
+
+-- | 特殊块组合规则（第 8 刀）：两个特殊块交换时的组合效果。规则表是有序的：先按表顺序、每条规则先试
+-- (第一端, 第二端) = (p1, p2) 再试 (p2, p1)，取第一条两端谓词都成立的；comboSeeds 收
+-- 交换后盘面与 (对上 comboFirst 的一端, 对上 comboSecond 的一端)。一条规则天然对两个方向都成立（对称）；
+-- 表里没有的组合不成立（交给后面的成对规则 / 普通三消，与旧实现相同）。
+data ComboRule = ComboRule
+  { comboName   :: String
+  , comboFirst  :: Cell -> Bool
+  , comboSecond :: Cell -> Bool
+  , comboSeeds  :: Board -> Pos -> Pos -> [Pos]
   }
 
 -- | 内置本体的编号：宝石按种类 0..4（Normal / LineH / LineV / Bomb / Rainbow），其余构造器 5..19；

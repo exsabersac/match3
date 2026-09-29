@@ -1,11 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 沉降与补子：重力（固定格不动）、底行饼干收集、沉降节拍的关卡级钩子（onSettle，内置 = 传送门传送）、
--- 随机补子（refill）以及回放用的 settleRefill。
+-- 补子（第 8 刀起按补子策略 RefillPolicy，见 Match3.Board.Refill；refill = 缺省策略）以及回放用的 settleRefill。
 --
--- 依赖：Grid（randomColor）、Board.Hooks（第 7 刀：关卡级钩子取代传送门对参数）、元素注册表（固定格 falls、边缘收集 drains（方向可配））。
+-- 依赖：Grid、Board.Refill（补子策略）、Board.Hooks（第 7 刀：关卡级钩子取代传送门对参数）、元素注册表（固定格 falls、边缘收集 drains（方向可配））。
 -- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
--- 不变量：refill 按行优先顺序逐个空洞消耗随机数；settleRefill 与 stepCascadeDetailed /
+-- 不变量：补子按行优先顺序逐个空洞消耗随机数（缺省策略每洞恰好一次 randomColor）；settleRefill 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
 module Match3.Board.Gravity
   ( gravityFixedCellWith
@@ -16,13 +16,16 @@ module Match3.Board.Gravity
   , settleBoardPortalsWith
   , settleDrainWith
   , refill
+  , activeRefill
   , settleRefillWith
   ) where
 
-import Data.Array (array, bounds, elems, listArray, (!))
+import Data.Array (array, bounds, (!))
 import Data.List (nubBy)
 import Match3.Board.Hooks (LevelHooks(..))
-import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith)
+import Data.Maybe (fromMaybe)
+import Match3.Board.Refill (RefillPolicy, defaultRefill, refillWith)
+import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith, refillPolicyWith)
 import Match3.Element.Types (Edge(..))
 import Match3.Types
 import System.Random (RandomGen)
@@ -110,24 +113,17 @@ settleDrainWith reg hooks mb =
       (drained2, d2) = drainEdgesMWith reg fallen2
   in (drained2, d1 ++ d2)
 
--- | 按行优先顺序把每个空洞补成随机普通宝石；每个洞消耗一次 randomColor。
+-- | 按行优先顺序把每个空洞补成随机普通宝石；每个洞消耗一次 randomColor（= 缺省补子策略，见 Match3.Board.Refill）。
 refill :: RandomGen g => g -> MBoard -> (Board, g)
-refill g0 mb =
-  let (filled, g') = fillList g0 (elems mb)
-  in (boardFromArray (listArray (bounds mb) filled), g')
-  where
-    fillList g [] = ([], g)
-    fillList g (Nothing : xs) =
-      let (c, g1) = randomColor g
-          (rest, g2) = fillList g1 xs
-      in (mkGem c : rest, g2)
-    fillList g (Just x : xs) =
-      let (rest, g1) = fillList g xs
-      in (x : rest, g1)
+refill = refillWith defaultRefill
+
+-- | 本轮用的补子策略（第 8 刀）：关卡级元素换的（钩子 hookRefill）优先，否则注册表的（缺省 = 随机五色宝石）。
+activeRefill :: Registry -> LevelHooks -> RefillPolicy
+activeRefill reg hooks = fromMaybe (refillPolicyWith reg) (hookRefill hooks)
 
 -- | settleRefill（指定注册表）。
 settleRefillWith :: RandomGen g => Registry -> LevelHooks -> g -> MBoard -> (Board, [Pos], g)
 settleRefillWith reg hooks g mb =
   let (settled, _cookies, cookSites) = settleBoardPortalsWith reg hooks mb
-      (b', g') = refill g settled
+      (b', g') = refillWith (activeRefill reg hooks) g settled
   in (b', cookSites, g')

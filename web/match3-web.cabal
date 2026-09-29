@@ -43,6 +43,7 @@ executable match3-web
     Match3.Board.Clear
     Match3.Board.Gravity
     Match3.Board.Hooks
+    Match3.Board.Refill
     Match3.Board.Cascade
     Match3.Board.Random
     Match3.Board.Default
@@ -71,6 +72,7 @@ executable match3-web
     Match3.Element
     Match3.Element.Types
     Match3.Element.Registry
+    Match3.Element.Special
     Match3.Element.Builtin
     Match3.Element.Builtin.Common
     Match3.Element.Builtin.Gem

@@ -39,7 +39,7 @@ import Match3.Conveyor (Belt)
 import Match3.Element.Builtin.Level (BeltLevel(..), CarpetLevel(..), GroundLayer(..), PortalLevel(..), UfoLevel(..))
 import Match3.Element.Class
 import Match3.Element.Message
-import Match3.Element.Registry (Registry, hitGroundWith, levelDefs, portalWith)
+import Match3.Element.Registry (Registry, hitGroundWith, levelDefs, portalWith, refillPolicyWith)
 import Match3.Levels.Level (Level)
 import Match3.Types
 import Match3.Ufo (Ufo)
@@ -127,8 +127,9 @@ levelCarpetOpen = maybe [] (\(CarpetLevel ps) -> ps) . levelState
 levelGround :: [SomeLevelElement] -> Ground
 levelGround = maybe [] (\(GroundLayer g) -> g) . levelState
 
--- | Board 层的钩子：沉降节拍发 'Settling'（可穿门谓词 = 注册表的本体定义），补子之后发 'Refilled'。
--- 没人回复时不传送 / 不吸收（第 7 刀前的 teleportWith / absorbWith）。
+-- | Board 层的钩子：沉降节拍发 'Settling'（可穿门谓词 = 注册表的本体定义），补子之后发 'Refilled'，
+-- 补子策略问 'Refilling'（第 8 刀，初值 = 注册表的策略）。
+-- 没人回复时不传送 / 不吸收 / 用注册表的补子策略（第 7 刀前的 teleportWith / absorbWith）。
 levelHooksWith :: Registry -> [SomeLevelElement] -> LevelHooks
 levelHooksWith reg elems = hooks
   where
@@ -138,6 +139,7 @@ levelHooksWith reg elems = hooks
         , onAbsorb = \b -> case askLevelsIn reg elems (Refilled b []) of
             Just (Refilled _ ps, elems') -> (ps, levelHooksWith reg elems')
             Nothing -> ([], hooks)
+        , hookRefill = (\(Refilling p, _) -> p) <$> askLevelsIn reg elems (Refilling (refillPolicyWith reg))
         , hookLevel = elems
         }
 

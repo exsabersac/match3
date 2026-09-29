@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 匹配检测与提示：找 ≥3 连（MatchRun）、是否存在匹配、是否存在可走的一手（findHint）。
+-- | 匹配检测与提示：找 ≥3 连（MatchRun；第 8 刀起定义在 Element.Types，这里再导出）、是否存在匹配、是否存在可走的一手（findHint）。
 --
 -- 依赖：Grid、元素注册表（哪些格参与匹配 / 能交换 / 进普通匹配提示；成对交换规则 = 彩虹与特殊合成也算可走）。只读盘面。
 -- 第二刀 2b：「哪些格打断连线」不再按构造器列举，改为查注册表 matchColorWith
@@ -20,16 +20,9 @@ import Data.Array (Array, listArray, (!))
 import Data.List (nub)
 import Data.Maybe (isJust)
 import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith, matchColorWith, swapRules, upperBlocksSwapWith)
-import Match3.Element.Types (SwapRule(..))
+import Match3.Element.Types (MatchRun(..), SwapRule(..))
 import Match3.Types
 import Match3.Board.Grid
-
--- | A contiguous same-color gem run of length >= 3 (stones break runs).
-data MatchRun = MatchRun
-  { runColor :: Color
-  , runPos   :: [Pos]
-  , runIsH   :: Bool  -- True = horizontal
-  } deriving (Eq, Show)
 
 -- | findMatchRuns（指定注册表）。
 findMatchRunsWith :: Registry -> Board -> [MatchRun]

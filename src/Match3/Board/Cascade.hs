@@ -42,6 +42,7 @@ module Match3.Board.Cascade
 
 import Data.List (nub)
 import Match3.Board.Hooks (LevelHooks(..), noHooks)
+import Match3.Board.Refill (refillWith)
 import Match3.Element.Registry (Registry, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
 import Match3.Counts (CounterKey(..), Counts, bumpCount, countsFromList, noCounts, singleCount)
@@ -147,12 +148,12 @@ rdAfter = cwAfter . rdWave
 
 -- | 所有连锁起手共用的一轮（第 3 刀前在匹配 / 飞碟 / 种子 / 种子后飞碟 / 皮带后 / 步末后 / 单轮里逐行重复 7 份）：
 -- 给出消除前盘面 b、本轮清除结果 (挖空盘面, 清除数, 清除格) 与波次 w（得分 = scoreForWave w 清除数），
--- 沉降后按行优先逐个空洞补子（每洞恰好一次 randomColor，随机数顺序与原先相同）。
+-- 沉降后按行优先逐个空洞补子（第 8 刀起按补子策略 activeRefill；缺省策略每洞恰好一次 randomColor，随机数顺序与原先相同）。
 settleRound :: RandomGen g => Registry -> LevelHooks -> g -> Board -> (MBoard, Int, [Pos]) -> Int -> (Round, g)
 settleRound reg hooks g b (mb, n, pos) w =
   let (settled, drained) = settleDrainWith reg hooks mb
       sites = map fst drained
-      (b', g') = refill g settled
+      (b', g') = refillWith (activeRefill reg hooks) g settled
   in (Round (CascadeWave b pos sites mb b' (scoreForWave w n)) n (withDrained reg drained (hitsOn reg b pos)) sites, g')
 
 -- | 补子后的整轮吸收（钩子 onAbsorb：关卡级元素回复 Refilled 消息，内置 = 飞碟）。吸到格子时吸收单独成一轮

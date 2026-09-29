@@ -6,7 +6,9 @@
 -- 一个格子解码成「修饰器（冰 → 叠层）包着本体」的元素值（'elementOf'），各查询就是在它上面调类方法。
 -- 关卡级元素（'SomeLevelElement'）的种类表（注册顺序；一局的状态与节拍见 Match3.Element.Level）。
 --
--- 依赖：Element.Class / Message / Types、Match3.Types、Board.Grid。不含任何具体元素（内置见 Element.Builtin）。
+-- 第 8 刀：另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）。
+--
+-- 依赖：Element.Class / Message / Types / Special、Match3.Types、Board.Grid、Board.Refill。不含任何具体元素（内置见 Element.Builtin）。
 module Match3.Element.Registry
   ( Registry
   , Entry
@@ -63,11 +65,19 @@ module Match3.Element.Registry
   , placeAllWith
     -- * 成对交换、开启、改色 / 推动谓词
   , swapRules
+  , elementSwapRules
   , swapOpeningWith
   , swapFiresWith
   , openWith
   , recolorableWith
   , pushableWith
+    -- * 规则表（第 8 刀）：特殊块形状、特殊块组合、补子策略
+  , shapeRules
+  , setShapeRules
+  , comboRules
+  , setComboRules
+  , refillPolicyWith
+  , setRefillPolicy
     -- * 关卡级元素（消息）
   , registerLevel
   , removeLevel
@@ -80,7 +90,9 @@ import Data.Array (Array, accumArray, bounds, inRange, (!))
 import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Match3.Board.Grid (getCell, setCell)
+import Match3.Board.Refill (RefillPolicy, defaultRefill)
 import Match3.Element.Class
+import Match3.Element.Special (comboSwapRule)
 import Match3.Element.Types
 import Match3.Types
 
@@ -157,6 +169,9 @@ data Registry = Registry
   , regSwap     :: [SwapRule]                       -- 成对交换规则，按 srOrder 排好（稳定）
   , regOpen     :: [OpenRule]                       -- 开启规则（注册顺序）
   , regLevel    :: [SomeLevelElement]                      -- 关卡级元素（注册顺序；同名以后注册的为准）
+  , regShapes   :: [ShapeRule]                      -- 特殊块形状规则表（有序；第 8 刀）
+  , regCombos   :: [ComboRule]                      -- 特殊块组合表（有序；第 8 刀）
+  , regRefill   :: RefillPolicy                     -- 补子策略（第 8 刀；关卡级元素可经 Refilling 换掉）
   }
 
 -- | 建表时发现的条目错误（'mkRegistryChecked'）。
@@ -215,6 +230,9 @@ mkRegistry defs0 =
        , regSwap = sortOn srOrder (mapMaybe swapRule bodies)
        , regOpen = mapMaybe openRule bodies
        , regLevel = []
+       , regShapes = []
+       , regCombos = []
+       , regRefill = defaultRefill
        }
   where
     -- 同名只留最后一个，位置取第一次出现处（注册顺序稳定）
@@ -238,8 +256,15 @@ mkRegistry defs0 =
       _ -> concatMap (maybe [] pure . endRule) (bodyProto d)
 
 -- | 往注册表里加（或按名字替换）一个条目。测试专用元素就这样接进来，主流程不用改。
+-- 关卡级元素与规则表（形状 / 组合 / 补子策略）原样保留。
 register :: Entry -> Registry -> Registry
-register d reg = (mkRegistry (regDefs reg ++ [d])) {regLevel = regLevel reg}
+register d reg =
+  (mkRegistry (regDefs reg ++ [d]))
+    { regLevel = regLevel reg
+    , regShapes = regShapes reg
+    , regCombos = regCombos reg
+    , regRefill = regRefill reg
+    }
 
 -- | 全部条目（注册顺序）。
 registryDefs :: Registry -> [Entry]
@@ -458,18 +483,24 @@ hitGroundWith reg hits = foldr one ([], [])
 --------------------------------------------------------------------------------
 -- 成对交换、开启、改色 / 推动
 
--- | 成对交换规则（已按 srOrder 排好）。
+-- | 成对交换规则（已按 srOrder 排好）：元素声明的（elementSwapRules）+ 组合表并成的一条（第 8 刀，次序 20）。
 swapRules :: Registry -> [SwapRule]
-swapRules = regSwap
+swapRules reg = case regCombos reg of
+  [] -> regSwap reg
+  combos -> sortOn srOrder (regSwap reg ++ [comboSwapRule combos])
+
+-- | 只是元素自己声明的成对交换规则（不含组合表；按 srOrder 排好）。
+elementSwapRules :: Registry -> [SwapRule]
+elementSwapRules = regSwap
 
 -- | 交换起手：交换前盘面 b0 上第一条成立的成对规则，在交换后盘面 swapped 上给出的种子；都不成立时 Nothing。
 swapOpeningWith :: Registry -> Board -> Board -> Pos -> Pos -> Maybe [Pos]
 swapOpeningWith reg b0 swapped p1 p2 =
-  listToMaybe [srSeeds r swapped p1 p2 | r <- regSwap reg, srFires r b0 p1 p2]
+  listToMaybe [srSeeds r swapped p1 p2 | r <- swapRules reg, srFires r b0 p1 p2]
 
 -- | 是否有成对规则成立（交换前盘面）。
 swapFiresWith :: Registry -> Board -> Pos -> Pos -> Bool
-swapFiresWith reg b p1 p2 = any (\r -> srFires r b p1 p2) (regSwap reg)
+swapFiresWith reg b p1 p2 = any (\r -> srFires r b p1 p2) (swapRules reg)
 
 -- | 一批前沿上的开启（彩蛋类）：依次跑各开启规则，返回 (盘面, 爆炸种子, 本轮坐住的格)。
 -- 只有一条规则时结果就是它自己的输出（内置只有彩蛋）。
@@ -489,6 +520,35 @@ recolorableWith reg = recolorable . bodyOf reg
 -- | 本体可被蜗牛推动。
 pushableWith :: Registry -> Cell -> Bool
 pushableWith reg = pushable . bodyOf reg
+
+--------------------------------------------------------------------------------
+-- 规则表（第 8 刀）
+
+-- | 特殊块形状规则表（有序；Board.Clear.spawnSpecialsWith 用）。mkRegistry 建出的表为空（不生成特殊块），
+-- 内置注册表是 Element.Builtin.Gem.builtinShapeRules。
+shapeRules :: Registry -> [ShapeRule]
+shapeRules = regShapes
+
+-- | 换掉形状规则表（扩展一条形状规则 = 把它插到表里合适的位置）。
+setShapeRules :: [ShapeRule] -> Registry -> Registry
+setShapeRules rs reg = reg {regShapes = rs}
+
+-- | 特殊块组合表（有序）。非空时整张表并成一条次序 comboOrder（20）的成对交换规则（见 'swapRules'）。
+-- mkRegistry 建出的表为空，内置注册表是 Match3.Combos.builtinComboRules。
+comboRules :: Registry -> [ComboRule]
+comboRules = regCombos
+
+-- | 换掉组合表。
+setComboRules :: [ComboRule] -> Registry -> Registry
+setComboRules rs reg = reg {regCombos = rs}
+
+-- | 注册表的补子策略（缺省 Board.Refill.defaultRefill）；关卡级元素可以经 Refilling 消息换掉（见 Gravity.activeRefill）。
+refillPolicyWith :: Registry -> RefillPolicy
+refillPolicyWith = regRefill
+
+-- | 换掉注册表的补子策略。
+setRefillPolicy :: RefillPolicy -> Registry -> Registry
+setRefillPolicy p reg = reg {regRefill = p}
 
 --------------------------------------------------------------------------------
 -- 关卡级元素

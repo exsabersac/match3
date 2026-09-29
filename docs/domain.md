@@ -149,6 +149,9 @@
 | 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
 | 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
 | 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
+| 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消 |
+| 特殊块组合规则 | `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`（第 8 刀） | 两个特殊块交换时的组合效果；有序表（注册表 `comboRules`），两个方向都试（对称），整张表并成成对交换规则 20。内置 `builtinComboRules`：炸弹 × 炸弹、直线 × 直线、直线 × 炸弹、彩虹 × 直线 |
+| 补子策略 | `RefillPolicy { refillName, refillCell }`、`RefillCtx`（第 8 刀） | 沉降后空洞补什么：注册表的策略（`refillPolicyWith`，缺省 `defaultRefill` = 随机五色普通宝石），关卡级元素可回复 `Refilling` 换掉；`colorsRefill n` = 只用前 n 色 |
 | 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |

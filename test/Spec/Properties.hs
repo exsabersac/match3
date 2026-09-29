@@ -4,7 +4,7 @@
 -- | QuickCheck 性质测试。
 --
 -- qc_findMatches_ge3 是原有的性质（逐字不变）。其余是第 1 刀新增的不变量，覆盖重力、补子、连锁、
--- 撤销 / 重做、回放、目标进度与元素注册表。为了可复现，新性质统一挂在固定种子下
+-- 撤销 / 重做、回放、目标进度与元素注册表；第 8 刀加形状规则表 / 组合表 / 补子策略与旧实现的对照、组合表的对称性。为了可复现，新性质统一挂在固定种子下
 -- （localOption (QuickCheckReplayLegacy 20260930)），每条用 withMaxSuccess 控制次数。
 -- 生成器只用本模块里的 Gen（格子、可空盘面、战役关卡 + 种子 + 动作选择），不依赖规则实现。
 module Spec.Properties
@@ -26,9 +26,13 @@ import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTabl
 import Match3.Game.Trace (traceSpreadsWith)
 import System.Random (StdGen)
 import Match3.Board.Default (LevelHooks(..), builtinHooks, cascadeMatches, noHooks)
-import Match3.Board.Match (findHintWith, hasAnyMatchWith)
-import Match3.Board.Grid (MBoard, atM, mboardFromRows)
-import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
+import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith)
+import Match3.Board.Grid (MBoard, atM, mboardFromRows, randomColor)
+import Match3.Board.Gravity (activeRefill, applyGravityWith, gravityFixedCellWith, refill)
+import Match3.Board.Clear (spawnSpecialsWith)
+import qualified Match3.Combos as Combos
+import Control.Monad (filterM)
+import Data.Maybe (listToMaybe)
 import Match3.Core
 import Match3.Counts (bumpCount, noCounts, plusCounts)
 import Match3.Element
@@ -64,6 +68,10 @@ tests =
       , testProperty "qc_level_elems_readers_roundtrip" (withMaxSuccess 100 qc_level_elems_readers_roundtrip)
       , testProperty "qc_end_table_matches_legacy" (withMaxSuccess 300 qc_end_table_matches_legacy)
       , testProperty "qc_ask_levels_folds_in_order" (withMaxSuccess 300 qc_ask_levels_folds_in_order)
+      , testProperty "qc_shape_table_matches_legacy" (withMaxSuccess 1000 (checkCoverage qc_shape_table_matches_legacy))
+      , testProperty "qc_combo_table_matches_legacy" (withMaxSuccess 3000 (checkCoverage qc_combo_table_matches_legacy))
+      , testProperty "qc_combo_table_symmetric" (withMaxSuccess 3000 qc_combo_table_symmetric)
+      , testProperty "qc_refill_policy_default_matches_legacy" (withMaxSuccess 500 qc_refill_policy_default_matches_legacy)
       ]
   where
     -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
@@ -735,8 +743,6 @@ qc_level_hooks_match_legacy =
                , onSettle hooks mb === portalTeleport (portalWith defaultRegistry) portals mb
                , onSettle hooks' mb === onSettle hooks mb
                ]
-  where
-    genPos = (,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)
 
 -- | 第 7 刀（7a）：战役开局的关卡级元素 = 内置四种（注册顺序）+ 地面层；第 7 刀前的五个字段改为派生读数，
 -- 写回同一值是恒等（相等与 Show 都不变），读数等于关卡记录（没有放置的飞碟 / 地毯按目标补齐）。
@@ -858,4 +864,181 @@ qc_ask_levels_folds_in_order =
          , fmap fst viaIn === expected
          -- 每个回复者推进后的状态都写回（同名替换，顺序不变）
          , fmap snd viaIn === (if null ks then Nothing else Just [SomeLevelElement (Adder k 6) | k <- ks])
+         ]
+
+--------------------------------------------------------------------------------
+-- 第 8 刀：规则表（形状 / 组合）与补子策略对照旧实现
+
+-- | 第 8 刀前的 Board.Clear.spawnSpecials（逐字副本，只用来对照形状规则表）。
+legacySpawnSpecials :: Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
+legacySpawnSpecials prefer runs clearable =
+  [ (pos, Gem (runColor run) kind 0 Nothing)
+  | run <- runs
+  , let n = length (runPos run)
+  , n >= 4
+  , let kind
+          | n >= 5 = Rainbow
+          | runIsH run = LineH
+          | otherwise = LineV
+        slots = filter (`elem` clearable) (runPos run)
+  , pos <- take 1 $ case prefer of
+      Just p | p `elem` slots -> [p]
+      _ -> drop (length slots `div` 2) slots
+  ]
+
+-- | 第 8 刀前的 Combos.isSpecialCombo（逐字副本）。
+legacyIsSpecialCombo :: Board -> Pos -> Pos -> Bool
+legacyIsSpecialCombo b p1 p2 =
+  kindCombo && specialActivates (getCell b p1) && specialActivates (getCell b p2)
+  where
+    kindCombo =
+      Combos.isLineBombCombo b p1 p2
+        || Combos.isRainbowLineCombo b p1 p2
+        || Combos.isBombBombCombo b p1 p2
+        || Combos.isLineLineCombo b p1 p2
+
+-- | 第 8 刀前的 Combos.comboClearSeeds（逐字副本）。
+legacyComboClearSeeds :: Board -> Pos -> Pos -> [Pos]
+legacyComboClearSeeds b p1 p2
+  | Combos.isBombBombCombo b p1 p2 || bothBombsAfter =
+      nub (Combos.bigBomb b p1 ++ Combos.bigBomb b p2)
+  | Combos.isLineLineCombo b p1 p2 || bothLinesAfter =
+      nub (Combos.fullRowCol b p1 ++ Combos.fullRowCol b p2)
+  | Combos.isLineBombCombo b p1 p2 || lineBombAfter =
+      case (getCell b p1, getCell b p2) of
+        (Gem _ Bomb _ _, _) -> Combos.lineBombCross b p1
+        (_, Gem _ Bomb _ _) -> Combos.lineBombCross b p2
+        _ -> nub (Combos.lineBombCross b p1 ++ Combos.lineBombCross b p2)
+  | Combos.isRainbowLineCombo b p1 p2 = rainbowClearSeeds b p1 p2
+  | otherwise = []
+  where
+    kinds = (kindOf (getCell b p1), kindOf (getCell b p2))
+    kindOf cell = case cell of
+      Gem _ k _ _ -> Just k
+      _ -> Nothing
+    isLine k = k == LineH || k == LineV
+    bothBombsAfter = kinds == (Just Bomb, Just Bomb)
+    bothLinesAfter = case kinds of
+      (Just k1, Just k2) -> isLine k1 && isLine k2
+      _ -> False
+    lineBombAfter = case kinds of
+      (Just Bomb, Just k) | isLine k -> True
+      (Just k, Just Bomb) | isLine k -> True
+      _ -> False
+
+-- | 第 8 刀前的 Gravity.refill（逐字副本）。
+legacyRefill :: StdGen -> MBoard -> (Board, StdGen)
+legacyRefill g0 mb =
+  let (filled, g') = fillList g0 [atM mb (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+  in (boardFromRows (chunks filled), g')
+  where
+    fillList g [] = ([], g)
+    fillList g (Nothing : xs) =
+      let (c, g1) = randomColor g
+          (rest, g2) = fillList g1 xs
+      in (mkGem c : rest, g2)
+    fillList g (Just x : xs) =
+      let (rest, g1) = fillList g xs
+      in (x : rest, g1)
+    chunks [] = []
+    chunks xs = take boardSize xs : chunks (drop boardSize xs)
+
+genPos :: Gen Pos
+genPos = (,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)
+
+-- | 形状用例：两三色为主的盘面（常有 4 / 5 连与横竖交叉）、随机落点、连线格的随机子集当可清格。
+genShapeCase :: Gen (Board, Maybe Pos, [Pos])
+genShapeCase = do
+  b <- boardFromRows <$> vectorOf boardSize (vectorOf boardSize (frequency [(12, mkGem <$> elements [C1, C2, C3]), (2, genGem), (1, genCell)]))
+  let ps = nub (concatMap runPos (findMatchRunsWith defaultRegistry b))
+  clearable <- filterM (const (frequency [(4, pure True), (1, pure False)])) ps
+  prefer <- oneof ([pure Nothing, Just <$> genPos] ++ [Just <$> elements ps | not (null ps)])
+  pure (b, prefer, clearable)
+
+-- | 形状规则表：内置表 = [5 连彩虹, 横 4, 竖 4]，逐连线的产出（位置、种类、先后）与旧 spawnSpecials 逐字相同。
+qc_shape_table_matches_legacy :: Property
+qc_shape_table_matches_legacy =
+  forAll genShapeCase $ \(b, prefer, clearable) ->
+    let runs = findMatchRunsWith defaultRegistry b
+        legacy = legacySpawnSpecials prefer runs clearable
+    in cover 20 (not (null legacy)) "spawns a special" $
+       cover 3 (length legacy >= 2) "spawns two or more" $
+       conjoin
+         [ map shapeName (shapeRules defaultRegistry) === ["line5→rainbow", "line4h→line_h", "line4v→line_v"]
+         , spawnSpecialsWith defaultRegistry prefer runs clearable === legacySpawnSpecials prefer runs clearable
+         , spawnByShapes builtinShapeRules prefer runs clearable === legacySpawnSpecials prefer runs clearable
+         -- 空表不生成
+         , spawnByShapes [] prefer runs clearable === []
+         ]
+
+-- | 交换两端的格：各种宝石（含冰 / 叠层 / 软锁）为主，也有障碍；p2 多半与 p1 相邻，偶尔是任意格（也可重合）。
+genComboCase :: Gen (Board, Pos, Pos)
+genComboCase = do
+  b <- genPlayBoard
+  p1@(r, c) <- genPos
+  let nbrs = [q | q@(rr, cc) <- [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)], rr >= 0, rr < boardSize, cc >= 0, cc < boardSize]
+  p2 <- frequency [(8, elements nbrs), (1, genPos)]
+  let end =
+        frequency
+          [ (8, Gem <$> genColor <*> elements [Normal, LineH, LineV, Bomb, Rainbow] <*> frequency [(5, pure 0), (1, choose (1, 2))] <*> frequency [(5, pure Nothing), (1, Just <$> genOverlay)])
+          , (1, genCell)
+          ]
+  c1 <- end
+  c2 <- end
+  pure (setCell (setCell b p1 c1) p2 c2, p1, p2)
+
+-- | 组合表：成立判定与清种子（交换前 / 交换后两个盘面）与旧 isSpecialCombo / comboClearSeeds 逐字相同；
+-- 并进成对交换规则后次序仍是 [10, 20]，交换起手（swapOpeningWith / swapFiresWith）与旧的两条规则相同。
+qc_combo_table_matches_legacy :: Property
+qc_combo_table_matches_legacy =
+  forAll genComboCase $ \(b, p1, p2) ->
+    let swapped = swapCells b p1 p2
+        rules = comboRules defaultRegistry
+        legacyOpening =
+          listToMaybe ([rainbowClearSeeds swapped p1 p2 | isRainbowSwap b p1 p2] ++ [legacyComboClearSeeds swapped p1 p2 | legacyIsSpecialCombo b p1 p2])
+    in cover 5 (legacyIsSpecialCombo b p1 p2) "combo fires" $
+       cover 5 (not (null (legacyComboClearSeeds b p1 p2)) && not (legacyIsSpecialCombo b p1 p2)) "kinds match but soft-locked" $
+       conjoin
+         [ map comboName rules === ["bomb×bomb", "line×line", "line×bomb", "rainbow×line"]
+         , map srOrder (swapRules defaultRegistry) === [10, 20]
+         , map srOrder (elementSwapRules defaultRegistry) === [10]
+         , comboFires rules b p1 p2 === legacyIsSpecialCombo b p1 p2
+         , Combos.isSpecialCombo b p1 p2 === legacyIsSpecialCombo b p1 p2
+         , conjoin [comboSeedsFor rules bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]
+         , conjoin [Combos.comboClearSeeds bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]
+         , swapOpeningWith defaultRegistry b swapped p1 p2 === legacyOpening
+         , swapFiresWith defaultRegistry b p1 p2 === (isRainbowSwap b p1 p2 || legacyIsSpecialCombo b p1 p2)
+         ]
+
+-- | 组合表对称：交换两端（p1 ↔ p2）后，每条规则是否对得上、整张表是否成立不变，清种子的格集合不变。
+qc_combo_table_symmetric :: Property
+qc_combo_table_symmetric =
+  forAll genComboCase $ \(b, p1, p2) ->
+    let swapped = swapCells b p1 p2
+        rules = comboRules defaultRegistry
+        matched r q1 q2 = isJust (comboMatch [r] b q1 q2)
+        seedSet bb q1 q2 = sort (nub (comboSeedsFor rules bb q1 q2))
+    in conjoin
+         [ conjoin [counterexample (comboName r) (matched r p1 p2 === matched r p2 p1) | r <- rules]
+         , comboFires rules b p1 p2 === comboFires rules b p2 p1
+         , conjoin [seedSet bb p1 p2 === seedSet bb p2 p1 | bb <- [b, swapped]]
+         ]
+
+-- | 补子策略：缺省策略（defaultRefill、colorsRefill numColors、Gravity.refill）与旧 refill 逐字相同——
+-- 盘面与推进后的生成器都相同（随机数消费顺序不变）；内置关卡级元素不换策略（activeRefill = 注册表的缺省）。
+qc_refill_policy_default_matches_legacy :: Int -> Property
+qc_refill_policy_default_matches_legacy seed =
+  forAll genMBoard $ \mb ->
+    let g = mkStdGen seed
+        (b0, g0) = legacyRefill g mb
+        same (b1, g1) = b1 === b0 .&&. show g1 === show g0
+        builtinPolicy = activeRefill defaultRegistry (builtinHooks [] [])
+    in conjoin
+         [ same (refillWith defaultRefill g mb)
+         , same (refillWith (colorsRefill numColors) g mb)
+         , same (refill g mb)
+         , same (refillWith (activeRefill defaultRegistry noHooks) g mb)
+         , same (refillWith builtinPolicy g mb)
+         , refillName builtinPolicy === "random-gem"
+         , refillName (refillPolicyWith defaultRegistry) === "random-gem"
          ]

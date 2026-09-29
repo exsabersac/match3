@@ -25,10 +25,10 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
      Outcome  Shuffle  Trace            Match   Gravity
      Resolve（公共结算）                 Clear   Random
      Level  Move  Boosters
-               │                        Cascade  Hooks（第 7 刀）
+               │                        Cascade  Hooks（第 7 刀）  Refill（第 8 刀）
                └──── 直接 import 子模块 ───┤
                                             ▼
- Match3.Element（元素框架：Types / Registry / Builtin / Event / Level；默认注册表 defaultRegistry）
+ Match3.Element（元素框架：Types / Registry / Builtin / Event / Level / Special（第 8 刀规则表解释器）；默认注册表 defaultRegistry）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
  Match3.Levels.Campaign（40 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
  Match3.Types（门面，再导出 Types.Name / Cell / Overlay / Body / Board / Game；第 6 刀拆分）  Match3.Goal（目标数据，第 5 刀）
@@ -69,11 +69,11 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
-| `Match3.Element` | 门面：再导出 `Types` / `Registry` / `Builtin` / `Event` / `Level`（第 7 刀；元素类 `Class` 与 `Message` 单独 import，方法名 `name` / `color` / `pushable` 等较通用，避免与使用方撞名） | 自身无实现 |
-| `Match3.Element.Types` | 规则与查询结果的数据类型：`Slot`、`HitResult`、`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、`CounterKey`（再导出自 `Match3.Counts`，第 4 刀前叫 `Counter`）、`Arg` / `Placement`、`cellSlot` | 调用顺序 |
-| `Match3.Element.Registry` | `Registry`（名字 → 构造器 `Entry`；按层数组 O(1) 取解码器 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、解码 `elementOf`、各能力的查询函数 `*With`、关卡级元素的种类表 `registerLevel` / `removeLevel` / `levelDefs` / `askLevels`（问注册的原型值，第 7 刀 7b 起折叠所有回复者；第 7 刀删掉了带状态参数的 `absorbWith` / `beltShiftWith` / `teleportWith` / `coverWith`） | 具体元素、一局的关卡级状态（`Element.Level`） |
-| `Match3.Element.Builtin` | 汇总：条目表 `builtinDefs`（注册顺序固定，快照锁定）、`builtinLevelDefs` 与 `defaultRegistry`；再导出测试 / 扩展用的元素类型 | 具体元素的定义 |
-| `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色与特殊合成的成对交换规则、`specialBlast` | 障碍与叠层 |
+| `Match3.Element` | 门面：再导出 `Types` / `Registry` / `Builtin` / `Event` / `Level`（第 7 刀）、`Special` / `Board.Refill`（第 8 刀；元素类 `Class` 与 `Message` 单独 import，方法名 `name` / `color` / `pushable` 等较通用，避免与使用方撞名） | 自身无实现 |
+| `Match3.Element.Types` | 规则与查询结果的数据类型：`Slot`、`HitResult`、`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、第 8 刀的特殊块形状规则 `ShapeRule { shapeName, shapeSpawn :: ShapeCtx -> MatchRun -> Maybe [(Pos, Cell)] }`（上下文 `ShapeCtx { scPrefer, scRuns, scClearable }`）与组合规则 `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`、连线 `MatchRun`（第 8 刀从 `Board.Match` 移来，原处再导出）、`CounterKey`（再导出自 `Match3.Counts`，第 4 刀前叫 `Counter`）、`Arg` / `Placement`、`cellSlot` | 调用顺序 |
+| `Match3.Element.Registry` | `Registry`（名字 → 构造器 `Entry`；按层数组 O(1) 取解码器 + 自定义元素表 + 已排序的邻格 / 步末规则）、`register` / `lookupElement`、解码 `elementOf`、各能力的查询函数 `*With`、关卡级元素的种类表 `registerLevel` / `removeLevel` / `levelDefs` / `askLevels`（问注册的原型值，第 7 刀 7b 起折叠所有回复者；第 7 刀删掉了带状态参数的 `absorbWith` / `beltShiftWith` / `teleportWith` / `coverWith`）；第 8 刀的三张规则表 `shapeRules` / `setShapeRules`、`comboRules` / `setComboRules`（非空时并成一条次序 20 的成对交换规则，`swapRules` = 元素声明的 `elementSwapRules` + 它）、`refillPolicyWith` / `setRefillPolicy`（`mkRegistry` 建出的表：形状 / 组合为空，补子 = `defaultRefill`；`register` 保留三张表） | 具体元素、一局的关卡级状态（`Element.Level`） |
+| `Match3.Element.Builtin` | 汇总：条目表 `builtinDefs`（注册顺序固定，快照锁定）、`builtinLevelDefs` 与 `defaultRegistry`（第 8 刀起另装上 `builtinShapeRules` / `builtinComboRules`，均再导出）；再导出测试 / 扩展用的元素类型 | 具体元素的定义 |
+| `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则、`specialBlast`、第 8 刀的内置形状规则表 `builtinShapeRules`（特殊合成不再挂在 line_h 上） | 障碍与叠层 |
 | `Match3.Element.Builtin.Layer` | 冰层 `Ice` 与 8 种叠层修饰器（草 / 藤 / 巧 / 迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 蒸汽），蔓延规则 | 本体 |
 | `Match3.Element.Builtin.Obstacle` | 打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋 | 收走 / 按名字计数的元素（`Collectible`） |
 | `Match3.Element.Builtin.Collectible` | 收集与计数类：饼干、时间精灵、气泡 | 削层 / 变形（`Obstacle`） |
@@ -82,15 +82,17 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element.Builtin.Level` | 关卡级元素：飞碟 `UfoLevel [Ufo]`、皮带 `BeltLevel [Belt]`、传送门 `PortalLevel [(Pos,Pos)]`、地毯 `CarpetLevel [Pos]`、地面层 `GroundLayer Ground`（第 7 刀：状态在元素值里；按节拍消息回复并交回推进后的自身，开局状态 `levelStart` 取自关卡记录，飞碟 / 地毯的目标补齐也在这里）；`portalTeleport`（第 7 刀前在 `Board.Gravity`） | 一局里有哪些元素（`GameState.gsLevelElems`） |
 | `Match3.Element.Level` | 第 7 刀（7a）：一局的关卡级元素 `gsLevelElems`——开局 `startLevelsWith`（注册的各种 + 核心元素地面层）、每个节拍参与的元素 `activeLevels`（注册顺序取同名状态，没有则用原型；未注册的不参与，核心元素总参与）、`askLevelsIn`（发消息，第 7 刀 7b 起按参与顺序折叠所有回复者并依次写回推进后的状态）、读写 `levelState` / `putLevel` 与内置读数 `levelUfos` / `levelBelts` / `levelPortals` / `levelCarpetOpen` / `levelGround`、给 Board 层的钩子 `levelHooksWith`、Game 层的节拍 `beltShiftIn` / `avoidCellsIn` / `wallCellsIn` / `coverIn` / `hitGroundIn` | 连锁顺序（`Board.Cascade`） |
 | `Match3.Element.Builtin.Common` | 跨分组共用的辅助：`deadRule`（邻消打碎并入清除格）、`colorPlace`（按颜色放置） | 只在一组里用的辅助 |
+| `Match3.Element.Special` | 第 8 刀：规则表的解释器（不含具体规则）——形状表 `spawnByShapes`（每条连线取第一条认领它的规则）、落点 `shapeAnchor`、单连线规则的构造器 `runShape`；组合表 `comboMatch`（按表顺序、每条先试 (p1,p2) 再试 (p2,p1)）/ `comboFires`（另要求两端 `specialActivates`）/ `comboSeedsFor` / `comboSwapRule`（次序 `comboOrder` = 20） | 具体规则（`Builtin.Gem` / `Combos`） |
 | `Match3.Element.Class` | 元素类（xmonad LayoutClass 风格）：`Element`（带默认实现的能力方法，默认由 `archetype` 推出）、`SomeElement`、修饰器 `Modifier` / `Modified`、惰性占格 `Inert`、关卡级元素 `LevelElement`（`levelName` / `levelReply` 返回（回复，推进后的自身）/ `levelStart` / `levelCore`）与存在类型 `SomeLevelElement`（第 7 刀前的 `SomeLevel` 没有状态；相等 = 同类型且值相等） | 具体元素 |
-| `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息（第 7 刀起问题与回复同类型，回复者在上面累加：`Refilled`、`EndTicked`、`Settling`、`Covering`、`GroundHit`，查询 `AvoidCells` / `WallCells`；第 7 刀前的 `Absorbed` / `Shifted` / `Settled` / `Covered` 已删） | 谁回复 |
+| `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息（第 7 刀起问题与回复同类型，回复者在上面累加：`Refilled`、`Refilling`（第 8 刀，补子策略）、`EndTicked`、`Settling`、`Covering`、`GroundHit`，查询 `AvoidCells` / `WallCells`；第 7 刀前的 `Absorbed` / `Shifted` / `Settled` / `Covered` 已删） | 谁回复 |
 | `Match3.Element.Event` | 通用步末效果 `EndEffect { endEffectKind, endEffectElement, endEffectItems }` / `EndItem { eiFrom, eiTo, eiCell, eiBack }`（第 7 刀 7b 取代四个构造器与 `SpreadKind` / `SnailMove`；`Show` 手写成旧构造器文本）、`applyEndEffect` / `endEffectPairs` / `endItemDir` / `spreadPairs`、效果事件 `EventKind` / `Event` | 帧与样式 |
 | `Match3.Core` | 再导出公共 API | 自身几乎无逻辑 |
 | `Match3.Board.Grid` | 坐标边界、读写格（`getCell` = `boardAt`，O(1)）、交换、相邻、可空盘面 `MBoard = Array Pos (Maybe Cell)`（第 3 刀起与 `Board` 同形的二维数组，`atM` / `setM` / `setManyM` 读写、`mboardRows` 转行列表；只在一轮消除 / 沉降内部使用，重力按列取出不再转置）、`randomColor` | 任何规则 |
-| `Match3.Board.Match` | `MatchRun` / `findMatchRuns` / `hasAnyMatch`、`findHint` / `hasValidMove`（第 3 刀起提示只对交换两格所在的行 / 列做局部匹配检查，其余行列用原盘的结果；遍历顺序与返回值不变，性质 `qc_find_hint_local_matches_reference` 与旧实现对照） | 修改盘面 |
-| `Match3.Board.Clear` | 一轮消除（匹配 / 种子）、特殊扩展与生成、彩蛋、邻格削层与触发、飞碟吸收（吸走 ≠ 引爆）、计分公式 | 沉降、连锁循环 |
-| `Match3.Board.Gravity` | 重力（固定格分段）、边缘收集（`drainEdgesMWith`：按元素的 `drains` 方向，底 → 左 → 右 → 上，收完再落，内置只有饼干 = 底边）、沉降节拍的钩子（`onSettle`，内置 = 传送门）、补子、`settleRefill` / `settleDrainWith`（第 7 刀起收 `LevelHooks`，不再收传送门对） | 消除 |
-| `Match3.Board.Hooks` | 第 7 刀（7a）：Board 层的关卡级钩子记录 `LevelHooks { onSettle, onAbsorb, hookLevel }` 与空钩子 `noHooks`；由 `Element.Level.levelHooksWith` 从注册表 + `gsLevelElems` 造出，Board 层不看背后是哪些元素 | 关卡级元素本身 |
+| `Match3.Board.Match` | `MatchRun`（第 8 刀起定义在 `Element.Types`，这里再导出）/ `findMatchRuns` / `hasAnyMatch`、`findHint` / `hasValidMove`（第 3 刀起提示只对交换两格所在的行 / 列做局部匹配检查，其余行列用原盘的结果；遍历顺序与返回值不变，性质 `qc_find_hint_local_matches_reference` 与旧实现对照） | 修改盘面 |
+| `Match3.Board.Clear` | 一轮消除（匹配 / 种子）、特殊扩展与生成（第 8 刀起 `spawnSpecialsWith reg` 查注册表的形状规则表；不带 With 的 `spawnSpecials` 移到 `Board.Default`）、彩蛋、邻格削层与触发、飞碟吸收（吸走 ≠ 引爆）、计分公式 | 沉降、连锁循环 |
+| `Match3.Board.Gravity` | 重力（固定格分段）、边缘收集（`drainEdgesMWith`：按元素的 `drains` 方向，底 → 左 → 右 → 上，收完再落，内置只有饼干 = 底边）、沉降节拍的钩子（`onSettle`，内置 = 传送门）、补子（第 8 刀起按补子策略：`activeRefill reg hooks` = 钩子 `hookRefill` 优先、否则注册表的策略；`refill` = 缺省策略）、`settleRefill` / `settleDrainWith`（第 7 刀起收 `LevelHooks`，不再收传送门对） | 消除 |
+| `Match3.Board.Refill` | 第 8 刀：补子策略 `RefillPolicy { refillName, refillCell :: RandomGen g => RefillCtx -> g -> (Cell, g) }`（上下文 `RefillCtx { rcPos, rcBoard }`）、缺省 `defaultRefill`（随机五色普通宝石，每洞一次 `randomColor`）、关卡颜色数 `colorsRefill n`、`refillWith`（行优先逐个空洞问策略）；不依赖注册表 | 策略从哪来（`Gravity.activeRefill`） |
+| `Match3.Board.Hooks` | 第 7 刀（7a）：Board 层的关卡级钩子记录 `LevelHooks { onSettle, onAbsorb, hookRefill（第 8 刀）, hookLevel }` 与空钩子 `noHooks`；由 `Element.Level.levelHooksWith` 从注册表 + `gsLevelElems` 造出，Board 层不看背后是哪些元素 | 关卡级元素本身 |
 | `Match3.Board.Cascade` | 连锁的**单一实现**：`cascadeMatches` / `cascadeMatchesFrom` / `cascadeSeeds` / `cascadeAfterWith`（`AfterBelt` / `AfterEnd 空洞`）/ `cascadeCountdowns` 返回 `CascadeRun`（终盘 + `CascadeTally` 计数记录 + `[CascadeWave]` + 推进后的钩子 `crHooks`（第 7 刀前是飞碟 `crUfos`）+ 生成器；第 7 刀起全部入口只收一个 `LevelHooks`，不再收 `[Ufo]` / 传送门对），调用方直接读字段（第三刀删掉了元组兼容层 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 与 `traceCascade*`）；`stepCascade` 保留为「恰好一轮」的小工具；段 2c 的步末补结算（挖 `erHoles` 空洞 → 边缘收集 + 补子 → 再连锁）与皮带后连锁在第 3 刀合并为 `cascadeAfterWith`；每轮的「沉降 + 补子」只在 `settleRound`、整轮吸收（飞碟）只在 `absorbRound` 各写一次 | 步数 / 目标结算、道具扣次 |
 | `Match3.Board.Default` | 段 2c：不带 `With` 的旧名（`cascadeMatches` / `clearMatches` / `applyGravity` / `findHint` …）= `*With defaultRegistry`；第 7 刀起连锁 / 沉降的旧名也收 `LevelHooks`，`builtinHooks 飞碟 传送门对` 造出内置注册表下的钩子（再导出 `LevelHooks(..)` / `noHooks`）。`Board.{Match,Clear,Gravity,Cascade}` 自身不再 import `Element.Builtin`，只收 `Registry` 参数；主流程一律把 `reg` 往下传，不经本模块 | 规则 |
 | `Match3.Board.Random` | 随机盘、稳定盘、可玩盘、`shufflePlayable` | 保留装饰（见 `Game.Shuffle`） |
@@ -106,7 +108,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Game.Boosters` | `resolveHammer` / `resolveFreeSwap` / `resolveCrossClear` 及其投影 `use*` / `trace*` | 种子几何（见 `Match3.Boosters`） |
 | `Match3.Obstacles` | 石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/瓶子/精灵/魔法帽/果汁机的邻消削层与触发 | 连锁循环 |
 | `Match3.Rainbow` | 彩虹判定与清色种子 | 合成几何（见 Combos） |
-| `Match3.Combos` | 特殊×特殊合成种子 | 普通三消 |
+| `Match3.Combos` | 特殊×特殊合成：第 8 刀起是内置组合表 `builtinComboRules`（炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线），`isSpecialCombo` / `comboClearSeeds` 是这张表的判定 / 清种子；各组合的种类谓词与爆炸几何 `bigBomb` / `fullRowCol` / `lineBombCross` | 普通三消、组合表的解释（`Element.Special`） |
 | `Match3.Ice` | 匹配时削冰层 | overlay（Freeze/Chain…） |
 | `Match3.Grass` | 草/藤/巧/雾/链/冻/帘/蒸汽的清除与蔓延 | 蜗牛爬行 |
 | `Match3.Carpet` | 地毯覆盖计数（各关的地毯布局第 6 刀起在关卡记录 `lvlCarpets` 里） | 饼干底行收集逻辑（在 `Board.Gravity` / `Game.Tally`） |
@@ -216,7 +218,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `archetype` | 原型，决定下面各方法的默认值 | — |
 | `color` / `matchColor` | 本体颜色（颜色袋计数）/ 参与匹配的颜色（修饰器可挡住，`modBlocksMatch`） | `Board.Match.groupGemRuns`、`Clear.countColor`、提示 |
 | `blocksSwap` | 本格不能被交换（任一层挡即挡） | `Move` / `Boosters` 校验、`findHint` |
-| `swapRule` | 成对交换规则 `SwapRule{srOrder, srFires 交换前盘, srSeeds 交换后盘}`：交换两端的组合直接给出起手种子；多条按 `srOrder` 取第一条成立的。内置：彩虹取色（rainbow，10）、特殊 × 特殊合成（挂在 line_h 上，20） | `Registry.swapOpeningWith`、`Board.Match.findHintWith` |
+| `swapRule` | 成对交换规则 `SwapRule{srOrder, srFires 交换前盘, srSeeds 交换后盘}`：交换两端的组合直接给出起手种子；多条按 `srOrder` 取第一条成立的。内置：彩虹取色（rainbow，10）；特殊 × 特殊合成第 8 刀起不再是元素规则，而是注册表的组合表并成的一条（20，见「规则表」） | `Registry.swapOpeningWith`、`Board.Match.findHintWith` |
 | `hintable` | 普通匹配提示是否试这个格（缺省 True；彩虹 = False，只经成对交换规则给提示） | `Board.Match.findHintWith`（取代原先写死的 `isRainbow`） |
 | `activates` | 特殊块能否点火（自上而下第一个 `Just` 决定，软锁纪律） | `Clear.expandSpecials` |
 | `falls` / `portal` / `drains` | 随重力下落（否则把列分段）/ 可穿传送门 / 到达哪些边时被收走（`[Edge]`；内置饼干 = `[EdgeBottom]`） | `Board.Gravity.drainEdgesMWith` |
@@ -246,15 +248,30 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 节拍消息（问题 = 回复的类型） | 时机 | 内置回复者 | 主流程入口 |
 |------|------|------|------|
 | `Refilled 盘 吸走格` | 每轮补子之后 | `UfoLevel`（`stepUfos`，飞碟移动） | 钩子 `onAbsorb`（`Board.Cascade.absorbRound`） |
+| `Refilling 补子策略` | 第 8 刀：补子时取策略（初值 = 注册表的策略） | 无（内置都不回复 = 用注册表的缺省策略） | 钩子 `hookRefill`（`Board.Gravity.activeRefill`） |
 | `EndTicked 移位表` | 玩家交换的步末，倒计时之后、蔓延之前；没有皮带时不回复 | `BeltLevel`（`beltMoves`） | `Element.Level.beltShiftIn`（步末表 `belt` 行） |
 | `AvoidCells 格` / `WallCells 格` | 会走的元素（PhaseMove）之前 | `BeltLevel`（皮带格）/ `PortalLevel`（门端点） | `avoidCellsIn` / `wallCellsIn`（步末表 `move` 行的 `EndCtx`） |
 | `Settling 可穿门谓词 可空盘` | 沉降时 | `PortalLevel`（`portalTeleport`） | 钩子 `onSettle`（`Board.Gravity.settleDrainWith`） |
 | `Covering 本步格 新覆盖数` | 步末结算 | `CarpetLevel`（`coverCarpets`） | `coverIn`（`Resolve`） |
 | `GroundHit 规则 命中格 去层数` | 每轮之后（按轮） | `GroundLayer`（规则 = 注册表的 `hitGroundWith`；核心元素） | `hitGroundIn`（`Resolve`） |
 
-**Board 层只收钩子记录**（第 7 刀，`Match3.Board.Hooks`）：`LevelHooks { onSettle :: MBoard -> MBoard, onAbsorb :: Board -> ([Pos], LevelHooks), hookLevel :: [SomeLevelElement] }`，由 `levelHooksWith reg (gsLevelElems gs)` 造出；连锁把 `onAbsorb` 交回的钩子一路传下去（`CascadeRun.crHooks`），Game 层最后从 `hookLevel` 取回推进后的关卡级元素。第 3 刀留下的 `[Ufo]` / 传送门对参数全部删掉，Board 核心模块（Match / Clear / Cascade / Gravity / Hooks / Grid）不 import 飞碟 / 皮带 / 地毯模块，也不碰 `GameState`（`br_board_takes_hooks_only` 扫描）。
+**Board 层只收钩子记录**（第 7 刀，`Match3.Board.Hooks`）：`LevelHooks { onSettle :: MBoard -> MBoard, onAbsorb :: Board -> ([Pos], LevelHooks), hookRefill :: Maybe RefillPolicy（第 8 刀）, hookLevel :: [SomeLevelElement] }`，由 `levelHooksWith reg (gsLevelElems gs)` 造出；连锁把 `onAbsorb` 交回的钩子一路传下去（`CascadeRun.crHooks`），Game 层最后从 `hookLevel` 取回推进后的关卡级元素。第 3 刀留下的 `[Ufo]` / 传送门对参数全部删掉，Board 核心模块（Match / Clear / Cascade / Gravity / Hooks / Grid）不 import 飞碟 / 皮带 / 地毯模块，也不碰 `GameState`（`br_board_takes_hooks_only` 扫描）。
 
 没有元素回复 = 该机制不生效（`removeLevel`；测试 `br_level_hooks_*` 在 38 关实测）。消息是开放的：任何模块都能定义新的消息类型和新的关卡级元素（`ec_level_elements_by_message` 用无状态的「磁铁」演示只 `registerLevel` 即可接入；`ec_level_element_stateful_extension` 用带状态的「虹吸」演示开局 `levelStart`、状态写回 `gsLevelElems`、去掉注册后状态原样不生效，都不改主流程）。
+
+### 规则表：特殊块形状、特殊块组合、补子策略（第 8 刀）
+
+三处原先写死在主流程里的规则改成注册表上的数据，扩展只改表、不改主流程（`br_rule_tables_out_of_main_flow` 扫描：Board 核心与 Game 的 Move / Resolve / Boosters 不点名特殊块种类、不直接随机选色、不用组合几何）：
+
+| 规则表 | 数据 | 内置（顺序即优先级） | 主流程入口 | 语义 |
+|------|------|------|------|------|
+| 特殊块形状 | `[ShapeRule]`（`shapeRules` / `setShapeRules`） | `builtinShapeRules`：line5→rainbow（长度 ≥5）→ line4h→line_h（横 4）→ line4v→line_v（竖 4）；长度 3 不生成；目前没有 L / T 规则 | `Board.Clear.spawnSpecialsWith`（`Element.Special.spawnByShapes`） | 每条连线（横线在前、竖线在后）按表顺序问各规则，取第一条认领它的（`Just`，可为空 = 认领但不生成）；各连线的产出依次写回，后写的覆盖先写的；落点 `shapeAnchor`：交换落点在可清格里就放那里，否则放可清格的中间一个 |
+| 特殊块组合 | `[ComboRule]`（`comboRules` / `setComboRules`） | `builtinComboRules`：bomb×bomb（两个 5×5）→ line×line（两端整行整列）→ line×bomb（炸弹端 3 行 + 3 列）→ rainbow×line（彩虹取色；实际总被先于它的彩虹规则 10 接走） | 整张表并成一条 `SwapRule 20`（`comboSwapRule`），经 `swapOpeningWith` / `findHintWith` | 成立 = 表里有对得上的规则（按表顺序，每条先试 (p1,p2) 再试 (p2,p1)，所以天然对称）且两端都 `specialActivates`（软锁不发火）；种子取第一条对得上的规则、参数是（对上第一端谓词的格, 对上第二端的格）；表里没有的组合（彩虹 × 炸弹、彩虹 × 彩虹、普通宝石）不成立，交给后面的规则 / 普通三消 |
+| 补子策略 | `RefillPolicy`（`refillPolicyWith` / `setRefillPolicy`；关卡级元素回复 `Refilling` 可换掉） | `defaultRefill`：每个空洞随机选一色补普通宝石（每洞恰好一次 `randomColor`）；另有关卡颜色数 `colorsRefill n` | `Board.Gravity.activeRefill` → `refillWith`（`Cascade.settleRound`、`settleRefillWith`） | 行优先逐个空洞问策略，策略看到空洞位置与已部分补上的盘面，随机数只经给出的生成器消耗 |
+
+等价性：内置表与第 8 刀前的 `spawnSpecials` / `isSpecialCombo` / `comboClearSeeds` / `refill` 逐字相同（性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_refill_policy_default_matches_legacy`，旧实现逐字保留在测试里；缺省补子的生成器状态也相同，随机数消费顺序不变），组合表对称（`qc_combo_table_symmetric`）；元素查询快照的 `R swap [10,20]` 与各 S 行不变，金标准 2534 行不变。
+
+`mkRegistry` 建出的注册表形状 / 组合表为空（只有 `defaultRegistry` 装上内置表），`register` 保留三张表：从 `defaultRegistry` 扩展的注册表行为不变；直接用 `mkRegistry` 建的非内置注册表不再生成特殊块、也没有特殊合成（第 8 刀前这两处写死、与注册表无关），需要时 `setShapeRules builtinShapeRules` / `setComboRules builtinComboRules`。
 
 ### 邻格规则顺序
 
@@ -310,7 +327,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 1. 选层：本体用 `Custom "名字" (CustomState 值)`（值自定义，例如耐久；存储编码只能是一个 `Int`，第 6b 刀起包在 `CustomState` 里，在元素的 `toCell` / 解码函数这一处转换）；格子下面的层用 `SlotGround`（放进 `gsGround`）；需要新的内置层时才动 `Types`。
 2. 写 instance：定义一个类型（状态放在值里），写 `instance Element 类型`（测试 / 扩展元素写在自己的模块里；新的**内置**元素放进 `src/Match3/Element/Builtin/` 下功能最接近的分组文件——宝石 `Gem`、冰 / 叠层 `Layer`、打破型障碍 `Obstacle`、收集计数 `Collectible`、会动 / 会生成的 `Actor`、地面层 `Ground`、关卡级 `Level`——条目函数写在同一文件，跨分组共用的辅助放 `Common`；再在 `Element.Builtin.builtinDefs` 末尾追加条目，已有条目不要重排），只写 `name` / `toCell` 和要改的方法（例如 `archetype`、`onHit`、`adjacentRule`、`counter`、`falls`、`drains`、`groundRule`、`color`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层类写 `instance Modifier`；不在格子里的机制写 `instance LevelElement`，回复流水线节拍消息（或自定义新消息）。
-   - 只经注册表即可接入的类别：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留，也可以是按颜色匹配的有色棋子：给 `color`、原型 `Piece`，见 `ec_custom_matchable_gem`）、叠层与冰的命中规则、地面层、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素、成对交换规则（`swapRule`）、开启类元素（`openRule`）、可被改色 / 推动（`recolorable` / `pushable`）、不进普通匹配提示（`hintable`）、在已有节拍上反应的关卡级元素（`LevelElement`，见 `ec_level_elements_by_message`）。
+   - 只经注册表即可接入的类别：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留，也可以是按颜色匹配的有色棋子：给 `color`、原型 `Piece`，见 `ec_custom_matchable_gem`）、叠层与冰的命中规则、地面层、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素、成对交换规则（`swapRule`）、开启类元素（`openRule`）、可被改色 / 推动（`recolorable` / `pushable`）、不进普通匹配提示（`hintable`）、在已有节拍上反应的关卡级元素（`LevelElement`，见 `ec_level_elements_by_message`）；第 8 刀起还有特殊块形状规则（`setShapeRules`，见 `ext_shape_rule_lt_bomb`）、特殊块组合规则（`setComboRules`，见 `ext_combo_rule_line_gem`）、补子策略（注册表 `setRefillPolicy` 或关卡级元素回复 `Refilling`，见 `ext_refill_policy_level_colors` / `ext_refill_policy_level_element`）。
    - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：地面层 + `groundRule` + `CountNamed`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` + `onHit` + `adjacentRule` + `CountNamed`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。
    - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）、补子时生成自定义棋子。
 3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 里加一行（关卡级元素加进 `builtinLevelDefs`）；测试 / 扩展元素 = `register (customEntry 原型 (元素 . unCustomState)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevelElement 原型值)`，开局状态写在 `levelStart` 里，开局 / 走子用 `newGameAtLevelWith reg` 与 `*With reg` 入口），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
@@ -325,7 +342,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 原专门分支 | 段 4 之后（元素类迁移后的写法） | 主流程入口 |
 |------------|-----------|------------|
 | 彩虹取色（`Move` / `Boosters` / `findHint` 直接调 `isRainbowSwap` / `rainbowClearSeeds`） | `SpecialGem _ Rainbow` 的 `swapRule = SwapRule 10 isRainbowSwap rainbowClearSeeds` | `Registry.swapOpeningWith`、`findHintWith` 逐条 `swapRules` |
-| 特殊 × 特殊合成（`isSpecialCombo` / `comboClearSeeds`） | `SwapRule 20`，挂在 `SpecialGem _ LineH` 上（规则自己检查两端） | 同上 |
+| 特殊 × 特殊合成（`isSpecialCombo` / `comboClearSeeds`） | `SwapRule 20`，挂在 `SpecialGem _ LineH` 上（规则自己检查两端）；第 8 刀起改为注册表的组合表 `comboRules`（内置 `builtinComboRules`），整张表并成一条 `SwapRule 20` | 同上 |
 | 彩蛋开启（`Clear` 直接调 `Obstacles.openSurprises`） | `SurpriseEgg` 的 `openRule = OpenRule openSurprises` | `Registry.openWith`（`surpriseClearPassWith` 成为通用的「开启类元素」流程） |
 | 魔法帽 / 染色瓶只改 `isGem` 的格 | `recolorable`（`Piece` 缺省 True：宝石各种类、倒计时、双面块） | `AdjCtx.acRecolor` → `triggerAdjacentHatsBy` / `triggerAdjacentBottlesBy` |
 | 蜗牛只推 `Snail.pushable` 的格 | `pushable`（同上） | `EndCtx.ecPushable` → `stepSnailAtBy` / `traceSnailsBy` |

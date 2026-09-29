@@ -18,6 +18,7 @@ module Match3.Board.Default
   , hasValidMove
   , findHint
   , expandSpecials
+  , spawnSpecials
   , countColor
   , clearMatches
   , clearMatchesAt
@@ -140,6 +141,10 @@ findHint = findHintWith defaultRegistry
 -- Rainbow is a no-op here (partner color comes from rainbowClearSeeds only).
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials = expandSpecialsWith defaultRegistry
+
+-- | Specials spawned from runs（内置形状规则表：len>=5 Rainbow, len==4 Line (orient by run)）。
+spawnSpecials :: Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
+spawnSpecials = spawnSpecialsWith defaultRegistry
 
 -- | Count how many cleared positions have a given color (pre-clear board; stones skip).
 countColor :: Board -> [Pos] -> Color -> Int

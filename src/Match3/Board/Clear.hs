@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 一轮消除：匹配清除（clearMatchesDetailed）与种子清除（clearFromSeedsDetailed），两者共用同一个
--- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecials）、彩蛋、
+-- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecialsWith，第 8 刀起查形状规则表）、彩蛋、
 -- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbed：吸走 ≠ 引爆）以及计分公式。
 --
 -- 第二刀 2b：直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
@@ -14,7 +14,7 @@
 -- 返回 (挖空后盘面, 清除数, 清除格)；Cascade 再按清除格在消除前盘面上统计障碍计数。
 module Match3.Board.Clear
   ( expandSpecialsWith
-  , spawnSpecials
+  , spawnSpecialsWith
   , clearMatchesAtWith
   , countColorWith
   , surpriseClearPassWith
@@ -27,7 +27,8 @@ module Match3.Board.Clear
   ) where
 
 import Data.List (nub)
-import Match3.Element.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, openWith, runAdjacentWith, stripOnClearWith)
+import Match3.Element.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, openWith, runAdjacentWith, shapeRules, stripOnClearWith)
+import Match3.Element.Special (spawnByShapes)
 import Match3.Types
 import Match3.Board.Grid
 import Match3.Board.Match
@@ -43,25 +44,11 @@ expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
--- | Specials spawned from runs: len>=5 Rainbow, len==4 Line (orient by run).
--- Only place onto positions that actually clear (holes). Flip / ice>1 seeds stay
--- on the board, so prefer/middle must fall back to a clearable cell in the run
--- (otherwise a 4-match with Flip/ice at the anchor silently drops the special).
-spawnSpecials :: Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
-spawnSpecials prefer runs clearable =
-  [ (pos, Gem (runColor run) kind 0 Nothing)
-  | run <- runs
-  , let n = length (runPos run)
-  , n >= 4
-  , let kind
-          | n >= 5 = Rainbow
-          | runIsH run = LineH
-          | otherwise = LineV
-        slots = filter (`elem` clearable) (runPos run)
-  , pos <- take 1 $ case prefer of
-      Just p | p `elem` slots -> [p]
-      _ -> drop (length slots `div` 2) slots
-  ]
+-- | 新特殊块（第 8 刀起按注册表的有序形状规则表 shapeRules，解释器 Match3.Element.Special.spawnByShapes）：
+-- 每条连线取第一条认领它的规则的产出（内置：长度 ≥5 彩虹，长度 4 按方向横 / 竖消）；只放在真正挖空的格上
+-- （Flip / ice>1 的格留在盘面上，落点退到连线里别的可清格，否则 4 连在这类格上会悄悄丢掉特殊块）。
+spawnSpecialsWith :: Registry -> Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
+spawnSpecialsWith reg = spawnByShapes (shapeRules reg)
 
 -- | countColor（指定注册表）：按本体颜色 color 计（不看叠层）。
 countColorWith :: Registry -> Board -> [Pos] -> Color -> Int
@@ -127,7 +114,7 @@ clearWaveWith reg prefer runs b base =
       allPos = nub (trueClears ++ dead)
       n = length allPos
       mb0 = setManyM (toM bAdj) [(p, Nothing) | p <- allPos]
-      spawns = spawnSpecials prefer runs allPos
+      spawns = spawnSpecialsWith reg prefer runs allPos
       mb1 = setManyM mb0 [(p, Just cell) | (p, cell) <- spawns, p `elem` allPos]
   in (mb1, n, allPos)
 

@@ -2,7 +2,8 @@
 -- | 扩展钩子（段 2c）：按元素名计数的目标 GoalNamed、地面层元素槽、方向可配的边缘收集、
 -- 步末之后的补结算、自定义注册表下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
 -- **只定义在测试里**，主流程源码里没有它们的名字；这组测试证明双层果冻、气泡这类元素今后
--- 可以只靠注册表 + 白名单钩子接入。
+-- 可以只靠注册表 + 白名单钩子接入。第 8 刀：扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、
+-- 一种补子策略（关卡级元素换成掉金币 / 关卡颜色数），都只改注册表的规则表或加一个关卡级元素，主流程不用改。
 module Spec.Extension
   ( tests
   ) where
@@ -18,6 +19,17 @@ import Match3.Game.Trace (traceEventsWith)
 import Match3.Game.Shuffle (shuffleGameWith)
 import Match3.Game.Move (resolveSwapWith)
 import qualified Match3.Engine as M3E
+import Data.List (intersect, nub, sort)
+import Match3.Board.Clear (clearMatchesDetailedWith)
+import Match3.Board.Gravity (settleRefillWith)
+import Match3.Board.Grid (mboardFromRows)
+import Match3.Element
+  ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
+  , inertEntry, levelHooksWith, registerLevel, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
+import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
+import Match3.Element.Message (Refilling(..), fromMessage)
+import qualified Match3.Combos as Combos
+import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
@@ -31,6 +43,10 @@ tests =
   , testCase "ext_post_end_settle_hole_element" ext_post_end_settle_hole_element
   , testCase "ext_manual_shuffle_keeps_crate_via_engine" ext_manual_shuffle_keeps_crate_via_engine
   , testCase "ext_end_effect_generic_hopper" ext_end_effect_generic_hopper
+  , testCase "ext_shape_rule_lt_bomb" ext_shape_rule_lt_bomb
+  , testCase "ext_combo_rule_line_gem" ext_combo_rule_line_gem
+  , testCase "ext_refill_policy_level_element" ext_refill_policy_level_element
+  , testCase "ext_refill_policy_level_colors" ext_refill_policy_level_colors
   ]
 
 -- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
@@ -246,3 +262,110 @@ ext_end_effect_generic_hopper = do
   let (gsD, _, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertEqual "default registry: hopper stays" [(7, 0)] (customsOn "hopper" (gsBoard gsD))
   assertBool "default registry: no hopper effect" (all ((/= "hopper") . endEffectElement . esEffect) (mtEnd mtD))
+
+--------------------------------------------------------------------------------
+-- 第 8 刀：规则表 / 补子策略的扩展
+
+-- | L / T 形状规则（只在测试里）：同色横竖两条连线交叉时，横线在交点（可清时）放一颗炸弹，竖线认领但不生成
+-- （否则竖线的直线规则会在交点上覆盖）；不交叉的连线交给后面的直线规则。
+ltBombRule :: ShapeRule
+ltBombRule = ShapeRule "l/t→bomb" spawn
+  where
+    spawn ctx run =
+      case [x | o <- scRuns ctx, runColor o == runColor run, runIsH o /= runIsH run, x <- runPos run `intersect` runPos o] of
+        [] -> Nothing
+        (x : _)
+          | runIsH run -> Just [(x, Gem (runColor run) Bomb 0 Nothing) | x `elem` scClearable ctx]
+          | otherwise -> Just []
+
+-- | L 形用例：交换 (2,3)↔(3,3) 后 (3,1)(3,2)(3,3) 与 (3,3)(4,3)(5,3) 都是 C1 三连（交点 (3,3)）。
+lBoard :: Board
+lBoard = setCells stableBoard [((3, 1), mkGem C1), ((3, 2), mkGem C1), ((4, 3), mkGem C1), ((5, 3), mkGem C1), ((2, 3), mkGem C1), ((3, 3), mkGem C3)]
+
+-- | 形状规则表扩展：把 L / T 规则插到内置表最前面（优先于直线规则），注册表之外什么都不改——
+-- 同一局面在内置表下不生成特殊块（两条三连），扩展后交点生成炸弹；走正式的交换流程（resolveSwapWith）也一样。
+ext_shape_rule_lt_bomb :: Assertion
+ext_shape_rule_lt_bomb = do
+  let reg = setShapeRules (ltBombRule : shapeRules defaultRegistry) defaultRegistry
+      (p1, p2) = ((2, 3), (3, 3))
+      swapped = swapCells lBoard p1 p2
+      spawnedAt r = let (mb, _, _) = clearMatchesDetailedWith r (Just p2) swapped in atM mb (3, 3)
+  assertBool "no match before the swap" (not (hasAnyMatch lBoard))
+  assertEqual "two crossing runs" [True, False] (map runIsH (findMatchRuns swapped))
+  assertEqual "builtin table: plain L spawns nothing" Nothing (spawnedAt defaultRegistry)
+  assertEqual "extended table: bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) (spawnedAt reg)
+  let gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = lBoard}
+      (_, o, mt) = resolveSwapWith reg p1 p2 gs0
+  assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
+  w <- firstWave mt
+  assertEqual "first wave leaves the bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) (atM (cwHoles w) (3, 3))
+  -- 内置表下同一步的第一轮交点是空洞
+  let (_, _, mt0) = resolveSwapWith defaultRegistry p1 p2 gs0
+  w0 <- firstWave mt0
+  assertEqual "builtin: corner is a hole" Nothing (atM (cwHoles w0) (3, 3))
+
+-- | 直线 × 普通宝石组合（只在测试里）：直线端清整行 + 整列。
+lineGemRule :: ComboRule
+lineGemRule = ComboRule "line×gem" isLineCell isNormalCell (\b l _ -> Combos.fullRowCol b l)
+  where
+    isLineCell c = case c of
+      Gem _ k _ _ -> k == LineH || k == LineV
+      _ -> False
+    isNormalCell c = case c of
+      Gem _ Normal _ _ -> True
+      _ -> False
+
+-- | 组合表扩展：往内置组合表末尾加一条「直线 × 普通宝石」，注册表之外什么都不改——内置表下这一步不成三消、
+-- 被拒；扩展后按组合起手（两个方向都成立），第一轮清掉直线端所在的整行整列。
+ext_combo_rule_line_gem :: Assertion
+ext_combo_rule_line_gem = do
+  let reg = setComboRules (comboRules defaultRegistry ++ [lineGemRule]) defaultRegistry
+      board = setCell stableBoard (0, 0) (Gem C1 LineH 0 Nothing)
+      (p1, p2) = ((0, 0), (0, 1))
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = board}
+      (_, o0, _) = resolveSwapWith defaultRegistry p1 p2 gs0
+      (_, o, mt) = resolveSwapWith reg p1 p2 gs0
+  assertEqual "builtin: rejected" NoMatch o0
+  assertBool "table rule fires both ways" (comboFires (comboRules reg) board p1 p2 && comboFires (comboRules reg) board p2 p1)
+  assertBool "builtin table does not fire" (not (comboFires (comboRules defaultRegistry) board p1 p2))
+  assertBool "extended: accepted" (o `notElem` [NoMatch, InvalidSwap])
+  w <- firstWave mt
+  let rowCol = nub ([(0, c) | c <- [0 .. boardSize - 1]] ++ [(r, 1) | r <- [0 .. boardSize - 1]])
+  assertBool "first wave clears the line end's row and column" (all (`elem` cwCleared w) rowCol)
+
+-- | 掉金币的关卡级元素（只在测试里）：回复补子查询，把补子策略换成「每个空洞补一枚金币」（不消耗随机数）。
+data CoinRain = CoinRain
+  deriving (Eq, Show)
+
+instance LevelElement CoinRain where
+  levelName _ = "coin_rain"
+  levelReply e msg
+    | Just (Refilling _) <- fromMessage msg =
+        Just (SomeMessage (Refilling (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)))), e)
+    | otherwise = Nothing
+
+-- | 补子策略扩展（关卡级元素）：注册 CoinRain 之后，交换出的 4 连（横消落在交换点 (1,2)）挖出的 3 个洞补成金币，
+-- 金币无色不再连锁；其余什么都不改。注册表缺省策略下同一步不出金币。
+ext_refill_policy_level_element :: Assertion
+ext_refill_policy_level_element = do
+  let reg = registerLevel (SomeLevelElement CoinRain) (register (inertEntry "coin") defaultRegistry)
+      gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = tripleBoard}
+      (p1, p2) = tripleMove
+      (gs1, o, mt) = resolveSwapWith reg p1 p2 gs0
+      (gsD, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
+  assertBool "accepted" (o `notElem` [NoMatch, InvalidSwap])
+  assertEqual "one wave" 1 (length (mtWaves mt))
+  assertEqual "three coins refilled at the top (the line_h sits at (1,2))" [(0, 0), (0, 1), (0, 3)] (sort (customsOn "coin" (gsBoard gs1)))
+  assertEqual "default policy: no coins" [] (customsOn "coin" (gsBoard gsD))
+
+-- | 补子策略扩展（关卡颜色数）：注册表换成只用 3 色的策略（colorsRefill 3），沉降补子只补 C1..C3；
+-- 同一盘面在缺省策略下会出现别的颜色。
+ext_refill_policy_level_colors :: Assertion
+ext_refill_policy_level_colors = do
+  let reg = setRefillPolicy (colorsRefill 3) defaultRegistry
+      mb = mboardFromRows (replicate boardSize (replicate boardSize Nothing))
+      colorsOf r = nub (sort [c | p <- allPos, Gem c Normal 0 Nothing <- [getCell b p]])
+        where
+          (b, _, _) = settleRefillWith r (levelHooksWith r []) (mkStdGen 42) mb
+  assertEqual "three colours only" [C1, C2, C3] (colorsOf reg)
+  assertEqual "default: all five" [C1, C2, C3, C4, C5] (colorsOf defaultRegistry)

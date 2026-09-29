@@ -5,13 +5,14 @@
 -- 流水线节拍上向关卡级元素发消息。会推进状态的钩子（onAbsorb）交回推进后的钩子，连锁把它一路传下去，
 -- Game 层最后从 'hookLevel' 取回推进后的关卡级元素。
 --
--- 依赖：Board.Grid（MBoard）、Element.Class（SomeLevelElement，只当不透明的载荷）。
+-- 依赖：Board.Grid（MBoard）、Board.Refill（补子策略，第 8 刀）、Element.Class（SomeLevelElement，只当不透明的载荷）。
 module Match3.Board.Hooks
   ( LevelHooks(..)
   , noHooks
   ) where
 
 import Match3.Board.Grid (MBoard)
+import Match3.Board.Refill (RefillPolicy)
 import Match3.Element.Class (SomeLevelElement)
 import Match3.Types
 
@@ -21,10 +22,13 @@ data LevelHooks = LevelHooks
     -- ^ 沉降节拍（每次沉降、下落并收边之后）：传送（内置 = 传送门）。只读状态、不推进。
   , onAbsorb  :: Board -> ([Pos], LevelHooks)
     -- ^ 补子之后的整轮吸收（内置 = 飞碟）：吸走的格（空 = 本轮没有吸收轮）与推进后的钩子。
+  , hookRefill :: Maybe RefillPolicy
+    -- ^ 补子节拍（第 8 刀）：关卡级元素换的补子策略（'Match3.Element.Message.Refilling' 的回复）；
+    -- Nothing = 没有元素换，用注册表的策略（Gravity.activeRefill）。
   , hookLevel :: [SomeLevelElement]
     -- ^ 钩子背后的关卡级元素的当前状态（Game 层取回写进 gsLevelElems；Board 层不读）。
   }
 
--- | 没有任何关卡级元素的钩子：不传送、不吸收（测试与只看盘面的调用方用）。
+-- | 没有任何关卡级元素的钩子：不传送、不吸收、不换补子策略（测试与只看盘面的调用方用）。
 noHooks :: LevelHooks
-noHooks = LevelHooks {onSettle = id, onAbsorb = const ([], noHooks), hookLevel = []}
+noHooks = LevelHooks {onSettle = id, onAbsorb = const ([], noHooks), hookRefill = Nothing, hookLevel = []}

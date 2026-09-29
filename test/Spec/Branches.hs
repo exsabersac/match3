@@ -42,6 +42,7 @@ tests =
   , testCase "br_level_hooks_builtin_and_removable" br_level_hooks_builtin_and_removable
   , testCase "br_level_hooks_removed_in_play" br_level_hooks_removed_in_play
   , testCase "br_main_flow_no_special_branches" br_main_flow_no_special_branches
+  , testCase "br_rule_tables_out_of_main_flow" br_rule_tables_out_of_main_flow
   , testCase "br_board_takes_hooks_only" br_board_takes_hooks_only
   , testCase "br_end_phase_table_order" br_end_phase_table_order
   ]
@@ -283,6 +284,25 @@ br_main_flow_no_special_branches = do
         [(f, "import " ++ m) | (f, s) <- zip files srcs, m <- importsOf s, m `elem` bannedImports]
           ++ [(f, w) | (f, s) <- zip files srcs, w <- bannedIdents, mentionsIdent w s]
   assertEqual "special-cased names in main flow" [] bad
+
+-- | 第 8 刀：特殊块形状、特殊块组合、顶部补子都是注册表上的规则表 / 策略，结算流水线不再写死——
+-- Board / Game 层代码（去掉注释与字符串）不点名特殊块种类（LineH / LineV / Bomb / Rainbow）、不直接随机选色
+-- （randomColor / numColors），也不用 Combos 的几何函数；特殊合成不再挂在 line_h 的元素规则上（只剩彩虹取色）。
+br_rule_tables_out_of_main_flow :: Assertion
+br_rule_tables_out_of_main_flow = do
+  files <- pipelineSources
+  let flow = filter (`elem` files) ["src/Match3/Board/" ++ m ++ ".hs" | m <- ["Match", "Clear", "Cascade", "Gravity", "Hooks"]] ++ ["src/Match3/Game/" ++ m ++ ".hs" | m <- ["Move", "Resolve", "Boosters"]]
+  assertEqual "scanned Board + Game core" 8 (length flow)
+  srcs <- mapM readFile flow
+  assertEqual "no special kinds / colour picks / combo geometry in the pipeline"
+    []
+    [ (f, w)
+    | (f, s) <- zip flow srcs
+    , w <- ["LineH", "LineV", "Bomb", "Rainbow", "randomColor", "numColors", "bigBomb", "fullRowCol", "lineBombCross"]
+    , mentionsIdent w s
+    ]
+  assertEqual "only the rainbow swap rule is element-declared" [10] (map srOrder (elementSwapRules defaultRegistry))
+  assertEqual "the combo table joins as order 20" [10, 20] (map srOrder (swapRules defaultRegistry))
 
 -- | 第 7 刀（7a）：Board 层（连锁 / 沉降）只收关卡级钩子 LevelHooks，不 import 飞碟 / 皮带 / 地毯的实现模块、
 -- 也不碰 GameState；结算流水线不读第 7 刀前的五个关卡字段（它们在 Game/State.hs 里只是派生读数）；

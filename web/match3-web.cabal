@@ -71,7 +71,8 @@ executable match3-web
     Match3.Element.Class
     Match3.Element.Message
   default-language: Haskell2010
-  -- random / splitmix 钉在与桌面版 lts-21.25 相同的版本，保证同种子同盘面
+  -- random / splitmix 钉在与桌面版 stack.yaml extra-deps 相同的版本（random-1.2.1.1 / splitmix-0.1.0.5，
+  -- 桌面版为 GHC 9.14.1：lts-24.60 + compiler 覆盖），保证同种子同盘面；splitmix 的 ==0.1.0.5 在 cabal.project
   build-depends:
       base
     , array

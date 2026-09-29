@@ -1,11 +1,11 @@
 # 网页版（GHC WebAssembly）
 
-> 分支 `web-wasm-spike` 上的技术验证，尚未合入 main。操作细节（命令、参数）以 [`web/README.md`](../web/README.md) 为准，
+> 技术验证，最初在分支 `web-wasm-spike` 上开发，已合入 main（`59f1e53`）。操作细节（命令、参数）以 [`web/README.md`](../web/README.md) 为准，
 > 本文讲结构与取舍，供评审阅读。
 
 ## 1. 一句话
 
-用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/UI/ComboFx.hs`）
+用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/ComboFx.hs`）
 编成一个 `.wasm`，浏览器里的 JS 只做三件事：**加载、画、收输入**。规则判定、连锁时间轴、帧数都在 Haskell 里算，
 所以同关卡同种子，网页版与桌面版的每一步结果、每一帧动画相位都逐字节一致（有测试守着，见 §7）。
 
@@ -119,13 +119,13 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-09-29，合入元素类之后）：wasm `-Oz` 后 1.74 MB（gzip 675 KB）；dist 合计 2.20 MB，逐文件 gzip 约 1.05 MB。
+体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm `-Oz` 后 1,737,478 B ≈ 1.74 MB（gzip 674,329 B）；dist 合计 2,194,833 B ≈ 2.19 MB，逐文件 gzip 约 1.05 MB。
 
 ## 3. 工具链与构建
 
 - 工具链：[ghc-wasm-meta](https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta) `FLAVOUR=9.14`，装在 `~/.ghc-wasm`（约 6.4 GB），
   与桌面版的 Stack / GHC 9.14.1（原生 x86_64 / arm64）完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
-- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（1.2.1.1 / 0.1.0.5，最初取自 lts-21.25），保证同种子同结果；
+- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；桌面版现为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
 - 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。部署到 Mac 不需要工具链，只拷 `dist/`。

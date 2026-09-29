@@ -9,6 +9,7 @@ module Spec.Builtin.Obstacle
 import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctChests, ctBalloons, ctCakes, ctCells, ctHoney))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
@@ -662,14 +663,14 @@ flip_four_match_spawns_line = do
   let (mb, n) = clearMatches board0
   assertEqual "three holes (flip stays)" (3 :: Int) n
   assertBool "flip became back gem" $
-    case (mb !! 3) !! 2 of
+    case atM mb (3, 2) of
       Just c -> isGem c && cellColor c == Just C4 && cellKind c == Just Normal
       Nothing -> False
   let specials =
         [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [((mb !! r) !! c)]
+        , Just cell <- [(atM mb (r, c))]
         , isGem cell
         , Just k <- [cellKind cell]
         , k /= Normal
@@ -693,7 +694,7 @@ flip_four_match_spawns_line = do
         [ k
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [((mbI !! r) !! c)]
+        , Just cell <- [(atM mbI (r, c))]
         , isGem cell
         , Just k <- [cellKind cell]
         , k /= Normal
@@ -725,7 +726,7 @@ surprise_blast_expands_bomb = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mb !! r) !! c) == Nothing
+        , (atM mb (r, c)) == Nothing
         ]
   assertBool "bomb cell cleared" ((2, 3) `elem` holes)
   -- Bomb at (2,3) expands to row1; (1,3) is outside surprise 3×3 alone.
@@ -791,13 +792,13 @@ safe_bottom_cookie_collected = do
           mkSafe
       (mb, _) = clearMatches board0
   assertBool "opened to cookie pre-settle" $
-    case (mb !! 7) !! 1 of
+    case atM mb (7, 1) of
       Just Cookie -> True
       _ -> False
   let (settled, fallen, _) = settleBoardPortals [] mb
   assertEqual "cookie drained" (1 :: Int) fallen
   assertBool "bottom no longer cookie" $
-    case (settled !! 7) !! 1 of
+    case atM settled (7, 1) of
       Just Cookie -> False
       _ -> True
   let gs0 =
@@ -903,19 +904,19 @@ surprise_blast_peels_adjacent = do
           (Gem C1 Normal 0 (Just (Curtain 2)))
   assertEqual "explode outcome" (3 :: Int) (((3 * 8 + 3) `mod` 4))
   let (mb, _) = clearMatches board0
-      stone = case (mb !! 2) !! 5 of
+      stone = case atM mb (2, 5) of
         Just c -> c
         Nothing -> error "stone must remain"
-      fog = case (mb !! 1) !! 4 of
+      fog = case atM mb (1, 4) of
         Just c -> c
         Nothing -> error "fog gem must remain"
-      chain = case (mb !! 4) !! 5 of
+      chain = case atM mb (4, 5) of
         Just c -> c
         Nothing -> error "chain gem must remain"
-      freeze = case (mb !! 5) !! 3 of
+      freeze = case atM mb (5, 3) of
         Just c -> c
         Nothing -> error "freeze gem must remain"
-      curtain = case (mb !! 3) !! 5 of
+      curtain = case atM mb (3, 5) of
         Just c -> c
         Nothing -> error "curtain gem must remain"
   assertEqual "stone chipped 2→1" (1 :: Int) (stoneLayers stone)
@@ -939,7 +940,7 @@ surprise_blast_peels_adjacent = do
           (2, 5)
           (mkHoneyLayers 2)
       (mbH, _) = clearMatches boardH
-  case (mbH !! 2) !! 5 of
+  case atM mbH (2, 5) of
     Just h -> assertEqual "honey chipped 2→1" (1 :: Int) (honeyLayers h)
     Nothing -> assertFailure "honey must remain (not last layer)"
   -- Control: Bomb in-match 3×3 still peels the same way (parity sanity).
@@ -955,7 +956,7 @@ surprise_blast_peels_adjacent = do
           (2, 4)
           (mkStoneLayers 2)
       (mbB, _) = clearMatches boardB
-  case (mbB !! 2) !! 4 of
+  case atM mbB (2, 4) of
     Just s -> assertEqual "bomb still chips stone" (1 :: Int) (stoneLayers s)
     Nothing -> assertFailure "bomb stone must remain"
 
@@ -1072,7 +1073,7 @@ surprise_blast_opens_nested = do
   assertEqual "outer explode" (3 :: Int) (((3 * 8 + 3) `mod` 4))
   assertEqual "nested special" (2 :: Int) (((2 * 8 + 2) `mod` 4))
   let (mbS, _) = clearMatches boardSpecial
-  case (mbS !! 2) !! 2 of
+  case atM mbS (2, 2) of
     Just c -> do
       assertBool "nested opened to gem" (isGem c)
       assertEqual "nested Bomb special" (Just Bomb) (cellKind c)
@@ -1084,7 +1085,7 @@ surprise_blast_opens_nested = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mbS !! r) !! c) == Nothing
+        , (atM mbS (r, c)) == Nothing
         ]
   assertBool "nested Bomb must not fire (1,1)" ((1, 1) `notElem` holesS)
   assertBool "nested Bomb must not fire (2,1)" ((2, 1) `notElem` holesS)
@@ -1101,7 +1102,7 @@ surprise_blast_opens_nested = do
           (2, 2)
           mkSurprise
       (mbB, _) = clearMatches boardBomb
-  case (mbB !! 2) !! 2 of
+  case atM mbB (2, 2) of
     Just c -> assertEqual "bomb-hit nested Bomb" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "bomb-hit Surprise must open"
   -- Nested explode at (2,3): chain must reach (1,3) outside outer 3×3 alone.
@@ -1125,7 +1126,7 @@ surprise_blast_opens_nested = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mbC !! r) !! c) == Nothing
+        , (atM mbC (r, c)) == Nothing
         ]
   assertBool "nested explode center cleared" ((2, 3) `elem` holesC)
   assertBool "chained blast reached (1,3)" ((1, 3) `elem` holesC)
@@ -1163,9 +1164,9 @@ surprise_nested_special_no_fire = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mb !! r) !! c) == Nothing
+        , (atM mb (r, c)) == Nothing
         ]
-  case (mb !! 2) !! 2 of
+  case atM mb (2, 2) of
     Just c -> assertEqual "special sits" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "nested special must survive"
   assertBool "no fire beyond outer blast (1,1)" ((1, 1) `notElem` holes)
@@ -1194,10 +1195,10 @@ surprise_nested_special_no_fire = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mbP !! r) !! c) == Nothing
+        , (atM mbP (r, c)) == Nothing
         ]
   assertBool "pre-existing Bomb fires (1,1)" ((1, 1) `elem` holesP)
-  assertBool "pre-existing Bomb consumed" (((mbP !! 2) !! 2) == Nothing)
+  assertBool "pre-existing Bomb consumed" ((atM mbP (2, 2)) == Nothing)
 
 --------------------------------------------------------------------------------
 -- Surprise-opened special must sit through same-wave Hat / Bottle
@@ -1267,7 +1268,7 @@ surprise_special_sits_hat_bottle = do
           (1, 2)
           (mkGem C5)
       (mb, _) = clearMatches boardBoth
-  case (mb !! 2) !! 2 of
+  case atM mb (2, 2) of
     Just c -> do
       assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
       assertEqual "cascade keeps special color (not Bottle/Hat)" (Just C4) (cellColor c)

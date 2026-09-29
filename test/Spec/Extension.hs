@@ -9,6 +9,7 @@ module Spec.Extension
 import Data.List (isPrefixOf)
 import Engine.Game (Game(..), Step(..))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import Match3.Element (Counter(..), EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
 import Match3.Element.Class (Archetype(..), Element(..))
 import Match3.Game.Shuffle (shuffleGameWith)
@@ -153,7 +154,7 @@ ext_post_end_settle_hole_element = do
       gs0 = (newGame (GameConfig 5 (GoalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
-      settleWaves = [w | w <- mtWaves mt1, null (cwCleared w), (cwHoles w !! 5) !! 5 == Nothing]
+      settleWaves = [w | w <- mtWaves mt1, null (cwCleared w), atM (cwHoles w) (5, 5) == Nothing]
   assertBool "move applied" (moveApplied o1)
   assertEqual "sinkhole vacated" [] (customsOn "sinkhole" (gsBoard gs1))
   assertBool "board stable after post-end settle" (not (hasAnyMatch (mtFinal mt1)))

@@ -35,6 +35,7 @@ module Match3.Game.Trace
 import Match3.Board.Cascade (CascadeWave(..))
 import Match3.Board.Grid (getCell)
 import Match3.Conveyor (beltMoves)
+import Data.Array (assocs)
 import Data.List (groupBy, nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)
 import Match3.Element.Event
@@ -85,11 +86,14 @@ traceSpreads = traceSpreadsWith defaultRegistry
 -- | traceSpreads（指定注册表）：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
 -- 每条规则产出的效果记成一个 EndStep（esAfterWaves = k）。
 traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
-traceSpreadsWith reg k b0 = foldl one ([], b0) (endRules reg PhaseSpread)
+traceSpreadsWith reg k b0 =
+  let (stepsRev, b1) = foldl one ([], b0) (endRules reg PhaseSpread)
+  in (reverse stepsRev, b1)
   where
-    one (acc, before) rule =
+    -- 反向累积，收尾再反转
+    one (accRev, before) rule =
       let (eff, after) = erRun rule (EndCtx [] [] (pushableWith reg)) before
-      in (acc ++ [EndStep k before after e | Just e <- [eff]], after)
+      in ([EndStep k before after e | Just e <- [eff]] ++ accRev, after)
 
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。
 emptyTrace :: GameState -> MoveTrace
@@ -129,9 +133,7 @@ traceEventsWith reg t =
           holes = cwHoles w
           hit =
             [ p
-            | (r, row) <- zip [0 ..] holes
-            , (c, mc) <- zip [0 ..] row
-            , let p = (r, c)
+            | (p, mc) <- assocs holes
             , p `notElem` cleared
             , mc /= Just (getCell before p)
             ]

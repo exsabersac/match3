@@ -26,6 +26,7 @@ module Match3Web.Api
 
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
+import Match3.Board.Grid (mboardRows)
 import Match3.Core
 import Match3.Element.Event (Event(..))
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
@@ -187,7 +188,7 @@ encodeWave w =
     [ ("before", encodeBoard (cwBefore w))
     , ("cleared", arr (map encodePos (cwCleared w)))
     , ("drained", arr (map encodePos (cwDrained w)))
-    , ("holes", arr [arr (map (maybe "null" encodeCell) row) | row <- cwHoles w])
+    , ("holes", arr [arr (map (maybe "null" encodeCell) row) | row <- mboardRows (cwHoles w)])
     , ("after", encodeBoard (cwAfter w))
     , ("score", int (cwScore w))
     ]

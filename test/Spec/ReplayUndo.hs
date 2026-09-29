@@ -12,6 +12,7 @@ import Data.List (nub, sort)
 import Data.Maybe (isJust)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crUfos), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
@@ -429,7 +430,7 @@ trace_multi_wave_each_round_visible =
       -- 空洞盘面在被消格上确实是空的（除非放下了新特殊块）
       sequence_
         [ assertBool "holes at cleared cells"
-            (all (\(r, c) -> case (cwHoles w !! r) !! c of
+            (all (\(r, c) -> case atM (cwHoles w) (r, c) of
                                 Nothing -> True
                                 Just cell -> isGem cell) (cwCleared w))
         | w <- ws

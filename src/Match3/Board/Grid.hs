@@ -13,14 +13,16 @@ module Match3.Board.Grid
   , adjacent
   , MBoard
   , toM
+  , mboardFromRows
+  , mboardRows
   , atM
   , setM
-  , transposeM
+  , setManyM
   , randomColor
   , chunk
   ) where
 
-import Data.List (transpose)
+import Data.Array (Array, accum, bounds, inRange, listArray, (!))
 import Match3.Types
 import System.Random (RandomGen, randomR)
 
@@ -48,30 +50,41 @@ adjacent :: Pos -> Pos -> Bool
 adjacent (r1, c1) (r2, c2) =
   (abs (r1 - r2) == 1 && c1 == c2) || (abs (c1 - c2) == 1 && r1 == r2)
 
--- | 沉降过程中的可空盘面：Nothing = 本轮挖空、等待重力 / 补子的洞。
-type MBoard = [[Maybe Cell]]
+-- | 可空盘面（沉降用；Nothing = 空洞）：与 Board 同形的二维数组，(行, 列) 下标、行主序。
+-- 第 3 刀之前是 [[Maybe Cell]]（读格走两次 (!!)，重力要转置两次）。
+type MBoard = Array Pos (Maybe Cell)
 
 toM :: Board -> MBoard
-toM = map (map Just) . boardRows
+toM = fmap Just . boardArray
+
+-- | 由行列表建可空盘面（每行等长；测试与回放构造用）。
+mboardFromRows :: [[Maybe Cell]] -> MBoard
+mboardFromRows rows =
+  let nr = length rows
+      nc = case rows of
+        [] -> 0
+        (r0 : _) -> length r0
+  in listArray ((0, 0), (nr - 1, nc - 1)) (concat rows)
+
+-- | 行列表视图（行主序；回放 JSON / 金标准打印用）。
+mboardRows :: MBoard -> [[Maybe Cell]]
+mboardRows mb =
+  let ((r0, c0), (r1, c1)) = bounds mb
+  in [[mb ! (r, c) | c <- [c0 .. c1]] | r <- [r0 .. r1]]
 
 -- | 可空盘面读格；越界按空洞（Nothing）处理。
 atM :: MBoard -> Pos -> Maybe Cell
-atM b (r, c) = case drop r b of
-  row : _ | c >= 0, r >= 0 -> case drop c row of
-    x : _ -> x
-    [] -> Nothing
-  _ -> Nothing
+atM mb p
+  | inRange (bounds mb) p = mb ! p
+  | otherwise = Nothing
 
 -- | 可空盘面写格；越界不改。
 setM :: MBoard -> Pos -> Maybe Cell -> MBoard
-setM b (r, c) v =
-  [ if i == r then [if j == c then v else x | (j, x) <- zip [0 ..] row] else row
-  | (i, row) <- zip [0 :: Int ..] b
-  ]
+setM mb p v = setManyM mb [(p, v)]
 
--- | 转置（盘面恒为矩形，与逐列取行首等价）。
-transposeM :: MBoard -> MBoard
-transposeM = transpose
+-- | 一次写多格：按列表顺序写（同一格以后写的为准），越界的项忽略。
+setManyM :: MBoard -> [(Pos, Maybe Cell)] -> MBoard
+setManyM mb kvs = accum (\_ v -> v) mb [kv | kv@(p, _) <- kvs, inRange (bounds mb) p]
 
 -- | 均匀随机取一种颜色；恰好调用一次 randomR（随机数消耗顺序的基本单位）。
 randomColor :: RandomGen g => g -> (Color, g)

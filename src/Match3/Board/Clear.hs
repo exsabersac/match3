@@ -126,15 +126,9 @@ clearWaveWith reg prefer runs b base =
       (bAdj, dead, _sits) = runAdjacentWith reg trueClears directHits surpSaved bClearedOv
       allPos = nub (trueClears ++ dead)
       n = length allPos
-      mb0 = foldl' (\m p -> setM m p Nothing) (toM bAdj) allPos
+      mb0 = setManyM (toM bAdj) [(p, Nothing) | p <- allPos]
       spawns = spawnSpecials prefer runs allPos
-      mb1 =
-        foldl'
-          ( \m (p, cell) ->
-              if p `elem` allPos then setM m p (Just cell) else m
-          )
-          mb0
-          spawns
+      mb1 = setManyM mb0 [(p, Just cell) | (p, cell) <- spawns, p `elem` allPos]
   in (mb1, n, allPos)
 
 -- | 旧计分：每格 10 分（不带波次倍数）。

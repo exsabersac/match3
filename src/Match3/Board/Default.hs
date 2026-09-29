@@ -183,7 +183,7 @@ cascadeSeeds = cascadeSeedsWith defaultRegistry
 -- | 皮带移位之后：成消则整段连锁；否则仍沉降一次（收皮带送到底行的饼干，回放记为一个
 -- 只有沉降的轮次，盘面没变且没收饼干时不记），沉降后成消再接连锁并补上饼干数与收饼干位。
 cascadeAfterBelt :: RandomGen g => [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeAfterBelt = cascadeAfterBeltWith defaultRegistry
+cascadeAfterBelt = cascadeAfterWith defaultRegistry AfterBelt
 
 -- | 一步之后倒计时 -1；归零的 3×3 爆炸走种子连锁（带飞碟与传送门）。
 -- 没有归零时终盘就是 tick 之后的盘面（数字减一），不产生回放轮次。

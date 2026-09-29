@@ -40,6 +40,7 @@ module Spec.Support
 import Control.Monad (foldM)
 import Data.List (nub)
 import Match3.Core
+import Match3.Board.Grid (mboardRows)
 import Match3.Element (Entry, Counter(CountNamed), AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
 import Match3.Element.Class (Archetype(Fixed), Element(..), Hit(..), SomeElement(..))
 import Match3.Types (isCustom)
@@ -210,7 +211,7 @@ checkWaveChain tag start ws final = do
     [] -> start @?= final
     (w : _) -> assertEqual (tag ++ ": first wave starts from start board") start (cwBefore w)
   sequence_
-    [ assertEqual (tag ++ ": wave " ++ show i ++ " holes -> after keeps shape") boardSize (length (cwHoles a))
+    [ assertEqual (tag ++ ": wave " ++ show i ++ " holes -> after keeps shape") boardSize (length (mboardRows (cwHoles a)))
     | (i, a) <- zip [1 :: Int ..] ws
     ]
   case reverse ws of

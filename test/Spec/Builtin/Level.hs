@@ -11,6 +11,7 @@ import Data.List (nub, sort)
 import Match3.Board.Default (cascadeMatches, clearMatches)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctUfoAbsorbed))
 import Match3.Core
+import Match3.Board.Grid (atM, setM, mboardFromRows)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -175,18 +176,15 @@ conveyor_can_create_match = do
 portal_teleports_gem :: Assertion
 portal_teleports_gem = do
   -- Build MBoard: gem at (0,0), hole at (7,7)
-  let setMBoard b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+  let setMBoard = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       mb1 = setMBoard mb0 (0, 0) (Just (mkGem C1))
       mb2 = setMBoard mb1 (7, 7) Nothing
       portals = [((0, 0), (7, 7))]
       mb3 = applyPortalTeleports portals mb2
-  assertEqual "entrance emptied" Nothing ((mb3 !! 0) !! 0)
-  case (mb3 !! 7) !! 7 of
+  assertEqual "entrance emptied" Nothing (atM mb3 (0, 0))
+  case atM mb3 (7, 7) of
     Just cell -> do
       assertBool "exit got gem" (isGem cell)
       assertEqual "teleported color" (Just C1) (cellColor cell)
@@ -504,22 +502,22 @@ portal_after_belt_match_teleports = do
   assertEqual "B is C5" (Just C5) (cellColor (getCell shifted (7, 2)))
   let (mb, n) = clearMatches shifted
   assertBool "cleared triple+" (n >= 3)
-  assertEqual "A hole pre-portal" Nothing ((mb !! 0) !! 2)
-  assertEqual "B still C5" (Just (mkGem C5)) ((mb !! 7) !! 2)
+  assertEqual "A hole pre-portal" Nothing (atM mb (0, 2))
+  assertEqual "B still C5" (Just (mkGem C5)) (atM mb (7, 2))
   -- Direct portal step (pre re-gravity): B→A
   let ported = applyPortalTeleports portals mb
-  assertEqual "C5 teleported to A" (Just (mkGem C5)) ((ported !! 0) !! 2)
-  assertEqual "B emptied by portal" Nothing ((ported !! 7) !! 2)
+  assertEqual "C5 teleported to A" (Just (mkGem C5)) (atM ported (0, 2))
+  assertEqual "B emptied by portal" Nothing (atM ported (7, 2))
   -- Full settle: gravity may repack column, but B must not keep C5
   let (settled, _, _) = settleBoardPortals portals mb
   assertBool "B no longer holds C5 after settle" $
-    case (settled !! 7) !! 2 of
+    case atM settled (7, 2) of
       Just c -> not (isGem c && cellColor c == Just C5) || False
       Nothing -> True
   assertBool "C5 still somewhere in col 2" $
     any
       ( \r ->
-          case (settled !! r) !! 2 of
+          case atM settled (r, 2) of
             Just c -> isGem c && cellColor c == Just C5
             Nothing -> False
       )
@@ -561,11 +559,8 @@ cookie_bottom_portal_collects :: Assertion
 cookie_bottom_portal_collects = do
   let bottom = boardSize - 1
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
-      setMB b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
+      setMB = setM
       -- Cookie already on bottom portal A; exit B empty (buggy order teleports up)
       mb = setMB (setMB mb0 (bottom, 1) (Just Cookie)) (0, 6) Nothing
       portals = [((0, 6), (bottom, 1))]
@@ -574,14 +569,14 @@ cookie_bottom_portal_collects = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , case (settled !! r) !! c of
+        , case atM settled (r, c) of
             Just Cookie -> True
             _ -> False
         ]
   assertEqual "cookie collected at bottom portal" (1 :: Int) fallen
   assertEqual "no cookie left on board" ([] :: [(Int, Int)]) cookieLeft
   assertBool "exit not holding snatch" $
-    case (settled !! 0) !! 6 of
+    case atM settled (0, 6) of
       Just Cookie -> False
       _ -> True
   -- trySwap path with portals: cookie on bottom portal drains into GoalCookie
@@ -698,18 +693,15 @@ belt_delivers_cookie_bottom_drains = do
 -- | Portal teleports Flip (dual-face) the same as gems/countdowns/cookies.
 portal_teleports_flip :: Assertion
 portal_teleports_flip = do
-  let setMBoard b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+  let setMBoard = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       mb1 = setMBoard mb0 (0, 0) (Just (mkFlip C1 C2))
       mb2 = setMBoard mb1 (7, 7) Nothing
       portals = [((0, 0), (7, 7))]
       mb3 = applyPortalTeleports portals mb2
-  assertEqual "Flip left entrance" Nothing ((mb3 !! 0) !! 0)
-  case (mb3 !! 7) !! 7 of
+  assertEqual "Flip left entrance" Nothing (atM mb3 (0, 0))
+  case atM mb3 (7, 7) of
     Just cell -> do
       assertBool "exit is Flip" (isFlip cell)
       assertEqual "front color" (Just C1) (flipFront cell)
@@ -722,8 +714,8 @@ portal_teleports_flip = do
           (6, 6)
           Nothing
       mbC' = applyPortalTeleports [((1, 1), (6, 6))] mbC
-  assertEqual "CD entrance empty" Nothing ((mbC' !! 1) !! 1)
-  case (mbC' !! 6) !! 6 of
+  assertEqual "CD entrance empty" Nothing (atM mbC' (1, 1))
+  case atM mbC' (6, 6) of
     Just (Countdown C3 2) -> pure ()
     other -> assertFailure ("expected Countdown at exit, got " ++ show other)
 
@@ -766,17 +758,14 @@ portal_endpoints_not_immortal_blocked = do
           assertBool "finale snail off portal row" (isSnail (getCell (gsBoard gs) (2, 0)))
           assertBool "finale portal A not snail" (not (isSnail (getCell (gsBoard gs) (0, 3))))
           let portals = gsPortals gs
-              setMBoard b (r, c) v =
-                take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-                where
-                  row = b !! r
+              setMBoard = setM
               fill = Just (mkGem C5)
-              mb0 = replicate boardSize (replicate boardSize fill)
+              mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
               mb1 = setMBoard mb0 (0, 3) (Just (mkGem C1))
               mb2 = setMBoard mb1 (7, 4) Nothing
               mb3 = applyPortalTeleports portals mb2
-          assertEqual "finale A emptied" Nothing ((mb3 !! 0) !! 3)
-          case (mb3 !! 7) !! 4 of
+          assertEqual "finale A emptied" Nothing (atM mb3 (0, 3))
+          case atM mb3 (7, 4) of
             Just cell -> do
               assertBool "finale B got gem" (isGem cell)
               assertEqual "finale teleported C1" (Just C1) (cellColor cell)
@@ -984,12 +973,9 @@ carpet_covers_on_cookie_bottom_drain :: Assertion
 carpet_covers_on_cookie_bottom_drain = do
   let bottom = boardSize - 1
       -- Unit: settle drains Cookie that fell onto bottom; sites include that cell
-      setMB b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+      setMB = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       -- Hole under Cookie at (3,4) so gravity packs Cookie to bottom col 4
       mb =
         foldl
@@ -1058,12 +1044,9 @@ carpet_covers_on_cookie_bottom_drain = do
 carpet_covers_on_portal_cookie_drain :: Assertion
 carpet_covers_on_portal_cookie_drain = do
   let bottom = boardSize - 1
-      setMB b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+      setMB = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       -- Empty exit column 6; Cookie at portal A (4,2) → B (bottom,6)
       mb1 = foldl (\m r -> setMB m (r, 6) Nothing) mb0 [0 .. bottom]
       mb = setMB mb1 (4, 2) (Just Cookie)

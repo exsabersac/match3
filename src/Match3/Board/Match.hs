@@ -16,6 +16,7 @@ module Match3.Board.Match
   , findHintWith
   ) where
 
+import Data.Array (Array, listArray, (!))
 import Data.List (nub)
 import Data.Maybe (isJust)
 import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith, matchColorWith, swapRules, upperBlocksSwapWith)
@@ -86,7 +87,7 @@ findHintWith reg b =
       , inBounds p2
       , hintable (getCell b p2)
       , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2)
-      , hasAnyMatchWith reg (swapCells b p1 p2)
+      , swapMakesMatch p1 p2
       ]
     ruleHints rule =
       [ (p1, p2)
@@ -100,6 +101,26 @@ findHintWith reg b =
       ]
     hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
     upperLocked = upperBlocksSwapWith reg
+    -- 局部检查（第 3 刀）：交换后的盘面有匹配 ⇔ 没被交换触及的行 / 列在原盘上已有 ≥3 连，
+    -- 或交换两格所在的行 / 列在交换后有 ≥3 连。与整盘 hasAnyMatchWith (swapCells b p1 p2) 逐格等价
+    -- （匹配只看各格自己的 matchColorWith，连线按行 / 列独立），遍历顺序与返回结果不变。
+    idxs = [0 .. boardSize - 1]
+    rowPs r = [(r, c) | c <- idxs]
+    colPs c = [(r, c) | r <- idxs]
+    rowHas = listArray (0, boardSize - 1) [lineHasRunWith reg b (rowPs r) | r <- idxs] :: Array Int Bool
+    colHas = listArray (0, boardSize - 1) [lineHasRunWith reg b (colPs c) | c <- idxs] :: Array Int Bool
+    swapMakesMatch p1@(r1, c1) p2@(r2, c2) =
+      let b' = swapCells b p1 p2
+          rs = nub [r1, r2]
+          cs = nub [c1, c2]
+      in any (lineHasRunWith reg b' . rowPs) rs
+           || any (lineHasRunWith reg b' . colPs) cs
+           || or [rowHas ! r | r <- idxs, r `notElem` rs]
+           || or [colHas ! c | c <- idxs, c `notElem` cs]
+
+-- | 一条线（按给定顺序的格）上是否有 ≥3 的同色连续段。
+lineHasRunWith :: Registry -> Board -> [Pos] -> Bool
+lineHasRunWith reg b ps = any ((>= 3) . length . snd) (groupGemRunsWith reg b ps)
 
 -- | 所有匹配格（指定注册表）：各连线位置的去重并集。
 findMatchesWith :: Registry -> Board -> [Pos]

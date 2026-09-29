@@ -100,6 +100,8 @@ module Match3.Types
   , boardAt
   , boardSet
   , boardSetMany
+  , boardArray
+  , boardFromArray
   , mapBoard
   , boardSize
   , numColors
@@ -617,6 +619,14 @@ boardSet (Board a) p v = Board (a // [(p, v)])
 -- | 一次写多格（后写的覆盖先写的）。
 boardSetMany :: Board -> [(Pos, Cell)] -> Board
 boardSetMany (Board a) kvs = Board (a // kvs)
+
+-- | 底层二维数组（(行, 列) 下标，行主序）。
+boardArray :: Board -> Array Pos Cell
+boardArray (Board a) = a
+
+-- | 由二维数组建盘（与 boardArray 互逆）。
+boardFromArray :: Array Pos Cell -> Board
+boardFromArray = Board
 
 -- | 逐格变换。
 mapBoard :: (Cell -> Cell) -> Board -> Board

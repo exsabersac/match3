@@ -10,13 +10,15 @@ module Spec.Properties
   ( tests
   ) where
 
+import Data.Array (bounds)
 import Data.List (nub, sort)
 import Data.Maybe (isJust, isNothing)
 import Engine.Game (Game(..), Step(..), runActions)
 import Engine.History (History(..), HistoryPolicy(..), Undoable(..), historyDepth, startHistory)
 import Match3.Board.Cascade (CascadeRun(..))
 import Match3.Board.Default (cascadeMatches)
-import Match3.Board.Grid (MBoard)
+import Match3.Board.Match (findHintWith, hasAnyMatchWith)
+import Match3.Board.Grid (MBoard, atM, mboardFromRows)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
 import Match3.Element
@@ -40,6 +42,7 @@ tests =
       , testProperty "qc_goal_progress_monotone" (withMaxSuccess 60 qc_goal_progress_monotone)
       , testProperty "qc_registry_decode_roundtrip" (withMaxSuccess 1000 qc_registry_decode_roundtrip)
       , testProperty "qc_registry_names_slots_unique" (once qc_registry_names_slots_unique)
+      , testProperty "qc_find_hint_local_matches_reference" (withMaxSuccess 400 qc_find_hint_local_matches_reference)
       ]
   where
     -- 新性质固定种子，每次运行生成同一批用例（命令行 --quickcheck-replay 对它们不生效）
@@ -111,7 +114,7 @@ genCell =
 
 -- | 可空盘面（行优先），约 1/4 是空洞。
 genMBoard :: Gen MBoard
-genMBoard = vectorOf boardSize (vectorOf boardSize (frequency [(3, Just <$> genCell), (1, pure Nothing)]))
+genMBoard = mboardFromRows <$> vectorOf boardSize (vectorOf boardSize (frequency [(3, Just <$> genCell), (1, pure Nothing)]))
 
 -- | 只含普通 / 特殊宝石（少量冰、叠层）与少量障碍的完整盘面，常带现成的匹配。
 genPlayBoard :: Gen Board
@@ -120,7 +123,7 @@ genPlayBoard =
     <$> vectorOf boardSize (vectorOf boardSize (frequency [(10, mkGem <$> genColor), (2, genGem), (1, genCell)]))
 
 column :: MBoard -> Int -> [Maybe Cell]
-column mb c = [row !! c | row <- mb]
+column mb c = [atM mb (r, c) | r <- [0 .. boardSize - 1]]
 
 --------------------------------------------------------------------------------
 -- 重力 / 补子 / 连锁
@@ -147,14 +150,14 @@ qc_gravity_keeps_cells_and_column_order =
                && fixedAt colBefore == fixedAt colAfter
                && movable colBefore == movable colAfter
                && all packed (segments colAfter)
-    in counterexample (show mb') (length mb' == boardSize && all ((== boardSize) . length) mb' && all colOk [0 .. boardSize - 1])
+    in counterexample (show mb') (bounds mb' == ((0, 0), (boardSize - 1, boardSize - 1)) && all colOk [0 .. boardSize - 1])
 
 -- | 补子：任何可空盘面都能补满（不触发 "refill: hole"）；原有格不变；每个空洞补成普通宝石。
 qc_refill_leaves_no_holes :: Int -> Property
 qc_refill_leaves_no_holes seed =
   forAll genMBoard $ \mb ->
     let (b, _) = refill (mkStdGen seed) mb
-        cellOk (r, c) = case (mb !! r) !! c of
+        cellOk (r, c) = case atM mb (r, c) of
           Just x -> getCell b (r, c) == x
           Nothing -> case getCell b (r, c) of
             Gem _ Normal 0 Nothing -> True
@@ -344,3 +347,58 @@ qc_registry_names_slots_unique =
        , counterexample "overlay slots unique and complete" (ovs === [0 .. 7])
        , counterexample "one ice entry" (length ices === 1)
        ]
+
+--------------------------------------------------------------------------------
+-- 提示
+
+-- | 第 3 刀之前的 findHintWith（整盘 hasAnyMatchWith (swapCells b p1 p2)），留作参照实现。
+findHintReference :: Registry -> Board -> Maybe (Pos, Pos)
+findHintReference reg b =
+  case matchHints ++ concatMap ruleHints (swapRules reg) of
+    (x : _) -> Just x
+    [] -> Nothing
+  where
+    matchHints =
+      [ (p1, p2)
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , let p1 = (r, c)
+      , hintable (getCell b p1)
+      , p2 <- [(r, c + 1), (r + 1, c)]
+      , inBounds p2
+      , hintable (getCell b p2)
+      , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2)
+      , hasAnyMatchWith reg (swapCells b p1 p2)
+      ]
+    ruleHints rule =
+      [ (p1, p2)
+      | r <- [0 .. boardSize - 1]
+      , c <- [0 .. boardSize - 1]
+      , let p1 = (r, c)
+      , p2 <- [(r, c + 1), (r + 1, c)]
+      , inBounds p2
+      , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
+      , srFires rule b p1 p2
+      ]
+    hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
+    upperLocked = upperBlocksSwapWith reg
+
+-- | findHintWith 的局部匹配检查与参照实现（整盘检查）结果相同：随机盘面（常带现成匹配）、
+-- 各关开局（稳定、无现成匹配，提示走局部检查路径）、整盘随机格（含障碍与自定义）三类。
+qc_find_hint_local_matches_reference :: Property
+qc_find_hint_local_matches_reference =
+  forAll genHintBoard $ \b ->
+    findHintWith defaultRegistry b === findHintReference defaultRegistry b
+  where
+    genHintBoard =
+      oneof
+        [ genPlayBoard
+        , do
+            li <- choose (0, length allLevels - 1)
+            seed <- choose (1, 100000)
+            pure (gsBoard (newGameAtLevel li (levelConfig (allLevels !! li)) seed))
+        , do
+            seed <- choose (1, 100000)
+            pure (gsBoard (newGame defaultConfig seed))
+        , boardFromRows <$> vectorOf boardSize (vectorOf boardSize genCell)
+        ]

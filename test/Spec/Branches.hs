@@ -15,6 +15,7 @@ import Control.Monad (forM_)
 import Data.List (sort)
 import Data.Maybe (isNothing)
 import Match3.Board.Gravity (portalTeleport)
+import Match3.Board.Grid (setM, toM)
 import Match3.Board.Match (findHintWith)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
@@ -204,7 +205,7 @@ br_level_hooks_builtin_and_removable = do
   let belts = [[(2, 0), (2, 1), (2, 2), (3, 2)]]
   assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (beltShiftWith defaultRegistry belts)
   assertBool "belt removed" (isNothing (beltShiftWith (removeLevel "belt" defaultRegistry) belts))
-  let mb = [[if (r, c) == (0, 5) then Nothing else Just (getCell b0 (r, c)) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
+  let mb = setM (toM b0) (0, 5) Nothing
       portals = [((7, 0), (0, 5))]
   assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultRegistry) portals mb) (teleportWith defaultRegistry portals mb)
   assertBool "portal hook moves something here" (teleportWith defaultRegistry portals mb /= mb)

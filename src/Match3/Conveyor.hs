@@ -1,4 +1,4 @@
--- | 传送带：环路径上格内容循环前移一格。移位后的连锁/收饼由 Game.Resolve + Board.Cascade.cascadeAfterBelt 处理。
+-- | 传送带：环路径上格内容循环前移一格。移位后的连锁/收饼由 Game.Resolve + Board.Cascade.cascadeAfterWith（AfterBelt 入口）处理。
 --
 -- 单一实现（第三刀）：先由 beltMoves 把全部皮带按顺序合成为「原格 → 新格」的置换，
 -- 真正移位 shiftBelts 与回放描述 EndBeltShift 都用 applyBeltMoves 执行同一份置换

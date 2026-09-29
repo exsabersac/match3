@@ -10,6 +10,7 @@ import Data.List (nub)
 import Match3.Board.Default (cascadeCountdowns, cascadeMatches, clearMatches)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crUfos, crBoard), CascadeTally(CascadeTally, ctCookies, ctScore, ctMaxWave, ctCells))
 import Match3.Core
+import Match3.Board.Grid (atM, setM, mboardFromRows)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
@@ -264,7 +265,7 @@ maker_bomb_survives_wave = do
   assertBool "maker converted away" (not (isMaker cell))
   -- Unit path: same-wave clearMatches leaves Bomb in place (not consumed by producing wave)
   let (mb, _) = clearMatches board0
-  case (mb !! 2) !! 1 of
+  case atM mb (2, 1) of
     Just c -> do
       assertBool "unit bomb gem" (isGem c)
       assertEqual "unit Bomb kind" (Just Bomb) (cellKind c)
@@ -477,7 +478,7 @@ maker_bomb_sits_bottle = do
   assertEqual "protected Bottle skips maker bomb" (Gem C1 Bomb 0 Nothing) (getCell dyedProt (2, 1))
   -- Integration: clearMatches keeps Maker Bomb color through Bottle
   let (mb, _) = clearMatches board0
-  case (mb !! 2) !! 1 of
+  case atM mb (2, 1) of
     Just c -> do
       assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
       assertEqual "cascade keeps maker color (not Bottle)" (Just C1) (cellColor c)
@@ -990,16 +991,13 @@ snail_reverses_at_portal_endpoint = do
   assertBool "after move2 snail not on portal A" (not (isSnail (getCell (gsBoard gs3) (0, 3))))
   assertBool "after move2 snail not on portal B" (not (isSnail (getCell (gsBoard gs3) (7, 4))))
   -- Portal still transferable after two crawls
-  let setMBoard b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+  let setMBoard = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       mb1 = setMBoard mb0 (0, 3) (Just (mkGem C1))
       mb2 = setMBoard mb1 (7, 4) Nothing
       mb3 = applyPortalTeleports (gsPortals gs3) mb2
-  assertEqual "portal A still empties" Nothing ((mb3 !! 0) !! 3)
-  case (mb3 !! 7) !! 4 of
+  assertEqual "portal A still empties" Nothing (atM mb3 (0, 3))
+  case atM mb3 (7, 4) of
     Just cell -> assertEqual "portal B still receives" (Just C1) (cellColor cell)
     Nothing -> assertFailure "expected gem at portal B after crawls"

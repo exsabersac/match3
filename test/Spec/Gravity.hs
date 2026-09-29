@@ -11,6 +11,7 @@ import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCookies))
 import Match3.Board.Gravity (refill)
 import Match3.Core
+import Match3.Board.Grid (atM)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -40,7 +41,7 @@ gravity_then_refill = do
       colsOk =
         all
           ( \c ->
-              let col = map (!! c) fallen
+              let col = [atM fallen (r, c) | r <- [0 .. boardSize - 1]]
                   (holes, rest) = span (== Nothing) col
               in all (/= Nothing) rest && length holes + length rest == boardSize
           )

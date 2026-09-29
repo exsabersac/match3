@@ -27,8 +27,8 @@ import Match3.Board.Cascade
   ( CascadeRun(..)
   , CascadeTally(..)
   , CascadeWave(..)
-  , cascadeAfterBeltWith
-  , cascadeAfterEndWith
+  , AfterEntry(..)
+  , cascadeAfterWith
   , endHolesWith
   , cascadeCountdownsTracedWith
   , cascadeMatchesWith
@@ -102,10 +102,12 @@ resolveMoveWith reg kind start opening gs =
       bonusMoves = sum (map dcBonus diffs)
       -- 地面层（段 2c）：逐轮被上方消除命中（每轮每格一次）；段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
       (ground', groundCounts) =
-        foldl
-          (\(gr, acc) w -> let (gr', cs) = hitGroundWith reg (nub (cwCleared w ++ cwDrained w)) gr in (gr', acc ++ cs))
-          (gsGround gs, [])
-          (concatMap crWaves (NE.toList segs))
+        let (gr', countsRev) =
+              foldl
+                (\(gr, accRev) w -> let (gr1, cs) = hitGroundWith reg (nub (cwCleared w ++ cwDrained w)) gr in (gr1, cs : accRev))
+                (gsGround gs, [])
+                (concatMap crWaves (NE.toList segs))
+        in (gr', concat (reverse countsRev))
       namedCounts =
         foldl addNamed (gsElementCounts gs)
           (concatMap ctNamed tallies ++ [(n, dcCount d) | d <- diffs, CountNamed n <- [dcCounter d], dcCount d > 0] ++ groundCounts)
@@ -194,11 +196,14 @@ addNamed ((k', v') : rest) (k, v)
 
 -- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
 runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
-runPhase reg ph ctx k b0 = foldl one ([], b0) (endRules reg ph)
+runPhase reg ph ctx k b0 =
+  let (stepsRev, b1) = foldl one ([], b0) (endRules reg ph)
+  in (reverse stepsRev, b1)
   where
-    one (acc, before) rule =
+    -- 反向累积，收尾再反转
+    one (accRev, before) rule =
       let (eff, after) = erRun rule ctx before
-      in (acc ++ [EndStep k before after e | Just e <- [eff]], after)
+      in ([EndStep k before after e | Just e <- [eff]] ++ accRev, after)
 
 -- | 玩家交换的步末：倒计时（PhaseTick）→ 皮带 → 蔓延（PhaseSpread）→ 会走的元素（PhaseMove）→（成消）再连锁。
 -- 返回 (四段连锁, 步末记录, 终盘, 地毯腾空比较用的盘面)。
@@ -227,7 +232,7 @@ swapEnd reg gs seg0 =
       seg2 =
         if null belts
           then stillRun boardCd (crUfos seg1) (crGen seg1)
-          else cascadeAfterBeltWith reg (crUfos seg1) portals (crGen seg1) boardBelt
+          else cascadeAfterWith reg AfterBelt (crUfos seg1) portals (crGen seg1) boardBelt
       -- 蔓延，然后会走的元素（跳过皮带格；传送门端点当墙）
       boardBeltCas = crBoard seg2
       nEnd = nBelt + length (crWaves seg2)
@@ -237,7 +242,7 @@ swapEnd reg gs seg0 =
       (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx beltCells portalEnds (pushableWith reg)) nEnd boardSpread
       -- 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁；
       -- 不再重复步末效果。内置元素没有空洞时等于旧的「成消才连锁」。
-      seg3 = cascadeAfterEndWith reg (endHolesWith reg boardSnail) (crUfos seg2) portals (crGen seg2) boardSnail
+      seg3 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSnail)) (crUfos seg2) portals (crGen seg2) boardSnail
       board1 = crBoard seg3
   in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
 
@@ -247,5 +252,5 @@ boosterEnd reg portals seg0 =
   let boardH = crBoard seg0
       (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
       -- 步末补结算（同交换的统一路径；蔓延不会造出匹配，内置元素没有空洞时恒等）
-      seg1 = cascadeAfterEndWith reg (endHolesWith reg boardSp) (crUfos seg0) portals (crGen seg0) boardSp
+      seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crUfos seg0) portals (crGen seg0) boardSp
   in (seg0 :| [seg1], ends, crBoard seg1, boardH)

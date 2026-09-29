@@ -9,6 +9,7 @@ module Spec.Builtin.Layer
 import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
@@ -731,11 +732,11 @@ chain_freeze_both_peel = do
   -- Full clearMatches also leaves both cells as bare gems (not holes)
   let (mb, _) = clearMatches board0
   assertBool "chain cell not holed" $
-    case (mb !! 2) !! 1 of
+    case atM mb (2, 1) of
       Just c -> isGem c && not (hasChain c)
       Nothing -> False
   assertBool "freeze cell not holed" $
-    case (mb !! 4) !! 1 of
+    case atM mb (4, 1) of
       Just c -> isGem c && not (hasFreeze c)
       Nothing -> False
 

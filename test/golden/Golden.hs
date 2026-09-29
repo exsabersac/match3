@@ -24,7 +24,7 @@ import Data.Char (ord)
 import Data.List (intercalate)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
-import Match3.Board.Grid (getCell, inBounds, setCell)
+import Match3.Board.Grid (getCell, inBounds, setCell, MBoard, mboardRows)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), historyDepth, pushHistory, replaceNow, startHistory, undoHistory)
@@ -112,8 +112,8 @@ pCell cell = case cell of
 pBoard :: Board -> String
 pBoard = intercalate "/" . map (intercalate "," . map pCell) . boardRows
 
-pHoles :: [[Maybe Cell]] -> String
-pHoles = intercalate "/" . map (intercalate "," . map (maybe "_" pCell))
+pHoles :: MBoard -> String
+pHoles = intercalate "/" . map (intercalate "," . map (maybe "_" pCell)) . mboardRows
 
 pPos :: Pos -> String
 pPos (r, c) = show r ++ show c

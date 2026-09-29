@@ -19,7 +19,7 @@
 倒计时 cascadeCountdowns（tick；归零则 3×3 种子再连锁）
     │
     ▼
-传送带 beltMoves → applyBeltMoves → cascadeAfterBelt（有匹配则连锁；无匹配仍 settle 收底行饼干）
+传送带 beltMoves → applyBeltMoves → cascadeAfterWith AfterBelt（有匹配则连锁；无匹配仍 settle 收底行饼干）
     │
     ▼
 蔓延 spreadVines → spreadChoco → spreadSteam
@@ -31,7 +31,7 @@
 若蜗牛后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
     │
     ▼
-步末补结算 cascadeAfterEndWith（段 2c：挖 erHoles 空洞 → 边缘收集 + 补子 → 成消再连锁；内置元素下恒为空操作）
+步末补结算 cascadeAfterWith (AfterEnd 空洞)（段 2c：挖 erHoles 空洞 → 边缘收集 + 补子 → 成消再连锁；内置元素下恒为空操作）
     │
     ▼
 汇总分数/收集/地毯/精灵+2步/−1步 → decideOutcome → 非终局则 ensurePlayable（无可走步时自动洗牌）
@@ -77,7 +77,7 @@
 
 **注意**：`useFreeSwap` 不走 tick（不耗步、不推进倒计时）；普通 `trySwap` 成功后才 tick。
 
-## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterBelt`）
+## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterWith AfterBelt`）
 
 - 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用这一份。
 - 移位后有匹配 → 全连锁。

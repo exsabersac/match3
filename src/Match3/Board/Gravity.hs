@@ -21,6 +21,7 @@ module Match3.Board.Gravity
   , settleRefillWith
   ) where
 
+import Data.Array (array, bounds, elems, listArray, (!))
 import Data.List (nub, nubBy)
 import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith, teleportWith)
 import Match3.Element.Types (Edge(..))
@@ -50,8 +51,16 @@ colGravityWith reg = concatMap packSegment . splitFixed
       in replicate holes Nothing ++ map Just solids
 
 -- | applyGravity（指定注册表）。
+-- 逐列取出（自上而下）、按列重力、写回；不再转置两次。
 applyGravityWith :: Registry -> MBoard -> MBoard
-applyGravityWith reg mb = transposeM (map (colGravityWith reg) (transposeM mb))
+applyGravityWith reg mb =
+  let bnds@((r0, c0), (r1, c1)) = bounds mb
+      rows = [r0 .. r1]
+  in array bnds
+       [ ((r, c), v)
+       | c <- [c0 .. c1]
+       , (r, v) <- zip rows (colGravityWith reg [mb ! (r', c) | r' <- rows])
+       ]
 
 -- | drainBottomCookies（指定注册表）：边缘收集的旧形状（收走个数 + 位置）。
 drainBottomCookiesWith :: Registry -> MBoard -> (MBoard, Int, [Pos])
@@ -82,7 +91,7 @@ drainEdgesMWith reg mb =
   in if null hits
        then (mb, [])
        else
-         let mb1 = foldl (\m (p, _) -> setM m p Nothing) mb hits
+         let mb1 = setManyM mb [(p, Nothing) | (p, _) <- hits]
              (mb2, more) = drainEdgesMWith reg (applyGravityWith reg mb1)
          in (mb2, hits ++ more)
 
@@ -126,8 +135,8 @@ settleDrainWith reg portals mb =
 -- | 按行优先顺序把每个空洞补成随机普通宝石；每个洞消耗一次 randomColor。
 refill :: RandomGen g => g -> MBoard -> (Board, g)
 refill g0 mb =
-  let (filled, g') = fillList g0 (concat mb)
-  in (boardFromRows (chunk boardSize filled), g')
+  let (filled, g') = fillList g0 (elems mb)
+  in (boardFromArray (listArray (bounds mb) filled), g')
   where
     fillList g [] = ([], g)
     fillList g (Nothing : xs) =

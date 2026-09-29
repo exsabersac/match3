@@ -106,8 +106,11 @@ traceSnails = traceSnailsBy Snail.pushable
 
 -- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 注册表的 pushable）。
 traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
-traceSnailsBy canPush avoid walls b0 = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
+traceSnailsBy canPush avoid walls b0 =
+  let (movesRev, b1) = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
+  in (reverse movesRev, b1)
   where
+    -- 反向累积，收尾再反转
     one (acc, board) pos = case getCell board pos of
       Snail dr dc ->
         let board' = stepSnailAtBy canPush walls board pos
@@ -115,7 +118,7 @@ traceSnailsBy canPush avoid walls b0 = foldl one ([], b0) [p | p <- snailPositio
             mv = case getCell board' pos of
               Snail dr' dc' -> SnailMove pos pos (dr', dc') Nothing
               pushed -> SnailMove pos next (dr, dc) (Just pushed)
-        in (acc ++ [mv], board')
+        in (mv : acc, board')
       _ -> (acc, board)
 
 --------------------------------------------------------------------------------

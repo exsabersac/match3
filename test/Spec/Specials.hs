@@ -10,6 +10,7 @@ import Match3.Board.Default (cascadeMatches, clearMatches)
 import Data.List (sort)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard, crTally), CascadeTally(CascadeTally, ctCells))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -51,7 +52,7 @@ special_line_from_4 = do
         [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [ (mb !! r) !! c ]
+        , Just cell <- [ atM mb (r, c) ]
         , Just k <- [cellKind cell]
         , k /= Normal
         ]
@@ -70,7 +71,7 @@ special_rainbow_from_5 = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [ (mb !! r) !! c ]
+        , Just cell <- [ atM mb (r, c) ]
         , cellKind cell == Just Rainbow
         ]
   assertBool ("rainbow spawned: " ++ show rainbows) (not (null rainbows))

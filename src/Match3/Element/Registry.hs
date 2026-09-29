@@ -375,11 +375,16 @@ adjacentRules = regAdjacent
 -- | 按顺序跑完一轮的全部邻格波及：返回 (盘面, 打碎的格（按规则顺序拼接）, 新生成需坐住的格)。
 -- 每条规则的 acProtect = 起始保护格 ++ 之前各规则的 aoSit。
 runAdjacentWith :: Registry -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
-runAdjacentWith reg trueClears direct protect0 b0 = foldl one (b0, [], []) (regAdjacent reg)
+runAdjacentWith reg trueClears direct protect0 b0 =
+  let (b', deadRev, sitsRev, _) = foldl one (b0, [], [], nub protect0) (regAdjacent reg)
+  in (b', concat (reverse deadRev), concat (reverse sitsRev))
   where
-    one (board, dead, sits) rule =
-      let out = arRun rule (AdjCtx trueClears direct (nub (protect0 ++ sits)) (recolorableWith reg)) board
-      in (aoBoard out, dead ++ aoDead out, sits ++ aoSit out)
+    -- 打碎格 / 坐住格按规则反向累积，收尾再反转拼接；保护格 = nub (起始保护格 ++ 之前的坐住格)，
+    -- 增量维护（nub (xs ++ ys) = nub xs ++ [y | y <- nub ys, y `notElem` xs]）
+    one (board, deadRev, sitsRev, protect) rule =
+      let out = arRun rule (AdjCtx trueClears direct protect (recolorableWith reg)) board
+          new = aoSit out
+      in (aoBoard out, aoDead out : deadRev, new : sitsRev, protect ++ [p | p <- nub new, p `notElem` protect])
 
 -- | 本体进入清除格时的计数键。
 counterWith :: Registry -> Cell -> Maybe Counter

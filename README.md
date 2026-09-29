@@ -2,6 +2,10 @@
 
 8×8、五色可玩三消，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
 
+![关卡 16「大师」截图](docs/images/screenshot-l16.png)
+
+**贴图**：宝石用「颜色 + 形状」双编码（红圆 / 绿方 / 蓝菱 / 黄星 / 紫三角），每种障碍都有独立图标，多层障碍会显示层数角标。美术说明、完整图例和重新生成方法见 [`docs/ui-art.md`](docs/ui-art.md)。贴图是 SDL2 核心可以直接读取的 32 位 BMP，macOS **不用装新的 brew 包**（不需要 sdl2_image）；缺少 `assets/` 时会自动退回几何图形渲染。
+
 ## 30 秒上手
 
 ```bash
@@ -125,7 +129,7 @@ stack build && stack exec match3-sdl
 | `P` | 暂停 + 键位帮助（冻结动画；清掉进行中的拖拽） |
 | `Esc` / `Q` | 退出 |
 
-外观速查：白金条=直线；多色环=彩虹；黑黄+红环=炸弹；灰岩=石头；金箱=宝箱；琥珀罐=蜂蜜；粉霜蛋糕=蛋糕（≠饼干）；紫檐帽=魔法帽；金属嘴=果汁机；灰叉链=锁链；深蓝雪花釉=火箭冰冻（≠青色冰裂纹）；酒红竖纹=窗帘；钢库+金钮=保险箱；双色对半=双面块；粉礼+金结=彩蛋；有色瓶=染色瓶；青球+沙漏=时间精灵；灰蒸汽=蒸汽；品红编织地砖=地毯；橄榄壳+方向点=蜗牛；紫环对=传送门；气球/饼干/迷雾/冰/草/藤/巧克力/倒计时/飞碟见盘面。
+外观速查：红圆 / 绿方 / 蓝菱 / 黄星 / 紫三角＝五色宝石；白金箭头光带＝直线（方向即消除方向）；橙色光晕 + 黑炸弹标记＝炸弹；七彩旋涡＝彩虹；右下角数字＝剩余层数（果汁机为剩余次数）。每种障碍的图标见 [`docs/images/legend.png`](docs/images/legend.png)。
 
 ## 对标开心消消乐（机制对照）
 
@@ -154,8 +158,11 @@ Stackage：**lts-21.25** / GHC **9.4.8**（`stack.yaml` 已 `system-ghc: true`�
 src/Match3/   Types Board Game Core Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
 app/Main.hs   SDL2 前端
+app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
+assets/       生成的贴图（atlas.bmp + atlas.txt + background.bmp）
+tools/        gen_assets.py（Pillow 程序化生成贴图与图例）
 test/Spec.hs  tasty（205 命名用例）
-docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位）
+docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
 ```
 
 冻结规则 API 形态：`trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`。

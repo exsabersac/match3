@@ -56,6 +56,7 @@ library
 executable match3-sdl
   main-is: Main.hs
   other-modules:
+      Art
       Paths_match3
   autogen-modules:
       Paths_match3
@@ -65,6 +66,9 @@ executable match3-sdl
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
+    , directory
+    , filepath
     , match3
     , random
     , sdl2

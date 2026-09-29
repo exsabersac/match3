@@ -9,5 +9,6 @@
 | [rules-pipeline.md](rules-pipeline.md) | `trySwap` / 稳定化 / 连锁波次流水线（据实描述代码） |
 | [testing.md](testing.md) | 如何跑测、覆盖面、合并门禁 |
 | [ui-controls.md](ui-controls.md) | SDL 键位与道具点选流（前端） |
+| [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |
 
 根目录 [`README.md`](../README.md) 是玩家向上手说明；本目录偏实现与规则。许可证见 [`LICENSE`](../LICENSE)（法律原文不译）。

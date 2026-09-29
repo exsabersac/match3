@@ -52,6 +52,7 @@
 | `Match3.Boosters` | 锤子/十字**种子位置**（纯几何） | 扣次数与连锁（Game） |
 | `Match3.Daily` | 日期种子、每日配置、三星公式 | 每日盘面装饰（Game） |
 | `app/Main.hs` | 窗口、事件、工具模式、地图 UI、动画 | 改写规则结果 |
+| `app/Art.hs` | 贴图图集（BMP + 索引）加载、路径查找、九宫格面板、染色/加色绘制 | 游戏状态；缺资源时由 Main 退回几何绘制 |
 
 ## 构建工具链
 
@@ -64,7 +65,7 @@
 | 可执行文件 | `match3-sdl` |
 | 测试套件 | `match3-test`（`test/Spec.hs`，tasty + HUnit + QuickCheck） |
 
-库依赖：`base`、`array`、`random`。可执行文件额外：`sdl2`、`text`。
+库依赖：`base`、`array`、`random`。可执行文件额外：`sdl2`、`text`，以及 GHC 自带的 `containers`、`directory`、`filepath`（贴图加载）。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
 
 ## 状态边界
 

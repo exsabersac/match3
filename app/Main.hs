@@ -6,17 +6,21 @@
 module Main (main) where
 
 import Control.Concurrent (threadDelay)
-import Control.Monad (forM_, unless, when)
+import Art
+import Control.Monad (forM_, unless, void, when)
+import Data.Char (ord, toUpper)
 import Data.IORef
 import Data.Int (Int32)
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word8)
-import Foreign.C.Types (CInt)
+import Foreign.C.Types (CDouble, CInt)
 import Match3.Core
 import SDL hiding (Normal)
+import System.Environment (lookupEnv)
 import System.Random (randomIO, randomRIO)
+import Text.Read (readMaybe)
 
 cellPx, padPx, hudH, boardPx, winW, winH :: CInt
 cellPx = 56
@@ -84,14 +88,15 @@ data App = App
   , appTool      :: ToolMode
   , appMapOpen   :: Bool  -- level map overlay (选关)
   , appMaxReached :: Int  -- highest unlocked campaign index
+  , appArt       :: Maybe Art  -- 贴图集；Nothing 时回退到矩形绘制
   }
 
 colorRGB :: Color -> (Word8, Word8, Word8)
-colorRGB C1 = (220, 70, 70)
-colorRGB C2 = (70, 180, 90)
-colorRGB C3 = (70, 120, 220)
-colorRGB C4 = (240, 200, 60)
-colorRGB C5 = (180, 80, 200)
+colorRGB C1 = (236, 62, 78)   -- 红·圆（与 tools/gen_assets.py 调色板一致）
+colorRGB C2 = (52, 196, 96)   -- 绿·方
+colorRGB C3 = (56, 128, 246)  -- 蓝·菱
+colorRGB C4 = (255, 194, 36)  -- 黄·星
+colorRGB C5 = (172, 88, 236)  -- 紫·三角
 
 helpKeysMsg :: Text
 helpKeysMsg = "H hint | 1 hammer | 2 free-swap | 3 cross | U undo | S shuffle | D daily | M map | R restart | N next | P pause | Esc"
@@ -99,15 +104,23 @@ helpKeysMsg = "H hint | 1 hammer | 2 free-swap | 3 cross | U undo | S shuffle | 
 main :: IO ()
 main = do
   initializeAll
+  -- 线性过滤：2x 贴图缩到 56px 格子时更平滑（须在创建纹理之前设置）
+  HintRenderScaleQuality $= ScaleLinear
   seed <- randomIO
-  let lvl = head allLevels
-      gs0 = newGameAtLevel 0 (levelConfig lvl) seed
+  startIdx <- envStartLevel
+  showcase <- isJust <$> lookupEnv "MATCH3_SHOWCASE"
+  let lvl = allLevels !! startIdx
+      gs0 = newGameAtLevel startIdx (levelConfig lvl) seed
   window <-
     createWindow
       "Match-3"
       defaultWindow { windowInitialSize = V2 winW winH }
   renderer <- createRenderer window (-1) defaultRenderer
-  let (gsHinted, _) = applyHint gs0
+  -- 开启 alpha 混合：面板、遮罩、粒子的半透明才生效
+  rendererDrawBlendMode renderer $= BlendAlphaBlend
+  art <- loadArt renderer
+  let (gsHinted0, _) = applyHint gs0
+      gsHinted = if showcase then showcaseState gsHinted0 else gsHinted0
   ref <-
     newIORef
       App
@@ -119,14 +132,15 @@ main = do
         , appAnim = AnimNone
         , appComboShow = 0
         , appParticles = []
-        , appTipFrames = 240
-        , appHelpFrames = 300
+        , appTipFrames = if startIdx == 0 && not showcase then 240 else 0
+        , appHelpFrames = if showcase then 0 else 300
         , appPaused = False
         , appStartMoves = lvlMoves lvl
         , appDragFrom = Nothing
         , appTool = ToolNone
         , appMapOpen = False
-        , appMaxReached = 0
+        , appMaxReached = startIdx
+        , appArt = art
         }
   updateTitle window =<< readIORef ref
   let loop = do
@@ -1077,15 +1091,31 @@ draw :: Renderer -> App -> IO ()
 draw ren app = do
   rendererDrawColor ren $= V4 28 28 38 255
   clear ren
-  drawHud ren app
-  drawBoard ren app
-  drawParticles ren (appParticles app)
-  drawComboPop ren app
-  drawTipBanner ren app
-  drawHelpStrip ren app
-  drawOverlay ren app
-  drawPauseHelp ren app
-  drawLevelMap ren app
+  case appArt app of
+    -- 贴图模式：背景图 + 圆角面板 HUD + 精灵棋子
+    Just art -> do
+      forM_ (artBg art) $ \bg -> copy ren bg Nothing Nothing
+      drawHudArt ren art app
+      drawBoard ren app
+      drawParticlesAny ren app
+      drawComboPopArt ren art app
+      drawTipBannerArt ren art app
+      drawToolBannerArt ren art app
+      drawHelpStripArt ren art app
+      drawOverlayArt ren art app
+      drawPauseHelpArt ren art app
+      drawLevelMapArt ren art app
+    -- 回退：无资源时沿用原有矩形 / 位图字绘制
+    Nothing -> do
+      drawHud ren app
+      drawBoard ren app
+      drawParticlesAny ren app
+      drawComboPop ren app
+      drawTipBanner ren app
+      drawHelpStrip ren app
+      drawOverlay ren app
+      drawPauseHelp ren app
+      drawLevelMap ren app
 
 --------------------------------------------------------------------------------
 -- Bitmap 3x5 digits (no TTF)
@@ -2137,7 +2167,7 @@ drawGemAt ren x y cell flashing = case cell of
         rendererDrawColor ren $= V4 160 50 90 200
         fillRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
         rendererDrawColor ren $= V4 200 80 120 220
-        forM_ [0 .. 3] $ \i ->
+        forM_ [0 .. 3 :: Int] $ \i ->
           fillRect
             ren
             (Just
@@ -2209,7 +2239,13 @@ drawBoard ren app = case appAnim app of
     drawStatic ren app (gsBoard (appGame app)) 0
 
 drawStatic :: Renderer -> App -> Board -> CInt -> IO ()
-drawStatic ren app board yOff = do
+drawStatic ren app board yOff = case appArt app of
+  Just art -> drawStaticArt ren art app board yOff
+  Nothing -> drawStaticPrim ren app board yOff
+
+-- | 原有矩形版棋盘绘制（无贴图时的回退）。
+drawStaticPrim :: Renderer -> App -> Board -> CInt -> IO ()
+drawStaticPrim ren app board yOff = do
   let sel = appSel app
       hint = gsHint (appGame app)
       flashSet = map fst (appFlash app)
@@ -2407,16 +2443,18 @@ drawSwap ren app board p1 p2 frame = do
       c1 = getCell board p1
       c2 = getCell board p2
       flashSet = map fst (appFlash app)
+  -- 贴图模式先画棋盘底（格子 / 地毯 / 传送带 / 传送门），交换中也不露底色
+  forM_ (appArt app) $ \art -> drawBoardBgArt ren art app
   mapM_
     ( \(r, c) -> do
         let pos = (r, c)
         unless (pos == p1 || pos == p2) $ do
           let (x0, y0) = cellOrigin pos
-          drawGemAt ren x0 y0 (getCell board pos) (pos `elem` flashSet)
+          drawCellAny ren app x0 y0 (getCell board pos) (pos `elem` flashSet)
     )
     [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
-  drawGemAt ren xa ya c1 (p1 `elem` flashSet)
-  drawGemAt ren xb yb c2 (p2 `elem` flashSet)
+  drawCellAny ren app xa ya c1 (p1 `elem` flashSet)
+  drawCellAny ren app xb yb c2 (p2 `elem` flashSet)
 
 drawFall :: Renderer -> App -> Board -> Int -> IO ()
 drawFall ren app board frame = do
@@ -2424,3 +2462,638 @@ drawFall ren app board frame = do
       ease = 1 - (1 - t) * (1 - t)
       offset = round (fromIntegral cellPx * (1 - ease) * (-0.35)) :: CInt
   drawStatic ren app board offset
+
+--------------------------------------------------------------------------------
+-- 贴图渲染（assets/atlas.bmp）：棋子精灵、圆角面板 HUD、中文标签
+--------------------------------------------------------------------------------
+
+rect :: CInt -> CInt -> CInt -> CInt -> Rectangle CInt
+rect x y w h = Rectangle (P (V2 x y)) (V2 w h)
+
+cellRect :: CInt -> CInt -> Rectangle CInt
+cellRect x y = rect x y cellPx cellPx
+
+-- | 开发 / 截图用：MATCH3_LEVEL=N（1 起）直接从第 N 关开始；仅前端，不改规则。
+envStartLevel :: IO Int
+envStartLevel = do
+  v <- lookupEnv "MATCH3_LEVEL"
+  pure $ case v >>= readMaybe of
+    Just n | n >= 1 && n <= length allLevels -> n - 1
+    _ -> 0
+
+-- | MATCH3_SHOWCASE=1：把棋盘换成「全部棋子一览」，用于检查贴图（仅展示，不影响规则模块）。
+showcaseState :: GameState -> GameState
+showcaseState gs =
+  gs
+    { gsBoard = showcaseBoard
+    , gsHint = Nothing
+    , gsUfos = [Ufo (7, 7) C3]
+    , gsPortals = [((7, 5), (7, 6))]
+    , gsBelts = [[(7, 0), (7, 1), (7, 2), (7, 3)]]
+    , gsCarpetOpen = [(7, 4)]
+    }
+
+showcaseBoard :: Board
+showcaseBoard =
+  [ [mkGem C1, mkGem C2, mkGem C3, mkGem C4, mkGem C5, Gem C1 LineH 0 Nothing, Gem C2 LineV 0 Nothing, Gem C3 Bomb 0 Nothing]
+  , [Gem C4 Rainbow 0 Nothing, mkFlip C1 C3, mkCountdown C2 3, mkIceGem C5 1, mkIceGem C1 2, mkIceGem C2 3, mkGrassGem C3, mkVineGem C4]
+  , [mkChocoGem C5, mkFogGem C1 1, mkFogGem C2 3, mkChainGem C3 1, mkChainGem C4 2, mkFreezeGem C5 1, mkFreezeGem C1 2, mkCurtainGem C2 1]
+  , [mkCurtainGem C3 2, mkSteamGem C4, mkStoneLayers 1, mkStoneLayers 2, mkStoneLayers 3, mkChestLayers 1, mkChestLayers 2, mkHoneyLayers 2]
+  , [mkBalloon C1, mkBalloon C2, mkBalloon C3, mkBalloon C4, mkBalloon C5, mkCookie, mkCakeLayers 1, mkCakeLayers 3]
+  , [mkMagicHat, mkMakerCharges C1 3, mkMakerCharges C3 2, mkSnail 0 1, mkSnail 1 0, mkSafeLayers 2, mkSurprise, mkTimeSpirit]
+  , [mkBottle C1, mkBottle C2, mkBottle C3, mkBottle C4, mkBottle C5, mkSnail 0 (-1), mkSnail (-1) 0, mkGem C1]
+  , [mkGem C2, mkGem C3, mkGem C4, mkGem C5, mkGem C1, mkGem C2, mkGem C3, mkGem C4]
+  ]
+
+-- | 颜色 → 贴图后缀（c1..c5）。
+colorKey :: Color -> String
+colorKey C1 = "c1"
+colorKey C2 = "c2"
+colorKey C3 = "c3"
+colorKey C4 = "c4"
+colorKey C5 = "c5"
+
+gemSprite :: Color -> String
+gemSprite c = "gem_" ++ colorKey c
+
+clampI :: Int -> Int -> Int -> Int
+clampI lo hi = max lo . min hi
+
+-- | 0..1 正弦呼吸，周期约 period 帧。
+breathe :: Int -> Double -> Double
+breathe pulse period = 0.5 + 0.5 * sin (fromIntegral pulse * 2 * pi / period)
+
+-- | 单格绘制入口：有贴图走精灵，否则走原矩形版。
+drawCellAny :: Renderer -> App -> CInt -> CInt -> Cell -> Bool -> IO ()
+drawCellAny ren app x y cell flashing = case appArt app of
+  Just art -> drawCellArt ren art (appPulse app) x y cell flashing
+  Nothing -> drawGemAt ren x y cell flashing
+
+-- | 该格的主贴图名（用于检测资源缺失时逐格回退）。
+primarySprite :: Cell -> String
+primarySprite cell = case cell of
+  Gem c k _ _ -> if k == Rainbow then "rainbow" else gemSprite c
+  Stone _ -> "stone_3"
+  Chest _ -> "chest"
+  Honey _ -> "honey"
+  Balloon c -> "balloon_" ++ colorKey c
+  Cookie -> "cookie"
+  Cake _ -> "cake_1"
+  MagicHat -> "magic_hat"
+  Maker c _ -> "maker_" ++ colorKey c
+  Snail _ _ -> "snail"
+  Safe _ -> "safe"
+  Flip f _ -> gemSprite f
+  Surprise -> "surprise"
+  Bottle c -> "bottle_" ++ colorKey c
+  TimeSpirit -> "time_spirit"
+  Countdown c _ -> gemSprite c
+
+-- | 精灵版单格：底层宝石 / 障碍 → 特殊标记 → 冰 → 覆盖层 → 层数角标 → 闪白。
+drawCellArt :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> Bool -> IO ()
+drawCellArt ren art pulse x y cell flashing
+  | not (hasSprite art (primarySprite cell)) = drawGemAt ren x y cell flashing
+  | otherwise = do
+      let dst = cellRect x y
+          spr n = void (drawSprite ren art n dst)
+          -- 气球 / 精灵轻微上下浮动
+          bob = round (2 * sin (fromIntegral pulse / 9 :: Double)) :: CInt
+          sprBob n = void (drawSprite ren art n (cellRect x (y + bob)))
+          badge = drawLayerBadge ren art x y
+      case cell of
+        Gem col kind ice ov -> do
+          -- 炸弹：身后橙色呼吸光晕
+          when (kind == Bomb) $ do
+            let a = round (140 + 110 * breathe pulse 50) :: Int
+            void (drawSpriteMod ren art "bomb_glow" dst (V3 255 255 255) (fromIntegral a))
+          if kind == Rainbow
+            then void (drawSpriteEx ren art "rainbow" dst (fromIntegral (pulse * 2 `mod` 360) :: CDouble) False)
+            else spr (gemSprite col)
+          case kind of
+            LineH -> spr "line_h"
+            LineV -> spr "line_v"
+            Bomb -> spr "bomb_mark"
+            _ -> pure ()
+          when (ice > 0) $ spr ("ice_" ++ show (clampI 1 3 ice))
+          layers <- case ov of
+            Just Grass -> spr "grass" >> pure 0
+            Just Vine -> spr "vine" >> pure 0
+            Just Choco -> spr "choco" >> pure 0
+            Just (Fog n) -> spr ("fog_" ++ show (clampI 1 2 n)) >> pure n
+            Just (Chain n) -> spr ("chain_" ++ show (clampI 1 2 n)) >> pure n
+            Just (Freeze n) -> spr ("freeze_" ++ show (clampI 1 2 n)) >> pure n
+            Just (Curtain n) -> spr ("curtain_" ++ show (clampI 1 2 n)) >> pure n
+            Just Steam -> spr "steam" >> pure 0
+            Nothing -> pure 0
+          badge (if layers > 0 then layers else ice)
+        Stone n -> spr ("stone_" ++ show (clampI 1 3 n)) >> badge n
+        Chest n -> spr "chest" >> badge n
+        Honey n -> spr "honey" >> badge n
+        Balloon c -> sprBob ("balloon_" ++ colorKey c)
+        Cookie -> spr "cookie"
+        Cake n -> spr ("cake_" ++ show (clampI 1 3 n)) >> badge n
+        MagicHat -> spr "magic_hat"
+        Maker c n -> do
+          spr ("maker_" ++ colorKey c)
+          -- 果汁机是计数器：剩余次数始终显示
+          drawBadgeAt ren art x y (max 1 n)
+        Snail dr dc -> do
+          -- 贴图朝右；按爬行方向旋转 / 翻转
+          let (ang, flipH)
+                | abs dc >= abs dr && dc >= 0 = (0, False)
+                | abs dc >= abs dr = (0, True)
+                | dr > 0 = (90, False)
+                | otherwise = (-90, False)
+          void (drawSpriteEx ren art "snail" dst ang flipH)
+        Safe n -> spr "safe" >> badge n
+        Flip f b -> do
+          spr (gemSprite f)
+          -- 右上角小图 = 翻面后的颜色；左下角双箭头标记
+          void (drawSprite ren art (gemSprite b) (rect (x + cellPx - 25) (y + 1) 24 24))
+          spr "flip_mark"
+        Surprise -> spr "surprise"
+        Bottle c -> spr ("bottle_" ++ colorKey c)
+        TimeSpirit -> sprBob "time_spirit"
+        Countdown c n -> do
+          spr (gemSprite c)
+          spr ("countdown_" ++ show (clampI 1 9 n))
+      when flashing $
+        void (drawSpriteAdd ren art "spark" (rect (x - 10) (y - 10) (cellPx + 20) (cellPx + 20)) (V3 255 255 230) 210)
+
+-- | 层数 ≥ 2 时右下角数字角标。
+drawLayerBadge :: Renderer -> Art -> CInt -> CInt -> Int -> IO ()
+drawLayerBadge ren art x y n = when (n >= 2) $ drawBadgeAt ren art x y n
+
+drawBadgeAt :: Renderer -> Art -> CInt -> CInt -> Int -> IO ()
+drawBadgeAt ren art x y n =
+  void (drawSprite ren art ("badge_" ++ show (clampI 1 9 n)) (rect (x + cellPx - 23) (y + cellPx - 23) 23 23))
+
+-- | 传送带每格的朝向角度（右 0 / 下 90 / 左 180 / 上 270）。
+beltAngles :: [Pos] -> [(Pos, CDouble)]
+beltAngles belt = go Nothing (zip belt (drop 1 belt ++ take 1 belt))
+  where
+    go _ [] = []
+    go prev ((a, b) : rest) =
+      let ang = case dirAngle a b of
+            Just d -> d
+            Nothing -> maybe 0 id prev
+      in (a, ang) : go (Just ang) rest
+    dirAngle (r1, c1) (r2, c2)
+      | r1 == r2 && c2 == c1 + 1 = Just 0
+      | r1 == r2 && c2 == c1 - 1 = Just 180
+      | c1 == c2 && r2 == r1 + 1 = Just 90
+      | c1 == c2 && r2 == r1 - 1 = Just 270
+      | otherwise = Nothing
+
+-- | 棋盘底层：圆角框 + 棋盘格 + 地毯 + 传送带 + 传送门（都在棋子下面）。
+drawBoardBgArt :: Renderer -> Art -> App -> IO ()
+drawBoardBgArt ren art app = do
+  let gs = appGame app
+      carpets = levelCarpets (gsLevel gs)
+  _ <- drawPanel ren art "panel_dark" (rect (padPx - 8) (hudH + padPx - 8) (boardPx + 16) (boardPx + 16)) 16
+  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \pos@(r, c) -> do
+    let (x, y) = cellOrigin pos
+        carpetOpen = pos `elem` gsCarpetOpen gs
+        carpetCovered = pos `elem` carpets && not carpetOpen
+    void (drawSprite ren art (if even (r + c) then "tile_a" else "tile_b") (cellRect x y))
+    when carpetCovered $ void (drawSprite ren art "carpet_covered" (cellRect x y))
+    when carpetOpen $ void (drawSprite ren art "carpet_open" (cellRect x y))
+  forM_ (gsBelts gs) $ \belt ->
+    forM_ (beltAngles belt) $ \(pos, ang) -> do
+      let (x, y) = cellOrigin pos
+      void (drawSpriteEx ren art "belt" (cellRect x y) ang False)
+  forM_ (gsPortals gs) $ \(a, b) ->
+    forM_ [a, b] $ \pos -> do
+      let (x, y) = cellOrigin pos
+          spin = fromIntegral (appPulse app * 3 `mod` 360) :: CDouble
+      void (drawSpriteEx ren art "portal" (cellRect x y) spin False)
+
+-- | 精灵版棋盘：底层 → 提示光 → 棋子（下落时带 yOff）→ 选中框 → 蔓延预告 → 飞碟。
+drawStaticArt :: Renderer -> Art -> App -> Board -> CInt -> IO ()
+drawStaticArt ren art app board yOff = do
+  let gs = appGame app
+      pulse = appPulse app
+      flashSet = map fst (appFlash app)
+      hintCells = maybe [] (\(a, b) -> [a, b]) (gsHint gs)
+      hintA = round (120 + 135 * breathe pulse 60) :: Int
+  drawBoardBgArt ren art app
+  forM_ hintCells $ \pos -> do
+    let (x, y) = cellOrigin pos
+    void (drawSpriteMod ren art "hint_glow" (rect (x - 3) (y - 3) (cellPx + 6) (cellPx + 6)) (V3 255 255 255) (fromIntegral hintA))
+  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \pos -> do
+    let (x, y) = cellOrigin pos
+    drawCellArt ren art pulse x (y + yOff) (getCell board pos) (pos `elem` flashSet)
+  -- 提示格再叠一层淡淡的加色光，便于一眼看到
+  forM_ hintCells $ \pos -> do
+    let (x, y) = cellOrigin pos
+    void (drawSpriteAdd ren art "hint_glow" (cellRect x y) (V3 255 230 150) (fromIntegral (hintA `div` 3)))
+  forM_ (appSel app) $ \pos -> do
+    let (x, y) = cellOrigin pos
+        tint = case appTool app of
+          ToolHammer -> V3 255 170 80
+          ToolFreeSwap _ -> V3 110 190 255
+          ToolCross -> V3 235 110 235
+          ToolNone -> V3 255 255 255
+        grow = round (2 * breathe pulse 30) :: CInt
+    void (drawSpriteMod ren art "sel_ring" (rect (x - 2 - grow) (y - 2 - grow) (cellPx + 4 + 2 * grow) (cellPx + 4 + 2 * grow)) tint 255)
+  -- 自由交换第一格：保持高亮
+  case appTool app of
+    ToolFreeSwap (Just p) -> do
+      let (x, y) = cellOrigin p
+      void (drawSpriteMod ren art "sel_ring" (cellRect x y) (V3 110 190 255) 220)
+    _ -> pure ()
+  -- 藤蔓 / 巧克力下一步可能蔓延到的格子：绿 / 棕色柔光呼吸
+  let spreadA = fromIntegral (round (70 + 110 * breathe pulse 60) :: Int) :: Word8
+  forM_ (spreadTargets hasVine (gsBoard gs)) $ \pos -> do
+    let (x, y) = cellOrigin pos
+    void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 90 255 120) spreadA)
+  forM_ (spreadTargets hasChoco (gsBoard gs)) $ \pos -> do
+    let (x, y) = cellOrigin pos
+    void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 210 120 60) spreadA)
+  forM_ (gsUfos gs) $ \(Ufo pos col) -> do
+    let (x, y) = cellOrigin pos
+        bob = round (3 * sin (fromIntegral pulse / 10 :: Double)) :: CInt
+    ok <- drawSprite ren art ("ufo_" ++ colorKey col) (rect x (y + yOff - 12 + bob) cellPx cellPx)
+    unless ok $ drawUfo ren yOff pulse (Ufo pos col)
+
+-- | 与 drawVineSpreadHints 相同的判定：源格正交相邻、且无覆盖层的普通宝石格。
+spreadTargets :: (Cell -> Bool) -> Board -> [Pos]
+spreadTargets isSource board =
+  [ q
+  | r <- [0 .. boardSize - 1]
+  , c <- [0 .. boardSize - 1]
+  , isSource (getCell board (r, c))
+  , q <- [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+  , inBounds q
+  , case getCell board q of
+      Gem _ _ _ Nothing -> True
+      _ -> False
+  ]
+
+-- | 粒子：有贴图时用柔光圆点（按颜色着色、随寿命淡出）。
+drawParticlesAny :: Renderer -> App -> IO ()
+drawParticlesAny ren app = case appArt app of
+  Nothing -> drawParticles ren (appParticles app)
+  Just art ->
+    forM_ (appParticles app) $ \p -> do
+      let fade = if pMax p <= 0 then 255 else fromIntegral (255 * pLife p `div` pMax p) :: Word8
+          s = pSize p * 3
+          x = round (pX p) - s `div` 2
+          y = round (pY p) - s `div` 2
+      void (drawSpriteMod ren art "spark" (rect x y s s) (V3 (pR p) (pG p) (pB p)) fade)
+
+--------------------------------------------------------------------------------
+-- 贴图字形 / 中文标签 / 面板工具
+--------------------------------------------------------------------------------
+
+-- | 贴图字形文字：每字 4*px 宽、6*px 高（与位图字体步幅一致），颜色经 colorMod 着色。
+textA :: Renderer -> Art -> CInt -> CInt -> CInt -> V4 Word8 -> String -> IO ()
+textA ren art x0 y0 px col@(V4 r g b a) s =
+  forM_ (zip [0 :: CInt ..] s) $ \(i, ch0) -> do
+    let ch = if ch0 == 'x' then 'x' else toUpper ch0
+        x = x0 + i * 4 * px
+    unless (ch == ' ') $ do
+      ok <- drawSpriteMod ren art ("g_" ++ show (ord ch)) (rect x y0 (4 * px) (6 * px)) (V3 r g b) a
+      unless ok $ drawGlyph ren x (y0 + px) px col ch
+
+textW :: CInt -> String -> CInt
+textW px s = 4 * px * fromIntegral (length s)
+
+-- | 水平居中文字。
+textAC :: Renderer -> Art -> CInt -> CInt -> CInt -> V4 Word8 -> String -> IO ()
+textAC ren art cx y px col s = textA ren art (cx - textW px s `div` 2) y px col s
+
+-- | 中文标签贴图宽度（按目标高度 h 等比）。
+zhW :: Art -> String -> CInt -> CInt
+zhW art key h = maybe 0 (\(w0, h0) -> w0 * h `div` max 1 h0) (spriteSize art key)
+
+-- | 画中文标签（贴图生成时为 2x，h=20 时最清晰）；返回宽度。
+zhA :: Renderer -> Art -> String -> CInt -> CInt -> CInt -> IO CInt
+zhA ren art key x y h = do
+  let w = zhW art key h
+  when (w > 0) $ void (drawSprite ren art key (rect x y w h))
+  pure w
+
+zhAC :: Renderer -> Art -> String -> CInt -> CInt -> CInt -> IO ()
+zhAC ren art key cx y h = void (zhA ren art key (cx - zhW art key h `div` 2) y h)
+
+-- | 着色九宫格（进度条填充）。
+drawPanelTint :: Renderer -> Art -> String -> Rectangle CInt -> CInt -> V3 Word8 -> IO ()
+drawPanelTint ren art name r c tint = do
+  textureColorMod (artTex art) $= tint
+  _ <- drawPanel ren art name r c
+  textureColorMod (artTex art) $= V3 255 255 255
+
+-- | 按键小方块。
+keyChipA :: Renderer -> Art -> CInt -> CInt -> Char -> V4 Word8 -> IO ()
+keyChipA ren art x y ch col = do
+  _ <- drawPanel ren art "panel_chip" (rect x y 22 22) 7
+  textA ren art (x + 5) (y + 2) 3 col [ch]
+
+-- | 进度条：底槽 + 着色填充 + 右对齐数字。
+meterA :: Renderer -> Art -> CInt -> CInt -> CInt -> Int -> Int -> V3 Word8 -> String -> IO ()
+meterA ren art x y w value cap tint label = do
+  _ <- drawPanel ren art "panel_bar" (rect x y w 20) 9
+  let inner = w - 4
+      fw
+        | cap <= 0 = 0
+        | otherwise = min inner (max 0 (fromIntegral value * inner `div` fromIntegral (max 1 cap)))
+  when (fw > 0) $ drawPanelTint ren art "panel_fill" (rect (x + 2) (y + 2) (max 16 fw) 16) 8 tint
+  textA ren art (x + w - 8 - textW 3 label) (y + 1) 3 (V4 255 255 255 255) label
+
+--------------------------------------------------------------------------------
+-- 贴图版 HUD / 横幅 / 暂停 / 结算 / 地图
+--------------------------------------------------------------------------------
+
+-- | 目标图标（复用棋子贴图）。
+goalIcon :: LevelGoal -> String
+goalIcon g = case g of
+  GoalScore _ -> "icon_score"
+  GoalCollect c _ -> gemSprite c
+  GoalCollectMulti _ -> "icon_multi"
+  GoalClearStone _ -> "stone_3"
+  GoalChest _ -> "chest"
+  GoalHoney _ -> "honey"
+  GoalBalloon _ -> "balloon_c1"
+  GoalCookie _ -> "cookie"
+  GoalCake _ -> "cake_1"
+  GoalSafe _ -> "safe"
+  GoalUfo _ -> "ufo_c3"
+  GoalCarpet _ -> "carpet_covered"
+
+-- | HUD 目标进度（与窗口标题使用同一组计数器）。
+hudProgress :: GameState -> Int
+hudProgress gs = case gsGoal gs of
+  GoalScore _ -> gsScore gs
+  GoalCollect _ _ -> gsCollected gs
+  GoalCollectMulti reqs -> sum [min n (lookupCount (gsColorBag gs) c) | (c, n) <- reqs]
+  GoalClearStone _ -> gsStonesCleared gs
+  GoalChest _ -> gsChestsCleared gs
+  GoalHoney _ -> gsHoneyCleared gs
+  GoalBalloon _ -> gsBalloonsPopped gs
+  GoalCookie _ -> gsCookiesCollected gs
+  GoalCake _ -> gsCakesCleared gs
+  GoalSafe _ -> gsSafesOpened gs
+  GoalUfo _ -> gsUfoCollected gs
+  GoalCarpet _ -> gsCarpetsCovered gs
+
+goalTint :: LevelGoal -> V3 Word8
+goalTint g = case g of
+  GoalScore _ -> V3 110 230 150
+  GoalCollect c _ -> let (r, gg, b) = colorRGB c in V3 r gg b
+  GoalCollectMulti _ -> V3 240 190 100
+  GoalClearStone _ -> V3 180 184 200
+  GoalChest _ -> V3 230 170 70
+  GoalHoney _ -> V3 250 190 50
+  GoalBalloon _ -> V3 255 120 160
+  GoalCookie _ -> V3 220 160 90
+  GoalCake _ -> V3 255 140 190
+  GoalSafe _ -> V3 200 180 90
+  GoalUfo _ -> V3 170 130 255
+  GoalCarpet _ -> V3 220 90 150
+
+drawHudArt :: Renderer -> Art -> App -> IO ()
+drawHudArt ren art app = do
+  let gs = appGame app
+      li = min (gsLevel gs) (length allLevels - 1)
+      lvl = allLevels !! li
+      white = V4 245 245 255 255
+      dim = V4 150 145 190 255
+      gold = V4 255 214 90 255
+  _ <- drawPanel ren art "panel_dark" (rect 8 6 464 96) 14
+  -- 关卡徽章 + 名称
+  _ <- drawSprite ren art "medal" (rect 14 11 44 44)
+  textAC ren art 36 24 3 white (show (li + 1))
+  _ <- if gsDaily gs
+    then zhA ren art "zh_daily" 66 12 22
+    else zhA ren art ("name_" ++ show li) 66 11 24
+  -- 关卡进度点：已过绿、当前金、未解锁暗
+  forM_ [0 .. length allLevels - 1] $ \i -> do
+    let xD = 66 + fromIntegral i * 6
+        (col, yy, hh)
+          | i == li = (V4 255 214 90 255, 38, 10)
+          | i < li = (V4 90 210 130 255, 40, 6)
+          | i <= appMaxReached app = (V4 120 180 140 255, 40, 6)
+          | otherwise = (V4 80 72 130 255, 40, 6)
+    rendererDrawColor ren $= col
+    fillRect ren (Just (rect xD yy 4 hh))
+  -- 道具：锤子 / 自由交换 / 十字消（当前模式金框）
+  let chips =
+        [ ("icon_hammer", gsHammers gs, appTool app == ToolHammer)
+        , ("icon_swap", gsFreeSwaps gs, case appTool app of ToolFreeSwap _ -> True; _ -> False)
+        , ("icon_cross", gsCrossClears gs, appTool app == ToolCross)
+        ]
+  forM_ (zip [0 :: CInt ..] chips) $ \(i, (ic, n, active)) -> do
+    let cx = 298 + i * 57
+    _ <- drawPanel ren art (if active then "panel_gold" else "panel_chip") (rect cx 11 53 32) 10
+    _ <- drawSprite ren art ic (rect (cx + 4) 15 24 24)
+    textA ren art (cx + 30) 18 3 (if n > 0 then white else dim) (show n)
+  -- 目标条
+  let goal = gsGoal gs
+      prog = hudProgress gs
+      targ = goalTarget goal
+  _ <- drawSprite ren art (goalIcon goal) (rect 12 50 26 26)
+  meterA ren art 42 53 332 prog targ (goalTint goal) (show prog ++ "/" ++ show targ)
+  -- 步数条（≤5 步时变红并闪烁）
+  let mv = gsMoves gs
+      moveCap = max mv (lvlMoves lvl)
+      low = mv <= 5
+      tintMv
+        | low = let k = round (160 + 95 * breathe (appPulse app) 40) :: Int in V3 255 (fromIntegral (k `div` 2)) 80
+        | otherwise = V3 90 165 255
+  _ <- drawSprite ren art "icon_moves" (rect 13 77 24 24)
+  meterA ren art 42 79 332 mv (max 1 moveCap) tintMv (show mv)
+  -- 右下：连击优先，否则得分
+  if gsCombo gs > 1 && appComboShow app > 0
+    then do
+      _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
+      zhAC ren art "zh_combo" 424 56 18
+      textAC ren art 424 76 3 gold ("x" ++ show (gsCombo gs))
+    else do
+      _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
+      zhAC ren art (if gsShuffled gs then "zh_shuffle" else "zh_score") 424 56 18
+      textAC ren art 424 76 3 gold (show (gsScore gs))
+
+-- | 首关提示横幅（棋盘上沿）。
+drawTipBannerArt :: Renderer -> Art -> App -> IO ()
+drawTipBannerArt ren art app
+  | appPaused app || appMapOpen app = pure ()
+  | appTipFrames app <= 0 = pure ()
+  | gsLevel (appGame app) /= 0 = pure ()
+  | appTool app /= ToolNone = pure ()
+  | otherwise = do
+      let y = hudH + padPx + 4
+          w = 40 + zhW art "zh_tip" 20
+          x = (winW - w) `div` 2
+      _ <- drawPanel ren art "panel_gold" (rect x y w 30) 12
+      keyChipA ren art (x + 10) (y + 5) 'H' (V4 255 220 100 255)
+      void (zhA ren art "zh_tip" (x + 34) (y + 5) 20)
+
+-- | 道具点选模式横幅：告诉玩家下一步要点哪里。
+drawToolBannerArt :: Renderer -> Art -> App -> IO ()
+drawToolBannerArt ren art app
+  | appPaused app || appMapOpen app = pure ()
+  | otherwise = case appTool app of
+      ToolNone -> pure ()
+      tool -> do
+        let (ic, key) = case tool of
+              ToolHammer -> ("icon_hammer", "zh_tool_hammer")
+              ToolFreeSwap _ -> ("icon_swap", "zh_tool_swap")
+              _ -> ("icon_cross", "zh_tool_cross")
+            y = hudH + padPx + 4
+            w = 44 + zhW art key 20
+            x = (winW - w) `div` 2
+        _ <- drawPanel ren art "panel_gold" (rect x y w 30) 12
+        _ <- drawSprite ren art ic (rect (x + 10) (y + 4) 22 22)
+        void (zhA ren art key (x + 36) (y + 5) 20)
+
+-- | 开局 / 取消暂停后的按键条。
+drawHelpStripArt :: Renderer -> Art -> App -> IO ()
+drawHelpStripArt ren art app
+  | appPaused app || appMapOpen app = pure ()
+  | appHelpFrames app <= 0 = pure ()
+  | otherwise = do
+      -- 放在棋盘底部浮层，避免遮住 HUD 的步数行
+      let y = winH - padPx - 34
+          keys = "H123USDMRNP"
+      _ <- drawPanel ren art "panel_chip" (rect 8 y 464 28) 10
+      forM_ (zip [0 :: CInt ..] keys) $ \(i, ch) ->
+        keyChipA ren art (13 + i * 24) (y + 3) ch (V4 255 220 120 255)
+      void (zhA ren art "zh_help_more" (13 + 11 * 24 + 4) (y + 6) 16)
+
+-- | 全屏暂停：按键说明（中文）+ 形状图例。
+drawPauseHelpArt :: Renderer -> Art -> App -> IO ()
+drawPauseHelpArt ren art app
+  | not (appPaused app) = pure ()
+  | otherwise = do
+      rendererDrawColor ren $= V4 8 6 20 200
+      fillRect ren (Just (rect 0 0 winW winH))
+      let px0 = 40
+          py0 = 40
+          pw = winW - 80
+          ph = winH - 80
+      _ <- drawPanel ren art "panel_gold" (rect px0 py0 pw ph) 18
+      zhAC ren art "zh_pause" (winW `div` 2) (py0 + 14) 32
+      let rows :: [(Char, String, String)]
+          rows =
+            [ ('H', "zh_k_hint", "HINT"), ('1', "zh_k_hammer", "HAMMER"), ('2', "zh_k_swap", "SWAP")
+            , ('3', "zh_k_cross", "CROSS"), ('U', "zh_k_undo", "UNDO"), ('S', "zh_k_shuffle", "SHUFFLE")
+            , ('D', "zh_k_daily", "DAILY"), ('M', "zh_k_map", "MAP"), ('R', "zh_k_retry", "RETRY")
+            , ('N', "zh_k_next", "NEXT"), ('P', "zh_k_play", "PLAY")
+            ]
+      forM_ (zip [0 :: CInt ..] rows) $ \(i, (ch, key, en)) -> do
+        let yy = py0 + 60 + i * 30
+        keyChipA ren art (px0 + 40) yy ch (V4 255 220 120 255)
+        _ <- zhA ren art key (px0 + 72) yy 20
+        textA ren art (px0 + pw - 40 - textW 3 en) (yy + 2) 3 (V4 190 185 240 255) en
+      -- 图例：颜色 × 形状
+      let ly = py0 + ph - 62
+      _ <- zhA ren art "zh_legend" (px0 + 40) (ly + 8) 20
+      forM_ (zip [0 :: CInt ..] allColors) $ \(i, c) ->
+        void (drawSprite ren art (gemSprite c) (rect (px0 + 100 + i * 50) ly 40 40))
+
+-- | 结算面板：过关 / 胜利 / 失败 + 星级 + 分数 + 下一步提示。
+drawOverlayArt :: Renderer -> Art -> App -> IO ()
+drawOverlayArt ren art app = case gsOver (appGame app) of
+  Nothing -> pure ()
+  Just outcome -> do
+    rendererDrawColor ren $= V4 10 8 24 170
+    fillRect ren (Just (rect 0 hudH winW (winH - hudH)))
+    let pw = 380
+        ph = 180
+        px0 = (winW - pw) `div` 2
+        py0 = hudH + padPx + (boardPx - ph) `div` 2
+        cx = winW `div` 2
+        stars = starRating (appStartMoves app) (gsMoves (appGame app))
+        drawStars = forM_ [0 .. 2 :: Int] $ \i ->
+          void (drawSprite ren art (if i < stars then "star_on" else "star_off")
+                  (rect (cx - 72 + fromIntegral i * 48) (py0 + 58) 48 48))
+        white = V4 255 255 255 255
+    _ <- drawPanel ren art "panel_gold" (rect px0 py0 pw ph) 18
+    case outcome of
+      LevelClear s nextIdx -> do
+        zhAC ren art "zh_clear" cx (py0 + 12) 38
+        drawStars
+        -- 得分：图标 + 金色数字
+        let sw = textW 3 (show s)
+            sx = cx - (sw + 30) `div` 2
+        _ <- drawSprite ren art "icon_score" (rect sx (py0 + 108) 24 24)
+        textA ren art (sx + 30) (py0 + 111) 3 (V4 255 220 120 255) (show s)
+        let w = zhW art "zh_next" 22
+            rowX = cx - (w + 60) `div` 2
+        _ <- zhA ren art "zh_next" rowX (py0 + 142) 22
+        textA ren art (rowX + w + 6) (py0 + 144) 3 white (show (nextIdx + 1))
+        keyChipA ren art (px0 + pw - 40) (py0 + 144) 'N' (V4 140 230 160 255)
+      Won s -> do
+        zhAC ren art "zh_win" cx (py0 + 12) 38
+        drawStars
+        _ <- drawSprite ren art "icon_score" (rect (cx - 60) (py0 + 120) 32 32)
+        textA ren art (cx - 20) (py0 + 124) 4 white (show s)
+      Lost s -> do
+        zhAC ren art "zh_lose" cx (py0 + 12) 38
+        _ <- drawSprite ren art "icon_score" (rect (cx - 60) (py0 + 64) 32 32)
+        textA ren art (cx - 20) (py0 + 68) 4 white (show s)
+        zhAC ren art "zh_retry" cx (py0 + 130) 26
+      _ -> pure ()
+
+-- | 棋盘中央浮起的「连击 xN」。
+drawComboPopArt :: Renderer -> Art -> App -> IO ()
+drawComboPopArt ren art app
+  | appMapOpen app || appPaused app = pure ()
+  | gsCombo (appGame app) <= 1 || appComboShow app <= 0 = pure ()
+  | otherwise = do
+      let combo = gsCombo (appGame app)
+          life = appComboShow app
+          yOff = fromIntegral ((120 - min 120 life) `div` 2) :: CInt
+          cx = padPx + boardPx `div` 2
+          cy = hudH + padPx + boardPx `div` 2 - 40 - yOff
+          col
+            | combo >= 5 = V4 255 120 220 255
+            | combo >= 3 = V4 255 180 60 255
+            | otherwise = V4 255 230 110 255
+          s = "x" ++ show combo
+          w = zhW art "zh_combo" 34 + 12 + textW 5 s
+      _ <- drawPanel ren art "panel_gold" (rect (cx - w `div` 2 - 16) (cy - 8) (w + 32) 52) 16
+      wz <- zhA ren art "zh_combo" (cx - w `div` 2) (cy + 1) 34
+      textA ren art (cx - w `div` 2 + wz + 12) (cy + 3) 5 col s
+
+-- | 贴图版选关地图（节点坐标 / 点击判定与原版一致）。
+drawLevelMapArt :: Renderer -> Art -> App -> IO ()
+drawLevelMapArt ren art app
+  | not (appMapOpen app) = pure ()
+  | otherwise = do
+      rendererDrawColor ren $= V4 12 10 32 235
+      fillRect ren (Just (rect 0 0 winW winH))
+      zhAC ren art "zh_map" (winW `div` 2) 16 32
+      zhAC ren art "zh_map_hint" (winW `div` 2) 56 18
+      forM_ chapterStarts $ \ci -> do
+        let (_nx, ny) = mapNodePos ci
+        rendererDrawColor ren $= V4 110 100 190 160
+        fillRect ren (Just (rect 16 (ny - 36) (winW - 32) 1))
+      rendererDrawColor ren $= V4 140 130 220 200
+      forM_ [0 .. length allLevels - 2] $ \i -> do
+        let (x0, y0) = mapNodePos i
+            (x1, y1) = mapNodePos (i + 1)
+        forM_ [-1, 0, 1] $ \d -> drawLine ren (P (V2 x0 (y0 + d))) (P (V2 x1 (y1 + d)))
+      let reached = appMaxReached app
+          cur = gsLevel (appGame app)
+      forM_ (zip [0 :: Int ..] allLevels) $ \(i, lvl) -> do
+        let (nx, ny) = mapNodePos i
+            kind
+              | i == cur = "node_cur"
+              | i <= reached = "node_done"
+              | otherwise = "node_lock"
+        when (i == cur) $ do
+          let a = round (120 + 120 * breathe (appPulse app) 50) :: Int
+          void (drawSpriteAdd ren art "spark" (rect (nx - 34) (ny - 34) 68 68) (V3 255 210 90) (fromIntegral a))
+        _ <- drawSprite ren art kind (rect (nx - 20) (ny - 20) 40 40)
+        textAC ren art nx (ny - 9) 3 (if i <= reached then V4 255 255 255 255 else V4 170 170 200 255) (show (i + 1))
+        void (drawSprite ren art (goalIcon (lvlGoal lvl)) (rect (nx + 10) (ny + 6) 18 18))
+      -- 章节标签最后画（小底板），避免被节点遮住
+      forM_ (zip [0 :: Int ..] chapterStarts) $ \(k, ci) -> do
+        let (nx, ny) = mapNodePos ci
+            key = "zh_ch" ++ show (k + 1)
+            w = zhW art key 14
+            lx = max 8 (nx - (w + 12) `div` 2)
+        _ <- drawPanel ren art "panel_gold" (rect lx (ny - 45) (w + 12) 20) 7
+        void (zhA ren art key (lx + 6) (ny - 42) 14)

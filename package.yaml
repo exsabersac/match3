@@ -60,6 +60,9 @@ executables:
     - match3
     - sdl2
     - text
+    - containers
+    - directory
+    - filepath
 
 tests:
   match3-test:

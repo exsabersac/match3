@@ -52,6 +52,7 @@ tests =
   , testCase "ec_flat_record_removed" ec_flat_record_removed
   , testCase "ec_level_elements_by_message" ec_level_elements_by_message
   , testCase "ec_custom_matchable_gem" ec_custom_matchable_gem
+  , testCase "ec_registry_checked_slots" ec_registry_checked_slots
   ]
 
 -- | 快照里以给定前缀开头的行，两边逐行比；报告第一处分叉。
@@ -239,7 +240,7 @@ instance Element Star where
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do
-  let reg = register (customEntry (Star C5) (Star . toEnum)) defaultRegistry
+  let reg = register (customEntry (Star C5) (Star . colorAt)) defaultRegistry
       star = Custom "star" (fromEnum C5)
       board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
       gs0 = (newGame (GameConfig 5 (GoalNamed "star" 1)) 1) {gsBoard = board0}
@@ -255,3 +256,31 @@ ec_custom_matchable_gem = do
   let (_, oD) = trySwap p1 p2 gs0
   assertEqual "unregistered star is inert" Nothing (matchColorWith defaultRegistry star)
   assertBool "unregistered: no match through it" (not (moveApplied oD) || gsElementCounts (fst (trySwap p1 p2 gs0)) == [])
+
+-- | 注册表条目的槽位由原型推导；mkRegistryChecked 把重名 / 槽位冲突 / 推不出槽位暴露成值，
+-- 内置条目表通过检查；mkRegistry 是总函数（空表也能解码，查不到的槽位退回惰性占格）。
+newtype OtherGem = OtherGem Color
+  deriving (Eq, Show)
+
+instance Element OtherGem where
+  name _ = "other_gem"
+  toCell (OtherGem c) = Gem c Normal 0 Nothing
+
+ec_registry_checked_slots :: Assertion
+ec_registry_checked_slots = do
+  let errsOf = either Just (const Nothing) . mkRegistryChecked
+      otherGem = bodyEntry (OtherGem C1) (const Nothing) (\_ _ -> Nothing)
+      stray = bodyEntry (C.Inert "stray" (Custom "stray" 1)) (const Nothing) (\_ _ -> Nothing)
+      slotOf n = [entrySlot e | e <- builtinDefs, entryName e == n]
+  assertEqual "builtin defs pass the check" Nothing (errsOf builtinDefs)
+  assertEqual "gem slot derived from prototype" [SlotCell 0] (slotOf "gem")
+  assertEqual "countdown slot derived from prototype" [SlotCell (cellSlot (Countdown C1 1))] (slotOf "countdown")
+  assertEqual "ice slot derived from prototype" [SlotIce] (slotOf "ice")
+  assertEqual "steam slot derived from prototype" [SlotOverlay (overlaySlot Steam)] (slotOf "steam")
+  assertEqual "duplicate name" (Just [DuplicateName "dup"]) (errsOf [inertEntry "dup", inertEntry "dup"])
+  assertEqual "duplicate slot" (Just [DuplicateSlot (SlotCell 0) ["gem", "other_gem"]]) (errsOf (builtinDefs ++ [otherGem]))
+  assertEqual "no slot" (Just [NoSlot "stray"]) (errsOf [stray])
+  assertEqual "stray entry has no slot" SlotNone (entrySlot stray)
+  -- 总函数：register 按名字替换仍可用；空注册表解码不崩
+  assertEqual "empty registry decodes to inert" "?" (elementName (mkRegistry []) (mkGem C1))
+  assertEqual "empty registry: no upper layers" 0 (length (upperOf (mkRegistry []) (mkIceGem C1 2)))

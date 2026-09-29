@@ -286,8 +286,8 @@ choco_cleared_by_adjacent = do
   let cleared = clearChocoAdjacent board0 ms
   assertBool "adj choco above cleared" (not (hasChoco (getCell cleared (2, 1))))
   assertBool "adj choco below cleared" (not (hasChoco (getCell cleared (4, 1))))
-  assertEqual "gem color kept above" C3 (cellColor (getCell cleared (2, 1)))
-  assertEqual "gem color kept below" C4 (cellColor (getCell cleared (4, 1)))
+  assertEqual "gem color kept above" (Just C3) (cellColor (getCell cleared (2, 1)))
+  assertEqual "gem color kept below" (Just C4) (cellColor (getCell cleared (4, 1)))
   -- Far choco untouched
   let withFar = setCell board0 (6, 6) (mkChocoGem C5)
       cleared2 = clearChocoAdjacent withFar ms
@@ -680,7 +680,7 @@ steam_cleared_by_adjacent = do
   assertBool "steam present" (hasSteam (getCell board0 (2, 1)))
   let b1 = clearSteamAdjacent board0 (findMatches board0)
   assertBool "steam extinguished" (not (hasSteam (getCell b1 (2, 1))))
-  assertEqual "gem remains" C2 (cellColor (getCell b1 (2, 1)))
+  assertEqual "gem remains" (Just C2) (cellColor (getCell b1 (2, 1)))
 
 steam_spreads_after_move :: Assertion
 steam_spreads_after_move = do
@@ -844,7 +844,7 @@ soft_hit_preserves_choco_steam = do
   let CascadeRun {crBoard = boardF1} = cascadeMatches Nothing [] [] (mkStdGen 23) boardFlip
   assertBool "became back gem" $
     isGem (getCell boardF1 (4, 1)) && not (isFlip (getCell boardF1 (4, 1)))
-  assertEqual "back color C5" C5 (cellColor (getCell boardF1 (4, 1)))
+  assertEqual "back color C5" (Just C5) (cellColor (getCell boardF1 (4, 1)))
   assertBool "steam survives flip soft-hit" (hasSteam (getCell boardF1 (5, 1)))
 
 --------------------------------------------------------------------------------
@@ -957,7 +957,7 @@ soft_hit_no_adj_side_effects = do
   let boardFlipBot = setCell boardFlip (3, 1) (mkBottle C4)
       CascadeRun {crBoard = bFlip} = cascadeMatches Nothing [] [] (mkStdGen 73) boardFlipBot
   assertBool "Balloon survives soft Flip" (isBalloon (getCell bFlip (5, 1)))
-  assertEqual "Bottle did not dye neighbor" C3 (cellColor (getCell bFlip (5, 2)))
+  assertEqual "Bottle did not dye neighbor" (Just C3) (cellColor (getCell bFlip (5, 2)))
   -- Control: true clear mid gem *does* peel Fog / charge Maker.
   let boardHard' =
         setCell (boardIce (mkFogGem C2 2)) (3, 1) (mkGem C1)  -- bare mid

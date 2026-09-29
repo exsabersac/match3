@@ -13,12 +13,14 @@ module Match3.Board.Grid
   , adjacent
   , MBoard
   , toM
+  , atM
   , setM
   , transposeM
   , randomColor
   , chunk
   ) where
 
+import Data.List (transpose)
 import Match3.Types
 import System.Random (RandomGen, randomR)
 
@@ -52,28 +54,30 @@ type MBoard = [[Maybe Cell]]
 toM :: Board -> MBoard
 toM = map (map Just) . boardRows
 
+-- | 可空盘面读格；越界按空洞（Nothing）处理。
+atM :: MBoard -> Pos -> Maybe Cell
+atM b (r, c) = case drop r b of
+  row : _ | c >= 0, r >= 0 -> case drop c row of
+    x : _ -> x
+    [] -> Nothing
+  _ -> Nothing
+
+-- | 可空盘面写格；越界不改。
 setM :: MBoard -> Pos -> Maybe Cell -> MBoard
 setM b (r, c) v =
-  take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-  where
-    row = b !! r
+  [ if i == r then [if j == c then v else x | (j, x) <- zip [0 ..] row] else row
+  | (i, row) <- zip [0 :: Int ..] b
+  ]
 
+-- | 转置（盘面恒为矩形，与逐列取行首等价）。
 transposeM :: MBoard -> MBoard
-transposeM [] = []
-transposeM ([] : _) = []
-transposeM rows = map hd rows : transposeM (map tl rows)
-  where
-    -- 盘面恒为矩形；参差行与原 head/tail 一样直接报错
-    hd (x : _) = x
-    hd [] = error "transposeM: ragged board"
-    tl (_ : xs) = xs
-    tl [] = error "transposeM: ragged board"
+transposeM = transpose
 
 -- | 均匀随机取一种颜色；恰好调用一次 randomR（随机数消耗顺序的基本单位）。
 randomColor :: RandomGen g => g -> (Color, g)
 randomColor g =
   let (i, g') = randomR (0, numColors - 1) g
-  in (toEnum i, g')
+  in (colorAt i, g')
 
 chunk :: Int -> [a] -> [[a]]
 chunk _ [] = []

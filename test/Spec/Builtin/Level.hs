@@ -137,7 +137,7 @@ conveyor_can_create_match = do
           (mkGem C3)
   assertBool "no match yet" (not (hasAnyMatch board0))
   let shifted = shiftBelt board0 belt
-  assertEqual "C1 arrived" C1 (cellColor (getCell shifted (4, 2)))
+  assertEqual "C1 arrived" (Just C1) (cellColor (getCell shifted (4, 2)))
   assertBool "match formed" (hasAnyMatch shifted)
   -- Via trySwap: match elsewhere + belt creates extra clear
   let boardM =
@@ -189,7 +189,7 @@ portal_teleports_gem = do
   case (mb3 !! 7) !! 7 of
     Just cell -> do
       assertBool "exit got gem" (isGem cell)
-      assertEqual "teleported color" C1 (cellColor cell)
+      assertEqual "teleported color" (Just C1) (cellColor cell)
     Nothing -> assertFailure "expected gem at exit"
   assertBool "identity on full board" (applyPortalTeleports portals mb0 == mb0)
   let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
@@ -500,8 +500,8 @@ portal_after_belt_match_teleports = do
           (mkGem C5)
       shifted = shiftBelts board0 [belt]
   assertBool "belt assembled match" (hasAnyMatch shifted)
-  assertEqual "A is C1" C1 (cellColor (getCell shifted (0, 2)))
-  assertEqual "B is C5" C5 (cellColor (getCell shifted (7, 2)))
+  assertEqual "A is C1" (Just C1) (cellColor (getCell shifted (0, 2)))
+  assertEqual "B is C5" (Just C5) (cellColor (getCell shifted (7, 2)))
   let (mb, n) = clearMatches shifted
   assertBool "cleared triple+" (n >= 3)
   assertEqual "A hole pre-portal" Nothing ((mb !! 0) !! 2)
@@ -514,13 +514,13 @@ portal_after_belt_match_teleports = do
   let (settled, _, _) = settleBoardPortals portals mb
   assertBool "B no longer holds C5 after settle" $
     case (settled !! 7) !! 2 of
-      Just c -> not (isGem c && cellColor c == C5) || False
+      Just c -> not (isGem c && cellColor c == Just C5) || False
       Nothing -> True
   assertBool "C5 still somewhere in col 2" $
     any
       ( \r ->
           case (settled !! r) !! 2 of
-            Just c -> isGem c && cellColor c == C5
+            Just c -> isGem c && cellColor c == Just C5
             Nothing -> False
       )
       [0 .. boardSize - 1]
@@ -712,8 +712,8 @@ portal_teleports_flip = do
   case (mb3 !! 7) !! 7 of
     Just cell -> do
       assertBool "exit is Flip" (isFlip cell)
-      assertEqual "front color" C1 (flipFront cell)
-      assertEqual "back color" C2 (flipBack cell)
+      assertEqual "front color" (Just C1) (flipFront cell)
+      assertEqual "back color" (Just C2) (flipBack cell)
     Nothing -> assertFailure "expected Flip at portal exit"
   -- Countdown still teleports (sibling transferable)
   let mbC =
@@ -779,7 +779,7 @@ portal_endpoints_not_immortal_blocked = do
           case (mb3 !! 7) !! 4 of
             Just cell -> do
               assertBool "finale B got gem" (isGem cell)
-              assertEqual "finale teleported C1" C1 (cellColor cell)
+              assertEqual "finale teleported C1" (Just C1) (cellColor cell)
             Nothing -> assertFailure "finale expected gem at portal B"
     )
     portalLevels

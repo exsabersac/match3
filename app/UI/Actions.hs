@@ -280,11 +280,14 @@ advanceOrMsg ref window = do
               }
       writeIORef ref app'
       updateTitle window app'
-    Just (Won _) -> do
-      let gs = newGameAtLevel 0 (levelConfig (allLevels !! 0)) seed
-          app' = (freshLevelUi gs app) { appMsg = "New campaign" }
-      writeIORef ref app'
-      updateTitle window app'
+    Just (Won _) -> case allLevels of
+      -- 通关后从第 1 关重开（关卡表恒非空；空表时不动）
+      lvl0 : _ -> do
+        let gs = newGameAtLevel 0 (levelConfig lvl0) seed
+            app' = (freshLevelUi gs app) { appMsg = "New campaign" }
+        writeIORef ref app'
+        updateTitle window app'
+      [] -> pure ()
     Just (Lost _) -> do
       let gs0 = appGame app
           gs =

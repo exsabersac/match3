@@ -26,6 +26,7 @@ module Match3.Board.Cascade
   , cascadeSeedsWith
   , cascadeAfterBeltWith
   , cascadeCountdownsWith
+  , cascadeCountdownsTracedWith
   , cascadeAfterEndWith
   , endHolesWith
     -- * 回放数据
@@ -36,6 +37,7 @@ module Match3.Board.Cascade
 
 import Data.List (nub)
 import Match3.Element.Registry (Registry, absorbWith, counterWith, endRules, pushableWith)
+import Match3.Element.Event (EndEffect)
 import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Ufo (Ufo)
@@ -312,13 +314,24 @@ cascadeAfterEndWith reg holes ufos portals g b =
 
 -- | cascadeCountdowns（指定注册表）：依次跑 PhaseTick 阶段的步末规则，再合并各规则的引爆种子。
 cascadeCountdownsWith :: RandomGen g => Registry -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeCountdownsWith reg ufos0 portals g b =
+cascadeCountdownsWith reg ufos0 portals g b = snd (cascadeCountdownsTracedWith reg ufos0 portals g b)
+
+-- | 带记录的 cascadeCountdownsWith：PhaseTick 规则只跑一遍，同时返回各规则的 (前盘, 后盘, 效果)
+-- （空效果不记，按规则顺序）和倒计时连锁。步末记录由调用方按轮次号包成 EndStep。
+cascadeCountdownsTracedWith
+  :: RandomGen g => Registry -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> ([(Board, Board, EndEffect)], CascadeRun g)
+cascadeCountdownsTracedWith reg ufos0 portals g b =
   let rules = endRules reg PhaseTick
-      bTick = foldl (\bd r -> snd (erRun r (EndCtx [] [] (pushableWith reg)) bd)) b rules
+      ctx = EndCtx [] [] (pushableWith reg)
+      step (acc, before) r =
+        let (eff, after) = erRun r ctx before
+        in (acc ++ [(before, after, e) | Just e <- [eff]], after)
+      (steps, bTick) = foldl step ([], b) rules
       seeds = nub (concatMap (\r -> erSeeds r bTick) rules)
-  in if null seeds
-       then stillRun bTick ufos0 g
-       else cascadeSeedsWith reg Nothing seeds ufos0 portals g bTick
+      run
+        | null seeds = stillRun bTick ufos0 g
+        | otherwise = cascadeSeedsWith reg Nothing seeds ufos0 portals g bTick
+  in (steps, run)
 
 --------------------------------------------------------------------------------
 -- 单轮

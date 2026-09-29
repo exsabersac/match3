@@ -52,10 +52,8 @@ import Match3.Types
   , isStone
   , isChest
   , isHoney
-  , isBalloon
   , isCake
   , isMagicHat
-  , isMaker
   , isSafe
   , isSurprise
   , isBottle
@@ -77,6 +75,7 @@ import Match3.Types
   , CellContents(..)
   , GemKind(..)
   , cellColor
+  , colorAt
   , isGem
   )
 
@@ -191,11 +190,10 @@ balloonsAdjacentSameColor b cleared =
     | cpos <- cleared
     , let clearedCell = at b cpos
     , isGem clearedCell
-    , let col = cellColor clearedCell
+    , Just col <- [cellColor clearedCell]
     , p <- orthoNeighbors cpos
     , inBoard p
-    , isBalloon (at b p)
-    , balloonColor (at b p) == col
+    , balloonColor (at b p) == Just col
     ]
 
 -- | Pop balloons adjacent to same-color clears (single hit; no layers).
@@ -286,9 +284,7 @@ recolorCell (Flip _ back) col = Flip col back
 recolorCell x _ = x
 
 cycleColor :: Color -> Color
-cycleColor c =
-  let i = fromEnum c
-  in toEnum ((i + 1) `mod` 5)
+cycleColor c = colorAt (fromEnum c + 1)
 
 -- | Trigger magic hats adjacent to clears: swap colors of two ortho gem neighbors
 -- (deterministic: sorted positions). If only one gem neighbor, cycle its color.
@@ -319,15 +315,15 @@ triggerAdjacentHatsBy recolorable b cleared protected =
             ]
           sorted = nub (sort nbrs)
       in case sorted of
-           (p1 : p2 : _) ->
-             let c1 = cellColor (at board p1)
-                 c2 = cellColor (at board p2)
-                 b1 = setAt board p1 (recolorCell (at board p1) c2)
-             in setAt b1 p2 (recolorCell (at board p2) c1)
-           [p1] ->
-             let c = cellColor (at board p1)
-             in setAt board p1 (recolorCell (at board p1) (cycleColor c))
-           [] -> board
+           (p1 : p2 : _)
+             | Just c1 <- cellColor (at board p1)
+             , Just c2 <- cellColor (at board p2) ->
+                 let b1 = setAt board p1 (recolorCell (at board p1) c2)
+                 in setAt b1 p2 (recolorCell (at board p2) c1)
+           [p1]
+             | Just c <- cellColor (at board p1) ->
+                 setAt board p1 (recolorCell (at board p1) (cycleColor c))
+           _ -> board
 
 -- | Maker positions orthogonally adjacent to a same-color cleared gem.
 makersAdjacentSameColor :: Board -> [Pos] -> [Pos]
@@ -337,11 +333,10 @@ makersAdjacentSameColor b cleared =
     | cpos <- cleared
     , let clearedCell = at b cpos
     , isGem clearedCell
-    , let col = cellColor clearedCell
+    , Just col <- [cellColor clearedCell]
     , p <- orthoNeighbors cpos
     , inBoard p
-    , isMaker (at b p)
-    , makerColor (at b p) == col
+    , makerColor (at b p) == Just col
     ]
 
 -- | Charge juice makers adjacent to same-color clears.
@@ -384,7 +379,7 @@ surpriseOutcome (r, c) = (r * 8 + c) `mod` 4
 
 surpriseSpecial :: Pos -> Cell
 surpriseSpecial (r, c) =
-  let col = toEnum ((r + 3 * c) `mod` 5) :: Color
+  let col = colorAt (r + 3 * c)
       kind = case surpriseOutcome (r, c) of
         0 -> LineH
         1 -> LineV

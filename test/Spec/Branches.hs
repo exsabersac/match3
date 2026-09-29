@@ -55,7 +55,7 @@ instance Element TweakedGem where
   pushable (TweakedGem _ p _) = p
 
 tweakedGem :: Bool -> Bool -> Entry
-tweakedGem r p = bodyEntry 0 (TweakedGem r p C1) (\cell -> case cell of Gem c _ _ _ -> Just (TweakedGem r p c); _ -> Nothing) (\_ _ -> Nothing)
+tweakedGem r p = bodyEntry (TweakedGem r p C1) (\cell -> case cell of Gem c _ _ _ -> Just (TweakedGem r p c); _ -> Nothing) (\_ _ -> Nothing)
 
 -- | 测试专用「拉杆」：可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
 newtype Lever = Lever Int

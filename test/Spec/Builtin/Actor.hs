@@ -78,7 +78,7 @@ hat_triggered_by_adjacent = do
   assertEqual "hat adjacent to match" [(2, 1)] hats
   let board1 = triggerAdjacentHats board0 ms
   assertBool "hat still there" (isMagicHat (getCell board1 (2, 1)))
-  assertEqual "cycled neighbor" C3 (cellColor (getCell board1 (1, 1)))
+  assertEqual "cycled neighbor" (Just C3) (cellColor (getCell board1 (1, 1)))
 
 hat_swaps_colors :: Assertion
 hat_swaps_colors = do
@@ -106,13 +106,13 @@ hat_swaps_colors = do
   let ms = findMatches board0
       cLeft0 = cellColor (getCell board0 (2, 0))
       cRight0 = cellColor (getCell board0 (2, 2))
-  assertEqual "left before" C4 cLeft0
-  assertEqual "right before" C5 cRight0
+  assertEqual "left before" (Just C4) cLeft0
+  assertEqual "right before" (Just C5) cRight0
   let board1 = triggerAdjacentHats board0 ms
       cLeft1 = cellColor (getCell board1 (2, 0))
       cRight1 = cellColor (getCell board1 (2, 2))
-  assertEqual "left got right" C5 cLeft1
-  assertEqual "right got left" C4 cRight1
+  assertEqual "left got right" (Just C5) cLeft1
+  assertEqual "right got left" (Just C4) cRight1
   assertBool "hat remains" (isMagicHat (getCell board1 (2, 1)))
 
 --------------------------------------------------------------------------------
@@ -175,8 +175,8 @@ maker_produces_bomb = do
   let ms = findMatches board0
       b1 = chargeAdjacentMakers board0 ms
   assertBool "became gem" (isGem (getCell b1 (2, 1)))
-  assertEqual "bomb kind" Bomb (cellKind (getCell b1 (2, 1)))
-  assertEqual "bomb color" C1 (cellColor (getCell b1 (2, 1)))
+  assertEqual "bomb kind" (Just Bomb) (cellKind (getCell b1 (2, 1)))
+  assertEqual "bomb color" (Just C1) (cellColor (getCell b1 (2, 1)))
   let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
       nMaker =
         length
@@ -196,7 +196,7 @@ bottle_blocks_swap :: Assertion
 bottle_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkBottle C2)
   assertBool "is bottle" (isBottle (getCell board (3, 3)))
-  assertEqual "color" C2 (bottleColor (getCell board (3, 3)))
+  assertEqual "color" (Just C2) (bottleColor (getCell board (3, 3)))
   assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
 
 bottle_dyes_neighbors :: Assertion
@@ -218,7 +218,7 @@ bottle_dyes_neighbors = do
   let ms = findMatches board0
       b1 = triggerAdjacentBottles board0 ms
   assertBool "bottle stays" (isBottle (getCell b1 (2, 1)))
-  assertEqual "dyed neighbor" C3 (cellColor (getCell b1 (2, 2)))
+  assertEqual "dyed neighbor" (Just C3) (cellColor (getCell b1 (2, 2)))
   let gs = newGameAtLevel 33 (levelConfig (allLevels !! 33)) 42
       nBot =
         length
@@ -267,8 +267,8 @@ maker_bomb_survives_wave = do
   case (mb !! 2) !! 1 of
     Just c -> do
       assertBool "unit bomb gem" (isGem c)
-      assertEqual "unit Bomb kind" Bomb (cellKind c)
-      assertEqual "unit bomb color" C1 (cellColor c)
+      assertEqual "unit Bomb kind" (Just Bomb) (cellKind c)
+      assertEqual "unit bomb color" (Just C1) (cellColor c)
     Nothing -> assertFailure "maker cell must not hole"
 
 -- | Dye bottle recolors neighbors mid-clear; a new match must cascade (not stall).
@@ -295,7 +295,7 @@ bottle_dye_followup_match = do
   assertBool "seed match includes row6" $
     all (`elem` ms) [(6, 0), (6, 1), (6, 2)]
   let dyed = triggerAdjacentBottles board ms
-  assertEqual "dyed (5,2)" C3 (cellColor (getCell dyed (5, 2)))
+  assertEqual "dyed (5,2)" (Just C3) (cellColor (getCell dyed (5, 2)))
   assertBool "dye created vertical C3" $
     all (`elem` findMatches dyed) [(3, 2), (4, 2), (5, 2)]
   let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 42) board
@@ -326,8 +326,8 @@ hat_recolor_followup_match = do
           ]
       ms = findMatches board
       hatted = triggerAdjacentHats board ms
-  assertEqual "hat swapped left to C3" C3 (cellColor (getCell hatted (5, 0)))
-  assertEqual "hat swapped right to C2" C2 (cellColor (getCell hatted (5, 2)))
+  assertEqual "hat swapped left to C3" (Just C3) (cellColor (getCell hatted (5, 0)))
+  assertEqual "hat swapped right to C2" (Just C2) (cellColor (getCell hatted (5, 2)))
   assertBool "hat created col0 C3 match" $
     all (`elem` findMatches hatted) [(3, 0), (4, 0), (5, 0)]
   let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 7) board
@@ -367,7 +367,7 @@ maker_multi_adjacent_charges_once = do
   assertEqual "2->1 once" (1 :: Int) (makerCharges (getCell b1 (2, 2)))
   let bLow = setCell board (2, 2) (mkMakerCharges C1 1)
       bBomb = chargeAdjacentMakers bLow cleared
-  assertBool "became bomb" (cellKind (getCell bBomb (2, 2)) == Bomb)
+  assertBool "became bomb" (cellKind (getCell bBomb (2, 2)) == Just Bomb)
   assertBool "not maker" (not (isMaker (getCell bBomb (2, 2))))
 
 --------------------------------------------------------------------------------
@@ -472,15 +472,15 @@ maker_bomb_sits_bottle = do
   assertEqual "maker bomb sites" [(2, 1)] saved
   assertEqual "produced C1 Bomb" (Gem C1 Bomb 0 Nothing) (getCell bCharged (2, 1))
   let dyedBare = triggerAdjacentBottles bCharged clears
-  assertEqual "unprotected Bottle dyes maker bomb" C3 (cellColor (getCell dyedBare (2, 1)))
+  assertEqual "unprotected Bottle dyes maker bomb" (Just C3) (cellColor (getCell dyedBare (2, 1)))
   let dyedProt = triggerAdjacentBottlesExcept bCharged clears saved
   assertEqual "protected Bottle skips maker bomb" (Gem C1 Bomb 0 Nothing) (getCell dyedProt (2, 1))
   -- Integration: clearMatches keeps Maker Bomb color through Bottle
   let (mb, _) = clearMatches board0
   case (mb !! 2) !! 1 of
     Just c -> do
-      assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
-      assertEqual "cascade keeps maker color (not Bottle)" C1 (cellColor c)
+      assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
+      assertEqual "cascade keeps maker color (not Bottle)" (Just C1) (cellColor c)
     Nothing -> assertFailure "Maker Bomb must sit, not hole"
 
 --------------------------------------------------------------------------------
@@ -493,7 +493,7 @@ countdown_bomb_spawns = do
   let b0 = spawnCountdown stableBoard (2, 2) C1 5
   assertBool "is countdown" (isCountdown (getCell b0 (2, 2)))
   assertEqual "turns" (5 :: Int) (countdownTurns (getCell b0 (2, 2)))
-  assertEqual "color" C1 (cellColor (getCell b0 (2, 2)))
+  assertEqual "color" (Just C1) (cellColor (getCell b0 (2, 2)))
   assertBool "counts as gem" (isGem (getCell b0 (2, 2)))
   -- Participates in a same-color run
   let b1 =
@@ -873,7 +873,7 @@ snail_crawl_resolves_match = do
   let afterCrawl = stepSnails board0
   assertBool "crawl creates match" (hasAnyMatch afterCrawl)
   assertBool "snail at (3,3)" (isSnail (getCell afterCrawl (3, 3)))
-  assertEqual "C1 pushed to (3,2)" C1 (cellColor (getCell afterCrawl (3, 2)))
+  assertEqual "C1 pushed to (3,2)" (Just C1) (cellColor (getCell afterCrawl (3, 2)))
   let gs0 =
         (newGame (GameConfig 20 (GoalScore 99999)) 7)
           { gsBoard = board0
@@ -921,7 +921,7 @@ snail_reverses_at_portal_endpoint = do
   assertBool "gated: still left of portal" (isSnail (getCell gated (3, 2)))
   assertBool "gated: portal not snail" (not (isSnail (getCell gated (3, 3))))
   assertEqual "gated: reversed dir" (0, -1) (snailDir (getCell gated (3, 2)))
-  assertEqual "gated: portal gem kept" C2 (cellColor (getCell gated (3, 3)))
+  assertEqual "gated: portal gem kept" (Just C2) (cellColor (getCell gated (3, 3)))
   -- Full move with portals: snail must not land on endpoint after crawl
   let boardTrap =
         -- Cookie right of snail forces reverse toward portal (old finale pattern)
@@ -1001,5 +1001,5 @@ snail_reverses_at_portal_endpoint = do
       mb3 = applyPortalTeleports (gsPortals gs3) mb2
   assertEqual "portal A still empties" Nothing ((mb3 !! 0) !! 3)
   case (mb3 !! 7) !! 4 of
-    Just cell -> assertEqual "portal B still receives" C1 (cellColor cell)
+    Just cell -> assertEqual "portal B still receives" (Just C1) (cellColor cell)
     Nothing -> assertFailure "expected gem at portal B after crawls"

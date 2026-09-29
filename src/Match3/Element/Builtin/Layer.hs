@@ -173,35 +173,33 @@ spreadRule order kind spread = EndRule PhaseSpread order run (const []) (const [
 
 -- | 冰层：放置参数 = 冰层数（原样）。
 iceEntry :: Entry
-iceEntry = modifierEntry SlotIce (Ice 1) (\cell -> case cell of Gem _ _ n _ -> Just (Ice n); _ -> Nothing) $ \args cell -> case (args, cell) of
+iceEntry = modifierEntry (Ice 1) (\cell -> case cell of Gem _ _ n _ -> Just (Ice n); _ -> Nothing) $ \args cell -> case (args, cell) of
   ([AInt n], Gem col kind _ ov) -> Just (Gem col kind n ov)
   _ -> Nothing
 
 grassEntry, vineEntry, chocoEntry, fogEntry, chainEntry, freezeEntry, curtainEntry, steamEntry :: Entry
-grassEntry = overlay 0 Grass (\o -> case o of Grass -> Just GrassL; _ -> Nothing)
-vineEntry = overlay 1 Vine (\o -> case o of Vine -> Just VineL; _ -> Nothing)
-chocoEntry = overlay 2 Choco (\o -> case o of Choco -> Just ChocoL; _ -> Nothing)
-fogEntry = layeredOverlay 3 (FogL 1) (\o -> case o of Fog n -> Just (FogL n); _ -> Nothing) Fog
-chainEntry = layeredOverlay 4 (ChainL 1) (\o -> case o of Chain n -> Just (ChainL n); _ -> Nothing) Chain
-freezeEntry = layeredOverlay 5 (FreezeL 1) (\o -> case o of Freeze n -> Just (FreezeL n); _ -> Nothing) Freeze
-curtainEntry = layeredOverlay 6 (CurtainL 1) (\o -> case o of Curtain n -> Just (CurtainL n); _ -> Nothing) Curtain
-steamEntry = overlay 7 Steam (\o -> case o of Steam -> Just SteamL; _ -> Nothing)
+grassEntry = overlay GrassL Grass (\o -> case o of Grass -> Just GrassL; _ -> Nothing)
+vineEntry = overlay VineL Vine (\o -> case o of Vine -> Just VineL; _ -> Nothing)
+chocoEntry = overlay ChocoL Choco (\o -> case o of Choco -> Just ChocoL; _ -> Nothing)
+fogEntry = layeredOverlay (FogL 1) (\o -> case o of Fog n -> Just (FogL n); _ -> Nothing) Fog
+chainEntry = layeredOverlay (ChainL 1) (\o -> case o of Chain n -> Just (ChainL n); _ -> Nothing) Chain
+freezeEntry = layeredOverlay (FreezeL 1) (\o -> case o of Freeze n -> Just (FreezeL n); _ -> Nothing) Freeze
+curtainEntry = layeredOverlay (CurtainL 1) (\o -> case o of Curtain n -> Just (CurtainL n); _ -> Nothing) Curtain
+steamEntry = overlay SteamL Steam (\o -> case o of Steam -> Just SteamL; _ -> Nothing)
 
 ovDecode :: (CellOverlay -> Maybe m) -> Cell -> Maybe m
 ovDecode f cell = case cell of
   Gem _ _ _ (Just o) -> f o
   _ -> Nothing
 
--- | 叠层放置 = 盖在宝石上（替换原叠层）。
-overlay :: Modifier m => Int -> CellOverlay -> (CellOverlay -> Maybe m) -> Entry
-overlay i ov f = modifierEntry (SlotOverlay i) (fromJustProto (f ov)) (ovDecode f) $ \_ cell -> case cell of
+-- | 叠层放置 = 盖在宝石上（替换原叠层）。原型值、放置写的叠层、解码。
+overlay :: Modifier m => m -> CellOverlay -> (CellOverlay -> Maybe m) -> Entry
+overlay proto ov f = modifierEntry proto (ovDecode f) $ \_ cell -> case cell of
   Gem col kind ice _ -> Just (Gem col kind ice (Just ov))
   _ -> Nothing
-  where
-    fromJustProto = maybe (error "builtinDefs: overlay prototype") id
 
 -- | 带层数的叠层：放置参数 = 层数（原样）。
-layeredOverlay :: Modifier m => Int -> m -> (CellOverlay -> Maybe m) -> (Int -> CellOverlay) -> Entry
-layeredOverlay i proto f con = modifierEntry (SlotOverlay i) proto (ovDecode f) $ \args cell -> case (args, cell) of
+layeredOverlay :: Modifier m => m -> (CellOverlay -> Maybe m) -> (Int -> CellOverlay) -> Entry
+layeredOverlay proto f con = modifierEntry proto (ovDecode f) $ \args cell -> case (args, cell) of
   ([AInt n], Gem col kind ice _) -> Just (Gem col kind ice (Just (con n)))
   _ -> Nothing

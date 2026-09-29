@@ -119,20 +119,20 @@ traceSnailsBy canPush avoid walls b0 = foldl one ([], b0) [p | p <- snailPositio
       _ -> (acc, board)
 
 --------------------------------------------------------------------------------
--- 条目（槽位 = cellSlot）
+-- 条目（槽位由原型推导 = cellSlot (toCell 原型)）
 
 magicHatEntry, makerEntry, snailEntry, bottleEntry, countdownEntry :: Entry
-magicHatEntry = bodyEntry 11 MagicHatE (\cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing) (\_ _ -> Just MagicHat)
-makerEntry = bodyEntry 12 (MakerE C1 3) (\cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing) $ \args _ -> case args of
+magicHatEntry = bodyEntry MagicHatE (\cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing) (\_ _ -> Just MagicHat)
+makerEntry = bodyEntry (MakerE C1 3) (\cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing) $ \args _ -> case args of
   [AColor c, AInt n] -> Just (Maker c (max 1 n))
   [AColor c] -> Just (Maker c 3)
   _ -> Nothing
-snailEntry = bodyEntry 13 (SnailE 0 1) (\cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing) $ \args _ -> case args of
+snailEntry = bodyEntry (SnailE 0 1) (\cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing) $ \args _ -> case args of
   [AInt dr, AInt dc] -> Just (mkSnail dr dc)
   _ -> Nothing
-bottleEntry = bodyEntry 17 (BottleE C1) (\cell -> case cell of Bottle c -> Just (BottleE c); _ -> Nothing) (colorPlace Bottle)
+bottleEntry = bodyEntry (BottleE C1) (\cell -> case cell of Bottle c -> Just (BottleE c); _ -> Nothing) (colorPlace Bottle)
 -- 倒计时：放置参数 = 初值，颜色取自原格（宝石或倒计时）。
-countdownEntry = bodyEntry 19 (CountdownE C1 1) (\cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing) $ \args cell -> case (args, cell) of
+countdownEntry = bodyEntry (CountdownE C1 1) (\cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing) $ \args cell -> case (args, cell) of
   ([AInt n], Gem col _ _ _) -> Just (mkCountdown col n)
   ([AInt n], Countdown col _) -> Just (mkCountdown col n)
   _ -> Nothing

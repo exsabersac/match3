@@ -156,16 +156,16 @@ layersPlace con args _ = case args of
   _ -> Nothing
 
 --------------------------------------------------------------------------------
--- 条目（槽位 = cellSlot）
+-- 条目（槽位由原型推导 = cellSlot (toCell 原型)）
 
 stoneEntry, chestEntry, honeyEntry, cakeEntry, balloonEntry, safeEntry, flipEntry, surpriseEntry :: Entry
-stoneEntry = bodyEntry 5 (StoneE 1) (\cell -> case cell of Stone n -> Just (StoneE n); _ -> Nothing) (layersPlace Stone)
-chestEntry = bodyEntry 6 (ChestE 1) (\cell -> case cell of Chest n -> Just (ChestE n); _ -> Nothing) (layersPlace Chest)
-honeyEntry = bodyEntry 7 (HoneyE 1) (\cell -> case cell of Honey n -> Just (HoneyE n); _ -> Nothing) (layersPlace Honey)
-balloonEntry = bodyEntry 8 (BalloonE C1) (\cell -> case cell of Balloon c -> Just (BalloonE c); _ -> Nothing) (colorPlace Balloon)
-cakeEntry = bodyEntry 10 (CakeE 1) (\cell -> case cell of Cake n -> Just (CakeE n); _ -> Nothing) (layersPlace Cake)
-safeEntry = bodyEntry 14 (SafeE 1) (\cell -> case cell of Safe n -> Just (SafeE n); _ -> Nothing) (layersPlace Safe)
-flipEntry = bodyEntry 15 (FlipE C1 C2) (\cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing) $ \args _ -> case args of
+stoneEntry = bodyEntry (StoneE 1) (\cell -> case cell of Stone n -> Just (StoneE n); _ -> Nothing) (layersPlace Stone)
+chestEntry = bodyEntry (ChestE 1) (\cell -> case cell of Chest n -> Just (ChestE n); _ -> Nothing) (layersPlace Chest)
+honeyEntry = bodyEntry (HoneyE 1) (\cell -> case cell of Honey n -> Just (HoneyE n); _ -> Nothing) (layersPlace Honey)
+balloonEntry = bodyEntry (BalloonE C1) (\cell -> case cell of Balloon c -> Just (BalloonE c); _ -> Nothing) (colorPlace Balloon)
+cakeEntry = bodyEntry (CakeE 1) (\cell -> case cell of Cake n -> Just (CakeE n); _ -> Nothing) (layersPlace Cake)
+safeEntry = bodyEntry (SafeE 1) (\cell -> case cell of Safe n -> Just (SafeE n); _ -> Nothing) (layersPlace Safe)
+flipEntry = bodyEntry (FlipE C1 C2) (\cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing) $ \args _ -> case args of
   [AColor f, AColor b] -> Just (Flip f b)
   _ -> Nothing
-surpriseEntry = bodyEntry 16 SurpriseEgg (\cell -> case cell of Surprise -> Just SurpriseEgg; _ -> Nothing) (\_ _ -> Just Surprise)
+surpriseEntry = bodyEntry SurpriseEgg (\cell -> case cell of Surprise -> Just SurpriseEgg; _ -> Nothing) (\_ _ -> Just Surprise)

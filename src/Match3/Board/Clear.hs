@@ -58,10 +58,9 @@ spawnSpecials prefer runs clearable =
           | runIsH run = LineH
           | otherwise = LineV
         slots = filter (`elem` clearable) (runPos run)
-  , not (null slots)
-  , let pos = case prefer of
-          Just p | p `elem` slots -> p
-          _ -> slots !! (length slots `div` 2)
+  , pos <- take 1 $ case prefer of
+      Just p | p `elem` slots -> [p]
+      _ -> drop (length slots `div` 2) slots
   ]
 
 -- | countColor（指定注册表）：按本体颜色 color 计（不看叠层）。

@@ -217,7 +217,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 **修饰器**（`Modifier`，对应 xmonad 的 `LayoutModifier`）：冰层（`Ice 层数`）和八种叠层（`GrassL` / `VineL` / `ChocoL` / `FogL` / `ChainL` / `FreezeL` / `CurtainL` / `SteamL`）。`Modified` 把修饰器和里面的元素合成一个元素：挡匹配 / 挡交换任一层即挡；点火与命中自上而下第一个有意见的层决定；名字 / 颜色 / 计数 / 下落等取本体；有上层就洗牌保留。一格解码为「冰 → 叠层 → 本体」的嵌套 `Modified`。
 
-**注册表条目**（`Registry.Entry`，名字 → 构造器）：`bodyEntry 槽位 原型 解码 放置`（内置本体）、`customEntry 原型 (Int → 元素)`（`Custom 名字 k`）、`modifierEntry 槽位 原型 解码 放置`（冰 / 叠层）、`groundEntry 原型`（地面层）、`inertEntry 名字`（`Inert`：挡交换、无色、会下落、打不动、洗牌保留的惰性占格，即旧 `baseDef` 的等价物；未注册的 `Custom` 名字也按它处理）。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）。
+**注册表条目**（`Registry.Entry`，名字 → 构造器）：`bodyEntry 原型 解码 放置`（内置本体；槽号由原型推导 = `cellSlot (toCell 原型)`）、`customEntry 原型 (Int → 元素)`（`Custom 名字 k`）、`modifierEntry 原型 解码 放置`（冰 / 叠层；槽位由原型写到裸宝石上的结果推导：叠层 → `SlotOverlay (overlaySlot …)`，冰 → `SlotIce`）、`groundEntry 原型`（地面层）、`inertEntry 名字`（`Inert`：挡交换、无色、会下落、打不动、洗牌保留的惰性占格，即旧 `baseDef` 的等价物；未注册的 `Custom` 名字也按它处理）。建表：`mkRegistry`（总函数：同名 / 同槽以后出现的为准，分派数组边界由条目的槽号算出，查不到的槽号退回惰性占格）；`mkRegistryChecked :: [Entry] -> Either [RegistryError] Registry` 把重名（`DuplicateName`）、槽位冲突（`DuplicateSlot`）、推不出槽位（`NoSlot`，原型写回 `Custom` 或修饰器不落任何层）暴露成值，内置条目表由测试 `ec_registry_checked_slots` 保证通过检查。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）。
 
 **关卡级元素**（`LevelElement`：`levelName`、`levelReply :: l -> SomeMessage -> Maybe SomeMessage`）：飞碟 / 皮带 / 传送门 / 地毯。主流程在固定的流水线节拍上发消息，关卡级元素自己决定回复哪条（`Registry.askLevel`，取第一个类型对得上的回复）：
 

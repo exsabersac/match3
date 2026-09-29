@@ -48,11 +48,12 @@ special_line_from_4 = do
       (mb, n) = clearMatches b
   assertBool "cleared" (n >= 4)
   let specials =
-        [ (r, c, cellKind cell)
+        [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [ (mb !! r) !! c ]
-        , cellKind cell /= Normal
+        , Just k <- [cellKind cell]
+        , k /= Normal
         ]
   assertBool ("spawned line: " ++ show specials) $
     any (\(_, _, k) -> k == LineH || k == LineV) specials
@@ -70,7 +71,7 @@ special_rainbow_from_5 = do
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [ (mb !! r) !! c ]
-        , cellKind cell == Rainbow
+        , cellKind cell == Just Rainbow
         ]
   assertBool ("rainbow spawned: " ++ show rainbows) (not (null rainbows))
 
@@ -389,7 +390,7 @@ rainbow_swap_flip_partner = do
   -- Unit: direct seed hit flips partner (gem stays as back color)
   let (bIced, iceFree) = chipIceOnClear swapped [(0, 0)]
   assertBool "partner not holed" ((0, 0) `notElem` iceFree)
-  assertEqual "flipped to back C1" C1 (cellColor (getCell bIced (0, 0)))
+  assertEqual "flipped to back C1" (Just C1) (cellColor (getCell bIced (0, 0)))
   assertBool "no longer flip" (not (isFlip (getCell bIced (0, 0))))
   -- Live trySwap must apply (regression: used to NoMatch-rollback)
   let gs0 =
@@ -439,10 +440,10 @@ soft_lock_blocks_special_expand = do
   assertEqual "ice>1 LineH does not expand row" (sort (findMatches boardIce)) (sort expIce)
   let CascadeRun {crBoard = bIce, crTally = CascadeTally {ctCells = nIce}} = cascadeMatches Nothing [] [] (mkStdGen 31) boardIce
   assertEqual "only two match partners clear" (2 :: Int) nIce
-  assertEqual "LineH survives" LineH (cellKind (getCell bIce (3, 1)))
+  assertEqual "LineH survives" (Just LineH) (cellKind (getCell bIce (3, 1)))
   assertEqual "ice chipped 2→1" (1 :: Int) (iceLayers (getCell bIce (3, 1)))
   assertBool "far cell (3,7) untouched kind" $
-    isGem (getCell bIce (3, 7)) && cellKind (getCell bIce (3, 7)) == Normal
+    isGem (getCell bIce (3, 7)) && cellKind (getCell bIce (3, 7)) == Just Normal
   -- Control: last ice (ice==1) LineH still expands the row.
   let boardLast =
         setCell
@@ -485,7 +486,7 @@ soft_lock_blocks_special_expand = do
     InvalidSwap -> assertFailure "hammer charges present"
     _ -> pure ()
   let cellCh = getCell (gsBoard gsCh1) (4, 4)
-  assertEqual "LineH kept" LineH (cellKind cellCh)
+  assertEqual "LineH kept" (Just LineH) (cellKind cellCh)
   assertBool "chain peeled 2→1" (hasChain cellCh && chainLayers cellCh == 1)
   assertEqual "no illicit row score" (0 :: Int) (gsScore gsCh1)
   assertEqual "hammer spent" (1 :: Int) (gsHammers gsCh1)

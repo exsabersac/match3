@@ -73,6 +73,8 @@
 2. 若有归零：`explodeSeedsFor` → 种子连锁（仍带 UFO + 传送门）。
 3. 匹配或特殊清掉倒计时可在清除阶段解除（不走到爆炸）。
 
+交换结算的步末（`Game.Resolve.swapEnd`）调 `cascadeCountdownsTracedWith`：倒计时规则只跑一遍，同时给出连锁和步末记录（`EndStep`）；第 2 刀之前是先跑一遍取连锁、再为记录重跑一遍 `PhaseTick`，结果相同。
+
 **注意**：`useFreeSwap` 不走 tick（不耗步、不推进倒计时）；普通 `trySwap` 成功后才 tick。
 
 ## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterBelt`）

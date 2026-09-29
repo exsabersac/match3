@@ -224,11 +224,11 @@ shuffle_preserves_specials = do
           }
       gs1 = shuffleGame gs0
       b1 = gsBoard gs1
-  assertEqual "bomb kept" Bomb (cellKind (getCell b1 (1, 1)))
-  assertEqual "bomb color" C1 (cellColor (getCell b1 (1, 1)))
-  assertEqual "lineH kept" LineH (cellKind (getCell b1 (1, 2)))
-  assertEqual "lineV kept" LineV (cellKind (getCell b1 (1, 3)))
-  assertEqual "rainbow kept" Rainbow (cellKind (getCell b1 (1, 4)))
+  assertEqual "bomb kept" (Just Bomb) (cellKind (getCell b1 (1, 1)))
+  assertEqual "bomb color" (Just C1) (cellColor (getCell b1 (1, 1)))
+  assertEqual "lineH kept" (Just LineH) (cellKind (getCell b1 (1, 2)))
+  assertEqual "lineV kept" (Just LineV) (cellKind (getCell b1 (1, 3)))
+  assertEqual "rainbow kept" (Just Rainbow) (cellKind (getCell b1 (1, 4)))
   -- Countdown still kept (pre-existing decor path)
   let boardCd = setCell board (2, 2) (mkCountdown C5 4)
       gsCd = shuffleGame (gs0 { gsBoard = boardCd })

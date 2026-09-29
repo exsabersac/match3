@@ -524,8 +524,8 @@ flip_matches_front = do
           (mkGem C1)
   assertBool "flip participates" (not (null (findMatches boardM)))
   assertBool "is flip" (isFlip (getCell boardM (3, 1)))
-  assertEqual "front" C1 (flipFront (getCell boardM (3, 1)))
-  assertEqual "back" C3 (flipBack (getCell boardM (3, 1)))
+  assertEqual "front" (Just C1) (flipFront (getCell boardM (3, 1)))
+  assertEqual "back" (Just C3) (flipBack (getCell boardM (3, 1)))
   -- Can swap like a gem
   assertBool "not blocked" (not (swapBlockedWith defaultRegistry boardM (3, 1) (3, 3)))
 
@@ -545,7 +545,7 @@ flip_becomes_back_on_clear = do
       cellAfter = getCell b1 (3, 1)
   assertBool "became gem" (isGem cellAfter)
   assertBool "not still flip" (not (isFlip cellAfter))
-  assertEqual "back color" C4 (cellColor cellAfter)
+  assertEqual "back color" (Just C4) (cellColor cellAfter)
   -- Flip stays on board (not listed as clearable hole)
   assertBool "flip not cleared away" ((3, 1) `notElem` iceFree)
   -- Full cascade also leaves a gem (possibly later matched as C4)
@@ -592,8 +592,8 @@ surprise_opens_to_special = do
       (b1, expl) = openAdjacentSurprises board0 ms
   assertEqual "no explode" (0 :: Int) (length expl)
   let cell = getCell b1 (4, 0)
-  assertBool "became special gem" (isGem cell && cellKind cell /= Normal)
-  assertEqual "LineH" LineH (cellKind cell)
+  assertBool "became special gem" (isGem cell && cellKind cell /= Just Normal)
+  assertEqual "LineH" (Just LineH) (cellKind cell)
   let gs = newGameAtLevel 32 (levelConfig (allLevels !! 32)) 42
       nSur =
         length
@@ -663,15 +663,16 @@ flip_four_match_spawns_line = do
   assertEqual "three holes (flip stays)" (3 :: Int) n
   assertBool "flip became back gem" $
     case (mb !! 3) !! 2 of
-      Just c -> isGem c && cellColor c == C4 && cellKind c == Normal
+      Just c -> isGem c && cellColor c == Just C4 && cellKind c == Just Normal
       Nothing -> False
   let specials =
-        [ (r, c, cellKind cell)
+        [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [((mb !! r) !! c)]
         , isGem cell
-        , cellKind cell /= Normal
+        , Just k <- [cellKind cell]
+        , k /= Normal
         ]
   assertBool ("expected Line spawn, got " ++ show specials) $
     any (\(_, _, k) -> k == LineH || k == LineV) specials
@@ -689,12 +690,13 @@ flip_four_match_spawns_line = do
           (mkGem C2)
       (mbI, _) = clearMatches boardIce
       specsI =
-        [ cellKind cell
+        [ k
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , Just cell <- [((mbI !! r) !! c)]
         , isGem cell
-        , cellKind cell /= Normal
+        , Just k <- [cellKind cell]
+        , k /= Normal
         ]
   assertBool ("ice mid still spawns, got " ++ show specsI) (LineH `elem` specsI || LineV `elem` specsI)
 
@@ -832,19 +834,19 @@ surprise_direct_seed_opens = do
   assertEqual "no explode for outcome 0" (0 :: Int) (length expl0)
   assertEqual "saved special cell" [(4, 0)] saved0
   let cellU = getCell bOpen (4, 0)
-  assertBool "opened to special" (isGem cellU && cellKind cellU /= Normal)
-  assertEqual "LineH" LineH (cellKind cellU)
+  assertBool "opened to special" (isGem cellU && cellKind cellU /= Just Normal)
+  assertEqual "LineH" (Just LineH) (cellKind cellU)
   -- Seed cascade (hammer path): special sits; not dug by iceFree hole.
   let g0 = mkStdGen 11
       CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] [] [] g0 boardSpecial
   assertEqual "special open clears no hole" (0 :: Int) nCleared
   let cellC = getCell bCas (4, 0)
-  assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Normal)
-  assertEqual "cascade LineH" LineH (cellKind cellC)
+  assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Just Normal)
+  assertEqual "cascade LineH" (Just LineH) (cellKind cellC)
   -- Direct-hit alongside another seed: special is saved (not spawn-then-hole).
   let (bOpen2, _, saved2) = openSurprises boardSpecial [(4, 0), (4, 1)]
   assertBool "saved when co-seeded" ((4, 0) `elem` saved2)
-  assertEqual "still LineH when co-seeded" LineH (cellKind (getCell bOpen2 (4, 0)))
+  assertEqual "still LineH when co-seeded" (Just LineH) (cellKind (getCell bOpen2 (4, 0)))
   -- (3,3) explode-outcome: hammer 3×3 scores >= 90 (single-cell would be 10).
   let boardBoom = setCell stableBoard (3, 3) mkSurprise
       gsB0 =
@@ -1073,7 +1075,7 @@ surprise_blast_opens_nested = do
   case (mbS !! 2) !! 2 of
     Just c -> do
       assertBool "nested opened to gem" (isGem c)
-      assertEqual "nested Bomb special" Bomb (cellKind c)
+      assertEqual "nested Bomb special" (Just Bomb) (cellKind c)
       assertBool "not still Surprise" (not (isSurprise c))
     Nothing -> assertFailure "nested Surprise must open to special, not hole-delete"
   -- Same-pass special must sit (Bomb parity): must NOT fire-and-survive.
@@ -1100,7 +1102,7 @@ surprise_blast_opens_nested = do
           mkSurprise
       (mbB, _) = clearMatches boardBomb
   case (mbB !! 2) !! 2 of
-    Just c -> assertEqual "bomb-hit nested Bomb" Bomb (cellKind c)
+    Just c -> assertEqual "bomb-hit nested Bomb" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "bomb-hit Surprise must open"
   -- Nested explode at (2,3): chain must reach (1,3) outside outer 3×3 alone.
   let boardChain =
@@ -1164,7 +1166,7 @@ surprise_nested_special_no_fire = do
         , ((mb !! r) !! c) == Nothing
         ]
   case (mb !! 2) !! 2 of
-    Just c -> assertEqual "special sits" Bomb (cellKind c)
+    Just c -> assertEqual "special sits" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "nested special must survive"
   assertBool "no fire beyond outer blast (1,1)" ((1, 1) `notElem` holes)
   assertBool "no fire beyond outer blast (1,2)" ((1, 2) `notElem` holes)
@@ -1227,7 +1229,7 @@ surprise_special_sits_hat_bottle = do
   assertEqual "saved special pos" [(2, 2)] saved
   assertEqual "opened Bomb C4" expectedSpecial (getCell bOpen (2, 2))
   let dyedBare = triggerAdjacentBottles bOpen clears
-  assertEqual "unprotected Bottle dyes special" C3 (cellColor (getCell dyedBare (2, 2)))
+  assertEqual "unprotected Bottle dyes special" (Just C3) (cellColor (getCell dyedBare (2, 2)))
   let dyedProt = triggerAdjacentBottlesExcept bOpen clears saved
   assertEqual "protected Bottle skips special" expectedSpecial (getCell dyedProt (2, 2))
   -- Unit: Hat would swap special color without protection
@@ -1242,7 +1244,7 @@ surprise_special_sits_hat_bottle = do
       (hOpen, _, hSaved) = openSurprises boardHat clears
       hattedBare = triggerAdjacentHats hOpen clears
       hattedProt = triggerAdjacentHatsExcept hOpen clears hSaved
-  assertEqual "unprotected Hat recolors special" C1 (cellColor (getCell hattedBare (2, 2)))
+  assertEqual "unprotected Hat recolors special" (Just C1) (cellColor (getCell hattedBare (2, 2)))
   assertEqual "protected Hat skips special" expectedSpecial (getCell hattedProt (2, 2))
   -- Integration: clearMatches keeps opened special through Hat+Bottle.
   -- Hat (2,1) with stones so only neighbor is Surprise special → would cycleColor;
@@ -1267,6 +1269,6 @@ surprise_special_sits_hat_bottle = do
       (mb, _) = clearMatches boardBoth
   case (mb !! 2) !! 2 of
     Just c -> do
-      assertEqual "cascade keeps Bomb kind" Bomb (cellKind c)
-      assertEqual "cascade keeps special color (not Bottle/Hat)" C4 (cellColor c)
+      assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
+      assertEqual "cascade keeps special color (not Bottle/Hat)" (Just C4) (cellColor c)
     Nothing -> assertFailure "Surprise special must sit, not hole"

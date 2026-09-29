@@ -61,11 +61,11 @@ specialBlast k = case k of
 
 -- | 条目：普通宝石（槽位 0；宝石不经关卡放置表放置）。
 plainGemEntry :: Entry
-plainGemEntry = bodyEntry 0 (PlainGem C1) (\cell -> case cell of Gem c _ _ _ -> Just (PlainGem c); _ -> Nothing) noPlace
+plainGemEntry = bodyEntry (PlainGem C1) (\cell -> case cell of Gem c _ _ _ -> Just (PlainGem c); _ -> Nothing) noPlace
 
--- | 条目：按种类的特殊块（槽位 = kindSlot）。
+-- | 条目：按种类的特殊块（槽位由原型推导 = kindSlot）。
 specialEntry :: GemKind -> Entry
-specialEntry k = bodyEntry (kindSlot k) (SpecialGem C1 k) (\cell -> case cell of Gem c _ _ _ -> Just (SpecialGem c k); _ -> Nothing) noPlace
+specialEntry k = bodyEntry (SpecialGem C1 k) (\cell -> case cell of Gem c _ _ _ -> Just (SpecialGem c k); _ -> Nothing) noPlace
 
 noPlace :: Placer
 noPlace _ _ = Nothing

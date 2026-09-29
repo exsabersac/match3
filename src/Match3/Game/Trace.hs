@@ -35,7 +35,7 @@ module Match3.Game.Trace
 import Match3.Board.Cascade (CascadeWave(..))
 import Match3.Board.Grid (getCell)
 import Match3.Conveyor (beltMoves)
-import Data.List (nub)
+import Data.List (groupBy, nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)
 import Match3.Element.Event
 import Match3.Element.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName)
@@ -104,7 +104,8 @@ traceEvents = traceEventsWith defaultRegistry
 
 -- | 回放脚本 → 按时间顺序的效果事件（纯数据，不参与结算）。时间线与 MoveTrace 相同：
 -- 插入点 k 的步末事件（esAfterWaves == k）在第 k 轮之前；自动洗牌在最后。
--- 轮内事件顺序：特殊块爆炸 → 消除（按被消格本体的元素名分组）→ 波及（按最上层元素名分组）→
+-- 轮内事件顺序：特殊块爆炸 → 消除（被消格按 cwCleared 的顺序、连续同名为一组，拼起来即 cwCleared）→
+-- 波及（按最上层元素名分组）→
 -- 底收 → 得分 → 连击（本步第 2 次起有消除的轮）。
 traceEventsWith :: Registry -> MoveTrace -> [Event]
 traceEventsWith reg t =
@@ -148,9 +149,14 @@ traceEventsWith reg t =
             | n <- nub (map nameOf ps)
             , let mine = [p | p <- ps, nameOf p == n]
             ]
+          -- 连续同名分组：保持原顺序（前端按 EvClear 的格序画高亮 / 迸粒子，须与 cwCleared 逐项相同）
+          runs kind nameOf ps =
+            [ Event kind k (nameOf (head g)) [(p, p) | p <- g] (length g)
+            | g <- groupBy (\a b -> nameOf a == nameOf b) ps
+            ]
           rank = comboRank k
       in blasts
-           ++ grouped EvClear (elementName reg . getCell before) cleared
+           ++ runs EvClear (elementName reg . getCell before) cleared
            ++ grouped EvHit (topLayerName reg . getCell before) hit
            ++ [Event EvDrain k "cookie" [(p, p) | p <- cwDrained w] (length (cwDrained w)) | not (null (cwDrained w))]
            ++ [Event EvScore k "" [] (cwScore w) | cwScore w > 0]

@@ -1,6 +1,11 @@
 -- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式、浮字曲线。
--- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 Main.hs 的 drawCascade* / drawPops*），
--- 也不改规则：回放脚本来自 Match3.Game.Move / Boosters 的 trace*，结算结果仍以 trySwap 等为准。
+-- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 UI.Cascade / UI.HudArt / UI.HudPrim），
+-- 也不改规则：回放脚本与效果事件来自 Match3.Engine.play，结算结果仍以规则层为准。
+--
+-- 第三刀：时钟（帧号、加速、进度）交给通用播放层 Engine.Playback——本模块只给出阶段机
+-- cascadeStages（每个阶段多长、播完去哪、进入时触发什么）；回放器是 Player Cascade。
+-- 波次级界面（高亮 / 消失 / 粒子 / 得分浮字）读 WaveView 里的效果事件（EvClear 格、EvScore 分），
+-- 不再读 CascadeWave 的 cwCleared / cwScore；底图快照（cwBefore / cwHoles / cwAfter）仍取自波次。
 module ComboFx
   ( -- * 时间线（帧；主循环固定 60 fps 步长，1 帧 ≈ 16.7 ms）
     waveFlashFrames
@@ -19,12 +24,18 @@ module ComboFx
     -- * 逐轮回放阶段机
   , WavePhase (..)
   , Cascade (..)
+  , CascadePlayer
   , CascadeEvent (..)
-  , StepResult (..)
   , newCascade
+  , cascadeStages
   , stepPlayback
   , phaseLen
   , phaseT
+    -- * 波次视图（快照 + 效果事件）
+  , WaveView (..)
+  , waveViews
+  , wvCleared
+  , wvScore
     -- * 步末效果阶段
   , StageKind (..)
   , EndStage (..)
@@ -50,7 +61,8 @@ import Data.List (transpose)
 import Data.Word (Word8)
 import Match3.Core
 import Match3.Board.Gravity (gravityFixedCell)
-import Match3.Element.Event (EventKind (..), endEffectKind, endEffectPairs)
+import Match3.Element.Event (Event (..), EventKind (..), endEffectKind, endEffectPairs)
+import Engine.Playback (Player (..), Stages (..), Tick (..), playerProgress, stepPlayer)
 
 --------------------------------------------------------------------------------
 -- 时间线
@@ -139,18 +151,40 @@ data EndStage = EndStage
   , stFrames :: Int
   }
 
--- | 一步操作的回放进度。
+-- | 一轮的界面视图：底图快照（消除前 / 挖洞 / 落定）来自规则层的波次，
+-- 被消格与得分来自本轮的效果事件（EvClear / EvScore 等，evWave = 轮下标）。
+data WaveView = WaveView
+  { wvWave   :: CascadeWave -- ^ 快照：cwBefore / cwHoles / cwAfter（下落映射也按它算）
+  , wvEvents :: [Event]     -- ^ 本轮的轮内效果事件（爆炸 / 消除 / 波及 / 底收 / 得分 / 连击）
+  }
+
+-- | 本轮被消格：各 EvClear 事件的格按事件顺序拼接（规则层按连续同名分组，拼起来即原顺序）。
+wvCleared :: WaveView -> [Pos]
+wvCleared v = [p | e <- wvEvents v, evKind e == EvClear, (p, _) <- evCells e]
+
+-- | 本轮得分：EvScore 事件之和（无得分的轮没有 EvScore，即 0）。
+wvScore :: WaveView -> Int
+wvScore v = sum [evAmount e | e <- wvEvents v, evKind e == EvScore]
+
+-- | 按轮下标把效果事件分给各轮（只取轮内事件；步末事件由 EndStage 播放）。
+waveViews :: MoveTrace -> [Event] -> [WaveView]
+waveViews mt evs =
+  [ WaveView w [e | e <- evs, evWave e == k, evKind e `elem` inWave]
+  | (k, w) <- zip [0 ..] (mtWaves mt)
+  ]
+  where
+    inWave = [EvBlast, EvClear, EvHit, EvDrain, EvScore, EvCombo]
+
+-- | 一步操作的回放进度（阶段状态；帧号与加速在 Player 里）。
 data Cascade = Cascade
-  { cWaves :: [CascadeWave] -- ^ 尚未播完的轮次，head 为当前轮
+  { cWaves :: [WaveView]    -- ^ 尚未播完的轮次，head 为当前轮
   , cPhase :: WavePhase
-  , cFrame :: Int
   , cCombo :: Int           -- ^ 当前轮的连击序号（从 1 起，只计有消除的轮）
   , cBest  :: Int           -- ^ 已播到的最高连击
   , cGain  :: Int           -- ^ 已消失轮次的累计得分（HUD 分数滚动）
   , cBase  :: Int           -- ^ 本步之前的总分
   , cFinal :: Board         -- ^ 结算后的真实盘面（含蔓延 / 蜗牛 / 自动洗牌）
   , cShown :: Board         -- ^ 最近一次落定的盘面
-  , cFast  :: Bool          -- ^ 玩家点击加速
   , cEnds  :: [EndStep]     -- ^ 尚未播放的步末效果（按 esAfterWaves 排序）
   , cDone  :: Int           -- ^ 已播完的轮数（= 下一个步末效果插入点）
   , cStages :: [EndStage]   -- ^ PhEnd 中：当前及后续的步末段
@@ -158,25 +192,25 @@ data Cascade = Cascade
 
 -- | 阶段切换时前端要做的一次性动作。
 data CascadeEvent
-  = EvHighlight Int CascadeWave -- ^ 进入高亮：k ≥ 2 时弹「连击 xk」
-  | EvVanish Int CascadeWave    -- ^ 进入消失：粒子 + 本轮得分浮字 + 震屏（k ≥ 2）
-  | EvEndStage EndStage         -- ^ 进入一段步末动画：蔓延碎屑 / 倒计时火花等
+  = EvHighlight Int WaveView -- ^ 进入高亮：k ≥ 2 时弹「连击 xk」
+  | EvVanish Int WaveView    -- ^ 进入消失：粒子 + 本轮得分浮字 + 震屏（k ≥ 2）
+  | EvEndStage EndStage      -- ^ 进入一段步末动画：蔓延碎屑 / 倒计时火花等
 
-data StepResult = Continue Cascade | Finished Cascade
+-- | 逐轮回放器 = 通用播放器 + 本模块的阶段机。
+type CascadePlayer = Player Cascade
 
-newCascade :: MoveTrace -> Board -> Int -> Cascade
-newCascade mt final base =
+-- | 由回放脚本、本步效果事件、结算后盘面与本步之前的总分建立回放（阶段 PhStart）。
+newCascade :: MoveTrace -> [Event] -> Board -> Int -> Cascade
+newCascade mt evs final base =
   Cascade
-    { cWaves = mtWaves mt
+    { cWaves = waveViews mt evs
     , cPhase = PhStart
-    , cFrame = 0
     , cCombo = 0
     , cBest = 0
     , cGain = 0
     , cBase = base
     , cFinal = final
     , cShown = mtStart mt
-    , cFast = False
     , cEnds = mtEnd mt
     , cDone = 0
     , cStages = []
@@ -199,35 +233,40 @@ curLen c = case cPhase c of
     (s : _) -> stFrames s
     [] -> 0
   ph -> case cWaves c of
-    (w : _) -> phaseLen ph w
+    (w : _) -> phaseLen ph (wvWave w)
     [] -> 0
 
+-- | 逐轮回放的阶段机：长度 = curLen，播完 = advance（Left = 全部播完）。
+cascadeStages :: Stages Cascade CascadeEvent
+cascadeStages = Stages curLen next
+  where
+    next c = case advance c of
+      (Continue c', evs) -> Right (c', evs)
+      (Finished c', _) -> Left c'
+
 -- | 当前阶段进度 0..1。
-phaseT :: Cascade -> Double
-phaseT c =
-  let n = curLen c
-  in if n <= 0 then 1 else min 1 (fromIntegral (cFrame c) / fromIntegral n)
+phaseT :: CascadePlayer -> Double
+phaseT = playerProgress cascadeStages
 
 -- | 推进一帧（加速时一次推进 fastStep 帧，步末阶段同样加速）。
-stepPlayback :: Cascade -> (StepResult, [CascadeEvent])
-stepPlayback c =
-  let f = cFrame c + (if cFast c then fastStep else 1)
-  in if f < curLen c
-       then (Continue c {cFrame = f}, [])
-       else advance c
+stepPlayback :: CascadePlayer -> Tick Cascade CascadeEvent
+stepPlayback = stepPlayer fastStep cascadeStages
+
+-- | advance 的内部结果：还有下一阶段 / 播完。
+data StepResult = Continue Cascade | Finished Cascade
 
 advance :: Cascade -> (StepResult, [CascadeEvent])
 advance c = case (cPhase c, cWaves c) of
   (PhStart, _) -> arrive c
   (PhEnd, _) -> case cStages c of
-    (s : rest@(s2 : _)) -> (Continue c {cStages = rest, cFrame = 0, cShown = stAfter s}, [EvEndStage s2])
+    (s : rest@(s2 : _)) -> (Continue c {cStages = rest, cShown = stAfter s}, [EvEndStage s2])
     (s : []) -> enterWave c {cStages = [], cShown = stAfter s}
     [] -> enterWave c
   (_, []) -> (Finished c, [])
   (PhFlash, w : _) ->
-    (Continue c {cPhase = PhPop, cFrame = 0, cGain = cGain c + cwScore w}, [EvVanish (cCombo c) w])
-  (PhPop, _) -> (Continue c {cPhase = PhFall, cFrame = 0}, [])
-  (PhFall, w : _) -> (Continue c {cPhase = PhRest, cFrame = 0, cShown = cwAfter w}, [])
+    (Continue c {cPhase = PhPop, cGain = cGain c + wvScore w}, [EvVanish (cCombo c) w])
+  (PhPop, _) -> (Continue c {cPhase = PhFall}, [])
+  (PhFall, w : _) -> (Continue c {cPhase = PhRest, cShown = cwAfter (wvWave w)}, [])
   (PhRest, _ : rest) -> arrive c {cWaves = rest, cDone = cDone c + 1}
 
 -- | 到达插入点 cDone：先播这里的步末效果（全部轮次之后还要检查自动洗牌），再进入下一轮。
@@ -246,7 +285,7 @@ arrive c =
       stages = stages0 ++ shuffle
       c' = c {cEnds = later}
   in case stages of
-       (s : _) -> (Continue c' {cPhase = PhEnd, cFrame = 0, cStages = stages}, [EvEndStage s])
+       (s : _) -> (Continue c' {cPhase = PhEnd, cStages = stages}, [EvEndStage s])
        [] -> enterWave c'
 
 -- | 规则层的步末效果 → 表现段：连续的蔓延合并为一段同时播放。
@@ -278,11 +317,11 @@ enterWave :: Cascade -> (StepResult, [CascadeEvent])
 enterWave c = case cWaves c of
   [] -> (Finished c {cPhase = PhRest, cStages = []}, [])
   (w : _)
-    | null (cwCleared w) ->
-        (Continue c {cPhase = PhFall, cFrame = 0, cGain = cGain c + cwScore w}, [])
+    | null (wvCleared w) ->
+        (Continue c {cPhase = PhFall, cGain = cGain c + wvScore w}, [])
     | otherwise ->
         let k = cCombo c + 1
-        in ( Continue c {cPhase = PhFlash, cFrame = 0, cCombo = k, cBest = max (cBest c) k}
+        in ( Continue c {cPhase = PhFlash, cCombo = k, cBest = max (cBest c) k}
            , [EvHighlight k w]
            )
 

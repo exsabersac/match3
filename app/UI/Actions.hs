@@ -1,12 +1,15 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | 界面动作（IO）：刷新窗口标题、关卡重置、三种道具的执行、回放加速、过关后前进 / 重试、解锁记录。
+-- | 界面动作（IO）：刷新窗口标题、关卡重置、走步（交换 / 三种道具）的执行、回放加速、过关后前进 / 重试、解锁记录。
 --
--- 依赖：UI.Types、UI.Playback、Match3.Core、SDL（窗口标题）。
--- 规则结果一律来自 Match3.Core（trySwap / use* / trace*），这里只更新 App。
+-- 依赖：UI.Types、UI.Playback、Match3.Engine（动作执行 / 状态摘要）、Match3.Core、SDL（窗口标题）。
+-- 规则结果一律来自 Match3.Engine.play（每个动作只结算一次：状态、Outcome、MoveFx、回放脚本、效果事件），
+-- 这里只更新 App。
 module UI.Actions
   ( updateTitle
+  , playMove
+  , playbackOf
   , colorTag
   , freshLevelUi
   , applyHammer
@@ -17,10 +20,13 @@ module UI.Actions
   , advanceOrMsg
   ) where
 
-import ComboFx
 import Data.IORef
+import Data.Maybe (fromMaybe)
+import Engine.Game (Game (..))
+import Engine.Playback (Player (..))
 import qualified Data.Text as T
 import Match3.Core
+import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
 import UI.Playback
@@ -36,9 +42,11 @@ updateTitle window app = do
         Just (LevelClear s n) -> " LEVEL UP ->" <> show (n + 1) <> " score=" <> show s
         Just (Lost s) -> " LOSE score=" <> show s
         _ -> ""
+      -- 连击数经通用接口的状态摘要取（不直接读 gsCombo）
+      combo = fromMaybe 0 (lookup "combo" (gameStatus M3E.match3Game gs))
       comboBits =
-        if gsCombo gs > 1
-          then "  combo x" ++ show (gsCombo gs)
+        if combo > 1
+          then "  combo x" ++ show combo
           else ""
       goalBits = case gsGoal gs of
         GoalScore t ->
@@ -87,6 +95,17 @@ updateTitle window app = do
             ++ T.unpack (appMsg app)
   windowTitle window $= title
 
+-- | 经 Match3.Engine 执行一个走步动作（交换 / 道具）：返回完整结果与 Outcome。
+playMove :: M3E.Action -> GameState -> (M3E.Played, Outcome)
+playMove act gs =
+  let pd = M3E.play act gs
+  in (pd, fromMaybe InvalidSwap (M3E.pdOutcome pd))
+
+-- | 走步之后的表现编排：MoveFx、回放脚本与效果事件都取自同一次 play。
+playbackOf :: GameState -> M3E.Played -> Maybe (Pos, Pos) -> App -> App
+playbackOf before pd =
+  withMovePlayback before (M3E.pdState pd) (M3E.pdFx pd) (M3E.pdTrace pd) (M3E.pdEvents pd)
+
 -- | 颜色的三字母标签（标题栏用）。
 colorTag :: Color -> String
 colorTag C1 = "RED"
@@ -128,10 +147,9 @@ freshLevelUi gs app =
 -- | Apply hammer booster at pos with flash / particles / msg.
 applyHammer :: IORef App -> Window -> App -> Pos -> IO App
 applyHammer ref window app pos = do
-  let (gs', out) = useHammer pos (appGame app)
+  let (pd, out) = playMove (M3E.Hammer pos) (appGame app)
       -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
-      fx = moveFx (appGame app) gs' out
-      mt = traceHammer pos (appGame app)
+      gs' = M3E.pdState pd
       msg = case out of
         InvalidSwap -> "No hammers left"
         NoMatch -> "Hammer failed"
@@ -141,7 +159,7 @@ applyHammer ref window app pos = do
         Lost _ -> T.pack (loseHint (gsGoal gs'))
   let app' =
         withUnlock
-          ( withMovePlayback (appGame app) gs' fx mt Nothing
+          ( playbackOf (appGame app) pd Nothing
               app
                 { appGame = gs'
                 , appSel = Nothing
@@ -159,10 +177,9 @@ applyHammer ref window app pos = do
 -- | Apply cross-clear booster at pos with flash / particles / msg.
 applyCrossClear :: IORef App -> Window -> App -> Pos -> IO App
 applyCrossClear ref window app pos = do
-  let (gs', out) = useCrossClear pos (appGame app)
+  let (pd, out) = playMove (M3E.CrossClear pos) (appGame app)
       -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
-      fx = moveFx (appGame app) gs' out
-      mt = traceCrossClear pos (appGame app)
+      gs' = M3E.pdState pd
       msg = case out of
         InvalidSwap -> "No cross-clears left"
         NoMatch -> "Cross failed"
@@ -172,7 +189,7 @@ applyCrossClear ref window app pos = do
         Lost _ -> T.pack (loseHint (gsGoal gs'))
   let app' =
         withUnlock
-          ( withMovePlayback (appGame app) gs' fx mt Nothing
+          ( playbackOf (appGame app) pd Nothing
               app
                 { appGame = gs'
                 , appSel = Nothing
@@ -189,10 +206,9 @@ applyCrossClear ref window app pos = do
 -- | 执行自由交换道具：规则结果来自 useFreeSwap，回放脚本来自 traceFreeSwap。
 applyFreeSwap :: IORef App -> Window -> App -> Pos -> Pos -> IO ()
 applyFreeSwap ref window app p1 p2 = do
-  let (gs', out) = useFreeSwap p1 p2 (appGame app)
+  let (pd, out) = playMove (M3E.FreeSwap p1 p2) (appGame app)
       -- 特效只看本次调用的 MoveFx（边沿触发），道具无效时不重播上一步连击
-      fx = moveFx (appGame app) gs' out
-      mt = traceFreeSwap p1 p2 (appGame app)
+      gs' = M3E.pdState pd
       msg = case out of
         InvalidSwap -> "Free-swap invalid / empty"
         NoMatch -> "Free-swap: no match; not spent"
@@ -207,7 +223,7 @@ applyFreeSwap ref window app p1 p2 = do
         _ -> ToolNone
   let app' =
         withUnlock
-          ( withMovePlayback (appGame app) gs' fx mt (Just (p1, p2))
+          ( playbackOf (appGame app) pd (Just (p1, p2))
               app
                 { appGame = gs'
                 , appSel = Nothing
@@ -224,8 +240,8 @@ applyFreeSwap ref window app p1 p2 = do
 speedUp :: IORef App -> Window -> IO ()
 speedUp ref window = do
   app <- readIORef ref
-  case playingCascade app of
-    Just c | not (cFast c) -> do
+  case playingPlayer app of
+    Just p | not (plFast p) -> do
       let app' = app {appAnim = accelerate (appAnim app), appMsg = "Fast-forward combo"}
       writeIORef ref app'
       updateTitle window app'

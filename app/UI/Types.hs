@@ -16,12 +16,14 @@ module UI.Types
   , helpKeysMsg
   , animBusy
   , playingCascade
+  , playingPlayer
   ) where
 
 import Art
 import ComboFx
 import Data.Text (Text)
 import Data.Word (Word8)
+import Engine.Playback (Player (..))
 import Foreign.C.Types (CInt)
 import Match3.Core
 
@@ -44,7 +46,7 @@ data Anim
       { afBoard :: Board
       , afFrame :: Int
       }
-  | AnimCascade Cascade  -- ^ 逐轮回放连锁（ComboFx 阶段机）
+  | AnimCascade CascadePlayer  -- ^ 逐轮回放连锁（通用播放器 + ComboFx 阶段机）
 
 -- | Simple rectangle particle (no textures).
 data Particle = Particle
@@ -105,9 +107,13 @@ animBusy app = case appAnim app of
   AnimNone -> False
   _ -> True
 
--- | 当前（或交换之后）的逐轮回放。
-playingCascade :: App -> Maybe Cascade
-playingCascade app = case appAnim app of
-  AnimCascade c -> Just c
-  AnimSwap {asNext = AnimCascade c} -> Just c
+-- | 当前（或交换之后）的逐轮回放器。
+playingPlayer :: App -> Maybe CascadePlayer
+playingPlayer app = case appAnim app of
+  AnimCascade p -> Just p
+  AnimSwap {asNext = AnimCascade p} -> Just p
   _ -> Nothing
+
+-- | 当前（或交换之后）的逐轮回放进度（阶段状态）。
+playingCascade :: App -> Maybe Cascade
+playingCascade = fmap plStage . playingPlayer

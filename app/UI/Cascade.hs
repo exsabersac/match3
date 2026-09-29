@@ -21,6 +21,7 @@ import Art
 import ComboFx
 import Control.Monad (forM_, unless, void)
 import Data.Word (Word8)
+import Engine.Playback (Player (..))
 import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
@@ -37,8 +38,8 @@ drawBoard ren app = case appAnim app of
     drawSwap ren app asBefore asP1 asP2 asFrame
   AnimFall { afBoard, afFrame } ->
     drawFall ren app afBoard afFrame
-  AnimCascade c ->
-    drawCascade ren app c
+  AnimCascade p ->
+    drawCascade ren app p
   AnimNone ->
     drawStatic ren app (gsBoard (appGame app)) 0
 
@@ -61,35 +62,40 @@ withShake ren app act
       rendererViewport ren $= Nothing
 
 -- | 回放中：步末阶段交给 UI.EndStage，其余按轮绘制。
-drawCascade :: Renderer -> App -> Cascade -> IO ()
-drawCascade ren app c = case (cPhase c, cStages c) of
-  (PhEnd, st : _) -> drawEndStage ren app (phaseT c) st
-  _ -> drawCascadeWave ren app c
+drawCascade :: Renderer -> App -> CascadePlayer -> IO ()
+drawCascade ren app p = case (cPhase c, cStages c) of
+  (PhEnd, st : _) -> drawEndStage ren app (phaseT p) st
+  _ -> drawCascadeWave ren app p
+  where
+    c = plStage p
 
 -- | 按当前轮的阶段（高亮 / 消失 / 下落 / 落定）绘制。
-drawCascadeWave :: Renderer -> App -> Cascade -> IO ()
-drawCascadeWave ren app c = case cWaves c of
+drawCascadeWave :: Renderer -> App -> CascadePlayer -> IO ()
+drawCascadeWave ren app p = case cWaves c of
   [] -> drawStatic ren app (cShown c) 0
-  (w : _) -> case cPhase c of
-    PhStart -> drawStatic ren app (cwBefore w) 0
-    PhFlash -> drawWaveFlash ren app c w
-    PhPop -> drawWavePop ren app c w
-    PhFall -> drawWaveFall ren app c w
-    PhRest -> drawStatic ren app (cwAfter w) 0
+  (v : _) -> case cPhase c of
+    PhStart -> drawStatic ren app (cwBefore (wvWave v)) 0
+    PhFlash -> drawWaveFlash ren app p v
+    PhPop -> drawWavePop ren app p v
+    PhFall -> drawWaveFall ren app p v
+    PhRest -> drawStatic ren app (cwAfter (wvWave v)) 0
     PhEnd -> drawStatic ren app (cShown c) 0
+  where
+    c = plStage p
 
 -- | 高亮：整盘压暗，被消格提到暗幕之上，闪两下 + 轻微弹跳 + 等级色光圈。
-drawWaveFlash :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
-drawWaveFlash ren app c w = do
-  let t = phaseT c
-      tint@(V3 tr tg tb) = waveTint app (cCombo c)
+drawWaveFlash :: Renderer -> App -> CascadePlayer -> WaveView -> IO ()
+drawWaveFlash ren app p v = do
+  let t = phaseT p
+      w = wvWave v
+      tint@(V3 tr tg tb) = waveTint app (cCombo (plStage p))
       veilA = round (min 1 (t * 4) * 120 :: Double) :: Word8
       blink = 0.5 + 0.5 * cos (t * 2 * pi * 2) :: Double
       bounce = round (3 * sin (t * pi) :: Double) :: CInt
   drawStatic ren app (cwBefore w) 0
   rendererDrawColor ren $= V4 8 6 24 veilA
   fillRect ren (Just boardRect)
-  forM_ (cwCleared w) $ \pos -> do
+  forM_ (wvCleared v) $ \pos -> do
     let (x, y0) = cellOrigin pos
         y = y0 - bounce
         cell = getCell (cwBefore w) pos
@@ -108,12 +114,13 @@ drawWaveFlash ren app c w = do
         drawRect ren (Just (rect (x + 1) (y + 1) (cellPx - 2) (cellPx - 2)))
 
 -- | 消失：被消格缩小淡出 + 光环外扩；本轮生成的特殊块从中心放大出现；其它格保持不动。
-drawWavePop :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
-drawWavePop ren app c w = do
-  let t = phaseT c
-      tint = waveTint app (cCombo c)
+drawWavePop :: Renderer -> App -> CascadePlayer -> WaveView -> IO ()
+drawWavePop ren app p v = do
+  let t = phaseT p
+      w = wvWave v
+      tint = waveTint app (cCombo (plStage p))
       holes = cwHoles w
-      cleared = cwCleared w
+      cleared = wvCleared v
       holeAt (r, cc) = (holes !! r) !! cc
       veilA = round ((1 - t) * 120) :: Word8
   drawBoardBase ren app
@@ -139,9 +146,10 @@ drawWavePop ren app c w = do
       Nothing -> pure ()
 
 -- | 下落 + 补子：按列复现重力（ComboFx.fallTable），加速度下落；新格从棋盘上沿外落入（裁剪）。
-drawWaveFall :: Renderer -> App -> Cascade -> CascadeWave -> IO ()
-drawWaveFall ren app c w = do
-  let t = phaseT c
+drawWaveFall :: Renderer -> App -> CascadePlayer -> WaveView -> IO ()
+drawWaveFall ren app p v = do
+  let t = phaseT p
+      w = wvWave v
       e = t * t
       table = fallTable w
   drawBoardBase ren app

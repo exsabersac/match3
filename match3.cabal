@@ -80,6 +80,7 @@ executable match3-sdl
   other-modules:
       Art
       ComboFx
+      Shell.Loop
       UI.Actions
       UI.BoardArt
       UI.BoardPrim
@@ -94,6 +95,7 @@ executable match3-sdl
       UI.Layout
       UI.LevelMap
       UI.Playback
+      UI.Plugin
       UI.TextArt
       UI.Types
       Paths_match3

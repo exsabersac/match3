@@ -8264,6 +8264,16 @@ trace_events_consistent_with_trace = do
               ++ [ tag "end" | length [e | e <- evs, evKind e `elem` [EvTick, EvBelt, EvSpread, EvMove]] /= length (mtEnd mt) ]
               ++ [ tag "shuffle" | any ((== EvShuffle) . evKind) evs /= isJust (mtShuffle mt) ]
               ++ [ tag "blast" | e <- evs, evKind e == EvBlast, evElement e `notElem` ["line_h", "line_v", "bomb"] ]
+              -- 逐轮严格相等：该轮 EvClear 的格按事件顺序拼接 == cwCleared（顺序也相同，前端据此画高亮 / 迸粒子），
+              -- 该轮 EvScore 之和 == cwScore
+              ++ [ tag ("wave-clear-order " ++ show k)
+                 | (k, w) <- zip [0 ..] (mtWaves mt)
+                 , [p | e <- evs, evWave e == k, evKind e == EvClear, (p, _) <- evCells e] /= cwCleared w
+                 ]
+              ++ [ tag ("wave-score " ++ show k)
+                 | (k, w) <- zip [0 ..] (mtWaves mt)
+                 , sum [evAmount e | e <- evs, evWave e == k, evKind e == EvScore] /= cwScore w
+                 ]
           | (li, gs, p1, p2) <- cases
           , let (gs1, _, mt) = resolveSwapWith defaultRegistry p1 p2 gs
                 evs = traceEvents mt
@@ -8325,7 +8335,7 @@ engine_layer_is_game_agnostic :: Assertion
 engine_layer_is_game_agnostic = do
   let files =
         [ "src/Engine/Game.hs", "src/Engine/Effect.hs", "src/Engine/Playback.hs"
-        , "test/Toy.hs" ]
+        , "app/Shell/Loop.hs", "test/Toy.hs" ]
   srcs <- mapM readFile files
   let bad =
         [ f ++ ": " ++ l

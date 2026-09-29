@@ -27,11 +27,16 @@ module UI.Playback
 
 import ComboFx
 import Data.Word (Word8)
+import Engine.Playback (Tick (..), acceleratePlayer, newPlayer)
 import Match3.Core
 import Match3.Element.Event (endEffectElement, endEffectPairs)
+import qualified Match3.Element.Event as Ev
 import System.Random (StdGen, mkStdGen, randomR)
 import UI.Layout
 import UI.Types
+
+-- | 规则层效果事件（与 SDL 的 Event 区分）。
+type Match3Event = Ev.Event
 
 -- | 每帧推进：暂停时只走呼吸光；否则推进动画、闪光、粒子、弹字、震屏与各类倒计时。
 tickAnim :: App -> App
@@ -61,9 +66,9 @@ stepAnim app = case appAnim app of
   AnimFall {afBoard, afFrame}
     | afFrame + 1 >= fallFrames -> app {appAnim = AnimNone}
     | otherwise -> app {appAnim = AnimFall afBoard (afFrame + 1)}
-  AnimCascade c -> case stepPlayback c of
-    (Continue c', evs) -> foldl applyCascadeEvent app {appAnim = AnimCascade c'} evs
-    (Finished c', _) ->
+  AnimCascade p -> case stepPlayback p of
+    Playing p' evs -> foldl applyCascadeEvent app {appAnim = AnimCascade p'} evs
+    Done c' ->
       app
         { appAnim = if cShown c' == cFinal c' then AnimNone else AnimFall (cFinal c') 0
           -- 连锁播完才亮 HUD 总结（最高连击 ≥ 2）
@@ -74,12 +79,15 @@ stepAnim app = case appAnim app of
 -- | 回放阶段切换时的一次性表现：高亮时弹「连击 xN」，消失时出粒子 / 得分浮字 / 震屏，步末段出碎屑火花。
 applyCascadeEvent :: App -> CascadeEvent -> App
 applyCascadeEvent app ev = case ev of
-  EvHighlight k w
-    | k >= 2 -> app {appPops = spawnComboPop k (cwCleared w) (appPops app)}
+  EvHighlight k v
+    | k >= 2 -> app {appPops = spawnComboPop k (wvCleared v) (appPops app)}
     | otherwise -> app
-  EvVanish k w ->
-    let parts = burstParticles (appPulse app) (cwBefore w) (cwCleared w)
-        scorePop = [scorePopAt (cwScore w) k (cwCleared w) | cwScore w > 0]
+  EvVanish k v ->
+    -- 被消格与得分读本轮效果事件（EvClear / EvScore）；粒子颜色取消除前的快照
+    let cleared = wvCleared v
+        gain = wvScore v
+        parts = burstParticles (appPulse app) (cwBefore (wvWave v)) cleared
+        scorePop = [scorePopAt gain k cleared | gain > 0]
         st = comboStyle k
     in app
          { appParticles = parts ++ appParticles app
@@ -233,8 +241,8 @@ noMoveFx = MoveFx 0 []
 --   连击弹字 / 得分浮字 / 震屏 / 粒子都在回放阶段切换时产生；轮次之间与全部落定之后按
 --   mtEnd 播放步末效果（倒计时减一 / 皮带 / 蔓延 / 蜗牛，必要时自动洗牌），HUD 总结在全部播完后才亮。
 -- * 兜底（理论上不会发生：结算过却没有轮次）：沿用旧的「闪光 + 粒子 + 轻落」。
-withMovePlayback :: GameState -> GameState -> MoveFx -> MoveTrace -> Maybe (Pos, Pos) -> App -> App
-withMovePlayback before after fx mt swapPair app
+withMovePlayback :: GameState -> GameState -> MoveFx -> MoveTrace -> [Match3Event] -> Maybe (Pos, Pos) -> App -> App
+withMovePlayback before after fx mt evs swapPair app
   | fx == noMoveFx =
       app {appFlash = [], appAnim = AnimNone, appComboShow = 0, appComboBest = 0, appPops = []}
   | null (mtWaves mt) && null (mtEnd mt) =
@@ -251,7 +259,7 @@ withMovePlayback before after fx mt swapPair app
   | otherwise =
       app
         { appFlash = []
-        , appAnim = viaSwap (AnimCascade (newCascade mt (gsBoard after) (gsScore before)))
+        , appAnim = viaSwap (AnimCascade (newPlayer (newCascade mt evs (gsBoard after) (gsScore before))))
         , appComboShow = 0
         , appComboBest = 0
         , appPops = []
@@ -264,6 +272,6 @@ withMovePlayback before after fx mt swapPair app
 -- | 点击 / 空格加速正在播放的连锁回放（输入本身仍被锁定，不会误触下一步）。
 accelerate :: Anim -> Anim
 accelerate a = case a of
-  AnimCascade c -> AnimCascade c {cFast = True}
+  AnimCascade p -> AnimCascade (acceleratePlayer p)
   AnimSwap {asNext} -> a {asNext = accelerate asNext}
   _ -> a

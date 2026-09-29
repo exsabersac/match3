@@ -69,6 +69,7 @@
 | 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(名字, 层数))]`），`SlotGround` / `edGround` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
 | 边缘收集 | `edDrains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
 | 步末补结算 | `EndRule.erHoles`、`cascadeAfterEndWith` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
+| 关卡级元素 | `LevelDef{ldName, ldHook}`，`LevelHook` = `HookAbsorb` / `HookShift` / `HookTeleport` / `HookCover` | 段 4：飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；状态仍在上面各自的 `GameState` 字段；去掉即不生效 |
 
 ## 目标与结局
 
@@ -120,6 +121,8 @@
 | 蜗牛一步 | `SnailMove { smFrom, smTo, smDir, smPushed }` | `smFrom == smTo` 表示碰壁掉头 |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
 | 元素（定义 / 注册表） | `ElementDef`、`Registry`、`defaultRegistry` | 一种格子内容在各时机的反应（见 [architecture.md](architecture.md#元素框架与事件)）；`gsElementCounts` 记注册表元素的具名计数 |
+| 成对交换规则 / 开启规则 | `SwapRule`（`edSwap`）/ `OpenRule`（`edOpen`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
+| 可改色 / 可推动 | `edRecolorable` / `edPushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |
 | 回放加速 | 点击 / 空格 / 回车 / `N` | 每帧推进 3 帧（`fastStep`）；播放期间锁定交换、道具、撤销、洗牌 |

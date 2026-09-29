@@ -9,7 +9,7 @@
 -- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 保留为「恰好一轮」的小工具。段 2c 起本模块不依赖内置注册表（便捷旧名在 Match3.Board.Default）。
 --
 -- 依赖：Grid、Match、Clear、Gravity、Ufo、元素注册表（计数键 edCounter、倒计时 = PhaseTick 步末规则）。
--- 不变量：每轮 = clear → settleBoardPortals → refill → stepUfos（→ 飞碟吸收单独一轮），随机数按此顺序消耗；
+-- 不变量：每轮 = clear → settleBoardPortals → refill → 整轮吸收（飞碟，段 4 起经注册表的关卡级元素 absorbWith；→ 吸收单独一轮），随机数按此顺序消耗；
 -- 计数口径（逐字保持旧实现，由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
 --   * 障碍计数按清除格在消除前盘面上的格子种类计；饼干 = 被清除的饼干 + 沉降时底行收走的饼干；
@@ -35,10 +35,10 @@ module Match3.Board.Cascade
   ) where
 
 import Data.List (nub)
-import Match3.Element.Registry (Registry, counterWith, endRules)
+import Match3.Element.Registry (Registry, absorbWith, counterWith, endRules, pushableWith)
 import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
-import Match3.Ufo (Ufo, stepUfos)
+import Match3.Ufo (Ufo)
 import System.Random (RandomGen)
 import Match3.Board.Clear
 import Match3.Board.Gravity
@@ -168,7 +168,7 @@ cascadeMatchesWith :: RandomGen g => Registry -> Maybe Pos -> [Ufo] -> [(Pos, Po
 cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
 
 -- | cascadeMatchesFrom（指定注册表）。
--- 每轮：clearMatchesDetailed → settleBoardPortals → refill → stepUfos；若飞碟吸到格子，
+-- 每轮：clearMatchesDetailed → settleBoardPortals → refill → 飞碟吸收（段 4：注册表的 HookAbsorb，内置 = stepUfos）；若飞碟吸到格子，
 -- 吸收单独算下一轮（clearUfoAbsorbed → settle → refill）。没有匹配时最大波次 = startW。
 cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
@@ -189,7 +189,7 @@ cascadeMatchesFromWith reg startW prefer0 ufos0 portals g0 b0 =
               score' = score + scoreForWave wave n
               tallies' = addColors reg tallies b posD
               hits1 = hits `plusHits` withDrained reg cookiesFallen h1
-              (absorbed, ufos') = stepUfos b' ufos
+              (absorbed, ufos') = absorbWith reg ufos b'
           in if null absorbed
                then
                  go Nothing g' b' (cells + n) score' wave tallies' hits1
@@ -225,7 +225,7 @@ cascadeSeedsWith reg prefer seeds ufos0 portals g b
           w0 = CascadeWave b pos cookSites0 mb b1 (scoreForWave 1 n)
           score0 = scoreForWave 1 n
           tallies0 = [(col, countColorWith reg b pos col) | col <- allColors]
-          (absorbed, ufos1) = stepUfos b1 ufos0
+          (absorbed, ufos1) = absorbWith reg ufos0 b1
           (wU, b1', g1', nU, hitsU, talliesU, uAbs0, posU) =
             if null absorbed
               then ([], b1, g1, 0, noHits, zip allColors (repeat 0), 0, [])
@@ -314,7 +314,7 @@ cascadeAfterEndWith reg holes ufos portals g b =
 cascadeCountdownsWith :: RandomGen g => Registry -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
 cascadeCountdownsWith reg ufos0 portals g b =
   let rules = endRules reg PhaseTick
-      bTick = foldl (\bd r -> snd (erRun r (EndCtx [] []) bd)) b rules
+      bTick = foldl (\bd r -> snd (erRun r (EndCtx [] [] (pushableWith reg)) bd)) b rules
       seeds = nub (concatMap (\r -> erSeeds r bTick) rules)
   in if null seeds
        then stillRun bTick ufos0 g

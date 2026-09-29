@@ -33,10 +33,9 @@ import Match3.Board.Cascade
   , cascadeSeedsWith
   , stillRun
   )
-import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, endRules, hitGroundWith)
+import Match3.Element.Registry (Registry, beltShiftWith, coverWith, endRules, hitGroundWith, pushableWith)
 import Match3.Element.Types (Counter(..), EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Game.Outcome
@@ -108,7 +107,7 @@ resolveMoveWith reg kind start opening gs =
         foldl addNamed (gsElementCounts gs)
           (concatMap ctNamed tallies ++ [(n, dcCount d) | d <- diffs, CountNamed n <- [dcCounter d], dcCount d > 0] ++ groundCounts)
       (carpetOpen', carpetHit) =
-        coverCarpets (gsCarpetOpen gs) (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter)
+        coverWith reg (gsCarpetOpen gs) (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter)
       ufoCollected' = gsUfoCollected gs + uAbs
       cookies' = gsCookiesCollected gs + cookieHit
       cakes' = gsCakesCleared gs + cakeHit
@@ -203,15 +202,18 @@ runPhase reg ph ctx k b0 = foldl one ([], b0) (endRules reg ph)
 swapEnd :: Registry -> GameState -> CascadeRun StdGen -> ([CascadeRun StdGen], [EndStep], Board, Board)
 swapEnd reg gs seg0 =
   let portals = gsPortals gs
-      belts = gsBelts gs
+      -- 皮带是关卡级元素（段 4）：经注册表的 HookShift 取移位；未注册时当作没有皮带
+      (belts, shiftOf) = case beltShiftWith reg of
+        Just f -> (gsBelts gs, f)
+        Nothing -> ([], const [])
       ws0 = crWaves seg0
       board0' = crBoard seg0
       -- 倒计时 tick / 归零爆炸（带飞碟与传送门）
       seg1 = cascadeCountdownsWith reg (crUfos seg0) portals (crGen seg0) board0'
-      (endTick, _) = runPhase reg PhaseTick (EndCtx [] []) (length ws0) board0'
+      (endTick, _) = runPhase reg PhaseTick (EndCtx [] [] (pushableWith reg)) (length ws0) board0'
       -- 皮带：移位后连锁 / 沉降（收皮带送到底行的饼干）
       boardCd = crBoard seg1
-      mvBelt = beltMoves belts
+      mvBelt = shiftOf belts
       boardBelt = applyBeltMoves boardCd mvBelt
       nBelt = length ws0 + length (crWaves seg1)
       endBelt =
@@ -229,7 +231,7 @@ swapEnd reg gs seg0 =
       beltCells = nub (concat belts)
       portalEnds = nub (concatMap (\(a, b) -> [a, b]) portals)
       (endSpread, boardSpread) = traceSpreadsWith reg nEnd boardBeltCas
-      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx beltCells portalEnds) nEnd boardSpread
+      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx beltCells portalEnds (pushableWith reg)) nEnd boardSpread
       -- 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁；
       -- 不再重复步末效果。内置元素没有空洞时等于旧的「成消才连锁」。
       seg3 = cascadeAfterEndWith reg (endHolesWith reg boardSnail) (crUfos seg2) portals (crGen seg2) boardSnail

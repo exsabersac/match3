@@ -1,7 +1,7 @@
 -- | 道具：锤子 / 自由交换 / 十字清除。每种道具一个 resolve* 函数（校验 + 起手方式），
 -- 结算与回放都是它的投影（use* = 结果，trace* = 回放脚本），公共结算见 Match3.Game.Resolve。
 --
--- 依赖：Resolve、State、Trace、Match3.Board.*、Match3.Boosters（十字种子几何）、元素注册表（挡交换 / 锤子免疫）、Rainbow / Combos。
+-- 依赖：Resolve、State、Trace、Match3.Board.*、Match3.Boosters（十字种子几何）、元素注册表（挡交换 / 锤子免疫 / 成对交换规则 = 彩虹与特殊合成，段 4）。
 -- 不变量：道具不耗步、不推进倒计时、没有皮带 / 蜗牛，步末只有蔓延；锤子对免疫格不扣次数（NoMatch）。
 -- 护栏 trace_boosters_final_equal_result、trace_end_steps_boosters_replay。
 module Match3.Game.Boosters
@@ -23,9 +23,7 @@ module Match3.Game.Boosters
 import Match3.Board.Grid (inBounds, swapCells, getCell)
 import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, hitImmuneWith, swapBlockedWith)
-import Match3.Combos (isSpecialCombo, comboClearSeeds)
-import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
+import Match3.Element.Registry (Registry, hitImmuneWith, swapBlockedWith, swapOpeningWith)
 import Match3.Boosters (crossClearSeeds)
 import Match3.Types
 import Match3.Game.Resolve
@@ -68,17 +66,14 @@ resolveFreeSwapWith reg p1 p2 gs
   | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | p1 == p2 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
-  | not rainbow && not specialCombo && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
+  | pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
   | otherwise = resolveMoveWith reg KindFreeSwap swapped opening gs
   where
     board0 = gsBoard gs
     swapped = swapCells board0 p1 p2
-    rainbow = isRainbowSwap board0 p1 p2
-    specialCombo = isSpecialCombo board0 p1 p2
-    opening
-      | rainbow = OpenSeeds (Just p2) (rainbowClearSeeds swapped p1 p2)
-      | specialCombo = OpenSeeds (Just p2) (comboClearSeeds swapped p1 p2)
-      | otherwise = OpenMatch (Just p2)
+    -- 成对交换规则（段 4，同 Move.resolveSwapWith）
+    pairRule = swapOpeningWith reg board0 swapped p1 p2
+    opening = maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
 
 -- | 十字清除：花一次清掉一格所在的整行 + 整列（种子起手连锁），不耗步。
 resolveCrossClear :: Pos -> GameState -> (GameState, Outcome, MoveTrace)

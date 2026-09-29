@@ -44,12 +44,28 @@ module Match3.Element.Registry
   , placeWith
   , hitGroundWith
   , placeAllWith
+    -- * 段 4：成对交换、开启、改色 / 推动谓词、关卡级元素
+  , swapRules
+  , swapOpeningWith
+  , swapFiresWith
+  , openWith
+  , recolorableWith
+  , pushableWith
+  , registerLevel
+  , removeLevel
+  , levelDefs
+  , absorbWith
+  , beltShiftWith
+  , teleportWith
+  , coverWith
   ) where
 
 import Data.Array (Array, accumArray, (!))
 import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import Match3.Board.Grid (getCell, setCell)
+import Match3.Board.Grid (MBoard, getCell, setCell)
+import Match3.Conveyor (Belt)
+import Match3.Ufo (Ufo)
 import Match3.Element.Types
 import Match3.Types
 
@@ -63,6 +79,9 @@ data Registry = Registry
   , regAdjacent :: [AdjacentRule]            -- 按 arOrder 排好（稳定）
   , regEnd      :: [EndRule]                 -- 按 (阶段, erOrder) 排好（稳定）
   , regDiff     :: [ElementDef]              -- 带 edDiffCounter 的定义
+  , regSwap     :: [SwapRule]                -- 段 4：成对交换规则，按 srOrder 排好（稳定）
+  , regOpen     :: [OpenRule]                -- 段 4：开启规则（注册顺序）
+  , regLevel    :: [LevelDef]                -- 段 4：关卡级元素（注册顺序；同名以后注册的为准）
   }
 
 -- | 由定义列表建表。同一槽位 / 同名的多个定义以后出现的为准。
@@ -82,6 +101,9 @@ mkRegistry defs0 =
        , regAdjacent = sortOn arOrder (mapMaybe edAdjacent defs)
        , regEnd = sortOn (\r -> (erPhase r, erOrder r)) (mapMaybe edEnd defs)
        , regDiff = [d | d <- defs, Just _ <- [edDiffCounter d]]
+       , regSwap = sortOn srOrder (mapMaybe edSwap defs)
+       , regOpen = mapMaybe edOpen defs
+       , regLevel = []
        }
   where
     -- 同名只留最后一个，位置取第一次出现处（注册顺序稳定）
@@ -91,7 +113,7 @@ mkRegistry defs0 =
 
 -- | 往注册表里加（或按名字替换）一个定义。测试专用元素就这样接进来，主流程不用改。
 register :: ElementDef -> Registry -> Registry
-register d reg = mkRegistry (regDefs reg ++ [d])
+register d reg = (mkRegistry (regDefs reg ++ [d])) {regLevel = regLevel reg}
 
 -- | 全部定义（注册顺序）。
 registryDefs :: Registry -> [ElementDef]
@@ -222,7 +244,7 @@ runAdjacentWith :: Registry -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos]
 runAdjacentWith reg trueClears direct protect0 b0 = foldl one (b0, [], []) (regAdjacent reg)
   where
     one (board, dead, sits) rule =
-      let out = arRun rule (AdjCtx trueClears direct (nub (protect0 ++ sits))) board
+      let out = arRun rule (AdjCtx trueClears direct (nub (protect0 ++ sits)) (recolorableWith reg)) board
       in (aoBoard out, dead ++ aoDead out, sits ++ aoSit out)
 
 -- | 本体进入清除格时的计数键。
@@ -283,3 +305,72 @@ hitGroundWith reg hits = foldr one ([], [])
                 _ -> counts
           in (maybe acc (\l -> (p, (n, l)) : acc) after, counts')
       | otherwise = ((p, (n, layers)) : acc, counts)
+
+--------------------------------------------------------------------------------
+-- 段 4：原来的专门分支收进注册表
+
+-- | 成对交换规则（已按 srOrder 排好）。
+swapRules :: Registry -> [SwapRule]
+swapRules = regSwap
+
+-- | 交换起手：交换前盘面 b0 上第一条成立的成对规则，在交换后盘面 swapped 上给出的种子；都不成立时 Nothing。
+swapOpeningWith :: Registry -> Board -> Board -> Pos -> Pos -> Maybe [Pos]
+swapOpeningWith reg b0 swapped p1 p2 =
+  listToMaybe [srSeeds r swapped p1 p2 | r <- regSwap reg, srFires r b0 p1 p2]
+
+-- | 是否有成对规则成立（交换前盘面）。
+swapFiresWith :: Registry -> Board -> Pos -> Pos -> Bool
+swapFiresWith reg b p1 p2 = any (\r -> srFires r b p1 p2) (regSwap reg)
+
+-- | 一批前沿上的开启（彩蛋类）：依次跑各开启规则，返回 (盘面, 爆炸种子, 本轮坐住的格)。
+-- 只有一条规则时结果就是它自己的输出（内置只有彩蛋）。
+openWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos])
+openWith reg b front = case regOpen reg of
+  [] -> (b, [], [])
+  (r : rs) -> foldl step (orOpen r b front) rs
+  where
+    step (b1, e1, s1) r' =
+      let (b2, e2, s2) = orOpen r' b1 front
+      in (b2, nub (e1 ++ e2), nub (s1 ++ s2))
+
+-- | 本体可被魔法帽 / 染色瓶改色。
+recolorableWith :: Registry -> Cell -> Bool
+recolorableWith reg = edRecolorable . bodyDef reg
+
+-- | 本体可被蜗牛推动。
+pushableWith :: Registry -> Cell -> Bool
+pushableWith reg = edPushable . bodyDef reg
+
+-- | 注册（或按名字替换）一个关卡级元素。
+registerLevel :: LevelDef -> Registry -> Registry
+registerLevel d reg = reg {regLevel = [x | x <- regLevel reg, ldName x /= ldName d] ++ [d]}
+
+-- | 去掉一个关卡级元素（测试用：去掉后该机制不生效）。
+removeLevel :: ElementName -> Registry -> Registry
+removeLevel n reg = reg {regLevel = [x | x <- regLevel reg, ldName x /= n]}
+
+-- | 全部关卡级元素（注册顺序）。
+levelDefs :: Registry -> [LevelDef]
+levelDefs = regLevel
+
+-- | 整轮吸收（飞碟）；未注册时不吸、飞碟原样。
+absorbWith :: Registry -> [Ufo] -> Board -> ([Pos], [Ufo])
+absorbWith reg = case [f | LevelDef _ (HookAbsorb f) <- regLevel reg] of
+  (f : _) -> f
+  [] -> \us _ -> ([], us)
+
+-- | 步末移位（皮带）；未注册时 Nothing（皮带不动，也没有皮带后的再连锁）。
+beltShiftWith :: Registry -> Maybe ([Belt] -> [(Pos, Pos)])
+beltShiftWith reg = listToMaybe [f | LevelDef _ (HookShift f) <- regLevel reg]
+
+-- | 沉降时传送（传送门）；未注册时不传送。
+teleportWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
+teleportWith reg = case [f | LevelDef _ (HookTeleport f) <- regLevel reg] of
+  (f : _) -> f (portalWith reg)
+  [] -> \_ mb -> mb
+
+-- | 覆盖目标格（地毯）；未注册时不覆盖。
+coverWith :: Registry -> [Pos] -> [Pos] -> ([Pos], Int)
+coverWith reg = case [f | LevelDef _ (HookCover f) <- regLevel reg] of
+  (f : _) -> f
+  [] -> \open _ -> (open, 0)

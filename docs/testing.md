@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**236** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
+- 期望：**244** 个命名用例通过（Tasty：`testCase` + `testProperty`）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 236）：
+- 目录（用例数合计 244）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -47,6 +47,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/GoalsLevels.hs` | 31 | 目标、结局、星级、关卡表、每日、地图与步数结转 |
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 6 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌（样例元素苔藓 / 风筝 / 陷坑 / 浮尘只定义在该模块里） |
+| `test/Spec/Branches.hs` | 8 | 段 4 专门分支收编护栏：测试专用成对交换规则（拉杆）/ 开启规则（豆荚）/ 可推动（小车）只经注册表生效；内置改色 / 推动谓词与原写死谓词相同；关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）去掉后不生效（含 38 关实测）；主流程源码扫描 |
 | `test/Spec/Engine.hs` | 5 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描） |
 | `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
@@ -142,6 +143,23 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 **补结算统一路径的扫描**：`cascadeAfterEndWith` 对内置元素恒为空操作的实测依据——38 关 × 种子 1..100 × 15 步，每步检查主交换、三种道具与全部可成交交换对的步末终盘（`esAfter`）有无待挖空洞 / 待收边缘 / 沉降变化，共 **610,751** 手，pending = 0；金标准 2344 行全等（扫描程序不入库，结论写在这里）。
 
+## 专门分支收编验收（段 4）
+
+`test/Spec/Branches.hs`；样例元素拉杆 / 豆荚 / 小车只定义在该模块里。
+
+| 用例 | 断言 |
+|------|------|
+| `br_swap_rule_test_element` | 拉杆（`edSwap`，`srOrder` 5，种子 = 交换两端）：无普通匹配的交换被接受、两端在首轮清除；无路可走的盘上提示经同一条规则给出拉杆；内置表下拉杆挡交换、被拒 |
+| `br_open_rule_test_element` | 豆荚（`edOpen`）：邻格真消除时开成直线，本轮不清除（坐住）、落定后仍在；与内置彩蛋同盘时两条开启规则都跑；内置表下原样下落 |
+| `br_builtin_predicates_match_legacy` | 21 种样例格上 `recolorableWith defaultRegistry` = `isGem`、`pushableWith defaultRegistry` = `Snail.pushable` |
+| `br_recolorable_from_registry` | 魔法帽：内置表下给两个邻格换色；把 gem 定义改成 `edRecolorable = False` 后颜色不变 |
+| `br_pushable_from_registry` | 蜗牛：`edPushable` 的小车被推回、蜗牛前进；内置表下小车挡住、蜗牛掉头；gem 改成不可推后蜗牛不推宝石 |
+| `br_level_hooks_builtin_and_removable` | 内置表的四个 `LevelDef` 依次为 ufo / belt / portal / carpet，钩子与原实现（`stepUfos` / `beltMoves` / `portalTeleport` / `coverCarpets`）结果相同；`removeLevel` 后各自退化为不吸收 / 不移位 / 不传送 / 不覆盖 |
+| `br_level_hooks_removed_in_play` | 38 关、种子 1、按提示走 6 手：四个关卡级元素都去掉后，飞碟关飞碟不动不吸、皮带关没有 `EndBeltShift`、地毯关不覆盖；内置表下同样的对局里三者都发生过 |
+| `br_main_flow_no_special_branches` | 源码扫描（去掉注释）：`Game.Move` / `Game.Boosters` 不 import `Combos` / `Rainbow`、不点名 `isRainbowSwap` / `isSpecialCombo` / `rainbowClearSeeds` / `comboClearSeeds`；`Board.Match` 不 import `Combos`、不点名前两者；`Board.Clear` 不 import `Obstacles`、不用 `openSurprises`；`Board.Cascade` 不用 `stepUfos`；`Game.Resolve` 不用 `coverCarpets` / `beltMoves`；`Board.Gravity` 不用 `portalWith` |
+
+段 4 的等价性依据：金标准 2344 行全等；showcase / l28 / l1map 三场景截图与 `51b1cfa` 基线 AE=0。
+
 ## 多游戏接口验收（第三刀）
 
 接口见 [architecture.md](architecture.md#多游戏接口)。
@@ -162,7 +180,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 236，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 244，含金标准比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

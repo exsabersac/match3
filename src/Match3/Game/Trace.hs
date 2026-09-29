@@ -38,7 +38,7 @@ import Match3.Conveyor (beltMoves)
 import Data.List (groupBy, nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)
 import Match3.Element.Event
-import Match3.Element.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName)
+import Match3.Element.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName, pushableWith)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import Match3.Game.State
@@ -88,7 +88,7 @@ traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
 traceSpreadsWith reg k b0 = foldl one ([], b0) (endRules reg PhaseSpread)
   where
     one (acc, before) rule =
-      let (eff, after) = erRun rule (EndCtx [] []) before
+      let (eff, after) = erRun rule (EndCtx [] [] (pushableWith reg)) before
       in (acc ++ [EndStep k before after e | Just e <- [eff]], after)
 
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。

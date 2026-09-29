@@ -10,6 +10,7 @@
 module Match3.Element.Builtin
   ( defaultRegistry
   , builtinDefs
+  , builtinLevelDefs
   , traceSnails
   ) where
 
@@ -38,24 +39,46 @@ import Match3.Obstacles
   , chipAdjacentSafesExcept
   , chipAdjacentStonesExcept
   , chipAdjacentTimeSpiritsExcept
-  , triggerAdjacentBottlesExcept
-  , triggerAdjacentHatsExcept
+  , openSurprises
+  , triggerAdjacentBottlesBy
+  , triggerAdjacentHatsBy
   )
-import Match3.Snail (snailPositions, stepSnailAtBlocked)
+import Match3.Snail (pushable, snailPositions, stepSnailAtBy)
+import Match3.Board.Gravity (portalTeleport)
+import Match3.Carpet (coverCarpets)
+import Match3.Combos (comboClearSeeds, isSpecialCombo)
+import Match3.Conveyor (beltMoves)
+import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
+import Match3.Ufo (stepUfos)
 import Match3.Types
 
 -- | 内置注册表：全部内置元素。主流程的旧函数名（不带 With）都用它。
 defaultRegistry :: Registry
-defaultRegistry = mkRegistry builtinDefs
+defaultRegistry = foldl (flip registerLevel) (mkRegistry builtinDefs) builtinLevelDefs
+
+-- | 内置关卡级元素（段 4）：状态在 GameState 专用字段里，钩子经注册表分派；去掉某项即该机制不生效。
+builtinLevelDefs :: [LevelDef]
+builtinLevelDefs =
+  [ LevelDef "ufo" (HookAbsorb (\us b -> stepUfos b us))
+  , LevelDef "belt" (HookShift beltMoves)
+  , LevelDef "portal" (HookTeleport portalTeleport)
+  , LevelDef "carpet" (HookCover coverCarpets)
+  ]
 
 -- | 全部内置定义（注册顺序 = 文档里的清单顺序）。
 builtinDefs :: [ElementDef]
 builtinDefs =
   [ gemDef "gem" Normal Nothing
-  , gemDef "line_h" LineH (Just (\(r, _) -> [(r, c) | c <- [0 .. boardSize - 1]]))
+  , (gemDef "line_h" LineH (Just (\(r, _) -> [(r, c) | c <- [0 .. boardSize - 1]])))
+      { -- 特殊 × 特殊合成（段 4 成对交换规则）：挂在直线上，规则本身检查两端（直线 / 炸弹 / 彩虹的组合）
+        edSwap = Just (SwapRule 20 isSpecialCombo comboClearSeeds)
+      }
   , gemDef "line_v" LineV (Just (\(_, c) -> [(r, c) | r <- [0 .. boardSize - 1]]))
   , gemDef "bomb" Bomb (Just (\(r, c) -> [(rr, cc) | rr <- [r - 1 .. r + 1], cc <- [c - 1 .. c + 1], inBounds (rr, cc)]))
-  , gemDef "rainbow" Rainbow Nothing
+  , (gemDef "rainbow" Rainbow Nothing)
+      { -- 彩虹取色（段 4 成对交换规则）：由交换对象决定清哪种颜色；先于特殊合成判定
+        edSwap = Just (SwapRule 10 isRainbowSwap rainbowClearSeeds)
+      }
   , iceElem
   , overlayElem "grass" 0 Grass
   , (overlayElem "vine" 1 Vine) {edEnd = Just (spreadRule 10 SpreadVine spreadVines)}
@@ -90,7 +113,7 @@ builtinDefs =
       }
   , (layered "cake" 10 Cake 40 chipAdjacentCakesExcept) {edCounter = Just CountCakes}
   , (fixed "magic_hat" 11)
-      { edAdjacent = Just (AdjacentRule 60 (\ctx b -> AdjOut (triggerAdjacentHatsExcept b (acTrue ctx) (acProtect ctx)) [] []))
+      { edAdjacent = Just (AdjacentRule 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] []))
       , edPlace = \_ _ -> Just MagicHat
       }
   , (fixed "maker" 12)
@@ -122,6 +145,8 @@ builtinDefs =
           _ -> Nothing
       , edBlocksSwap = False
       , edPortal = True
+      , edPushable = True
+      , edRecolorable = True
       , edOnHit = \cell -> case cell of
           Flip _ back -> HitAbsorb (mkGem back)
           _ -> HitImmune
@@ -129,9 +154,14 @@ builtinDefs =
           [AColor f, AColor b] -> Just (Flip f b)
           _ -> Nothing
       }
-  , (blocker "surprise" 16) {edOnHit = const HitDestroy, edPlace = \_ _ -> Just Surprise}
+  , (blocker "surprise" 16)
+      { edOnHit = const HitDestroy
+      , edPlace = \_ _ -> Just Surprise
+        -- 开启规则（段 4）：邻格真消除 / 直接命中时开启，开出直线 / 炸弹（本轮坐住）或 3×3 爆炸
+      , edOpen = Just (OpenRule openSurprises)
+      }
   , (fixed "bottle" 17)
-      { edAdjacent = Just (AdjacentRule 140 (\ctx b -> AdjOut (triggerAdjacentBottlesExcept b (acTrue ctx) (acProtect ctx)) [] []))
+      { edAdjacent = Just (AdjacentRule 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] []))
       , edPlace = colorPlace Bottle
       }
   , (blocker "time_spirit" 18)
@@ -147,6 +177,8 @@ builtinDefs =
           _ -> Nothing
       , edBlocksSwap = False
       , edPortal = True
+      , edPushable = True
+      , edRecolorable = True
       , edOnHit = const HitDestroy
       , edEnd = Just (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))
       , edPlace = \args cell -> case (args, cell) of
@@ -171,6 +203,8 @@ gemDef name k blast =
     , edActivates = const (Just True)
     , edPortal = True
     , edOnHit = const HitDestroy
+    , edRecolorable = True
+    , edPushable = True
     , edKeepOnShuffle = const (k /= Normal)
     , edBlast = blast
     , edPlace = \_ _ -> Nothing
@@ -299,17 +333,21 @@ tickRun _ b =
 -- | 蜗牛爬行（跳过本步被皮带移过的格，传送门端点当墙）。
 snailRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 snailRun ctx b =
-  let (ms, b') = traceSnails (ecAvoid ctx) (ecWalls ctx) b
+  let (ms, b') = traceSnailsBy (ecPushable ctx) (ecAvoid ctx) (ecWalls ctx) b
   in (if null ms then Nothing else Just (EndSnail ms), b')
 
 -- | stepSnailsAvoidingBlocked 的逐只记录版：对同一快照顺序逐只调用 stepSnailAtBlocked，
 -- 结果盘面与原函数完全一致（测试锁定）。
 traceSnails :: [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
-traceSnails avoid walls b0 = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
+traceSnails = traceSnailsBy pushable
+
+-- | traceSnails，可推动谓词由调用方给出（段 4：步末上下文 ecPushable = 注册表的 edPushable）。
+traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
+traceSnailsBy canPush avoid walls b0 = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
   where
     one (acc, board) pos = case getCell board pos of
       Snail dr dc ->
-        let board' = stepSnailAtBlocked walls board pos
+        let board' = stepSnailAtBy canPush walls board pos
             next = (fst pos + dr, snd pos + dc)
             mv = case getCell board' pos of
               Snail dr' dc' -> SnailMove pos pos (dr', dc') Nothing

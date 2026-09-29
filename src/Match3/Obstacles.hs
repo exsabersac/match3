@@ -23,6 +23,7 @@ module Match3.Obstacles
   , hatsAdjacentTo
   , triggerAdjacentHats
   , triggerAdjacentHatsExcept
+  , triggerAdjacentHatsBy
   , makersAdjacentSameColor
   , chargeAdjacentMakers
   , chargeAdjacentMakersSit
@@ -32,6 +33,7 @@ module Match3.Obstacles
   , bottlesAdjacentTo
   , triggerAdjacentBottles
   , triggerAdjacentBottlesExcept
+  , triggerAdjacentBottlesBy
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits
   , chipAdjacentTimeSpiritsExcept
@@ -298,7 +300,11 @@ triggerAdjacentHats b cleared = triggerAdjacentHatsExcept b cleared []
 -- Surprise-opened specials (saved same wave) must sit unchanged — Hat must not
 -- swap/cycle their color before the next move (parity with maker_bomb_survives_wave).
 triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
-triggerAdjacentHatsExcept b cleared protected =
+triggerAdjacentHatsExcept = triggerAdjacentHatsBy isGem
+
+-- | 段 4：可改色谓词由调用方给出（元素框架里 = 注册表的 edRecolorable；内置等于 isGem）。
+triggerAdjacentHatsBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
+triggerAdjacentHatsBy recolorable b cleared protected =
   foldl triggerOne b (hatsAdjacentTo b cleared)
   where
     skip = nub (cleared ++ protected)
@@ -309,7 +315,7 @@ triggerAdjacentHatsExcept b cleared protected =
             , inBoard p
             , p `notElem` skip
             , let cell = at board p
-            , isGem cell
+            , recolorable cell
             ]
           sorted = nub (sort nbrs)
       in case sorted of
@@ -445,7 +451,11 @@ triggerAdjacentBottles b cleared = triggerAdjacentBottlesExcept b cleared []
 -- Surprise-opened specials and Maker-produced Bombs sit same-wave; Bottle
 -- must not recolor them (parity with maker_bomb_survives_wave / Surprise sit).
 triggerAdjacentBottlesExcept :: Board -> [Pos] -> [Pos] -> Board
-triggerAdjacentBottlesExcept b cleared protected =
+triggerAdjacentBottlesExcept = triggerAdjacentBottlesBy isGem
+
+-- | 段 4：可改色谓词由调用方给出（同 triggerAdjacentHatsBy）。
+triggerAdjacentBottlesBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
+triggerAdjacentBottlesBy recolorable b cleared protected =
   foldl dyeOne b (bottlesAdjacentTo b cleared)
   where
     skip = nub (cleared ++ protected)
@@ -458,7 +468,7 @@ triggerAdjacentBottlesExcept b cleared protected =
                 , inBoard p
                 , p `notElem` skip
                 , let cell = at board p
-                , isGem cell
+                , recolorable cell
                 ]
           in foldl (\bd p -> setAt bd p (recolorCell (at bd p) col)) board (nub nbrs)
         _ -> board

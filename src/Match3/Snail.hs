@@ -3,6 +3,8 @@
 module Match3.Snail
   ( stepSnailAt
   , stepSnailAtBlocked
+  , stepSnailAtBy
+  , pushable
   , stepSnails
   , stepSnailsAvoiding
   , stepSnailsAvoidingBlocked
@@ -65,12 +67,16 @@ stepSnailAt = stepSnailAtBlocked []
 -- Snails are immortal and not portal-transferable; occupying a portal forever
 -- kills the pair (same class of bug as Bottle/Maker/Hat seeded on a portal).
 stepSnailAtBlocked :: [Pos] -> Board -> Pos -> Board
-stepSnailAtBlocked walls b pos = case at b pos of
+stepSnailAtBlocked = stepSnailAtBy pushable
+
+-- | 段 4：可推动谓词由调用方给出（元素框架里 = 注册表的 edPushable；内置等于 pushable）。
+stepSnailAtBy :: (Cell -> Bool) -> [Pos] -> Board -> Pos -> Board
+stepSnailAtBy canPush walls b pos = case at b pos of
   Snail dr dc ->
     let next = (fst pos + dr, snd pos + dc)
     in if not (inBoard next) || next `elem` walls || blocksSnail (at b next)
          then setAt b pos (Snail (-dr) (-dc))
-         else if pushable (at b next)
+         else if canPush (at b next)
            then
              -- Swap: snail moves to next, gem is pushed into snail's old cell
              let gem = at b next

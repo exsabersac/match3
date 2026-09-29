@@ -126,6 +126,7 @@ test-suite match3-test
   main-is: Spec.hs
   other-modules:
       Spec.Boosters
+      Spec.Branches
       Spec.Cascade
       Spec.Element
       Spec.Engine

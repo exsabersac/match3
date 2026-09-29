@@ -14,6 +14,7 @@ module Match3.Board.Gravity
   , drainBottomCookiesWith
   , drainEdgesMWith
   , applyPortalTeleportsWith
+  , portalTeleport
   , settleBoardPortalsWith
   , settleDrainWith
   , refill
@@ -21,7 +22,7 @@ module Match3.Board.Gravity
   ) where
 
 import Data.List (nub, nubBy)
-import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith, portalWith)
+import Match3.Element.Registry (Registry, drainEdgesWith, fallsWith, teleportWith)
 import Match3.Element.Types (Edge(..))
 import Match3.Types
 import System.Random (RandomGen)
@@ -86,14 +87,19 @@ drainEdgesMWith reg mb =
              (mb2, more) = drainEdgesMWith reg (applyGravityWith reg mb1)
          in (mb2, hits ++ more)
 
--- | applyPortalTeleports（指定注册表）：本体 edPortal 的格可传送。
+-- | applyPortalTeleports（指定注册表）：段 4 起传送门是关卡级元素，经注册表的 HookTeleport 取实现
+-- （内置 = portalTeleport；本体 edPortal 的格可传送）；未注册时不传送。
 applyPortalTeleportsWith :: Registry -> [(Pos, Pos)] -> MBoard -> MBoard
-applyPortalTeleportsWith reg portals mb =
+applyPortalTeleportsWith = teleportWith
+
+-- | 传送门的实现（内置 LevelDef "portal" 的钩子）：可穿门谓词由注册表给出。
+portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard
+portalTeleport canPort portals mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.
   foldl tryPair mb (nub portals)
   where
     atM m (r, c) = (m !! r) !! c
-    transferable (Just cell) = portalWith reg cell
+    transferable (Just cell) = canPort cell
     transferable Nothing = False
     tryPair m (a, b) =
       case (atM m a, atM m b) of

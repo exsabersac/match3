@@ -2,7 +2,8 @@
 
 -- | 匹配检测与提示：找 ≥3 连（MatchRun）、是否存在匹配、是否存在可走的一手（findHint）。
 --
--- 依赖：Grid、元素注册表（哪些格参与匹配 / 能交换）、Rainbow / Combos（彩虹与特殊合成也算可走）。只读盘面。
+-- 依赖：Grid、元素注册表（哪些格参与匹配 / 能交换；成对交换规则 edSwap = 彩虹与特殊合成也算可走，段 4）、
+-- Rainbow（只用 isRainbow：普通匹配提示排除彩虹本体，残留见 docs/architecture.md）。只读盘面。
 -- 第二刀 2b：「哪些格打断连线」不再按构造器列举，改为查注册表 matchColorWith
 -- （本体颜色 + 挡匹配的叠层）；新增元素只需在它的 ElementDef 里声明。段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 module Match3.Board.Match
@@ -17,9 +18,9 @@ module Match3.Board.Match
 
 import Data.List (nub)
 import Data.Maybe (isJust)
-import Match3.Combos (isSpecialCombo)
-import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, matchColorWith, upperBlocksSwapWith)
-import Match3.Rainbow (isRainbow, isRainbowSwap)
+import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, matchColorWith, swapRules, upperBlocksSwapWith)
+import Match3.Element.Types (SwapRule(..))
+import Match3.Rainbow (isRainbow)
 import Match3.Types
 import Match3.Board.Grid
 
@@ -68,11 +69,11 @@ hasAnyMatchWith reg = not . null . findMatchRunsWith reg
 hasValidMoveWith :: Registry -> Board -> Bool
 hasValidMoveWith reg = maybe False (const True) . findHintWith reg
 
--- | findHint（指定注册表）。普通匹配提示只试「有色且能交换」的格；彩虹 / 特殊合成提示只排除
--- 上层（锁链 / 火箭冰冻）挡交换的格，本体由 isRainbowSwap / isSpecialCombo 自己判定。
+-- | findHint（指定注册表）。普通匹配提示只试「有色且能交换」的格；成对交换规则（段 4：注册表的 edSwap，
+-- 内置 = 彩虹、特殊合成，按 srOrder 逐条）的提示只排除上层（锁链 / 火箭冰冻）挡交换的格，本体由规则自己判定。
 findHintWith :: Registry -> Board -> Maybe (Pos, Pos)
 findHintWith reg b =
-  case matchHints ++ rainbowHints ++ comboHints of
+  case matchHints ++ concatMap ruleHints (swapRules reg) of
     (x : _) -> Just x
     [] -> Nothing
   where
@@ -88,7 +89,7 @@ findHintWith reg b =
       , not (isRainbow (getCell b p1) || isRainbow (getCell b p2))
       , hasAnyMatchWith reg (swapCells b p1 p2)
       ]
-    rainbowHints =
+    ruleHints rule =
       [ (p1, p2)
       | r <- [0 .. boardSize - 1]
       , c <- [0 .. boardSize - 1]
@@ -96,17 +97,7 @@ findHintWith reg b =
       , p2 <- [(r, c + 1), (r + 1, c)]
       , inBounds p2
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
-      , isRainbowSwap b p1 p2
-      ]
-    comboHints =
-      [ (p1, p2)
-      | r <- [0 .. boardSize - 1]
-      , c <- [0 .. boardSize - 1]
-      , let p1 = (r, c)
-      , p2 <- [(r, c + 1), (r + 1, c)]
-      , inBounds p2
-      , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
-      , isSpecialCombo b p1 p2
+      , srFires rule b p1 p2
       ]
     hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
     upperLocked = upperBlocksSwapWith reg

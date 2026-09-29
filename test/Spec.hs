@@ -15,6 +15,7 @@ import qualified Spec.Boosters
 import qualified Spec.GoalsLevels
 import qualified Spec.Element
 import qualified Spec.Extension
+import qualified Spec.Branches
 import qualified Spec.Engine
 import qualified Spec.UIEvents
 import qualified Spec.ReplayUndo
@@ -40,6 +41,7 @@ tests =
         , Spec.GoalsLevels.tests
         , Spec.Element.tests
         , Spec.Extension.tests
+        , Spec.Branches.tests
         , Spec.Engine.tests
         , Spec.UIEvents.tests
         , Spec.ReplayUndo.tests

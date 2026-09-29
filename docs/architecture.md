@@ -174,20 +174,23 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `edColor` | 本体颜色（无挡匹配的上层时参与匹配；颜色袋计数） | `Board.Match.groupGemRuns`、`Clear.countColor`、提示 |
 | `edBlocksMatch` | 冰 / 叠层盖住的宝石不参与匹配 | `matchColorWith` |
 | `edBlocksSwap` | 本格不能被交换 | `Move` / `Boosters` 校验、`findHint` |
+| `edSwap` | 段 4：成对交换规则 `SwapRule{srOrder, srFires 交换前盘, srSeeds 交换后盘}`：交换两端的组合直接给出起手种子（不必成三连）；多条按 `srOrder` 取第一条成立的。内置：彩虹取色（rainbow，10）、特殊 × 特殊合成（挂在 line_h 上，20） | `Registry.swapOpeningWith`（`Game.Move` / `Game.Boosters` 自由交换）、`Board.Match.findHintWith` |
 | `edActivates` | 特殊块能否点火（软锁纪律） | `Clear.expandSpecials` |
 | `edFalls` / `edPortal` / `edDrains` | 随重力下落（否则把列分段）/ 可穿传送门 / 到达哪些边时被收走（`[Edge]`，`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`；内置饼干 = `[EdgeBottom]`，段 2c 起方向可配） | `Board.Gravity.drainEdgesMWith` |
 | `edOnHit` | 直接命中（锤子、爆炸、十字）：`HitPierce` 穿过 / `HitAbsorb 新格` 吸收 / `HitDestroy` 打碎 / `HitImmune` 免疫 | `Clear.clearWaveWith`、`Ice.chipIceOnClear`、`hammerImmune` |
-| `edAdjacent` | 邻格真消除时的反应（`AdjacentRule 顺序 规则`，规则拿到 `AdjCtx{真消除格, 直接命中格, 保护格}`，返回 `AdjOut{新盘, 打碎格, 生成格}`） | `Clear.clearWaveWith`（按 `arOrder` 依次跑） |
+| `edAdjacent` | 邻格真消除时的反应（`AdjacentRule 顺序 规则`，规则拿到 `AdjCtx{真消除格, 直接命中格, 保护格, 可改色谓词 acRecolor}`，返回 `AdjOut{新盘, 打碎格, 生成格}`） | `Clear.clearWaveWith`（按 `arOrder` 依次跑） |
+| `edOpen` | 段 4：开启规则 `OpenRule{orOpen 盘 前沿 → (盘, 爆炸种子, 本轮坐住的格)}`：一轮内可多次开启（新爆炸再波及），开出的格本轮坐住。内置：彩蛋 | `Clear.surpriseClearPassWith`（经 `Registry.openWith`，多条规则依次跑） |
+| `edRecolorable` / `edPushable` | 段 4：本体可被魔法帽 / 染色瓶改色、可被蜗牛推动（原先写死 `isGem` / `Snail.pushable`；内置取值相同：宝石各种类 + 倒计时 + 双面块） | `AdjCtx.acRecolor`、`EndCtx.ecPushable`（`Registry.recolorableWith` / `pushableWith`） |
 | `edStripOnClear` | 本格真消除时叠层随格清掉 | `Clear` |
 | `edCounter` / `edDiffCounter` / `edBonusMoves` | 进入清除格计数 / 按步前步后个数差计数 / 每少一个奖励步数 | `Board.Cascade`（`ctNamed`）、`Game.Resolve`、`Game.Tally.diffCountsWith` |
 | `edVacatesCarpet` | 离开格子也算覆盖地毯 | `Game.Tally.carpetVacateSeedsWith` |
 | `edKeepOnShuffle` | 洗牌时原样放回 | `Game.Shuffle.extractDecorWith` / `ensurePlayableWith` |
 | `edBlast` | 被消除且能点火时的爆炸范围 | `Clear.expandSpecials` |
 | `edGround` | 地面层（`SlotGround`）：上方格子每被消除 / 收走一次，层数 → 新层数（`Nothing` = 清掉）；每去掉一层按 `edCounter` 计 1 | `Registry.hitGroundWith`（`Game.Resolve` 逐轮调用） |
-| `edEnd` | 步末规则 `EndRule{erPhase, erOrder, erRun, erHoles}`：`PhaseTick`（倒计时）→ 皮带（关卡特性）→ `PhaseSpread`（蔓延）→ `PhaseMove`（蜗牛）→ 再连锁；`erHoles`（段 2c）在全部步末阶段之后给出要挖空的格，由 `cascadeAfterEndWith` 补结算（内置三处都是 `const []`） | `Game.Resolve.runPhase`、`Cascade.cascadeCountdownsWith`、`Trace.traceSpreadsWith` |
+| `edEnd` | 步末规则 `EndRule{erPhase, erOrder, erRun, erHoles}`：`PhaseTick`（倒计时）→ 皮带（关卡特性）→ `PhaseSpread`（蔓延）→ `PhaseMove`（蜗牛）→ 再连锁；规则拿到 `EndCtx{ecAvoid, ecWalls, ecPushable}`；`erHoles`（段 2c）在全部步末阶段之后给出要挖空的格，由 `cascadeAfterEndWith` 补结算（内置三处都是 `const []`） | `Game.Resolve.runPhase`、`Cascade.cascadeCountdownsWith`、`Trace.traceSpreadsWith` |
 | `edPlace` | 关卡放置：`Place 名字 参数 坐标` 经它落到格子上 | `Game.Level.decorateLevelWith`（`levelPlacements` 放置表） |
 
-`baseDef name` 是自定义元素的缺省：挡交换、会下落、直接命中免疫、洗牌保留、无邻格 / 步末规则、放置结果为 `Custom name n`——即「注册了但什么都不做」的惰性占格。未注册的 `Custom` 也按它处理。
+`baseDef name` 是自定义元素的缺省：挡交换、会下落、直接命中免疫、洗牌保留、无邻格 / 步末 / 成对交换 / 开启规则、不可改色、不可推动、放置结果为 `Custom name n`——即「注册了但什么都不做」的惰性占格。未注册的 `Custom` 也按它处理。
 
 ### 邻格规则顺序
 
@@ -242,26 +245,43 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 1. 选层：本体用 `Custom "名字" 值`（值自定义，例如耐久）；格子下面的层用 `SlotGround`（放进 `gsGround`）；需要新的内置层时才动 `Types`。
 2. 写定义：从 `baseDef "名字"` 起，只改需要的字段（例如 `edOnHit`、`edAdjacent`、`edCounter`、`edFalls`、`edDrains`、`edGround`）。邻格规则选一个不和现有顺序冲突的 `arOrder`；步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。
-   - 只经注册表即可接入的类别（白名单）：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留）、叠层与冰的命中规则、地面层 `SlotGround`、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素。
-   - 仍需改主流程的：可匹配的有色宝石、跨轮状态、成对组合规则、关卡级特性（见下节）。
+   - 只经注册表即可接入的类别（白名单）：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留）、叠层与冰的命中规则、地面层 `SlotGround`、任意方向的边缘收集物、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素；段 4 起还有：成对交换规则（`edSwap`）、开启类元素（`edOpen`）、可被改色 / 推动（`edRecolorable` / `edPushable`）。
+   - 仍需改主流程的：可匹配的有色宝石、新**种类**的关卡级元素（需要 `GameState` 新字段 + 新 `LevelHook` 构造器，见下节「残留」）。
 3. 注册：`register def defaultRegistry`，把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 `edPlace` 落格。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；步末有新效果时在前端各查找表里加一行。
 6. 测试：参照 `element_registry_custom_crate_extensibility` 与 `test/Spec/Extension.hs`（测试专用「木箱」只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
-### 仍保留专门分支的元素
+### 专门分支的收编（段 4）
 
-第三刀逐项看过，下列元素**保持原样**（机制刀停期间不改规则；它们要么不是「单个格子的反应」，要么迁过去需要扩展钩子类型、等于改规则流水线）：
+段 4 把原先写死在主流程里的专门分支收进元素框架：主流程只经注册表取规则，内置实现挪到 `Element.Builtin` 的定义里。金标准 2344 行全等、三场景截图 AE=0。**段 4 没有改动 `Engine.*`**（只动了 `Match3.*`）。
 
-| 元素 / 概念 | 为什么不迁进注册表 |
-|-------------|--------------------|
-| 彩蛋 `Surprise` | 多轮开启、开出的特殊块要跨轮保存；现有钩子（`AdjOut{新盘, 打碎格, 生成格}`）只描述单轮结果，迁移需要新的跨轮状态钩子 |
-| 彩虹 `Rainbow` | 清哪种颜色取决于**交换对象**（输入），属于 `Move` 的起手选择，不是格子自身的反应 |
-| 特殊 × 特殊合成 | 两个格子之间的组合规则（`Combos`），单元素钩子表达不了成对关系 |
-| 飞碟 | 不在格子里（`gsUfos`），按整轮吸收同色，时机在一轮清除之后 |
-| 皮带 / 传送门 / 地毯 | 关卡特性，存在 `GameState`（`gsBelts` / `gsPortals` / `gsCarpet*`）而不在格子里 |
-| `LevelGoal` / `SpreadKind` | 封闭 ADT，被关卡表、目标判定、HUD / 标题文案穷举匹配；改成开放表示要改所有穷举点，却不带来新行为。段 2c 起新元素用 `GoalNamed 名字 N` 作目标，不必再加构造器 |
-| 魔法帽 / 染色瓶 / 蜗牛内部的 `isGem` / 可推判断 | 「对任意宝石生效」的语义谓词；换成注册表查询（如 `edColor`）会把双面块 / 倒计时等带色格的边界情况一起改掉，属于规则变化 |
+| 原专门分支 | 段 4 之后 | 主流程入口 |
+|------------|-----------|------------|
+| 彩虹取色（`Move` / `Boosters` / `findHint` 直接调 `isRainbowSwap` / `rainbowClearSeeds`） | rainbow 定义的 `edSwap = SwapRule 10 isRainbowSwap rainbowClearSeeds` | `Registry.swapOpeningWith`、`findHintWith` 逐条 `swapRules` |
+| 特殊 × 特殊合成（`isSpecialCombo` / `comboClearSeeds`） | `SwapRule 20`，挂在 line_h 定义上（规则自己检查两端） | 同上 |
+| 彩蛋开启（`Clear` 直接调 `Obstacles.openSurprises`） | surprise 定义的 `edOpen = OpenRule openSurprises` | `Registry.openWith`（`surpriseClearPassWith` 成为通用的「开启类元素」流程） |
+| 魔法帽 / 染色瓶只改 `isGem` 的格 | `edRecolorable`（内置 = gem 各种类、countdown、flip） | `AdjCtx.acRecolor` → `triggerAdjacentHatsBy` / `triggerAdjacentBottlesBy` |
+| 蜗牛只推 `Snail.pushable` 的格 | `edPushable`（同上） | `EndCtx.ecPushable` → `stepSnailAtBy` / `traceSnailsBy` |
+| 飞碟（`Cascade` 直接调 `stepUfos`） | `LevelDef "ufo" (HookAbsorb …)` | `Registry.absorbWith` |
+| 皮带（`Resolve` 直接调 `beltMoves`） | `LevelDef "belt" (HookShift beltMoves)` | `Registry.beltShiftWith` |
+| 传送门（`Gravity` 里写死实现） | `LevelDef "portal" (HookTeleport portalTeleport)` | `Registry.teleportWith` |
+| 地毯（`Resolve` 直接调 `coverCarpets`） | `LevelDef "carpet" (HookCover coverCarpets)` | `Registry.coverWith` |
+
+关卡级元素（`LevelDef{ldName, ldHook}`，`registerLevel` / `removeLevel` / `levelDefs`）：不在格子里、状态在 `GameState` 专用字段的机制。`LevelHook` 按时机分四种：`HookAbsorb`（每轮补子之后整轮吸收）、`HookShift`（步末 Tick 之后、Spread 之前的移位）、`HookTeleport`（沉降时传送，谓词 = `edPortal`）、`HookCover`（覆盖目标格）。未注册即不生效（测试 `br_level_hooks_*` 在 38 关实测）。
+
+护栏（`test/Spec/Branches.hs`，样例元素拉杆 / 豆荚 / 小车只在测试里）：测试专用成对规则、开启规则、可推动元素只经注册表生效；内置谓词与原写死谓词逐格相同；去掉关卡级元素后飞碟 / 皮带 / 地毯不生效；源码扫描 `br_main_flow_no_special_branches`（`Move` / `Boosters` / `Match` 不点名彩虹取色与特殊合成，`Clear` 不 import `Obstacles`，`Cascade` 不用 `stepUfos`，`Resolve` 不用 `coverCarpets` / `beltMoves`，`Gravity` 不用 `portalWith`）。
+
+**残留（抽不干净的，及原因）**：
+
+| 残留 | 原因 |
+|------|------|
+| `Board.Match.findHint` 的普通匹配提示仍用 `Rainbow.isRainbow` 排除彩虹本体 | 这是「提示先给哪一对」的顺序问题而不是规则：彩虹本体有颜色字段，去掉排除后含彩虹的交换对可能先以普通匹配提示给出（仍是合法走步）。实测去掉后金标准仍全等，但任意盘面上的提示选择不再保证与原来相同；改成「任一成对规则成立就排除」也不等价（特殊合成对会被推后）。机制刀停期间不改提示行为，保留 |
+| 关卡级元素的状态仍在 `GameState` 专用字段（`gsUfos` / `gsBelts` / `gsPortals` / `gsCarpetOpen` 与 `gsUfoCollected` / `gsCarpetsCovered`），`LevelHook` 是按机制各自定义的封闭和类型；关卡搭建（`Game.Level`）直接构造这些字段 | 字段参与撤销快照、存档、HUD、目标判定与金标准投影；换成开放的「按名字存状态」要改所有这些读点，却不带来新行为。新增**同种时机**的关卡级元素可复用现有构造器；新种类要加字段 + 构造器 + 调用点 |
+| 钩子调用时机写死在主流程（吸收在补子后、移位在 Tick 与 Spread 之间……） | 时机由钩子种类决定，改成可配置等于改规则流水线 |
+| `Resolve` 仍 import `Conveyor.applyBeltMoves`；`Trace` 重放 `EndBeltShift` 时也直接用它；`Trace` 再导出 `beltMoves` | `applyBeltMoves` 是「按 (原格, 新格) 列表移格」的通用搬运，与皮带语义无关；再导出只为兼容旧 import |
+| `Rainbow` / `Combos` / `Obstacles` / `Snail` 里的规则实现本身 | 实现仍在各自模块，只是改由 `Element.Builtin` 引用；旧的 `*Except` / `stepSnailAtBlocked` 保留为 `By isGem` / `By pushable` 的包装（测试与 `Board.Default` 在用） |
+| `LevelGoal` / `SpreadKind` | 封闭 ADT，被关卡表、目标判定、HUD / 标题文案穷举匹配；新元素用 `GoalNamed 名字 N` 作目标，不必再加构造器 |
 | 自定义元素不能是可匹配的有色宝石 | 需要让 `Custom` 参与匹配与补子生成，是新玩法，机制刀停期间不做 |
 
 ## 多游戏接口

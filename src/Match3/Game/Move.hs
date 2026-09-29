@@ -1,7 +1,7 @@
 -- | 玩家交换：trySwap（= runMove）与回放 traceSwap。两者都是 resolveSwap 的投影：
 -- 同一次计算同时产出新状态、结局与回放脚本（Match3.Game.Resolve.resolveMove），天然一致。
 --
--- 依赖：Resolve、State、Trace、Match3.Board.*、元素注册表（挡交换）、Rainbow / Combos（起手种子）。
+-- 依赖：Resolve、State、Trace、Match3.Board.*、元素注册表（挡交换、成对交换规则 = 彩虹 / 特殊合成的起手种子）。
 -- 护栏 trace_swap_final_equals_trySwap、trace_end_steps_replay_to_trySwap_final、trace_rejected_move_is_empty、
 -- trace_shuffle_step_replays。
 module Match3.Game.Move
@@ -16,9 +16,7 @@ module Match3.Game.Move
 import Match3.Board.Grid (inBounds, adjacent, swapCells)
 import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, swapBlockedWith)
-import Match3.Combos (isSpecialCombo, comboClearSeeds)
-import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
+import Match3.Element.Registry (Registry, swapBlockedWith, swapOpeningWith)
 import Match3.Types
 import Match3.Game.Resolve
 import Match3.Game.State
@@ -37,17 +35,14 @@ resolveSwapWith reg p1 p2 gs
   | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
-  | not rainbow && not specialCombo && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
+  | pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
   | otherwise = resolveMoveWith reg KindSwap swapped opening gs
   where
     board0 = gsBoard gs
     swapped = swapCells board0 p1 p2
-    rainbow = isRainbowSwap board0 p1 p2
-    specialCombo = isSpecialCombo board0 p1 p2
-    opening
-      | rainbow = OpenSeeds (Just p2) (rainbowClearSeeds swapped p1 p2)
-      | specialCombo = OpenSeeds (Just p2) (comboClearSeeds swapped p1 p2)
-      | otherwise = OpenMatch (Just p2)
+    -- 成对交换规则（段 4：彩虹取色 / 特殊合成经注册表的 edSwap，按 srOrder 取第一条成立的）
+    pairRule = swapOpeningWith reg board0 swapped p1 p2
+    opening = maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
 
 -- | 玩家相邻交换入口（结算结果）。步骤见 Match3.Game.Resolve。
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)

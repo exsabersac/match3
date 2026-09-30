@@ -287,6 +287,8 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 `make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-snow-boss 合入 main 9f5504e 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 23 组、动画一致性 21 组全部一致（含第 43 / 44 关与第 45 关种子 1–3）；e2e 89 项全过（46 关逐关贴图护栏全空（含多格护栏）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证，无控制台错误）；`make android-check` 6 项全过。
 feat/chameleon 合入 main 42e1173 后（第 47 关变色龙 + `Match3.GoalLabel`）再跑 `make check`：`stack test` 381 通过；状态一致性 23 组、动画一致性 21 组全部一致；e2e 89 项全过（47 关逐关贴图护栏全空，第 47 关 HUD「目标 变色龙」，无控制台错误）。
+
+feat/magic-ground（新玩法 8 魔法地格 + 第 48 关「魔法格」+ 碎石失败提示改为「砸开碎石」，基于 4783210）跑 `make check`：`stack test` 389 通过；状态一致性 23 组、动画一致性 21 组全部一致；e2e 89 项全过（48 关逐关贴图护栏全空、48 关 HUD 目标标签都是中文，无控制台错误）。网页端对魔法地格尚未跟进（地面层 `magic` 画成表外名字的淡灰框，见上文待跟进）。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

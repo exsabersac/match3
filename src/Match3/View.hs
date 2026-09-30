@@ -338,6 +338,7 @@ namedGoalLabelTable =
   , ("bubble", "气泡")         -- 段 5：气泡（第 40 关）
   , ("magic_stone", "魔法石")  -- 新玩法 2
   , ("fuzzball", "毛球")       -- 新玩法 3：毛球（第 43 关）
+  , (unElementName snowBossName, "雪怪")  -- 新玩法 5：雪怪 Boss（第 45 关，目标 = 击败 Boss）
   ]
 
 -- | 颜色的中文名（与图例、ui-art.md 的颜色表一致）。

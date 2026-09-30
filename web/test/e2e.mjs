@@ -313,12 +313,12 @@ try {
       if (Object.keys(fb).length) bad.push({ level: li + 1, fallbacks: fb });
     }
     report.fallbackLevels = nLevels;
-    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 44 && bad.length === 0, bad);
-    for (const lv of [43, 44]) {
+    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 46 && bad.length === 0, bad);
+    for (const lv of [43, 44, 46]) {
       const row = report.fallbacksByLevel.find((x) => x.level === lv);
       check(`第 ${lv} 关 m3debug.fallbacks 为空`, !!row && Object.keys(row.fallbacks).length === 0, row);
     }
-    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 44 && badGoal.length === 0, badGoal);
+    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 46 && badGoal.length === 0, badGoal);
     await P.ctx.close();
   }
 

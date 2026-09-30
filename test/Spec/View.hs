@@ -409,4 +409,6 @@ frontends_read_view_model = do
   assertEqual "every level goal has a Chinese label" [] [(lvIndex l, goalLabel (lvGoal l)) | l <- levelViews, rawIdent (goalLabel (lvGoal l))]
   assertEqual "every daily goal has a Chinese label" [] [goalLabel g | g <- dailyGoals, rawIdent (goalLabel g)]
   assertEqual "level 43 goal label" "毛球" (goalLabel (gvGoal (gameView (levelGame 42 1))))
+  assertEqual "level 45 goal label" "雪怪" (goalLabel (gvGoal (gameView (levelGame 44 1))))
+  assertEqual "level 46 goal label" "饼干" (goalLabel (gvGoal (gameView (levelGame 45 1))))
   assertEqual "unregistered named goal falls back to its name" "x_elem" (goalLabel (goalInfo (goalCount (CountNamed (ElementName "x_elem")) 3) 0))

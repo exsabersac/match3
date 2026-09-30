@@ -120,12 +120,19 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   而 `snow_boss` 贴图在图集里，降级护栏查不出。现在带 `q`（本格在多格整体里的编号）的 Custom 格一旦走到通用画法（整格或缩放），
   就按 `<元素名>#多格通用画法` 计进 `m3debug.fallbacks`，逐关护栏随之失败；e2e 另做反证（页面里 `import("/cells.js")` 后
   `forceGeneric.add("snow_boss")` 强制旧画法，护栏必须报出），并截前后对比 `snow-boss-crop-before-generic.png` / `snow-boss-crop-after.png`。
-- 待跟进（网页版未改）：第 46 关饼干掉落口——饼干格本身网页端已有画法（`cookie`）、玩法由核心结算自动生效；
-  只缺掉落口标记：核心 `Match3.View.BoardView.bvDrops`（掉落口格）尚未经 Api 编码，网页端要画的话按格子上沿画 `cookie_drop`。
-- 待跟进（网页版未改）：第 47 关变色龙 `{t:"custom", name:"chameleon", v:0..4}`（v = 当前颜色下标，0..4 = C1 红 / C2 绿 / C3 蓝 / C4 黄 / C5 紫，
-  解码同核心 `Match3.Element.Builtin.chameleonColor`）应先画 `gem_c${v+1}` 再叠一张慢转的 `chameleon` 环；HUD / 地图目标图标
-  `chameleon_icon`，降级色 = 当前颜色。每步换色是步末 `EvTick`（元素 `chameleon`，每项原格改写），按类型复用倒计时段即可；
-  彩虹 × 变色龙由核心成对规则结算。该关同样有掉落口（(0,3)，`bvDrops` 同上待编码）。HUD 目标标签已由核心 `goalLabel` 给出「变色龙」。跟进之前网页端按元素名画图集里的 `chameleon` 环贴图（不走几何降级，e2e 的 `fallbacks` 护栏查不出，底下也没有当前颜色的宝石）。
+- 第 46 关饼干掉落口——饼干格沿用 `cookie` 画法，补子由核心结算（新补的饼干和宝石一样按 `fall` 表从上沿落入）；掉落口格经 Api
+  `state.drops`（视图模型 `bvDrops`）给出，`cells.js` 的 `drawDrops` 同桌面 `UI.BoardArt.drawDropsArt`：棋子之上、格子上沿（上移 6）
+  画 `cookie_drop`，不随下落偏移；画的时机也同桌面（静止盘 / 高亮段 / 轻落 / 皮带 / 蜗牛段画，消失 / 下落段不画；唯一不同是交换补间里也画，
+  桌面 `drawSwap` 不画，见 §8.1）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
+- 第 47 关变色龙 `{t:"custom", name:"chameleon", v:0..4, c:1..5}`——v 是核心的颜色下标（0..4 = C1 红 / C2 绿 / C3 蓝 / C4 黄 / C5 紫），
+  `c` 由 Api 按核心 `Match3.Element.Builtin.chameleonColor` 解码（同宝石的 `c`，前端不换算 v）。`cells.js` 的 `drawChameleon`
+  同桌面 `UI.Cell.Art.artChameleon`：先画当前颜色的宝石 `gem_c<c>`，再叠一张缓慢旋转的五色描边环 `chameleon`（角度 = 呼吸计数 mod 360 度）；
+  `primarySprite` = `gem_c<c>`、降级色 / 消除碎屑色 = 当前颜色（同桌面 `cellRGB`）。带颜色 `c` 的 Custom 格若走到通用的「元素名贴图 + 角标」
+  画法（接入前就是这样：只有环、没有底下的宝石），按 `<元素名>#通用画法缺底层宝石` 计进 `fallbacks`，逐关护栏随之失败。
+  每步换色是步末 `EvTick "chameleon"`（每项原格改写），`render.js` 的倒计时段照常播（同桌面 `drawEndTick`：前半段旧盘、后半段新盘，全程红光脉冲）；
+  彩虹 × 变色龙由核心成对交换规则 15 结算，网页只播事件（通用的逐轮高亮 / 消失）。HUD：目标条左侧画 `state.goal.icon`
+  （`UI.GoalIcon.goalIcon`，与桌面 HUD 同一张表，本关 `chameleon_icon`），标签「目标 变色龙」读 `state.goal.label`；
+  关名用浏览器字体画 `state.name`「变色龙」（桌面画预渲染文字图 `name_46`，网页图集不收文字图）。该关 (0,3) 的掉落口同第 46 关走 `state.drops`。
 - 待跟进（网页版未改）：第 48 关魔法地格——地面层已经由 Api 编码（`state.ground` 里 `{p:[r,c], name:"magic", layers:1}`，layers 恒为 1、只用于显示），
   网页端 `cells.js` 的 `GROUND` 表还没有 `magic`，现在画的是表外名字的淡灰框（地面层走不到 `fallbacks` 计数，e2e 护栏查不出）；
   补一行 `magic: () => "magic"` 即可（贴图 `magic` 在桌面图集里，重新生成网页图集后可用）。扩大的爆炸不需要新动画：核心的 `EvBlast`
@@ -149,8 +156,8 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 ```
 tools/gen_assets.py（桌面版，已有）→ assets/*.bmp（2x，112 px/格）
                                           │  只读
-web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张，1024×1464，约 372 KB）
-                                            atlas.json（约 3.5 KB，名字 → 矩形）
+web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（124 张，1024×1528，约 384 KB）
+                                            atlas.json（约 3.6 KB，名字 → 矩形）
                                             background.webp（约 17 KB）
 ```
 
@@ -159,7 +166,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm `-Oz` 后 1,737,478 B ≈ 1.74 MB（gzip 674,329 B）；dist 合计 2,194,833 B ≈ 2.19 MB，逐文件 gzip 约 1.05 MB。
+体积（2026-09-30，web-chameleon 合入 main 1cdd4e4 后）：wasm `-Oz` 后 2,004,667 B ≈ 2.00 MB（gzip 758,417 B）；dist 合计 2,549,340 B ≈ 2.55 MB，逐文件 gzip 约 1.21 MB。
 
 ## 3. 工具链与构建
 
@@ -272,7 +279,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 ## 6. 调试要点
 
-- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.perf`；URL `?level=0..45&seed=N` 复现一局；
+- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.dropMarks`（最近一帧画的掉落口标记格与设计坐标）/ `m3debug.overlay`（结算层实际画出的标题 / 副标题）/ `m3debug.perf`；URL `?level=0..46&seed=N` 复现一局；
 - 快捷键：`u` / `z` 撤销，`h` 提示，空格加速；
 - 页面白屏先看网络面板里 `.wasm` 的 Content-Type（必须是 `application/wasm`）。
 
@@ -280,15 +287,12 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（389 个） | `make test-native` |
-| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（23 组，含第 41–45 关（第 45 关种子 1–3）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
-| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（21 组，含第 41–45 关（第 45 关种子 1–3）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
-| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
+| `stack test` | 核心规则（381 个） | `make test-native` |
+| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（29 组，含第 41–47 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 与种子 140 的 `cham-rainbow` 走法）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
+| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（27 组，含第 41–47 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙） |
+| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、第 39 / 40 / 43 / 45 / 47 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-snow-boss 合入 main 9f5504e 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 23 组、动画一致性 21 组全部一致（含第 43 / 44 关与第 45 关种子 1–3）；e2e 89 项全过（46 关逐关贴图护栏全空（含多格护栏）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证，无控制台错误）；`make android-check` 6 项全过。
-feat/chameleon 合入 main 42e1173 后（第 47 关变色龙 + `Match3.GoalLabel`）再跑 `make check`：`stack test` 381 通过；状态一致性 23 组、动画一致性 21 组全部一致；e2e 89 项全过（47 关逐关贴图护栏全空，第 47 关 HUD「目标 变色龙」，无控制台错误）。
-
-feat/magic-ground（新玩法 8 魔法地格 + 第 48 关「魔法格」+ 碎石失败提示改为「砸开碎石」，基于 4783210）跑 `make check`：`stack test` 389 通过；状态一致性 23 组、动画一致性 21 组全部一致；e2e 89 项全过（48 关逐关贴图护栏全空、48 关 HUD 目标标签都是中文，无控制台错误）。网页端对魔法地格尚未跟进（地面层 `magic` 画成表外名字的淡灰框，见上文待跟进）。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-chameleon 合入 main 1cdd4e4 后，`make clean && make check`）：`stack test` 381 通过；状态一致性 29 组、动画一致性 27 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow））；e2e 123 项全过（47 关逐关贴图护栏全空（含多格护栏与「通用画法缺底层宝石」）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证、第 46 关掉落口标记与补下饼干的下落段、第 46 / 47 关掉落口与第 47 关变色龙的真实绘制核对、第 47 关换色段与通用画法反证、5 关玩到失败的结算文字，无控制台错误）；`make android-check` 6 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制
@@ -299,6 +303,22 @@ e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-b
 - 没有音效；没有离线缓存；
 - `m3Swap` 每步返回完整 JSON（中位数约 30 KB，长连锁可达约 120 KB），未做增量；
 - 真机（iOS Safari / Android Chrome）和 itch.io 上线都还没实测，只在无头 Chrome 里验证过。
+
+### 8.1 已知差异（与桌面版，已确认接受）
+
+- **第 45 关雪怪血条的读数时机**：动画播放期间，网页 HUD 的雪怪血条显示**本步之前**的 HP（与网页目标条的进度一致，`main.js` 的 `hudInfo`
+  在 `anim` 非空时读 `state.boss`），桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（测试跑手已用 4 个种子 × 24 步核对）。
+- **第 46 关掉落口标记在交换补间里也画**：网页的交换补间走 `drawCellsExcept`，顺带画了 `cookie_drop`，桌面 `drawSwap` 不画；
+  标记是不动的装饰、不影响状态，补间中与补间结束后的标记格都等于核心 `bvDrops`、坐标同桌面 `drawDropsArt`（`cellOrigin`、上移 6）——
+  e2e 3g 用 `m3debug.dropMarks` 核对（「第 46 关交换补间中 / 补间结束后：掉落口标记格 = state.drops…」两项）。消失 / 下落段两边都不画。
+  3h 另用真实绘制钩子（`drawImage` 调用记录，不读 `dropMarks`）核对第 46 / 47 关静止帧与交换补间帧里 `cookie_drop` 的屏幕矩形
+  = 桌面 `(16+56c, 16+56r−6)` 经布局换算，反证（副本里画到 x+4 而 `dropMarks` 不变）8 项失败。
+- **第 47 关变色龙在缩放 / 弹出画法里的样子**：桌面缩放 / 弹出（`primarySprite` = `"chameleon"`）只画环，网页 `primarySprite` = 当前颜色的
+  `gem_c<c>`，消除缩小、特殊块弹出等缩放段画的是当前颜色的宝石（不带环）；静止盘与步末段两边都是「宝石 + 环」。
+- **第 47 关变色龙环的转速**：角度 = 呼吸计数 mod 360，每个逻辑帧 1 度——桌面 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈（同毛球浮动的帧长差别）。
+- **HUD 目标图标**：网页目标条左侧新画 `state.goal.icon`（`UI.GoalIcon.goalIcon`，与桌面 HUD 同一张表），对所有非 Boss 关卡生效——
+  之前的网页 HUD 只有文字与进度条，现在与桌面 HUD 一样带图标；图标尺寸 = 目标条高，进度条右移（条高 + 6）。
+- **关名文字**：网页用浏览器字体画 `state.name`（第 47 关「变色龙」），桌面画预渲染文字图 `name_46`（网页图集不收文字图）；字形略有不同，文字相同。
 
 ## 9. TODO
 

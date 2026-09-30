@@ -138,6 +138,7 @@ executable match3-sdl
       UI.TextArt
       UI.Types
       ComboFx
+      UI.GoalIcon
       UI.Presentation
       UI.Sound
       Paths_match3
@@ -204,6 +205,7 @@ test-suite match3-test
       ElementQueries
       Golden
       ComboFx
+      UI.GoalIcon
       UI.Presentation
       UI.Sound
       Paths_match3

@@ -4,7 +4,7 @@
 // 全部坐标为棋盘设计单位（格 56，见 cells.js）。
 import {
   CELL, PAD, ROWS, COLS, ELEMENT_RGB, boardW, boardH, breathe, cellRGB, clamp, drawBoardBase, drawCell,
-  drawCellScaled, drawUfos, origin, snailPose, spreadTargets,
+  drawCellScaled, drawDrops, drawUfos, origin, snailPose, spreadTargets,
 } from "./cells.js";
 
 // 时间线常量（帧，60 fps；UI.Types / ComboFx）
@@ -33,7 +33,7 @@ export function styleRGB(st, pulse) { return st.rainbow ? hsv(Math.floor(((pulse
 const waveTint = (k, pulse) => (k <= 1 ? [255, 250, 220] : styleRGB(comboStyle(k), pulse));
 
 // ---------------------------------------------------------------------------
-// 静止盘面：底层 → 提示光 → 棋子 → 选中框 → 蔓延预告（仅静止时）→ 飞碟（UI.BoardArt.drawStaticArt）
+// 静止盘面：底层 → 提示光 → 棋子 → 选中框 → 蔓延预告（仅静止时）→ 飞碟 → 掉落口（UI.BoardArt.drawStaticArt）
 export function drawStatic(ctx, art, v, board, yOff = 0) {
   drawBoardBase(ctx, art, v.st, v.pulse);
   const hintA = Math.round(120 + 135 * breathe(v.pulse, 60));
@@ -50,6 +50,7 @@ export function drawStatic(ctx, art, v, board, yOff = 0) {
     for (const p of spreadTargets(board, "choco")) { const [x, y] = origin(p); art.mod(ctx, "hint_glow", x, y + yOff, CELL, CELL, [210, 120, 60], a); }
   }
   drawUfos(ctx, art, v.st, v.pulse, yOff);
+  drawDrops(ctx, art, v.st);
 }
 
 // 底层 + 除 hidden 以外的格
@@ -57,6 +58,7 @@ function drawCellsExcept(ctx, art, v, board, hidden) {
   drawBoardBase(ctx, art, v.st, v.pulse);
   for (const p of cellsOf()) if (!inList(p, hidden)) { const [x, y] = origin(p); drawCell(ctx, art, v.pulse, x, y, board[p[0]][p[1]]); }
   drawUfos(ctx, art, v.st, v.pulse);
+  drawDrops(ctx, art, v.st);   // 同桌面 drawCellsExcept（皮带 / 蜗牛段）；交换补间也走这里（桌面 drawSwap 不画）。消失 / 下落段两边都不画
 }
 
 function veil(ctx, alpha) {

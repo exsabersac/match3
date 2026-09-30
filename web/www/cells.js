@@ -36,7 +36,7 @@ export function cellRGB(cell) {
     case "safe": return [180, 150, 40];
     case "surprise": return [255, 100, 160];
     case "spirit": return [80, 220, 255];
-    case "custom": return ELEMENT_RGB[cell.name] || [160, 160, 170];
+    case "custom": return cell.name === "chameleon" && cell.c ? COLOR_RGB[cell.c] : ELEMENT_RGB[cell.name] || [160, 160, 170];   // 变色龙：当前颜色（同桌面 cellRGB）
     default: return [160, 160, 170];
   }
 }
@@ -61,7 +61,12 @@ export function primarySprite(cell) {
     case "bottle": return `bottle_c${cell.c}`;
     case "spirit": return "time_spirit";
     case "countdown": return gemSprite(cell.c);
-    case "custom": return cell.name === "magic_stone" ? `magic_stone_${clamp(0, 3, cell.v)}` : cell.name;   // 魔法石按充能取贴图
+    case "custom":
+      if (cell.name === "magic_stone") return `magic_stone_${clamp(0, 3, cell.v)}`;   // 魔法石按充能取贴图
+      // 变色龙：当前颜色的宝石（c 由 Api 按核心 chameleonColor 解码）。桌面 customTable 的主贴图是环 "chameleon"，
+      // 缩放画法（消失 / 缩放段）因此只画环；网页缩放画法画当前颜色的宝石（见 docs/web.md §8.1）
+      if (cell.name === "chameleon" && !forceGeneric.has("chameleon")) return gemSprite(cell.c);
+      return cell.name;
     default: return "";
   }
 }
@@ -128,7 +133,7 @@ const CELL_ART = {
     }
     // 新玩法 3 毛球：贴图 fuzzball，一直轻微浮动（它每步会跳），同桌面 UI.Cell.Art.artFuzzball（sprBob "fuzzball"）；不画状态角标
     else if (c.name === "fuzzball") art.draw(ctx, "fuzzball", x, y + bobY(p), CELL, CELL);
-    else { noteGenericMulti(c); art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
+    else { noteGenericCustom(c); art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
   },
 };
 
@@ -158,18 +163,29 @@ function drawSnowBoss(ctx, art, pulse, x, y, c) {
     ctx.fillRect(x + CELL - 12 - (c.every - 1 - i) * 9, y + CELL - 11, 6, 6);
   }
 }
-const CUSTOM_ART = { snow_boss: drawSnowBoss };
+// 新玩法 7 变色龙（Custom "chameleon"，v = 颜色下标 0..4）：同桌面 UI.Cell.Art.artChameleon——先画当前颜色的宝石
+// gem_c<c>（c = 1..5 由 Api 按核心 Match3.Element.Builtin.chameleonColor 解码，前端不拆 v），再叠一张缓慢旋转的五色描边环
+// chameleon（角度 = 呼吸计数 mod 360 度，每个逻辑帧 1 度：桌面 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈）。
+// 每步换色是步末 EvTick "chameleon"（原格改写），render.js 的倒计时段照常播：前半段旧色、后半段新色，全程红光脉冲。
+function drawChameleon(ctx, art, pulse, x, y, c) {
+  art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL);
+  if (!art.ex(ctx, "chameleon", x, y, CELL, CELL, pulse % 360)) fallbacks["chameleon#环"] = (fallbacks["chameleon#环"] || 0) + 1;
+}
+const CUSTOM_ART = { snow_boss: drawSnowBoss, chameleon: drawChameleon };
 
 // 多格元素护栏：占多格的 Custom 元素（格子 JSON 带 q = 本格在整体里的编号，如雪怪 Boss 的象限）不能走通用的「贴图名 = 元素名
 // + 层数角标」画法——那样每格都画一只缩小的整只贴图，v 是打包值时角标还会夹成 9（第 45 关网页版接入前就是这样）；
 // 因为元素名贴图本身在图集里，普通降级护栏查不出来。走到通用画法时按「元素名#多格通用画法」计进 fallbacks，e2e 逐关要求为空。
 // forceGeneric：e2e 的反证用（在页面里 import 本模块后临时加入元素名，强制走旧的通用画法，护栏必须报错）。
 export const forceGeneric = new Set();
+// 同理，带颜色 c 的 Custom 格（第 47 关变色龙：本体是一颗当前颜色的宝石）走通用画法时只画元素名贴图（变色龙的环）、
+// 底下没有宝石，也看不出颜色（第 47 关网页版接入前就是这样），记为「元素名#通用画法缺底层宝石」。
 const isMultiCell = (c) => c.t === "custom" && c.q !== undefined;
-function noteGenericMulti(c) {
-  if (!isMultiCell(c)) return;
-  const k = `${c.name}#多格通用画法`;
-  fallbacks[k] = (fallbacks[k] || 0) + 1;
+const isColoredCustom = (c) => c.t === "custom" && c.c !== undefined;
+function noteGenericCustom(c) {
+  const bump = (k) => { fallbacks[k] = (fallbacks[k] || 0) + 1; };
+  if (isMultiCell(c)) bump(`${c.name}#多格通用画法`);
+  if (isColoredCustom(c)) bump(`${c.name}#通用画法缺底层宝石`);
 }
 
 // 回归护栏：走几何降级（drawCellPrim，以及缩放画法 drawCellScaled 的色块分支）的次数，按元素名计
@@ -205,7 +221,7 @@ export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
   if (!cell || s <= 0.03 || a <= 0) return;
   const sz = Math.max(1, Math.round(CELL * s)), x = cx - sz / 2, y = cy - sz / 2, name = primarySprite(cell);
   if (art.has(name)) {
-    if (cell.t === "custom" && name === cell.name) noteGenericMulti(cell);   // 缩放画法也按元素名取了整只贴图
+    if (cell.t === "custom" && name === cell.name) noteGenericCustom(cell);   // 缩放画法也按元素名取了整只贴图
     art.mod(ctx, name, x, y, sz, sz, null, a);
     const mark = cell.t === "G" && { H: "line_h", V: "line_v", B: "bomb_mark" }[cell.k];
     if (mark) art.mod(ctx, mark, x, y, sz, sz, null, a);
@@ -275,6 +291,27 @@ export function drawUfos(ctx, art, st, pulse, yOff = 0) {
   for (const u of st.ufos || []) {
     const [x, y] = origin(u.p);
     art.draw(ctx, `ufo_c${u.c}`, x, y + yOff - 12 + bob, CELL, CELL);
+  }
+}
+
+// 饼干掉落口标记（新玩法 6，state.drops = 视图模型 bvDrops）：同桌面 UI.BoardArt.drawDropsArt——画在棋子之上、掉落口格上沿
+// （上移 6 压在棋盘框上），固定不随下落偏移；缺图时退回几何画法（同 UI.BoardPrim.drawDropMark：三级金色台阶 + 白色箭头），
+// 并按 "cookie_drop" 计进 fallbacks（e2e 逐关护栏）。
+// dropMarks 记下最近一次画的标记（格子与棋盘设计坐标，seq 每画一次加 1），main.js 以 m3debug.dropMarks 暴露，
+// e2e 用它核对交换补间中 / 补间结束后的标记格 = state.drops（bvDrops）、坐标 = 桌面 drawDropsArt 的 (cellOrigin, y − 6)。
+export const dropMarks = { seq: 0, marks: [] };
+export function drawDrops(ctx, art, st) {
+  dropMarks.seq++;
+  dropMarks.marks = (st.drops || []).map((p) => { const [x, y] = origin(p); return { p: [p[0], p[1]], x, y: y - 6 }; });
+  for (const p of st.drops || []) {
+    const [x, y] = origin(p);
+    if (art.draw(ctx, "cookie_drop", x, y - 6, CELL, CELL)) continue;
+    fallbacks.cookie_drop = (fallbacks.cookie_drop || 0) + 1;
+    const box = (rgb, bx, by, bw, bh) => { ctx.fillStyle = `rgb(${rgb})`; ctx.fillRect(bx, by, bw, bh); }, yy = y - 3, m = x + CELL / 2;
+    box("120,70,20", x + 4, yy, CELL - 8, 3);
+    box("240,190,90", x + 6, yy + 3, CELL - 12, 4); box("240,190,90", x + 11, yy + 7, CELL - 22, 4);
+    box("200,130,50", x + 16, yy + 11, CELL - 32, 3);
+    box("255,250,230", m - 2, yy + 3, 4, 5); box("255,250,230", m - 5, yy + 8, 10, 2); box("255,250,230", m - 2, yy + 10, 4, 2);
   }
 }
 

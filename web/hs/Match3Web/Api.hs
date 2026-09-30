@@ -28,12 +28,14 @@ import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
 import Match3.Board.Grid (mboardRows)
 import Match3.Core
+import Match3.Element.Builtin (chameleonColor)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
 import Match3.Game.Trace (emptyTrace)
 import Match3.View
 import Match3Web.Anim (AnimSeed, seedOf)
 import Match3Web.Json
+import UI.GoalIcon (goalIcon)
 
 -- ---------------------------------------------------------------------------
 -- 对外接口（被 WebMain 的 JSFFI 导出包装）
@@ -141,6 +143,8 @@ encodeState h =
     , ("ufos", arr [obj [("p", encodePos (ufoCell u)), ("c", int (colorNum (ufoColor u)))] | u <- bvUfos bv])
     , ("carpets", arr (map encodePos (bvCarpets bv)))
     , ("carpetOpen", arr (map encodePos (bvCarpetOpen bv)))
+      -- 饼干掉落口格（新玩法 6，视图模型 bvDrops，与桌面 UI.BoardArt.drawDropsArt 同一份读数）；没有掉落口为 []
+    , ("drops", arr (map encodePos (bvDrops bv)))
     , ("board", encodeBoard (bvBoard bv))
     ]
   where
@@ -175,6 +179,8 @@ encodeGoal gi =
       ++ [("name", str (unElementName n)) | Just n <- [giName gi]]   -- 段 5：按元素名计数的目标（jelly / bubble）
       -- 中文显示名（视图模型 Match3.View.goalLabel，唯一来源）：HUD「目标 …」直接画它，前端不再自带映射表
       ++ [("label", str (goalLabel gi))]
+      -- 目标图标贴图名（UI.GoalIcon.goalIcon，app/pure 里与桌面 HUD / 选关地图共用的一张表；如第 47 关 chameleon_icon）
+      ++ [("icon", str (goalIcon (giGoal gi)))]
 
 -- | 一步的逐轮回放：start → waves[0..] → end（步末效果，按 afterWaves 插在第 k 轮之后）→ final
 --   → shuffle（本步触发自动洗牌时的洗牌后盘面，否则 null）。
@@ -254,6 +260,8 @@ encodeEvent e =
 --         maker {"c","n"}；snail {"dr","dc"}；flip {"c":正面,"b":背面}；countdown {"c","n"}；custom {"name","v"}
 --         雪怪 Boss（custom "snow_boss"）另带 Match3.View.bossPart 的解码：{"q":象限 0–3,"hurt":血量是否过半,"turn":召唤计数,"every":召唤周期}，
 --         前端不自己拆 v
+--         变色龙（custom "chameleon"，v = 颜色下标 0..4）另带 "c"：当前颜色 1..5（同宝石的 "c"），由核心
+--         Match3.Element.Builtin.chameleonColor 解码（前端不自己换算 v）
 --   每格另带 "s"（核心 show 文本，调试 / 未知元素占位用）。渲染层按 t 查表（www/cells.js，对应桌面 UI.CellTable）。
 
 encodeBoard :: Board -> String
@@ -261,8 +269,9 @@ encodeBoard b = arr [arr (map encodeCell row) | row <- boardRows b]
 
 -- | 单格：Match3.View.cellFace 的类型标签与字段，外加 "s"。
 encodeCell :: Cell -> String
-encodeCell cell = obj (("t", str tag) : map field fields ++ boss ++ [("s", str (show cell))])
+encodeCell cell = obj (("t", str tag) : map field fields ++ boss ++ cham ++ [("s", str (show cell))])
   where
+    cham = maybe [] (\col -> [("c", int (colorNum col))]) (chameleonColor cell)
     boss = case bossPart cell of
       Just bp -> [("q", int (bpQuad bp)), ("hurt", bool (bpHurt bp)), ("turn", int (bpTurn bp)), ("every", int (bpEvery bp))]
       Nothing -> []

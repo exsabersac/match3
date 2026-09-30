@@ -5,7 +5,7 @@
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
 import { loadArt } from "./art.js";
-import { CELL, PAD, fallbacks, setDims } from "./cells.js";
+import { CELL, PAD, dropMarks, fallbacks, setDims } from "./cells.js";
 import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
@@ -68,6 +68,7 @@ let busy = false, fastReq = false;
 let sel = null, showHint = null, msg = "", pulse = 0, shownScore = 0;
 let hudDrawn = null;   // 上一帧 HUD 关卡面板各部件的矩形（drawHud 返回；调试钩子 / e2e 检查规则角标布局）
 let pressed = null, frozen = false, frames = 0;
+let overlayDrawn = null;   // 上一帧画出的结局面板文字 {title, sub}（e2e 查失败提示不漏内部名）
 const fx = new Fx();
 
 // HUD「目标 …」的中文显示名：直接用核心给的 goal.label（视图模型 Match3.View.goalLabel，唯一来源；
@@ -195,7 +196,7 @@ function swapped(board, a, b) {
 // 4. 绘制
 function hudInfo() {
   const s = pending ? pending.state : state;
-  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s),
+  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s), goalIcon: s.goal.icon,
     progress: anim ? state.progress : s.progress, target: s.target, msg, undo: s.undo, busy,
     boss: anim ? state.boss : s.boss, pulse };   // Boss 血条与目标条一样：播放期间显示本步之前的读数
 }
@@ -226,7 +227,8 @@ function render() {
     const title = { LevelClear: "过关！", Won: "通关！", Lost: "步数用完了" }[o.tag] || o.tag;
     const sub = o.tag === "Lost" ? `${state.loseHint}。可「撤销」或「重开」` : `得分 ${o.score}` + (o.tag === "LevelClear" ? `，点「›」进入第 ${o.next + 1} 关` : "");
     drawOverlay(ctx, art, { x: PAD, y: PAD, w: L.cols * CELL, h: L.rows * CELL }, title, sub);
-  }
+    overlayDrawn = { title, sub };
+  } else overlayDrawn = null;
   ctx.restore();
   perf.drawMs += performance.now() - t0; perf.draws++;
 }
@@ -317,9 +319,11 @@ function debugInfo() {
 // 自动化钩子：只读状态 + 断点（breakWhen(info) 为真时冻结帧循环，截图后置 frozen=false 继续）；操作仍走真实指针事件
 window.m3debug = {
   get state() { return state; }, get pending() { return pending; }, get busy() { return busy; }, get anim() { return debugInfo(); },
-  get layout() { return L; }, get hud() { return hudDrawn; }, get levels() { return levels.length; },
+  get layout() { return L; }, get hud() { return hudDrawn; }, get overlay() { return overlayDrawn; }, get levels() { return levels.length; },
   // 走几何降级的次数（按元素名，见 cells.js 的 fallbacks）；图集加载后应一直为空，e2e 每关检查
-  get fallbacks() { return { ...fallbacks }; }, get dpr() { return dpr; }, perf, breakWhen: null,
+  get fallbacks() { return { ...fallbacks }; },
+  // 最近一帧画的掉落口标记（cells.js 的 dropMarks：{seq, marks:[{p,x,y}]}，棋盘设计坐标）
+  get dropMarks() { return { seq: dropMarks.seq, marks: dropMarks.marks.map((m) => ({ ...m, p: [...m.p] })) }; }, get dpr() { return dpr; }, perf, breakWhen: null,
   get frozen() { return frozen; }, set frozen(v) { frozen = v; },
   cellCenter: (r, c) => cellCenterCss(L, [r, c]),
   buttonCenter: (id) => { const b = L.buttons.find((x) => x.id === id); return [L.ox + (b.x + b.w / 2) * L.u, L.oy + (b.y + b.h / 2) * L.u]; },

@@ -1,6 +1,6 @@
 # 安卓版（Capacitor 包装网页版）
 
-> 分支 `android-capacitor`，尚未合入 main。网页版本身见 [`web.md`](web.md)；本文讲怎么把它装进 Android 应用。
+> 最初在分支 `android-capacitor` 上开发，已合入 main。网页版本身见 [`web.md`](web.md)；本文讲怎么把它装进 Android 应用。
 
 ## 1. 思路
 

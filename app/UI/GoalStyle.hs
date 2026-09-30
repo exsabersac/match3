@@ -2,7 +2,7 @@
 -- 目标形状 / 计数键分派（标题 / 状态栏的文字标签 countTag / colorTag 第 11 刀起在 Match3.View）。进度与目标值不在这里：统一由核心 gsProgress / goalTarget 算（第 5 刀前
 -- HudArt / HudPrim / LevelMap / Actions / Input 各有一份「目标构造器 → 计数字段 / 颜色」的 case）。
 --
--- 依赖：Match3.Core、UI.Layout（调色板）、UI.Cell.Art（宝石贴图名）。
+-- 依赖：Match3.Core、UI.Layout（调色板）、UI.GoalIcon（目标图标名；纯模块，在 app/pure，网页版 Api 也用它）。
 -- 同步：色值与第 5 刀前各处逐字相同（截图对照 AE=0）；非内置形状（ViewOther、未列出的计数键）落到多色的外观。
 module UI.GoalStyle
   ( goalIcon
@@ -13,29 +13,8 @@ module UI.GoalStyle
 import Data.Word (Word8)
 import Match3.Core
 import SDL (V3 (..), V4 (..))
-import UI.Cell.Art (gemSprite)
+import UI.GoalIcon (goalIcon)
 import UI.Layout (colorRGB, namedRGB)
-
--- | 目标图标（复用棋子贴图；贴图版 HUD 与地图节点）。
-goalIcon :: LevelGoal -> String
-goalIcon g = case goalView g of
-  ViewScore _ -> "icon_score"
-  ViewCollect c _ -> gemSprite c
-  ViewCount k _ -> case k of
-    CountStones -> "stone_3"
-    CountChests -> "chest"
-    CountHoney -> "honey"
-    CountBalloons -> "balloon_c1"
-    CountCookies -> "cookie"
-    CountCakes -> "cake_1"
-    CountSafes -> "safe"
-    CountUfo -> "ufo_c3"
-    CountCarpets -> "carpet_covered"
-    CountNamed name
-      | unElementName name == "chameleon" -> "chameleon_icon" -- 变色龙（新玩法 7）：环贴图单独看不出是宝石，用合成图标
-      | otherwise -> unElementName name
-    _ -> "icon_multi"
-  _ -> "icon_multi"
 
 -- | 贴图版 HUD 进度条色调。
 goalTint :: LevelGoal -> V3 Word8

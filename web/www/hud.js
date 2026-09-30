@@ -109,8 +109,12 @@ function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
   };
 }
 
-// 目标进度条：标签「目标 <中文名>」（info.goalText = state.goal.label）+ 进度数字 + 进度条。返回实际画出的标签文字（e2e 检查）。
-function goalBar(ctx, art, x, y, w, h, info) {
+// 目标进度条：左边目标图标（info.goalIcon = state.goal.icon，核心侧 UI.GoalIcon.goalIcon，与桌面 HUD 同一张表；缺图不画、
+// 条不右移）+ 标签「目标 <中文名>」（info.goalText = state.goal.label）+ 进度数字 + 进度条。
+// 返回实际画出的标签文字与图标名（e2e 检查）。
+function goalBar(ctx, art, x0, y, w0, h, info) {
+  const icon = info.goalIcon && art.draw(ctx, info.goalIcon, x0, y, h, h) ? info.goalIcon : null;
+  const x = icon ? x0 + h + 6 : x0, w = icon ? w0 - h - 6 : w0;
   const frac = info.target > 0 ? Math.min(1, info.progress / info.target) : 0;
   ctx.font = `700 15px ${FONT}`;
   const label = fit(ctx, `目标 ${info.goalText}`, w - 80);
@@ -122,7 +126,7 @@ function goalBar(ctx, art, x, y, w, h, info) {
     const fw = Math.max(bh, w * frac);
     if (!art.panel(ctx, "panel_fill", x, by, fw, bh, bh / 2)) { ctx.fillStyle = "#7cd67c"; ctx.fillRect(x, by, fw, bh); }
   }
-  return label;
+  return { label, icon };
 }
 
 // 雪怪 Boss 血条（新玩法 5；state.boss = 视图模型 gvBoss {hp, max}）：目标是「击败 Boss」时替换目标条，同桌面 UI.HudArt——
@@ -160,9 +164,9 @@ function button(ctx, art, b, enabled, pressed) {
   ctx.restore();
 }
 
-// info：{level, name, rules, score, moves, goalText, progress, target, boss, pulse, msg, undo, busy}（boss = state.boss，非 null 时画血条）；
+// info：{level, name, rules, score, moves, goalText, goalIcon, progress, target, boss, pulse, msg, undo, busy}（boss = state.boss，非 null 时画血条）；
 // pressed：当前按下的按钮 id。返回关卡面板各部件（面板 / 标签 / 关名 / 规则角标）的矩形、目标标签文字 goal 与 Boss 血条 boss，
-// 供调试钩子与 e2e 检查。
+// 供调试钩子与 e2e 检查（goalIcon = 目标条实际画出的图标名，血条关卡为 undefined）。
 export function drawHud(ctx, art, L, info, pressed) {
   const h = L.hud;
   let lv, boss = null;
@@ -172,7 +176,7 @@ export function drawHud(ctx, art, L, info, pressed) {
     chip(ctx, art, h.x + wl + g, h.y, 130, 48, "分数", info.score);
     chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
     if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 56, h.w, 36, info, info.pulse); lv.goal = boss.label; }
-    else lv.goal = goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info);
+    else { const g = goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info); lv.goal = g.label; lv.goalIcon = g.icon; }
     ctx.font = `600 16px ${FONT}`;
     text(ctx, fit(ctx, info.msg, h.w), h.x + 2, h.y + 110, 16, "#fff8e1", "left", 600);
   } else {
@@ -181,7 +185,7 @@ export function drawHud(ctx, art, L, info, pressed) {
     chip(ctx, art, h.x, h.y + 64, hw, 56, "分数", info.score);
     chip(ctx, art, h.x + hw + 8, h.y + 64, hw, 56, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
     if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 130, h.w, 40, info, info.pulse); lv.goal = boss.label; }
-    else lv.goal = goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info);
+    else { const g = goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info); lv.goal = g.label; lv.goalIcon = g.icon; }
     const top = h.y + 186, bottom = L.buttons[0].y - 8;
     ctx.font = `600 16px ${FONT}`;
     const lines = wrap(ctx, info.msg, h.w - 4, Math.max(1, Math.floor((bottom - top) / 22)));

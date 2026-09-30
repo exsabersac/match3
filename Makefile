@@ -42,7 +42,7 @@ NEED_DIST = @[ -f "$(WEB)/dist/match3-web.wasm" ] || { echo "没有 web/dist，�
 NATIVE_ENV = env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP
 
 .PHONY: android-sync apk apk-release aab android-check
-.PHONY: help desktop-build run test-native build atlas serve parity anim-parity e2e test check size pack \
+.PHONY: help desktop-build run test-native build atlas serve parity anim-parity e2e test check lint-sh size pack \
         deploy-install deploy-start deploy-stop deploy-status clean toolchain doctor
 
 ##@ 通用
@@ -102,7 +102,11 @@ e2e: ## 无头 Chrome 端到端测试，截图与 report.json 写到 SHOTS
 test: test-native parity anim-parity e2e ## 全部测试（stack test + 网页两组一致性 + e2e）
 	@echo "== 全部测试通过"
 
-check: ## CI 用：构建网页版后跑全部测试并报告体积
+lint-sh: ## shell 脚本 / Makefile 检查：变量名后紧跟中文等非 ASCII 字符（macOS bash 3.2 会读错变量名）须写 ${VAR}
+	python3 "$(WEB)/tools/lint-sh.py"
+
+check: ## CI 用：lint-sh + 构建网页版后跑全部测试并报告体积
+	$(MAKE) -f "$(ROOT)/Makefile" lint-sh
 	$(MAKE) -f "$(ROOT)/Makefile" build
 	$(MAKE) -f "$(ROOT)/Makefile" test
 	$(MAKE) -f "$(ROOT)/Makefile" size
@@ -165,14 +169,14 @@ toolchain: ## 安装或校验 ghc-wasm-meta（FLAVOUR=9.14）；已安装则只�
 	  echo "== 校验 $(GHC_WASM_PREFIX)"; \
 	  v=$$(. "$(GHC_WASM_PREFIX)/env" >/dev/null 2>&1 && wasm32-wasi-ghc --numeric-version) || { echo "wasm32-wasi-ghc 不能运行：make toolchain FORCE=1" >&2; exit 1; }; \
 	  case "$$v" in $(FLAVOUR).*) echo "  wasm32-wasi-ghc $$v ✓（FLAVOUR $(FLAVOUR)）";; \
-	    *) echo "  wasm32-wasi-ghc $$v，与 FLAVOUR=$(FLAVOUR) 不符：make toolchain FORCE=1" >&2; exit 1;; esac; \
+	    *) echo "  wasm32-wasi-ghc $${v}，与 FLAVOUR=$(FLAVOUR) 不符：make toolchain FORCE=1" >&2; exit 1;; esac; \
 	  c=$$(. "$(GHC_WASM_PREFIX)/env" >/dev/null 2>&1 && wasm32-wasi-cabal --numeric-version) || { echo "  缺 wasm32-wasi-cabal" >&2; exit 1; }; \
 	  echo "  wasm32-wasi-cabal $$c ✓"; \
 	  o=$$(. "$(GHC_WASM_PREFIX)/env" >/dev/null 2>&1 && wasm-opt --version) && echo "  $$o ✓" || echo "  缺 wasm-opt（build 会跳过 -Oz）"; \
 	  [ -x "$(GHC_WASM_PREFIX)/nodejs/bin/node" ] && echo "  node $$("$(GHC_WASM_PREFIX)/nodejs/bin/node" --version) ✓" || echo "  缺自带 node"; \
 	  echo "工具链可用；首次构建若提示没有 Hackage 索引：sh -c '. $(GHC_WASM_PREFIX)/env && wasm32-wasi-cabal update'"; \
 	else \
-	  for t in curl jq unzip zstd xz make; do command -v $$t >/dev/null 2>&1 || { echo "安装脚本需要 $$t：sudo apt-get install -y curl jq unzip zstd xz-utils make" >&2; exit 1; }; done; \
+	  for t in curl jq unzip zstd xz make; do command -v $$t >/dev/null 2>&1 || { echo "安装脚本需要 $${t}：sudo apt-get install -y curl jq unzip zstd xz-utils make" >&2; exit 1; }; done; \
 	  echo "== 安装 ghc-wasm-meta FLAVOUR=$(FLAVOUR) 到 $(GHC_WASM_PREFIX)（约 6.4 GB）"; \
 	  curl -fL "$(BOOTSTRAP_URL)" | FLAVOUR="$(FLAVOUR)" PREFIX="$(GHC_WASM_PREFIX)" sh; \
 	fi

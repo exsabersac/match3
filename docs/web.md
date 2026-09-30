@@ -158,7 +158,8 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
-| `make check` | CI 用：`build` → `test` → `size` |
+| `make check` | CI 用：`lint-sh` → `build` → `test` → `size` |
+| `make lint-sh` | shell 脚本 / Makefile 检查：`$变量名` 后紧跟中文等非 ASCII 字符即报错（macOS bash 3.2 会读错变量名，须写 `${VAR}`；见 `docs/testing.md`） |
 | `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |
 | `make pack [TGZ=…]` | 打包 dist + serve.py + 部署脚本 |
 | `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |

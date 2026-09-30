@@ -7,14 +7,15 @@
 #   bash deploy-mac.sh install match3-web-dist.tgz [目标目录]   # 解包到目标目录（默认见 TARGET）
 #   bash deploy-mac.sh run    [目标目录]    # 前台运行（exec，Ctrl-C 停止）——最稳妥
 #   bash deploy-mac.sh start  [目标目录]    # 后台常驻：用户级 launchd 代理（登录后自动起、崩溃自动拉起）
-#   bash deploy-mac.sh stop | status        # 停止后台代理 / 查看端口占用（lsof -i :$PORT）
+#   bash deploy-mac.sh stop | status        # 停止后台代理 / 查看端口占用（lsof -i :${PORT}）
 #
 # 环境变量：PORT（默认 8080）、BIND（默认 0.0.0.0）、TARGET（默认 /Users/yubin/Documents/dev/haskell/match3-web）
 #
 # 注意：不要在一次性的远程会话里用 `nohup ... &` 起服务——会话结束时整组进程会被一起杀掉，
 # 服务器看起来「启动成功」随即消失。要么前台 run（放在自己开的终端 / tmux 里），要么 start 交给 launchd。
 # 注意：变量后面紧跟中文全角字符时一律写成 ${VAR}——macOS 自带 bash 3.2 在 UTF-8 区域设置下会把全角字符的字节
-# 当成变量名的一部分（`$LABEL）` 会被读成变量 `LABEL\xef…`），配合 set -u 直接报 unbound variable 退出。
+# 当成变量名的一部分（不加花括号的 `$LABEL` 后面紧跟 `）` 时会被读成变量 `LABEL\xef…`），配合 set -u 直接报
+# unbound variable 退出。make lint-sh（web/tools/lint-sh.py，make check 会跑）逐行检查全部 shell 脚本与 Makefile。
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

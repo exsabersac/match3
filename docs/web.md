@@ -183,7 +183,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（173 张
 - 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；桌面版现为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
-- 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。部署到 Mac 不需要工具链，只拷 `dist/`。
+- 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。`web/dist/` 是可部署的构建产物，已提交进仓库；其他机器部署只需拷贝该目录，不需要工具链。
 
 ### 3.1 make 目标
 

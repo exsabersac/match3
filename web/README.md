@@ -10,6 +10,7 @@
 ```
 web/
 ├── build.sh              构建脚本（→ web/dist/），--serve 构建后用 serve.py 起服务器
+├── dist/                 可部署构建产物（已提交；html/js/wasm/图集），拷贝即可部署
 ├── serve.py              本地静态服务器（Python 3 标准库；正确 MIME、开发期 no-cache、打印局域网地址）
 ├── serve.sh              serve.py 的薄包装
 ├── deploy-mac.sh         打包 dist 并在 macOS 上安装 / 前台运行 / launchd 常驻 / 状态检查

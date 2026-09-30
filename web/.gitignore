@@ -1,5 +1,4 @@
 dist-newstyle/
-dist/
 .cache/
 node_modules/
 match3-web-dist.tgz

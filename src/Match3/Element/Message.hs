@@ -21,6 +21,8 @@ module Match3.Element.Message
   , GroundHit(..)
   , AvoidCells(..)
   , WallCells(..)
+  , Morphing(..)
+  , Morph(..)
   ) where
 
 import Data.Typeable (Typeable, cast)
@@ -74,6 +76,18 @@ newtype AvoidCells = AvoidCells [Pos]
 -- | 查询：会走的元素（PhaseMove）当墙的格（传送门端点；回复者追加）。
 newtype WallCells = WallCells [Pos]
 
+-- | 查询（新玩法 4「魔力鸟组合增强」，玩家交换节拍）：交换前 / 交换后的盘面与两端；回复者给出「变身」
+-- （初值 Nothing，第一个回复者填上）。没有元素回复 = 按注册表的成对交换规则起手（原有行为）。
+data Morphing = Morphing Board Board Pos Pos (Maybe Morph)
+
+-- | 交换起手前的变身：元素名（步末效果的元素名）、逐格 (来源, 目标, 变身后的格)、变身后的起手种子。
+-- 主流程把它记成第 0 轮之前的一条步末效果（EvSpread，前端按「长出新格」播放），再从变身后的盘面按种子起手。
+data Morph = Morph
+  { morphName  :: ElementName
+  , morphCells :: [(Pos, Pos, Cell)]
+  , morphSeeds :: [Pos]
+  }
+
 instance Message Refilled
 instance Message Refilling
 instance Message Shaping
@@ -83,3 +97,4 @@ instance Message Covering
 instance Message GroundHit
 instance Message AvoidCells
 instance Message WallCells
+instance Message Morphing

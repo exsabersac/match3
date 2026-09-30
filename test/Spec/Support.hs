@@ -268,9 +268,20 @@ replayTimeline tag mt = go 0 (mtStart mt) (mtWaves mt) (mtEnd mt) []
 effectName :: EndEffect -> String
 effectName = unElementName . endEffectElement
 
--- | 细节自洽：蔓延来源正交相邻且之前就带该覆盖层；蜗牛只走一格或原地掉头；皮带 / 倒计时格真的变了。
+-- | 细节自洽：蔓延来源正交相邻且之前就带该覆盖层（魔力鸟组合的变身：来源是彩虹、目标由同色普通宝石变成特效）；蜗牛只走一格或原地掉头；皮带 / 倒计时格真的变了。
 checkEffectDetail :: String -> EndStep -> Assertion
 checkEffectDetail tag e = case endEffectKind eff of
+  EvSpread
+    | endEffectElement eff `elem` ["rainbow_line", "rainbow_bomb"] ->
+        -- 新玩法 4：魔力鸟组合的变身（第 0 轮之前）：来源是彩虹，目标原是同色普通宝石、变成直线 / 炸弹
+        sequence_
+          [ do
+              assertBool (tag ++ ": morph source is the rainbow " ++ show src) (cellKind (getCell (esBefore e) src) == Just Rainbow)
+              assertEqual (tag ++ ": morph target was a plain gem " ++ show q) (Just Normal) (cellKind (getCell (esBefore e) q))
+              assertEqual (tag ++ ": morph keeps the colour " ++ show q) (gemColorOf (getCell (esBefore e) q)) (gemColorOf (getCell (esAfter e) q))
+              assertBool (tag ++ ": morph target became a line / bomb " ++ show q) (cellKind (getCell (esAfter e) q) `elem` map Just [LineH, LineV, Bomb])
+          | (src, q) <- endEffectPairs eff
+          ]
   EvSpread -> do
     let ov = case endEffectElement eff of
           "vine" -> Vine
@@ -295,6 +306,9 @@ checkEffectDetail tag e = case endEffectKind eff of
   k -> assertFailure (tag ++ ": unexpected end effect kind " ++ show k)
   where
     eff = esEffect e
+    gemColorOf cell = case cell of
+      Gem c _ _ _ -> Just c
+      _ -> Nothing
 
 --------------------------------------------------------------------------------
 -- 第二刀 2b：元素框架

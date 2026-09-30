@@ -300,4 +300,15 @@ allLevels =
   , (level 42 "毛球" 22 (goalCount (CountNamed "fuzzball") 10))
       { lvlPlacements = [Place "fuzzball" [] [(0, 1), (0, 3), (0, 4), (0, 6), (1, 0), (1, 2), (1, 5), (1, 7), (2, 3), (2, 4)]]
       }
+    -- 魔力鸟（新玩法 4：规则开关 rainbow_combos）：彩虹 × 直线 → 同色全部变直线再引爆，彩虹 × 炸弹 → 全部变炸弹再引爆；
+    -- 开局中间放好两组「彩虹 + 直线 / 炸弹」，12 块双层石头在四边，一次变身爆炸只削一层
+  , (level 43 "魔力鸟" 24 (goalCount CountStones 12))
+      { lvlPlacements =
+          [ Place "rainbow" [] [(3, 2), (4, 5)]
+          , Place "line_h" [] [(3, 3)]
+          , Place "bomb" [] [(4, 4)]
+          , Place "stone" [AInt 2] [(0, 0), (0, 3), (0, 4), (0, 7), (7, 0), (7, 3), (7, 4), (7, 7), (2, 0), (5, 0), (2, 7), (5, 7)]
+          ]
+      , lvlRules = ["rainbow_combos"]
+      }
   ]

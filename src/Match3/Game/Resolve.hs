@@ -52,6 +52,9 @@ data MoveKind = KindSwap | KindHammer | KindFreeSwap | KindCross
 data Opening
   = OpenMatch (Maybe Pos)        -- ^ 普通匹配连锁（prefer = 新特殊块的优先生成位）
   | OpenSeeds (Maybe Pos) [Pos]  -- ^ 种子起手（彩虹 / 特殊合成 / 锤子 / 十字）
+  | OpenMorph (Maybe Pos) EndEffect [Pos]
+    -- ^ 先变身再种子起手（新玩法 4：关卡级元素回复 Morphing）：变身记成第 0 轮之前的步末效果（esAfterWaves = 0），
+    -- mtStart 仍是交换后的盘面，第一轮从变身后的盘面开始
   deriving (Eq, Show)
 
 -- | 多段连锁的连击数：第一段的最大波次，之后每段有清除时把该段的最大波次叠加上去。
@@ -72,11 +75,17 @@ resolveMoveWith reg0 kind start opening gs =
   let -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
       reg = levelRegistryIn reg0 (gsLevelElems gs)
       hooks0 = levelHooksWith reg (gsLevelElems gs)
+      -- 变身起手（OpenMorph）：第一轮之前先把变身写进盘面，并记一条 esAfterWaves = 0 的步末效果
+      (startW, preEnds) = case opening of
+        OpenMorph _ eff _ -> let b = applyEndEffect eff start in (b, [EndStep 0 start b eff])
+        _ -> (start, [])
       seg0 = case opening of
-        OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) start
-        OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) start
+        OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) startW
+        OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) startW
+        OpenMorph prefer _ seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) startW
       -- 步末：按表的顺序执行（第 7 刀 7b）
-      (segs, ends, board1, vacateAfter) = runEndTable reg (endTableFor kind) seg0
+      (segs, ends0, board1, vacateAfter) = runEndTable reg (endTableFor kind) seg0
+      ends = preEnds ++ ends0
       finalSeg = NE.last segs
       tallies1 = NE.map crTally segs
       tallies = NE.toList tallies1

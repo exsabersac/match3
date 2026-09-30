@@ -59,6 +59,11 @@ drawHudArt ren art app = do
     _ <- drawSprite ren art "bomb_glow" (rect xR 12 22 22)
     _ <- drawSprite ren art "bomb_mark" (rect xR 12 22 22)
     void (zhA ren art "zh_rule_bomb" (xR + 26) 14 18)
+  -- 魔力鸟组合增强（新玩法 4）：关名右侧画彩虹 +「彩虹组合变身」
+  when ("rainbow_combos" `elem` gvRules gv) $ do
+    let xR = 66 + zhW art ("name_" ++ show li) 24 + 10
+    _ <- drawSprite ren art "rainbow" (rect xR 12 22 22)
+    void (zhA ren art "zh_rule_rainbow" (xR + 26) 14 18)
   -- 关卡进度点：已过绿、当前金、未解锁暗
   -- 间距 6（38 关时与段 5 之前逐像素相同）；关卡更多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
   let dots = levelDots li (appMaxReached app)  -- 每关一个点（levelCount 个）

@@ -98,7 +98,10 @@ plainGemEntry = bodyEntry (PlainGem C1) (\cell -> case cell of Gem c _ _ _ -> Ju
 
 -- | 条目：按种类的特殊块（槽位由原型推导 = kindSlot）。
 specialEntry :: GemKind -> Entry
-specialEntry k = bodyEntry (SpecialGem C1 k) (\cell -> case cell of Gem c _ _ _ -> Just (SpecialGem c k); _ -> Nothing) noPlace
+-- 放置（新玩法 4 起）：把原格的宝石变成该种特殊块，颜色取原格（关卡放置表 Place "rainbow" [] 格 等）；原格不是宝石时不放。
+specialEntry k = bodyEntry (SpecialGem C1 k) (\cell -> case cell of Gem c _ _ _ -> Just (SpecialGem c k); _ -> Nothing) $ \_ cell -> case cell of
+  Gem c _ _ _ -> Just (Gem c k 0 Nothing)
+  _ -> Nothing
 
 noPlace :: Placer
 noPlace _ _ = Nothing

@@ -30,7 +30,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
                                             ▼
  Match3.Element（元素框架：Types / Registry / Builtin / Event / Level / Special（第 8 刀规则表解释器）；默认注册表 defaultRegistry）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
- Match3.Levels.Campaign（43 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
+ Match3.Levels.Campaign（44 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
  Match3.Types（门面，再导出 Types.Name / Cell / Overlay / Body / Board / Game；第 6 刀拆分）  Match3.Goal（目标数据，第 5 刀）
    └─ Match3.Counts（计数键与 Counts，第 4 刀） ← Match3.Color（颜色，第 5 刀从 Types 拆出）
  （纯函数机制模块；无 IO）
@@ -65,7 +65,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Types.Board` | `Pos`、`Board = Board (Array (Int,Int) Cell)`（O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard` 等；`Show` 按行列表打印，与旧列表盘输出相同）、`boardSize` | 可变盘（`Board.Grid`） |
 | `Match3.Types.Game` | `Score` / `MovesLeft` / `TargetScore`、`Outcome`、地面层 `Ground`、`GameConfig` / `defaultConfig` | 关卡表 |
 | `Match3.Levels.Level` | 第 6 刀：关卡记录 `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` 与原先分散在按下标 case 的并行表里的 `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`）、`level`（不带装饰的关）、`levelConfig`、放置表辅助 `placeEach` / `layersAt` | 放置表的解释（`Game.Level`） |
-| `Match3.Levels.Campaign` | 第 6 刀：43 关 `allLevels`（2026-09-30 起新玩法关卡追加在末尾）（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
+| `Match3.Levels.Campaign` | 第 6 刀：44 关 `allLevels`（2026-09-30 起新玩法关卡追加在末尾）（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
@@ -85,7 +85,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element.Special` | 第 8 刀：规则表的解释器（不含具体规则）——形状表 `spawnByShapes`（每条连线取第一条认领它的规则）、落点 `shapeAnchor`、单连线规则的构造器 `runShape`；组合表 `comboMatch`（按表顺序、每条先试 (p1,p2) 再试 (p2,p1)）/ `comboFires`（另要求两端 `specialActivates`）/ `comboSeedsFor` / `comboSwapRule`（次序 `comboOrder` = 20） | 具体规则（`Builtin.Gem` / `Combos`） |
 | `Match3.Element.Class` | 元素类（xmonad LayoutClass 风格）：`Element`（第 9 刀起只剩 `name` / `toCell` / `caps` 三个方法）、能力记录 `Caps`（五组带默认值的记录 `MatchCaps` / `HitCaps` / `MoveCaps` / `CountCaps` / `StepCaps`，按原型的缺省 `capsOf`）与 27 个同名查询函数（第 9 刀前是类方法，签名不变）、`SomeElement`、修饰器 `Modifier` / `Modified`、惰性占格 `Inert`、关卡级元素 `LevelElement`（`levelName` / `levelReply` 返回（回复，推进后的自身）/ `levelStart` / `levelCore`）与存在类型 `SomeLevelElement`（第 7 刀前的 `SomeLevel` 没有状态；相等 = 同类型且值相等） | 具体元素 |
 | `Match3.Element.Caps` | 第 9 刀：写元素用的能力声明——`piece` / `blocker` / `fixed :: [Cap] -> Caps`（按原型的缺省能力再依次应用声明）、每项能力一个简写（`colorIs` / `swappable` / `hit` / `breaks` / `onAdjacent` / `teleports` / `counts` / `atEnd` / `onMessage` …，见「元素的能力」）、按组直接改字段的 `withMatch` / `withHit` / `withMove` / `withCount` / `withStep`；再导出 `Element.Class` | 内置本体、测试 / 扩展元素 |
-| `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息（第 7 刀起问题与回复同类型，回复者在上面累加：`Refilled`、`Refilling`（第 8 刀，补子策略）、`Shaping`（新玩法 1，本关形状表）、`EndTicked`、`Settling`、`Covering`、`GroundHit`，查询 `AvoidCells` / `WallCells`；第 7 刀前的 `Absorbed` / `Shifted` / `Settled` / `Covered` 已删） | 谁回复 |
+| `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息（第 7 刀起问题与回复同类型，回复者在上面累加：`Refilled`、`Refilling`（第 8 刀，补子策略）、`Shaping`（新玩法 1，本关形状表）、`Morphing`（新玩法 4，交换变身，回复 `Morph`）、`EndTicked`、`Settling`、`Covering`、`GroundHit`，查询 `AvoidCells` / `WallCells`；第 7 刀前的 `Absorbed` / `Shifted` / `Settled` / `Covered` 已删） | 谁回复 |
 | `Match3.Element.Event` | 通用步末效果 `EndEffect { endEffectKind, endEffectElement, endEffectItems }` / `EndItem { eiFrom, eiTo, eiCell, eiBack }`（第 7 刀 7b 取代四个构造器与 `SpreadKind` / `SnailMove`；`Show` 手写成旧构造器文本）、`applyEndEffect` / `endEffectPairs` / `endItemDir` / `spreadPairs`、效果事件 `EventKind` / `Event` | 帧与样式 |
 | `Match3.Core` | 再导出公共 API | 自身几乎无逻辑 |
 | `Match3.Board.Grid` | 坐标边界、读写格（`getCell` = `boardAt`，O(1)）、交换、相邻、可空盘面 `MBoard = Array Pos (Maybe Cell)`（第 3 刀起与 `Board` 同形的二维数组，`atM` / `setM` / `setManyM` 读写、`mboardRows` 转行列表；只在一轮消除 / 沉降内部使用，重力按列取出不再转置）、`randomColor` | 任何规则 |
@@ -105,11 +105,11 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Game.Trace` | `MoveTrace`（含 `mtGen` / `mtShuffle`）/ `EndStep`（`EndEffect` 等再导出自 `Element.Event`）、`traceSpreads`（跑注册表的蔓延规则）、`beltMoves`（再导出自 `Conveyor`）、效果事件 `traceEvents` | 结算 |
 | `Match3.Game.EndPhase` | 第 7 刀 7b：步末表 `EndStage { stageName, stagePhase, stageRun }`、累积器 `EndAcc`、`swapEndTable`（tick → belt → spread → move → settle → vacate）/ `boosterEndTable`（vacate → spread → settle）、`runEndTable`、各行 `tickStage` … `vacateStage`、`runPhase` | 计数、结局（在 `Resolve`） |
 | `Match3.Game.Resolve` | 交换与三种道具的**公共结算** `resolveMove`：主连锁 → 步末（按 `endTableFor` 选的 EndPhase 表执行）→ 计数与目标 → 结局 → 自动洗牌，同时产出 `MoveTrace` | 入口校验（在 `Move` / `Boosters`）、步末各阶段（在 `EndPhase`） |
-| `Match3.Game.Move` | `resolveSwap`（校验 + 起手选择）及其投影 `trySwap`（= `runMove`）/ `traceSwap` | 道具 |
+| `Match3.Game.Move` | `resolveSwap`（校验 + 起手选择；新玩法 4 起先问关卡级元素的交换变身 `morphIn`，有回复时起手为 `OpenMorph`）及其投影 `trySwap`（= `runMove`）/ `traceSwap` | 道具 |
 | `Match3.Game.Boosters` | `resolveHammer` / `resolveFreeSwap` / `resolveCrossClear` 及其投影 `use*` / `trace*` | 种子几何（见 `Match3.Boosters`） |
 | `Match3.Obstacles` | 石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/瓶子/精灵/魔法帽/果汁机的邻消削层与触发 | 连锁循环 |
 | `Match3.Rainbow` | 彩虹判定与清色种子 | 合成几何（见 Combos） |
-| `Match3.Combos` | 特殊×特殊合成：第 8 刀起是内置组合表 `builtinComboRules`（炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线），`isSpecialCombo` / `comboClearSeeds` 是这张表的判定 / 清种子；各组合的种类谓词与爆炸几何 `bigBomb` / `fullRowCol` / `lineBombCross` | 普通三消、组合表的解释（`Element.Special`） |
+| `Match3.Combos` | 特殊×特殊合成：第 8 刀起是内置组合表 `builtinComboRules`（炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线），`isSpecialCombo` / `comboClearSeeds` 是这张表的判定 / 清种子；新玩法 4 的 `rainbowComboMorph`（彩虹 × 直线 / 炸弹的变身格与种子，只经规则开关 `rainbow_combos` 用）；各组合的种类谓词与爆炸几何 `bigBomb` / `fullRowCol` / `lineBombCross` | 普通三消、组合表的解释（`Element.Special`） |
 | `Match3.Ice` | 匹配时削冰层 | overlay（Freeze/Chain…） |
 | `Match3.Grass` | 草/藤/巧/雾/链/冻/帘/蒸汽的清除与蔓延 | 蜗牛爬行 |
 | `Match3.Carpet` | 地毯覆盖计数（各关的地毯布局第 6 刀起在关卡记录 `lvlCarpets` 里） | 饼干底行收集逻辑（在 `Board.Gravity` / `Game.Tally`） |
@@ -279,6 +279,7 @@ instance Element StoneE where
 | `Refilled 盘 吸走格` | 每轮补子之后 | `UfoLevel`（`stepUfos`，飞碟移动） | 钩子 `onAbsorb`（`Board.Cascade.absorbRound`） |
 | `Refilling 补子策略` | 第 8 刀：补子时取策略（初值 = 注册表的策略） | 无（内置都不回复 = 用注册表的缺省策略） | 钩子 `hookRefill`（`Board.Gravity.activeRefill`） |
 | `Shaping 形状表` | 新玩法 1：每步结算开始时（初值 = 注册表的形状表） | `BombShapes`（规则开关 `bomb_shapes`；只在 `lvlRules` 含它的关卡打开，打开时插入 `ltBombRule`） | `Element.Level.levelRegistryIn`（`Game.Resolve.resolveMoveWith` 开头换上本关的注册表） |
+| `Morphing 交换前盘 交换后盘 两端 变身` | 新玩法 4：玩家交换成立前（初值 Nothing，第一个回复者填上 `Morph { morphName, morphCells, morphSeeds }`） | `RainbowCombos`（规则开关 `rainbow_combos`；彩虹 × 直线 / 炸弹，`Combos.rainbowComboMorph`） | `Element.Level.morphIn`（`Game.Move.resolveSwapWith`：有回复时起手为 `OpenMorph`，`Game.Resolve` 先把变身写进盘面并记一条 `esAfterWaves = 0` 的步末效果） |
 | `EndTicked 移位表` | 玩家交换的步末，倒计时之后、蔓延之前；没有皮带时不回复 | `BeltLevel`（`beltMoves`） | `Element.Level.beltShiftIn`（步末表 `belt` 行） |
 | `AvoidCells 格` / `WallCells 格` | 会走的元素（PhaseMove）之前 | `BeltLevel`（皮带格）/ `PortalLevel`（门端点） | `avoidCellsIn` / `wallCellsIn`（步末表 `move` 行的 `EndCtx`） |
 | `Settling 可穿门谓词 可空盘` | 沉降时 | `PortalLevel`（`portalTeleport`） | 钩子 `onSettle`（`Board.Gravity.settleDrainWith`） |

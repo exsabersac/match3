@@ -45,7 +45,7 @@ bs_switch_only_on_new_level :: Assertion
 bs_switch_only_on_new_level = do
   let builtin = map shapeName builtinShapeRules
   assertEqual "builtin table unchanged" builtin (shapeNames defaultRegistry)
-  assertEqual "only level 41 has rules" [(bombLevel, ["bomb_shapes"])] [(li, lvlRules l) | (li, l) <- zip [0 ..] allLevels, not (null (lvlRules l))]
+  assertEqual "only level 41 has bomb_shapes" [(bombLevel, ["bomb_shapes"])] [(li, lvlRules l) | (li, l) <- zip [0 ..] allLevels, "bomb_shapes" `elem` lvlRules l]
   mapM_
     (\(li, seed) -> assertEqual ("level " ++ show (li + 1) ++ " seed " ++ show seed) builtin (gameShapes (levelGame li seed)))
     [(li, seed) | li <- [0 .. bombLevel - 1], seed <- [1, 2]]

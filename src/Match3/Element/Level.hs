@@ -27,6 +27,7 @@ module Match3.Element.Level
     -- * 节拍
   , levelHooksWith
   , levelRegistryIn
+  , morphIn
   , beltShiftIn
   , avoidCellsIn
   , wallCellsIn
@@ -148,6 +149,11 @@ levelHooksWith reg elems = hooks
 -- 每步结算开始时调用（Game.Resolve.resolveMoveWith）；内置关卡里只有规则开关 BombShapes 打开时回复。
 levelRegistryIn :: Registry -> [SomeLevelElement] -> Registry
 levelRegistryIn reg elems = maybe reg (\(Shaping rs, _) -> setShapeRules rs reg) (askLevelsIn reg elems (Shaping (shapeRules reg)))
+
+-- | 交换变身节拍（'Morphing'，新玩法 4）：玩家交换成立前问一次；Just = 本步先变身再按种子起手。
+-- 内置关卡里只有规则开关 RainbowCombos（"rainbow_combos"）打开时回复。
+morphIn :: Registry -> [SomeLevelElement] -> Board -> Board -> Pos -> Pos -> Maybe Morph
+morphIn reg elems b0 swapped p1 p2 = askLevelsIn reg elems (Morphing b0 swapped p1 p2 Nothing) >>= \(Morphing _ _ _ _ m, _) -> m
 
 -- | 皮带节拍（'EndTicked'）：Just (移位, 推进后的元素)；没人回复时 Nothing（没有皮带，也没有皮带后的再连锁）。
 beltShiftIn :: Registry -> [SomeLevelElement] -> Maybe ([(Pos, Pos)], [SomeLevelElement])

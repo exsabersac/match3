@@ -36,7 +36,7 @@ module Match3.Game.State
 import Data.Maybe (isJust)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
+import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
 import Match3.Element.Class (LevelElement, SomeLevelElement, fromLevelElement)
 import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
 import Match3.Element.Registry (Registry)
@@ -124,6 +124,7 @@ builtinLevel e =
     || isJust (fromLevelElement e :: Maybe CarpetLevel)
     || isJust (fromLevelElement e :: Maybe GroundLayer)
     || isJust (fromLevelElement e :: Maybe BombShapes)
+    || isJust (fromLevelElement e :: Maybe RainbowCombos)
 
 -- | 与第 4 刀前派生的 Show 逐字相同（第 7 刀：皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影，仍按旧字段名、旧位置打印）：各计数仍按旧字段名、旧位置打印（元素查询快照对 show 取散列）。
 -- gsElementCounts 打印 namedCounts（按名字升序；旧实现按首次出现，快照里每局至多一个名字）。

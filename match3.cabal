@@ -186,6 +186,7 @@ test-suite match3-test
       Spec.MagicStone
       Spec.Presentation
       Spec.Properties
+      Spec.RainbowCombos
       Spec.ReplayUndo
       Spec.SourceScan
       Spec.Specials

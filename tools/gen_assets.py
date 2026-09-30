@@ -1392,7 +1392,7 @@ ZH_SIZES = {
     "pause": [32], "clear": [38], "win": [38], "lose": [38], "next": [22], "retry": [26],
     "map": [32], "map_hint": [18],
     "ch1": [14], "ch2": [14], "ch3": [14], "ch4": [14], "ch5": [14], "ch6": [14], "ch7": [14],
-    "rule_bomb": [18],
+    "rule_bomb": [18], "rule_rainbow": [18],
 }
 NAME_SIZES = [24]      # 关卡名 name_<i>
 
@@ -1408,7 +1408,7 @@ ZH = {
     "help_more": "P：暂停并查看全部按键",
     "ch1": "第一章", "ch2": "第二章", "ch3": "第三章", "ch4": "第四章", "ch5": "第五章", "ch6": "第六章", "ch7": "第七章",
     # 关卡规则开关的 HUD 角标（关名右侧）
-    "rule_bomb": "L/T 形出炸弹",
+    "rule_bomb": "L/T 形出炸弹", "rule_rainbow": "彩虹组合变身",
 }
 
 

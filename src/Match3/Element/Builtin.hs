@@ -45,6 +45,7 @@ module Match3.Element.Builtin
   , CarpetLevel(..)
   , GroundLayer(..)
   , BombShapes(..)
+  , RainbowCombos(..)
   , ltBombRule
   , withBombShapes
   , portalTeleport
@@ -112,4 +113,4 @@ builtinDefs =
 
 -- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 levelStart 按关卡记录给出）：按消息回复流水线节拍；去掉某项（removeLevel）即该机制不生效。
 builtinLevelDefs :: [SomeLevelElement]
-builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel []), SomeLevelElement (BombShapes False)]
+builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel []), SomeLevelElement (BombShapes False), SomeLevelElement (RainbowCombos False)]

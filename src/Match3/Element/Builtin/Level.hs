@@ -15,6 +15,7 @@ module Match3.Element.Builtin.Level
   , CarpetLevel(..)
   , GroundLayer(..)
   , BombShapes(..)
+  , RainbowCombos(..)
   , portalTeleport
   ) where
 
@@ -23,6 +24,7 @@ import Match3.Board.Grid (MBoard, atM, setM)
 import Match3.Carpet (coverCarpets)
 import Match3.Counts (CounterKey(..))
 import Match3.Conveyor (Belt, beltMoves)
+import Match3.Combos (rainbowComboMorph)
 import Match3.Element.Builtin.Gem (withBombShapes)
 import Match3.Element.Class
 import Match3.Levels.Level (Level(..))
@@ -116,6 +118,23 @@ instance LevelElement BombShapes where
     | on, Just (Shaping rules) <- fromMessage msg = Just (SomeMessage (Shaping (withBombShapes rules)), BombShapes on)
     | otherwise = Nothing
   levelStart lvl _ = BombShapes ("bomb_shapes" `elem` lvlRules lvl)
+
+-- | 规则开关「魔力鸟组合增强」（新玩法 4）：本关的 lvlRules 含 "rainbow_combos" 时开，玩家交换成立前回复
+-- 变身查询（Morphing）：彩虹 × 直线 → 同色普通宝石全部变直线再引爆，彩虹 × 炸弹 → 全部变炸弹再引爆
+-- （规则见 Match3.Combos.rainbowComboMorph）。关着时什么都不回复（= 原有彩虹取色，原有关卡与每日挑战不受影响）。
+-- 状态不变；GameState 的 Show 不打印它（内置元素）。
+newtype RainbowCombos = RainbowCombos Bool
+  deriving (Eq, Show)
+
+instance LevelElement RainbowCombos where
+  levelName _ = "rainbow_combos"
+  levelReply (RainbowCombos on) msg
+    | on
+    , Just (Morphing b0 swapped p1 p2 Nothing) <- fromMessage msg
+    , Just (n, cells, seeds) <- rainbowComboMorph b0 swapped p1 p2 =
+        Just (SomeMessage (Morphing b0 swapped p1 p2 (Just (Morph n cells seeds))), RainbowCombos on)
+    | otherwise = Nothing
+  levelStart lvl _ = RainbowCombos ("rainbow_combos" `elem` lvlRules lvl)
 
 -- | 传送门的实现（PortalLevel 回复 Settling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由注册表给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard

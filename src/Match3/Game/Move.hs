@@ -15,7 +15,10 @@ module Match3.Game.Move
 
 import Match3.Board.Grid (inBounds, adjacent, swapCells)
 import Match3.Board.Match (hasAnyMatchWith)
+import Data.Maybe (isNothing)
 import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Level (morphIn)
+import Match3.Element.Message (Morph(..))
 import Match3.Element.Registry (Registry, swapBlockedWith, swapOpeningWith)
 import Match3.Types
 import Match3.Game.Resolve
@@ -35,14 +38,21 @@ resolveSwapWith reg p1 p2 gs
   | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
-  | pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
+  | isNothing morph && pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
   | otherwise = resolveMoveWith reg KindSwap swapped opening gs
   where
     board0 = gsBoard gs
     swapped = swapCells board0 p1 p2
     -- 成对交换规则（段 4：彩虹取色 / 特殊合成经注册表的 swapRule，按 srOrder 取第一条成立的）
     pairRule = swapOpeningWith reg board0 swapped p1 p2
-    opening = maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
+    -- 交换变身（新玩法 4：关卡级元素回复 Morphing，内置 = 规则开关 rainbow_combos）：先变身再按种子起手，
+    -- 变身记成第 0 轮之前的一条步末效果；没人回复 = 原有起手
+    morph = morphIn reg (gsLevelElems gs) board0 swapped p1 p2
+    opening = case morph of
+      Just m
+        | null (morphCells m) -> OpenSeeds (Just p2) (morphSeeds m)
+        | otherwise -> OpenMorph (Just p2) (EndEffect EvSpread (morphName m) [EndItem s q cell Nothing | (s, q, cell) <- morphCells m]) (morphSeeds m)
+      Nothing -> maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
 
 -- | 玩家相邻交换入口（结算结果）。步骤见 Match3.Game.Resolve。
 trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)

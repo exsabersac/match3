@@ -113,6 +113,9 @@ def main():
         return Handler(*args, directory=root, **kw)
 
     http.server.ThreadingHTTPServer.daemon_threads = True
+    # 监听队列（listen backlog）默认只有 5：浏览器开页时并发拉十几个 ES 模块，队列满了新连接会被丢掉 / 重置，
+    # 页面偶发加载失败（局域网访问时见过）。调大到 128。
+    http.server.ThreadingHTTPServer.request_queue_size = 128
     try:
         httpd = http.server.ThreadingHTTPServer((a.bind, a.port), handler)
     except OSError as e:

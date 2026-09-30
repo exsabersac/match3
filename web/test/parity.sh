@@ -27,12 +27,12 @@ esac
 CASES="${CASES:-$DEF}"
 
 [ -f "$HERE/dist/match3-web.wasm" ] || { echo "没有 web/dist/match3-web.wasm，先 make build" >&2; exit 1; }
-command -v "$NODE" >/dev/null 2>&1 || { echo "找不到 node（$NODE）；设 NODE=... 或先 make toolchain" >&2; exit 1; }
+command -v "$NODE" >/dev/null 2>&1 || { echo "找不到 node（${NODE}）；设 NODE=... 或先 make toolchain" >&2; exit 1; }
 command -v stack >/dev/null 2>&1 || { echo "找不到 stack（原生侧需要）" >&2; exit 1; }
 
 mkdir -p "$OUT/obj-$SRC"
 BIN="$OUT/$SRC"
-echo "== 编译原生 $SRC（stack exec -- ghc -O1，增量）"
+echo "== 编译原生 ${SRC}（stack exec -- ghc -O1，增量）"
 # 不要带着 ~/.ghc-wasm/env 的 CC/AR 等变量编原生代码
 (cd "$ROOT" && env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP \
    stack exec -- ghc -O1 -v0 -isrc -iapp/pure -iweb/hs -outputdir "$OUT/obj-$SRC" -o "$BIN" "web/test/$SRC.hs")
@@ -43,15 +43,15 @@ for c in $CASES; do
   li="${c%%:*}"; seed="${c##*:}"; n=$((n + 1))
   nat="$OUT/$MODE-$li-$seed.native"; was="$OUT/$MODE-$li-$seed.wasm"
   if ! "$BIN" "$li" "$seed" "$STEPS" > "$nat" 2> "$nat.err"; then
-    echo "✗ 第 $((li + 1)) 关 种子 $seed：原生侧失败（$(tail -1 "$nat.err")）"; fail=$((fail + 1)); continue
+    echo "✗ 第 $((li + 1)) 关 种子 ${seed}：原生侧失败（$(tail -1 "$nat.err")）"; fail=$((fail + 1)); continue
   fi
   if ! "$NODE" "$HERE/test/$JS" "$li" "$seed" "$STEPS" > "$was" 2> "$was.err"; then
-    echo "✗ 第 $((li + 1)) 关 种子 $seed：wasm 侧失败（$(tail -1 "$was.err")）"; fail=$((fail + 1)); continue
+    echo "✗ 第 $((li + 1)) 关 种子 ${seed}：wasm 侧失败（$(tail -1 "$was.err")）"; fail=$((fail + 1)); continue
   fi
   if cmp -s "$nat" "$was"; then
-    echo "✓ 第 $((li + 1)) 关 种子 $seed：一致（$(wc -c < "$nat" | tr -d ' ') 字节）$( [ "$MODE" = anim ] && echo "  $(tail -1 "$was.err")")"
+    echo "✓ 第 $((li + 1)) 关 种子 ${seed}：一致（$(wc -c < "$nat" | tr -d ' ') 字节）$( [ "$MODE" = anim ] && echo "  $(tail -1 "$was.err")")"
   else
-    echo "✗ 第 $((li + 1)) 关 种子 $seed：不一致 → diff $nat $was"; fail=$((fail + 1))
+    echo "✗ 第 $((li + 1)) 关 种子 ${seed}：不一致 → diff $nat $was"; fail=$((fail + 1))
   fi
 done
 echo "== $MODE 一致性：$((n - fail))/$n 组一致"

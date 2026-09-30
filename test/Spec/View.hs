@@ -9,7 +9,7 @@ module Spec.View
   ( tests
   ) where
 
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, nub)
 import Engine.GridUI
 import Match3.Core
 import Match3.View
@@ -386,3 +386,18 @@ frontends_read_view_model = do
   -- 标签表只有一份（在 Match3.View）
   goalStyle <- readCode "app/UI/GoalStyle.hs"
   assertBool "no tag tables in GoalStyle" (not (any (`mentionsIdent` goalStyle) ["countTag", "colorTag"]))
+  -- 规则开关角标：两个前端都按 ruleBadges 通用地画（HUD 不点名具体规则）；关卡用到的每个规则开关都登记了角标；
+  -- 角标文字与 tools/gen_assets.py 里桌面文字贴图（ZH 表）的字面相同，图标是 gen_assets.py 生成的贴图
+  hudArt <- readCode "app/UI/HudArt.hs"
+  assertBool "HudArt draws ruleBadges generically" ("ruleBadges" `mentionsIdent` hudArt && not (any (`isInfixOf` hudArt) ["\"bomb_shapes\"", "\"zh_rule_bomb\""]))
+  assertBool "web Api encodes ruleBadges" ("ruleBadges" `mentionsIdent` api)
+  let levelRules = nub [unElementName r | l <- allLevels, r <- lvlRules l]
+  assertEqual "every level rule has a registered badge" [] [r | r <- levelRules, r `notElem` map rbRule ruleBadgeTable]
+  assertEqual "level 41 badges" [("bomb_shapes", "L/T 形出炸弹")] [(rbRule b, rbText b) | b <- ruleBadges (gameView (levelGame 40 1))]
+  assertEqual "level 1 has no badge" [] (ruleBadges (gameView (levelGame 0 1)))
+  assertEqual "unregistered rule falls back to its name" (RuleBadge "x_rule" "x_rule" [] "zh_rule_x_rule") (ruleBadge "x_rule")
+  gen <- readFile "tools/gen_assets.py"
+  assertEqual "badge text = gen_assets.py ZH text" []
+    [rbRule b | b <- ruleBadgeTable, not (("\"" ++ drop 3 (rbTextSprite b) ++ "\": \"" ++ rbText b ++ "\"") `isInfixOf` gen)]
+  assertEqual "badge icons are generated sprites" []
+    [ic | b <- ruleBadgeTable, ic <- rbIcons b, not (("sp[\"" ++ ic ++ "\"]") `isInfixOf` gen)]

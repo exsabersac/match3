@@ -12,6 +12,11 @@ module Match3.View
   , Boosters (..)
   , PlayStatus (..)
   , titleLine
+    -- * 规则开关角标
+  , RuleBadge (..)
+  , ruleBadgeTable
+  , ruleBadge
+  , ruleBadges
     -- * 目标视图
   , GoalInfo (..)
   , goalInfo
@@ -44,6 +49,7 @@ module Match3.View
   , kindCode
   ) where
 
+import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Core
@@ -146,6 +152,37 @@ titleLine gv =
       PlayCleared s n -> " LEVEL UP ->" <> show (n + 1) <> " score=" <> show s
       PlayLost s -> " LOSE score=" <> show s
       _ -> ""
+
+--------------------------------------------------------------------------------
+-- 规则开关角标
+
+-- | HUD 上的一枚规则开关角标：本关打开的每个规则开关（'gvRules' 的每一项）一枚，画在关名右侧。
+-- 桌面贴图版（UI.HudArt）叠画 'rbIcons' 再画文字贴图 'rbTextSprite'；网页版（web/hs/Match3Web/Api.hs 的
+-- state.rules → www/hud.js）画同样的图标，文字用画布字体渲染 'rbText'（网页图集不含文字贴图）。
+-- 新玩法加规则开关时在 'ruleBadgeTable' 登记一行，两个前端自动显示，不用改 HUD 代码。
+data RuleBadge = RuleBadge
+  { rbRule :: String        -- ^ 规则开关名（Level.lvlRules 里的名字，如 "bomb_shapes"）
+  , rbText :: String        -- ^ 角标文字，与 tools/gen_assets.py 里对应文字贴图的字面相同（测试核对）
+  , rbIcons :: [String]     -- ^ 图标贴图名，从下往上叠画（桌面与网页图集都有的贴图）；可为空
+  , rbTextSprite :: String  -- ^ 桌面版的文字贴图名（zh_*）
+  }
+  deriving (Eq, Show)
+
+-- | 已登记的规则开关角标（顺序无关，按 gvRules 的顺序画）。
+ruleBadgeTable :: [RuleBadge]
+ruleBadgeTable =
+  [ RuleBadge "bomb_shapes" "L/T 形出炸弹" ["bomb_glow", "bomb_mark"] "zh_rule_bomb"   -- 新玩法 1：L / T 形出炸弹（第 41 关）
+  , RuleBadge "rainbow_combos" "彩虹组合变身" ["rainbow"] "zh_rule_rainbow"          -- 新玩法 4：魔力鸟组合增强（第 44 关）
+  ]
+
+-- | 查一个规则开关的角标。没登记的规则也显示（不静默丢掉）：文字 = 规则名、无图标、
+-- 桌面文字贴图名 zh_rule_<名>（图集里没有时桌面版不画文字）。
+ruleBadge :: String -> RuleBadge
+ruleBadge r = fromMaybe (RuleBadge r r [] ("zh_rule_" ++ r)) (find ((== r) . rbRule) ruleBadgeTable)
+
+-- | 本关要画的全部角标（按 gvRules 的顺序；每日挑战为空）。
+ruleBadges :: GameView -> [RuleBadge]
+ruleBadges = map ruleBadge . gvRules
 
 --------------------------------------------------------------------------------
 -- 目标视图

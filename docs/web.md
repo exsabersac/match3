@@ -75,8 +75,8 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
 
-`state` 包含分数、步数、目标、结局、提示、地面层（果冻）、关卡级元素（皮带、传送门、飞碟、地毯）
-和结构化盘面（每格 `{"t":种类,…,"s":show 文本}`）。字段细节见 `web/README.md` §5。
+`state` 包含分数、步数、目标、结局、提示、规则开关角标 `rules`（视图模型 `gvRules` → `Match3.View.ruleBadge`，HUD 在关卡面板里通用地画，
+与桌面同一张表）、地面层（果冻）、关卡级元素（皮带、传送门、飞碟、地毯）和结构化盘面（每格 `{"t":种类,…,"s":show 文本}`）。字段细节见 `web/README.md` §5。
 
 ### 2.2 ComboFx 在 wasm 里
 
@@ -96,7 +96,13 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 流程：`doSwap` → 交换补间（不能消时换过去再换回）→ `m3AnimStart` → 每帧 `m3AnimTick` → 播完（必要时补一段轻落，如自动洗牌）→ 刷新 HUD；
 - 播放期间锁输入（与桌面 `animBusy` 一致），按钮 / 撤销在播完后可用；
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
-- `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用。
+- `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
+- **新元素要跟进 `cells.js`**：格子 JSON 由核心 `Match3.View.cellFace` 生成，新元素（包括 `Custom` 自定义元素）合入 main 后网页端
+  不会自动有画法——`cells.js` 的 `primarySprite`（主贴图名）/ `CELL_ART`（画法）/ `ELEMENT_RGB`（降级色）要补，贴图名要在网页图集里
+  （`web/tools/gen_web_atlas.py` 只跳过文字图 `g_*` / `zh_*` / `name_*` 与 `@` 变体）。漏了的格子会走几何降级（色块 + 类型名，
+  如魔法石合入时的「custom」灰块）。回归护栏：`cells.js` 按元素名统计走降级的次数，`m3debug.fallbacks` 暴露；e2e 对**每一关**
+  开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡（见 [testing.md](testing.md#网页版测试make-check)）。
+  例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -116,7 +122,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 ```
 tools/gen_assets.py（桌面版，已有）→ assets/*.bmp（2x，112 px/格）
                                           │  只读
-web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张，1024×1300，约 315 KB）
+web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（111 张，1024×1350，约 327 KB）
                                             atlas.json（约 3 KB，名字 → 矩形）
                                             background.webp（约 17 KB）
 ```
@@ -238,7 +244,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 ## 6. 调试要点
 
-- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.perf`；URL `?level=0..39&seed=N` 复现一局；
+- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形）/ `m3debug.perf`；URL `?level=0..41&seed=N` 复现一局；
 - 快捷键：`u` / `z` 撤销，`h` 提示，空格加速；
 - 页面白屏先看网络面板里 `.wasm` 的 Content-Type（必须是 `application/wasm`）。
 
@@ -247,12 +253,12 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
 | `stack test` | 核心规则（357 个） | `make test-native` |
-| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（12 组） |
-| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（10 组） |
-| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `make e2e` |
+| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（14 组，含第 41 / 42 关） |
+| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（12 组，含第 41 / 42 关） |
+| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 关规则角标（三种布局不出框不重叠）与第 42 关无角标、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-29，合入 main 2121bf8 后）：`stack test` 262 通过；状态一致性 12 组、动画一致性 10 组全部一致；e2e 33 项全过。
-e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32，外加 `report.json`）。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-rules-badge 合入 main 64c0351 后）：`stack test` 343 通过；状态一致性 14 组、动画一致性 12 组全部一致；e2e 54 项全过（含逐关贴图护栏）；`make android-check` 6 项全过。
+e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制
 

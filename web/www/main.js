@@ -5,7 +5,7 @@
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
 import { loadArt } from "./art.js";
-import { CELL, PAD, setDims } from "./cells.js";
+import { CELL, PAD, fallbacks, setDims } from "./cells.js";
 import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
@@ -70,6 +70,7 @@ let pending = null;      // 正在播放的一步的 m3Swap 结果（播完后�
 let anim = null;         // null | {kind:"swap"|"cascade"|"fall", ...}
 let busy = false, fastReq = false;
 let sel = null, showHint = null, msg = "", pulse = 0, shownScore = 0;
+let hudDrawn = null;   // 上一帧 HUD 关卡面板各部件的矩形（drawHud 返回；调试钩子 / e2e 检查规则角标布局）
 let pressed = null, frozen = false, frames = 0;
 const fx = new Fx();
 
@@ -193,7 +194,7 @@ function swapped(board, a, b) {
 // 4. 绘制
 function hudInfo() {
   const s = pending ? pending.state : state;
-  return { level: s.level, name: s.name, score: shownScore, moves: s.moves, goalText: goalText(s),
+  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s),
     progress: anim ? state.progress : s.progress, target: s.target, msg, undo: s.undo, busy };
 }
 function drawBackground(W, H) {
@@ -208,7 +209,7 @@ function render() {
   drawBackground(L.W, L.H);
   // 整体：设计单位 → CSS 像素 → 后备缓冲像素
   ctx.setTransform(dpr * L.u, 0, 0, dpr * L.u, dpr * L.ox, dpr * L.oy);
-  drawHud(ctx, art, L, hudInfo(), pressed);
+  hudDrawn = drawHud(ctx, art, L, hudInfo(), pressed);
   const [sx, sy] = fx.shakeOffset(pulse);
   ctx.save();
   ctx.translate(L.board.x + sx, L.board.y + sy);
@@ -314,7 +315,9 @@ function debugInfo() {
 // 自动化钩子：只读状态 + 断点（breakWhen(info) 为真时冻结帧循环，截图后置 frozen=false 继续）；操作仍走真实指针事件
 window.m3debug = {
   get state() { return state; }, get pending() { return pending; }, get busy() { return busy; }, get anim() { return debugInfo(); },
-  get layout() { return L; }, get dpr() { return dpr; }, perf, breakWhen: null,
+  get layout() { return L; }, get hud() { return hudDrawn; }, get levels() { return levels.length; },
+  // 走几何降级的次数（按元素名，见 cells.js 的 fallbacks）；图集加载后应一直为空，e2e 每关检查
+  get fallbacks() { return { ...fallbacks }; }, get dpr() { return dpr; }, perf, breakWhen: null,
   get frozen() { return frozen; }, set frozen(v) { frozen = v; },
   cellCenter: (r, c) => cellCenterCss(L, [r, c]),
   buttonCenter: (id) => { const b = L.buttons.find((x) => x.id === id); return [L.ox + (b.x + b.w / 2) * L.u, L.oy + (b.y + b.h / 2) * L.u]; },

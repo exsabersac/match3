@@ -1,7 +1,7 @@
 # 网页版技术验证（GHC WebAssembly 后端）
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
-在浏览器里用桌面版同一套美术（2x 精灵图集）把 41 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
+在浏览器里用桌面版同一套美术（2x 精灵图集）把 44 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
@@ -64,9 +64,9 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 337 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 357 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
-| `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
+| `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
 | `make check` | CI 用：`build` → `test` → `size` |
 | `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |
@@ -120,8 +120,8 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：107 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
-1024×1300，WebP 约 315 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
+图集：111 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
+1024×1350，WebP 约 327 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
 dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
@@ -204,6 +204,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
 NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules ~/.ghc-wasm/nodejs/bin/node web/test/e2e.mjs
 #   默认用 /usr/bin/google-chrome，可用 CHROME=/path/to/chromium 覆盖
+#   服务器端口：E2E_PORT=8765（默认）；同一台机器上并行跑多份 e2e（多个工作树 / 多个任务）时各设一个，
+#   例如 make check E2E_PORT=18765。端口已被占用时 e2e 直接报错退出（不会连到别人的服务器）
 
 # 原生 vs wasm 一致性（仓库根目录）
 ~/.ghc-wasm/nodejs/bin/node web/test/node-parity.mjs 0 20260929 12 > /tmp/wasm.txt
@@ -219,7 +221,9 @@ cmp /tmp/native-anim.txt /tmp/wasm-anim.txt && echo 一致
 
 e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局、无效交换退回、连锁三帧、撤销、结局），
 `07–12` 特殊块爆炸、步末蜗牛 / 传送带 / 蔓延、第 39 关果冻、第 40 关气泡，`20-分辨率-*` 七种视口，
-`30–32` 下落中改尺寸前后与播完。报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
+`30–32` 下落中改尺寸前后与播完，`rules-badge-*` 第 41 关规则开关角标（竖屏 390×844、横屏手机 844×390、桌面 1280×800）
+与 `rules-badge-l42-*` 第 42 关「魔石」（魔法石是元素不是规则开关，没有角标），`magic-stone-charge*` 魔法石 0–3 格充能。
+另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败。报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
 
 ## 5. 网页端与核心的接口
 
@@ -235,7 +239,7 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 | `m3AnimStart()` | – | 为上一次被接受的 `m3Swap` 建动画播放器：`{ok,anim:true,boards,base,fall}`；不需要播放时 `{ok,anim:false}` |
 | `m3AnimTick(fast)` | 0 / 1（1 = 加速） | 推进一帧（60 fps 固定步长）：播放中 `{p,fr,n,w,k,g,b[,s][,ev]}`，播完 `{done:true,b,best,g,fall}` |
 
-- `state`：`level/name/score/moves/goal/progress/target/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
+- `state`：`level/name/rules/score/moves/goal/progress/target/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
   （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal.name` 为 `GoalNamed` 的元素名）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
 - 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
@@ -248,6 +252,10 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - `events`：规则层效果事件 `pdEvents`（按时间顺序）`{kind,beat,subject,pairs:[[来源],[目标]],amount}`，
   `kind` ∈ `clear/hit/blast/drain/score/combo/tick/belt/spread/move/shuffle`（同 `Match3.Engine.eventKindTag`），
   `beat` 与 `end[].afterWaves` 同一时间轴、同 beat 同时播放；比通用 `Engine.Effect` 多保留来源格（爆炸方向、移动轨迹）；
+- `state.rules`：本关打开的规则开关角标 `[{name,text,icons}]`（视图模型 `gvRules` 查 `Match3.View.ruleBadge`，与桌面 HUD 同一张表；
+  如第 41 关 `[{"name":"bomb_shapes","text":"L/T 形出炸弹","icons":["bomb_glow","bomb_mark"]}]`，其余关卡与每日挑战为 `[]`）。
+  前端 `hud.js` 在关卡面板「第 N 关」右侧逐个画「叠放图标 + 文字」小胶囊（文字用画布字体，图集里没有文字贴图），
+  竖屏 / 横屏同一套；放不下时先截断文字、再只留图标。新规则只要在 `ruleBadgeTable` 登记一行，两个前端自动显示；
 - `state` 另含关卡级元素：`belts`（皮带路径）、`portals`（传送门对）、`ufos[{p,c}]`、`carpets`、`carpetOpen`；
 - `board`：行 × 列（每关不同），结构化编码，每格都带 `"s"`（核心 show 文本）：
   宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名|null,"n":覆盖层数}`；

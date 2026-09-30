@@ -33,7 +33,7 @@ import Match3.Board.Cascade
   )
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Board.Hooks (LevelHooks(..))
-import Match3.Element.Level (coverIn, hitGroundIn, levelHooksWith)
+import Match3.Element.Level (coverIn, hitGroundIn, levelHooksWith, levelRegistryIn)
 import Match3.Element.Registry (Registry)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
 import Match3.Game.EndPhase (EndStage, boosterEndTable, runEndTable, swapEndTable)
@@ -68,8 +68,10 @@ resolveMove = resolveMoveWith defaultRegistry
 
 -- | 公共结算（指定注册表）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
 resolveMoveWith :: Registry -> MoveKind -> Board -> Opening -> GameState -> (GameState, Outcome, MoveTrace)
-resolveMoveWith reg kind start opening gs =
-  let hooks0 = levelHooksWith reg (gsLevelElems gs)
+resolveMoveWith reg0 kind start opening gs =
+  let -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
+      reg = levelRegistryIn reg0 (gsLevelElems gs)
+      hooks0 = levelHooksWith reg (gsLevelElems gs)
       seg0 = case opening of
         OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) start
         OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) start

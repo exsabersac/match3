@@ -233,7 +233,7 @@ ec_flat_record_removed = do
   flow <- mapM readFile flowFiles
   assertEqual "main flow does not call level element implementations" [] [(f, w) | (f, s) <- zip flowFiles flow, w <- ["stepUfos", "beltMoves", "coverCarpets"], mentionsIdent w s]
   assertEqual "31 builtin entries" 31 (length builtinDefs)
-  assertEqual "level elements" ["ufo", "belt", "portal", "carpet"] (map levelNameOf builtinLevelDefs)
+  assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes"] (map levelNameOf builtinLevelDefs)
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；
 -- 不改主流程，只 registerLevel（无状态：开局没有它时用注册的原型值）。第 7 刀 7b 起节拍折叠所有回复者：
@@ -278,7 +278,7 @@ ec_level_elements_by_message = do
   assertEqual "ping folds all repliers in registration order" (Just 16) (ping (registerLevel (SomeLevelElement Doubler) reg))
   assertEqual "other order" (Just 15) (ping (registerLevel (SomeLevelElement Magnet) (registerLevel (SomeLevelElement Doubler) defaultRegistry)))
   assertEqual "nobody answers ping by default" Nothing (ping defaultRegistry)
-  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "magnet"] (map levelNameOf (levelDefs reg))
+  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "magnet"] (map levelNameOf (levelDefs reg))
 
 -- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 levelStart 给 2 格电量，
 -- 每轮补子之后（Refilled）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
@@ -309,7 +309,7 @@ ec_level_element_stateful_extension = do
             Just (a, b) -> let (gs', _, _) = resolveSwapWith r a b gs in gs : play r (n - 1) gs'
       states = play reg 12 gs0
       final = last states
-  assertEqual "opened in registration order + core ground" ["ufo", "belt", "portal", "carpet", "siphon", "ground"] (map levelNameOf (gsLevelElems gs0))
+  assertEqual "opened in registration order + core ground" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "siphon", "ground"] (map levelNameOf (gsLevelElems gs0))
   assertEqual "levelStart gives the charge" (Just 2) (charge gs0)
   assertBool "Show appends the extension state" ("gsLevelExtra = [Siphon 2]" `isInfixOf` show gs0)
   assertBool "builtin games show no extras" (not ("gsLevelExtra" `isInfixOf` show (newGameAtLevel 0 defaultConfig 7)))

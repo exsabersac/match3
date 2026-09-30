@@ -76,6 +76,7 @@ data GameView = GameView
   , gvLevelName :: String  -- ^ 夹紧下标的关名（标题）
   , gvRawName :: String    -- ^ 原下标的关名，无此关为 "?"（网页 name）
   , gvDaily :: Bool
+  , gvRules :: [String]    -- ^ 本关打开的规则开关（Level.lvlRules，如 "bomb_shapes"）；每日挑战为空（HUD 角标）
   , gvScore :: Int
   , gvMoves :: Int
   , gvMoveCap :: Int       -- ^ 步数条满格值：max 当前步数 该关印制步数
@@ -96,6 +97,7 @@ gameView gs =
     , gvLevelName = maybe "?" lvlName mlvl
     , gvRawName = maybe "?" lvlName (lookupLevel lvl)
     , gvDaily = gsDaily gs
+    , gvRules = if gsDaily gs then [] else maybe [] (map unElementName . lvlRules) (lookupLevel lvl)
     , gvScore = gsScore gs
     , gvMoves = mv
     , gvMoveCap = max mv (maybe mv lvlMoves mlvl)

@@ -94,6 +94,23 @@
 - **气泡不可交换**：可交换的话需要给无色格定义「交换后是否成立」的新规则，超出白名单；挡交换沿用原型 `Blocker` 的默认方法。
 - 两关追加在第 38 关之后，前 38 关不改；因此第 38 关「织毯」不再是终章（过关由 `Won` 变为 `LevelClear` 进入第 39 关），终章变成第 40 关。
 
+## L / T 形出炸弹（新玩法 1，规则开关 `bomb_shapes`）
+
+对照开心消消乐：同色 5 颗排成 L 形或 T 形时生成「爆炸特效」。本项目的炸弹原来只能靠关卡放置、彩蛋、果汁机得到，形状表里没有 L / T 规则。
+
+| 项 | 规则 |
+|---|---|
+| 判定 | 同一轮里同色的一条横线和一条竖线（各 ≥3）有公共格 = L / T 形（十字也算）；交点就是公共格 |
+| 生成 | 横线在交点放一颗该色炸弹（交点这一轮真被挖空时）；竖线认领但不生成（不会再出竖向直线） |
+| 优先级 | 形状表里排在「五连 → 彩虹」之后、「四连 → 直线」之前：带五连的 T 仍出彩虹；带四连的 L / T 出炸弹、不出直线；不交叉的连线照旧 |
+| 开关 | 关卡记录 `lvlRules` 含 `"bomb_shapes"` 时打开（关卡级元素 `BombShapes`，每步结算开始时回复 `Shaping`，把 `ltBombRule` 插进本关的形状表）；原有 40 关与每日挑战都关着，行为不变 |
+| 关卡 | 第 41 关「爆破」：24 步，碎 10 块石头（左右两堆，炸弹 3×3 一次能砸好几块），`goalCount CountStones 10` |
+| 前端 | 炸弹沿用原有贴图与爆炸表现；开关打开的关卡 HUD 关名右侧画炸弹角标 +「L/T 形出炸弹」（视图模型 `gvRules`） |
+
+取舍说明：
+- **按关打开，不全局打开**：全局打开会改变原有 40 关的对局（金标准会大面积变化），需要另行批准；规则开关让新旧关卡并存。
+- **交点即落点**：不按交换落点放炸弹（交换落点可能不在交点上），这样 L / T 的炸弹位置固定可预期。
+
 ## 目标与结局
 
 | 中文 | 类型 | 说明 |
@@ -125,8 +142,8 @@
 
 | 中文 | API | 说明 |
 |------|-----|------|
-| 关卡表 | `allLevels`（40：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」；`Match3.Levels.Campaign`） | 名称中文；见 README 表；第 40 关是终章（过关为 `Won`）；按下标取关用 `lookupLevel`（`Maybe`） |
-| 关卡记录 | `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` / `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`） | 第 6 刀：一关的全部数据（步数、目标、装饰放置表、皮带、传送门、飞碟、地毯、地面层）在同一条记录里 |
+| 关卡表 | `allLevels`（41：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」+ 新玩法 1 的第 41 关「爆破」；`Match3.Levels.Campaign`） | 名称中文；见 README 表；第 41 关是终章（过关为 `Won`；第 40 关过关由 `Won` 变为 `LevelClear` 进入第 41 关）；按下标取关用 `lookupLevel`（`Maybe`） |
+| 关卡记录 | `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` / `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround` / `lvlRules`） | 第 6 刀：一关的全部数据（步数、目标、装饰放置表、皮带、传送门、飞碟、地毯、地面层）在同一条记录里；`lvlRules`（新玩法 1）= 本关打开的规则开关名，缺省空 |
 | 选关解锁 | `unlockAfterOutcome` | 每日 `Won` **不**抬地图进度 |
 | 每日 | `newDailyGame` / `dailySeed` | 日期种子；10 种目标轮换 |
 | 三星 | `starRating start left` | ≥40% 印制步剩余 → 3★；≥15% → 2★；否则 1★ |
@@ -149,7 +166,7 @@
 | 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance；第 9 刀起类只有 `name` / `toCell` / `caps`）、能力记录 `Caps`（五组：匹配与交换 `MatchCaps` / 消除与受击 `HitCaps` / 重力与移动 `MoveCaps` / 计数与目标 `CountCaps` / 步末与变化 `StepCaps`，带按原型的缺省值，元素用 `Match3.Element.Caps` 的简写只声明用到的几项）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
 | 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
 | 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
-| 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消 |
+| 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消；L / T 形 → 炸弹（`ltBombRule`）只在规则开关 `bomb_shapes` 打开的关卡插入（见下文「L / T 形出炸弹」） |
 | 特殊块组合规则 | `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`（第 8 刀） | 两个特殊块交换时的组合效果；有序表（注册表 `comboRules`），两个方向都试（对称），整张表并成成对交换规则 20。内置 `builtinComboRules`：炸弹 × 炸弹、直线 × 直线、直线 × 炸弹、彩虹 × 直线 |
 | 补子策略 | `RefillPolicy { refillName, refillCell }`、`RefillCtx`（第 8 刀） | 沉降后空洞补什么：注册表的策略（`refillPolicyWith`，缺省 `defaultRefill` = 随机五色普通宝石），关卡级元素可回复 `Refilling` 换掉；`colorsRefill n` = 只用前 n 色 |
 | 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |

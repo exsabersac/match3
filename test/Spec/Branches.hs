@@ -198,7 +198,7 @@ br_pushable_from_registry = do
 -- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按注册表的地面层规则命中。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do
-  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet"] (map levelNameOf (levelDefs defaultRegistry))
+  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet", "bomb_shapes"] (map levelNameOf (levelDefs defaultRegistry))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       ufos = [mkUfo (3, 3) C1, mkUfo (0, 0) C2]
       noUfo = removeLevel "ufo" defaultRegistry

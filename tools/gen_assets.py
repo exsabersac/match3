@@ -1344,6 +1344,7 @@ ZH_SIZES = {
     "pause": [32], "clear": [38], "win": [38], "lose": [38], "next": [22], "retry": [26],
     "map": [32], "map_hint": [18],
     "ch1": [14], "ch2": [14], "ch3": [14], "ch4": [14], "ch5": [14], "ch6": [14], "ch7": [14],
+    "rule_bomb": [18],
 }
 NAME_SIZES = [24]      # 关卡名 name_<i>
 
@@ -1358,12 +1359,15 @@ ZH = {
     "k_play": "继续游戏", "k_quit": "退出", "legend": "图例", "map_hint": "点击关卡进入 · M 关闭",
     "help_more": "P：暂停并查看全部按键",
     "ch1": "第一章", "ch2": "第二章", "ch3": "第三章", "ch4": "第四章", "ch5": "第五章", "ch6": "第六章", "ch7": "第七章",
+    # 关卡规则开关的 HUD 角标（关名右侧）
+    "rule_bomb": "L/T 形出炸弹",
 }
 
 
 def level_names():
-    src = (ROOT / "src" / "Match3" / "Types.hs").read_text(encoding="utf-8")
-    names = re.findall(r'Level\s+(\d+)\s+"([^"]+)"', src)
+    # 第 6a 刀起关卡表在 src/Match3/Levels/Campaign.hs，写法是 `level <0 基下标> "名字" ...`
+    src = (ROOT / "src" / "Match3" / "Levels" / "Campaign.hs").read_text(encoding="utf-8")
+    names = re.findall(r'\blevel\s+(\d+)\s+"([^"]+)"', src)
     return [(int(i), n) for i, n in names]
 
 

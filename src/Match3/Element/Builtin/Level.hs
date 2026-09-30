@@ -6,13 +6,15 @@
 -- 自己关心的那几条，回复时交回推进后的自身：飞碟 = 补子之后（Refilled）、皮带 = 步末倒计时之后（EndTicked）
 -- 与会走元素的避让格（AvoidCells）、传送门 = 沉降时（Settling）与会走元素的墙（WallCells）、
 -- 地毯 = 步末结算（Covering）、地面层 = 每轮之后（GroundHit）。开局状态由关卡记录给出（levelStart）。
--- 前四种去掉（removeLevel）即不生效；地面层是核心元素（levelCore），其中每层的行为由注册表的地面层条目决定。
+-- 规则开关 BombShapes = 每步结算开始时（Shaping）改本关的形状表。
+-- 前四种与规则开关去掉（removeLevel）即不生效；地面层是核心元素（levelCore），其中每层的行为由注册表的地面层条目决定。
 module Match3.Element.Builtin.Level
   ( UfoLevel(..)
   , BeltLevel(..)
   , PortalLevel(..)
   , CarpetLevel(..)
   , GroundLayer(..)
+  , BombShapes(..)
   , portalTeleport
   ) where
 
@@ -21,6 +23,7 @@ import Match3.Board.Grid (MBoard, atM, setM)
 import Match3.Carpet (coverCarpets)
 import Match3.Counts (CounterKey(..))
 import Match3.Conveyor (Belt, beltMoves)
+import Match3.Element.Builtin.Gem (withBombShapes)
 import Match3.Element.Class
 import Match3.Levels.Level (Level(..))
 import Match3.Element.Message
@@ -100,6 +103,19 @@ instance LevelElement GroundLayer where
     Nothing -> Nothing
   levelStart lvl _ = GroundLayer (lvlGround lvl)
   levelCore _ = True
+
+-- | 规则开关「L / T 形生成炸弹」（新玩法，开心消消乐的爆炸特效）：本关的 lvlRules 含 "bomb_shapes" 时开，
+-- 每步结算开始时回复形状表查询（Shaping），把 L / T 规则插进本关的形状表；关着时什么都不回复（= 内置表，
+-- 原有关卡与每日挑战不受影响）。状态不变，不参与撤销差异；GameState 的 Show 不打印它（内置元素）。
+newtype BombShapes = BombShapes Bool
+  deriving (Eq, Show)
+
+instance LevelElement BombShapes where
+  levelName _ = "bomb_shapes"
+  levelReply (BombShapes on) msg
+    | on, Just (Shaping rules) <- fromMessage msg = Just (SomeMessage (Shaping (withBombShapes rules)), BombShapes on)
+    | otherwise = Nothing
+  levelStart lvl _ = BombShapes ("bomb_shapes" `elem` lvlRules lvl)
 
 -- | 传送门的实现（PortalLevel 回复 Settling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由注册表给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard

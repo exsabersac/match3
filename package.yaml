@@ -121,6 +121,8 @@ executables:
     - containers
     - directory
     - filepath
+    - bytestring
+    - vector
 
 tests:
   match3-test:

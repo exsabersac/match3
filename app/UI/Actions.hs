@@ -33,6 +33,7 @@ import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
 import Match3.View (colorTag, gameView, titleLine)
+import UI.Audio (beginLevel)
 import UI.Playback
 import UI.Types
 
@@ -204,6 +205,7 @@ advanceOrMsg ref window = do
   app <- readIORef ref
   case gsOver (appGame app) of
     Just (LevelClear _ n) -> do
+      beginLevel
       let gs = nextLevel (appGame app) seed
           -- Stars rate vs printed level moves; carry must not inflate the denominator.
           baseMoves = maybe (gsMoves gs) lvlMoves (lookupLevel (gsLevel gs))
@@ -218,11 +220,13 @@ advanceOrMsg ref window = do
     Just (Won _) -> case campaignGame 0 seed of
       -- 通关后从第 1 关重开（关卡表恒非空；空表时不动）
       Just gs -> do
+        beginLevel
         let app' = (freshLevelUi gs app) { appMsg = "New campaign" }
         writeIORef ref app'
         updateTitle window app'
       Nothing -> pure ()
     Just (Lost _) -> do
+      beginLevel
       let gs0 = appGame app
           gs =
             if gsDaily gs0

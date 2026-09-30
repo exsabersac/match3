@@ -10,6 +10,7 @@ import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, d
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
 import { drawGuide, guideEntries, noteSpecials } from "./guide.js";
+import { unlock, play, toggle, enabled, startBgm } from "./audio.js";
 
 // ---------------------------------------------------------------------------
 // 1. 加载 wasm 与贴图（并行），记录耗时
@@ -85,6 +86,7 @@ function newGame(level, seed) {
   showGuide = false; seenSpecials = new Set(); noteSpecials(state, seenSpecials);
   shownScore = state.score; fx.clear();
   msg = `第 ${state.level + 1} 关：交换相邻两格（点选或拖划），凑 3 个以上同色消除`;
+  startBgm();
   relayout();
 }
 
@@ -101,10 +103,12 @@ function doSwap(a, b) {
   perf.steps.push({ ms: +(performance.now() - t0).toFixed(2), wasmMs: +(t1 - t0).toFixed(2), jsonBytes: raw.length,
     outcome: res.outcome?.tag ?? null, waves });
   if (!res.accepted) {
+    play("illegal");
     msg = res.outcome?.tag === "NoMatch" ? "这样换不能消除，已退回" : "只能交换相邻两格";
     if (res.outcome?.tag === "NoMatch") { busy = true; anim = { kind: "swap", board: state.board, a, b, frame: 0, back: true }; }
     return;
   }
+  play("swap");
   busy = true; fastReq = false; pending = res;
   anim = { kind: "swap", board: state.board, a, b, frame: 0, back: false };
 }
@@ -146,6 +150,7 @@ function stepCascade() {
     const cl = cas.cleared[e.w] || [];
     if (e.e === "hl" && e.k >= 2) fx.comboPop(e.k, cl);
     if (e.e === "van") {
+      play(cas.blast[e.w] ? "special" : "clear");
       fx.burst(cas.waves[e.w].before, cl);
       if (cas.score[e.w] > 0) fx.scorePop(cas.score[e.w], e.k, cl);
       if (e.k >= 2) fx.startShake(e.k);
@@ -171,6 +176,9 @@ function finishMove(best = 0) {
   const gained = res.trace.waves.reduce((s, w) => s + w.score, 0);
   msg = best >= 2 ? `${best} 连击！本步 +${gained}` : `+${gained}`;
   if (state.shuffled) msg += "（无可走步，已自动洗牌）";
+  const tag = state.over && state.over.tag;
+  if (tag === "Won" || tag === "LevelClear") play("win");
+  else if (tag === "Lost") play("lose");
 }
 
 // 固定步长的一帧（60 fps）：呼吸计数、粒子 / 浮字 / 震屏、当前动画
@@ -198,7 +206,7 @@ function swapped(board, a, b) {
 // 4. 绘制
 function hudInfo() {
   const s = pending ? pending.state : state;
-  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s), goalIcon: s.goal.icon,
+  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s), goalIcon: s.goal.icon, sound: enabled(),
     progress: anim ? state.progress : s.progress, target: s.target, msg, undo: s.undo, busy,
     boss: anim ? state.boss : s.boss, pulse };   // Boss 血条与目标条一样：播放期间显示本步之前的读数
 }
@@ -261,7 +269,10 @@ let drag = null;   // {cell, x, y}（设计单位）
 function unitsOf(ev) { const r = canvas.getBoundingClientRect(); return toUnits(L, ev.clientX - r.left, ev.clientY - r.top); }
 canvas.addEventListener("pointerdown", (ev) => {
   ev.preventDefault();
+  unlock();
   const [x, y] = unitsOf(ev);
+  const snd = hudDrawn && hudDrawn.sound;
+  if (snd && x >= snd.x && x < snd.x + snd.w && y >= snd.y && y < snd.y + snd.h) { toggle(); return; }
   const b = buttonAtUnits(L, x, y);
   if (b) { pressed = b.id; return; }
   if (showGuide) { showGuide = false; return; }

@@ -31,8 +31,8 @@ tests =
   , testCase "presentation_spread_curves_match_legacy" presentation_spread_curves_match_legacy
   , testCase "presentation_combo_style_matches_legacy" presentation_combo_style_matches_legacy
   , testCase "presentation_extension_defaults" presentation_extension_defaults
-  , testCase "effect_sound_defaults_to_nothing" effect_sound_defaults_to_nothing
-  , testCase "cascade_sounds_silent_on_real_moves" cascade_sounds_silent_on_real_moves
+  , testCase "effect_sound_names_clear_and_special" effect_sound_names_clear_and_special
+  , testCase "cascade_sounds_follow_clear_and_special" cascade_sounds_follow_clear_and_special
   , testCase "presentation_scattered_cases_removed" presentation_scattered_cases_removed
   , testCase "draw_hud_and_prim_overlay_are_thin" draw_hud_and_prim_overlay_are_thin
   ]
@@ -197,17 +197,18 @@ presentation_extension_defaults = do
   -- 内置的藤 / 巧 / 蒸汽各有曲线与颜色
   mapM_ (\n -> assertBool (show n) (lookup n spreadCurves /= Nothing && lookup n elementRGBTable /= Nothing)) ["vine", "choco", "steam"]
 
--- | 音效钩子默认全为 Nothing（无声）。
-effect_sound_defaults_to_nothing :: Assertion
-effect_sound_defaults_to_nothing = do
-  map effectSound allKinds @?= map (const Nothing) allKinds
-  map (prSound . snd) presentationTable @?= map (const Nothing) presentationTable
+-- | 消除与爆炸有音效名，其余事件无声。
+effect_sound_names_clear_and_special :: Assertion
+effect_sound_names_clear_and_special = do
+  effectSound EvClear @?= Just "clear"
+  effectSound EvBlast @?= Just "special"
+  map effectSound (filter (`notElem` [EvClear, EvBlast]) allKinds) @?= map (const Nothing) (filter (`notElem` [EvClear, EvBlast]) allKinds)
   prSound defaultPresentation @?= Nothing
-  playSounds ["anything"] -- 预留接口：空操作，不抛异常
+  playSounds ["anything"] -- 纯模块仍是空操作；真正播放在桌面 UI.Audio / 网页
 
 -- | 用真实的连锁（第 8 关 7 轮、第 16 关倒计时步末）跑完整个回放：各阶段事件映射到的效果种类齐全，且都不出声。
-cascade_sounds_silent_on_real_moves :: Assertion
-cascade_sounds_silent_on_real_moves = do
+cascade_sounds_follow_clear_and_special :: Assertion
+cascade_sounds_follow_clear_and_special = do
   kinds <- concat <$> mapM run [(7, ((2, 5), (3, 5))), (15, ((0, 1), (1, 1)))]
   mapM_ (\k -> assertBool ("kind seen: " ++ show k) (k `elem` kinds)) [EvClear, EvScore, EvCombo, EvTick]
   where
@@ -224,7 +225,7 @@ cascade_sounds_silent_on_real_moves = do
                   Done _ -> acc
             cevs = go 0 (newPlayer c) []
         assertBool "cascade produced events" (not (null cevs))
-        mapM_ (\e -> cascadeSounds e @?= []) cevs
+        mapM_ (\e -> assertBool (show (cascadeSounds e)) (all (`elem` ["clear", "special"]) (cascadeSounds e))) cevs
         pure (concatMap cascadeEventKinds cevs)
 
 -- | 源码扫描：散落的表 / case 已收进表现表；搬走的颜色字面量只在 UI.Presentation 里出现。

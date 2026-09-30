@@ -59,6 +59,8 @@ if [ ! -f "$ART/atlas.webp" ] || [ ! -f "$ART/atlas.json" ] || [ ! -f "$ART/back
   python3 "$HERE/tools/gen_web_atlas.py" --assets "$ROOT/assets" --out "$ART"
 fi
 cp "$ART/atlas.webp" "$ART/atlas.json" "$ART/background.webp" "$DIST/"
+mkdir -p "$DIST/sfx"
+cp "$ROOT/assets/sfx/"*.wav "$DIST/sfx/"
 
 # 4) 浏览器 WASI 垫片（首次联网下载，之后用缓存）
 CACHE="$HERE/.cache/browser_wasi_shim-$WASI_SHIM_VERSION"

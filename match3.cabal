@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.39.6.
 --
 -- see: https://github.com/sol/hpack
 
@@ -114,6 +114,7 @@ executable match3-sdl
       Art
       Shell.Loop
       UI.Actions
+      UI.Audio
       UI.BoardArt
       UI.BoardPrim
       UI.Cascade
@@ -151,6 +152,7 @@ executable match3-sdl
   build-depends:
       array
     , base >=4.7 && <5
+    , bytestring
     , containers
     , directory
     , filepath
@@ -158,6 +160,7 @@ executable match3-sdl
     , random
     , sdl2
     , text
+    , vector
   default-language: Haskell2010
 
 test-suite match3-test

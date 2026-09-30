@@ -216,7 +216,9 @@ export function drawHud(ctx, art, L, info, pressed) {
     const enabled = !info.busy && (b.id !== "undo" || info.undo > 0);
     button(ctx, art, b, enabled, pressed === b.id);
   }
-  return { ...lv, boss };
+  const sound = { x: h.x + h.w - 48, y: h.y + (L.mode === "portrait" ? 98 : 184), w: 46, h: 28 };
+  button(ctx, art, { ...sound, id: "sound", label: info.sound === false ? "静" : "声" }, true, false);
+  return { ...lv, boss, sound };
 }
 
 // 结局面板（盖在棋盘上）

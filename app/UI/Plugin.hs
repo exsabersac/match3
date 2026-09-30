@@ -28,7 +28,7 @@ import UI.Env
 import UI.Input
 import UI.Layout
 import UI.Playback
-import UI.Sound (playSounds)
+import UI.Audio (beginLevel, cue, start)
 import UI.Types
 
 -- | 启动参数（来自环境变量，见 UI.Env）。
@@ -54,6 +54,8 @@ match3Plugin o =
   Plugin
     { plugInit = \window renderer -> do
         art <- loadArt renderer
+        start
+        beginLevel
         ref <- newIORef (initialApp o art)
         updateTitle window =<< readIORef ref
         pure ref
@@ -108,4 +110,4 @@ drainSounds ref = do
   a <- readIORef ref
   case appSounds a of
     [] -> pure ()
-    ss -> playSounds ss >> writeIORef ref a {appSounds = []}
+    ss -> cue ss >> writeIORef ref a {appSounds = []}

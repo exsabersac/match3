@@ -96,7 +96,7 @@ data Presentation = Presentation
   , prColor  :: Maybe RGB        -- ^ 固定主色（Nothing = 按格子 / 连击等级 / 元素名取色）
   , prSprite :: Maybe SpriteName -- ^ 贴图版用到的光效 / 精灵（Nothing = 不用；几何版不用贴图）
   , prCrumbs :: Crumbs
-  , prSound  :: Maybe SoundName  -- ^ 音效钩子（内置全部 Nothing）
+  , prSound  :: Maybe SoundName  -- ^ 音效名；消除 clear、爆炸 special，其余无声
   } deriving (Eq, Show)
 
 -- | 只给表现方式与帧数，其余为空。
@@ -108,9 +108,9 @@ look l n = Presentation l n Nothing Nothing NoCrumbs Nothing
 -- 皮带移位 14（≈ 230 ms）、蔓延 18（≈ 300 ms，藤 / 巧 / 蒸汽同时长出）、会走的元素（蜗牛）18、自动洗牌 22（≈ 370 ms）。
 presentationTable :: [(EventKind, Presentation)]
 presentationTable =
-  [ (EvClear, (look LookClear 12) {prColor = Just (255, 250, 220), prSprite = Just "spark"}) -- 第 1 轮柔白光圈，连击轮用等级色
+  [ (EvClear, (look LookClear 12) {prColor = Just (255, 250, 220), prSprite = Just "spark", prSound = Just "clear"}) -- 第 1 轮柔白光圈，连击轮用等级色
   , (EvHit, look LookWithClear 0)
-  , (EvBlast, look LookWithClear 0)
+  , (EvBlast, (look LookWithClear 0) {prSound = Just "special"})
   , (EvDrain, look LookWithClear 0)
   , (EvScore, (look LookScore 48) {prColor = Just (255, 244, 200)}) -- 第 1 轮的得分色，连击轮用等级色
   , (EvCombo, (look LookCombo 54) {prSprite = Just "zh_combo"})
@@ -153,7 +153,7 @@ stageFrames = prFrames . stagePresentation
 presentationRGB :: Presentation -> RGB
 presentationRGB = fromMaybe defaultSpreadGlow . prColor
 
--- | 音效钩子：效果事件 → 音效名（内置全部 Nothing = 无声）。
+-- | 音效钩子：效果事件 → 音效名（消除 clear、爆炸 special，其余 Nothing）。
 effectSound :: EventKind -> Maybe SoundName
 effectSound = prSound . presentationFor
 

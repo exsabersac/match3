@@ -106,7 +106,7 @@ data App = App
 
 -- | 标题栏 / 键位条的默认提示。
 helpKeysMsg :: Text
-helpKeysMsg = "H hint | 1 hammer | 2 free-swap | 3 cross | U undo | S shuffle | D daily | M map | R restart | N next | P pause | Esc"
+helpKeysMsg = "H hint | 1 hammer | 2 free-swap | 3 cross | U undo | S shuffle | D daily | M map | K sound | R restart | N next | P pause | Esc"
 
 -- | 当前局面（appHist 的当前状态）。
 appGame :: App -> GameState

@@ -30,6 +30,7 @@ import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
 import UI.Actions
+import UI.Audio (beginLevel, toggleMute)
 import UI.Env
 import Engine.GridUI (Click (..), gridClick, gridDragRelease)
 import Match3.View (GameView (..), gameView, goalBracket)
@@ -80,6 +81,7 @@ handleKey ref window code = do
     KeycodeEscape -> pure True
     KeycodeQ -> pure True
     KeycodeP -> False <$ keyPause ref window appGate
+    KeycodeK -> False <$ (toggleMute >> pure ())
     -- Restart works while paused (暂停重开); freshLevelUi clears pause.
     KeycodeR -> False <$ keyRestart ref window
     _
@@ -136,6 +138,7 @@ keyRestart ref window = do
   app <- readIORef ref
   let app' = (freshLevelUi (restartSame app seed) app) { appMsg = "Restarted level" }
   commit ref window app'
+  beginLevel
 
 -- | M：开关关卡地图。
 keyMap :: IORef App -> Window -> IO ()
@@ -293,6 +296,7 @@ keyDaily ref window = do
       lvl = dailyLevel y m d
       gs = newDailyGame (levelConfig lvl) (dailySeed y m d)
   commit ref window (freshLevelUi gs app) { appMsg = "Daily challenge!" }
+  beginLevel
 
 --------------------------------------------------------------------------------
 -- 鼠标
@@ -346,6 +350,7 @@ handleMouseDown ref window me = do
           seed <- randomIO
           app <- readIORef ref
           commit ref window (freshLevelUi (restartSame app seed) app) { appMsg = "Retry!" }
+          beginLevel
           pure False
         _ ->
           let (nr, nc) = boardDims (gsBoard (appGame app0))
@@ -368,6 +373,7 @@ mapClick ref window app0 mx0 my0 =
               , appMsg = "Map -> L" <> T.pack (show (jump + 1)) <> " " <> T.pack (lvlName lvl)
               , appMaxReached = max (appMaxReached app0) jump
               }
+          beginLevel
         _ ->
           -- Same level / locked: close map and resume (keep mid-level progress)
           commit ref window app0 { appMapOpen = False, appMsg = helpKeysMsg }
@@ -429,6 +435,7 @@ swapTo msgOf app p1 p2 =
              , appDragFrom = Nothing
              , appMsg = msgOf before gs' (M3E.pdFx pd) out
              , appTipFrames = 0
+             , appSounds = hear out ++ appSounds app
              }
        )
        out
@@ -474,3 +481,12 @@ clickMsg before gs' fx out =
 -- | 收集类目标的进度后缀（第 11 刀起读 Match3.View.goalBracket）。
 collectMsg :: GameState -> Text
 collectMsg gs' = T.pack (goalBracket (gvGoal (gameView gs')))
+
+-- | 交换结果要播的音效（表现层；规则不发声）。非法与换不掉都用 illegal。
+hear :: Outcome -> [String]
+hear InvalidSwap = ["illegal"]
+hear NoMatch = ["illegal"]
+hear (MoveApplied _) = ["swap"]
+hear (Won _) = ["swap", "win"]
+hear (Lost _) = ["lose"]
+hear (LevelClear _ _) = ["swap", "win"]

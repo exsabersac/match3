@@ -19,9 +19,9 @@ OUT="${OUT:-$HERE/.cache/parity}"
 
 case "$MODE" in
   state) SRC=Parity;     JS=node-parity.mjs;      STEPS="${STEPS:-12}"
-         DEF="0:20260929 5:1 12:42 15:1 20:1 25:1 27:1 30:1 35:1 37:1 38:2026 39:31337 40:1" ;;
+         DEF="0:20260929 5:1 12:42 15:1 20:1 25:1 27:1 30:1 35:1 37:1 38:2026 39:31337 40:1 41:1" ;;
   anim)  SRC=AnimParity; JS=node-anim-parity.mjs; STEPS="${STEPS:-20}"
-         DEF="0:20260929 11:1 12:42 13:1 15:1 27:1 28:1 35:1 38:2026 39:31337 40:1" ;;
+         DEF="0:20260929 11:1 12:42 13:1 15:1 27:1 28:1 35:1 38:2026 39:31337 40:1 41:1" ;;
   *) echo "用法：$0 state|anim [步数]" >&2; exit 2 ;;
 esac
 CASES="${CASES:-$DEF}"

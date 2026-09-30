@@ -281,7 +281,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `view_cell_face_and_level_list_match_legacy` | 全部样本盘面的格子与每种构造器 / 叠层组合：`cellFace` 与旧 `encodeCell` 的字段（`t` 在前、顺序相同）逐项相同；`levelViews` 与 `allLevels` 的序号 / 名字 / 步数 / 目标相同 |
 | `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
-| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表 |
+| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图 |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
@@ -344,6 +344,24 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 通用层 `Engine.*` / `Shell.Loop` 不得 import `Match3`（`engine_layer_is_game_agnostic`）；三消实例与直接调用旧入口逐位相同（`engine_match3_instance_matches_direct_api`）。
 - 动到前端绘制 / 回放时，另做截图比对：新旧二进制在 Xvfb 下的 6 个场景（展示盘、L16、L28 @2x、L5 暂停、L1 地图、L36 提示），贴图与几何降级两种模式都要能找到 `compare -metric AE` = 0 的帧配对（呼吸光随时钟变化，所以连拍找配对）。
 - 元组兼容层（`runCascade*` / `resolveCountdowns` / `runPostBeltCascade` / `traceCascade*` / `toTuple*`）与门面 `Match3.Board` / `Match3.Game` 已删除；测试与 Golden 直接用 `CascadeRun` 记录和子模块。
+
+## 网页版测试（`make check`）
+
+`make check` = `make build`（wasm + 页面 + 图集）→ `make test`（`stack test` + 状态一致性 + 动画一致性 + e2e）→ `make size`。
+安卓壳另有 `make android-sync` + `make android-check`（见 [android.md](android.md)）。
+
+- **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
+  和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
+- **一致性用例**：`web/test/parity.sh` 默认状态 14 组、动画 12 组（「关卡:种子」列表，含第 41 关「爆破」与第 42 关「魔石」），`CASES=` 可改。
+- **e2e 端口 `E2E_PORT`**：e2e 临时起 `web/serve.py`，只监听 `127.0.0.1`，端口取环境变量 `E2E_PORT`（默认 **8765**）。
+  同一台机器上并行跑多份 e2e（多个工作树 / 多个任务）时各设一个端口，例如 `make check E2E_PORT=18765` 或 `E2E_PORT=18765 make e2e`，
+  直接跑脚本时 `E2E_PORT=18765 node web/test/e2e.mjs`。端口已被占用时 e2e 立刻报错退出；服务器起来后还会核对它提供的
+  `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
+  `make android-check` 的服务器用端口 0（系统分配空闲端口）。
+- **规则开关角标**：e2e 检查第 41 关 `state.rules` = `[{name:"bomb_shapes", text:"L/T 形出炸弹", icons:["bomb_glow","bomb_mark"]}]`，
+  竖屏 390×844、横屏手机 844×390、桌面 1280×800 三种布局下 HUD 角标都完整画出、落在关卡面板里、不压「第 N 关」标签与关名、
+  彼此不重叠（读 `m3debug.hud`），走一步后仍在；第 1 关与第 42 关（魔法石是元素不是规则开关）没有角标。截图
+  `rules-badge-*.png` / `rules-badge-l42-*.png` 写到 `SHOTS`（默认 `/workspace/match3-web-shots/`，每次运行先清空）。
 
 ## 新玩法验收
 

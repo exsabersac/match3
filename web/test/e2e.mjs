@@ -260,6 +260,22 @@ try {
     const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
     check("第 1 关没有规则角标", Array.isArray(s.rules) && s.rules.length === 0 && hud && hud.badges.length === 0, { rules: s.rules, badges: hud?.badges });
     await P.ctx.close();
+    // 第 42 关「魔石」（下标 41，新玩法 2）：魔法石是元素（Custom "magic_stone"）不是规则开关，lvlRules 为空 → 没有角标
+    // （与桌面 gvRules 相同）；盘面上有 4 块魔法石，图集里有 magic_stone_0..3 贴图。截图 rules-badge-l42-*.png
+    const atlas = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
+    check("图集含魔法石贴图 magic_stone_0..3", [0, 1, 2, 3].every((k) => atlas[`magic_stone_${k}`]));
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const Q = await openPage(vp, 41, 20260929);
+      await sleep(150);
+      const s42 = await Q.st(), hud42 = await Q.page.evaluate(() => window.m3debug.hud);
+      const stones = s42.board.flat().filter((c) => c.t === "custom" && c.name === "magic_stone").length;
+      // 魔法石走贴图（不是几何降级）：cells.js 为它选的贴图在图集里
+      const sprites = await Q.page.evaluate(async (b) => { const m = await import("/cells.js"); return b.flat().filter((c) => c.t === "custom").map((c) => m.primarySprite(c)); }, s42.board);
+      check(`第 42 关魔法石有贴图：${vp.name}`, sprites.length === 4 && sprites.every((n) => atlas[n]), sprites);
+      check(`第 42 关：没有规则角标、盘面 4 块魔法石：${vp.name}`, s42.level === 41 && s42.rules.length === 0 && hud42.badges.length === 0 && stones === 4, { rules: s42.rules, stones });
+      await Q.shot(`rules-badge-l42-${vp.name}`);
+      await Q.ctx.close();
+    }
   }
 
   // -------------------------------------------------------------------------

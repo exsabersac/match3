@@ -121,8 +121,8 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：111 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
-1024×1350，WebP 约 327 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
+图集：122 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
+1024×1464，WebP 约 372 KB；`atlas.json` 约 3.6 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
 dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
@@ -200,8 +200,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-09-30，web-fuzzball-rainbow 合入 main b53a917 后）：46 关，`stack test` 372 个用例全过，
-状态一致性 20 组、动画一致性 18 组（都含第 43 / 44 关），e2e 71 项全过，`make android-check` 见 docs/web.md §7。
+下面是各自的底层命令。当前（2026-09-30，web-snow-boss 合入 main 9f5504e 后）：46 关，`stack test` 372 个用例全过，
+状态一致性 23 组、动画一致性 21 组（都含第 43 / 44 / 45 关），e2e 89 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
@@ -231,11 +231,12 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 `07–12` 特殊块爆炸、步末蜗牛 / 传送带 / 蔓延、第 39 关果冻、第 40 关气泡，`20-分辨率-*` 七种视口，
 `30–32` 下落中改尺寸前后与播完，`rules-badge-*` 第 41 关规则开关角标（竖屏 390×844、横屏手机 844×390、桌面 1280×800）
 与 `rules-badge-l42-*` 第 42 关「魔石」（魔法石是元素不是规则开关，没有角标），`magic-stone-charge*` 魔法石 0–3 格充能，
+`snow-boss-*` 第 45 关「雪怪」Boss（竖屏 / 横屏开局与血条、扣血那一轮的高亮、召唤雪块的步末、血量过半的受伤表情）。
 `fuzzball-float-a-up` / `fuzzball-float-b-down` 第 43 关毛球浮动的两帧（偏移 −2 / +2 设计像素，e2e 按像素测出两帧纵向平移 ≈ 4 设计像素 × 缩放）、
 `fuzzball-jump-mid-l43-*` 毛球步末跳格（皮带段）中间帧、`goal-label-l43-*` 第 43 关 HUD「目标 毛球」（竖屏 390×844 / 横屏 1280×800）、
 `rules-badge-l44-*` 第 44 关规则角标「彩虹组合变身」、`rainbow-transform-{line,bomb}-mid-l44-*` 彩虹 × 直线 / 炸弹变身段中间帧。
 另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败
-（`report.json` 的 `fallbacksByLevel` 逐关记录，第 43 / 44 / 46 关另有单独的检查项；第 45 关雪怪网页端尚未按象限画，但贴图 `snow_boss` 在图集里、不走降级，护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
+（`report.json` 的 `fallbacksByLevel` 逐关记录，第 43 / 44 / 45 / 46 关另有单独的检查项；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`，第 45 关雪怪接入前就是这样画成每格一只整图 + 角标 9、原护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
 报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
 
 ## 5. 网页端与核心的接口
@@ -252,10 +253,11 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 | `m3AnimStart()` | – | 为上一次被接受的 `m3Swap` 建动画播放器：`{ok,anim:true,boards,base,fall}`；不需要播放时 `{ok,anim:false}` |
 | `m3AnimTick(fast)` | 0 / 1（1 = 加速） | 推进一帧（60 fps 固定步长）：播放中 `{p,fr,n,w,k,g,b[,s][,ev]}`，播完 `{done:true,b,best,g,fall}` |
 
-- `state`：`level/name/rules/score/moves/goal/progress/target/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
+- `state`：`level/name/rules/score/moves/goal/progress/target/boss/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
   （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal = {kind,text,target[,name],label}`：`goal.name` 为 `GoalNamed` 的元素名，
   `goal.label` 为中文显示名（视图模型 `Match3.View.goalLabel`：分数 / 收集红色宝石 / 多色收集（红 / 蓝）/ 碎石 / 毛球 …，名字目标查 `namedGoalLabelTable`，
-  没登记的名字退回元素名），HUD「目标 …」直接画它，`m3Levels` 的 `goal` 同样带 `label`）；
+  没登记的名字退回元素名），HUD「目标 …」直接画它，`m3Levels` 的 `goal` 同样带 `label`；
+  `boss` = 雪怪 Boss 血条 `{hp,max}`（视图模型 `gvBoss`，目标不是「击败 Boss」时为 `null`），`hud.js` 用它把目标条换成血条）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
 - 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
   表现数据全部取自 `stepReport`（`Played`），规则每步只算一次；
@@ -277,7 +279,8 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - `board`：行 × 列（每关不同），结构化编码，每格都带 `"s"`（核心 show 文本）：
   宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名|null,"n":覆盖层数}`；
   其他 `t` ∈ `stone/chest/honey/balloon/cookie/cake/hat/maker/snail(dr,dc)/safe/flip(c,b)/surprise/bottle/spirit/countdown/custom(name,v)`，
-  各带自己的字段；前端 `cells.js` 按 `t` 取精灵。
+  各带自己的字段；雪怪格（`custom` `snow_boss`）另带 `q/hurt/turn/every`（`Match3.View.bossPart` 的解码：象限、血量是否过半、召唤计数、周期）；
+  前端 `cells.js` 按 `t` 取精灵（`custom` 先按名字查 `CUSTOM_ART`）。
 
 ### 动画接口
 - 播放器就是桌面 `UI.ComboFx` 的状态机（同一份源码），建立条件与桌面 `withMovePlayback` 相同；前端每帧调一次 `m3AnimTick`，

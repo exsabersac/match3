@@ -27,6 +27,8 @@ case "$MODE" in
          DEF="0:20260929 11:1 12:42 13:1 15:1 27:1 28:1 35:1 38:2026 39:31337 40:1 41:1 42:1 42:2 42:5 43:1:combo 43:2:combo 43:3:combo-bomb" ;;
   *) echo "用法：$0 state|anim [步数]" >&2; exit 2 ;;
 esac
+# 第 45 关「雪怪」Boss（下标 44，新玩法 5）：两组都跑 3 个种子
+DEF="$DEF 44:1 44:2 44:3"
 CASES="${CASES:-$DEF}"
 
 [ -f "$HERE/dist/match3-web.wasm" ] || { echo "没有 web/dist/match3-web.wasm，先 make build" >&2; exit 1; }

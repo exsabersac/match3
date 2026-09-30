@@ -91,7 +91,7 @@
 
 `sel_ring`（选中框，颜色随道具模式变化）、`hint_glow`（提示呼吸光）、`spark`（消除闪光）、`star_on/off`、`medal`、`node_cur/done/lock`（地图节点）、`icon_*`（锤子 / 交换 / 十字 / 步数 / 分数 / 多色）、`badge_1..9`、`g_*`（字形）、`zh_*`（中文标签）、`name_*`（关卡名）。魔法石（新玩法 2）：`magic_stone_<充能>`，满 3 格的贴图外发光并轻微浮动。毛球（新玩法 3）：`fuzzball`（灰粉色毛团 + 大眼睛，轻微浮动；步末跳格借用皮带的平移动画）。魔力鸟组合增强（新玩法 4）：没有新棋子贴图，变身段借用蔓延的「长出新格」动画（第一轮之前，同色宝石从格子中心长成直线 / 炸弹；与彩虹格恰好差一行或一列的目标沿蔓延方向擦出，是 `drawEndSpread` 按来源方向分支的结果）。网页版（`web/www/cells.js` / `render.js`）画法相同：毛球用同一个浮动公式 `round(2·sin(pulse/9))`（网页逻辑帧 1/60 s、桌面 16 ms，周期约 0.94 s 对 0.90 s），跳格走皮带段，变身走蔓延段的同一组分支（匀速、白色前沿光、不迸碎屑）。规则开关角标：打开 `bomb_shapes` 的关卡，关名右侧画 `bomb_glow` + `bomb_mark`（22 px）和 `zh_rule_bomb`（18 px）；打开 `rainbow_combos` 的关卡画 `rainbow`（22 px）+ `zh_rule_rainbow`「彩虹组合变身」（18 px）。角标表在 `Match3.View.ruleBadgeTable`（规则名 → 文字、叠放图标、文字贴图），桌面 `UI.HudArt` 与网页版都按它通用地画；网页图集不含 `zh_*`，网页版在关卡面板「第 N 关」右侧画同样的图标 + 画布字体文字（小胶囊）。新增规则开关的角标：`ruleBadgeTable` 加一行 + gen_assets.py 的 `ZH` / `ZH_SIZES` 加文字贴图（`stack test` 核对两边文字一致）。
 
-**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随 `appPulse` 呼吸闪烁。几何版 `UI.HudBlocks.hudBoss` 在目标条位置画同样的红条和两个数字。
+**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随 `appPulse` 呼吸闪烁。几何版 `UI.HudBlocks.hudBoss` 在目标条位置画同样的红条和两个数字。网页版同样画（`web/www/cells.js` 按象限取 `snow_boss[_hurt]_<q>` + 召唤进度点，`hud.js` 读 `state.boss` 画血条，头像 / 着色 / 过半闪烁同桌面；网页图集不含 `@56` 变体，头像用 `snow_boss` 缩放）。
 
 名字里带 `@` 的是同一贴图的**尺寸变体**（`基名@像素高`），例如 `zh_combo@68`（「连击」34 px 大字版）、`g_48@60`（5 号字形「0」）、`gem_c1@56`（半尺寸宝石，给 HUD 小图标用）、`panel_gold@80`（小圆角面板）。代码里始终只写基名，运行时自动挑变体。
 

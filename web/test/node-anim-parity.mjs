@@ -1,7 +1,7 @@
 // 逐轮回放的一致性脚本（wasm 一侧，node 直接加载 dist/ 的 wasm）：走法与 AnimParity.hs 相同——
 // 按 state.hint 连走 N 步，每步 m3AnimStart 后逐帧 m3AnimTick 到播完（每第 3 步从第 5 帧起加速），
 // 打印开播 JSON、每帧 JSON 与 "frames=帧数 events=事件数"。另把每帧 m3AnimTick 耗时与 JSON 字节数写到 stderr。
-// 用法：node web/test/node-anim-parity.mjs 12 42 20 [hint|combo|combo-bomb|cham-rainbow]   （先 ./build.sh；第 4 个参数是走法，见 pickMove）
+// 用法：node web/test/node-anim-parity.mjs 12 42 20 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]   （先 ./build.sh；第 4 个参数是走法，见 pickMove）
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +26,28 @@ function chamRainbowPairs(b) {
     }
   }
   return pairs;
+}
+// 走法 fix-RCRC-RCRC-…（第 48 关魔法地格的固定用例）：第 k 步（0 起）换第 k 对（每对 4 个数字 r1 c1 r2 c2），列表用完后按提示（同原生侧 fixedMove）
+function fixedMove(mode, k) {
+  const w = mode.split("-");
+  if (w[0] !== "fix" || k + 1 >= w.length) return null;
+  const d = [...w[k + 1]].map(Number);
+  return [[d[0], d[1]], [d[2], d[3]]];
+}
+// 魔法地格扩爆（第 48 关）：本步 events 里 blast 的来源格在魔法地格（换之前 state.ground 的 magic）上的，每个来源一行
+// 「元素@(r,c) N 格 R 行 C 列」（同原生侧 magicBlasts）
+function magicBlasts(s, events) {
+  const magic = new Set((s.ground || []).filter((g) => g.name === "magic").map((g) => g.p.join(",")));
+  const out = [];
+  for (const e of events || []) {
+    if (e.kind !== "blast") continue;
+    for (const src of [...new Set(e.pairs.map((p) => p[0].join(",")))]) {
+      if (!magic.has(src)) continue;
+      const ts = [...new Set(e.pairs.filter((p) => p[0].join(",") === src).map((p) => p[1].join(",")))].map((q) => q.split(","));
+      out.push(`${e.subject}@(${src}) ${ts.length} 格 ${new Set(ts.map((q) => q[0])).size} 行 ${new Set(ts.map((q) => q[1])).size} 列`);
+    }
+  }
+  return out;
 }
 // cham-rainbow：先换第一对「彩虹 × 变色龙」（提示不会主动选它），否则按 state.hint
 function pickMove(mode, s) {
@@ -59,11 +81,12 @@ const out = [];
 let tickMs = 0, ticks = 0, maxBytes = 0, startBytes = 0;
 for (let k = 0; k < n; k++) {
   if (s.over || !s.hint) break;
-  const [[r1, c1], [r2, c2]] = pickMove(mode, s);
+  const [[r1, c1], [r2, c2]] = fixedMove(mode, k) || pickMove(mode, s);
   if (mode === "cham-rainbow" && chamRainbowPairs(s.board).some(([p, q]) => p[0] === r1 && p[1] === c1 && q[0] === r2 && q[1] === c2)) {
     console.error(`走法 cham-rainbow：第 ${k} 步换彩虹 × 变色龙 ((${r1},${c1}),(${r2},${c2}))`);
   }
   const res = JSON.parse(X.m3Swap(r1, c1, r2, c2));
+  if (mode.startsWith("fix-")) for (const l of magicBlasts(s, res.events)) console.error(`走法 fix：第 ${k} 步魔法地格扩爆 ${l}`);
   s = res.state;
   out.push(`step ${k}`);
   const j0 = X.m3AnimStart();

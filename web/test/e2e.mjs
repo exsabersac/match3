@@ -15,6 +15,9 @@
 //       同时逐关检查 HUD 目标标签是中文显示名（state.goal.label，不含 [a-z_] 内部名）；
 //   4d. 第 43 关毛球：浮动两帧（按像素测上下偏移）、步末跳格（皮带段）中间帧、HUD「目标 毛球」竖屏 / 横屏；
 //   4e. 第 44 关彩虹组合：规则角标「彩虹组合变身」、彩虹 × 直线 / 炸弹的变身段（第一轮之前的蔓延段）中间帧；
+//   4f. 真实绘制钩子（drawImage 按调用序记录）：第 46 / 47 关掉落口、第 47 关变色龙；逐关地面层贴图与 HUD 关名 name_<i>；
+//   4g. 第 48 关魔法地格：地面层 magic 贴图与像素、4 组扩圈爆炸（真实绘制格数 = EvBlast 格数）、终章（第 47 关过关 → 第 48 关 Won）；
+//   4h. 第 8 / 39–45 / 47 / 48 关玩到失败的结局面板文字（碎石关「用邻消或特效砸开碎石，目标 n 个」）、逐关失败提示无「箱子」/ [a-z_]；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -128,6 +131,48 @@ function chamCheck(draws, grid, board) {
     cells.push({ p: [r, c], v: cell.v, want, gems: gems.map((g) => [g.name, g.seq]), ring: ring ? ring.seq : null, ok });
   }));
   return { ok: cells.length > 0 && cells.every((x) => x.ok), cells };
+}
+// 地面层：桌面 UI.Ground.groundTable 的贴图名（测试侧自己的一份，不 import 页面的 cells.js）；表外的名字没有贴图（页面画淡灰框）
+const GROUND_SPRITE = { jelly: (n) => (n >= 2 ? "jelly_2" : "jelly"), magic: () => "magic" };
+// 每个地面层格：真实画了表内贴图、56 × 56 画在该格左上角、不旋转，且调用序在该格底格 tile 之后、在该格任何棋子之前（棋盘格之上、棋子之下）
+const UNDER = new Set(["tile_a", "tile_b", "carpet_open", "carpet_covered", "belt", "portal"]);
+function groundCheck(draws, grid, ground) {
+  const s = 56 * grid.k, cells = [];
+  for (const g of ground) {
+    const [r, c] = g.p, x = grid.x + 56 * c * grid.k, y = grid.y + 56 * r * grid.k, f = GROUND_SPRITE[g.name], want = f ? f(g.layers) : null;
+    const at = draws.filter((d) => !d.rot && near(d.x0, x) && near(d.y0, y) && near(d.w, s) && near(d.h, s));
+    const tile = at.find((d) => d.name === "tile_a" || d.name === "tile_b"), mine = at.filter((d) => d.name === want);
+    // 该格的棋子 = 该格上除底格 / 地毯 / 传送带 / 传送门 / 本地面层贴图以外的整格贴图（这些底层都在棋子之前画）
+    const piece = at.find((d) => d.name && d.name !== want && !UNDER.has(d.name));
+    const ok = !!want && mine.length === 1 && !!tile && mine[0].seq > tile.seq && (!piece || mine[0].seq < piece.seq);
+    cells.push({ p: [r, c], name: g.name, layers: g.layers, want, got: mine.map((d) => d.seq), tile: tile?.seq ?? null, piece: piece ? [piece.name, piece.seq] : null, ok });
+  }
+  return { ok: cells.every((x) => x.ok), cells };
+}
+// HUD 关名：真实画了且只画了一张 name_*（预渲染文字图），就是 name_<关卡下标>（同桌面 HudArt 的 "name_" ++ show li），
+// 目标矩形 = 页面报告的关名槽（m3debug.hud.name，设计单位）经 HUD 变换（dpr × u、偏移 ox / oy）
+function nameCheck(draws, li, hud, L, dpr) {
+  const names = draws.filter((d) => /^name_\d+$/.test(d.name || "")), want = `name_${li}`, n = hud?.name;
+  const k = dpr * L.u, rect = n ? { x: dpr * L.ox + k * n.x, y: dpr * L.oy + k * n.y, w: k * n.w, h: k * n.h } : null;
+  const d = names[0];
+  const ok = names.length === 1 && d.name === want && !d.rot && !!rect && n.sprite === want && near(d.x0, rect.x, 1) && near(d.y0, rect.y, 1) && near(d.w, rect.w, 1) && near(d.h, rect.h, 1);
+  return { ok, want, drawn: names.map((x) => x.name), rect, got: d ? { x: d.x0, y: d.y0, w: d.w, h: d.h } : null, hudName: n };
+}
+// 格子边缘一圈（离边 4%–12% 格宽）的平均「紫度」(R + B) / 2 − G（后备缓冲像素）：魔法地格的贴图是紫色地砖，淡灰框几乎为 0
+async function purpleBand(P, grid, cells) {
+  return P.page.evaluate(({ grid, cells }) => {
+    const g = document.getElementById("board").getContext("2d"), S = Math.round(56 * grid.k);
+    return cells.map(([r, c]) => {
+      const d = g.getImageData(Math.round(grid.x + 56 * c * grid.k), Math.round(grid.y + 56 * r * grid.k), S, S).data;
+      let sum = 0, n = 0;
+      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+        const e = Math.min(i, j, S - 1 - i, S - 1 - j);
+        if (e < S * 0.04 || e > S * 0.12) continue;
+        const o = (j * S + i) * 4; sum += (d[o] + d[o + 2]) / 2 - d[o + 1]; n++;
+      }
+      return +(sum / n).toFixed(1);
+    });
+  }, { grid, cells });
 }
 
 async function openPage(vp, level, seed) {
@@ -477,18 +522,48 @@ try {
   {
     const P = await openPage({ w: 390, h: 844, dpr: 1 }, 0, 7);
     const nLevels = await P.page.evaluate(() => window.m3debug.levels);
-    const bad = [], badGoal = [];
+    const bad = [], badGoal = [], badGround = [], badName = [], badLose = [];
     report.fallbacksByLevel = [];
+    report.loseHints = [];
     report.goalLabels = [];
+    report.groundByLevel = [];
+    report.levelNames = [];
     for (let li = 0; li < nLevels; li++) {
       await P.page.goto(`http://127.0.0.1:${PORT}/?level=${li}&seed=7`);
       await P.page.waitForFunction(() => window.m3debug && window.m3debug.state, null, { timeout: 30000 });
       await sleep(60);
+      // 真实绘制（开局静止帧）：地面层格画了表内贴图（不走表外淡灰框）、HUD 关名画了 name_<li>
+      {
+        const s = await P.st(), d = await captureDraws(P), g = boardGrid(d, s.board.length, s.board[0].length);
+        const [hud, L, dpr] = await P.page.evaluate(() => [window.m3debug.hud, window.m3debug.layout, window.m3debug.dpr]);
+        if (s.ground.length) {
+          const gc = g ? groundCheck(d, g, s.ground) : { ok: false, grid: null };
+          report.groundByLevel.push({ level: li + 1, cells: gc.cells ?? null, ok: gc.ok });
+          if (!gc.ok) badGround.push({ level: li + 1, ...gc });
+        }
+        const nc = nameCheck(d, li, hud, L, dpr);
+        report.levelNames.push({ level: li + 1, name: s.name, sprite: hud?.name?.sprite ?? null, text: hud?.name?.text ?? null, ok: nc.ok });
+        if (!nc.ok) badName.push({ level: li + 1, ...nc });
+        if ([0, 40, 47].includes(li) && hud?.chip) {
+          const c = hud.chip, f = `${shots}/level-name-l${String(li + 1).padStart(2, "0")}.png`;
+          await P.page.screenshot({ path: f, clip: { x: L.ox + L.u * c.x - 4, y: L.oy + L.u * c.y - 4, width: L.u * c.w + 8, height: L.u * c.h + 8 } });
+          report.shots.push(f);
+        }
+      }
       // HUD 目标标签：画出来的文字 = 「目标 」+ 核心给的中文名 goal.label，且不含内部名（[a-z_] 标识符，如 fuzzball / GoalNamed）
       const s0 = await P.st(), hudGoal = await P.page.evaluate(() => window.m3debug.hud?.goal ?? null);
       report.goalLabels.push({ level: li + 1, kind: s0.goal.kind, label: s0.goal.label, hud: hudGoal });
       if (typeof s0.goal.label !== "string" || /[a-z_]/.test(s0.goal.label) || hudGoal !== `目标 ${s0.goal.label}`) {
         badGoal.push({ level: li + 1, goal: s0.goal, hud: hudGoal });
+      }
+      // 失败提示（失败面板副标题 = loseHint +「。可「撤销」或「重开」」）：全关不含「箱子」与 [a-z_]；
+      // 碎石目标关（第 8 / 41 / 42 / 44 / 48 关）= 「用邻消或特效砸开碎石，目标 <target> 个」（核心 39dde8e 修正）
+      {
+        const stoneLv = [8, 41, 42, 44, 48].includes(li + 1);
+        report.loseHints.push({ level: li + 1, loseHint: s0.loseHint, target: s0.target });
+        const okText = typeof s0.loseHint === "string" && s0.loseHint.length > 0 && !/箱子|[a-z_]/.test(s0.loseHint);
+        const okStone = !stoneLv || s0.loseHint === `用邻消或特效砸开碎石，目标 ${s0.target} 个`;
+        if (!okText || !okStone) badLose.push({ level: li + 1, loseHint: s0.loseHint, target: s0.target });
       }
       for (let k = 0; k < 3; k++) {
         const s = await P.st();
@@ -502,12 +577,18 @@ try {
       if (Object.keys(fb).length) bad.push({ level: li + 1, fallbacks: fb });
     }
     report.fallbackLevels = nLevels;
-    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 47 && bad.length === 0, bad);
-    for (const lv of [43, 44, 45, 46, 47]) {
+    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 48 && bad.length === 0, bad);
+    const groundLevels = report.groundByLevel.map((x) => x.level), groundCells = report.groundByLevel.reduce((n, x) => n + (x.cells?.length ?? 0), 0);
+    check(`全部 ${nLevels} 关的地面层格（${groundLevels.length} 关 ${groundCells} 格）都真实画了表内贴图（jelly / jelly_2 / magic），棋盘格之上、棋子之下`,
+      nLevels >= 48 && groundLevels.includes(39) && groundLevels.includes(48) && badGround.length === 0, { levels: groundLevels, bad: badGround });
+    check(`全部 ${nLevels} 关 HUD 关名真实画了预渲染文字图 name_<关卡下标>（同桌面 HudArt），位置 = 关名槽`, nLevels >= 48 && badName.length === 0, badName);
+    for (const lv of [43, 44, 45, 46, 47, 48]) {
       const row = report.fallbacksByLevel.find((x) => x.level === lv);
       check(`第 ${lv} 关 m3debug.fallbacks 为空`, !!row && Object.keys(row.fallbacks).length === 0, row);
     }
-    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 47 && badGoal.length === 0, badGoal);
+    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 48 && badGoal.length === 0, badGoal);
+    check(`全部 ${nLevels} 关失败提示不含「箱子」与 [a-z_]，第 8 / 41 / 42 / 44 / 48 关 =「用邻消或特效砸开碎石，目标 n 个」`,
+      nLevels >= 48 && report.loseHints.length === nLevels && badLose.length === 0, badLose);
     await P.ctx.close();
   }
 
@@ -885,24 +966,157 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  // 3i. 失败提示不漏内部名：第 39 / 40 / 43 / 45 / 47 关按提示走到步数用完（空格加速），结局面板实际画出的文字（m3debug.overlay）
-  //     标题「步数用完了」、副标题含 state.loseHint（核心中文失败提示）且不含 [a-z_]
+  // 3j. 第 48 关「魔法格」（下标 47，新玩法 8：地面层 magic，特效在上面引爆时范围扩一圈）：
+  //     (a) 竖屏 / 横屏开局：state.ground = 4 格 magic (6,2)(6,5)(5,3)(5,4)、layers 1，关名 name_47「魔法格」，HUD「目标 碎石」；
+  //         真实绘制：4 格都画了 magic 贴图（位置 = 该格、棋盘格之上、棋子之下），像素上格边一圈是紫色（不是淡灰框）；截图 magic-l48-*.png
+  //     (b) 测试跑手找到的 4 组走法（同 parity.sh 的 fix 用例）第 3 步在魔法地格上引爆：冻结在该轮「消失」段中间，
+  //         EvBlast（pending.events 的 blast）的来源 / 格数 / 行列数 = 原生（parity 的「魔法地格扩爆」行），扩出来的一圈与原范围的每个目标格
+  //         都有真实绘制——被消格画了消失段（格中心的光环 + 缩小的棋子），碎石等受击不消的格画了受击后的样子（holes，层数变了）；
+  //         两类合计 = EvBlast 格数；截图 magic-widen-seed<N>.png
+  //     (c) 终章：第 47 关种子 2 / 第 48 关种子 3 按核心测试的一步贪心走法（test/Spec/{Chameleon,MagicGround}.hs）走完：
+  //         第 47 关 LevelClear「过关！… 进入第 48 关」，第 48 关（最后一关）Won「通关！」
   {
-    report.loseOverlays = [];
-    for (const li of [38, 39, 42, 44, 46]) {
-      const P = await openPage({ w: 390, h: 844, dpr: 1 }, li, 7);
-      for (let k = 0; k < 80; k++) {
-        const s = await P.st();
-        if (s.over || !s.hint) break;
-        await P.swap(s.hint[0], s.hint[1], false); await sleep(20);
+    const MAGIC = [[6, 2], [6, 5], [5, 3], [5, 4]];
+    report.magic = { layout: [], widen: [], ending: [] };
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const P = await openPage(vp, 47, 1);
+      await sleep(150);
+      const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
+      const magic = s.ground.filter((g) => g.name === "magic");
+      check(`第 48 关开局：state.ground = 4 格 magic（layers 1）、关名「魔法格」、HUD「目标 碎石」：${vp.name}`,
+        s.level === 47 && s.name === "魔法格" && s.ground.length === 4 && magic.length === 4 && magic.every((g) => g.layers === 1) &&
+        MAGIC.every(([r, c]) => magic.some((g) => g.p[0] === r && g.p[1] === c)) && s.goal.label === "碎石" && hud?.goal === "目标 碎石" && hud?.name?.sprite === "name_47",
+        { ground: s.ground, name: s.name, goal: hud?.goal, nameSprite: hud?.name?.sprite });
+      const d = await captureDraws(P), g = boardGrid(d, s.board.length, s.board[0].length), gc = g && groundCheck(d, g, s.ground);
+      check(`第 48 关真实绘制：4 格魔法地格画了 magic 贴图（在该格、棋盘格之上、棋子之下）：${vp.name}`, !!gc?.ok && gc.cells.length === 4, gc);
+      const others = [];
+      for (const [r] of MAGIC) for (let c = 0; c < 8; c++) if (!MAGIC.some((m) => m[0] === r && m[1] === c)) others.push([r, c]);
+      const pm = g ? await purpleBand(P, g, MAGIC) : [], po = g ? await purpleBand(P, g, others) : [];
+      const base = po.length ? po.reduce((a, b) => a + b, 0) / po.length : 0;
+      report.magic.layout.push({ vp: vp.name, cells: gc?.cells, purpleMagic: pm, purpleOthersMean: +base.toFixed(1) });
+      check(`第 48 关像素：魔法地格格边一圈是紫色地砖（紫度比同行其他格平均高 ≥ 15；淡灰框不带紫色）：${vp.name}`, pm.length === 4 && pm.every((x) => x >= base + 15), { purpleMagic: pm, othersMean: base });
+      check(`第 48 关开局没有走几何降级：${vp.name}`, Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0, await P.page.evaluate(() => window.m3debug.fallbacks));
+      await P.shot(`magic-l48-${vp.name}`);
+      await P.ctx.close();
+    }
+    // (b) 扩圈爆炸
+    const PLAN = { 2: [[[3, 5], [3, 6]], [[4, 4], [4, 5]], [[4, 2], [5, 2]]], 3: [[[0, 4], [1, 4]], [[4, 4], [4, 5]], [[5, 2], [6, 2]]],
+      4: [[[1, 4], [1, 5]], [[5, 4], [5, 5]], [[5, 4], [5, 5]]], 5: [[[1, 5], [1, 6]], [[2, 4], [3, 4]], [[4, 2], [4, 3]]] };
+    // 原生侧（parity.sh 的 fix 用例、Parity.hs 的 magicBlasts）给出的扩爆：元素、来源、格数、行数、列数
+    const NATIVE = { 2: ["bomb", [5, 3], 25, 5, 5], 3: ["line_h", [6, 2], 24, 3, 8], 4: ["line_h", [5, 4], 24, 3, 8], 5: ["line_h", [5, 3], 24, 3, 8] };
+    for (const seed of [2, 3, 4, 5]) {
+      const P = await openPage({ w: 390, h: 844, dpr: 3 }, 47, seed);
+      await sleep(150);
+      const mk = new Set(MAGIC.map((p) => p.join(",")));
+      let ok12 = true;
+      for (let k = 0; k < 2; k++) {
+        const m0 = (await P.st()).moves;
+        await P.swap(PLAN[seed][k][0], PLAN[seed][k][1], false); await sleep(30);
+        await P.page.keyboard.press(" "); await P.idle();
+        ok12 = ok12 && (await P.st()).moves === m0 - 1;
+      }
+      const sb = await P.st();
+      await P.breakAt((i) => i.kind === "cascade" && i.p === "pop" && i.blast && i.n > 0 && i.fr >= Math.floor(i.n / 3));
+      await P.swap(PLAN[seed][2][0], PLAN[seed][2][1], false);
+      await P.frozenOrIdle();
+      const row = { seed, ok12 };
+      if (await P.isFrozen()) {
+        const inf = await P.info();
+        const pend = await P.page.evaluate(() => ({ events: window.m3debug.pending.events, waves: window.m3debug.pending.trace.waves }));
+        const blasts = pend.events.filter((e) => e.kind === "blast").flatMap((e) => [...new Set(e.pairs.map((p) => p[0].join(",")))].filter((q) => mk.has(q)).map((src) => {
+          const ts = [...new Set(e.pairs.filter((p) => p[0].join(",") === src).map((p) => p[1].join(",")))].map((q) => q.split(",").map(Number));
+          return { subject: e.subject, beat: e.beat, src: src.split(",").map(Number), targets: ts, n: ts.length, rows: new Set(ts.map((q) => q[0])).size, cols: new Set(ts.map((q) => q[1])).size };
+        }));
+        const b = blasts[0];
+        row.blast = b ? { subject: b.subject, beat: b.beat, src: b.src, n: b.n, rows: b.rows, cols: b.cols } : null;
+        row.frozenAt = { w: inf.w, p: inf.p, fr: inf.fr, n: inf.n };
+        if (b && inf.w === b.beat) {
+          const w = pend.waves[b.beat], cleared = new Set(pend.events.filter((e) => e.beat === b.beat && e.kind === "clear").flatMap((e) => e.pairs.map((p) => p[0].join(","))));
+          const d = await captureDraws(P), g = boardGrid(d, sb.board.length, sb.board[0].length);
+          // 原范围：炸弹 = 来源 3×3，横线 = 来源所在行，竖线 = 来源所在列；其余目标格是扩出来的一圈
+          const base = ([r, c]) => (b.subject === "bomb" ? Math.abs(r - b.src[0]) <= 1 && Math.abs(c - b.src[1]) <= 1 : b.subject === "line_h" ? r === b.src[0] : c === b.src[1]);
+          const per = b.targets.map(([r, c]) => {
+            const S = 56 * g.k, cx = g.x + (56 * c + 28) * g.k, cy = g.y + (56 * r + 28) * g.k, x0 = g.x + 56 * c * g.k, y0 = g.y + 56 * r * g.k;
+            const isCl = cleared.has(`${r},${c}`);
+            // 被消格：消失段在格中心画光环（≥ 一格大）与缩小的棋子（< 一格）；受击不消：在该格画 holes 里受击后的格子，且与消除前不同
+            const ringDrawn = d.some((x) => near(x.cx, cx, 1) && near(x.cy, cy, 1) && x.w >= S - 0.5 && (!x.name || x.name === "spark"));
+            const shrunk = d.some((x) => near(x.cx, cx, 1) && near(x.cy, cy, 1) && x.w < S - 0.5 && !!x.name);
+            const hitDrawn = !isCl && JSON.stringify(w.holes[r][c]) !== JSON.stringify(w.before[r][c]) && d.some((x) => !!x.name && !/^tile_/.test(x.name) && x.name !== "magic" && near(x.x0, x0, 1) && near(x.y0, y0, 1) && near(x.w, S, 1));
+            return { p: [r, c], ring: !base([r, c]), kind: isCl ? "clear" : "hit", ok: isCl ? ringDrawn && shrunk : hitDrawn };
+          });
+          row.drawn = per.filter((x) => x.ok).length;
+          row.drawnClear = per.filter((x) => x.ok && x.kind === "clear").length;
+          row.drawnHit = per.filter((x) => x.ok && x.kind === "hit").length;
+          row.ringCells = per.filter((x) => x.ring).length;
+          row.ringDrawn = per.filter((x) => x.ring && x.ok).length;
+          row.missing = per.filter((x) => !x.ok);
+        }
+        await P.shot(`magic-widen-seed${seed}`);
+      }
+      await P.clearBreak(); await P.resume(); await P.idle();
+      row.fallbacks = await P.page.evaluate(() => window.m3debug.fallbacks);
+      report.magic.widen.push(row);
+      const nat = NATIVE[seed], bb = row.blast;
+      check(`第 48 关种子 ${seed}：前两步照走、第 3 步在魔法地格上引爆，EvBlast = 原生（${nat[0]}@(${nat[1]}) ${nat[2]} 格 ${nat[3]} 行 ${nat[4]} 列）`,
+        ok12 && !!bb && bb.subject === nat[0] && bb.src.join(",") === nat[1].join(",") && bb.n === nat[2] && bb.rows === nat[3] && bb.cols === nat[4], row);
+      check(`第 48 关种子 ${seed}：扩圈爆炸的每个目标格都有消失 / 受击的真实绘制，合计 = EvBlast 格数（扩出来的一圈全在内）`,
+        !!bb && row.drawn === bb.n && row.ringCells > 0 && row.ringDrawn === row.ringCells, row);
+      check(`第 48 关种子 ${seed}：没有走几何降级`, Object.keys(row.fallbacks).length === 0, row.fallbacks);
+      await P.ctx.close();
+    }
+    // (c) 终章：第 47 关过关进入第 48 关；第 48 关是最后一关，过关为 Won「通关！」
+    const LINES = { 46: [2, "3132-7677-4353-4142-1213-3242-3637-6263-6171-3444-4555-4445-0212-1727-0414-3132"],
+      47: [3, "4445-5051-6364-4344-6667-6263-5060-0405-2526-4445-2636-5666-5556-4454-5565"] };
+    for (const li of [46, 47]) {
+      const [seed, line] = LINES[li];
+      const P = await openPage({ w: 390, h: 844, dpr: 1 }, li, seed);
+      for (const mv of line.split("-")) {
+        const [a, b2, c, d] = [...mv].map(Number);
+        if ((await P.st()).over) break;
+        await P.swap([a, b2], [c, d], false); await sleep(20);
         await P.page.keyboard.press(" "); await P.idle();
       }
       await sleep(120);
-      const s = await P.st(), ov = await P.page.evaluate(() => window.m3debug.overlay);
-      report.loseOverlays.push({ level: li + 1, over: s.over, loseHint: s.loseHint, overlay: ov });
-      check(`第 ${li + 1} 关失败面板：副标题含核心失败提示、不含 [a-z_] 内部名`,
-        s.over?.tag === "Lost" && ov && ov.title === "步数用完了" && ov.sub.includes(s.loseHint) && !/[a-z_]/.test(ov.title + ov.sub), { over: s.over, loseHint: s.loseHint, overlay: ov });
+      const s = await P.st(), ov = await P.page.evaluate(() => window.m3debug.overlay), n = await P.page.evaluate(() => window.m3debug.levels);
+      report.magic.ending.push({ level: li + 1, seed, over: s.over, overlay: ov, levels: n });
+      if (li === 46) check("第 47 关过关（LevelClear）：结局面板「过关！」、进入第 48 关（不再是终章）",
+        s.over?.tag === "LevelClear" && s.over.next === 47 && ov?.title === "过关！" && ov.sub.includes("进入第 48 关"), { over: s.over, overlay: ov });
+      else {
+        check("第 48 关是终章：最后一关、过关为 Won，结局面板「通关！」", n === 48 && s.over?.tag === "Won" && ov?.title === "通关！", { over: s.over, overlay: ov, levels: n });
+        await P.shot("magic-l48-won");
+      }
+      await P.ctx.close();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3i. 失败提示不漏内部名：第 8 / 39 / 40 / 41 / 42 / 43 / 44 / 45 / 47 / 48 关按提示走到步数用完（空格加速），结局面板实际画出的文字（m3debug.overlay）
+  //     标题「步数用完了」、副标题含 state.loseHint（核心中文失败提示）且不含 [a-z_] /「箱子」；
+  //     碎石目标关（8 / 41 / 42 / 44 / 48）副标题 =「用邻消或特效砸开碎石，目标 n 个。可「撤销」或「重开」」。种子 7 按提示过了关就换下一个种子
+  {
+    report.loseOverlays = [];
+    for (const li of [7, 38, 39, 40, 41, 42, 43, 44, 46, 47]) {
+      let P = null, s = null, ov = null, seed = 7;
+      for (; seed < 12; seed++) {
+        if (P) await P.ctx.close();
+        P = await openPage({ w: 390, h: 844, dpr: 1 }, li, seed);
+        for (let k = 0; k < 80; k++) {
+          const t = await P.st();
+          if (t.over || !t.hint) break;
+          await P.swap(t.hint[0], t.hint[1], false); await sleep(20);
+          await P.page.keyboard.press(" "); await P.idle();
+        }
+        await sleep(120);
+        s = await P.st(); ov = await P.page.evaluate(() => window.m3debug.overlay);
+        if (s.over?.tag === "Lost") break;
+      }
+      const stoneLv = [8, 41, 42, 44, 48].includes(li + 1);
+      report.loseOverlays.push({ level: li + 1, seed, over: s.over, loseHint: s.loseHint, overlay: ov });
+      check(`第 ${li + 1} 关失败面板（种子 ${seed}）：副标题含核心失败提示、不含 [a-z_] 内部名与「箱子」` + (stoneLv ? "，=「用邻消或特效砸开碎石，目标 n 个。…」" : ""),
+        s.over?.tag === "Lost" && ov && ov.title === "步数用完了" && ov.sub.includes(s.loseHint) && !/[a-z_]|箱子/.test(ov.title + ov.sub) &&
+        (!stoneLv || ov.sub === `用邻消或特效砸开碎石，目标 ${s.target} 个。可「撤销」或「重开」`), { over: s.over, loseHint: s.loseHint, target: s.target, overlay: ov });
       if (li === 46 && s.over?.tag === "Lost") await P.shot("chameleon-l47-lost");
+      if (li === 47 && s.over?.tag === "Lost") await P.shot("magic-l48-lost");
       await P.ctx.close();
     }
   }

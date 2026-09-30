@@ -253,11 +253,14 @@ export function beltAngles(belt) {
 
 const key = ([r, c]) => r * 64 + c;
 
-// 地面层（UI.Ground.groundTable）：名字 → 贴图名(层数)；表里没有的名字画淡灰框
-const GROUND = { jelly: (n) => (n >= 2 ? "jelly_2" : "jelly") };
+// 地面层（UI.Ground.groundTable）：名字 → 贴图名(层数)；画在棋盘格之上、棋子之下（同桌面 drawGroundArtAt）。
+// 表里没有的名字或贴图缺失时画淡灰框，并按「<名字>#地面层」计进 fallbacks（e2e 逐关护栏；第 48 关魔法地格接入前就是淡灰框、护栏查不出）。
+// magic：第 48 关魔法地格（新玩法 8，layers 恒为 1、只用于显示），贴图同桌面 const "magic"。
+const GROUND = { jelly: (n) => (n >= 2 ? "jelly_2" : "jelly"), magic: () => "magic" };
 function drawGround(ctx, art, x, y, g) {
   const f = GROUND[g.name];
   if (f && art.draw(ctx, f(g.layers), x, y, CELL, CELL)) return;
+  fallbacks[`${g.name}#地面层`] = (fallbacks[`${g.name}#地面层`] || 0) + 1;
   ctx.strokeStyle = "rgba(170,170,180,.8)"; ctx.lineWidth = 1; ctx.strokeRect(x + 2.5, y + 2.5, CELL - 5, CELL - 5);
 }
 

@@ -359,25 +359,36 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
   和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
-- **一致性用例**：`web/test/parity.sh` 默认状态 29 组、动画 27 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
-  第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）、第 44 关「魔力鸟」、第 45 关「雪怪」种子 1–3 与第 46 关「掉落口」种子 1 / 28 / 30——后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干，种子 1 走满也不补；第 47 关「变色龙」种子 1 / 2（每步都有步末换色 `EvTick "chameleon"`）与种子 140 的 `cham-rainbow` 走法），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
-  `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）、`cham-rainbow`（先换「彩虹 × 变色龙」，同样行优先、先右后下；种子 140 在第 5 步（0 起）换 (1,2) 彩虹 × (1,3) 变色龙，第一轮清掉彩虹、变色龙与 15 颗同色宝石，即成对交换规则 15）；
+- **一致性用例**：`web/test/parity.sh` 默认状态 33 组、动画 31 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
+  第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）、第 44 关「魔力鸟」、第 45 关「雪怪」种子 1–3 与第 46 关「掉落口」种子 1 / 28 / 30——后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干，种子 1 走满也不补；第 47 关「变色龙」种子 1 / 2（每步都有步末换色 `EvTick "chameleon"`）与种子 140 的 `cham-rainbow` 走法；第 48 关「魔法格」种子 2–5 的 `fix-…` 固定走法），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
+  `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）、`cham-rainbow`（先换「彩虹 × 变色龙」，同样行优先、先右后下；种子 140 在第 5 步（0 起）换 (1,2) 彩虹 × (1,3) 变色龙，第一轮清掉彩虹、变色龙与 15 颗同色宝石，即成对交换规则 15）、`fix-RCRC-RCRC-…`（按写死的交换走：第 k 步换第 k 对，每对 4 个数字 r1 c1 r2 c2，用完后按提示）；
   提示不会主动选彩虹组合，第 44 关的变身步（`rainbow_line` / `rainbow_bomb`）靠后两种走法覆盖，`parity.sh` 会检查这些用例真的走到了变身步
-  （状态 JSON 里有 `"kind":"rainbow_…"`、动画帧里有蔓延段；`cham-rainbow` 查两侧 stderr 都有「走法 cham-rainbow：第 k 步换彩虹 × 变色龙」）。原生 `Parity.hs` / `AnimParity.hs` 与 node 两侧的 `pickMove` 逐条相同。
+  （状态 JSON 里有 `"kind":"rainbow_…"`、动画帧里有蔓延段；`cham-rainbow` 查两侧 stderr 都有「走法 cham-rainbow：第 k 步换彩虹 × 变色龙」）。
+  第 48 关 4 组 `fix` 用例是测试跑手原生穷举（≤ 3 步）找到的「特效在魔法地格上引爆」走法，第 3 步（stderr 记为第 2 步，0 起）扩爆：
+  种子 2 `fix-3536-4445-4252` 炸弹@(5,3) 25 格 5 行 5 列；种子 3 `fix-0414-4445-5262` 横线@(6,2) 24 格 3 行 8 列；
+  种子 4 `fix-1415-5455-5455` 横线@(5,4) 24 格 3 行 8 列；种子 5 `fix-1516-2434-4243` 横线@(5,3) 24 格 3 行 8 列。原生侧 `magicBlasts` 用
+  `Match3.Engine.play` 的 `EvBlast`、node 侧用接口 JSON 的 `events`，按「来源在魔法地格上」各记一行「走法 fix：第 k 步魔法地格扩爆 元素@(r,c) N 格 R 行 C 列」；
+  `parity.sh` 要求原生侧有这一行、两侧逐字相同，一致时把它打印在结果行下面。原生 `Parity.hs` / `AnimParity.hs` 与 node 两侧的 `pickMove` 逐条相同。
 - **e2e 端口 `E2E_PORT`**：e2e 临时起 `web/serve.py`，只监听 `127.0.0.1`，端口取环境变量 `E2E_PORT`（默认 **8765**）。
   同一台机器上并行跑多份 e2e（多个工作树 / 多个任务）时各设一个端口，例如 `make check E2E_PORT=18765` 或 `E2E_PORT=18765 make e2e`，
   直接跑脚本时 `E2E_PORT=18765 node web/test/e2e.mjs`。端口已被占用时 e2e 立刻报错退出；服务器起来后还会核对它提供的
   `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
 - **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
-  e2e 对全部关卡（当前 47 关；第 45 关「雪怪」按象限画，多格护栏见下；第 46 关掉落口标记 `cookie_drop` 缺图走几何版时计入 `fallbacks`；第 47 关变色龙见下）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
+  e2e 对全部关卡（当前 48 关；第 45 关「雪怪」按象限画，多格护栏见下；第 46 关掉落口标记 `cookie_drop` 缺图走几何版时计入 `fallbacks`；第 47 关变色龙见下；地面层表外名字或缺贴图时按 `<名字>#地面层` 计入，第 48 关魔法地格接入前就是表外名字的淡灰框、护栏查不出）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
   **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
   `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。`report.json` 的 `fallbacksByLevel` 逐关记录计数，
-  第 43 / 44 / 45 / 46 关（毛球、彩虹组合、雪怪、掉落口）另有单独的「fallbacks 为空」检查项。
+  第 43–48 关（毛球、彩虹组合、雪怪、掉落口、变色龙、魔法格）另有单独的「fallbacks 为空」检查项。
+  同一轮逐关开局用真实绘制钩子（见下）再查两项：每个地面层格（第 39 关 16 格果冻、第 48 关 4 格魔法地格）都画了表内贴图
+  （`jelly` / `jelly_2` / `magic`，测试侧自己的一份 `GROUND_SPRITE`，同桌面 `UI.Ground.groundTable`），56 × 56 在该格、调用序在该格底格之后、
+  棋子之前（`report.json` 的 `groundByLevel`）；HUD 关名真实画了且只画了一张 `name_<关卡下标>`（同桌面 `HudArt`），矩形 = 关名槽
+  （`levelNames`；当前 48 关都有文字图，没有关卡退回浏览器字体）。截关名 `level-name-l01.png` / `level-name-l41.png` / `level-name-l48.png`。
 - **HUD 目标中文标签（每关）**：同一轮逐关检查 `m3debug.hud.goal`（HUD 实际画出的目标标签）= 「目标 」+ `state.goal.label`，
   且 `goal.label` 不含 `[a-z_]`（不漏出 `fuzzball` / `GoalNamed` 这类内部名）；逐关结果在 `report.json` 的 `goalLabels`。
   `goal.label` 来自视图模型 `Match3.View.goalLabel`（名字目标查 `namedGoalLabelTable`），`stack test` 的 `frontends_read_view_model` 也核对全部关卡与每日挑战。
+  同一轮还逐关核对失败提示 `state.loseHint`（失败面板副标题的前半）：全部关卡不含「箱子」与 `[a-z_]`，碎石目标关（第 8 / 41 / 42 / 44 / 48 关）
+  =「用邻消或特效砸开碎石，目标 <target> 个」（核心 39dde8e 修正，原为「砸箱子」；逐关结果在 `report.json` 的 `loseHints`）。
 - **第 43 关毛球**：静止时冻结在浮动偏移 −2 与 +2 设计像素的两帧（同桌面 `sprBob`），截 `fuzzball-float-a-up.png` / `fuzzball-float-b-down.png`，
   并在页面里对两帧格内像素做纵向平移搜索，最佳平移须在 4 设计像素 × `u` × dpr（1280×800 dpr2 下 12.8 物理像素）±2.5 以内；
   步末跳格冻结在皮带段中间（`trace.end` 的 belt 项从毛球格出发），截 `fuzzball-jump-mid-l43-*.png`；HUD「目标 毛球」竖屏 / 横屏截 `goal-label-l43-*.png`。
@@ -403,10 +414,22 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
   `chameleon#通用画法缺底层宝石`，撤掉后恢复（`chameleon-crop-before-generic.png` / `chameleon-crop-after.png`）；
   步末换色冻结在倒计时段前半（真实绘制 = `trace.end` 的换色前颜色，`chameleon-shift-before.png`）与后半（换色后颜色，`chameleon-shift-mid.png`），
   播完 state 里的变色龙 = 换色结果、真实绘制随之更新。
-- **玩到失败（第 39 / 40 / 43 / 45 / 47 关，种子 7）**：按提示走满步数，状态 Lost、结算层标题「步数用完了」、副标题含 `goal.loseHint`
-  且不含 `[a-z_]`（读 `m3debug.overlay`，即真正画出的文字）；截 `chameleon-l47-lost.png`。
+- **魔法地格（第 48 关）**：竖屏 390×844 与横屏 1280×800 下 `state.ground` = 4 格 magic (6,2)(6,5)(5,3)(5,4)、layers 1，关名 `name_47`「魔法格」，
+  HUD「目标 碎石」；真实绘制：4 格都画了 `magic`（位置 = 该格、棋盘格之上、棋子之下），像素上格边一圈（离边 4%–12%）的紫度
+  (R + B) / 2 − G 比同行其他格平均高 ≥ 15（实测约 54–57 对 29；贴图被换成淡灰框时查得出来），截 `magic-l48-*.png`。
+  扩圈爆炸：按 parity 的 4 组 `fix` 走法走，第 3 步冻结在扩爆那一轮的「消失」段（`pop`，约 1/3 处），`pending.events` 的 blast 与原生逐项相同
+  （元素、来源、格数、行列数），每个目标格都有真实绘制——被消格在格中心画了光环（≥ 一格）与缩小的棋子，碎石等受击不消的格画了 `holes`
+  里受击后的样子（层数变了）；两类合计 = EvBlast 格数，扩出来的一圈（原范围之外的 16 格）全在内；截 `magic-widen-seed<N>.png`。
+  终章：第 47 关种子 2 / 第 48 关种子 3 按核心测试的一步贪心走法（`test/Spec/{Chameleon,MagicGround}.hs`，原生算出后写死在 e2e 里）走完——
+  第 47 关 `LevelClear`「过关！… 进入第 48 关」，第 48 关（最后一关）`Won`「通关！」（`magic-l48-won.png`）。
+- **玩到失败（第 8 / 39 / 40 / 41 / 42 / 43 / 44 / 45 / 47 / 48 关，种子 7，按提示过了关就换种子 8–11）**：按提示走满步数，状态 Lost、结算层标题「步数用完了」、副标题含 `state.loseHint`
+  且不含 `[a-z_]` 与「箱子」（读 `m3debug.overlay`，即真正画出的文字），碎石目标关（8 / 41 / 42 / 44 / 48）副标题 =「用邻消或特效砸开碎石，目标 n 个。可「撤销」或「重开」」；截 `chameleon-l47-lost.png` / `magic-l48-lost.png`。
 - **反证（测试跑手复核用，不进 `make check`）**：临时副本里改 `dist/cells.js` 跑完整 e2e，必须失败——掉落口画到 x+4（`dropMarks` 不变）
   → 8 项真实绘制掉落口检查失败；变色龙底层宝石画成 `gem_c<(c mod 5)+1>` → 6 项变色龙检查失败；先画环再画宝石（宝石名字对，只是顺序反了：环 seq 178 < 宝石 seq 179）→ 同样 6 项变色龙检查失败。三份副本都是整套 e2e 退出码 1、其余项照常通过。
+  魔法地格 / 关名（web-magic-ground，149 项的版本，副本端口 8832–8835）：删掉 `cells.js` GROUND 表的 `magic` 行 → 13 项失败（逐关地面层真实绘制、
+  逐关与第 48 关 `fallbacks`（`magic#地面层`）、第 48 关两个视口的贴图 / 像素 / 降级、4 组扩爆的降级）；`magic` 不画贴图、直接画淡灰框（不计 `fallbacks`，即适配前的样子）
+  → 5 项失败（逐关地面层真实绘制、第 48 关两个视口的贴图与像素）；`atlas.webp` 里 `magic` 区域换成淡灰框（贴图名与位置都对）→ 2 项像素检查失败；
+  `hud.js` 关名错位一关（画 `name_<i+1>`，第 48 关因此退回浏览器字体）→ 3 项失败（逐关关名真实绘制、第 48 关两个视口的开局检查）。四份副本 e2e 都退出码 1。
 - **规则开关角标**：e2e 检查第 41 关 `state.rules` = `[{name:"bomb_shapes", text:"L/T 形出炸弹", icons:["bomb_glow","bomb_mark"]}]`，
   竖屏 390×844、横屏手机 844×390、桌面 1280×800 三种布局下 HUD 角标都完整画出、落在关卡面板里、不压「第 N 关」标签与关名、
   彼此不重叠（读 `m3debug.hud`），走一步后仍在；第 1 关与第 42 关（魔法石是元素不是规则开关）没有角标。截图

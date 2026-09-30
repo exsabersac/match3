@@ -2,13 +2,18 @@
 -- 同一关卡 + 种子开局，按核心提示连走 N 步，逐步打印接口 JSON。
 -- 与 node-parity.mjs（wasm 一侧）的输出逐字节比较，验证两端规则与随机数完全一致。
 -- 走完后再撤销一步（覆盖 m3Undo / Engine.History），最后一行是撤销结果。
--- 用法（仓库根目录）：stack runghc -- -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 [hint|combo|combo-bomb|cham-rainbow]
+-- 用法（仓库根目录）：stack runghc -- -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]
 module Main (main) where
 
 import Control.Monad (when)
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
+import Data.Char (digitToInt)
+import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import Match3.Core
+import Match3.Element.Event (Event(..), EventKind(..))
+import Match3.Engine (Action(..), Played(..), play)
 import Match3.Element.Builtin (chameleonColor)
 import Match3Web.Api (apiNew, apiSwap, apiUndo, webState)
 
@@ -17,7 +22,7 @@ main = do
   args <- getArgs
   let (li, seed, n) = case map read (take 3 args) of
         [a, b, c] -> (a, b, c)
-        _ -> error "用法：Parity 关卡 种子 步数 [hint|combo|combo-bomb|cham-rainbow]"
+        _ -> error "用法：Parity 关卡 种子 步数 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]"
       mode = case drop 3 args of
         (m : _) -> m
         [] -> "hint"
@@ -25,10 +30,12 @@ main = do
       go 0 h = putStrLn (snd (apiUndo h))
       go k h = let gs = webState h in case (gsOver gs, findHint (gsBoard gs)) of
         (Nothing, Just hint) -> do
-          let (a, b) = pickMove mode (gsBoard gs) hint
+          let (a, b) = fromMaybe (pickMove mode (gsBoard gs) hint) (fixedMove mode (n - k))
               (h', j) = apiSwap a b h
           when (mode == "cham-rainbow" && (a, b) `elem` chamRainbowPairs (gsBoard gs)) $
             hPutStrLn stderr ("走法 cham-rainbow：第 " ++ show (n - k) ++ " 步换彩虹 × 变色龙 " ++ show (a, b))
+          when (take 4 mode == "fix-") $
+            mapM_ (\l -> hPutStrLn stderr ("走法 fix：第 " ++ show (n - k) ++ " 步魔法地格扩爆 " ++ l)) (magicBlasts gs a b)
           putStrLn j
           go (k - 1) h'
         _ -> putStrLn (snd (apiUndo h))
@@ -85,3 +92,27 @@ chamRainbowPairs b =
       Gem _ Rainbow 0 Nothing -> True
       _ -> False
     cham cell = chameleonColor cell /= Nothing
+
+-- | 走法 fix-RCRC-RCRC-…（第 48 关魔法地格的固定用例）：第 k 步（0 起）换第 k 对（每对 4 个数字 r1 c1 r2 c2），
+-- 列表用完后按提示。与 node 两侧的 fixedMove 逐条相同。
+fixedMove :: String -> Int -> Maybe (Pos, Pos)
+fixedMove mode k = case splitDash mode of
+  ("fix" : mvs) | k < length mvs, [a, b, c, d] <- map digitToInt (mvs !! k) -> Just ((a, b), (c, d))
+  _ -> Nothing
+  where
+    splitDash s = case break (== '-') s of
+      (w, []) -> [w]
+      (w, _ : rest) -> w : splitDash rest
+
+-- | 魔法地格扩爆（第 48 关）：本步的 EvBlast 里来源格在魔法地格上的，每个来源一行
+-- 「元素@(r,c) N 格 R 行 C 列」（N = 该来源的目标格数，含扩出来的一圈）。node 两侧按接口 JSON 的 events 算出同样的行。
+magicBlasts :: GameState -> Pos -> Pos -> [String]
+magicBlasts gs a b =
+  [ unElementName (evElement e) ++ "@" ++ show s ++ " " ++ show (length ts) ++ " 格 "
+      ++ show (length (nub (map fst ts))) ++ " 行 " ++ show (length (nub (map snd ts))) ++ " 列"
+  | e <- pdEvents (play (Swap a b) gs), evKind e == EvBlast
+  , s <- nub (map fst (evCells e)), s `elem` magic
+  , let ts = nub [t | (s', t) <- evCells e, s' == s]
+  ]
+  where
+    magic = [p | (p, (nm, _)) <- gsGround gs, unElementName nm == "magic"]

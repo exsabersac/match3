@@ -1094,6 +1094,23 @@ def carpet(covered):
     return img
 
 
+def cookie_drop():
+    """饼干掉落口（新玩法 6）：顶行格子上沿的金色漏斗 + 白色向下箭头，画在棋子之上（只占格子上部四分之一）。"""
+    img = new()
+    fun = poly_mask(pts_px([(0.06, 0.02), (0.94, 0.02), (0.74, 0.24), (0.26, 0.24)]))
+    img = comp(img, fill_layer(blur(fun, U(0.03)), (40, 20, 0), 0.45))
+    img = comp(img, fill_layer(fun, ("v", (255, 222, 130), (190, 120, 45)), 0.97))
+    rim = poly_mask(pts_px([(0.06, 0.02), (0.94, 0.02), (0.91, 0.06), (0.09, 0.06)]))
+    img = comp(img, fill_layer(rim, (110, 62, 18), 0.95))
+    lip = poly_mask(pts_px([(0.27, 0.20), (0.73, 0.20), (0.74, 0.24), (0.26, 0.24)]))
+    img = comp(img, fill_layer(lip, (92, 50, 14), 0.95))
+    for x0 in (0.16, 0.8):
+        img = comp(img, fill_layer(ellipse_mask((U(x0 - 0.022), U(0.058), U(x0 + 0.022), U(0.102))), (255, 246, 210), 0.9))
+    arr = poly_mask(pts_px([(0.44, 0.07), (0.56, 0.07), (0.56, 0.12), (0.63, 0.12), (0.5, 0.21), (0.37, 0.12), (0.44, 0.12)]))
+    img = comp(img, fill_layer(arr, (255, 252, 236), 0.97))
+    return img
+
+
 def jelly(n):
     """双层果冻（段 5，地面层）：半透明粉色果冻块，画在棋子下面。n=2 为双层（更厚、带一道层线），n=1 为单层。"""
     img = new()
@@ -1638,6 +1655,7 @@ def build_sprites():
     sp["jelly"] = down(jelly(1))
     sp["jelly_2"] = down(jelly(2))
     sp["bubble"] = down(bubble())
+    sp["cookie_drop"] = down(cookie_drop())
     for k in range(4):
         sp["magic_stone_%d" % k] = down(magic_stone(k))
     sp["fuzzball"] = down(fuzzball())
@@ -1706,7 +1724,7 @@ LEGEND = [
      + [("bottle_" + k, "染色瓶", "Bottle " + k.upper()) for k in GEMS]
      + [("maker_" + k, "果汁机", "Maker " + k.upper()) for k in GEMS] + [("ufo_" + k, "飞碟", "UFO " + k.upper()) for k in GEMS]),
     ("地面与标记 Floor & UI", [("@tiles", "棋盘格", "Cells"), ("carpet_open", "地毯目标", "Carpet target"), ("carpet_covered", "已铺地毯", "Carpet"),
-                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("sel_ring", "选中框", "Selection"),
+                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("cookie_drop", "饼干掉落口", "Cookie drop"), ("sel_ring", "选中框", "Selection"),
                              ("hint_glow", "提示光", "Hint"), ("@badge", "层数角标", "Layer badge")]),
 ]
 

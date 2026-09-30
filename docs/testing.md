@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**365** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强） + 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」） + 新玩法 5 新增 7 个（`test/Spec/SnowBoss.hs`：雪怪 Boss）。
+- 期望：**372** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强） + 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」） + 新玩法 5 新增 7 个（`test/Spec/SnowBoss.hs`：雪怪 Boss） + 新玩法 6 新增 7 个（`test/Spec/CookieDrop.hs`：饼干掉落口）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 365）：
+- 目录（用例数合计 372）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -65,6 +65,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Fuzzball.hs` | 7 | 新玩法 3：毛球——能力（挡交换 / 下落 / 无色 / 洗牌保留 / 命中即灭）、邻格真消除即灭（斜角不算、直接命中不重复）、跳到相邻普通宝石并换位且结果确定、墙 / 避让格 / 非普通宝石 / 已占格不跳、交换步末的 `EvBelt "fuzzball"` 可重放、去掉毛球条目后前 42 关逐步相同（不耗 `gsGen`）、第 43 关布局与实战（跳过格、有消灭计数、能过关） |
 | `test/Spec/RainbowCombos.hs` | 7 | 新玩法 4：魔力鸟组合增强（规则开关 `rainbow_combos`）——只有第 44 关打开且 Show 不打印开关、成立条件（彩虹 × 直线 / 炸弹，两端能点火）、彩虹 × 直线先变身（第 0 轮之前的 `EvSpread rainbow_line`，横竖棋盘格交替）再在第一轮全部引爆、彩虹 × 炸弹同理、带冰 / 叠层的同色宝石不变身但仍是种子、原有 43 关同一局面与去掉开关时逐项相同、第 44 关布局与实战 |
 | `test/Spec/SnowBoss.hs` | 7 | 新玩法 5：雪怪 Boss（2×2）——能力（固定 / 挡交换 / 不下落 / 无色 / 洗牌保留 / 直接命中原样吃掉、左上格按血量计权）、放置与第 45 关开局 / HUD 血条读数、身外一圈真消除与直接命中扣血且归零四格一起清除、锤子扣血与击败过关、交换步末的 `EvTick "snow_boss"` 与每 3 步确定地召唤雪块、去掉雪怪条目后前 44 关逐步相同、第 45 关实战（见下文「新玩法验收」） |
+| `test/Spec/CookieDrop.hs` | 7 | 新玩法 6：饼干掉落口（关卡级元素 `CookieDrop`，关卡记录 `lvlDrops`）——只有第 46 关有掉落口、Show 不打印、视图读数；`dropRefill` 在掉落口格补饼干的条件与名额、随机数消耗与原策略相同；第 46 关开局不做目标补齐；实战掉落与收集；去掉条目后前 45 关与每日挑战逐步相同；难度（按提示 30 局赢 ≤ 25、贪心能过关）（见下文「新玩法验收」） |
 | `test/Spec/View.hs` | 9 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
 | `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）等；并重新导出 `Spec.Support.Source` |
@@ -243,7 +244,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `jb_bubble_pops_on_adjacent_clear` | 与真消除格相邻的气泡在首轮被清、计数、达成 `GoalNamed "bubble" 1`；不相邻的不动 |
 | `jb_bubble_pops_on_direct_hit` | 锤子直接命中即破并计数 |
 | `jb_bubble_blocks_swap_falls_no_match` | 三个气泡连成一排不算匹配；与气泡交换被拒；列里没有消除时不动；下方格被清掉后下落一格 |
-| `jb_levels_appended` | 共 45 关（新玩法 5 起）；第 39 / 40 关目标为 `GoalNamed "jelly" 32` / `GoalNamed "bubble" 12`，种子 1–3 开局层数 / 气泡数等于目标且有可走步；前 38 关开局没有地面层、没有气泡 |
+| `jb_levels_appended` | 共 46 关（新玩法 6 起）；第 39 / 40 关目标为 `GoalNamed "jelly" 32` / `GoalNamed "bubble" 12`，种子 1–3 开局层数 / 气泡数等于目标且有可走步；前 38 关开局没有地面层、没有气泡 |
 | `jb_main_flow_untouched_scan` | `mainFlowSources`（`Board.*`、除 `Game.Level` 外的 `Game.*`、除内置定义外的 `Element.*`、`Match3.Engine`、`Engine.*`，按目录列出）源码里没有 `jelly` / `bubble`；两者定义在 `Element.Builtin` 及其分组文件（`builtinSources`）里并已注册 |
 
 改动了的旧测试（名字不变）：7 个用例里的「关卡数 = 38」断言改为 40（`surprise_opens_to_special`、`chain_layer_decrement`、`freeze_layer_decrement`、`curtain_layer_decrement`、`steam_spreads_after_move`、`goal_carpet_counts`、`campaign_levels_batch_ok`）。
@@ -284,7 +285,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `view_cell_face_and_level_list_match_legacy` | 全部样本盘面的格子与每种构造器 / 叠层组合：`cellFace` 与旧 `encodeCell` 的字段（`t` 在前、顺序相同）逐项相同；`levelViews` 与 `allLevels` 的序号 / 名字 / 步数 / 目标相同 |
 | `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
-| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图 |
+| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、第 45 关 =「雪怪」、第 46 关 =「饼干」、没登记的名字目标退回元素名 |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
@@ -339,7 +340,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 365，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 372，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 
@@ -355,17 +356,31 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
   和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
-- **一致性用例**：`web/test/parity.sh` 默认状态 17 组、动画 15 组（「关卡:种子」列表，含第 41 关「爆破」、第 42 关「魔石」与第 45 关「雪怪」种子 1–3），`CASES=` 可改。
+- **一致性用例**：`web/test/parity.sh` 默认状态 23 组、动画 21 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
+  第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）、第 44 关「魔力鸟」与第 45 关「雪怪」种子 1–3），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
+  `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）；
+  提示不会主动选彩虹组合，第 44 关的变身步（`rainbow_line` / `rainbow_bomb`）靠后两种走法覆盖，`parity.sh` 会检查这些用例真的走到了变身步
+  （状态 JSON 里有 `"kind":"rainbow_…"`、动画帧里有蔓延段）。原生 `Parity.hs` / `AnimParity.hs` 与 node 两侧的 `pickMove` 逐条相同。
 - **e2e 端口 `E2E_PORT`**：e2e 临时起 `web/serve.py`，只监听 `127.0.0.1`，端口取环境变量 `E2E_PORT`（默认 **8765**）。
   同一台机器上并行跑多份 e2e（多个工作树 / 多个任务）时各设一个端口，例如 `make check E2E_PORT=18765` 或 `E2E_PORT=18765 make e2e`，
   直接跑脚本时 `E2E_PORT=18765 node web/test/e2e.mjs`。端口已被占用时 e2e 立刻报错退出；服务器起来后还会核对它提供的
   `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
 - **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
-  e2e 对全部关卡（当前 45 关，含第 45 关「雪怪」）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
+  e2e 对全部关卡（当前 46 关；第 45 关「雪怪」按象限画，多格护栏见下；第 46 关「掉落口」只用饼干格，不会触发降级，掉落口标记网页端暂不画）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
   **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
-  `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。
+  `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。`report.json` 的 `fallbacksByLevel` 逐关记录计数，
+  第 43 / 44 / 46 关（毛球、彩虹组合、掉落口）另有单独的「fallbacks 为空」检查项。
+- **HUD 目标中文标签（每关）**：同一轮逐关检查 `m3debug.hud.goal`（HUD 实际画出的目标标签）= 「目标 」+ `state.goal.label`，
+  且 `goal.label` 不含 `[a-z_]`（不漏出 `fuzzball` / `GoalNamed` 这类内部名）；逐关结果在 `report.json` 的 `goalLabels`。
+  `goal.label` 来自视图模型 `Match3.View.goalLabel`（名字目标查 `namedGoalLabelTable`），`stack test` 的 `frontends_read_view_model` 也核对全部关卡与每日挑战。
+- **第 43 关毛球**：静止时冻结在浮动偏移 −2 与 +2 设计像素的两帧（同桌面 `sprBob`），截 `fuzzball-float-a-up.png` / `fuzzball-float-b-down.png`，
+  并在页面里对两帧格内像素做纵向平移搜索，最佳平移须在 4 设计像素 × `u` × dpr（1280×800 dpr2 下 12.8 物理像素）±2.5 以内；
+  步末跳格冻结在皮带段中间（`trace.end` 的 belt 项从毛球格出发），截 `fuzzball-jump-mid-l43-*.png`；HUD「目标 毛球」竖屏 / 横屏截 `goal-label-l43-*.png`。
+- **第 44 关彩虹组合**：`state.rules` = `[{name:"rainbow_combos", text:"彩虹组合变身", icons:["rainbow"]}]`，竖屏 / 横屏角标完整画在关卡面板里
+  （`rules-badge-l44-*.png`）；开局的彩虹 × 直线、彩虹 × 炸弹各走一次，冻结在第一轮之前的蔓延段中间（`trace.end[0]` 为 `afterWaves = 0` 的
+  `rainbow_line` / `rainbow_bomb`，此时轮次 0、连击 0），截 `rainbow-transform-{line,bomb}-mid-l44-*.png`，播完 `fallbacks` 仍为空。
 - **雪怪 Boss（第 45 关）**：图集含 `snow_boss` / `snow_boss_0..3` / `snow_boss_hurt_0..3`；竖屏 390×844 与横屏 1280×800 下四格在
   (2,3)–(3,4)、象限 0–3、贴图正确，`state.boss` = HUD 血条读数 = 40/40（`m3debug.hud.boss`），第 42 关 `state.boss = null`；
   多格护栏：带 `q` 的 Custom 格走通用「元素名贴图 + 角标」画法时计入 `fallbacks`（键 `<元素名>#多格通用画法`），反证为页面里强制
@@ -388,6 +403,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | 3. 毛球（`Custom "fuzzball"`，第 43 关「毛球」） | `test/Spec/Fuzzball.hs` | 7 | 金标准末尾追加第 43 关 76 行（2026-09-30 加难后为 85 行，见下文「第 43 关加难」） + 第 42 关种子 2 十字道具过关 3 行（2714 / 2719 / 2720：`Won` → `LevelClear>42`，同行 / 辅助行整局状态散列随之变）；元素查询快照 `R adjacent` / `R end` / `R names` 3 行（新条目与规则）+ 5 行 `E … PhaseMove`（该阶段规则列表多了毛球；去掉毛球条目重跑生成器，除追加的 `M 43` 外与旧快照逐字相同）+ 追加 `M 43` 2 行 |
 | 4. 魔力鸟组合增强（规则开关 `rainbow_combos`，第 44 关「魔力鸟」） | `test/Spec/RainbowCombos.hs` | 7 | 金标准末尾追加第 44 关 105 行 + 第 43 关过关结局 8 行（2758 / 2768 / 2770 / 2771 / 2786 / 2794–2796：种子 1 / 2 的交换或道具过关，`Won` → `LevelClear>43`，同行 / 辅助行整局状态散列随之变）；元素查询快照 `R level` 1 行（多了 `rainbow_combos`）+ `M 43` 2 行（同上）+ 追加 `M 44` 2 行；原有关卡没有别的变化 |
 | 5. 雪怪 Boss（`Custom "snow_boss"`，2×2，第 45 关「雪怪」） | `test/Spec/SnowBoss.hs` | 7 | 金标准末尾追加第 45 关 105 行（2915–3019），原有 2914 行逐字不变（第 44 关在金标准里没有过关的局，结局行不变）；元素查询快照 `R adjacent`（多了 200）/ `R end`（`PhaseMove` 多了 30）/ `R names`（多了 `snow_boss`）/ `R diff`（多了 `("snow_boss",Just (CountNamed "snow_boss"),0)`）4 行 + 5 行 `E {0,60,120,180,240} PhaseMove`（该阶段规则列表多了雪怪；去掉雪怪条目、保留权重钩子重跑生成器，前 1656 行与旧快照逐字相同，只是第 45 关装饰报 `UnknownElement`）+ 追加 `M 45 1` / `M 45 2` 2 行；`M 1`–`M 44` 不变 |
+| 6. 饼干掉落口（关卡级元素 `CookieDrop`，第 46 关「掉落口」） | `test/Spec/CookieDrop.hs` | 7 | 金标准末尾追加第 46 关 105 行（3020–3124），原 3019 行逐字不变（第 45 关在金标准里没有过关的局，「不再是终章」不影响任何结局行）；元素查询快照 `R level` 1 行（多了 `cookie_drop`）+ 追加 `M 46 1` / `M 46 2` 2 行；`M 1`–`M 45` 不变 |
 
 `test/Spec/BombShapes.hs` 的断言：
 
@@ -451,6 +467,20 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 改动了的旧测试：关卡数 44 → 45（`jb_levels_appended`、`Builtin/Obstacle`、`Builtin/Layer` 4 处、`GoalsLevels` 2 处，标签多了「第 45 关雪怪」）；`ElementClass` 内置条目数 33 → 34；`Caps` 本体实例数 21 → 22；`Presentation` 的 `draw_hud_and_prim_overlay_are_thin` 期望的几何版 HUD 分派多了 `hudBoss`（在 `hudGoal` 之后）。
 
+`test/Spec/CookieDrop.hs` 的断言：
+
+| 用例 | 断言 |
+|------|------|
+| `cd_only_level46_has_drops` | 关卡表里只有第 46 关写了 `lvlDrops`（四个顶行掉落口、饼干、保持 4 块）；`levelDrops` / `bvDrops` 在第 46 关给出掉落口格，前 45 关与每日挑战为空；`GameState` 的 Show 不含 `CookieDrop` |
+| `cd_refill_drops_cookie_at_drop_cells` | `dropRefill`：两个掉落口格都有空洞且盘上没有饼干时两格都补饼干，其余空洞与原策略相同；已有一块时只剩一个名额、行优先先补的拿到；已够两块、或掉落口格没有空洞时与原策略完全相同 |
+| `cd_refill_same_rng_as_base` | 多列空洞、种子 1–5：补满后的生成器与原策略相同；盘面只在掉落口格上不同；策略名 `random-gem+drop` |
+| `cd_level46_start_no_goal_decor` | 第 46 关种子 1–3 开局饼干恰在四个掉落口格（没有目标补齐）、目标收 8 块；第 22 / 23 关仍按目标补齐；去掉 `cookie_drop` 条目开局盘面相同 |
+| `cd_drops_and_collects_in_play` | 第 46 关种子 1–6 一步贪心走满：盘上饼干始终 ≤ 4、每局都掉过饼干并有收集计数、每步新出现的饼干数在 0–4 之间；去掉条目后按提示走 26 步饼干总数不超过开局的 4 块 |
+| `cd_other_levels_unchanged` | 去掉 `cookie_drop` 条目的注册表与默认注册表：前 45 关（种子 3）与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、`gsGen` 逐项相同；第 46 关按提示走 26 步在种子 1–30 里至少一局不同 |
+| `cd_level46_difficulty` | 按提示走种子 1–30 赢 ≤ 25 局（backlog 的「太容易」标准）；一步贪心种子 1 过关 |
+
+改动了的旧测试：关卡数 45 → 46（`jb_levels_appended`、`Builtin/Obstacle`、`Builtin/Layer` 4 处、`GoalsLevels` 2 处）；内置关卡级元素列表多了 `cookie_drop`（`br_level_hooks_builtin_and_removable`、`ec_flat_record_removed`、`ec_level_elements_by_message`、`ec_level_element_stateful_extension`，性质 `qc_level_elems_readers_roundtrip` 同样）；`campaign_levels_batch_ok` 的「开局收集物数 ≥ 目标」对有掉落口的关卡改为「开局至少一块、掉落口掉的是饼干」。测试辅助 `findMatchPair` 已按引擎的挡交换条件过滤（饼干挡交换），`find_match_pair_engine_accepts` 自动覆盖第 46 关。
+
 ### 第 43 关加难（2026-09-30）
 
 网页端反映第 43 关种子 1 走 3 步就过关；桌面核心复现：原布局 10 个毛球挤在上三行，按提示走（`findHintWith`）种子 1 三步过关（第一步连锁灭 6 个），种子 1–30 里 26 局过关、种子 9 / 30 两步过关。改为 14 个毛球分散在全盘（隔行错开）、目标 14：种子 1 要 14 步，种子 1–30 里 19 局过关（其余 11 局 22 步用完）。快照变化只来自第 43 关：金标准第 43 关一段（原 2725–2800 行 76 行 → 新 2725–2809 行 85 行，`L43` / `G43` 行，目标 `namedfuzzball:10` → `:14`），前后各段逐字不变（第 42 关过关结局仍是 `LevelClear>42`）；元素查询快照只有 `M 43 1` / `M 43 2` 两行。`fz_level43_layout_and_play` 改为 14 个毛球并加难度护栏（种子 1–3 按提示 8 步内过不了关）。
@@ -463,7 +493,17 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## shell 脚本检查（`make lint-sh`）
 
-`make check` 第一步跑 `make lint-sh`（`python3 web/tools/lint-sh.py`），检查仓库里（`git ls-files`）全部 `*.sh`、`*.mk` 与 `Makefile`：
+`make check` 第一步跑 `make lint-sh`（`python3 web/tools/lint-sh.py`），检查仓库里（`git ls-files`）全部 `*.sh`、`*.mk` 与 `Makefile`。
+
+注意两处盲区：
+
+- **只扫已跟踪的文件**：文件清单来自 `git ls-files`，新建但还没 `git add` 的脚本不在清单里，`make lint-sh` 不会扫它（照样显示 0 处问题）。
+  提交前先 `git add`，或者直接把路径传给脚本：`python3 web/tools/lint-sh.py 新脚本.sh`（传了路径就只查这些文件，不管是否已跟踪）。
+- **只按扩展名选文件**：没有扩展名的脚本（例如 Gradle 生成的 `web/android-app/android/gradlew`、自己写的无后缀可执行脚本）不在范围内，
+  即使带 `#!/bin/bash` 也不查；需要时同样用路径参数单独查。
+
+规则与细节：
+
 
 - **规则**：`$` 后接命名变量 `[A-Za-z_][A-Za-z0-9_]*`，紧跟一个 ≥ 0x80 的字节（中文、全角标点等 UTF-8 字符的首字节）就报错，
   逐条打印 `文件:行号: $变量 …: 该行`，退出码 1。修法是加花括号：`"…$LABEL）"` → `"…${LABEL}）"`。

@@ -29,6 +29,10 @@ module Match3.View
   , goalBracket
   , countTag
   , colorTag
+  , goalLabel
+  , countLabel
+  , colorLabel
+  , namedGoalLabelTable
     -- * 棋盘视图
   , BoardView (..)
   , boardView
@@ -54,12 +58,13 @@ module Match3.View
   , kindCode
   ) where
 
-import Data.List (find)
+import Data.List (find, intercalate)
 import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Core
 import Match3.Element.Builtin (SnowBoss (..), decodeBoss, snowBossEvery, snowBossHp, snowBossName)
 import Match3.Engine (match3Game)
+import Match3.Element.Level (levelDrops)
 
 --------------------------------------------------------------------------------
 -- 整局视图
@@ -297,6 +302,53 @@ colorTag C3 = "BLU"
 colorTag C4 = "YEL"
 colorTag C5 = "PRP"
 
+-- | 目标的中文显示名（HUD「目标 …」标签；网页 state.goal.label / m3Levels 的 goal.label 都取这里，
+-- 前端不再各自维护「目标种类 → 中文」的表）。桌面贴图版 HUD 用目标图标（UI.GoalStyle.goalIcon）而不写字，
+-- 所以这张表目前只有网页版在画；与图例（tools/gen_assets.py 的 LEGEND）用词一致。
+-- 名字目标查 'namedGoalLabelTable'；没登记的名字退回元素名本身（不静默丢掉，网页 e2e 会因英文标识符报错）。
+goalLabel :: GoalInfo -> String
+goalLabel gi = case giView gi of
+  ViewScore _ -> "分数"
+  ViewCollect c _ -> "收集" ++ colorLabel c ++ "色宝石"
+  ViewCollectMulti cs -> "多色收集（" ++ intercalate " / " [colorLabel c | (c, _) <- cs] ++ "）"
+  ViewCount k _ -> countLabel k
+  ViewOther _ -> "综合目标"
+
+-- | 计数键的中文名（'goalLabel' 用；名字目标查 'namedGoalLabelTable'）。
+countLabel :: CounterKey -> String
+countLabel k = case k of
+  CountStones -> "碎石"
+  CountChests -> "宝箱"
+  CountHoney -> "蜂蜜罐"
+  CountBalloons -> "气球"
+  CountCookies -> "饼干"
+  CountCakes -> "蛋糕"
+  CountSafes -> "保险箱"
+  CountUfo -> "飞碟"
+  CountCarpets -> "地毯"
+  CountSpirits -> "时间精灵"
+  CountColor c -> colorLabel c ++ "色宝石"
+  CountNamed name -> fromMaybe (unElementName name) (lookup (unElementName name) namedGoalLabelTable)
+
+-- | 按元素名计数的目标（'GoalNamed'）的中文名（键 = 元素名）。新元素做成关卡目标时在这里登记一行
+-- （stack test 的 frontends_read_view_model 核对全部关卡目标都有中文名）。
+namedGoalLabelTable :: [(String, String)]
+namedGoalLabelTable =
+  [ ("jelly", "果冻")          -- 段 5：双层果冻（第 39 关）
+  , ("bubble", "气泡")         -- 段 5：气泡（第 40 关）
+  , ("magic_stone", "魔法石")  -- 新玩法 2
+  , ("fuzzball", "毛球")       -- 新玩法 3：毛球（第 43 关）
+  , (unElementName snowBossName, "雪怪")  -- 新玩法 5：雪怪 Boss（第 45 关，目标 = 击败 Boss）
+  ]
+
+-- | 颜色的中文名（与图例、ui-art.md 的颜色表一致）。
+colorLabel :: Color -> String
+colorLabel C1 = "红"
+colorLabel C2 = "绿"
+colorLabel C3 = "蓝"
+colorLabel C4 = "黄"
+colorLabel C5 = "紫"
+
 --------------------------------------------------------------------------------
 -- 棋盘视图
 
@@ -316,6 +368,7 @@ data BoardView = BoardView
   , bvUfos :: [Ufo]
   , bvCarpets :: [Pos]               -- ^ 本关地毯格（levelCarpets gsLevel）
   , bvCarpetOpen :: [Pos]
+  , bvDrops :: [Pos]                 -- ^ 掉落口格（新玩法 6，Element.Level.levelDrops）；没有掉落口为空
   }
 
 boardView :: GameState -> BoardView
@@ -331,6 +384,7 @@ boardView gs =
     , bvUfos = gsUfos gs
     , bvCarpets = levelCarpets (gsLevel gs)
     , bvCarpetOpen = gsCarpetOpen gs
+    , bvDrops = levelDrops (gsLevelElems gs)
     }
 
 -- | 一格的地毯标记：已铺优先；未铺 = 本关地毯格且未铺。

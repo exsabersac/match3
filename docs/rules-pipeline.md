@@ -64,7 +64,7 @@
 
 1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），魔法石充能（180）、毛球消灭（190）、雪怪扣血（新玩法 5，200：身外一圈的真消除 + 直接命中的 Boss 格各扣 1，归零四格并入清除格），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊（第 8 刀起按注册表的有序形状规则表 `shapeRules`：每条连线取第一条认领它的规则；内置 = 长度 ≥5 彩虹 → 横 4 横消 → 竖 4 竖消，放在交换落点或连线可清格的中间，横线在前、竖线在后，后写的覆盖先写的；新玩法 1：规则开关 `bomb_shapes` 打开的关卡在「长度 ≥5 彩虹」之后多一条 L / T 规则——同色横竖连线交叉时横线在交点放炸弹、竖线认领不生成）。本关的形状表在每步结算开始时确定：`resolveMoveWith` 先用 `levelRegistryIn` 问关卡级元素 `Shaping`，有回复就换上回复的表，这一步的所有轮次都用它。
 2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级元素：元素类迁移后为 `Settling` 消息，内置回复者调 `portalTeleport`；第 7 刀起 Board 层经钩子 `onSettle` 调用）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`；第 7 刀起是关卡级元素 `GroundLayer`，按轮发 `GroundHit`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
-3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则注册表的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。
+3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则注册表的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。新玩法 6：有掉落口（关卡记录 `lvlDrops`）的关卡，关卡级元素 `CookieDrop` 回复 `Refilling`，把策略包一层 `dropRefill`——每个空洞仍照原策略补一次（随机数照常消耗），若空洞在掉落口格上、且此刻盘上（已补的算在内）的饼干少于 `dropKeep` 块，就换成饼干；饼干之后照常下落、到底行被收走。
 4. 飞碟吸收（段 4：注册表关卡级元素回复 `Refilled` 消息，内置 = `stepUfos`；去掉 `ufo` 即不吸收；第 7 刀起经钩子 `onAbsorb`，飞碟位置在 `UfoLevel` 的值里）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 
 波次分：`scoreForWave wave n`。

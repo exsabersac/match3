@@ -15,6 +15,7 @@ module UI.BoardPrim
   , drawChocoSpreadHints
   , drawPortal
   , drawUfo
+  , drawDropMark
   , drawBelt
   ) where
 
@@ -125,6 +126,8 @@ drawStaticPrim ren app board yOff = do
     drawChocoSpreadHints ren yOff pulse (bvBoard bv)
   -- UFO overlays
   mapM_ (drawUfo ren yOff pulse) (bvUfos bv)
+  -- 掉落口（新玩法 6）：格子上沿的漏斗
+  mapM_ (drawDropMark ren) (bvDrops bv)
 
 -- | Pulse outline on cells a vine would spread onto next move.
 drawVineSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
@@ -218,6 +221,24 @@ drawUfo ren yOff pulse (Ufo cell col) = do
   -- beam hint downward
   rendererDrawColor ren $= V4 cr cg cb 100
   drawLine ren (P (V2 (x0 + cellPx `div` 2) (y + 30 + bob))) (P (V2 (x0 + cellPx `div` 2) (y + cellPx - 6)))
+
+-- | 掉落口标记（新玩法 6，几何版）：格子上沿一条金色漏斗（上宽下窄的三级台阶）+ 中间白色向下箭头；固定不随下落偏移。
+drawDropMark :: Renderer -> Pos -> IO ()
+drawDropMark ren pos = do
+  let (x, y0) = cellOrigin pos
+      y = y0 - 3
+      box bx by bw bh = fillRect ren (Just (Rectangle (P (V2 bx by)) (V2 bw bh)))
+  rendererDrawColor ren $= V4 120 70 20 255
+  box (x + 4) y (cellPx - 8) 3
+  rendererDrawColor ren $= V4 240 190 90 255
+  box (x + 6) (y + 3) (cellPx - 12) 4
+  box (x + 11) (y + 7) (cellPx - 22) 4
+  rendererDrawColor ren $= V4 200 130 50 255
+  box (x + 16) (y + 11) (cellPx - 32) 3
+  rendererDrawColor ren $= V4 255 250 230 255
+  box (x + cellPx `div` 2 - 2) (y + 3) 4 5
+  box (x + cellPx `div` 2 - 5) (y + 8) 10 2
+  box (x + cellPx `div` 2 - 2) (y + 10) 4 2
 
 drawBelt :: Renderer -> CInt -> [Pos] -> IO ()
 drawBelt _ _ [] = pure ()

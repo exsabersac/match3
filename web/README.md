@@ -1,7 +1,7 @@
 # 网页版技术验证（GHC WebAssembly 后端）
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
-在浏览器里用桌面版同一套美术（2x 精灵图集）把 45 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
+在浏览器里用桌面版同一套美术（2x 精灵图集）把 46 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
@@ -64,8 +64,8 @@ make check           # CI：lint-sh + 构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 365 个，桌面版与网页版共用） |
-| `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
+| `make test-native` | `stack test`（核心 372 个，桌面版与网页版共用） |
+| `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子[:走法] …"` 可改，走法 `hint` / `combo` / `combo-bomb` 见 §4） |
 | `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
 | `make check` | CI 用：`lint-sh` → `build` → `test` → `size` |
@@ -121,8 +121,8 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：121 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
-1024×1464，WebP 约 368 KB；`atlas.json` 约 3.5 KB；背景 WebP 约 17 KB。
+图集：122 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
+1024×1464，WebP 约 372 KB；`atlas.json` 约 3.6 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
 dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
@@ -166,11 +166,12 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 用 `lsof -i :8080` 或 `deploy-mac.sh status` 检查。详见 [`docs/web.md` §5](../docs/web.md#5-部署)（含 itch.io 静态托管）。
 
 - 点一格再点相邻格交换，或按住拖向相邻格（拖过半格即交换）；
-- 交换补间 → 逐轮高亮 / 消失 + 粒子 / 下落补子 → 连锁、连击浮字、震屏 → 步末效果（倒计时、传送带、蔓延、蜗牛、洗牌）；
+- 交换补间 → （第 44 关彩虹组合：第一轮之前的变身段）→ 逐轮高亮 / 消失 + 粒子 / 下落补子 → 连锁、连击浮字、震屏 → 步末效果（倒计时、传送带 / 毛球跳格、蔓延、蜗牛、洗牌）；
   播放期间锁输入，点击或空格加速（对应 `m3AnimTick(1)`）；
 - 换了不能消：换过去再换回，不扣步；过关 / 通关 / 步数用完时出现结局遮罩；
 - 按钮：‹ / › 切关、重开、提示（高亮核心 `findHint`）、撤销（核心 `Engine.History`，最多 20 步）；
-  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..44&seed=N`。
+  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..45&seed=N`（关卡下标 0 起，共 46 关）；
+- HUD「目标 …」显示核心给的中文名（`state.goal.label`，如第 43 关「目标 毛球」），不显示内部名。
 
 ### 自适应布局（layout.js）
 - 画布铺满视口，监听 `visualViewport` resize、`resize`、`orientationchange` 和 `ResizeObserver`；
@@ -199,7 +200,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。
+下面是各自的底层命令。当前（2026-09-30，web-snow-boss 合入 main 9f5504e 后）：46 关，`stack test` 372 个用例全过，
+状态一致性 23 组、动画一致性 21 组（都含第 43 / 44 / 45 关），e2e 89 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
@@ -218,6 +220,11 @@ stack exec -- ghc -O1 -isrc -iapp/pure -iweb/hs -outputdir /tmp/par/o -o /tmp/pa
 /tmp/par/animparity 27 1 20 > /tmp/native-anim.txt
 ~/.ghc-wasm/nodejs/bin/node web/test/node-anim-parity.mjs 27 1 20 > /tmp/wasm-anim.txt
 cmp /tmp/native-anim.txt /tmp/wasm-anim.txt && echo 一致
+
+# 第 4 个参数是走法：hint（缺省，按核心提示）/ combo（盘上有「彩虹 × 直线 / 炸弹」相邻就先换它，覆盖第 44 关的变身步；
+# 提示不会主动选彩虹组合）/ combo-bomb（同 combo，但先换「彩虹 × 炸弹」）。parity.sh 的 CASES 写成「关卡:种子:走法」
+/tmp/par/animparity 43 1 20 combo > /tmp/native-anim.txt
+~/.ghc-wasm/nodejs/bin/node web/test/node-anim-parity.mjs 43 1 20 combo > /tmp/wasm-anim.txt
 ```
 
 e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局、无效交换退回、连锁三帧、撤销、结局），
@@ -225,7 +232,12 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 `30–32` 下落中改尺寸前后与播完，`rules-badge-*` 第 41 关规则开关角标（竖屏 390×844、横屏手机 844×390、桌面 1280×800）
 与 `rules-badge-l42-*` 第 42 关「魔石」（魔法石是元素不是规则开关，没有角标），`magic-stone-charge*` 魔法石 0–3 格充能，
 `snow-boss-*` 第 45 关「雪怪」Boss（竖屏 / 横屏开局与血条、扣血那一轮的高亮、召唤雪块的步末、血量过半的受伤表情）。
-另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败。报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
+`fuzzball-float-a-up` / `fuzzball-float-b-down` 第 43 关毛球浮动的两帧（偏移 −2 / +2 设计像素，e2e 按像素测出两帧纵向平移 ≈ 4 设计像素 × 缩放）、
+`fuzzball-jump-mid-l43-*` 毛球步末跳格（皮带段）中间帧、`goal-label-l43-*` 第 43 关 HUD「目标 毛球」（竖屏 390×844 / 横屏 1280×800）、
+`rules-badge-l44-*` 第 44 关规则角标「彩虹组合变身」、`rainbow-transform-{line,bomb}-mid-l44-*` 彩虹 × 直线 / 炸弹变身段中间帧。
+另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败
+（`report.json` 的 `fallbacksByLevel` 逐关记录，第 43 / 44 / 45 / 46 关另有单独的检查项；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`，第 45 关雪怪接入前就是这样画成每格一只整图 + 角标 9、原护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
+报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
 
 ## 5. 网页端与核心的接口
 
@@ -242,7 +254,9 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 | `m3AnimTick(fast)` | 0 / 1（1 = 加速） | 推进一帧（60 fps 固定步长）：播放中 `{p,fr,n,w,k,g,b[,s][,ev]}`，播完 `{done:true,b,best,g,fall}` |
 
 - `state`：`level/name/rules/score/moves/goal/progress/target/boss/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
-  （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal.name` 为 `GoalNamed` 的元素名；
+  （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal = {kind,text,target[,name],label}`：`goal.name` 为 `GoalNamed` 的元素名，
+  `goal.label` 为中文显示名（视图模型 `Match3.View.goalLabel`：分数 / 收集红色宝石 / 多色收集（红 / 蓝）/ 碎石 / 毛球 …，名字目标查 `namedGoalLabelTable`，
+  没登记的名字退回元素名），HUD「目标 …」直接画它，`m3Levels` 的 `goal` 同样带 `label`；
   `boss` = 雪怪 Boss 血条 `{hp,max}`（视图模型 `gvBoss`，目标不是「击败 Boss」时为 `null`），`hud.js` 用它把目标条换成血条）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
 - 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
@@ -251,6 +265,8 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - `trace`：`pdTrace` 的逐轮快照 `start → waves[{before,cleared,drained,holes,after,score}] → end[] → final → shuffle`，
   前端按它逐轮播放；`end[i] = {afterWaves,before,after,effect}`，`effect` 为结构化步末效果：
   `{type:"tick",cells}` / `{type:"belt",pairs}` / `{type:"spread",kind:"vine|choco|steam",pairs}` / `{type:"snail",moves:[{from,to,dir,pushed}]}`；
+  第 43 关毛球的步末跳格也是 `belt`（毛球与相邻宝石互换，两项）；第 44 关彩虹组合的变身是 `afterWaves = 0` 的
+  `{type:"spread",kind:"rainbow_line|rainbow_bomb",pairs:[[彩虹格],[同色宝石]]…}`，在第一轮之前播放；
   `shuffle` 为本步触发自动洗牌后的盘面（否则 `null`）；
 - `events`：规则层效果事件 `pdEvents`（按时间顺序）`{kind,beat,subject,pairs:[[来源],[目标]],amount}`，
   `kind` ∈ `clear/hit/blast/drain/score/combo/tick/belt/spread/move/shuffle`（同 `Match3.Engine.eventKindTag`），

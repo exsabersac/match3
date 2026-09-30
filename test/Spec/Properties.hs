@@ -754,7 +754,7 @@ qc_level_elems_readers_roundtrip =
      let gs = levelGame li seed
          same gs' = gs' == gs .&&. show gs' === show gs
      in conjoin
-         [ map levelNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "ground"]
+         [ map levelNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "ground"]
          , same (setUfos (gsUfos gs) gs)
          , same (setBelts (gsBelts gs) gs)
          , same (setPortals (gsPortals gs) gs)

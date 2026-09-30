@@ -316,7 +316,17 @@ allLevels =
   , (level 44 "雪怪" 24 (goalCount (CountNamed "snow_boss") snowBossLevelHp))
       { lvlPlacements = bossAt (2, 3) snowBossLevelHp
       }
+    -- 饼干掉落口（新玩法 6）：顶行 (0,1) / (0,3) / (0,4) / (0,6) 是掉落口，开局各有一块饼干；盘上饼干少于 4 块时
+    -- 补子在掉落口补饼干（不额外消耗随机数）；饼干落到底行被收走（原有的底边收集），目标收 8 块
+  , (level 45 "掉落口" 26 (goalCount CountCookies 8))
+      { lvlPlacements = [Place "cookie" [] cookieDropCells]
+      , lvlDrops = [DropSpec cookieDropCells Cookie 4]
+      }
   ]
+
+-- | 第 46 关的掉落口格。
+cookieDropCells :: [Pos]
+cookieDropCells = [(0, 1), (0, 3), (0, 4), (0, 6)]
 
 -- | 第 45 关雪怪的满血值（= 关卡目标值）。
 snowBossLevelHp :: Int

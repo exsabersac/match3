@@ -24,6 +24,7 @@ module Match3.Element.Level
   , levelPortals
   , levelCarpetOpen
   , levelGround
+  , levelDrops
     -- * 节拍
   , levelHooksWith
   , levelRegistryIn
@@ -38,11 +39,11 @@ module Match3.Element.Level
 import Data.Maybe (listToMaybe, mapMaybe)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Conveyor (Belt)
-import Match3.Element.Builtin.Level (BeltLevel(..), CarpetLevel(..), GroundLayer(..), PortalLevel(..), UfoLevel(..))
+import Match3.Element.Builtin.Level (BeltLevel(..), CarpetLevel(..), CookieDrop(..), GroundLayer(..), PortalLevel(..), UfoLevel(..))
 import Match3.Element.Class
 import Match3.Element.Message
 import Match3.Element.Registry (Registry, hitGroundWith, levelDefs, portalWith, refillPolicyWith, setShapeRules, shapeRules)
-import Match3.Levels.Level (Level)
+import Match3.Levels.Level (DropSpec(..), Level)
 import Match3.Types
 import Match3.Ufo (Ufo)
 
@@ -128,6 +129,10 @@ levelCarpetOpen = maybe [] (\(CarpetLevel ps) -> ps) . levelState
 -- | 地面层（第 7 刀前的 gsGround）。
 levelGround :: [SomeLevelElement] -> Ground
 levelGround = maybe [] (\(GroundLayer g) -> g) . levelState
+
+-- | 掉落口格（新玩法 6；没有掉落口的关卡为空）：前端画掉落口标记用。
+levelDrops :: [SomeLevelElement] -> [Pos]
+levelDrops = maybe [] (\(CookieDrop ds) -> concatMap dropCells ds) . levelState
 
 -- | Board 层的钩子：沉降节拍发 'Settling'（可穿门谓词 = 注册表的本体定义），补子之后发 'Refilled'，
 -- 补子策略问 'Refilling'（第 8 刀，初值 = 注册表的策略）。

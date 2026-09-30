@@ -59,10 +59,6 @@ new ResizeObserver(scheduleRelayout).observe(document.documentElement);
 
 // ---------------------------------------------------------------------------
 // 3. 对局状态
-const GOAL_NAMES = { GoalScore: "分数", GoalCollect: "收集", GoalCollectMulti: "多色收集", GoalClearStone: "碎石",
-  GoalChest: "宝箱", GoalHoney: "蜂蜜罐", GoalBalloon: "气球", GoalCookie: "饼干", GoalCake: "蛋糕",
-  GoalSafe: "保险箱", GoalUfo: "飞碟", GoalCarpet: "地毯" };
-const NAMED_GOALS = { jelly: "果冻", bubble: "气泡" };
 const levels = call("m3Levels");
 
 let state = null;        // 最近一次核心返回的（已生效的）状态
@@ -74,10 +70,9 @@ let hudDrawn = null;   // 上一帧 HUD 关卡面板各部件的矩形（drawHud
 let pressed = null, frozen = false, frames = 0;
 const fx = new Fx();
 
-function goalText(s) {
-  if (s.goal.kind === "GoalNamed") return `${NAMED_GOALS[s.goal.name] || s.goal.name}`;
-  return GOAL_NAMES[s.goal.kind] || s.goal.text;
-}
+// HUD「目标 …」的中文显示名：直接用核心给的 goal.label（视图模型 Match3.View.goalLabel，唯一来源；
+// 名字目标在 namedGoalLabelTable 登记）。JS 不再自带「目标种类 → 中文」映射表，新目标 / 新元素不用改这里。
+function goalText(s) { return s.goal.label ?? s.goal.text; }
 
 function newGame(level, seed) {
   const t0 = performance.now();
@@ -129,6 +124,9 @@ function startCascade() {
   anim = { kind: "cascade", cas, tk: { p: "start", fr: 0, n: 0, w: 0, k: 0, g: 0, b: 0 }, best: 0 };
 }
 
+// 步末碎屑色（桌面 UI.Presentation.elementRGBTable 里会出现在蔓延步末的几行）
+const SPREAD_CRUMB_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235] };
+
 function stepCascade() {
   const t0 = performance.now();
   const tk = JSON.parse(X.m3AnimTick(fastReq ? 1 : 0));
@@ -152,7 +150,10 @@ function stepCascade() {
     if (e.e === "end" && tk.s) {
       for (const i of tk.s.e) {
         const ef = cas.ends[i].effect;
-        if (ef.type === "spread") fx.crumbs({ vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235] }[ef.kind] || [255, 255, 255], ef.pairs.map((p) => p[1]));
+        // 蔓延碎屑按元素名取色（桌面 UI.Playback.endCrumbs 的 CrumbsByElement：表里没有的元素不迸，
+        // 例如第 44 关彩虹组合的变身步 rainbow_line / rainbow_bomb）
+        const crumbRGB = ef.type === "spread" && SPREAD_CRUMB_RGB[ef.kind];
+        if (crumbRGB) fx.crumbs(crumbRGB, ef.pairs.map((p) => p[1]));
         if (ef.type === "tick") fx.crumbs([255, 110, 70], ef.cells);
       }
     }

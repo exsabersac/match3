@@ -71,7 +71,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3New(level, seed)` | 开一局（清空历史与动画） |
 | `m3Swap(r1,c1,r2,c2)` | 交换一步：`{accepted, outcome, trace, events, state}` |
 | `m3Undo()` | 撤销（核心 `Engine.History`，最多 20 步） |
-| `m3State()` / `m3Levels()` | 当前状态 / 45 关列表 |
+| `m3State()` / `m3Levels()` | 当前状态 / 46 关列表 |
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
 
@@ -102,16 +102,26 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   （`web/tools/gen_web_atlas.py` 只跳过文字图 `g_*` / `zh_*` / `name_*` 与 `@` 变体）。漏了的格子会走几何降级（色块 + 类型名，
   如魔法石合入时的「custom」灰块）。回归护栏：`cells.js` 按元素名统计走降级的次数，`m3debug.fallbacks` 暴露；e2e 对**每一关**
   开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡（见 [testing.md](testing.md#网页版测试make-check)）。
-  例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动。
-  例：第 45 关雪怪 Boss（2×2）`{t:"custom", name:"snow_boss", v, q, hurt, turn, every}`——`q/hurt/turn/every` 由 Api 按
+  例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动；
+  第 43 关毛球 `{t:"custom", name:"fuzzball", v:1}` 画 `fuzzball` 并一直浮动（同桌面 `artFuzzball`：`round(2·sin(pulse/9))` 设计像素，
+  振幅相同；呼吸计数桌面 16 ms 一帧、网页 1/60 s 一帧，所以网页周期约 0.94 s、桌面约 0.90 s，与气球 / 精灵 / 气泡同一个公式）。
+- **步末 / 变身动画复用已有段**：毛球跳格是核心的 `EvBelt "fuzzball"`，按皮带段平移播放（与桌面 `drawEndBelt` 相同）；
+  第 44 关彩虹组合（规则开关 `rainbow_combos`）的变身是第一轮之前（`afterWaves = 0`）的 `EvSpread rainbow_line / rainbow_bomb`，
+  ComboFx 在第一轮之前插入蔓延段，`render.js` 按桌面 `drawEndSpread` 逐分支画：来源（彩虹格）与目标不相邻 → 变身后的直线 / 炸弹从格子中心的方块匀速长满，
+  前沿白光、不迸碎屑（名字不在生长曲线 / 颜色表里，同桌面缺省）；目标恰好与彩虹差一行或一列（`dc = ±1` 或 `dr = ±1`）时桌面按方向擦出，网页相同。
+- **HUD 目标标签**：`state.goal.label`（视图模型 `Match3.View.goalLabel`，唯一来源），`main.js` 不再有「目标种类 → 中文」映射表；
+  新元素做成关卡目标时在 `namedGoalLabelTable` 登记（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
+- 第 45 关雪怪 Boss（2×2）`{t:"custom", name:"snow_boss", v, q, hurt, turn, every}`——`q/hurt/turn/every` 由 Api 按
   `Match3.View.bossPart` 解码（前端不拆 v）；`cells.js` 的 `CUSTOM_ART`（同桌面 `customTable`）按象限画 `snow_boss_<q>`、
   血量过半画 `snow_boss_hurt_<q>`，右下格画召唤进度小点（同 `artSnowBoss`）；四块拼接处源矩形内收 1 像素 + 目标对齐整像素，
-  避免缩放采样露出十字细缝。HUD：`state.boss`（`gvBoss`）非空时 `hud.js` 把目标条换成血条（`snow_boss` 头像 +「HP 剩余/满血」，
+  避免缩放采样露出十字细缝。HUD：`state.boss`（`gvBoss`）非空时 `hud.js` 把目标条换成血条（`snow_boss` 头像 + 目标标签「目标 雪怪」（`goal.label`）+「HP 剩余/满血」，
   红条过半后深红呼吸闪烁，同桌面 `HudArt`）。扣血 / 击败 / 召唤没有专门动画，与桌面相同走通用的逐轮高亮 / 消失与步末 tick 红光。
   **多格元素护栏**：接入前雪怪走的是通用的「贴图名 = 元素名 + 层数角标」画法——每格一只缩小的整只 `snow_boss` 加角标 9（v 是打包值），
   而 `snow_boss` 贴图在图集里，降级护栏查不出。现在带 `q`（本格在多格整体里的编号）的 Custom 格一旦走到通用画法（整格或缩放），
   就按 `<元素名>#多格通用画法` 计进 `m3debug.fallbacks`，逐关护栏随之失败；e2e 另做反证（页面里 `import("/cells.js")` 后
   `forceGeneric.add("snow_boss")` 强制旧画法，护栏必须报出），并截前后对比 `snow-boss-crop-before-generic.png` / `snow-boss-crop-after.png`。
+- 待跟进（网页版未改）：第 46 关饼干掉落口——饼干格本身网页端已有画法（`cookie`）、玩法由核心结算自动生效；
+  只缺掉落口标记：核心 `Match3.View.BoardView.bvDrops`（掉落口格）尚未经 Api 编码，网页端要画的话按格子上沿画 `cookie_drop`。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -131,7 +141,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 ```
 tools/gen_assets.py（桌面版，已有）→ assets/*.bmp（2x，112 px/格）
                                           │  只读
-web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（121 张，1024×1464，约 368 KB）
+web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张，1024×1464，约 372 KB）
                                             atlas.json（约 3.5 KB，名字 → 矩形）
                                             background.webp（约 17 KB）
 ```
@@ -169,7 +179,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（121 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 365 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 372 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -254,7 +264,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 ## 6. 调试要点
 
-- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形）/ `m3debug.perf`；URL `?level=0..44&seed=N` 复现一局；
+- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.perf`；URL `?level=0..45&seed=N` 复现一局；
 - 快捷键：`u` / `z` 撤销，`h` 提示，空格加速；
 - 页面白屏先看网络面板里 `.wasm` 的 Content-Type（必须是 `application/wasm`）。
 
@@ -262,12 +272,12 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（365 个） | `make test-native` |
-| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（17 组，含第 41 / 42 关与第 45 关 3 个种子） |
-| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（15 组，含第 41 / 42 关与第 45 关 3 个种子） |
-| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 关规则角标（三种布局不出框不重叠）与第 42 关无角标、第 45 关雪怪 Boss（四格贴图、血条、扣血 / 召唤 / 受伤截图）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
+| `stack test` | 核心规则（372 个） | `make test-native` |
+| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（23 组，含第 41–45 关（第 45 关种子 1–3）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
+| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（21 组，含第 41–45 关（第 45 关种子 1–3）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
+| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-snow-boss，基于 main f86c6cd）：`stack test` 365 通过；状态一致性 17 组、动画一致性 15 组全部一致（含第 45 关种子 1–3）；e2e 71 项全过（含逐关贴图护栏、多格护栏反证与第 45 关雪怪 Boss）；`make android-check` 6 项全过。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-snow-boss 合入 main 9f5504e 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 23 组、动画一致性 21 组全部一致（含第 43 / 44 关与第 45 关种子 1–3）；e2e 89 项全过（46 关逐关贴图护栏全空（含多格护栏）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证，无控制台错误）；`make android-check` 6 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

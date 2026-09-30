@@ -96,7 +96,13 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 流程：`doSwap` → 交换补间（不能消时换过去再换回）→ `m3AnimStart` → 每帧 `m3AnimTick` → 播完（必要时补一段轻落，如自动洗牌）→ 刷新 HUD；
 - 播放期间锁输入（与桌面 `animBusy` 一致），按钮 / 撤销在播完后可用；
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
-- `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用。
+- `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
+- **新元素要跟进 `cells.js`**：格子 JSON 由核心 `Match3.View.cellFace` 生成，新元素（包括 `Custom` 自定义元素）合入 main 后网页端
+  不会自动有画法——`cells.js` 的 `primarySprite`（主贴图名）/ `CELL_ART`（画法）/ `ELEMENT_RGB`（降级色）要补，贴图名要在网页图集里
+  （`web/tools/gen_web_atlas.py` 只跳过文字图 `g_*` / `zh_*` / `name_*` 与 `@` 变体）。漏了的格子会走几何降级（色块 + 类型名，
+  如魔法石合入时的「custom」灰块）。回归护栏：`cells.js` 按元素名统计走降级的次数，`m3debug.fallbacks` 暴露；e2e 对**每一关**
+  开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡（见 [testing.md](testing.md#网页版测试make-check)）。
+  例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -251,7 +257,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（12 组，含第 41 / 42 关） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 关规则角标（三种布局不出框不重叠）与第 42 关无角标、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-rules-badge 合入 main 64c0351 后）：`stack test` 343 通过；状态一致性 14 组、动画一致性 12 组全部一致；e2e 51 项全过；`make android-check` 6 项全过。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-rules-badge 合入 main 64c0351 后）：`stack test` 343 通过；状态一致性 14 组、动画一致性 12 组全部一致；e2e 54 项全过（含逐关贴图护栏）；`make android-check` 6 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

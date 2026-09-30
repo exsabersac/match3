@@ -11,6 +11,7 @@
 //   3. 第 39 关果冻、第 40 关气泡：静止 + 连锁中；
 //   4. 分辨率矩阵：7 种视口截图，并检查布局完整落在视口 / 安全区内、格子与按钮的 CSS 尺寸；
 //   4b. 规则开关角标：第 41 关 state.rules 与 HUD 角标（竖屏 / 横屏手机 / 桌面，截图 rules-badge-*.png），第 1 关没有角标；
+//   4c. 贴图护栏：每一关开局 + 走 3 步后 m3debug.fallbacks（走几何降级的格子）为空；第 42 关魔法石 0–3 格充能截图；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -276,6 +277,70 @@ try {
       await Q.shot(`rules-badge-l42-${vp.name}`);
       await Q.ctx.close();
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3c. 贴图护栏：每一关开局 + 按提示走 3 步（空格加速），图集加载后 m3debug.fallbacks（走几何降级的格子，按元素名计）必须为空。
+  //     新元素合入 main 却没在 cells.js 补画法 / 网页图集里没有贴图时，这里会列出元素名和关卡。
+  {
+    const P = await openPage({ w: 390, h: 844, dpr: 1 }, 0, 7);
+    const nLevels = await P.page.evaluate(() => window.m3debug.levels);
+    const bad = [];
+    for (let li = 0; li < nLevels; li++) {
+      await P.page.goto(`http://127.0.0.1:${PORT}/?level=${li}&seed=7`);
+      await P.page.waitForFunction(() => window.m3debug && window.m3debug.state, null, { timeout: 30000 });
+      await sleep(60);
+      for (let k = 0; k < 3; k++) {
+        const s = await P.st();
+        if (s.over || !s.hint) break;
+        await P.swap(s.hint[0], s.hint[1], k % 2 === 1); await sleep(30);
+        await P.page.keyboard.press(" "); await P.idle();
+      }
+      await sleep(60);
+      const fb = await P.page.evaluate(() => window.m3debug.fallbacks);
+      if (Object.keys(fb).length) bad.push({ level: li + 1, fallbacks: fb });
+    }
+    report.fallbackLevels = nLevels;
+    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 42 && bad.length === 0, bad);
+    await P.ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3d. 魔法石 0–3 格充能的贴图：第 42 关种子 2 按提示走，直到盘面上同时出现 0 / 1 / 2 / 3 格（按提示走法第 11 步后为 1,3,2,0），
+  //     截四块魔法石所在区域 magic-stone-charges-0123.png 与每种充能的单格放大 magic-stone-charge-<v>.png
+  {
+    const P = await openPage({ w: 390, h: 844, dpr: 3 }, 41, 2);
+    const want = [0, 1, 2, 3], got = new Set();
+    let all = false;
+    for (let k = 0; k < 30 && !all; k++) {
+      const s = await P.st();
+      const stones = [];
+      s.board.forEach((row, r) => row.forEach((c, col) => { if (c.t === "custom" && c.name === "magic_stone") stones.push({ p: [r, col], v: c.v }); }));
+      // 有新充能要截图时先等连击 / 得分浮字散掉（否则会压在魔法石上）
+      if (stones.some((st) => st.v <= 3 && !got.has(st.v))) await sleep(1600);
+      for (const st of stones) {
+        if (st.v > 3 || got.has(st.v)) continue;
+        got.add(st.v);
+        const [x, y] = await P.center(st.p), half = await P.page.evaluate(() => 28 * window.m3debug.layout.u + 4);
+        await P.page.screenshot({ path: `${shots}/magic-stone-charge-${st.v}.png`, clip: { x: x - half, y: y - half - 4, width: 2 * half, height: 2 * half + 4 } });
+        report.shots.push(`${shots}/magic-stone-charge-${st.v}.png`);
+      }
+      if (want.every((v) => stones.some((st) => st.v === v))) {
+        all = true;
+        const [x0, y0] = await P.center([2, 2]), [x1, y1] = await P.center([5, 5]), m = await P.page.evaluate(() => 34 * window.m3debug.layout.u);
+        await P.page.screenshot({ path: `${shots}/magic-stone-charges-0123.png`, clip: { x: x0 - m, y: y0 - m, width: x1 - x0 + 2 * m, height: y1 - y0 + 2 * m } });
+        report.shots.push(`${shots}/magic-stone-charges-0123.png`);
+        report.magicStoneCharges = stones;
+        await P.shot("magic-stone-charges-全盘");
+        break;
+      }
+      if (s.over || !s.hint) break;
+      await P.swap(s.hint[0], s.hint[1], false); await sleep(30);
+      await P.page.keyboard.press(" "); await P.idle();
+    }
+    check("第 42 关魔法石 0 / 1 / 2 / 3 格充能都截到（同盘出现四种）", all && want.every((v) => got.has(v)), [...got]);
+    check("魔法石画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0);
+    await P.ctx.close();
   }
 
   // -------------------------------------------------------------------------

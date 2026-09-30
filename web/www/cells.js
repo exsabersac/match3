@@ -13,7 +13,7 @@ export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
 // 五色主色（与 tools/gen_assets.py 调色板、UI.Layout.colorRGB 一致）
 export const COLOR_RGB = { 1: [236, 62, 78], 2: [52, 196, 96], 3: [56, 128, 246], 4: [255, 194, 36], 5: [172, 88, 236] };
 // 按元素名取色（UI.Layout.elementRGBTable）：蔓延碎屑 / 生长前沿光 / 自定义格
-export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [140, 90, 210] };
+export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [92, 60, 160] };
 
 export const clamp = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
 export const breathe = (pulse, period) => 0.5 + 0.5 * Math.sin((pulse * 2 * Math.PI) / period);
@@ -124,8 +124,18 @@ const CELL_ART = {
   },
 };
 
+// 回归护栏：走几何降级（drawCellPrim，以及缩放画法 drawCellScaled 的色块分支）的次数，按元素名计
+// （custom 取 name，如 "magic_stone"；其余取 t）。贴图在开局前就加载好，正常游戏里它应当一直为空；
+// 非空 = 有元素在网页图集里没有贴图 / cells.js 没有画法（新元素合入 main 后要在本文件补）。main.js 以 m3debug.fallbacks 暴露给 e2e。
+export const fallbacks = {};
+function noteFallback(cell) {
+  const k = cell.t === "custom" ? cell.name : cell.t;
+  fallbacks[k] = (fallbacks[k] || 0) + 1;
+}
+
 // 几何降级：纯色圆角块 + 元素缩写
 function drawCellPrim(ctx, x, y, cell) {
+  noteFallback(cell);
   const [r, g, b] = cellRGB(cell);
   ctx.fillStyle = `rgb(${r},${g},${b})`;
   ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
@@ -151,6 +161,7 @@ export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
     const mark = cell.t === "G" && { H: "line_h", V: "line_v", B: "bomb_mark" }[cell.k];
     if (mark) art.mod(ctx, mark, x, y, sz, sz, null, a);
   } else {
+    noteFallback(cell);
     const [r, g, b] = cellRGB(cell);
     ctx.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
     ctx.fillRect(x, y, sz, sz);

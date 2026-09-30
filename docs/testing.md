@@ -358,6 +358,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
   直接跑脚本时 `E2E_PORT=18765 node web/test/e2e.mjs`。端口已被占用时 e2e 立刻报错退出；服务器起来后还会核对它提供的
   `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
+- **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
+  e2e 对全部关卡（当前 42 关）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
+  **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
+  漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
+  `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。
 - **规则开关角标**：e2e 检查第 41 关 `state.rules` = `[{name:"bomb_shapes", text:"L/T 形出炸弹", icons:["bomb_glow","bomb_mark"]}]`，
   竖屏 390×844、横屏手机 844×390、桌面 1280×800 三种布局下 HUD 角标都完整画出、落在关卡面板里、不压「第 N 关」标签与关名、
   彼此不重叠（读 `m3debug.hud`），走一步后仍在；第 1 关与第 42 关（魔法石是元素不是规则开关）没有角标。截图

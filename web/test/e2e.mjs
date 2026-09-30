@@ -247,6 +247,33 @@ try {
       report.snowBoss.push({ name: vp.name, boss: s.boss, hudBoss: hud.boss });
       await P.ctx.close();
     }
+    // 多格护栏的反证 + 前后对比：Boss 区域裁图 snow-boss-crop-after.png（专门画法）；在页面里临时强制雪怪走旧的通用画法
+    // （整只缩小贴图 + 层数角标 9，即接入前 main 上的画面）截 snow-boss-crop-before-generic.png，此时 fallbacks 必须报出
+    // 「snow_boss#多格通用画法」（护栏确实能拦住）；撤掉强制后不再增加
+    {
+      const P = await openPage({ w: 390, h: 844, dpr: 3 }, 44, 1);
+      await sleep(200);
+      const [x0, y0] = await P.center([2, 3]), [x1, y1] = await P.center([3, 4]), m = await P.page.evaluate(() => 40 * window.m3debug.layout.u);
+      const clip = { x: x0 - m, y: y0 - m, width: x1 - x0 + 2 * m, height: y1 - y0 + 2 * m };
+      const crop = async (name) => { const f = `${shots}/${name}.png`; await P.page.screenshot({ path: f, clip }); report.shots.push(f); };
+      await crop("snow-boss-crop-after");
+      const fb0 = await P.page.evaluate(() => window.m3debug.fallbacks);
+      await P.page.evaluate(async () => { const c = await import("/cells.js"); c.forceGeneric.add("snow_boss"); });
+      await sleep(200);
+      await crop("snow-boss-crop-before-generic");
+      const fb1 = await P.page.evaluate(() => window.m3debug.fallbacks);
+      await P.page.evaluate(async () => { const c = await import("/cells.js"); c.forceGeneric.delete("snow_boss"); });
+      await sleep(100);
+      const fb2 = await P.page.evaluate(() => window.m3debug.fallbacks);
+      await sleep(200);
+      const fb3 = await P.page.evaluate(() => window.m3debug.fallbacks);
+      const k = "snow_boss#多格通用画法";
+      check("多格护栏：专门画法下 fallbacks 为空", Object.keys(fb0).length === 0, fb0);
+      check("多格护栏反证：强制雪怪走通用画法时 fallbacks 报出 snow_boss#多格通用画法", (fb1[k] || 0) > 0, fb1);
+      check("多格护栏：撤掉强制后不再增加", fb3[k] === fb2[k], { fb2, fb3 });
+      report.multiCellGuard = { before: fb0, forced: fb1, after: fb3 };
+      await P.ctx.close();
+    }
     // 其它关卡没有血条
     {
       const P = await openPage({ w: 390, h: 844, dpr: 1 }, 41, 1);

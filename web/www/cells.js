@@ -42,7 +42,7 @@ export function cellRGB(cell) {
 
 // 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
 export function primarySprite(cell) {
-  if (cell.t === "custom" && cell.name === "snow_boss") return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同桌面 customTable）
+  if (cell.t === "custom" && cell.name === "snow_boss" && !forceGeneric.has("snow_boss")) return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同桌面 customTable）
   switch (cell.t) {
     case "G": return cell.k === "R" ? "rainbow" : gemSprite(cell.c);
     case "stone": return "stone_3";
@@ -121,7 +121,7 @@ const CELL_ART = {
     // 新玩法 2 魔法石：按充能 v 画 magic_stone_0..3（满 3 格时浮动），同桌面 UI.Cell.Art.artMagicStone；不画层数角标
     else if (c.name === "magic_stone") {
       art.draw(ctx, primarySprite(c), x, y + (c.v >= 3 ? bobY(p) : 0), CELL, CELL);
-    } else { art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
+    } else { noteGenericMulti(c); art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
   },
 };
 
@@ -153,6 +153,18 @@ function drawSnowBoss(ctx, art, pulse, x, y, c) {
 }
 const CUSTOM_ART = { snow_boss: drawSnowBoss };
 
+// 多格元素护栏：占多格的 Custom 元素（格子 JSON 带 q = 本格在整体里的编号，如雪怪 Boss 的象限）不能走通用的「贴图名 = 元素名
+// + 层数角标」画法——那样每格都画一只缩小的整只贴图，v 是打包值时角标还会夹成 9（第 45 关网页版接入前就是这样）；
+// 因为元素名贴图本身在图集里，普通降级护栏查不出来。走到通用画法时按「元素名#多格通用画法」计进 fallbacks，e2e 逐关要求为空。
+// forceGeneric：e2e 的反证用（在页面里 import 本模块后临时加入元素名，强制走旧的通用画法，护栏必须报错）。
+export const forceGeneric = new Set();
+const isMultiCell = (c) => c.t === "custom" && c.q !== undefined;
+function noteGenericMulti(c) {
+  if (!isMultiCell(c)) return;
+  const k = `${c.name}#多格通用画法`;
+  fallbacks[k] = (fallbacks[k] || 0) + 1;
+}
+
 // 回归护栏：走几何降级（drawCellPrim，以及缩放画法 drawCellScaled 的色块分支）的次数，按元素名计
 // （custom 取 name，如 "magic_stone"；其余取 t）。贴图在开局前就加载好，正常游戏里它应当一直为空；
 // 非空 = 有元素在网页图集里没有贴图 / cells.js 没有画法（新元素合入 main 后要在本文件补）。main.js 以 m3debug.fallbacks 暴露给 e2e。
@@ -175,7 +187,7 @@ function drawCellPrim(ctx, x, y, cell) {
 // 单格：按元素查表画贴图；闪白统一叠一层柔光（UI.BoardArt.drawCellArt）
 export function drawCell(ctx, art, pulse, x, y, cell, flashing = false) {
   if (!cell) return;
-  const f = (cell.t === "custom" && CUSTOM_ART[cell.name]) || CELL_ART[cell.t];
+  const f = (cell.t === "custom" && !forceGeneric.has(cell.name) && CUSTOM_ART[cell.name]) || CELL_ART[cell.t];
   if (!f || !art.has(primarySprite(cell))) drawCellPrim(ctx, x, y, cell);
   else f(ctx, art, pulse, x, y, cell);
   if (flashing) art.add(ctx, "spark", x - 10, y - 10, CELL + 20, CELL + 20, [255, 255, 230], 210);
@@ -186,6 +198,7 @@ export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
   if (!cell || s <= 0.03 || a <= 0) return;
   const sz = Math.max(1, Math.round(CELL * s)), x = cx - sz / 2, y = cy - sz / 2, name = primarySprite(cell);
   if (art.has(name)) {
+    if (cell.t === "custom" && name === cell.name) noteGenericMulti(cell);   // 缩放画法也按元素名取了整只贴图
     art.mod(ctx, name, x, y, sz, sz, null, a);
     const mark = cell.t === "G" && { H: "line_h", V: "line_v", B: "bomb_mark" }[cell.k];
     if (mark) art.mod(ctx, mark, x, y, sz, sz, null, a);

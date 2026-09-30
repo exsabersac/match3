@@ -216,9 +216,12 @@ export function drawHud(ctx, art, L, info, pressed) {
     const enabled = !info.busy && (b.id !== "undo" || info.undo > 0);
     button(ctx, art, b, enabled, pressed === b.id);
   }
-  const sound = { x: h.x + h.w - 48, y: h.y + (L.mode === "portrait" ? 98 : 184), w: 46, h: 28 };
-  button(ctx, art, { ...sound, id: "sound", label: info.sound === false ? "静" : "声" }, true, false);
-  return { ...lv, boss, sound };
+  const yChip = h.y + (L.mode === "portrait" ? 98 : 184);
+  const sfx = { x: h.x + h.w - 98, y: yChip, w: 46, h: 28 };
+  const bgm = { x: h.x + h.w - 48, y: yChip, w: 46, h: 28 };
+  button(ctx, art, { ...sfx, id: "sfx", label: info.sfx === false ? "静" : "效" }, true, false);
+  button(ctx, art, { ...bgm, id: "bgm", label: info.bgm === false ? "静" : "乐" }, true, false);
+  return { ...lv, boss, sfx, bgm };
 }
 
 // 结局面板（盖在棋盘上）

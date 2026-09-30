@@ -31,6 +31,7 @@ import UI.Layout
 import UI.Presentation (comboPopSprite, scorePopRGB)
 import UI.TextArt
 import Match3.View
+import UI.Audio (bgmEnabled, sfxEnabled)
 import UI.Types
 
 --------------------------------------------------------------------------------
@@ -131,6 +132,18 @@ drawHudArt ren art app = do
       _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
       zhAC ren art (if shuffled then "zh_shuffle" else "zh_score") 424 56 18
       textAC ren art 424 76 3 gold (show score)
+  drawSoundChipsArt ren art
+
+-- | 音效 / BGM 两枚独立芯片（效/静、乐/静）。
+drawSoundChipsArt :: Renderer -> Art -> IO ()
+drawSoundChipsArt ren art = do
+  sfxOn <- sfxEnabled
+  bgmOn <- bgmEnabled
+  let drawOne (x, y, w, h) key = do
+        _ <- drawPanel ren art "panel_chip" (rect x y w h) 10
+        zhAC ren art key (x + w `div` 2) (y + 5) 18
+  drawOne sfxChipRect (if sfxOn then "zh_sfx" else "zh_mute")
+  drawOne bgmChipRect (if bgmOn then "zh_bgm" else "zh_mute")
 
 -- | HUD 右下「N 连击！」总结：放大弹入 + 等级色光晕，最后 16 帧淡出（回到得分）。
 drawComboSummaryArt :: Renderer -> Art -> App -> IO ()
@@ -197,11 +210,11 @@ drawHelpStripArt ren art app
   | otherwise = do
       -- 放在棋盘底部浮层，避免遮住 HUD 的步数行
       let y = winH - padPx - 34
-          keys = "H123USDMRNP"
+          keys = "H123USDMRKBNP"
       _ <- drawPanel ren art "panel_chip" (rect 8 y 464 28) 10
       forM_ (zip [0 :: CInt ..] keys) $ \(i, ch) ->
         keyChipA ren art (13 + i * 24) (y + 3) ch (V4 255 220 120 255)
-      void (zhA ren art "zh_help_more" (13 + 11 * 24 + 4) (y + 6) 16)
+      void (zhA ren art "zh_help_more" (13 + 13 * 24 + 4) (y + 6) 16)
 
 -- | 全屏暂停：按键说明（中文）+ 形状图例。
 drawPauseHelpArt :: Renderer -> Art -> App -> IO ()
@@ -220,7 +233,8 @@ drawPauseHelpArt ren art app
           rows =
             [ ('H', "zh_k_hint", "HINT"), ('1', "zh_k_hammer", "HAMMER"), ('2', "zh_k_swap", "SWAP")
             , ('3', "zh_k_cross", "CROSS"), ('U', "zh_k_undo", "UNDO"), ('S', "zh_k_shuffle", "SHUFFLE")
-            , ('D', "zh_k_daily", "DAILY"), ('M', "zh_k_map", "MAP"), ('R', "zh_k_retry", "RETRY")
+            , ('D', "zh_k_daily", "DAILY"), ('M', "zh_k_map", "MAP"), ('K', "zh_sfx", "SFX")
+            , ('B', "zh_bgm", "BGM"), ('R', "zh_k_retry", "RETRY")
             , ('N', "zh_k_next", "NEXT"), ('P', "zh_k_play", "PLAY")
             ]
       forM_ (zip [0 :: CInt ..] rows) $ \(i, (ch, key, en)) -> do

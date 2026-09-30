@@ -58,6 +58,8 @@ drawHelpStrip ren app
             , ('S', V4 200 160 255 255)
             , ('D', V4 140 220 200 255)
             , ('M', V4 180 200 255 255)
+            , ('K', V4 255 200 160 255)
+            , ('B', V4 160 220 255 255)
             , ('R', V4 255 160 140 255)
             , ('N', V4 140 220 160 255)
             , ('P', V4 255 200 120 255)
@@ -134,7 +136,7 @@ drawHud ren app = do
   hudBoosters ren app (gvBoosters gv)
   hudComboBadge ren app gv
   hudStatus ren (gvStatus gv)
-
+  hudSound ren
 
 -- | 退回画法（无贴图）的浮字：「COMBO N」+ 本轮得分「+N」，同样放大弹出再淡出。
 drawPopsPrim :: Renderer -> App -> IO ()

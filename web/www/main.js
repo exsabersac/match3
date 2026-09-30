@@ -10,7 +10,7 @@ import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, d
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
 import { drawGuide, guideEntries, noteSpecials } from "./guide.js";
-import { unlock, play, toggle, enabled, startBgm } from "./audio.js";
+import { unlock, play, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, startBgm } from "./audio.js";
 
 // ---------------------------------------------------------------------------
 // 1. 加载 wasm 与贴图（并行），记录耗时
@@ -206,7 +206,7 @@ function swapped(board, a, b) {
 // 4. 绘制
 function hudInfo() {
   const s = pending ? pending.state : state;
-  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s), goalIcon: s.goal.icon, sound: enabled(),
+  return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s), goalIcon: s.goal.icon, sfx: sfxEnabled(), bgm: bgmEnabled(),
     progress: anim ? state.progress : s.progress, target: s.target, msg, undo: s.undo, busy,
     boss: anim ? state.boss : s.boss, pulse };   // Boss 血条与目标条一样：播放期间显示本步之前的读数
 }
@@ -271,8 +271,9 @@ canvas.addEventListener("pointerdown", (ev) => {
   ev.preventDefault();
   unlock();
   const [x, y] = unitsOf(ev);
-  const snd = hudDrawn && hudDrawn.sound;
-  if (snd && x >= snd.x && x < snd.x + snd.w && y >= snd.y && y < snd.y + snd.h) { toggle(); return; }
+  const hitChip = (c) => c && x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h;
+  if (hitChip(hudDrawn && hudDrawn.sfx)) { toggleSfx(); return; }
+  if (hitChip(hudDrawn && hudDrawn.bgm)) { toggleBgm(); return; }
   const b = buttonAtUnits(L, x, y);
   if (b) { pressed = b.id; return; }
   if (showGuide) { showGuide = false; return; }

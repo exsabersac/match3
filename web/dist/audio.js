@@ -1,14 +1,30 @@
-// 网页音效。浏览器要在用户点过之后才能出声。总开关默认开，记在 localStorage m3-sound。
+// 网页音效。浏览器要在用户点过之后才能出声。
+// 音效与 BGM 各自开关，默认开；localStorage 键 m3-sfx / m3-bgm。
 const NAMES = ["swap", "clear", "special", "illegal", "win", "lose", "bgm"];
-const KEY = "m3-sound";
-let ctx = null, on = localStorage.getItem(KEY) !== "off", buffers = {}, bgm = null, unlocked = false;
+const KEY_SFX = "m3-sfx";
+const KEY_BGM = "m3-bgm";
+
+function readPref(key) {
+  const v = localStorage.getItem(key);
+  if (v === "on" || v === "off") return v !== "off";
+  // 旧总开关 m3-sound：新键缺失时借用一次
+  const legacy = localStorage.getItem("m3-sound");
+  if (legacy === "on" || legacy === "off") return legacy !== "off";
+  return true;
+}
+
+let ctx = null;
+let sfxOn = readPref(KEY_SFX);
+let bgmOn = readPref(KEY_BGM);
+let buffers = {}, bgm = null, unlocked = false, bgmEnded = false;
 
 function ac() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   return ctx;
 }
 
-export function enabled() { return on; }
+export function sfxEnabled() { return sfxOn; }
+export function bgmEnabled() { return bgmOn; }
 
 export async function unlock() {
   const c = ac();
@@ -23,11 +39,16 @@ export async function unlock() {
       } catch (_) { /* 缺文件就跳过这一声 */ }
     }));
   }
-  if (on) startBgm();
+  startBgm();
 }
 
 export function startBgm() {
-  if (!on || !ctx || !buffers.bgm) return;
+  bgmEnded = false;
+  actuallyStartBgm();
+}
+
+function actuallyStartBgm() {
+  if (!bgmOn || bgmEnded || !ctx || !buffers.bgm) return;
   if (bgm) return;
   const src = ctx.createBufferSource();
   src.buffer = buffers.bgm;
@@ -42,18 +63,27 @@ export function stopBgm() {
 }
 
 export function play(name) {
-  if (name === "win" || name === "lose") stopBgm();
-  if (!on || !ctx || !buffers[name]) return;
+  if (name === "win" || name === "lose") {
+    bgmEnded = true;
+    stopBgm();
+  }
+  if (!sfxOn || !ctx || !buffers[name]) return;
   const src = ctx.createBufferSource();
   src.buffer = buffers[name];
   src.connect(ctx.destination);
   src.start();
 }
 
-export function toggle() {
-  on = !on;
-  localStorage.setItem(KEY, on ? "on" : "off");
-  if (!on) stopBgm();
-  if (on) { unlock(); }
-  return on;
+export function toggleSfx() {
+  sfxOn = !sfxOn;
+  localStorage.setItem(KEY_SFX, sfxOn ? "on" : "off");
+  return sfxOn;
+}
+
+export function toggleBgm() {
+  bgmOn = !bgmOn;
+  localStorage.setItem(KEY_BGM, bgmOn ? "on" : "off");
+  if (!bgmOn) stopBgm();
+  else actuallyStartBgm();
+  return bgmOn;
 }

@@ -38,6 +38,9 @@ module UI.Layout
   , cellRect
   , clampI
   , popLeft
+  , sfxChipRect
+  , bgmChipRect
+  , hitChip
   ) where
 
 import Data.Int (Int32)
@@ -170,3 +173,14 @@ popLeft w cx =
   let lo = padPx + 4
       hi = padPx + boardPx - 4 - w
   in if hi < lo then lo else max lo (min hi (cx - w `div` 2))
+
+-- | HUD 音效 / BGM 开关芯片（逻辑像素；两枚并排贴在 HUD 右下，不挡棋盘格）。
+sfxChipRect, bgmChipRect :: (CInt, CInt, CInt, CInt)
+sfxChipRect = (374, 100, 46, 28)
+bgmChipRect = (424, 100, 46, 28)
+
+-- | 点是否落在芯片矩形内（鼠标逻辑坐标）。
+hitChip :: (CInt, CInt, CInt, CInt) -> Int32 -> Int32 -> Bool
+hitChip (x, y, w, h) mx my =
+  mx >= fromIntegral x && mx < fromIntegral (x + w)
+    && my >= fromIntegral y && my < fromIntegral (y + h)

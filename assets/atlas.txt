@@ -442,6 +442,7 @@ ufo_c5 912 1448 112 112 0
 ufo_c5@56 870 356 56 56 1
 vine 0 1562 112 112 0
 vine@56 928 356 56 56 1
+zh_bgm 44 0 42 38 2
 zh_ch1 288 978 74 28 1
 zh_ch2 364 978 74 28 1
 zh_ch3 440 978 74 28 1
@@ -477,12 +478,14 @@ zh_lose 200 1860 136 76 0
 zh_map 132 1938 216 64 0
 zh_map_hint 0 940 316 36 1
 zh_moves 832 818 74 40 1
+zh_mute 88 0 42 38 2
 zh_next 152 772 116 44 1
 zh_pause 350 1938 114 64 0
 zh_retry 150 414 186 52 1
 zh_rule_bomb 318 940 180 36 1
 zh_rule_rainbow 500 940 184 36 1
 zh_score 686 940 68 36 1
+zh_sfx 0 0 42 38 2
 zh_shuffle 756 940 98 36 1
 zh_tip 0 860 210 40 1
 zh_tool_cross 212 860 202 40 1

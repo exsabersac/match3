@@ -30,7 +30,7 @@ import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
 import UI.Actions
-import UI.Audio (beginLevel, toggleMute)
+import UI.Audio (beginLevel, toggleBgm, toggleSfx)
 import UI.Env
 import Engine.GridUI (Click (..), gridClick, gridDragRelease)
 import Match3.View (GameView (..), gameView, goalBracket)
@@ -81,7 +81,8 @@ handleKey ref window code = do
     KeycodeEscape -> pure True
     KeycodeQ -> pure True
     KeycodeP -> False <$ keyPause ref window appGate
-    KeycodeK -> False <$ (toggleMute >> pure ())
+    KeycodeK -> False <$ (toggleSfx >> pure ())
+    KeycodeB -> False <$ (toggleBgm >> pure ())
     -- Restart works while paused (暂停重开); freshLevelUi clears pause.
     KeycodeR -> False <$ keyRestart ref window
     _
@@ -332,7 +333,10 @@ handleMouseDown :: IORef App -> Window -> MouseButtonEventData -> IO Bool
 handleMouseDown ref window me = do
   app0 <- readIORef ref
   let P (V2 mx my) = mouseButtonEventPos me
-  if appMapOpen app0
+  -- 音效 / BGM 芯片优先（与网页一致；暂停 / 回放中也可点）
+  if hitChip sfxChipRect mx my then False <$ toggleSfx
+  else if hitChip bgmChipRect mx my then False <$ toggleBgm
+  else if appMapOpen app0
     then False <$ mapClick ref window app0 mx my
     else if appPaused app0
     then pure False

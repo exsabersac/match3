@@ -24,7 +24,8 @@
 | `H` 提示、`M` 地图、`D` 每日 | 可用（`D` 换盘会重置动画） |
 | `R` 重开 | 可用；`freshLevelUi` 重置动画、弹字和总结 |
 | `P` 暂停 | 可用；冻结动画，解除暂停后继续播 |
-| `K` | 开关声音（默认开，含 BGM；偏好写在配置目录） |
+| `K` | 开关音效（默认开；偏好 `~/.config/match3/sfx`） |
+| `B` | 开关 BGM（默认开；偏好 `~/.config/match3/bgm`） |
 | `Esc` / `Q` | 退出 |
 
 过关 / 胜利 / 失败叠层在播放结束（`animBusy` 为假）后才画出，最后几轮不会被面板挡住；叠层出现后点击或 `N` / 空格 / 回车才推进。回放的时间线、等级样式与步末阶段见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)。
@@ -52,7 +53,8 @@
 | `N` / 空格 / 回车 | 过关叠层后下一关 / 失败后重试等；动画播放中＝加速（见上） |
 | `R` | 重开本关（暂停中可用） |
 | `P` | 暂停 + 完整键位说明；冻结动画；清除拖拽 |
-| `K` | 开关声音（默认开，含 BGM；偏好写在配置目录） |
+| `K` | 开关音效（默认开；偏好 `~/.config/match3/sfx`） |
+| `B` | 开关 BGM（默认开；偏好 `~/.config/match3/bgm`） |
 | `Esc` / `Q` | 退出 |
 
 ## HUD 提示
@@ -66,7 +68,7 @@
 
 - 几何降级版 HUD（无贴图时）按区块拆在 `app/UI/HudBlocks.hs`，`UI.HudPrim.drawHud` 只按固定顺序调用：`hudFrame`（底板）→ `hudLevel`（关卡号 + 各关进度点）→ `hudGoal`（目标条与数字）→ `hudGoalSwatch`（收集目标色块）→ `hudMoves`（步数条）→ `hudBoosters`（锤子 / 自由交换 / 十字次数与当前工具模式字样）→ `hudComboBadge`（连击徽章）→ `hudStatus`（右侧结局色条）。第 11 刀起各区块收视图模型（`GameView` / `GoalInfo` / `Boosters` / `PlayStatus`，见 [architecture.md § 视图模型](architecture.md#视图模型第-11-刀)），不再收 `GameState`。顺序即绘制层次；新增区块写一个 `hudXxx` 函数、在 `drawHud` 里加一行。
 - 几何版格子上的覆盖层（草 / 藤 / 巧克力 / 迷雾 / 锁链 / 冰冻 / 窗帘 / 蒸汽）在 `app/UI/Cell/PrimOverlay.hs`，每种一个函数，`primOverlay` 只分派。
-- 弹字 / 浮字 / 连击徽章的颜色与贴图名、各动画的帧数读表现表 `UI.Presentation`（见 [ui-art.md「表现表」](ui-art.md#表现表第-10-刀)）；操作触发的音效钩子（`effectSound`，内置全部无声）同在那张表里，前端不播放声音。
+- 弹字 / 浮字 / 连击徽章的颜色与贴图名、各动画的帧数读表现表 `UI.Presentation`（见 [ui-art.md「表现表」](ui-art.md#表现表第-10-刀)）；操作触发的音效钩子（`effectSound`）同在那张表里；桌面 `UI.Audio` / 网页 `audio.js` 按独立的音效与 BGM 开关播放（引擎与 `UI.Sound.playSounds` 仍不发声）。
 - 拆分与改为查表都不改变画面：与 `ac211d8` 的截图逐帧相同，窗口标题逐字相同。
 
 更完整的功能与关卡表见根 [`README.md`](../README.md)。

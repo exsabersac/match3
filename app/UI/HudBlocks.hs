@@ -18,6 +18,7 @@ module UI.HudBlocks
   , hudBoosters
   , hudComboBadge
   , hudStatus
+  , hudSound
   , drawMeter
   ) where
 
@@ -28,6 +29,7 @@ import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import Match3.View
+import UI.Audio (bgmEnabled, sfxEnabled)
 import UI.Glyph
 import UI.GoalStyle (goalPip)
 import UI.Layout
@@ -238,3 +240,15 @@ drawMeter ren x y value cap col = do
   fillRect ren (Just (Rectangle (P (V2 x y)) (V2 w 24)))
   rendererDrawColor ren $= V4 200 200 220 255
   drawRect ren (Just (Rectangle (P (V2 x y)) (V2 maxW 24)))
+
+-- | 音效 / BGM 两枚独立芯片（几何降级用拉丁 X/M；静音为 S）。
+hudSound :: Renderer -> IO ()
+hudSound ren = do
+  sfxOn <- sfxEnabled
+  bgmOn <- bgmEnabled
+  let drawOne (x, y, w, h) ch = do
+        rendererDrawColor ren $= V4 30 24 60 200
+        fillRect ren (Just (Rectangle (P (V2 x y)) (V2 w h)))
+        drawGlyph ren (x + 16) (y + 8) 3 (V4 255 224 130 255) ch
+  drawOne sfxChipRect (if sfxOn then 'X' else 'S')
+  drawOne bgmChipRect (if bgmOn then 'M' else 'S')

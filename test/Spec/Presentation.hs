@@ -274,8 +274,8 @@ draw_hud_and_prim_overlay_are_thin = do
       ovBody = filter (not . null) (body "primOverlay" ov)
       hudCalls = [w | l <- hudBody, (w : _) <- [words l], "hud" `isPrefixOf` w]
   assertBool "drawHud body found" (not (null hudBody))
-  assertBool ("drawHud is thin: " ++ show (length hudBody)) (length hudBody <= 10)
-  hudCalls @?= ["hudFrame", "hudLevel", "hudGoal", "hudBoss", "hudGoalSwatch", "hudMoves", "hudBoosters", "hudComboBadge", "hudStatus"]
+  assertBool ("drawHud is thin: " ++ show (length hudBody)) (length hudBody <= 11)
+  hudCalls @?= ["hudFrame", "hudLevel", "hudGoal", "hudBoss", "hudGoalSwatch", "hudMoves", "hudBoosters", "hudComboBadge", "hudStatus", "hudSound"]
   assertBool "drawHud draws nothing itself" (not (any (\l -> any (`isInfixOf` l) ["rendererDrawColor", "fillRect", "drawNumber"]) hudBody))
   assertBool "primOverlay body found" (not (null ovBody))
   assertBool ("primOverlay is a dispatch: " ++ show (length ovBody)) (length ovBody <= 10)

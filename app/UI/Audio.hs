@@ -1,10 +1,14 @@
 -- | 桌面音效（只在 UI 层播）。引擎不发声。
--- 素材在 assets/sfx/*.wav（单声道 16-bit）。总开关默认开，记在 ~/.config/match3/sound。
+-- 素材在 assets/sfx/*.wav（单声道 16-bit）。
+-- 音效与 BGM 各自开关，默认开；偏好分别写在 ~/.config/match3/sfx 与 ~/.config/match3/bgm。
 module UI.Audio
   ( start
   , cue
   , beginLevel
-  , toggleMute
+  , toggleSfx
+  , toggleBgm
+  , sfxEnabled
+  , bgmEnabled
   ) where
 
 import Control.Exception (SomeException, try)
@@ -17,7 +21,6 @@ import Data.Map.Strict (Map)
 import Data.Word (Word8)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
-import Foreign.C.Types (CInt)
 import SDL.Audio
 import System.Directory (createDirectoryIfMissing, doesFileExist, getXdgDirectory, XdgDirectory (..))
 import System.Environment (getExecutablePath, lookupEnv)
@@ -33,7 +36,8 @@ data Mixer = Mixer
   , mxBgm :: !(V.Vector Int16)
   , mxBgmAt :: !(IORef Int)
   , mxVoices :: !(IORef [Clip])
-  , mxOn :: !(IORef Bool)
+  , mxSfxOn :: !(IORef Bool)
+  , mxBgmOn :: !(IORef Bool)
   , mxBgmGo :: !(IORef Bool)
   , mxDev :: !(Maybe AudioDevice)
   }
@@ -45,20 +49,23 @@ mixerRef = unsafePerformIO (newIORef Nothing)
 start :: IO ()
 start = do
   clips <- loadClips
-  on <- readPref
+  sfxOn <- readPref "sfx"
+  bgmOn <- readPref "bgm"
   bgmAt <- newIORef 0
   voices <- newIORef []
-  onRef <- newIORef on
+  sfxRef <- newIORef sfxOn
+  bgmRef <- newIORef bgmOn
   bgmGo <- newIORef True
   let bgm = M.findWithDefault V.empty "bgm" clips
       oneshots = M.delete "bgm" clips
-  dev <- openDev onRef bgmGo bgmAt voices bgm oneshots
+  dev <- openDev bgmRef bgmGo bgmAt voices bgm
   writeIORef mixerRef $ Just Mixer
     { mxClips = oneshots
     , mxBgm = bgm
     , mxBgmAt = bgmAt
     , mxVoices = voices
-    , mxOn = onRef
+    , mxSfxOn = sfxRef
+    , mxBgmOn = bgmRef
     , mxBgmGo = bgmGo
     , mxDev = dev
     }
@@ -70,12 +77,12 @@ cue names = do
     Nothing -> pure ()
     Just mx -> do
       when (any (`elem` ["win", "lose"]) names) $ writeIORef (mxBgmGo mx) False
-      on <- readIORef (mxOn mx)
+      on <- readIORef (mxSfxOn mx)
       when on $ do
         let vs = [Clip c 0 | n <- names, Just c <- [M.lookup n (mxClips mx)]]
         unless (null vs) $ modifyIORef' (mxVoices mx) (take 8 . (++ vs))
 
--- | 进关：重新循环 BGM（缺文件时无声，不抛）。
+-- | 进关：重新循环 BGM（缺文件时无声，不抛）。是否真正出声看 BGM 开关。
 beginLevel :: IO ()
 beginLevel = do
   m <- readIORef mixerRef
@@ -85,26 +92,54 @@ beginLevel = do
       writeIORef (mxBgmGo mx) True
       writeIORef (mxBgmAt mx) 0
 
-toggleMute :: IO Bool
-toggleMute = do
+toggleSfx :: IO Bool
+toggleSfx = do
   m <- readIORef mixerRef
   case m of
     Nothing -> pure True
     Just mx -> do
-      on <- atomicModifyIORef' (mxOn mx) (\b -> let b' = not b in (b', b'))
+      on <- atomicModifyIORef' (mxSfxOn mx) (\b -> let b' = not b in (b', b'))
       unless on $ writeIORef (mxVoices mx) []
-      writePref on
+      writePref "sfx" on
       pure on
 
-openDev :: IORef Bool -> IORef Bool -> IORef Int -> IORef [Clip] -> V.Vector Int16 -> Map String (V.Vector Int16) -> IO (Maybe AudioDevice)
-openDev onRef bgmGo bgmAt voices bgm _ones = do
+toggleBgm :: IO Bool
+toggleBgm = do
+  m <- readIORef mixerRef
+  case m of
+    Nothing -> pure True
+    Just mx -> do
+      on <- atomicModifyIORef' (mxBgmOn mx) (\b -> let b' = not b in (b', b'))
+      writePref "bgm" on
+      -- 开回 BGM：本关尚未胜负则从头再循环；已胜负（mxBgmGo 已关）保持停。
+      when on $ do
+        go <- readIORef (mxBgmGo mx)
+        when go $ writeIORef (mxBgmAt mx) 0
+      pure on
+
+sfxEnabled :: IO Bool
+sfxEnabled = do
+  m <- readIORef mixerRef
+  case m of
+    Nothing -> pure True
+    Just mx -> readIORef (mxSfxOn mx)
+
+bgmEnabled :: IO Bool
+bgmEnabled = do
+  m <- readIORef mixerRef
+  case m of
+    Nothing -> pure True
+    Just mx -> readIORef (mxBgmOn mx)
+
+openDev :: IORef Bool -> IORef Bool -> IORef Int -> IORef [Clip] -> V.Vector Int16 -> IO (Maybe AudioDevice)
+openDev bgmOn bgmGo bgmAt voices bgm = do
   r <- try (openAudioDevice OpenDeviceSpec
     { openDeviceFreq = Desire 22050
     , openDeviceFormat = Mandate Signed16BitNativeAudio
     , openDeviceChannels = Desire Mono
     , openDeviceSamples = 1024
     -- 格式已 Mandate 为 16-bit，回调里的样本向量就是 Int16。
-    , openDeviceCallback = \_ vec -> fill onRef bgmGo bgmAt voices bgm (unsafeCoerce vec)
+    , openDeviceCallback = \_ vec -> fill bgmOn bgmGo bgmAt voices bgm (unsafeCoerce vec)
     , openDeviceUsage = ForPlayback
     , openDeviceName = Nothing
     }) :: IO (Either SomeException (AudioDevice, AudioSpec))
@@ -117,26 +152,24 @@ openDev onRef bgmGo bgmAt voices bgm _ones = do
       pure (Just dev)
 
 fill :: IORef Bool -> IORef Bool -> IORef Int -> IORef [Clip] -> V.Vector Int16 -> VM.IOVector Int16 -> IO ()
-fill onRef bgmGo bgmAt voices bgm vec = do
-  on <- readIORef onRef
+fill bgmOn bgmGo bgmAt voices bgm vec = do
   let n = VM.length vec
-  if not on
-    then VM.set vec 0
-    else do
-      pos0 <- readIORef bgmAt
-      vs0 <- readIORef voices
-      go <- readIORef bgmGo
-      let blen = V.length bgm
-          step i pos vs
-            | i >= n = pure (pos, vs)
-            | otherwise = do
-                let sampleB = if not go || blen == 0 then 0 else fromIntegral (V.unsafeIndex bgm (pos `mod` blen))
-                    (sampleS, vs') = foldVoices vs
-                VM.unsafeWrite vec i (clamp (sampleB + sampleS))
-                step (i + 1) (pos + 1) vs'
-      (pos1, vs1) <- step 0 pos0 vs0
-      writeIORef bgmAt pos1
-      writeIORef voices vs1
+  pos0 <- readIORef bgmAt
+  vs0 <- readIORef voices
+  go <- readIORef bgmGo
+  onB <- readIORef bgmOn
+  let blen = V.length bgm
+      playB = onB && go && blen > 0
+      step i pos vs
+        | i >= n = pure (pos, vs)
+        | otherwise = do
+            let sampleB = if not playB then 0 else fromIntegral (V.unsafeIndex bgm (pos `mod` blen))
+                (sampleS, vs') = foldVoices vs
+            VM.unsafeWrite vec i (clamp (sampleB + sampleS))
+            step (i + 1) (pos + 1) vs'
+  (pos1, vs1) <- step 0 pos0 vs0
+  writeIORef bgmAt pos1
+  writeIORef voices vs1
 
 foldVoices :: [Clip] -> (Int, [Clip])
 foldVoices [] = (0, [])
@@ -192,22 +225,29 @@ assetDirs = do
         Right p -> take 4 $ iterate takeDirectory (takeDirectory p)
   pure $ maybe [] pure env ++ ["assets"] ++ map (</> "assets") exeDirs
 
-prefPath :: IO FilePath
-prefPath = do
+prefPath :: String -> IO FilePath
+prefPath name = do
   dir <- getXdgDirectory XdgConfig "match3"
   createDirectoryIfMissing True dir
-  pure (dir </> "sound")
+  pure (dir </> name)
 
-readPref :: IO Bool
-readPref = do
-  p <- prefPath
+-- | 读偏好：缺文件 = 开。旧版总开关 ~/.config/match3/sound 在新文件缺失时借用一次。
+readPref :: String -> IO Bool
+readPref name = do
+  p <- prefPath name
   ok <- doesFileExist p
-  if not ok then pure True
+  if ok then readOnOff p
   else do
-    t <- readFile p
-    pure (t /= "off\n" && t /= "off")
+    legacy <- prefPath "sound"
+    legOk <- doesFileExist legacy
+    if legOk then readOnOff legacy else pure True
 
-writePref :: Bool -> IO ()
-writePref on = do
-  p <- prefPath
+readOnOff :: FilePath -> IO Bool
+readOnOff p = do
+  t <- readFile p
+  pure (t /= "off\n" && t /= "off")
+
+writePref :: String -> Bool -> IO ()
+writePref name on = do
+  p <- prefPath name
   writeFile p (if on then "on\n" else "off\n")

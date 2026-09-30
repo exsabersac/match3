@@ -15,6 +15,7 @@ import qualified Spec.Builtin.Layer
 import qualified Spec.Builtin.Level
 import qualified Spec.Boosters
 import qualified Spec.GoalsLevels
+import qualified Spec.Levels
 import qualified Spec.Element
 import qualified Spec.Extension
 import qualified Spec.Branches
@@ -26,6 +27,9 @@ import qualified Spec.ReplayUndo
 import qualified Spec.Golden
 import qualified Spec.Properties
 import qualified Spec.SourceScan
+import qualified Spec.Caps
+import qualified Spec.Presentation
+import qualified Spec.View
 
 main :: IO ()
 main = defaultMain tests
@@ -46,6 +50,7 @@ tests =
         , Spec.Builtin.Level.tests
         , Spec.Boosters.tests
         , Spec.GoalsLevels.tests
+        , Spec.Levels.tests
         , Spec.Element.tests
         , Spec.Extension.tests
         , Spec.Branches.tests
@@ -56,6 +61,9 @@ tests =
         , Spec.ReplayUndo.tests
         , Spec.Golden.tests
         , Spec.Properties.tests
+        , Spec.Caps.tests
+        , Spec.Presentation.tests
+        , Spec.View.tests
         , Spec.SourceScan.tests
         ]
     )

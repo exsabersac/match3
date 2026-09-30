@@ -19,7 +19,7 @@
 倒计时 cascadeCountdowns（tick；归零则 3×3 种子再连锁）
     │
     ▼
-传送带 beltMoves → applyBeltMoves → cascadeAfterBelt（有匹配则连锁；无匹配仍 settle 收底行饼干）
+传送带 beltMoves → applyBeltMoves → cascadeAfterWith AfterBelt（有匹配则连锁；无匹配仍 settle 收底行饼干）
     │
     ▼
 蔓延 spreadVines → spreadChoco → spreadSteam
@@ -31,7 +31,7 @@
 若蜗牛后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
     │
     ▼
-步末补结算 cascadeAfterEndWith（段 2c：挖 erHoles 空洞 → 边缘收集 + 补子 → 成消再连锁；内置元素下恒为空操作）
+步末补结算 cascadeAfterWith (AfterEnd 空洞)（段 2c：挖 erHoles 空洞 → 边缘收集 + 补子 → 成消再连锁；内置元素下恒为空操作）
     │
     ▼
 汇总分数/收集/地毯/精灵+2步/−1步 → decideOutcome → 非终局则 ensurePlayable（无可走步时自动洗牌）
@@ -44,7 +44,7 @@
 1. 已有 `gsOver` → 原样返回该结局。
 2. 坐标越界或不相邻 → `InvalidSwap`。
 3. `swapBlockedWith reg`（注册表的 `blocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
-4. `swapCells` 后：若没有成对交换规则成立（段 4：注册表的 `swapRule`，按 `srOrder`：彩虹取色 10 → 特殊合成 20；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。
+4. `swapCells` 后：若没有成对交换规则成立（段 4：注册表的 `swapRule`，按 `srOrder`：彩虹取色 10 → 特殊合成 20（第 8 刀起 = 注册表组合表 `comboRules` 并成的一条，内置表：炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线，两个方向都试、表里没有的组合不成立）；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。
 
 2–4 返回的状态盘面 / 分数 / 步数不变，但会经 `clearMoveFx` 把 `gsCombo`、`gsLastCleared` 清零（这两个字段只描述最近一次**真正结算**的一步）。道具被拒（锤免疫、次数用完、自由交换无匹配）、撤销（`Engine.History` 的 `Undo`，经 `match3History.hpRestore`）、`shuffleGame` 同样清零。
 
@@ -56,10 +56,10 @@
 
 每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
-1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊。
-2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级元素：元素类迁移后为 `Settling` 消息，内置回复者调 `portalTeleport`）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
-3. `refill` 补随机普通宝石。
-4. 飞碟吸收（段 4：注册表关卡级元素回复 `Refilled` 消息，内置 = `stepUfos`；去掉 `ufo` 即不吸收）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
+1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊（第 8 刀起按注册表的有序形状规则表 `shapeRules`：每条连线取第一条认领它的规则；内置 = 长度 ≥5 彩虹 → 横 4 横消 → 竖 4 竖消，放在交换落点或连线可清格的中间，横线在前、竖线在后，后写的覆盖先写的）。
+2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级元素：元素类迁移后为 `Settling` 消息，内置回复者调 `portalTeleport`；第 7 刀起 Board 层经钩子 `onSettle` 调用）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`；第 7 刀起是关卡级元素 `GroundLayer`，按轮发 `GroundHit`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
+3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则注册表的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。
+4. 飞碟吸收（段 4：注册表关卡级元素回复 `Refilled` 消息，内置 = `stepUfos`；去掉 `ufo` 即不吸收；第 7 刀起经钩子 `onAbsorb`，飞碟位置在 `UfoLevel` 的值里）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 
 波次分：`scoreForWave wave n`。
 
@@ -67,19 +67,30 @@
 
 彩虹 / 特殊合成 / 倒计时爆炸 / 道具：先 `clearFromSeedsDetailed`（对种子做特殊扩展与邻障处理），再 UFO，再转入普通匹配连锁（波次编号衔接）。
 
+### 步末表（第 7 刀 7b：`Match3.Game.EndPhase`）
+
+主连锁之后的第 3–5 节不再是手写流程，而是一张按顺序执行的表（`runEndTable reg 表 主连锁`；`Game.Resolve.endTableFor` 按操作种类选表），每行 = 名字 + 它跑的元素步末规则阶段（`EndPhase`）+ 执行函数：
+
+| 表 | 行（按顺序） |
+|------|------|
+| 玩家交换 `swapEndTable` | `tick`（`PhaseTick`，新一段连锁）→ `belt`（关卡级元素 `EndTicked` 节拍，新一段连锁；没人回复时是空段）→ `spread`（`PhaseSpread`）→ `move`（`PhaseMove`，避让格 / 墙问关卡级元素）→ `settle`（步末补结算，新一段连锁）→ `vacate`（地毯腾空比较用终盘） |
+| 道具 `boosterEndTable` | `vacate`（腾空比较用蔓延前的盘面）→ `spread` → `settle` |
+
+顺序、各段连锁、步末记录、随机数消费都与第 7 刀前逐字相同（性质 `qc_end_table_matches_legacy` 对照留在测试里的旧 `swapEnd` / `boosterEnd` 副本，`br_end_phase_table_order` 锁定表的内容与「按表执行」）。
+
 ## 3. 倒计时（`cascadeCountdowns`）
 
 1. `tickCountdowns`：所有倒计时 −1。
 2. 若有归零：`explodeSeedsFor` → 种子连锁（仍带 UFO + 传送门）。
 3. 匹配或特殊清掉倒计时可在清除阶段解除（不走到爆炸）。
 
-交换结算的步末（`Game.Resolve.swapEnd`）调 `cascadeCountdownsTracedWith`：倒计时规则只跑一遍，同时给出连锁和步末记录（`EndStep`）；第 2 刀之前是先跑一遍取连锁、再为记录重跑一遍 `PhaseTick`，结果相同。
+交换结算的步末（第 7 刀 7b 起是 EndPhase 表 `Game.EndPhase.swapEndTable` 的 `tick` 行）调 `cascadeCountdownsTracedWith`：倒计时规则只跑一遍，同时给出连锁和步末记录（`EndStep`）；第 2 刀之前是先跑一遍取连锁、再为记录重跑一遍 `PhaseTick`，结果相同。
 
 **注意**：`useFreeSwap` 不走 tick（不耗步、不推进倒计时）；普通 `trySwap` 成功后才 tick。
 
-## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterBelt`）
+## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterWith AfterBelt`）
 
-- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EndBeltShift`）与重放（`applyEndEffect`）共用这一份。
+- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EvBelt` 步末效果）与重放（`applyEndEffect`）共用这一份。
 - 移位后有匹配 → 全连锁。
 - **无匹配**仍 `settleBoardPortals`：皮带把饼干送到底行时也要收集；settle 后若出现匹配再连锁。
 
@@ -98,7 +109,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 ## 6. 结算
 
-- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。
+- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`，按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；第 5 刀起各色清除数也在里面（`CountColor 色`，由各段的 `ctCounts` 带来），`gsColorBag` / `gsCollected` 改为派生读数，目标进度 / 达成由目标数据（`Match3.Goal`）统一从 `gsScore` + `gsCounts` 算，结算不再按目标种类分支。
 - 步数：`gsMoves - 1 + 2 * spiritHit`。
 - `decideOutcome`：目标满足 → 每日则 `Won`，否则战役 `LevelClear` 或终章 `Won`；步数用尽 → `Lost`；否则 `MoveApplied`。
 - `MoveApplied` 时 `ensurePlayable`：无合法手则洗牌并 `restoreDecor`（保留障碍/特殊/叠层等装饰）。
@@ -111,7 +122,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 | `useFreeSwap` | 否 | 否（交换后连锁，再仅蔓延） | 不移位 / 不爬 |
 | `useCrossClear` | 否 | 否（同锤子：种子连锁后仅蔓延） | 不移位 / 不爬 |
 
-三者成功（`MoveApplied`）后同样 `ensurePlayable`。回放脚本里道具的 `mtEnd` 只会出现 `EndSpread`（`trace_end_steps_boosters_replay` 锁定）。
+三者成功（`MoveApplied`）后同样 `ensurePlayable`。回放脚本里道具的 `mtEnd` 只会出现蔓延（`EvSpread`，`trace_end_steps_boosters_replay` 锁定）。
 
 校验与起手见 `src/Match3/Game/Boosters.hs` 各 `resolve*`，结算与交换共用 `Match3.Game.Resolve.resolveMove`（`MoveKind` 决定步末与扣次）；测试锁定「FreeSwap 不 tick」「锤免疫不扣次」等不变量。
 
@@ -123,4 +134,4 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 **逐轮回放用的纯函数**：`traceSwap`（`Match3.Game.Move`）/ `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Boosters`）与对应的结算 API 是同一次 `resolveMove` 计算的两个投影；连锁层同理，`Match3.Board.Cascade` 的记录版 `cascade*` 同时产出计数（`CascadeTally`）与每一轮（`CascadeWave`），调用方直接读 `CascadeRun` 的字段（第三刀删掉了旧的元组 API `runCascade*` / `traceCascade*`）。`MoveTrace` 含每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮）；`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器，没有自动洗牌时就等于结算结果的 `gsBoard` / `gsGen`，洗牌时 `mtShuffle` 记下洗牌后的盘面。`trace_*` 系列测试保留作回归，现在天然成立。
 
-`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EndCountdownTick`）→ 皮带移位（`EndBeltShift`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EndSpread`，带来源格）→ 蜗牛爬行（`EndSnail`，每只的起点、终点、朝向和被推的格子）。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。
+`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EvTick` / `countdown`）→ 皮带移位（`EvBelt` / `belt`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EvSpread` / `vine` · `choco` · `steam`，带来源格）→ 蜗牛爬行（`EvMove` / `snail`，每只的起点、终点、写入的新朝向蜗牛和被推的格子）。第 7 刀 7b 起每个效果都是同一种通用形状 `EndEffect { endEffectKind, endEffectElement, endEffectItems :: [EndItem] }`（`EndItem { eiFrom, eiTo, eiCell, eiBack }`：目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它），原来的四个构造器、`SpreadKind`、`SnailMove` 已删；`Show` 手写成原构造器的文本，金标准与快照散列不变。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。

@@ -6,9 +6,9 @@ module Spec.Cascade
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds)
-import Data.Maybe (fromMaybe, isNothing)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctColors, ctCells, ctScore))
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, noHooks)
+import Data.Maybe (isNothing)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctCounts, ctCells, ctScore))
 import Match3.Core
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -35,7 +35,7 @@ cascade_until_stable :: Assertion
 cascade_until_stable = do
   let g = mkStdGen 1
       (b0, g1) = randomBoard g
-      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCells = cleared}, crGen = g2} = cascadeMatches Nothing [] [] g1 b0
+      CascadeRun {crBoard = b1, crTally = CascadeTally {ctCells = cleared}, crGen = g2} = cascadeMatches Nothing noHooks g1 b0
   assertBool "stable" (not (hasAnyMatch b1))
   assertBool "stepCascade Nothing" (isNothing (stepCascade g2 b1))
   if hasAnyMatch b0
@@ -52,11 +52,11 @@ combo_wave_scoring = do
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C1, C2, C3, C4, C2, C3]
       b = boardFromRows $ take 3 b0 ++ [row3] ++ drop 4 b0
-      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = combo, ctColors = tallies}} = cascadeMatches Nothing [] [] (mkStdGen 3) b
+      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = combo, ctCounts = tallies}} = cascadeMatches Nothing noHooks (mkStdGen 3) b
   assertBool "cleared some" (cells >= 3)
   assertBool "combo >= 1" (combo >= 1)
   assertEqual "score matches waves aggregate lower bound" True (scored >= scoreForWave 1 3)
-  let c1n = fromMaybe 0 (lookup C1 tallies)
+  let c1n = countOf (CountColor C1) tallies
   assertBool "tallied some C1" (c1n >= 3)
 
 -- | Successful match without TimeSpirit deducts exactly 1 move.
@@ -74,15 +74,13 @@ inv_move_costs_one_without_spirit = do
           (3, 3)
           (mkGem C1)
       gs0 =
-        (newGame defaultConfig 7)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 7)
           { gsBoard = board0
           , gsMoves = 12
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -131,15 +129,13 @@ inv_move_end_order_steam_before_snail = do
   assertBool "steam-first: snail crawled onto (4,3)" (isSnail (getCell steamFirst (4, 3)))
   assertBool "steam-first: steamed gem pushed to (4,4)" (hasSteam (getCell steamFirst (4, 4)))
   let gs0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board0
           , gsMoves = 20
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -185,15 +181,13 @@ inv_move_end_order_belt_before_steam = do
       || hasSteam (getCell beltThenSteam (5, 2))
       || hasSteam (getCell beltThenSteam (7, 2))
   let gs0 =
-        (newGame defaultConfig 5)
+        (setBelts [belt] . setUfos [] $ (newGame defaultConfig 5)
           { gsBoard = board0
-          , gsBelts = [belt]
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (1, 2) (1, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -222,7 +216,7 @@ cascade_terminates_bounded = do
     Nothing -> assertFailure "need a matching swap"
     Just (p1, p2) -> do
       let swapped = swapCells (gsBoard gs0) p1 p2
-          CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = cells, ctMaxWave = maxW}, crGen = gCas} = cascadeMatches (Just p2) [] [] (gsGen gs0) swapped
+          CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = cells, ctMaxWave = maxW}, crGen = gCas} = cascadeMatches (Just p2) noHooks (gsGen gs0) swapped
       assertBool "cascade waves within bound" (maxW <= bound)
       assertBool "cascade reached stable" (not (hasAnyMatch bCas))
       assertBool "stepCascade exhausted" (isNothing (stepCascade gCas bCas))
@@ -243,7 +237,7 @@ cascade_terminates_bounded = do
         let g = mkStdGen seed
             (b0, g1) = randomBoard g
             (b1, maxW, g2) =
-              let CascadeRun {crBoard = b', crTally = CascadeTally {ctMaxWave = waves}, crGen = g'} = cascadeMatches Nothing [] [] g1 b0
+              let CascadeRun {crBoard = b', crTally = CascadeTally {ctMaxWave = waves}, crGen = g'} = cascadeMatches Nothing noHooks g1 b0
               in (b', waves, g')
         assertBool ("waves bounded seed " ++ show seed) (maxW <= bound)
         assertBool ("stable seed " ++ show seed) (not (hasAnyMatch b1))
@@ -313,7 +307,7 @@ combo_seed_continues_wave_score = do
           (7, 7)
           (mkGem C2)
       seeds = [(0, 0), (0, 1), (0, 2)]
-      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 0) board
+      CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 0) board
   assertBool "cleared both seed + follow-up" (cells >= 6)
   assertBool ("maxW >= 2, got " ++ show maxW) (maxW >= 2)
   -- With wave multipliers, score must beat flat 10/cell (all waves at 1x).

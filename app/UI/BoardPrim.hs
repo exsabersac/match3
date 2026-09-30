@@ -5,7 +5,7 @@
 --
 -- 单格绘制 drawGemAt 经 UI.CellTable 分派到 UI.Cell.Prim（按元素拆开的几何渲染器）。
 --
--- 依赖：UI.CellTable、UI.Types、UI.Layout、Match3.Core、SDL。
+-- 依赖：UI.CellTable、Match3.View（地毯 / 地面层 / 关卡级元素读数）、Engine.GridUI（高亮）、UI.Types、UI.Layout、Match3.Core、SDL。
 -- 同步：新增棋盘元素时 UI.Cell.Prim 与 UI.Cell.Art 各写一个函数并在 UI.CellTable 登记，保证缺图时仍可玩。
 module UI.BoardPrim
   ( drawParticles
@@ -20,11 +20,13 @@ module UI.BoardPrim
 
 import Control.Monad (unless, when)
 import Data.Word (Word8)
+import Engine.GridUI (isFlashing, isHinted, isSelected)
 import Foreign.C.Types (CInt)
 import Match3.Core
+import Match3.View (BoardView (..), CarpetMark (..), boardView, carpetAt, groundAtView)
 import SDL hiding (Normal)
 import UI.CellTable (CellRenderer (..), cellRenderer)
-import UI.Ground (drawGroundPrimAt, groundAt)
+import UI.Ground (drawGroundPrimAt)
 import UI.Layout
 import UI.Types
 
@@ -54,9 +56,9 @@ drawGemAt ren x y cell flashing = crPrim (cellRenderer cell) ren x y cell flashi
 -- | 原有矩形版棋盘绘制（无贴图时的回退）。
 drawStaticPrim :: Renderer -> App -> Board -> CInt -> IO ()
 drawStaticPrim ren app board yOff = do
-  let sel = appSel app
-      hint = gsHint (appGame app)
-      flashSet = map fst (appFlash app)
+  -- 第 11 刀：高亮读 Engine.GridUI.Highlight，地毯 / 地面层读视图模型 Match3.View.BoardView
+  let hl = appHighlight app
+      bv = boardView (appGame app)
       pulse = appPulse app
   mapM_
     ( \(r, c) -> do
@@ -64,13 +66,11 @@ drawStaticPrim ren app board yOff = do
             cell = getCell board pos
             (x0, y0) = cellOrigin pos
             y = y0 + yOff
-            flashing = pos `elem` flashSet
+            flashing = isFlashing hl pos
             -- Soft checkerboard under gems; carpet weave if open / covered target
-            carpetOpen = pos `elem` gsCarpetOpen (appGame app)
-            carpetCovered =
-              pos `elem` levelCarpets (gsLevel (appGame app))
-                && not carpetOpen
-                && not (null (levelCarpets (gsLevel (appGame app))))
+            carpet = carpetAt bv pos
+            carpetOpen = carpet == CarpetOpen
+            carpetCovered = carpet == CarpetCovered
             (br, bg, bb) =
               if carpetOpen
                 then (90, 40, 80)  -- uncovered target (magenta base)
@@ -96,8 +96,8 @@ drawStaticPrim ren app board yOff = do
             drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
         drawGemAt ren x0 y cell flashing
         -- 地面层（段 5：双层果冻）：几何版画在棋子之上（框），否则会被整格的色块盖住
-        mapM_ (drawGroundPrimAt ren x0 y) (groundAt (appGame app) pos)
-        when (sel == Just pos) $ do
+        mapM_ (drawGroundPrimAt ren x0 y) (groundAtView bv pos)
+        when (isSelected hl pos) $ do
           let bright = fromIntegral (180 + (pulse `mod` 40) * 2) :: Word8
               (sr, sg, sb) = case appTool app of
                 ToolHammer -> (255, 160, 80)
@@ -110,24 +110,21 @@ drawStaticPrim ren app board yOff = do
           rendererDrawColor ren $= V4 sr sg sb 255
           drawRect ren (Just (Rectangle (P (V2 (x0 + 1) (y + 1))) (V2 (cellPx - 2) (cellPx - 2))))
           drawRect ren (Just (Rectangle (P (V2 (x0 + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
-        case hint of
-          Just (h1, h2)
-            | pos == h1 || pos == h2 -> do
-                rendererDrawColor ren $= V4 255 255 100 255
-                drawRect ren (Just (Rectangle (P (V2 x0 y)) (V2 cellPx cellPx)))
-          _ -> pure ()
+        when (isHinted hl pos) $ do
+          rendererDrawColor ren $= V4 255 255 100 255
+          drawRect ren (Just (Rectangle (P (V2 x0 y)) (V2 cellPx cellPx)))
     )
-    [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+    allCells
   -- Conveyor belt path markers (teal chevrons)
-  mapM_ (drawBelt ren yOff) (gsBelts (appGame app))
+  mapM_ (drawBelt ren yOff) (bvBelts bv)
   -- Portal pair markers (violet rings)
-  mapM_ (drawPortal ren yOff) (gsPortals (appGame app))
+  mapM_ (drawPortal ren yOff) (bvPortals bv)
   -- Vine / chocolate spread preview pulses（只在静止时画，理由同贴图版）
   unless (animBusy app) $ do
-    drawVineSpreadHints ren yOff pulse (gsBoard (appGame app))
-    drawChocoSpreadHints ren yOff pulse (gsBoard (appGame app))
+    drawVineSpreadHints ren yOff pulse (bvBoard bv)
+    drawChocoSpreadHints ren yOff pulse (bvBoard bv)
   -- UFO overlays
-  mapM_ (drawUfo ren yOff pulse) (gsUfos (appGame app))
+  mapM_ (drawUfo ren yOff pulse) (bvUfos bv)
 
 -- | Pulse outline on cells a vine would spread onto next move.
 drawVineSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()

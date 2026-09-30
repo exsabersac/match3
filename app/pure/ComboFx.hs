@@ -6,6 +6,9 @@
 -- cascadeStages（每个阶段多长、播完去哪、进入时触发什么）；回放器是 Player Cascade。
 -- 波次级界面（高亮 / 消失 / 粒子 / 得分浮字）读 WaveView 里的效果事件（EvClear 格、EvScore 分），
 -- 不再读 CascadeWave 的 cwCleared / cwScore；底图快照（cwBefore / cwHoles / cwAfter）仍取自波次。
+--
+-- 第 10 刀：本模块移到 app/pure/（纯前端模块，桌面 / 测试 / 网页共用）；帧数（高亮、得分浮字、连击弹字、
+-- 各步末段）、步末段种类与连击等级样式都来自表现表 UI.Presentation（StageKind / ComboStyle 在那里定义，这里再导出）。
 module ComboFx
   ( -- * 时间线（帧；主循环固定 60 fps 步长，1 帧 ≈ 16.7 ms）
     waveFlashFrames
@@ -18,7 +21,6 @@ module ComboFx
   , comboSummaryFrames
   , shakeFrames
   , endStageBase
-  , endStageTable
   , stageKindFor
   , endBudgetFrames
     -- * 逐轮回放阶段机
@@ -36,7 +38,7 @@ module ComboFx
   , waveViews
   , wvCleared
   , wvScore
-    -- * 步末效果阶段
+    -- * 步末效果阶段（StageKind 第 10 刀起定义在 UI.Presentation，这里再导出）
   , StageKind (..)
   , EndStage (..)
   , stageMoves
@@ -44,7 +46,7 @@ module ComboFx
   , fallTable
   , fallAt
   , holeAt
-    -- * 连击等级样式
+    -- * 连击等级样式（第 10 刀起定义在 UI.Presentation，这里再导出）
   , ComboStyle (..)
   , comboStyle
   , styleRGB
@@ -64,18 +66,19 @@ import Match3.Board.Grid (atM)
 import Data.List (transpose)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
-import Data.Word (Word8)
 import Match3.Core
-import Match3.Element.Event (Event (..), EventKind (..), endEffectKind, endEffectPairs)
+import Data.Word (Word8)
+import Match3.Element.Event (Event (..), EventKind (..))
 import Engine.Playback (Player (..), Stages (..), Tick (..), playerProgress, stepPlayer)
+import UI.Presentation (ComboStyle (..), Presentation (..), StageKind (..), comboStyle, presentationFor, stageFrames, stageKindOf, styleRGB)
 
 --------------------------------------------------------------------------------
 -- 时间线
 --------------------------------------------------------------------------------
 
--- | 被消格高亮闪烁停留（≈ 200 ms）：玩家在这一段看清「这一轮消的是哪些格」。
+-- | 被消格高亮闪烁停留（≈ 200 ms）：玩家在这一段看清「这一轮消的是哪些格」。帧数取表现表 EvClear 行。
 waveFlashFrames :: Int
-waveFlashFrames = 12
+waveFlashFrames = prFrames (presentationFor EvClear)
 
 -- | 被消格缩小消失（≈ 100 ms），同时迸出粒子、弹出本轮得分。
 wavePopFrames :: Int
@@ -93,13 +96,13 @@ fallFramesFor maxDrop = max 8 (min 14 (6 + maxDrop))
 fastStep :: Int
 fastStep = 3
 
--- | 「连击 xN」弹字寿命（≈ 0.9 s，放大弹出 → 停留 → 淡出）。
+-- | 「连击 xN」弹字寿命（≈ 0.9 s，放大弹出 → 停留 → 淡出）：表现表 EvCombo 行。
 comboPopLife :: Int
-comboPopLife = 54
+comboPopLife = prFrames (presentationFor EvCombo)
 
--- | 本轮得分浮字寿命（≈ 0.8 s）。
+-- | 本轮得分浮字寿命（≈ 0.8 s）：表现表 EvScore 行。
 scorePopLife :: Int
-scorePopLife = 48
+scorePopLife = prFrames (presentationFor EvScore)
 
 -- | 连锁结束后 HUD「N 连击！」总结的显示时长（≈ 1.6 s）。
 comboSummaryFrames :: Int
@@ -109,27 +112,13 @@ comboSummaryFrames = 96
 shakeFrames :: Int
 shakeFrames = 10
 
--- | 步末播放表：规则层的事件类型（Match3.Element.Event.EventKind）→ (表现段种类, 基础帧数)。
--- 1 帧 ≈ 16.7 ms：倒计时减一 10（≈ 170 ms）、皮带移位 14（≈ 230 ms）、蔓延 18（≈ 300 ms，藤 / 巧 / 蒸汽
--- 同时长出）、会走的元素（蜗牛）18（≈ 300 ms）、自动洗牌 22（≈ 370 ms）。新增步末事件只需在这里加一行。
-endStageTable :: [(EventKind, (StageKind, Int))]
-endStageTable =
-  [ (EvTick, (StTick, 10))
-  , (EvBelt, (StBelt, 14))
-  , (EvSpread, (StSpread, 18))
-  , (EvMove, (StSnail, 18))
-  , (EvShuffle, (StShuffle, 22))
-  ]
-
--- | 步末阶段的基础帧数（查 endStageTable）。
+-- | 步末阶段的基础帧数：查表现表（UI.Presentation.presentationTable）里这个段的那一行。
 endStageBase :: StageKind -> Int
-endStageBase k = case [n | (_, (k', n)) <- endStageTable, k' == k] of
-  n : _ -> n
-  [] -> 18
+endStageBase = stageFrames
 
--- | 事件类型对应的表现段种类（查 endStageTable）。
+-- | 事件类型对应的表现段种类（查表现表；不是步末表现的种类按蔓延段播放）。新增步末事件只需在表现表里加一行。
 stageKindFor :: EventKind -> StageKind
-stageKindFor ev = maybe StSpread fst (lookup ev endStageTable)
+stageKindFor = stageKindOf
 
 -- | 同一时刻连续发生的步末阶段（不含自动洗牌）合计不超过 36 帧（≈ 0.6 s），超出时按比例压缩，
 -- 每段至少 8 帧，保证仍能看清。
@@ -143,10 +132,6 @@ endBudgetFrames = 36
 -- | 一轮的四个阶段；PhStart 只是「尚未进入第一轮」的占位（长度 0）。
 -- PhEnd：步末效果阶段（倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌），当前段是 cStages 的 head。
 data WavePhase = PhStart | PhFlash | PhPop | PhFall | PhRest | PhEnd
-  deriving (Eq, Show)
-
--- | 步末阶段的种类（同一时刻连续的藤 / 巧 / 蒸汽合并为一个 StSpread 同时播放）。
-data StageKind = StTick | StBelt | StSpread | StSnail | StShuffle
   deriving (Eq, Show)
 
 -- | 一段步末动画：从 stBefore 播到 stAfter。
@@ -391,50 +376,6 @@ fallAt table (r, c) = case drop r table of
 -- | 本轮消除并放下新特殊块之后、下落之前某格的内容（Nothing = 空洞；越界也按空洞）。
 holeAt :: CascadeWave -> Pos -> Maybe Cell
 holeAt w = atM (cwHoles w)
-
---------------------------------------------------------------------------------
--- 连击等级样式
---------------------------------------------------------------------------------
-
--- | 等级越高：字越大、颜色越暖越亮、震屏略大（克制：最多 5 px）。
-data ComboStyle = ComboStyle
-  { csRGB     :: (Word8, Word8, Word8) -- ^ 主色
-  , csHeight  :: Int                   -- ^ 「连击」字高（逻辑像素，弹出放大前）
-  , csShake   :: Int                   -- ^ 震屏振幅（逻辑像素）
-  , csRainbow :: Bool                  -- ^ x5+：彩色流转
-  }
-
-comboStyle :: Int -> ComboStyle
-comboStyle k
-  | k <= 2 = ComboStyle (255, 238, 150) 30 2 False -- x2 白黄
-  | k == 3 = ComboStyle (255, 164, 52) 36 3 False  -- x3 橙
-  | k == 4 = ComboStyle (255, 76, 64) 42 4 False   -- x4 红
-  | otherwise = ComboStyle (214, 120, 255) 48 5 True -- x5+ 紫 / 彩
-
--- | 当前帧颜色：x5+ 在紫色基础上做色相流转（彩虹感），其它等级固定。
-styleRGB :: ComboStyle -> Int -> (Word8, Word8, Word8)
-styleRGB st pulse
-  | not (csRainbow st) = csRGB st
-  | otherwise =
-      let h = fromIntegral ((pulse * 9) `mod` 360) :: Double
-          (r, g, b) = hsv h 0.55 1.0
-      in (r, g, b)
-
-hsv :: Double -> Double -> Double -> (Word8, Word8, Word8)
-hsv h s v =
-  let c = v * s
-      hp = h / 60
-      x = c * (1 - abs ((hp - 2 * fromIntegral (floor (hp / 2) :: Int)) - 1))
-      (r1, g1, b1)
-        | hp < 1 = (c, x, 0)
-        | hp < 2 = (x, c, 0)
-        | hp < 3 = (0, c, x)
-        | hp < 4 = (0, x, c)
-        | hp < 5 = (x, 0, c)
-        | otherwise = (c, 0, x)
-      m = v - c
-      to8 u = fromIntegral (max 0 (min 255 (round ((u + m) * 255) :: Int)))
-  in (to8 r1, to8 g1, to8 b1)
 
 --------------------------------------------------------------------------------
 -- 浮字

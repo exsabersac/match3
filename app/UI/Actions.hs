@@ -3,7 +3,7 @@
 
 -- | 界面动作（IO）：刷新窗口标题、关卡重置、走步（交换 / 三种道具）的执行、回放加速、过关后前进 / 重试、解锁记录。
 --
--- 依赖：UI.Types、UI.Playback、Match3.Engine（动作执行 / 状态摘要）、Match3.Core、SDL（窗口标题）。
+-- 依赖：UI.Types、UI.Playback、Match3.Engine（动作执行）、Match3.View（标题 titleLine）、Match3.Core、SDL（窗口标题）。
 -- 规则结果一律来自通用接口 gameStep（M3E.match3Shell；每个动作只结算一次，整步报告里有状态、Outcome、MoveFx、回放脚本、效果事件），
 -- 这里只更新 App。
 module UI.Actions
@@ -32,72 +32,15 @@ import Match3.Core
 import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
+import Match3.View (colorTag, gameView, titleLine)
 import UI.Playback
 import UI.Types
 
 -- | 把关卡、步数、分数、道具次数、状态与最近提示写到窗口标题（调试 / 无贴图时也能看到）。
 updateTitle :: Window -> App -> IO ()
 updateTitle window app = do
-  let gs = appGame app
-      lvl = allLevels !! min (gsLevel gs) (length allLevels - 1)
-      status = case gsOver gs of
-        Just (Won s) -> " CLEAR! score=" <> show s
-        Just (LevelClear s n) -> " LEVEL UP ->" <> show (n + 1) <> " score=" <> show s
-        Just (Lost s) -> " LOSE score=" <> show s
-        _ -> ""
-      -- 连击数经通用接口的状态摘要取（不直接读 gsCombo）
-      combo = fromMaybe 0 (lookup "combo" (gameStatus M3E.match3Game gs))
-      comboBits =
-        if combo > 1
-          then "  combo x" ++ show combo
-          else ""
-      goalBits = case gsGoal gs of
-        GoalScore t ->
-          "score=" ++ show (gsScore gs) ++ "/" ++ show t
-        GoalCollect col n ->
-          "collect " ++ colorTag col ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
-        GoalCollectMulti reqs ->
-          "multi " ++ show (gsCollected gs) ++ "/" ++ show (sum [n | (_, n) <- reqs])
-        GoalClearStone n ->
-          "stones=" ++ show (gsStonesCleared gs) ++ "/" ++ show n
-        GoalChest n ->
-          "chest=" ++ show (gsChestsCleared gs) ++ "/" ++ show n
-        GoalHoney n ->
-          "honey=" ++ show (gsHoneyCleared gs) ++ "/" ++ show n
-        GoalBalloon n ->
-          "balloon=" ++ show (gsBalloonsPopped gs) ++ "/" ++ show n
-        GoalCookie n ->
-          "cookie=" ++ show (gsCookiesCollected gs) ++ "/" ++ show n
-        GoalCake n ->
-          "cake=" ++ show (gsCakesCleared gs) ++ "/" ++ show n
-        GoalSafe n ->
-          "safe=" ++ show (gsSafesOpened gs) ++ "/" ++ show n
-        GoalUfo n ->
-          "ufo=" ++ show (gsUfoCollected gs) ++ "/" ++ show n
-        GoalCarpet n ->
-          "carpet=" ++ show (gsCarpetsCovered gs) ++ "/" ++ show n
-        GoalNamed name n ->
-          name ++ "=" ++ show (gsCollected gs) ++ "/" ++ show n
-      title =
-        T.pack $
-          "L"
-            ++ show (gsLevel gs + 1)
-            ++ " "
-            ++ lvlName lvl
-            ++ "  "
-            ++ goalBits
-            ++ "  moves="
-            ++ show (gsMoves gs)
-            ++ comboBits
-            ++ "  Hm="
-            ++ show (gsHammers gs)
-            ++ " Sw="
-            ++ show (gsFreeSwaps gs)
-            ++ " Cr="
-            ++ show (gsCrossClears gs)
-            ++ status
-            ++ "  |  "
-            ++ T.unpack (appMsg app)
+  -- 第 11 刀：标题全部读视图模型（Match3.View.titleLine；连击数经通用接口的状态摘要取）
+  let title = T.pack (titleLine (gameView (appGame app)) ++ "  |  " ++ T.unpack (appMsg app))
   windowTitle window $= title
 
 -- | 外壳执行一个动作：只调通用接口 M3E.match3Shell 的 gameStep（撤销历史由 Engine.History 维护，段 3）。
@@ -115,14 +58,6 @@ playMove act app =
 playbackOf :: GameState -> M3E.Played -> Maybe (Pos, Pos) -> App -> App
 playbackOf before pd =
   withMovePlayback before (M3E.pdState pd) (M3E.pdFx pd) (M3E.pdTrace pd) (M3E.pdEvents pd)
-
--- | 颜色的三字母标签（标题栏用）。
-colorTag :: Color -> String
-colorTag C1 = "RED"
-colorTag C2 = "GRN"
-colorTag C3 = "BLU"
-colorTag C4 = "YEL"
-colorTag C5 = "PRP"
 
 -- | Reset tip/help for a (re)started level; auto-hint on level 1 (index 0).
 freshLevelUi :: GameState -> App -> App
@@ -271,7 +206,7 @@ advanceOrMsg ref window = do
     Just (LevelClear _ n) -> do
       let gs = nextLevel (appGame app) seed
           -- Stars rate vs printed level moves; carry must not inflate the denominator.
-          baseMoves = lvlMoves (allLevels !! gsLevel gs)
+          baseMoves = maybe (gsMoves gs) lvlMoves (lookupLevel (gsLevel gs))
           app' =
             (freshLevelUi gs app)
               { appMsg = "Next level!"
@@ -280,14 +215,13 @@ advanceOrMsg ref window = do
               }
       writeIORef ref app'
       updateTitle window app'
-    Just (Won _) -> case allLevels of
+    Just (Won _) -> case campaignGame 0 seed of
       -- 通关后从第 1 关重开（关卡表恒非空；空表时不动）
-      lvl0 : _ -> do
-        let gs = newGameAtLevel 0 (levelConfig lvl0) seed
-            app' = (freshLevelUi gs app) { appMsg = "New campaign" }
+      Just gs -> do
+        let app' = (freshLevelUi gs app) { appMsg = "New campaign" }
         writeIORef ref app'
         updateTitle window app'
-      [] -> pure ()
+      Nothing -> pure ()
     Just (Lost _) -> do
       let gs0 = appGame app
           gs =

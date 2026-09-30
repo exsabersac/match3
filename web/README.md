@@ -2,7 +2,7 @@
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
 在浏览器里用桌面版同一套美术（2x 精灵图集）把 40 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
-（动画状态机 `app/ComboFx.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
+（动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
 日常任务用**仓库根目录**的 `Makefile`（`make help`），见 §0。
@@ -64,7 +64,7 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 273 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 331 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -112,7 +112,7 @@ make size            # 事后单独看体积
 `web/build.sh` 会：
 1. 检查 `match3-web.cabal` 里的核心模块清单（`Engine.*` + `Match3.*`）与 `package.yaml` 的 `library.exposed-modules` 是否一致
    （核心新增模块时要同步到 cabal 文件，否则会打印警告；例如 main 2121bf8 新增的 `Match3.Element.Class` / `Message` /
-   `Builtin.{Common,Gem,Layer,Obstacle,Collectible,Actor,Ground,Level}` 已同步）；
+   `Builtin.{Common,Gem,Layer,Obstacle,Collectible,Actor,Ground,Level}`、第 9 刀的 `Match3.Element.Caps` 已同步）；
 2. `wasm32-wasi-cabal build exe:match3-web`，链接为 WASI **reactor** 模块；
 3. `wasm-opt -Oz` 压体积；用 GHC 自带的 `post-link.mjs` 生成 JSFFI 胶水 `ghc_wasm_jsffi.js`；
 4. 下载并缓存浏览器 WASI 垫片 `@bjorn3/browser_wasi_shim@0.4.2`（MIT/Apache-2.0，约 96 KB）；
@@ -210,8 +210,8 @@ NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules ~/.ghc-wasm/nodejs/bin/node web/te
 stack exec -- runghc -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 > /tmp/native.txt   # 需 LANG=C.UTF-8
 cmp /tmp/wasm.txt /tmp/native.txt && echo 一致
 
-# 动画帧一致性：原生 ComboFx 与 wasm 逐帧 JSON 相同（AnimParity 需 -iapp，因为 ComboFx 在 app/UI）
-stack exec -- ghc -O1 -isrc -iapp -iweb/hs -outputdir /tmp/par/o -o /tmp/par/animparity web/test/AnimParity.hs
+# 动画帧一致性：原生 ComboFx 与 wasm 逐帧 JSON 相同（AnimParity 需 -iapp/pure，因为 ComboFx 与 UI.Presentation 在 app/pure）
+stack exec -- ghc -O1 -isrc -iapp/pure -iweb/hs -outputdir /tmp/par/o -o /tmp/par/animparity web/test/AnimParity.hs
 /tmp/par/animparity 27 1 20 > /tmp/native-anim.txt
 ~/.ghc-wasm/nodejs/bin/node web/test/node-anim-parity.mjs 27 1 20 > /tmp/wasm-anim.txt
 cmp /tmp/native-anim.txt /tmp/wasm-anim.txt && echo 一致
@@ -240,6 +240,7 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
 - 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
   表现数据全部取自 `stepReport`（`Played`），规则每步只算一次；
+- 状态 JSON（第 11 刀起）：`encodeState` / `apiLevels` / 盘面编码读视图模型 `Match3.View`（与桌面 HUD / 标题同一份读数），不再从 `GameState` 现算；
 - `trace`：`pdTrace` 的逐轮快照 `start → waves[{before,cleared,drained,holes,after,score}] → end[] → final → shuffle`，
   前端按它逐轮播放；`end[i] = {afterWaves,before,after,effect}`，`effect` 为结构化步末效果：
   `{type:"tick",cells}` / `{type:"belt",pairs}` / `{type:"spread",kind:"vine|choco|steam",pairs}` / `{type:"snail",moves:[{from,to,dir,pushed}]}`；

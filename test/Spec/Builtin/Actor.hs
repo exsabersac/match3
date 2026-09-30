@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 会动或会生成东西的元素（对应 Element/Builtin/Actor）：魔法帽、果汁机、染色瓶、倒计时、蜗牛。
@@ -7,9 +8,11 @@ module Spec.Builtin.Actor
   ) where
 
 import Data.List (nub)
-import Match3.Board.Default (cascadeCountdowns, cascadeMatches, clearMatches)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crUfos, crBoard), CascadeTally(CascadeTally, ctCookies, ctScore, ctMaxWave, ctCells))
+import Match3.Board.Default (cascadeCountdowns, cascadeMatches, clearMatches, noHooks, builtinHooks, hookLevel)
+import Match3.Element.Level (levelUfos)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crHooks, crBoard), CascadeTally(CascadeTally, ctCounts, ctScore, ctMaxWave, ctCells))
 import Match3.Core
+import Match3.Board.Grid (atM, setM, mboardFromRows)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
@@ -177,7 +180,7 @@ maker_produces_bomb = do
   assertBool "became gem" (isGem (getCell b1 (2, 1)))
   assertEqual "bomb kind" (Just Bomb) (cellKind (getCell b1 (2, 1)))
   assertEqual "bomb color" (Just C1) (cellColor (getCell b1 (2, 1)))
-  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
+  let gs = levelGame 26 42
       nMaker =
         length
           [ ()
@@ -219,7 +222,7 @@ bottle_dyes_neighbors = do
       b1 = triggerAdjacentBottles board0 ms
   assertBool "bottle stays" (isBottle (getCell b1 (2, 1)))
   assertEqual "dyed neighbor" (Just C3) (cellColor (getCell b1 (2, 2)))
-  let gs = newGameAtLevel 33 (levelConfig (allLevels !! 33)) 42
+  let gs = levelGame 33 42
       nBot =
         length
           [ ()
@@ -245,15 +248,13 @@ maker_bomb_survives_wave = do
           (2, 1)
           (mkMakerCharges C1 1)
       gs0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board0
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -264,7 +265,7 @@ maker_bomb_survives_wave = do
   assertBool "maker converted away" (not (isMaker cell))
   -- Unit path: same-wave clearMatches leaves Bomb in place (not consumed by producing wave)
   let (mb, _) = clearMatches board0
-  case (mb !! 2) !! 1 of
+  case atM mb (2, 1) of
     Just c -> do
       assertBool "unit bomb gem" (isGem c)
       assertEqual "unit Bomb kind" (Just Bomb) (cellKind c)
@@ -298,7 +299,7 @@ bottle_dye_followup_match = do
   assertEqual "dyed (5,2)" (Just C3) (cellColor (getCell dyed (5, 2)))
   assertBool "dye created vertical C3" $
     all (`elem` findMatches dyed) [(3, 2), (4, 2), (5, 2)]
-  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 42) board
+  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing noHooks (mkStdGen 42) board
   assertBool ("follow-up cascade cells>=6 got " ++ show cells) (cells >= 6)
   assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
   assertBool "scored" (scored >= scoreForWave 1 3 + scoreForWave 2 3)
@@ -330,10 +331,10 @@ hat_recolor_followup_match = do
   assertEqual "hat swapped right to C2" (Just C2) (cellColor (getCell hatted (5, 2)))
   assertBool "hat created col0 C3 match" $
     all (`elem` findMatches hatted) [(3, 0), (4, 0), (5, 0)]
-  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing [] [] (mkStdGen 7) board
+  let CascadeRun {crTally = CascadeTally {ctCells = cells, ctScore = scored, ctMaxWave = maxW}} = cascadeMatches Nothing noHooks (mkStdGen 7) board
   assertBool ("hat follow-up cells>=6 got " ++ show cells) (cells >= 6)
   assertBool ("maxW>=2 got " ++ show maxW) (maxW >= 2)
-  let CascadeRun {crBoard = bAfter} = cascadeMatches Nothing [] [] (mkStdGen 7) board
+  let CascadeRun {crBoard = bAfter} = cascadeMatches Nothing noHooks (mkStdGen 7) board
       hatLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
@@ -410,21 +411,19 @@ hat_immune_to_direct_clear = do
           (3, 7)
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
-  let CascadeRun {crBoard = bLine} = cascadeMatches Nothing [] [] (mkStdGen 61) (lineBoard mkMagicHat)
+  let CascadeRun {crBoard = bLine} = cascadeMatches Nothing noHooks (mkStdGen 61) (lineBoard mkMagicHat)
   assertBool "hat survives line blast" (isMagicHat (getCell bLine (3, 5)))
   -- Hammer on hat: NoMatch, charge kept, board unchanged.
   let gs0 =
-        (newGame defaultConfig 12)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 12)
           { gsBoard = setCell stableBoard (4, 4) mkMagicHat
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
-          }
+          })
       (gs1, outH) = useHammer (4, 4) gs0
   outH @?= NoMatch
   assertEqual "hammer not spent" (2 :: Int) (gsHammers gs1)
@@ -477,7 +476,7 @@ maker_bomb_sits_bottle = do
   assertEqual "protected Bottle skips maker bomb" (Gem C1 Bomb 0 Nothing) (getCell dyedProt (2, 1))
   -- Integration: clearMatches keeps Maker Bomb color through Bottle
   let (mb, _) = clearMatches board0
-  case (mb !! 2) !! 1 of
+  case atM mb (2, 1) of
     Just c -> do
       assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
       assertEqual "cascade keeps maker color (not Bottle)" (Just C1) (cellColor c)
@@ -509,7 +508,7 @@ countdown_bomb_ticks_after_move :: Assertion
 countdown_bomb_ticks_after_move = do
   let bPure = spawnCountdown stableBoard (2, 2) C3 5
   assertEqual "pure tick 5->4" (4 :: Int) (countdownTurns (getCell (tickCountdowns bPure) (2, 2)))
-  let CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCells = nClear}} = cascadeCountdowns [] [] (mkStdGen 0) bPure
+  let CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCells = nClear}} = cascadeCountdowns noHooks (mkStdGen 0) bPure
   assertEqual "resolve ticks" (4 :: Int) (countdownTurns (getCell bRes (2, 2)))
   assertEqual "no explode when >0" (0 :: Int) nClear
   -- trySwap path: use a tiny score goal so outcome is terminal (skips ensurePlayable shuffle)
@@ -525,7 +524,7 @@ countdown_bomb_ticks_after_move = do
           (3, 3)
           (mkGem C1)
       board = spawnCountdown board0 (5, 5) C5 5
-      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 1 }
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 1 }
       gs0 =
         (newGameAtLevel 0 cfg 11)
           { gsBoard = board
@@ -674,16 +673,14 @@ snail_moves_after_move = do
   assertBool "pure at (7,2)" (isSnail (getCell stepped (7, 2)))
   assertEqual "pure pushed gem back" gemRight (getCell stepped (7, 1))
   let gs0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -699,7 +696,7 @@ snail_moves_after_move = do
       edge1 = stepSnailAt edgeB (0, 7)
   assertEqual "reversed at edge" (0, -1) (snailDir (getCell edge1 (0, 7)))
   assertBool "still at edge" (isSnail (getCell edge1 (0, 7)))
-  let gsL = newGameAtLevel 28 (levelConfig (allLevels !! 28)) 42
+  let gsL = levelGame 28 42
       nSnail =
         length
           [ ()
@@ -741,7 +738,7 @@ countdown_explode_keeps_ufo_portals = do
       board0 =
         spawnCountdown (setCell stableBoard (bottom, 6) mkCookie) (4, 4) C5 1
       u0 = mkUfo (2, 2) C1
-      CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCookies = cookies}, crUfos = ufos'} = cascadeCountdowns [u0] portals (mkStdGen 5) board0
+      CascadeRun {crBoard = bRes, crTally = CascadeTally {ctCounts = (countOf CountCookies -> cookies)}, crHooks = (levelUfos . hookLevel -> ufos')} = cascadeCountdowns (builtinHooks [u0] portals) (mkStdGen 5) board0
   assertBool ("explode settle collected bottom cookie, got " ++ show cookies) (cookies >= 1)
   assertBool "cookie not left on bottom portal" (not (isCookie (getCell bRes (bottom, 6))))
   assertEqual "UFO list preserved through resolve" (1 :: Int) (length ufos')
@@ -759,15 +756,12 @@ countdown_explode_keeps_ufo_portals = do
           (mkGem C2)
       boardT' = spawnCountdown boardT (5, 5) C4 1
       gs0 =
-        (newGame defaultConfig 19)
+        (setUfos [u0] . setPortals portals . setBelts [] $ (newGame defaultConfig 19)
           { gsBoard = boardT'
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          , gsUfos = [u0]
-          , gsPortals = portals
-          , gsBelts = []
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -813,15 +807,13 @@ snail_belt_no_double_step = do
   assertBool "avoid: not at (4,3)" (not (isSnail (getCell skipped (4, 3))))
   assertBool "raw crawl would reach (4,3)" (isSnail (getCell crawled (4, 3)))
   let gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [belt] . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = board0
-          , gsBelts = [belt]
           , gsMoves = 12
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -875,17 +867,14 @@ snail_crawl_resolves_match = do
   assertBool "snail at (3,3)" (isSnail (getCell afterCrawl (3, 3)))
   assertEqual "C1 pushed to (3,2)" (Just C1) (cellColor (getCell afterCrawl (3, 2)))
   let gs0 =
-        (newGame (GameConfig 20 (GoalScore 99999)) 7)
+        (setBelts [] . setPortals [] . setUfos [] $ (newGame (GameConfig 20 (goalScore 99999)) 7)
           { gsBoard = board0
-          , gsBelts = []
-          , gsPortals = []
-          , gsUfos = []
           , gsOver = Nothing
           , gsMoves = 20
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsLastCleared = []
-          }
+          })
       (gs1, out) = trySwap (1, 6) (1, 7) gs0
   case out of
     NoMatch -> assertFailure "expected match swap"
@@ -945,17 +934,14 @@ snail_reverses_at_portal_endpoint = do
       boardMove =
         setCell boardTrap (1, 3) (mkGem C1)
       gs0 =
-        (newGame (GameConfig 20 (GoalScore 99999)) 11)
+        (setBelts [] . setPortals [((0, 3), (7, 4))] . setUfos [] $ (newGame (GameConfig 20 (goalScore 99999)) 11)
           { gsBoard = boardMove
-          , gsBelts = []
-          , gsPortals = [((0, 3), (7, 4))]
-          , gsUfos = []
           , gsOver = Nothing
           , gsMoves = 20
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsLastCleared = []
-          }
+          })
       -- Two crawls: first reverses at Cookie, second would enter portal without walls
       b1 = stepSnails (gsBoard gs0)
       b2 = stepSnails b1
@@ -990,16 +976,13 @@ snail_reverses_at_portal_endpoint = do
   assertBool "after move2 snail not on portal A" (not (isSnail (getCell (gsBoard gs3) (0, 3))))
   assertBool "after move2 snail not on portal B" (not (isSnail (getCell (gsBoard gs3) (7, 4))))
   -- Portal still transferable after two crawls
-  let setMBoard b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+  let setMBoard = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       mb1 = setMBoard mb0 (0, 3) (Just (mkGem C1))
       mb2 = setMBoard mb1 (7, 4) Nothing
-      mb3 = applyPortalTeleports (gsPortals gs3) mb2
-  assertEqual "portal A still empties" Nothing ((mb3 !! 0) !! 3)
-  case (mb3 !! 7) !! 4 of
+      mb3 = applyPortalTeleports (builtinHooks [] (gsPortals gs3)) mb2
+  assertEqual "portal A still empties" Nothing (atM mb3 (0, 3))
+  case atM mb3 (7, 4) of
     Just cell -> assertEqual "portal B still receives" (Just C1) (cellColor cell)
     Nothing -> assertFailure "expected gem at portal B after crawls"

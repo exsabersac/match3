@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 冰层与叠层：盖在宝石上的修饰器（Modifier，对应 xmonad 的 LayoutModifier）。
 --
 -- 共同特征：不占格，只在 Gem 格的冰层数 / overlay 字段里；由 Modified 包在本体外面，各方法「修饰器先说，
@@ -26,6 +27,7 @@ module Match3.Element.Builtin.Layer
   , steamEntry
   ) where
 
+import Match3.Board.Grid (getCell)
 import Match3.Element.Class
 import Match3.Element.Event
 import Match3.Element.Registry
@@ -80,7 +82,7 @@ instance Modifier VineL where
   modName _ = "vine"
   modApply _ = putOverlay Vine
   modStripOnClear _ = True
-  modEnd _ = Just (spreadRule 10 SpreadVine spreadVines)
+  modEnd _ = Just (spreadRule 10 "vine" Vine spreadVines)
 
 -- | 巧克力：真消除时随格清掉；邻格真消除清掉它；步末蔓延。
 data ChocoL = ChocoL
@@ -91,7 +93,7 @@ instance Modifier ChocoL where
   modApply _ = putOverlay Choco
   modStripOnClear _ = True
   modAdjacent _ = Just (AdjacentRule 150 (\ctx b -> AdjOut (clearChocoAdjacent b (acTrue ctx)) [] []))
-  modEnd _ = Just (spreadRule 20 SpreadChoco spreadChoco)
+  modEnd _ = Just (spreadRule 20 "choco" Choco spreadChoco)
 
 -- | 迷雾：挡匹配，邻消揭一层。
 newtype FogL = FogL Int
@@ -147,7 +149,7 @@ instance Modifier SteamL where
   modApply _ = putOverlay Steam
   modBlocksMatch _ = True
   modAdjacent _ = Just (AdjacentRule 160 (\ctx b -> AdjOut (clearSteamAdjacent b (acTrue ctx)) [] []))
-  modEnd _ = Just (spreadRule 30 SpreadSteam spreadSteam)
+  modEnd _ = Just (spreadRule 30 "steam" Steam spreadSteam)
 
 -- | 直接命中揭一层（锁链 / 窗帘）：宝石留下，不消除。
 peel :: Int -> (Int -> m) -> ModHit m
@@ -160,13 +162,13 @@ layerChip :: Int -> (Board -> [Pos] -> [Pos] -> (Board, Int)) -> AdjacentRule
 layerChip order f = AdjacentRule order (\ctx b -> AdjOut (fst (f b (acTrue ctx) (acDirect ctx))) [] [])
 
 -- | 蔓延：每只幸存的叠层向正交相邻的裸宝石长一格；记录 (来源, 新格)。
-spreadRule :: Int -> SpreadKind -> (Board -> Board) -> EndRule
-spreadRule order kind spread = EndRule PhaseSpread order run (const []) (const [])
+spreadRule :: Int -> ElementName -> CellOverlay -> (Board -> Board) -> EndRule
+spreadRule order nm ov spread = EndRule PhaseSpread order run (const []) (const [])
   where
     run _ b =
       let b' = spread b
-          ps = spreadPairs kind b b'
-      in (if null ps then Nothing else Just (EndSpread kind ps), b')
+          ps = spreadPairs ov b b'
+      in (if null ps then Nothing else Just (EndEffect EvSpread nm [EndItem src q (getCell b' q) Nothing | (src, q) <- ps]), b')
 
 --------------------------------------------------------------------------------
 -- 条目

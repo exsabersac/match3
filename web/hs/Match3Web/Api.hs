@@ -26,10 +26,12 @@ module Match3Web.Api
 
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
+import Match3.Board.Grid (mboardRows)
 import Match3.Core
-import Match3.Element.Event (Event(..))
+import Match3.Element.Event (Event(..), EventKind(..), endEffectPairs, endItemDir)
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
 import Match3.Game.Trace (emptyTrace)
+import Match3.View
 import Match3Web.Anim (AnimSeed, seedOf)
 import Match3Web.Json
 
@@ -46,7 +48,7 @@ webState = histNow
 -- | 新开一局：关卡序号（0 起）+ 随机种子。越界关卡号夹到合法范围。
 apiNew :: Int -> Int -> (WebGame, String)
 apiNew li seed =
-  let i = max 0 (min (length allLevels - 1) li)
+  let i = clampLevelIndex li
       h = gameNew match3Shell (Campaign i) seed
   in (h, obj [("ok", "true"), ("state", encodeState h)])
 
@@ -93,62 +95,53 @@ runStep act h =
 apiState :: WebGame -> String
 apiState h = obj [("ok", "true"), ("state", encodeState h)]
 
--- | 关卡列表（序号、中文名、步数、目标描述），给选关界面用。
+-- | 关卡列表（序号、中文名、步数、目标描述），给选关界面用（第 11 刀起读 Match3.View.levelViews）。
 apiLevels :: String
 apiLevels =
   arr
     [ obj
-        [ ("index", int (lvlIndex l))
-        , ("name", str (lvlName l))
-        , ("moves", int (lvlMoves l))
-        , ("goal", encodeGoal (lvlGoal l))
+        [ ("index", int (lvIndex l))
+        , ("name", str (lvName l))
+        , ("moves", int (lvMoves l))
+        , ("goal", encodeGoal (lvGoal l))
         ]
-    | l <- allLevels
+    | l <- levelViews
     ]
 
 -- ---------------------------------------------------------------------------
 -- 状态 / 结果 / 回放脚本
 
+-- | 局面 JSON：第 11 刀起全部读视图模型 Match3.View（与桌面 HUD / 标题同一份读数），不再从 GameState 现算。
 encodeState :: WebGame -> String
 encodeState h =
   obj
-    [ ("level", int (gsLevel gs))
-    , ("name", str (levelName (gsLevel gs)))
-    , ("score", int (gsScore gs))
-    , ("moves", int (gsMoves gs))
-    , ("goal", encodeGoal (gsGoal gs))
-    , ("progress", int (progress gs))
-    , ("target", int (goalTarget (gsGoal gs)))
-    , ("over", maybe "null" encodeOutcome (gsOver gs))
-    , ("loseHint", str (loseHint (gsGoal gs)))
-    , ("combo", int (gsCombo gs))
-    , ("shuffled", bool (gsShuffled gs))
+    [ ("level", int (gvLevel gv))
+    , ("name", str (gvRawName gv))
+    , ("score", int (gvScore gv))
+    , ("moves", int (gvMoves gv))
+    , ("goal", encodeGoal goal)
+    , ("progress", int (giProgress goal))
+    , ("target", int (giTarget goal))
+    , ("over", maybe "null" encodeOutcome (gvOver gv))
+    , ("loseHint", str (giLoseHint goal))
+    , ("combo", int (gvCombo gv))
+    , ("shuffled", bool (gvShuffled gv))
     , ("undo", int (historyDepth h))
-    , ("hint", maybe "null" encodePair (findHint (gsBoard gs)))
-    , ("lastCleared", arr (map encodePos (gsLastCleared gs)))
-    , ("ground", arr [obj [("p", encodePos p), ("name", str n), ("layers", int k)] | (p, (n, k)) <- gsGround gs])
+    , ("hint", maybe "null" encodePair (bvFoundHint bv))
+    , ("lastCleared", arr (map encodePos (bvLastCleared bv)))
+    , ("ground", arr [obj [("p", encodePos p), ("name", str (unElementName n)), ("layers", int k)] | (p, (n, k)) <- bvGround bv])
       -- 关卡级元素（棋盘底层 / 飞碟），渲染层按它们画传送带、传送门、地毯与飞碟
-    , ("belts", arr [arr (map encodePos b) | b <- gsBelts gs])
-    , ("portals", arr (map encodePair (gsPortals gs)))
-    , ("ufos", arr [obj [("p", encodePos (ufoCell u)), ("c", int (colorNum (ufoColor u)))] | u <- gsUfos gs])
-    , ("carpets", arr (map encodePos (levelCarpets (gsLevel gs))))
-    , ("carpetOpen", arr (map encodePos (gsCarpetOpen gs)))
-    , ("board", encodeBoard (gsBoard gs))
+    , ("belts", arr [arr (map encodePos b) | b <- bvBelts bv])
+    , ("portals", arr (map encodePair (bvPortals bv)))
+    , ("ufos", arr [obj [("p", encodePos (ufoCell u)), ("c", int (colorNum (ufoColor u)))] | u <- bvUfos bv])
+    , ("carpets", arr (map encodePos (bvCarpets bv)))
+    , ("carpetOpen", arr (map encodePos (bvCarpetOpen bv)))
+    , ("board", encodeBoard (bvBoard bv))
     ]
   where
-    gs = histNow h
-    levelName i = case [lvlName l | l <- allLevels, lvlIndex l == i] of
-      (n : _) -> n
-      [] -> "?"
-
--- | 目标进度：参数顺序与核心 goalSatisfied 调用 goalMetEx 的顺序一致。
-progress :: GameState -> Int
-progress gs =
-  goalProgressEx
-    (gsGoal gs) (gsScore gs) (gsCollected gs) (gsColorBag gs)
-    (gsStonesCleared gs) (gsUfoCollected gs) (gsChestsCleared gs)
-    (gsHoneyCleared gs) (gsBalloonsPopped gs) (gsCookiesCollected gs)
-    (gsCakesCleared gs) (gsSafesOpened gs)
+    gv = gameView (histNow h)
+    goal = gvGoal gv
+    bv = gvBoard gv
 
 encodeOutcome :: Outcome -> String
 encodeOutcome o = case o of
@@ -161,13 +154,11 @@ encodeOutcome o = case o of
   where
     tag t kvs = obj (("tag", str t) : kvs)
 
-encodeGoal :: LevelGoal -> String
-encodeGoal g =
+encodeGoal :: GoalInfo -> String
+encodeGoal gi =
   obj $
-    [("kind", str (goalKind g)), ("text", str (show g)), ("target", int (goalTarget g))]
-      ++ [("name", str n) | GoalNamed n _ <- [g]]   -- 段 5：按元素名计数的目标（jelly / bubble）
-  where
-    goalKind x = takeWhile (/= ' ') (show x)
+    [("kind", str (giKind gi)), ("text", str (giText gi)), ("target", int (giTarget gi))]
+      ++ [("name", str (unElementName n)) | Just n <- [giName gi]]   -- 段 5：按元素名计数的目标（jelly / bubble）
 
 -- | 一步的逐轮回放：start → waves[0..] → end（步末效果，按 afterWaves 插在第 k 轮之后）→ final
 --   → shuffle（本步触发自动洗牌时的洗牌后盘面，否则 null）。
@@ -187,7 +178,7 @@ encodeWave w =
     [ ("before", encodeBoard (cwBefore w))
     , ("cleared", arr (map encodePos (cwCleared w)))
     , ("drained", arr (map encodePos (cwDrained w)))
-    , ("holes", arr [arr (map (maybe "null" encodeCell) row) | row <- cwHoles w])
+    , ("holes", arr [arr (map (maybe "null" encodeCell) row) | row <- mboardRows (cwHoles w)])
     , ("after", encodeBoard (cwAfter w))
     , ("score", int (cwScore w))
     ]
@@ -202,24 +193,25 @@ encodeEnd e =
     ]
 
 -- | 步末效果（结构化）：{type:"tick",cells} / {type:"belt",pairs} / {type:"spread",kind,pairs} / {type:"snail",moves}
---   pairs 为 [[来源],[目标]]。
+--   pairs 为 [[来源],[目标]]。第 7 刀 7b 起 EndEffect 是通用形状（事件类型 + 元素名 + 逐项 EndItem），
+--   这里按事件类型编码成与之前逐字节相同的 JSON；其余事件类型编码为 {type:<eventKindTag>,kind:<元素名>,pairs}。
 encodeEndEffect :: EndEffect -> String
-encodeEndEffect eff = case eff of
-  EndCountdownTick ps -> obj [("type", str "tick"), ("cells", arr (map encodePos ps))]
-  EndBeltShift ps -> obj [("type", str "belt"), ("pairs", arr (map encodePair ps))]
-  EndSpread k ps -> obj [("type", str "spread"), ("kind", str (spreadName k)), ("pairs", arr (map encodePair ps))]
-  EndSnail ms -> obj [("type", str "snail"), ("moves", arr (map snail ms))]
+encodeEndEffect eff = case endEffectKind eff of
+  EvTick -> obj [("type", str "tick"), ("cells", arr (map (encodePos . eiTo) items))]
+  EvBelt -> obj [("type", str "belt"), ("pairs", arr (map encodePair pairs))]
+  EvSpread -> obj [("type", str "spread"), ("kind", str name), ("pairs", arr (map encodePair pairs))]
+  EvMove -> obj [("type", str "snail"), ("moves", arr (map snail items))]
+  k -> obj [("type", str (eventKindTag k)), ("kind", str name), ("pairs", arr (map encodePair pairs))]
   where
-    spreadName k = case k of
-      SpreadVine -> "vine"
-      SpreadChoco -> "choco"
-      SpreadSteam -> "steam"
+    items = endEffectItems eff
+    pairs = endEffectPairs eff
+    name = unElementName (endEffectElement eff)
     snail m =
       obj
-        [ ("from", encodePos (smFrom m))
-        , ("to", encodePos (smTo m))
-        , ("dir", encodePos (smDir m))
-        , ("pushed", maybe "null" encodeCell (smPushed m))
+        [ ("from", encodePos (eiFrom m))
+        , ("to", encodePos (eiTo m))
+        , ("dir", encodePos (maybe (0, 0) id (endItemDir m)))
+        , ("pushed", maybe "null" encodeCell (eiBack m))
         ]
 
 -- | 效果事件（规则层 Match3.Element.Event.Event，按时间顺序）：
@@ -233,7 +225,7 @@ encodeEvent e =
   obj
     [ ("kind", str (eventKindTag (evKind e)))
     , ("beat", int (evWave e))
-    , ("subject", str (evElement e))
+    , ("subject", str (unElementName (evElement e)))
     , ("pairs", arr (map encodePair (evCells e)))
     , ("amount", int (evAmount e))
     ]
@@ -249,62 +241,15 @@ encodeEvent e =
 encodeBoard :: Board -> String
 encodeBoard b = arr [arr (map encodeCell row) | row <- boardRows b]
 
+-- | 单格：Match3.View.cellFace 的类型标签与字段，外加 "s"。
 encodeCell :: Cell -> String
-encodeCell cell = obj (fields ++ [("s", str (show cell))])
+encodeCell cell = obj (("t", str tag) : map field fields ++ [("s", str (show cell))])
   where
-    t x = ("t", str x)
-    n k = ("n", int k)
-    col c = ("c", int (colorNum c))
-    fields = case cell of
-      Gem c k ice ov ->
-        [ t "G", col c, ("k", str (kindCode k)), ("i", int ice)
-        , ("o", maybe "null" (str . overlayName) ov), ("n", int (maybe 0 overlayLayers ov)) ]
-      Stone k -> [t "stone", n k]
-      Chest k -> [t "chest", n k]
-      Honey k -> [t "honey", n k]
-      Balloon c -> [t "balloon", col c]
-      Cookie -> [t "cookie"]
-      Cake k -> [t "cake", n k]
-      MagicHat -> [t "hat"]
-      Maker c k -> [t "maker", col c, n k]
-      Snail dr dc -> [t "snail", ("dr", int dr), ("dc", int dc)]
-      Safe k -> [t "safe", n k]
-      Flip f b -> [t "flip", col f, ("b", int (colorNum b))]
-      Surprise -> [t "surprise"]
-      Bottle c -> [t "bottle", col c]
-      TimeSpirit -> [t "spirit"]
-      Countdown c k -> [t "countdown", col c, n k]
-      Custom name v -> [t "custom", ("name", str name), ("v", int v)]
-
-overlayName :: CellOverlay -> String
-overlayName ov = case ov of
-  Grass -> "grass"
-  Vine -> "vine"
-  Choco -> "choco"
-  Fog _ -> "fog"
-  Chain _ -> "chain"
-  Freeze _ -> "freeze"
-  Curtain _ -> "curtain"
-  Steam -> "steam"
-
-overlayLayers :: CellOverlay -> Int
-overlayLayers ov = case ov of
-  Fog k -> k
-  Chain k -> k
-  Freeze k -> k
-  Curtain k -> k
-  _ -> 0
-
-colorNum :: Color -> Int
-colorNum c = fromEnum c + 1
-
-kindCode :: GemKind -> String
-kindCode k = case k of
-  Normal -> "N"
-  LineH -> "H"
-  LineV -> "V"
-  Bomb -> "B"
-  Rainbow -> "R"
+    (tag, fields) = cellFace cell
+    field (k, v) = (k, case v of
+      FieldInt i -> int i
+      FieldText x -> str x
+      FieldNull -> "null")
 
 encodePos :: Pos -> String
 encodePos (r, c) = arr [int r, int c]

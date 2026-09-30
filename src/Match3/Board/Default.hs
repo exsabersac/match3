@@ -18,6 +18,7 @@ module Match3.Board.Default
   , hasValidMove
   , findHint
   , expandSpecials
+  , spawnSpecials
   , countColor
   , clearMatches
   , clearMatchesAt
@@ -32,6 +33,10 @@ module Match3.Board.Default
   , cascadeCountdowns
   , stepCascade
   , stepCascadeAt
+    -- * 关卡级钩子（第 7 刀）
+  , LevelHooks(..)
+  , noHooks
+  , builtinHooks
   ) where
 
 import Match3.Board.Cascade
@@ -39,10 +44,20 @@ import Match3.Board.Clear
 import Match3.Board.Gravity
 import Match3.Board.Grid (MBoard)
 import Match3.Board.Match
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Board.Hooks (LevelHooks(..), noHooks)
+import Match3.Element.Builtin (PortalLevel(..), UfoLevel(..), defaultRegistry)
+import Match3.Element.Class (SomeLevelElement(..))
+import Match3.Element.Level (levelHooksWith)
 import Match3.Types
 import Match3.Ufo (Ufo)
 import System.Random (RandomGen)
+
+--------------------------------------------------------------------------------
+-- 关卡级钩子
+
+-- | 内置注册表下、只有飞碟与传送门两种关卡级元素的钩子（第 7 刀前各函数的 @[Ufo]@ / 传送门对参数）。
+builtinHooks :: [Ufo] -> [(Pos, Pos)] -> LevelHooks
+builtinHooks ufos portals = levelHooksWith defaultRegistry [SomeLevelElement (UfoLevel ufos), SomeLevelElement (PortalLevel portals)]
 
 --------------------------------------------------------------------------------
 -- Match3.Board.Gravity
@@ -75,18 +90,19 @@ drainBottomCookies = drainBottomCookiesWith defaultRegistry
 -- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
 -- moves A -> B (and reverse). Used after gravity + bottom-cookie drain so clears can
 -- open exits without snatching cookies that already touched the bottom row.
-applyPortalTeleports :: [(Pos, Pos)] -> MBoard -> MBoard
-applyPortalTeleports = applyPortalTeleportsWith defaultRegistry
+-- 第 7 刀：传送门是关卡级元素，传送经钩子（builtinHooks [] portals）的 onSettle。
+applyPortalTeleports :: LevelHooks -> MBoard -> MBoard
+applyPortalTeleports = onSettle
 
 -- | Gravity, drain bottom cookies, portal teleports (optional), gravity, drain again.
 -- Cookies that reach the bottom must collect before a portal can snatch them
 -- (触底优先于传送门); cookies that teleport onto a bottom exit still drain after.
 -- Third component: bottom cells cookies drained from (Carpet / particle seeds).
-settleBoardPortals :: [(Pos, Pos)] -> MBoard -> (MBoard, Int, [Pos])
+settleBoardPortals :: LevelHooks -> MBoard -> (MBoard, Int, [Pos])
 settleBoardPortals = settleBoardPortalsWith defaultRegistry
 
 -- | 一轮沉降：settle + refill（与 stepCascadeDetailed / 种子清除用的完全相同）。
-settleRefill :: RandomGen g => [(Pos, Pos)] -> g -> MBoard -> (Board, [Pos], g)
+settleRefill :: RandomGen g => LevelHooks -> g -> MBoard -> (Board, [Pos], g)
 settleRefill = settleRefillWith defaultRegistry
 
 --------------------------------------------------------------------------------
@@ -125,6 +141,10 @@ findHint = findHintWith defaultRegistry
 -- Rainbow is a no-op here (partner color comes from rainbowClearSeeds only).
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials = expandSpecialsWith defaultRegistry
+
+-- | Specials spawned from runs（内置形状规则表：len>=5 Rainbow, len==4 Line (orient by run)）。
+spawnSpecials :: Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
+spawnSpecials = spawnSpecialsWith defaultRegistry
 
 -- | Count how many cleared positions have a given color (pre-clear board; stones skip).
 countColor :: Board -> [Pos] -> Color -> Int
@@ -167,27 +187,27 @@ clearFromSeedsDetailed = clearFromSeedsDetailedWith defaultRegistry
 -- Match3.Board.Cascade
 
 -- | 普通匹配连锁到稳定（波次从 1 开始）。prefer 只作用于第一轮的特殊块生成位。
-cascadeMatches :: RandomGen g => Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
+cascadeMatches :: RandomGen g => Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatches = cascadeMatchesWith defaultRegistry
 
 -- | 普通匹配连锁，波次编号从 startW 之后继续（种子起手 / 飞碟吸收已占用的轮数）。
-cascadeMatchesFrom :: RandomGen g => Int -> Maybe Pos -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
+cascadeMatchesFrom :: RandomGen g => Int -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatchesFrom = cascadeMatchesFromWith defaultRegistry
 
 -- | 种子起手的连锁（彩虹 / 特殊合成 / 道具 / 倒计时爆炸）：第一轮清种子（波次 1）并沉降补子，
 -- 跑一次飞碟（吸到则单独一轮，波次 2），再接普通匹配连锁（波次编号衔接「已完成的起手轮数」）。
 -- 种子为空时等同 cascadeMatches。
-cascadeSeeds :: RandomGen g => Maybe Pos -> [Pos] -> [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
+cascadeSeeds :: RandomGen g => Maybe Pos -> [Pos] -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeSeeds = cascadeSeedsWith defaultRegistry
 
 -- | 皮带移位之后：成消则整段连锁；否则仍沉降一次（收皮带送到底行的饼干，回放记为一个
 -- 只有沉降的轮次，盘面没变且没收饼干时不记），沉降后成消再接连锁并补上饼干数与收饼干位。
-cascadeAfterBelt :: RandomGen g => [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
-cascadeAfterBelt = cascadeAfterBeltWith defaultRegistry
+cascadeAfterBelt :: RandomGen g => LevelHooks -> g -> Board -> CascadeRun g
+cascadeAfterBelt = cascadeAfterWith defaultRegistry AfterBelt
 
 -- | 一步之后倒计时 -1；归零的 3×3 爆炸走种子连锁（带飞碟与传送门）。
 -- 没有归零时终盘就是 tick 之后的盘面（数字减一），不产生回放轮次。
-cascadeCountdowns :: RandomGen g => [Ufo] -> [(Pos, Pos)] -> g -> Board -> CascadeRun g
+cascadeCountdowns :: RandomGen g => LevelHooks -> g -> Board -> CascadeRun g
 cascadeCountdowns = cascadeCountdownsWith defaultRegistry
 
 -- | 恰好一轮匹配消除 + 沉降补子（不跑飞碟、无传送门）；无匹配时返回 Nothing。

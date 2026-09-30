@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 本体障碍（对应 Element/Builtin/Obstacle）：石头、宝箱、蜂蜜、气球、蛋糕、保险箱、双面、彩蛋。
@@ -6,14 +7,16 @@ module Spec.Builtin.Obstacle
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctChests, ctBalloons, ctCakes, ctCells, ctHoney))
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches, noHooks, builtinHooks)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts, ctCells))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (noCounts)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -250,7 +253,7 @@ chest_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isChest (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctChests = chests}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountChests -> chests)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "chest opened" (chests >= 1)
   assertBool "chest gone" (not (isChest (getCell board1 (2, 1))))
 
@@ -302,7 +305,7 @@ honey_cleared_by_adjacent = do
   assertEqual "last layer dead" [(2, 1)] dead
   assertBool "still on board until remove" (isHoney (getCell b1 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctHoney = honey}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honey)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "honey smashed" (honey >= 1)
   assertBool "honey gone" (not (isHoney (getCell board1 (2, 1))))
 
@@ -354,7 +357,7 @@ balloon_popped_by_same_color = do
       (_b1, dead) = chipAdjacentBalloons board0 ms
   assertEqual "same color pops" [(2, 1)] dead
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctBalloons = balloons}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountBalloons -> balloons)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "balloon counted" (balloons >= 1)
   assertBool "balloon gone" (not (isBalloon (getCell board1 (2, 1))))
 
@@ -421,7 +424,7 @@ cake_clears_at_zero = do
           mkCake
   assertBool "cake present" (isCake (getCell board0 (2, 1)))
   let seeds = findMatches board0
-      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCakes = cakes}} = cascadeSeeds Nothing seeds [] [] (mkStdGen 1) board0
+      CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountCakes -> cakes)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
   assertBool "cake cleared count" (cakes >= 1)
   assertBool "cake gone" (not (isCake (getCell board1 (2, 1))))
 
@@ -467,23 +470,21 @@ safe_opens_to_cookie = do
   assertBool "not still safe" (not (isSafe (getCell b1 (2, 1))))
   -- Cascade path: open + cookie may fall/collect
   let gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
-          , gsGoal = GoalSafe 1
-          , gsSafesOpened = 0
+          , gsGoal = goalCount CountSafes 1
+          , gsCounts = noCounts
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "goal progress" (gsSafesOpened gs1 >= 1)
+  assertBool "goal progress" (gsCount CountSafes gs1 >= 1)
   assertBool "safe gone from board" $
     not (any (\r -> any (\c -> isSafe (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
 
@@ -549,7 +550,7 @@ flip_becomes_back_on_clear = do
   -- Flip stays on board (not listed as clearable hole)
   assertBool "flip not cleared away" ((3, 1) `notElem` iceFree)
   -- Full cascade also leaves a gem (possibly later matched as C4)
-  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 2) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing noHooks (mkStdGen 2) board0
   assertBool "no flip remains at seed" (not (isFlip (getCell board1 (3, 1))))
 
 --------------------------------------------------------------------------------
@@ -594,7 +595,7 @@ surprise_opens_to_special = do
   let cell = getCell b1 (4, 0)
   assertBool "became special gem" (isGem cell && cellKind cell /= Just Normal)
   assertEqual "LineH" (Just LineH) (cellKind cell)
-  let gs = newGameAtLevel 32 (levelConfig (allLevels !! 32)) 42
+  let gs = levelGame 32 42
       nSur =
         length
           [ ()
@@ -626,15 +627,13 @@ surprise_explodes_small = do
   -- Still Surprise on board until clear holes applied
   assertBool "still surprise until clear" (isSurprise (getCell b1 (3, 3)))
   let gs0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board0
           , gsScore = 0
           , gsMoves = 20
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -662,14 +661,14 @@ flip_four_match_spawns_line = do
   let (mb, n) = clearMatches board0
   assertEqual "three holes (flip stays)" (3 :: Int) n
   assertBool "flip became back gem" $
-    case (mb !! 3) !! 2 of
+    case atM mb (3, 2) of
       Just c -> isGem c && cellColor c == Just C4 && cellKind c == Just Normal
       Nothing -> False
   let specials =
         [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [((mb !! r) !! c)]
+        , Just cell <- [(atM mb (r, c))]
         , isGem cell
         , Just k <- [cellKind cell]
         , k /= Normal
@@ -693,7 +692,7 @@ flip_four_match_spawns_line = do
         [ k
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [((mbI !! r) !! c)]
+        , Just cell <- [(atM mbI (r, c))]
         , isGem cell
         , Just k <- [cellKind cell]
         , k /= Normal
@@ -725,7 +724,7 @@ surprise_blast_expands_bomb = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mb !! r) !! c) == Nothing
+        , (atM mb (r, c)) == Nothing
         ]
   assertBool "bomb cell cleared" ((2, 3) `elem` holes)
   -- Bomb at (2,3) expands to row1; (1,3) is outside surprise 3×3 alone.
@@ -751,24 +750,21 @@ honey_balloon_same_clear = do
           (4, 1)
           (mkBalloon C1)
       gs0 =
-        (newGame defaultConfig 12)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 12)
           { gsBoard = board0
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsHoneyCleared = 0
-          , gsBalloonsPopped = 0
-          , gsGoal = GoalScore 99999
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "honey counted" (gsHoneyCleared gs1 >= 1)
-  assertBool "balloon counted" (gsBalloonsPopped gs1 >= 1)
+  assertBool "honey counted" (gsCount CountHoney gs1 >= 1)
+  assertBool "balloon counted" (gsCount CountBalloons gs1 >= 1)
   assertBool "no honey left" $
     not (any (\r -> any (\c -> isHoney (getCell (gsBoard gs1) (r, c))) [0 .. boardSize - 1]) [0 .. boardSize - 1])
   assertBool "no balloon left" $
@@ -791,34 +787,31 @@ safe_bottom_cookie_collected = do
           mkSafe
       (mb, _) = clearMatches board0
   assertBool "opened to cookie pre-settle" $
-    case (mb !! 7) !! 1 of
+    case atM mb (7, 1) of
       Just Cookie -> True
       _ -> False
-  let (settled, fallen, _) = settleBoardPortals [] mb
+  let (settled, fallen, _) = settleBoardPortals (builtinHooks [] []) mb
   assertEqual "cookie drained" (1 :: Int) fallen
   assertBool "bottom no longer cookie" $
-    case (settled !! 7) !! 1 of
+    case atM settled (7, 1) of
       Just Cookie -> False
       _ -> True
   let gs0 =
-        (newGame defaultConfig 13)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 13)
           { gsBoard = board0
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsSafesOpened = 0
-          , gsCookiesCollected = 0
-          , gsGoal = GoalSafe 1
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalCount CountSafes 1
+          })
       (gs1, out) = trySwap (6, 1) (6, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool "safe opened" (gsSafesOpened gs1 >= 1)
-  assertBool "cookie collected" (gsCookiesCollected gs1 >= 1)
+  assertBool "safe opened" (gsCount CountSafes gs1 >= 1)
+  assertBool "cookie collected" (gsCount CountCookies gs1 >= 1)
 
 --------------------------------------------------------------------------------
 -- Surprise direct-seed open (hammer / cross): special survives; explode blasts
@@ -838,7 +831,7 @@ surprise_direct_seed_opens = do
   assertEqual "LineH" (Just LineH) (cellKind cellU)
   -- Seed cascade (hammer path): special sits; not dug by iceFree hole.
   let g0 = mkStdGen 11
-      CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] [] [] g0 boardSpecial
+      CascadeRun {crBoard = bCas, crTally = CascadeTally {ctCells = nCleared}} = cascadeSeeds Nothing [(4, 0)] noHooks g0 boardSpecial
   assertEqual "special open clears no hole" (0 :: Int) nCleared
   let cellC = getCell bCas (4, 0)
   assertBool "cascade kept special" (isGem cellC && cellKind cellC /= Just Normal)
@@ -850,16 +843,14 @@ surprise_direct_seed_opens = do
   -- (3,3) explode-outcome: hammer 3×3 scores >= 90 (single-cell would be 10).
   let boardBoom = setCell stableBoard (3, 3) mkSurprise
       gsB0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = boardBoom
           , gsHammers = 2
           , gsMoves = 20
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gsB1, outB) = useHammer (3, 3) gsB0
   case outB of
     NoMatch -> assertFailure "hammer explode surprise should apply"
@@ -903,19 +894,19 @@ surprise_blast_peels_adjacent = do
           (Gem C1 Normal 0 (Just (Curtain 2)))
   assertEqual "explode outcome" (3 :: Int) (((3 * 8 + 3) `mod` 4))
   let (mb, _) = clearMatches board0
-      stone = case (mb !! 2) !! 5 of
+      stone = case atM mb (2, 5) of
         Just c -> c
         Nothing -> error "stone must remain"
-      fog = case (mb !! 1) !! 4 of
+      fog = case atM mb (1, 4) of
         Just c -> c
         Nothing -> error "fog gem must remain"
-      chain = case (mb !! 4) !! 5 of
+      chain = case atM mb (4, 5) of
         Just c -> c
         Nothing -> error "chain gem must remain"
-      freeze = case (mb !! 5) !! 3 of
+      freeze = case atM mb (5, 3) of
         Just c -> c
         Nothing -> error "freeze gem must remain"
-      curtain = case (mb !! 3) !! 5 of
+      curtain = case atM mb (3, 5) of
         Just c -> c
         Nothing -> error "curtain gem must remain"
   assertEqual "stone chipped 2→1" (1 :: Int) (stoneLayers stone)
@@ -939,7 +930,7 @@ surprise_blast_peels_adjacent = do
           (2, 5)
           (mkHoneyLayers 2)
       (mbH, _) = clearMatches boardH
-  case (mbH !! 2) !! 5 of
+  case atM mbH (2, 5) of
     Just h -> assertEqual "honey chipped 2→1" (1 :: Int) (honeyLayers h)
     Nothing -> assertFailure "honey must remain (not last layer)"
   -- Control: Bomb in-match 3×3 still peels the same way (parity sanity).
@@ -955,7 +946,7 @@ surprise_blast_peels_adjacent = do
           (2, 4)
           (mkStoneLayers 2)
       (mbB, _) = clearMatches boardB
-  case (mbB !! 2) !! 4 of
+  case atM mbB (2, 4) of
     Just s -> assertEqual "bomb still chips stone" (1 :: Int) (stoneLayers s)
     Nothing -> assertFailure "bomb stone must remain"
 
@@ -994,39 +985,37 @@ blast_chips_layered_obstacles_once = do
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
   -- Honey 2 on blast path: chip once → Honey 1 (not removed).
-  let CascadeRun {crBoard = bH} = cascadeMatches Nothing [] [] (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
+  let CascadeRun {crBoard = bH} = cascadeMatches Nothing noHooks (mkStdGen 51) (lineBoard (mkHoneyLayers 2))
       cellH = getCell bH (3, 5)
   assertBool "honey survives" (isHoney cellH)
   assertEqual "honey chipped once 2→1" (1 :: Int) (honeyLayers cellH)
   -- Chest 2: same single chip.
-  let CascadeRun {crBoard = bC} = cascadeMatches Nothing [] [] (mkStdGen 52) (lineBoard (mkChestLayers 2))
+  let CascadeRun {crBoard = bC} = cascadeMatches Nothing noHooks (mkStdGen 52) (lineBoard (mkChestLayers 2))
       cellC = getCell bC (3, 5)
   assertBool "chest survives" (isChest cellC)
   assertEqual "chest chipped once 2→1" (1 :: Int) (chestLayers cellC)
   -- Cake 2: same single chip.
-  let CascadeRun {crBoard = bK} = cascadeMatches Nothing [] [] (mkStdGen 53) (lineBoard (mkCakeLayers 2))
+  let CascadeRun {crBoard = bK} = cascadeMatches Nothing noHooks (mkStdGen 53) (lineBoard (mkCakeLayers 2))
       cellK = getCell bK (3, 5)
   assertBool "cake survives" (isCake cellK)
   assertEqual "cake chipped once 2→1" (1 :: Int) (cakeLayers cellK)
   -- Control: Honey 1 on path fully clears (last layer).
-  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctHoney = honeyHit}} = cascadeMatches Nothing [] [] (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
+  let CascadeRun {crBoard = bH1, crTally = CascadeTally {ctCounts = (countOf CountHoney -> honeyHit)}} = cascadeMatches Nothing noHooks (mkStdGen 54) (lineBoard (mkHoneyLayers 1))
   assertBool "honey1 cleared" (not (isHoney (getCell bH1 (3, 5))))
   assertBool "honey1 counted" (honeyHit >= 1)
   -- Hammer on Honey 3: chip 3→2, charge spent, not goal-counted yet.
   let boardHam = setCell stableBoard (5, 5) (mkHoneyLayers 3)
       gs0 =
-        (newGame defaultConfig 12)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 12)
           { gsBoard = boardHam
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalHoney 8
+          , gsGoal = goalCount CountHoney 8
           , gsMoves = 20
           , gsScore = 0
-          , gsHoneyCleared = 0
-          }
+          , gsCounts = noCounts
+          })
       (gs1, outH) = useHammer (5, 5) gs0
   case outH of
     NoMatch -> assertFailure "hammer chip should apply"
@@ -1035,7 +1024,7 @@ blast_chips_layered_obstacles_once = do
   let cellHam = getCell (gsBoard gs1) (5, 5)
   assertBool "honey remains after hammer" (isHoney cellHam)
   assertEqual "hammer chips 3→2" (2 :: Int) (honeyLayers cellHam)
-  assertEqual "not counted until last" (0 :: Int) (gsHoneyCleared gs1)
+  assertEqual "not counted until last" (0 :: Int) (gsCount CountHoney gs1)
   assertEqual "hammer spent" (1 :: Int) (gsHammers gs1)
   -- chipIceOnClear unit: Chest2/Cake2 not clearable; layers decremented.
   let (bChest, freeChest) = chipIceOnClear (setCell stableBoard (1, 1) (mkChestLayers 2)) [(1, 1)]
@@ -1072,7 +1061,7 @@ surprise_blast_opens_nested = do
   assertEqual "outer explode" (3 :: Int) (((3 * 8 + 3) `mod` 4))
   assertEqual "nested special" (2 :: Int) (((2 * 8 + 2) `mod` 4))
   let (mbS, _) = clearMatches boardSpecial
-  case (mbS !! 2) !! 2 of
+  case atM mbS (2, 2) of
     Just c -> do
       assertBool "nested opened to gem" (isGem c)
       assertEqual "nested Bomb special" (Just Bomb) (cellKind c)
@@ -1084,7 +1073,7 @@ surprise_blast_opens_nested = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mbS !! r) !! c) == Nothing
+        , (atM mbS (r, c)) == Nothing
         ]
   assertBool "nested Bomb must not fire (1,1)" ((1, 1) `notElem` holesS)
   assertBool "nested Bomb must not fire (2,1)" ((2, 1) `notElem` holesS)
@@ -1101,7 +1090,7 @@ surprise_blast_opens_nested = do
           (2, 2)
           mkSurprise
       (mbB, _) = clearMatches boardBomb
-  case (mbB !! 2) !! 2 of
+  case atM mbB (2, 2) of
     Just c -> assertEqual "bomb-hit nested Bomb" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "bomb-hit Surprise must open"
   -- Nested explode at (2,3): chain must reach (1,3) outside outer 3×3 alone.
@@ -1125,7 +1114,7 @@ surprise_blast_opens_nested = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mbC !! r) !! c) == Nothing
+        , (atM mbC (r, c)) == Nothing
         ]
   assertBool "nested explode center cleared" ((2, 3) `elem` holesC)
   assertBool "chained blast reached (1,3)" ((1, 3) `elem` holesC)
@@ -1163,9 +1152,9 @@ surprise_nested_special_no_fire = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mb !! r) !! c) == Nothing
+        , (atM mb (r, c)) == Nothing
         ]
-  case (mb !! 2) !! 2 of
+  case atM mb (2, 2) of
     Just c -> assertEqual "special sits" (Just Bomb) (cellKind c)
     Nothing -> assertFailure "nested special must survive"
   assertBool "no fire beyond outer blast (1,1)" ((1, 1) `notElem` holes)
@@ -1194,10 +1183,10 @@ surprise_nested_special_no_fire = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , ((mbP !! r) !! c) == Nothing
+        , (atM mbP (r, c)) == Nothing
         ]
   assertBool "pre-existing Bomb fires (1,1)" ((1, 1) `elem` holesP)
-  assertBool "pre-existing Bomb consumed" (((mbP !! 2) !! 2) == Nothing)
+  assertBool "pre-existing Bomb consumed" ((atM mbP (2, 2)) == Nothing)
 
 --------------------------------------------------------------------------------
 -- Surprise-opened special must sit through same-wave Hat / Bottle
@@ -1267,7 +1256,7 @@ surprise_special_sits_hat_bottle = do
           (1, 2)
           (mkGem C5)
       (mb, _) = clearMatches boardBoth
-  case (mb !! 2) !! 2 of
+  case atM mb (2, 2) of
     Just c -> do
       assertEqual "cascade keeps Bomb kind" (Just Bomb) (cellKind c)
       assertEqual "cascade keeps special color (not Bottle/Hat)" (Just C4) (cellColor c)

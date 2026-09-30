@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 打破型障碍：占格本体，被直接命中或邻格真消除时削层 / 打碎 / 变成别的元素。
 --
 -- 共同特征：原型 Blocker（挡交换、不点火、会下落、洗牌保留），状态是层数或颜色；
@@ -26,7 +27,7 @@ module Match3.Element.Builtin.Obstacle
 import Match3.Element.Builtin.Collectible (CookieE(..))
 import Match3.Element.Builtin.Common (colorPlace, deadRule)
 import Match3.Element.Builtin.Gem (PlainGem(..))
-import Match3.Element.Class
+import Match3.Element.Caps
 import Match3.Element.Registry
 import Match3.Element.Types
 import Match3.Obstacles
@@ -47,10 +48,7 @@ newtype StoneE = StoneE Int
 instance Element StoneE where
   name _ = "stone"
   toCell (StoneE n) = Stone n
-  archetype _ = Blocker
-  onHit (StoneE n) = chip n StoneE
-  adjacentRule _ = Just (AdjacentRule 10 (deadRule chipAdjacentStonesExcept))
-  counter _ = Just CountStones
+  caps (StoneE n) = blocker [hit (chip n StoneE), onAdjacent 10 (deadRule chipAdjacentStonesExcept), counts CountStones]
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
@@ -59,10 +57,7 @@ newtype ChestE = ChestE Int
 instance Element ChestE where
   name _ = "chest"
   toCell (ChestE n) = Chest n
-  archetype _ = Blocker
-  onHit (ChestE n) = chip n ChestE
-  adjacentRule _ = Just (AdjacentRule 20 (deadRule chipAdjacentChestsExcept))
-  counter _ = Just CountChests
+  caps (ChestE n) = blocker [hit (chip n ChestE), onAdjacent 20 (deadRule chipAdjacentChestsExcept), counts CountChests]
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
@@ -71,10 +66,7 @@ newtype HoneyE = HoneyE Int
 instance Element HoneyE where
   name _ = "honey"
   toCell (HoneyE n) = Honey n
-  archetype _ = Blocker
-  onHit (HoneyE n) = chip n HoneyE
-  adjacentRule _ = Just (AdjacentRule 30 (deadRule chipAdjacentHoneyExcept))
-  counter _ = Just CountHoney
+  caps (HoneyE n) = blocker [hit (chip n HoneyE), onAdjacent 30 (deadRule chipAdjacentHoneyExcept), counts CountHoney]
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
@@ -83,10 +75,7 @@ newtype CakeE = CakeE Int
 instance Element CakeE where
   name _ = "cake"
   toCell (CakeE n) = Cake n
-  archetype _ = Blocker
-  onHit (CakeE n) = chip n CakeE
-  adjacentRule _ = Just (AdjacentRule 40 (deadRule chipAdjacentCakesExcept))
-  counter _ = Just CountCakes
+  caps (CakeE n) = blocker [hit (chip n CakeE), onAdjacent 40 (deadRule chipAdjacentCakesExcept), counts CountCakes]
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
@@ -95,10 +84,7 @@ newtype BalloonE = BalloonE Color
 instance Element BalloonE where
   name _ = "balloon"
   toCell (BalloonE c) = Balloon c
-  archetype _ = Blocker
-  onHit _ = Destroy
-  adjacentRule _ = Just (AdjacentRule 50 (deadRule chipAdjacentBalloonsExcept))
-  counter _ = Just CountBalloons
+  caps _ = blocker [breaks, onAdjacent 50 (deadRule chipAdjacentBalloonsExcept), counts CountBalloons]
 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int
@@ -107,13 +93,13 @@ newtype SafeE = SafeE Int
 instance Element SafeE where
   name _ = "safe"
   toCell (SafeE n) = Safe n
-  archetype _ = Blocker
-  onHit (SafeE n)
-    | n <= 1 = Absorb (SomeElement CookieE)
-    | otherwise = Absorb (SomeElement (SafeE (n - 1)))
-  adjacentRule _ = Just (AdjacentRule 110 (\ctx b -> AdjOut (fst (chipAdjacentSafesExcept b (acTrue ctx) (acDirect ctx))) [] []))
-  diffCounter _ = Just CountSafes
-  vacatesCarpet _ = True
+  caps (SafeE n) =
+    blocker
+      [ hit (Absorb (if n <= 1 then SomeElement CookieE else SomeElement (SafeE (n - 1))))
+      , onAdjacent 110 (\ctx b -> AdjOut (fst (chipAdjacentSafesExcept b (acTrue ctx) (acDirect ctx))) [] [])
+      , countsDiff CountSafes
+      , vacates
+      ]
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
@@ -122,13 +108,7 @@ data FlipE = FlipE Color Color
 instance Element FlipE where
   name _ = "flip"
   toCell (FlipE f b) = Flip f b
-  archetype _ = Blocker
-  color (FlipE f _) = Just f
-  blocksSwap _ = False
-  portal _ = True
-  pushable _ = True
-  recolorable _ = True
-  onHit (FlipE _ back) = Absorb (SomeElement (PlainGem back))
+  caps (FlipE f back) = blocker [colorIs f, swappable, teleports, pushes, recolors, hit (Absorb (SomeElement (PlainGem back)))]
 
 -- | 彩蛋：占格障碍；命中即破；开启规则 = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
 -- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
@@ -138,9 +118,7 @@ data SurpriseEgg = SurpriseEgg
 instance Element SurpriseEgg where
   name _ = "surprise"
   toCell _ = Surprise
-  archetype _ = Blocker
-  onHit _ = Destroy
-  openRule _ = Just (OpenRule openSurprises)
+  caps _ = blocker [breaks, opens openSurprises]
 
 -- | 多层障碍受直接命中：削一层，末层消除。
 chip :: Element e => Int -> (Int -> e) -> Hit

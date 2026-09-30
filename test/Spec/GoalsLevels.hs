@@ -11,6 +11,7 @@ import Data.List (nub)
 import Match3.Core
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (noCounts, singleCount)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -61,12 +62,12 @@ outcome_moves_or_score = do
           assertEqual "moves -1" (gsMoves gs0 - 1) (gsMoves gs1)
           assertEqual "score" (gsScore gs0 + gained) (gsScore gs1)
           assertBool "gained > 0" (gained > 0)
-        Won s -> assertBool "won" (goalMet (gsGoal gs1) s (gsCollected gs1))
-        LevelClear s _ -> assertBool "level" (goalMet (gsGoal gs1) s (gsCollected gs1))
+        Won _ -> assertBool "won" (gsGoalMet gs1)
+        LevelClear _ _ -> assertBool "level" (gsGoalMet gs1)
         Lost _ -> gsMoves gs1 @?= 0
         other -> assertFailure ("unexpected: " ++ show other)
 
-  let cfgW = GameConfig { cfgMoves = 5, cfgGoal = GoalScore 1 }
+  let cfgW = GameConfig { cfgMoves = 5, cfgGoal = goalScore 1 }
       gsW0 = newGameAtLevel (length allLevels - 1) cfgW 42
   case findMatchPair (gsBoard gsW0) of
     Nothing -> assertFailure "win mover"
@@ -76,7 +77,7 @@ outcome_moves_or_score = do
         Won _ -> pure ()
         other -> assertFailure ("expected Won on last level, got " ++ show other)
 
-  let cfgL = GameConfig { cfgMoves = 1, cfgGoal = GoalScore 999999 }
+  let cfgL = GameConfig { cfgMoves = 1, cfgGoal = goalScore 999999 }
       gsL0 = newGame cfgL 42
   case findMatchPair (gsBoard gsL0) of
     Nothing -> assertFailure "lose mover"
@@ -95,7 +96,7 @@ outcome_moves_or_score = do
 -- | Clearing gems of the target color increments gsCollected.
 collect_goal_progress :: Assertion
 collect_goal_progress = do
-  let cfg = GameConfig { cfgMoves = 20, cfgGoal = GoalCollect C1 100 }
+  let cfg = GameConfig { cfgMoves = 20, cfgGoal = goalCollect C1 100 }
       -- Build a board with a clearable C1 triple at row 3, rest C5 (won't make C1 match elsewhere)
       fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
@@ -110,7 +111,6 @@ collect_goal_progress = do
       gs0 =
         (newGame cfg 55)
           { gsBoard = board
-          , gsCollected = 0
           , gsOver = Nothing
           , gsHint = Nothing
           }
@@ -128,7 +128,7 @@ collect_goal_progress = do
 -- | Reaching collect count triggers LevelClear (or Won on last level).
 collect_goal_clears_level :: Assertion
 collect_goal_clears_level = do
-  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalCollect C1 3 }
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = goalCollect C1 3 }
       fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
@@ -137,7 +137,6 @@ collect_goal_clears_level = do
       gs0 =
         (newGameAtLevel 0 cfg 55)
           { gsBoard = board
-          , gsCollected = 0
           , gsOver = Nothing
           }
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
@@ -153,7 +152,7 @@ collect_goal_clears_level = do
 -- | One legal clear with moves=1 but GoalCollect unmet → Lost; collected < target.
 collect_goal_lose_on_moves :: Assertion
 collect_goal_lose_on_moves = do
-  let cfg = GameConfig { cfgMoves = 1, cfgGoal = GoalCollect C1 99 }
+  let cfg = GameConfig { cfgMoves = 1, cfgGoal = goalCollect C1 99 }
       fill = mkGem C5
       b0 = replicate boardSize (replicate boardSize fill)
       row3 = map mkGem [C1, C1, C2, C1, C3, C4, C5, C2]
@@ -161,7 +160,6 @@ collect_goal_lose_on_moves = do
       gs0 =
         (newGameAtLevel 0 cfg 55)
           { gsBoard = board
-          , gsCollected = 0
           , gsOver = Nothing
           }
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
@@ -183,8 +181,8 @@ collect_goal_lose_on_moves = do
 level_table_mixes_collect :: Assertion
 level_table_mixes_collect = do
   let goals = map lvlGoal allLevels
-      scores = [g | g@GoalScore {} <- goals]
-      collects = [g | g@GoalCollect {} <- goals]
+      scores = [g | g <- goals, ViewScore _ <- [goalView g]]
+      collects = [g | g <- goals, ViewCollect _ _ <- [goalView g]]
   assertBool "has score levels" (not (null scores))
   assertBool "has collect levels" (not (null collects))
   assertBool "at least 5 levels" (length allLevels >= 5)
@@ -195,17 +193,17 @@ level_table_mixes_collect = do
   assertBool "has 双采" ("双采" `elem` names)
   assertBool "has 碎石" ("碎石" `elem` names)
   assertBool "has multi goal"
-    (any (\g -> case g of GoalCollectMulti _ -> True; _ -> False) goals)
+    (any (\g -> case goalView g of ViewCollectMulti _ -> True; _ -> False) goals)
   assertBool "has clear-stone goal"
-    (any (\g -> case g of GoalClearStone _ -> True; _ -> False) goals)
+    (any (\g -> case goalView g of ViewCount CountStones _ -> True; _ -> False) goals)
   assertBool "has 飞碟" ("飞碟" `elem` names)
   assertBool "has ufo goal"
-    (any (\g -> case g of GoalUfo _ -> True; _ -> False) goals)
+    (any (\g -> case goalView g of ViewCount CountUfo _ -> True; _ -> False) goals)
 
 -- | Score-goal levels do not increment gsCollected (stays 0).
 score_goal_ignores_collect :: Assertion
 score_goal_ignores_collect = do
-  let cfg = GameConfig { cfgMoves = 20, cfgGoal = GoalScore 99999 }
+  let cfg = GameConfig { cfgMoves = 20, cfgGoal = goalScore 99999 }
       gs0 = newGame cfg 42
   case findMatchPair (gsBoard gs0) of
     Nothing -> assertFailure "need move"
@@ -220,7 +218,7 @@ score_goal_ignores_collect = do
 -- | GoalCollectMulti requires quotas for every listed color.
 goal_collect_multi_color :: Assertion
 goal_collect_multi_color = do
-  let cfg = GameConfig { cfgMoves = 20, cfgGoal = GoalCollectMulti [(C1, 3), (C2, 1)] }
+  let cfg = GameConfig { cfgMoves = 20, cfgGoal = goalColors [(C1, 3), (C2, 1)] }
       board0 =
         setCell
           (setCell
@@ -236,37 +234,35 @@ goal_collect_multi_color = do
       gs0 =
         (newGameAtLevel 0 cfg 5)
           { gsBoard = board0
-          , gsCollected = 0
-          , gsColorBag = zip allColors (repeat 0)
           , gsOver = Nothing
           }
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
-  assertBool "C1 tallied" (lookupCount (gsColorBag gs1) C1 >= 3)
+  assertBool "C1 tallied" (gsCount (CountColor C1) gs1 >= 3)
   -- Not yet clear: still need C2 quota unless cascade luck
   case out of
     LevelClear _ _ ->
       assertBool "if cleared, both quotas met" $
-        goalMetEx (gsGoal gs1) (gsScore gs1) (gsCollected gs1) (gsColorBag gs1) (gsStonesCleared gs1) (gsUfoCollected gs1) (gsChestsCleared gs1) (gsHoneyCleared gs1) (gsBalloonsPopped gs1) (gsCookiesCollected gs1) (gsCakesCleared gs1) (gsSafesOpened gs1)
+        gsGoalMet gs1
     MoveApplied _ ->
       assertBool "multi goal not met with only C1" $
-        not (goalMetEx (GoalCollectMulti [(C1, 3), (C2, 1)]) 0 0 (gsColorBag gs1) 0 0 0 0 0 0 0 0)
-          || lookupCount (gsColorBag gs1) C2 >= 1
+        not (goalMet (goalColors [(C1, 3), (C2, 1)]) 0 (gsCounts gs1))
+          || gsCount (CountColor C2) gs1 >= 1
     _ -> pure ()
-  -- Direct unit: goalMetEx logic
+  -- Direct unit: goalMet logic（多色配额）
   assertBool "both met"
-    (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 2), (C2, 0), (C3, 1), (C4, 0), (C5, 0)] 0 0 0 0 0 0 0 0)
+    (goalMet (goalColors [(C1, 2), (C3, 1)]) 0 (countsFromList [(CountColor C1, 2), (CountColor C3, 1)]))
   assertBool "missing color"
-    (not (goalMetEx (GoalCollectMulti [(C1, 2), (C3, 1)]) 0 0 [(C1, 5), (C2, 0), (C3, 0), (C4, 0), (C5, 0)] 0 0 0 0 0 0 0 0))
+    (not (goalMet (goalColors [(C1, 2), (C3, 1)]) 0 (countsFromList [(CountColor C1, 5)])))
 
 -- | GoalClearStone counts fully destroyed stones toward the goal.
 goal_clear_stone_counts :: Assertion
 goal_clear_stone_counts = do
   assertBool "0 stones unmet"
-    (not (goalMetEx (GoalClearStone 2) 0 0 [] 0 0 0 0 0 0 0 0))
+    (not (goalMet (goalCount CountStones 2) 0 noCounts))
   assertBool "2 stones met"
-    (goalMetEx (GoalClearStone 2) 0 0 [] 2 0 0 0 0 0 0 0)
-  assertEqual "goal target" (8 :: Int) (goalTarget (GoalClearStone 8))
-  let cfg = GameConfig { cfgMoves = 15, cfgGoal = GoalClearStone 2 }
+    (goalMet (goalCount CountStones 2) 0 (singleCount CountStones 2))
+  assertEqual "goal target" (8 :: Int) (goalTarget (goalCount CountStones 8))
+  let cfg = GameConfig { cfgMoves = 15, cfgGoal = goalCount CountStones 2 }
       boardN =
         setCell
           (setCell
@@ -284,15 +280,15 @@ goal_clear_stone_counts = do
       gsN =
         (newGameAtLevel 0 cfg 5)
           { gsBoard = boardN
-          , gsStonesCleared = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
           }
       (gsN1, outN) = trySwap (3, 2) (3, 3) gsN
   assertBool
-    ("stonesCleared incremented, got " ++ show (gsStonesCleared gsN1))
-    (gsStonesCleared gsN1 >= 1)
+    ("stonesCleared incremented, got " ++ show (gsCount CountStones gsN1))
+    (gsCount CountStones gsN1 >= 1)
   case outN of
-    LevelClear _ _ -> assertBool "enough stones" (gsStonesCleared gsN1 >= 2)
+    LevelClear _ _ -> assertBool "enough stones" (gsCount CountStones gsN1 >= 2)
     MoveApplied _ -> pure ()
     Won _ -> pure ()
     Lost _ -> pure ()
@@ -329,30 +325,30 @@ star_rating_tiers = do
 
 lose_hint_by_goal :: Assertion
 lose_hint_by_goal = do
-  assertBool "score hint" (not (null (loseHint (GoalScore 500))))
-  assertBool "collect hint" (not (null (loseHint (GoalCollect C1 20))))
-  assertBool "multi hint" (not (null (loseHint (GoalCollectMulti [(C1, 1)]))))
-  assertBool "stone hint" (not (null (loseHint (GoalClearStone 8))))
-  assertBool "chest hint" (not (null (loseHint (GoalChest 6))))
-  assertBool "honey hint" (not (null (loseHint (GoalHoney 6))))
-  assertBool "balloon hint" (not (null (loseHint (GoalBalloon 6))))
-  assertBool "cookie hint" (not (null (loseHint (GoalCookie 6))))
-  assertBool "cake hint" (not (null (loseHint (GoalCake 6))))
-  assertBool "safe hint" (not (null (loseHint (GoalSafe 5))))
-  assertBool "ufo hint" (not (null (loseHint (GoalUfo 10))))
-  assertBool "carpet hint" (not (null (loseHint (GoalCarpet 8))))
+  assertBool "score hint" (not (null (loseHint (goalScore 500))))
+  assertBool "collect hint" (not (null (loseHint (goalCollect C1 20))))
+  assertBool "multi hint" (not (null (loseHint (goalColors [(C1, 1)]))))
+  assertBool "stone hint" (not (null (loseHint (goalCount CountStones 8))))
+  assertBool "chest hint" (not (null (loseHint (goalCount CountChests 6))))
+  assertBool "honey hint" (not (null (loseHint (goalCount CountHoney 6))))
+  assertBool "balloon hint" (not (null (loseHint (goalCount CountBalloons 6))))
+  assertBool "cookie hint" (not (null (loseHint (goalCount CountCookies 6))))
+  assertBool "cake hint" (not (null (loseHint (goalCount CountCakes 6))))
+  assertBool "safe hint" (not (null (loseHint (goalCount CountSafes 5))))
+  assertBool "ufo hint" (not (null (loseHint (goalCount CountUfo 10))))
+  assertBool "carpet hint" (not (null (loseHint (goalCount CountCarpets 8))))
 
 goal_chest_counts :: Assertion
 goal_chest_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalChest 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalChest 2) 0 0 [] 0 0 2 0 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalChest 5) 0 0 [] 0 0 2 0 0 0 0 0)
-  assertEqual "target" (6 :: Int) (goalTarget (GoalChest 6))
+  assertBool "unmet" (not (goalMet (goalCount CountChests 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountChests 2) 0 (singleCount CountChests 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountChests 5) 0 (singleCount CountChests 2))
+  assertEqual "target" (6 :: Int) (goalTarget (goalCount CountChests 6))
   assertBool
     "campaign has GoalChest"
-    (any (\g -> case g of GoalChest _ -> True; _ -> False) (map lvlGoal allLevels))
+    (any (\g -> case goalView g of ViewCount CountChests _ -> True; _ -> False) (map lvlGoal allLevels))
   -- Level 16 décor places chests
-  let gs = newGameAtLevel 16 (levelConfig (allLevels !! 16)) 42
+  let gs = levelGame 16 42
       nChests =
         length
           [ ()
@@ -365,14 +361,14 @@ goal_chest_counts = do
 
 goal_honey_counts :: Assertion
 goal_honey_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalHoney 2) 0 0 [] 0 0 0 2 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalHoney 5) 0 0 [] 0 0 0 2 0 0 0 0)
-  assertEqual "target" (6 :: Int) (goalTarget (GoalHoney 6))
+  assertBool "unmet" (not (goalMet (goalCount CountHoney 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountHoney 2) 0 (singleCount CountHoney 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountHoney 5) 0 (singleCount CountHoney 2))
+  assertEqual "target" (6 :: Int) (goalTarget (goalCount CountHoney 6))
   assertBool
     "campaign has GoalHoney"
-    (any (\g -> case g of GoalHoney _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 18 (levelConfig (allLevels !! 18)) 42
+    (any (\g -> case goalView g of ViewCount CountHoney _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = levelGame 18 42
       nHoney =
         length
           [ ()
@@ -386,14 +382,14 @@ goal_honey_counts = do
 
 goal_balloon_counts :: Assertion
 goal_balloon_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalBalloon 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalBalloon 2) 0 0 [] 0 0 0 0 2 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalBalloon 5) 0 0 [] 0 0 0 0 2 0 0 0)
-  assertEqual "target" (6 :: Int) (goalTarget (GoalBalloon 6))
+  assertBool "unmet" (not (goalMet (goalCount CountBalloons 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountBalloons 2) 0 (singleCount CountBalloons 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountBalloons 5) 0 (singleCount CountBalloons 2))
+  assertEqual "target" (6 :: Int) (goalTarget (goalCount CountBalloons 6))
   assertBool
     "campaign has GoalBalloon"
-    (any (\g -> case g of GoalBalloon _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 20 (levelConfig (allLevels !! 20)) 42
+    (any (\g -> case goalView g of ViewCount CountBalloons _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = levelGame 20 42
       nBal =
         length
           [ ()
@@ -406,14 +402,14 @@ goal_balloon_counts = do
 
 goal_cookie_counts :: Assertion
 goal_cookie_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalCookie 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalCookie 2) 0 0 [] 0 0 0 0 0 2 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalCookie 5) 0 0 [] 0 0 0 0 0 2 0 0)
-  assertEqual "target" (6 :: Int) (goalTarget (GoalCookie 6))
+  assertBool "unmet" (not (goalMet (goalCount CountCookies 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountCookies 2) 0 (singleCount CountCookies 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountCookies 5) 0 (singleCount CountCookies 2))
+  assertEqual "target" (6 :: Int) (goalTarget (goalCount CountCookies 6))
   assertBool
     "campaign has GoalCookie"
-    (any (\g -> case g of GoalCookie _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 21 (levelConfig (allLevels !! 21)) 42
+    (any (\g -> case goalView g of ViewCount CountCookies _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = levelGame 21 42
       nCookie =
         length
           [ ()
@@ -426,14 +422,14 @@ goal_cookie_counts = do
 
 goal_cake_counts :: Assertion
 goal_cake_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalCake 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalCake 2) 0 0 [] 0 0 0 0 0 0 2 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalCake 5) 0 0 [] 0 0 0 0 0 0 2 0)
-  assertEqual "target" (6 :: Int) (goalTarget (GoalCake 6))
+  assertBool "unmet" (not (goalMet (goalCount CountCakes 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountCakes 2) 0 (singleCount CountCakes 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountCakes 5) 0 (singleCount CountCakes 2))
+  assertEqual "target" (6 :: Int) (goalTarget (goalCount CountCakes 6))
   assertBool
     "campaign has GoalCake"
-    (any (\g -> case g of GoalCake _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 23 (levelConfig (allLevels !! 23)) 42
+    (any (\g -> case goalView g of ViewCount CountCakes _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = levelGame 23 42
       nCake =
         length
           [ ()
@@ -442,7 +438,7 @@ goal_cake_counts = do
           , isCake (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor cake >= 6, got " ++ show nCake) (nCake >= 6)
-  let gsHat = newGameAtLevel 24 (levelConfig (allLevels !! 24)) 42
+  let gsHat = levelGame 24 42
       nHat =
         length
           [ ()
@@ -454,14 +450,14 @@ goal_cake_counts = do
 
 goal_safe_counts :: Assertion
 goal_safe_counts = do
-  assertBool "unmet" (not (goalMetEx (GoalSafe 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "met" (goalMetEx (GoalSafe 2) 0 0 [] 0 0 0 0 0 0 0 2)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalSafe 5) 0 0 [] 0 0 0 0 0 0 0 2)
-  assertEqual "target" (5 :: Int) (goalTarget (GoalSafe 5))
+  assertBool "unmet" (not (goalMet (goalCount CountSafes 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountSafes 2) 0 (singleCount CountSafes 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountSafes 5) 0 (singleCount CountSafes 2))
+  assertEqual "target" (5 :: Int) (goalTarget (goalCount CountSafes 5))
   assertBool
     "campaign has GoalSafe"
-    (any (\g -> case g of GoalSafe _ -> True; _ -> False) (map lvlGoal allLevels))
-  let gs = newGameAtLevel 31 (levelConfig (allLevels !! 31)) 42
+    (any (\g -> case goalView g of ViewCount CountSafes _ -> True; _ -> False) (map lvlGoal allLevels))
+  let gs = levelGame 31 42
       nSafes =
         length
           [ ()
@@ -482,7 +478,7 @@ goal_safe_counts = do
 -- | Daily (or any) GoalUfo config without level décor still gets a default UFO.
 daily_ufo_goal_spawns_saucer :: Assertion
 daily_ufo_goal_spawns_saucer = do
-  let cfg = GameConfig 26 (GoalUfo 8)
+  let cfg = GameConfig 26 (goalCount CountUfo 8)
       gs = newGame cfg 20260929
   assertBool "default UFO placed" (not (null (gsUfos gs)))
   assertEqual "target color" [C1] (map ufoColor (take 1 (gsUfos gs)))
@@ -490,31 +486,28 @@ daily_ufo_goal_spawns_saucer = do
 
 goal_carpet_counts :: Assertion
 goal_carpet_counts = do
-  assertBool "unmet" (not (goalMet (GoalCarpet 2) 0 0))
-  assertBool "met" (goalMet (GoalCarpet 2) 0 2)
-  assertBool "ex unmet" (not (goalMetEx (GoalCarpet 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "ex met" (goalMetEx (GoalCarpet 2) 0 2 [] 0 0 0 0 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgress (GoalCarpet 5) 0 2)
-  assertEqual "progressEx" (2 :: Int) (goalProgressEx (GoalCarpet 5) 0 2 [] 0 0 0 0 0 0 0 0)
-  assertEqual "target" (5 :: Int) (goalTarget (GoalCarpet 5))
+  assertBool "unmet" (not (goalMet (goalCount CountCarpets 2) 0 noCounts))
+  assertBool "met" (goalMet (goalCount CountCarpets 2) 0 (singleCount CountCarpets 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountCarpets 5) 0 (singleCount CountCarpets 2))
+  assertEqual "target" (5 :: Int) (goalTarget (goalCount CountCarpets 5))
   -- Campaign includes GoalCarpet
   assertBool "campaign has GoalCarpet" $
-    any (\g -> case g of GoalCarpet _ -> True; _ -> False) (map lvlGoal allLevels)
-  let gs = newGameAtLevel 36 (levelConfig (allLevels !! 36)) 42
+    any (\g -> case goalView g of ViewCount CountCarpets _ -> True; _ -> False) (map lvlGoal allLevels)
+  let gs = levelGame 36 42
   assertEqual "level 36 carpet open" (8 :: Int) (length (gsCarpetOpen gs))
-  assertEqual "goal" (GoalCarpet 8) (gsGoal gs)
+  assertEqual "goal" (goalCount CountCarpets 8) (gsGoal gs)
   assertEqual "campaign levels" (40 :: Int) (length allLevels)
 
 carry_moves_on_next_level :: Assertion
 carry_moves_on_next_level = do
-  let cfg0 = levelConfig (allLevels !! 0)
+  let cfg0 = levelConfig (levelAt 0)
       gs0 =
         (newGameAtLevel 0 cfg0 1)
           { gsOver = Just (LevelClear 100 1)
           , gsMoves = 5  -- leftover
           }
       gs1 = nextLevel gs0 99
-      base = lvlMoves (allLevels !! 1)
+      base = lvlMoves (levelAt 1)
   assertEqual "level advanced" (1 :: Int) (gsLevel gs1)
   assertEqual "carried min(3,left)" (base + 3) (gsMoves gs1)  -- cap 3
   let gs2 =
@@ -534,11 +527,11 @@ daily_goal_rotates_ten = do
   -- Sample includes newer flavors
   assertBool "has chest or cake or safe or balloon among first 20 days" $
     any
-      ( \g -> case g of
-          GoalChest _ -> True
-          GoalCake _ -> True
-          GoalSafe _ -> True
-          GoalBalloon _ -> True
+      ( \g -> case goalView g of
+          ViewCount CountChests _ -> True
+          ViewCount CountCakes _ -> True
+          ViewCount CountSafes _ -> True
+          ViewCount CountBalloons _ -> True
           _ -> False
       )
       flavors
@@ -563,24 +556,24 @@ campaign_levels_batch_ok = do
               assertBool ("cols L" ++ show i) (all ((== boardSize) . length) (boardRows b))
               assertEqual ("cfg moves L" ++ show i) (lvlMoves lvl) (gsMoves gs)
               assertBool ("playable L" ++ show i ++ " s=" ++ show seed) (hasValidMove b)
-              case lvlGoal lvl of
-                GoalClearStone n ->
+              case goalView (lvlGoal lvl) of
+                ViewCount CountStones n ->
                   assertBool ("stones L" ++ show i) (countCells isStone b >= n)
-                GoalChest n ->
+                ViewCount CountChests n ->
                   assertBool ("chests L" ++ show i) (countCells isChest b >= n)
-                GoalHoney n ->
+                ViewCount CountHoney n ->
                   assertBool ("honey L" ++ show i) (countCells isHoney b >= n)
-                GoalBalloon n ->
+                ViewCount CountBalloons n ->
                   assertBool ("balloons L" ++ show i) (countCells isBalloon b >= n)
-                GoalCookie n ->
+                ViewCount CountCookies n ->
                   assertBool ("cookies L" ++ show i) (countCells isCookie b >= n)
-                GoalCake n ->
+                ViewCount CountCakes n ->
                   assertBool ("cakes L" ++ show i) (countCells isCake b >= n)
-                GoalSafe n ->
+                ViewCount CountSafes n ->
                   assertBool ("safes L" ++ show i) (countCells isSafe b >= n)
-                GoalCarpet n ->
+                ViewCount CountCarpets n ->
                   assertBool ("carpets L" ++ show i) (length (gsCarpetOpen gs) >= n)
-                GoalUfo _ ->
+                ViewCount CountUfo _ ->
                   assertBool ("ufo L" ++ show i) (not (null (gsUfos gs)))
                 _ -> pure ()
           )
@@ -599,12 +592,12 @@ campaign_levels_batch_ok = do
 -- | Finale / high-pressure levels keep a reasonable move budget.
 finale_and_pressure_moves_reasonable :: Assertion
 finale_and_pressure_moves_reasonable = do
-  let finale = allLevels !! 27
-      master = allLevels !! 15
-      pressure = allLevels !! 14
-      steam = allLevels !! 35
-      carpet = allLevels !! 36
-      weave = allLevels !! 37
+  let finale = levelAt 27
+      master = levelAt 15
+      pressure = levelAt 14
+      steam = levelAt 35
+      carpet = levelAt 36
+      weave = levelAt 37
   assertEqual "终章 name" "终章" (lvlName finale)
   assertBool "终章 moves >= 24" (lvlMoves finale >= 24)
   assertBool "大师 moves >= 22" (lvlMoves master >= 22)
@@ -613,11 +606,11 @@ finale_and_pressure_moves_reasonable = do
   assertBool "地毯 moves >= 24" (lvlMoves carpet >= 24)
   assertBool "织毯 moves >= 24" (lvlMoves weave >= 24)
   -- Soft score caps so dense décor levels stay fair (numbers only; rules frozen)
-  case lvlGoal master of
-    GoalScore n -> assertBool "大师 score <= 1000" (n <= 1000)
+  case goalView (lvlGoal master) of
+    ViewScore n -> assertBool "大师 score <= 1000" (n <= 1000)
     _ -> assertFailure "大师 should be GoalScore"
-  case lvlGoal finale of
-    GoalScore n -> assertBool "终章 score <= 1400" (n <= 1400)
+  case goalView (lvlGoal finale) of
+    ViewScore n -> assertBool "终章 score <= 1400" (n <= 1400)
     _ -> assertFailure "终章 should be GoalScore"
   -- Every level at least 18 moves; no zero/negative goals
   mapM_
@@ -641,27 +634,27 @@ daily_obstacle_goal_spawns_decor = do
                 , keep (getCell (gsBoard gs) (r, c))
                 ]
         assertBool (tag ++ " decor count=" ++ show n) (n >= 4)
-  check isStone (GoalClearStone 6) "stone"
-  check isHoney (GoalHoney 6) "honey"
-  check isChest (GoalChest 5) "chest"
-  check isCake (GoalCake 5) "cake"
-  check isSafe (GoalSafe 4) "safe"
-  check isBalloon (GoalBalloon 6) "balloon"
-  check isCookie (GoalCookie 6) "cookie"
+  check isStone (goalCount CountStones 6) "stone"
+  check isHoney (goalCount CountHoney 6) "honey"
+  check isChest (goalCount CountChests 5) "chest"
+  check isCake (goalCount CountCakes 5) "cake"
+  check isSafe (goalCount CountSafes 4) "safe"
+  check isBalloon (goalCount CountBalloons 6) "balloon"
+  check isCookie (goalCount CountCookies 6) "cookie"
 
 -- | Map / restart jump uses printed moves only (no leftover carry bank).
 map_select_no_carry_moves :: Assertion
 map_select_no_carry_moves = do
   let gsPrev =
-        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 1)
+        (levelGame 0 1)
           { gsOver = Just (LevelClear 100 1)
           , gsMoves = 9
           }
       carried = nextLevel gsPrev 2
-      base1 = lvlMoves (allLevels !! 1)
+      base1 = lvlMoves (levelAt 1)
   assertEqual "carry path adds bonus" (base1 + 3) (gsMoves carried)
   -- Map-like jump / restart: fresh allotment
-  let gsMap = newGameAtLevel 1 (levelConfig (allLevels !! 1)) 3
+  let gsMap = levelGame 1 3
       gsRestart = restartLevel gsPrev { gsLevel = 1, gsOver = Nothing } 4
   assertEqual "map select no carry" base1 (gsMoves gsMap)
   assertEqual "restart no carry" base1 (gsMoves gsRestart)
@@ -676,12 +669,12 @@ star_rating_vs_carry_base = do
   assertEqual "inflated start would wrongly drop to 2★" (2 :: Int) (starRating (base + carry) left)
   -- After nextLevel, gsMoves is printed+carry; UI must rate vs printed (Main advanceOrMsg).
   let gsPrev =
-        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 1)
+        (levelGame 0 1)
           { gsOver = Just (LevelClear 50 1)
           , gsMoves = 5
           }
       gsNext = nextLevel gsPrev 9
-      printed = lvlMoves (allLevels !! gsLevel gsNext)
+      printed = lvlMoves (levelAt (gsLevel gsNext))
   assertEqual "carry cap on gsMoves" (printed + 3) (gsMoves gsNext)
   assertEqual "skill tier vs printed still 3★ at 40%" (3 :: Int) (starRating printed (printed * 2 `div` 5))
   assertEqual "skill tier vs inflated would be 2★" (2 :: Int) (starRating (gsMoves gsNext) (printed * 2 `div` 5))
@@ -705,14 +698,14 @@ map_click_same_level_resumes = do
 -- | Bare GoalCarpet (no levelCarpets) still gets open floor tiles (UFO décor parity).
 goal_carpet_seeds_open_tiles :: Assertion
 goal_carpet_seeds_open_tiles = do
-  let gs = newGame (GameConfig 26 (GoalCarpet 8)) 20260929
-  assertEqual "goal" (GoalCarpet 8) (gsGoal gs)
+  let gs = newGame (GameConfig 26 (goalCount CountCarpets 8)) 20260929
+  assertEqual "goal" (goalCount CountCarpets 8) (gsGoal gs)
   assertBool
     ("open carpets >= 8, got " ++ show (length (gsCarpetOpen gs)))
     (length (gsCarpetOpen gs) >= 8)
-  assertEqual "covered start" (0 :: Int) (gsCarpetsCovered gs)
+  assertEqual "covered start" (0 :: Int) (gsCount CountCarpets gs)
   -- GoalCookie bare newGame must seed high biscuits (ensureGoalDecor)
-  let gsCk = newGame (GameConfig 26 (GoalCookie 6)) 20260929
+  let gsCk = newGame (GameConfig 26 (goalCount CountCookies 6)) 20260929
       nCk =
         length
           [ ()
@@ -736,7 +729,7 @@ goal_carpet_seeds_open_tiles = do
 -- campaign L0 clear and offered NEXT L2 / unlocked map node 1.
 daily_clear_is_won_not_levelclear :: Assertion
 daily_clear_is_won_not_levelclear = do
-  let cfg = GameConfig 20 (GoalScore 10)
+  let cfg = GameConfig 20 (goalScore 10)
       gs0 = newDailyGame cfg 42
   assertBool "flagged daily" (gsDaily gs0)
   assertEqual "daily sits at index 0" (0 :: Int) (gsLevel gs0)
@@ -744,7 +737,7 @@ daily_clear_is_won_not_levelclear = do
   case hint of
     Nothing -> assertFailure "daily board must have a move"
     Just (p1, p2) -> do
-      let (_, out) = trySwap p1 p2 (gs0 { gsScore = 0, gsGoal = GoalScore 10, gsMoves = 15, gsOver = Nothing })
+      let (_, out) = trySwap p1 p2 (gs0 { gsScore = 0, gsGoal = goalScore 10, gsMoves = 15, gsOver = Nothing })
       case out of
         Won _ -> pure ()
         LevelClear _ n ->
@@ -754,7 +747,7 @@ daily_clear_is_won_not_levelclear = do
           let gsMet =
                 gs0
                   { gsScore = 50
-                  , gsGoal = GoalScore 10
+                  , gsGoal = goalScore 10
                   , gsMoves = 15
                   , gsOver = Nothing
                   }
@@ -770,14 +763,14 @@ daily_clear_is_won_not_levelclear = do
                other -> assertFailure ("expected Won, got " ++ show other)
         other -> assertFailure ("expected Won/MoveApplied, got " ++ show other)
   -- Campaign L0 with same goal still LevelClears
-  let gsCamp = newGameAtLevel 0 (GameConfig 20 (GoalScore 10)) 42
+  let gsCamp = newGameAtLevel 0 (GameConfig 20 (goalScore 10)) 42
   assertBool "campaign not daily" (not (gsDaily gsCamp))
   case findHint (gsBoard gsCamp) of
     Nothing -> assertFailure "campaign L0 needs a move"
     Just (p1, p2) -> do
       let (gsC, outC) =
             trySwap p1 p2
-              (gsCamp { gsScore = 50, gsGoal = GoalScore 10, gsMoves = 15, gsOver = Nothing })
+              (gsCamp { gsScore = 50, gsGoal = goalScore 10, gsMoves = 15, gsOver = Nothing })
       case outC of
         LevelClear _ 1 -> pure ()
         Won _ -> assertFailure "campaign L0 must LevelClear, not Won"
@@ -786,7 +779,7 @@ daily_clear_is_won_not_levelclear = do
 -- | Daily Won must not bump map unlock (finale Won still unlocks all).
 daily_won_does_not_unlock_map :: Assertion
 daily_won_does_not_unlock_map = do
-  let gsD = newDailyGame (GameConfig 26 (GoalScore 600)) 1
+  let gsD = newDailyGame (GameConfig 26 (goalScore 600)) 1
       reached0 = 0 :: Int
   assertEqual "daily Won keeps unlock" reached0 (unlockAfterOutcome gsD reached0 (Won 100))
   assertEqual "daily LevelClear also no-op" reached0 (unlockAfterOutcome gsD reached0 (LevelClear 100 1))

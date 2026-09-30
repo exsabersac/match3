@@ -1,6 +1,6 @@
 # 领域词汇（中英对照）
 
-与 `src/Match3/Types.hs`、`GameState` 及机制模块对齐。标识符保持英文；阅读文档时可用下表对照。
+与 `src/Match3/Types.hs`（第 6 刀起是 `Types/*.hs` 的门面）、`GameState`、关卡记录（`src/Match3/Levels/`）及机制模块对齐。标识符保持英文；阅读文档时可用下表对照。
 
 ## 棋盘与基本单位
 
@@ -63,14 +63,14 @@
 
 | 中文 | 字段 / 类型 | 说明 |
 |------|-------------|------|
-| 传送带 | `Belt` = `[Pos]`，`gsBelts` | 步末沿环移位；可再连锁 |
-| 传送门 | `gsPortals :: [(Pos,Pos)]` | 双向；沉降时 A 有子 B 空则传送 |
-| 飞碟 | `Ufo{ufoCell,ufoColor}`，`gsUfos` | 波末吸正交同色再移格；吸走≠引爆 |
-| 地毯 | `gsCarpetOpen` / `gsCarpetsCovered` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
-| 地面层（扩展槽） | `gsGround :: Ground`（`[(Pos,(名字, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
+| 传送带 | `Belt` = `[Pos]`，`BeltLevel` 的状态（读数 `gsBelts`） | 步末沿环移位；可再连锁 |
+| 传送门 | `PortalLevel [(Pos,Pos)]`（读数 `gsPortals`） | 双向；沉降时 A 有子 B 空则传送 |
+| 飞碟 | `Ufo{ufoCell,ufoColor}`，`UfoLevel` 的状态（读数 `gsUfos`） | 波末吸正交同色再移格；吸走≠引爆 |
+| 地毯 | `CarpetLevel` 的状态（读数 `gsCarpetOpen`）/ `gsCount CountCarpets` | 未铺目标格；清除/饼干腾空/保险箱开启可覆盖 |
+| 地面层（扩展槽） | `GroundLayer Ground`（读数 `gsGround`，`[(Pos,(ElementName, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用 |
 | 边缘收集 | `drains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
-| 步末补结算 | `EndRule.erHoles`、`cascadeAfterEndWith` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
-| 关卡级元素 | `LevelElement` / `SomeLevel`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel`），节拍消息 `Refilled` / `EndTicked` / `Settling` / `Covering` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；元素类迁移后改为回复流水线节拍消息；状态仍在上面各自的 `GameState` 字段；去掉即不生效 |
+| 步末补结算 | `EndRule.erHoles`、`cascadeAfterWith (AfterEnd …)` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
+| 关卡级元素 | `LevelElement` / `SomeLevelElement`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel` / 核心元素 `GroundLayer`），一局的全部在 `gsLevelElems`；节拍消息 `Refilled` / `EndTicked` / `Settling` / `Covering` / `GroundHit`；Board 层的钩子 `LevelHooks` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；元素类迁移后改为回复流水线节拍消息；第 7 刀起状态在元素值里（取代五个 `GameState` 专用字段，旧名为派生读数），开局状态由 `levelStart` 从关卡记录取；去掉即不生效（地面层除外） |
 
 ## 双层果冻与气泡（段 5）
 
@@ -98,11 +98,13 @@
 
 | 中文 | 类型 | 说明 |
 |------|------|------|
-| 分数目标 | `GoalScore` | `gsScore` |
-| 单色收集 | `GoalCollect` | `gsCollected` + 颜色袋 |
-| 多色收集 | `GoalCollectMulti` | `gsColorBag` |
-| 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | 对应 `Goal*` | 各 `gs*Cleared` / `gsUfoCollected` / `gsCarpetsCovered` 等 |
-| 按名字计数 | `GoalNamed 名字 N` | 段 2c：`gsElementCounts` 里该名字累计 ≥ N（扩展元素经 `counter` / `diffCounter = CountNamed 名字` 计数） |
+| 分数目标 | `goalScore t`（`Show`：`GoalScore t`） | `gsScore` |
+| 单色收集 | `goalCollect 色 n`（`GoalCollect`） | `gsCount (CountColor 色)` |
+| 多色收集 | `goalColors [(色, n)]`（`GoalCollectMulti`） | 每色 `gsCount (CountColor 色)` ≥ 配额；进度 = Σ min(配额, 该色数) |
+| 碎石/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱/飞碟/地毯 | `goalCount 键 n`（`GoalClearStone` … `GoalCarpet`） | `gsCounts` 里对应的键（第 4 刀前是 10 个专用字段）：`gsCount CountStones` / `CountChests` / `CountHoney` / `CountBalloons` / `CountCookies` / `CountCakes` / `CountSafes` / `CountUfo` / `CountCarpets` |
+| 按名字计数 | `goalCount (CountNamed 名字) N`（`GoalNamed 名字 N`） | 段 2c：`gsCount (CountNamed 名字)` 累计 ≥ N（扩展元素经能力 `counts` / `countsDiff (CountNamed 名字)`，即查询 `counter` / `diffCounter`，计数） |
+
+目标是数据（第 5 刀，`Match3.Goal`）：`LevelGoal` = 一组配额，每项 = 度量（分数或一个计数键）+ 目标值。达成 ⟺ 每项度量 ≥ 目标值；进度（HUD / 标题 / 网页）单项 = 度量本身（不截断），多项 = Σ min(目标值, 度量)；目标值 = 各项之和。结算、HUD、标题栏、网页版都调同一组函数（`goalMet` / `goalProgress` / `goalTarget`，状态上的简写 `gsGoalMet` / `gsProgress`）。括号里是 `Show` 的写法：与第 5 刀前的构造器写法逐字相同（元素查询快照对 `show` 取散列、网页版按首词取目标种类）。`gsCollected` / `gsColorBag` 第 5 刀起不是字段，是由 `gsCounts` 派生的读数（旧字段的值，`Show` 仍在原位置打印）。
 | 步数 | `gsMoves` / `MovesLeft` | 成功步 −1；时间精灵可 +2 |
 | 步数银行 | `carryMovesBonus` | 战役过关最多带 3 步 |
 | 交换无效 | `InvalidSwap` | 越界/非邻/无次数等 |
@@ -123,7 +125,8 @@
 
 | 中文 | API | 说明 |
 |------|-----|------|
-| 关卡表 | `allLevels`（40：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」） | 名称中文；见 README 表；第 40 关是终章（过关为 `Won`） |
+| 关卡表 | `allLevels`（40：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」；`Match3.Levels.Campaign`） | 名称中文；见 README 表；第 40 关是终章（过关为 `Won`）；按下标取关用 `lookupLevel`（`Maybe`） |
+| 关卡记录 | `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` / `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`） | 第 6 刀：一关的全部数据（步数、目标、装饰放置表、皮带、传送门、飞碟、地毯、地面层）在同一条记录里 |
 | 选关解锁 | `unlockAfterOutcome` | 每日 `Won` **不**抬地图进度 |
 | 每日 | `newDailyGame` / `dailySeed` | 日期种子；10 种目标轮换 |
 | 三星 | `starRating start left` | ≥40% 印制步剩余 → 3★；≥15% → 2★；否则 1★ |
@@ -140,11 +143,15 @@
 | 得分浮字 | 「+N」 | 每轮 `cwScore`，从本轮消除格中心飘起 |
 | 回放脚本 | `MoveTrace { mtStart, mtWaves, mtFinal, mtEnd, mtGen, mtShuffle }` | `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear` 生成；`mtFinal` / `mtGen` 为洗牌前的稳定盘与生成器，`mtShuffle` 为洗牌后盘面 |
 | 步末效果 | `EndStep { esAfterWaves, esBefore, esAfter, esEffect }` | 插在第 `esAfterWaves` 轮之后的非消除变化 |
-| 步末效果种类 | `EndEffect` = `EndCountdownTick` / `EndBeltShift` / `EndSpread SpreadKind` / `EndSnail [SnailMove]` | 倒计时减一 / 皮带移位 / 藤·巧·蒸汽蔓延 / 蜗牛爬行；`applyEndEffect` 可重放回盘面 |
-| 蜗牛一步 | `SnailMove { smFrom, smTo, smDir, smPushed }` | `smFrom == smTo` 表示碰壁掉头 |
+| 步末效果 | `EndEffect { endEffectKind, endEffectElement, endEffectItems }`（第 7 刀 7b 起的通用形状） | 事件类型 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` + 元素名 countdown / belt / vine·choco·steam / snail；`applyEndEffect` 逐项重放回盘面 |
+| 步末一项 | `EndItem { eiFrom, eiTo, eiCell, eiBack }` | 目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它；蜗牛 `eiFrom == eiTo` 表示碰壁掉头，新朝向 = `endItemDir` |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsElementCounts` 记注册表元素的具名计数 |
+| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance；第 9 刀起类只有 `name` / `toCell` / `caps`）、能力记录 `Caps`（五组：匹配与交换 `MatchCaps` / 消除与受击 `HitCaps` / 重力与移动 `MoveCaps` / 计数与目标 `CountCaps` / 步末与变化 `StepCaps`，带按原型的缺省值，元素用 `Match3.Element.Caps` 的简写只声明用到的几项）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
+| 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
 | 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
+| 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消 |
+| 特殊块组合规则 | `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`（第 8 刀） | 两个特殊块交换时的组合效果；有序表（注册表 `comboRules`），两个方向都试（对称），整张表并成成对交换规则 20。内置 `builtinComboRules`：炸弹 × 炸弹、直线 × 直线、直线 × 炸弹、彩虹 × 直线 |
+| 补子策略 | `RefillPolicy { refillName, refillCell }`、`RefillCtx`（第 8 刀） | 沉降后空洞补什么：注册表的策略（`refillPolicyWith`，缺省 `defaultRefill` = 随机五色普通宝石），关卡级元素可回复 `Refilling` 换掉；`colorsRefill n` = 只用前 n 色 |
 | 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |

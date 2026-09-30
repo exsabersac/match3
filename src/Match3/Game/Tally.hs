@@ -1,15 +1,15 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
--- | 结算计数辅助：颜色袋累加、「按前后盘面差计数」（保险箱开启 / 时间精灵 / 自定义）、地毯可覆盖的腾空格。
+-- | 结算计数辅助：「按前后盘面差计数」（保险箱开启 / 时间精灵 / 自定义）、地毯可覆盖的腾空格。
 --
 -- 依赖：Match3.Types、Match3.Board.*、元素注册表。被公共结算 Match3.Game.Resolve.resolveMove 使用
 -- （交换与三种道具共用一处）。第二刀 2b：哪些元素按差计数（元素类的 diffCounter / bonusMoves）、
 -- 哪些元素离格算地毯覆盖（vacatesCarpet）改由元素自己声明；旧的 countSafes / countTimeSpirits /
--- carpetVacateSeeds 保留为内置注册表上的同名入口。
+-- carpetVacateSeeds 保留为内置注册表上的同名入口。第 5 刀：颜色袋并入 Counts（CountColor），
+-- 旧的 lookupColor / mergeTallies 删除。
 module Match3.Game.Tally
-  ( lookupColor
-  , mergeTallies
-  , countSafes
+  ( countSafes
   , countTimeSpirits
   , carpetVacateSeeds
   , carpetVacateSeedsWith
@@ -17,21 +17,11 @@ module Match3.Game.Tally
   , diffCountsWith
   ) where
 
-import Data.Maybe (fromMaybe)
 import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, countElementWith, diffCountersWith, elementName, vacatesCarpetWith)
-import Match3.Element.Types (Counter, ElementName)
+import Match3.Element.Types (CounterKey)
 import Match3.Types
-
--- | 颜色袋里某色的计数（缺省 0）。
-lookupColor :: [(Color, Int)] -> Color -> Int
-lookupColor tallies col = fromMaybe 0 (lookup col tallies)
-
--- | 两个颜色袋逐色相加（结果按 allColors 顺序）。
-mergeTallies :: [(Color, Int)] -> [(Color, Int)] -> [(Color, Int)]
-mergeTallies a b =
-  [(col, lookupColor a col + lookupColor b col) | col <- allColors]
 
 -- | 盘上保险箱个数（结算时用前后差计「开启数」）。
 countSafes :: Board -> Int
@@ -44,7 +34,7 @@ countTimeSpirits = countElementWith defaultRegistry "time_spirit"
 -- | 一个「按前后差计数」元素本步的结果。
 data DiffCount = DiffCount
   { dcElement :: ElementName
-  , dcCounter :: Counter
+  , dcCounter :: CounterKey
   , dcCount   :: Int  -- ^ max 0 (步前个数 - 步后个数)
   , dcBonus   :: Int  -- ^ 奖励步数 = dcCount * bonusMoves
   } deriving (Eq, Show)

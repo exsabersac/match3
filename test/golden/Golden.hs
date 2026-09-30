@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 行为金标准（golden）：固定种子下「关卡 × 种子 × 逐步推进」以及道具、撤销、洗牌和几个手工局面的
 -- 规则结果，投影成稳定的文本，一个用例一行，行首是「关卡 / 种子 / 第几步」。
 --
@@ -18,13 +19,16 @@ module Golden
   , main
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, findHint, builtinHooks, hookLevel)
+import Match3.Element.Level (levelUfos)
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
-import Match3.Board.Grid (getCell, inBounds, setCell)
+import Match3.Counts (CounterKey(..), colorBag, countOf, namedCounts)
+import Match3.Board.Grid (getCell, inBounds, setCell, MBoard, mboardRows)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), historyDepth, pushHistory, replaceNow, startHistory, undoHistory)
@@ -38,6 +42,8 @@ import Match3.Game.Outcome
 import Match3.Game.Shuffle
 import Match3.Game.State
 import Match3.Game.Trace
+import Match3.Levels.Campaign (allLevels, lookupLevel)
+import Match3.Levels.Level (Level, levelConfig)
 import Match3.Types
 import Match3.Ufo (Ufo(..), mkUfo)
 import Numeric (showHex)
@@ -46,9 +52,11 @@ import System.Random (StdGen, mkStdGen)
 -- | 生成器入口：ghc -main-is Golden（见 regen.sh）。
 -- | 战役第 1 关（关卡表为空时直接报错）。
 firstLevel :: Level
-firstLevel = case allLevels of
-  (l : _) -> l
-  [] -> error "firstLevel: allLevels is empty"
+firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
+
+-- | 第 li 关（0 基）按该关步数与目标、给定种子开局；没有这一关直接报错（第 6 刀：取代 allLevels !! li）。
+levelGame :: Int -> Int -> GameState
+levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
 main :: IO ()
 main = mapM_ putStrLn goldenLines
@@ -107,13 +115,13 @@ pCell cell = case cell of
   Bottle c -> "D" ++ pColor c
   TimeSpirit -> "T"
   Countdown c n -> "@" ++ pColor c ++ ":" ++ show n
-  Custom n v -> "E" ++ n ++ ":" ++ show v
+  Custom n v -> "E" ++ unElementName n ++ ":" ++ show v
 
 pBoard :: Board -> String
 pBoard = intercalate "/" . map (intercalate "," . map pCell) . boardRows
 
-pHoles :: [[Maybe Cell]] -> String
-pHoles = intercalate "/" . map (intercalate "," . map (maybe "_" pCell))
+pHoles :: MBoard -> String
+pHoles = intercalate "/" . map (intercalate "," . map (maybe "_" pCell)) . mboardRows
 
 pPos :: Pos -> String
 pPos (r, c) = show r ++ show c
@@ -131,20 +139,23 @@ pOutcome o = case o of
   LevelClear s n -> "C" ++ show s ++ ">" ++ show n
 
 pGoal :: LevelGoal -> String
-pGoal g = case g of
-  GoalScore t -> "score" ++ show t
-  GoalCollect c n -> "collect" ++ pColor c ++ ":" ++ show n
-  GoalCollectMulti rs -> "multi" ++ concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- rs]
-  GoalClearStone n -> "stone" ++ show n
-  GoalChest n -> "chest" ++ show n
-  GoalHoney n -> "honey" ++ show n
-  GoalBalloon n -> "balloon" ++ show n
-  GoalCookie n -> "cookie" ++ show n
-  GoalCake n -> "cake" ++ show n
-  GoalSafe n -> "safe" ++ show n
-  GoalUfo n -> "ufo" ++ show n
-  GoalCarpet n -> "carpet" ++ show n
-  GoalNamed name n -> "named" ++ name ++ ":" ++ show n
+pGoal g = case goalView g of
+  ViewScore t -> "score" ++ show t
+  ViewCollect c n -> "collect" ++ pColor c ++ ":" ++ show n
+  ViewCollectMulti rs -> "multi" ++ concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- rs]
+  ViewCount k n -> case k of
+    CountStones -> "stone" ++ show n
+    CountChests -> "chest" ++ show n
+    CountHoney -> "honey" ++ show n
+    CountBalloons -> "balloon" ++ show n
+    CountCookies -> "cookie" ++ show n
+    CountCakes -> "cake" ++ show n
+    CountSafes -> "safe" ++ show n
+    CountUfo -> "ufo" ++ show n
+    CountCarpets -> "carpet" ++ show n
+    CountNamed name -> "named" ++ unElementName name ++ ":" ++ show n
+    _ -> show g
+  ViewOther _ -> show g
 
 pBag :: [(Color, Int)] -> String
 pBag xs = concat [pColor c ++ ":" ++ show n ++ ";" | (c, n) <- xs]
@@ -167,15 +178,15 @@ pCounters h =
     , "goal=" ++ pGoal (gsGoal gs)
     , "col=" ++ show (gsCollected gs)
     , "bag=" ++ pBag (gsColorBag gs)
-    , "stone=" ++ show (gsStonesCleared gs)
-    , "chest=" ++ show (gsChestsCleared gs)
-    , "honey=" ++ show (gsHoneyCleared gs)
-    , "balloon=" ++ show (gsBalloonsPopped gs)
-    , "cookie=" ++ show (gsCookiesCollected gs)
-    , "cake=" ++ show (gsCakesCleared gs)
-    , "safe=" ++ show (gsSafesOpened gs)
-    , "ufoc=" ++ show (gsUfoCollected gs)
-    , "carpet=" ++ show (gsCarpetsCovered gs)
+    , "stone=" ++ show (gsCount CountStones gs)
+    , "chest=" ++ show (gsCount CountChests gs)
+    , "honey=" ++ show (gsCount CountHoney gs)
+    , "balloon=" ++ show (gsCount CountBalloons gs)
+    , "cookie=" ++ show (gsCount CountCookies gs)
+    , "cake=" ++ show (gsCount CountCakes gs)
+    , "safe=" ++ show (gsCount CountSafes gs)
+    , "ufoc=" ++ show (gsCount CountUfo gs)
+    , "carpet=" ++ show (gsCount CountCarpets gs)
     , "copen=" ++ pPosList (gsCarpetOpen gs)
     , "over=" ++ maybe "-" pOutcome (gsOver gs)
     , "lv=" ++ show (gsLevel gs)
@@ -222,17 +233,25 @@ pWave w =
     , show (cwScore w)
     ]
 
+-- 第 7 刀 7b：EndEffect 改为通用形状（事件类型 + 元素名 + 逐项 EndItem），这里按事件类型手写成与之前逐字相同的文本。
 pEffect :: EndEffect -> String
-pEffect e = case e of
-  EndCountdownTick ps -> "tick" ++ pPosList ps
-  EndBeltShift mv -> "belt" ++ concat [pPos a ++ ">" ++ pPos b ++ ";" | (a, b) <- mv]
-  EndSpread k ps -> "spread" ++ pSpread k ++ concat [pPos a ++ ">" ++ pPos b ++ ";" | (a, b) <- ps]
-  EndSnail ms -> "snail" ++ concat [pPos (smFrom m) ++ ">" ++ pPos (smTo m) ++ "d" ++ show (fst (smDir m)) ++ ":" ++ show (snd (smDir m)) ++ "p" ++ maybe "-" pCell (smPushed m) ++ ";" | m <- ms]
+pEffect e = case endEffectKind e of
+  EvTick -> "tick" ++ pPosList (map eiTo items)
+  EvBelt -> "belt" ++ pairsText
+  EvSpread -> "spread" ++ pSpread (endEffectElement e) ++ pairsText
+  EvMove -> "snail" ++ concat [pPos (eiFrom m) ++ ">" ++ pPos (eiTo m) ++ pDir (endItemDir m) ++ "p" ++ maybe "-" pCell (eiBack m) ++ ";" | m <- items]
+  k -> show k ++ pairsText
   where
-    pSpread k = case k of
-      SpreadVine -> "V"
-      SpreadChoco -> "C"
-      SpreadSteam -> "S"
+    items = endEffectItems e
+    pairsText = concat [pPos a ++ ">" ++ pPos b ++ ";" | (a, b) <- endEffectPairs e]
+    pDir d = case d of
+      Just (dr, dc) -> "d" ++ show dr ++ ":" ++ show dc
+      Nothing -> "d?"
+    pSpread n = case n of
+      "vine" -> "V"
+      "choco" -> "C"
+      "steam" -> "S"
+      _ -> unElementName n
 
 pEnd :: EndStep -> String
 pEnd s = intercalate "|" [show (esAfterWaves s), pBoard (esBefore s), pBoard (esAfter s), pEffect (esEffect s)]
@@ -335,12 +354,12 @@ campaign38 = 38
 goldenLines :: [String]
 goldenLines =
   concat
-    [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (newGameAtLevel li (levelConfig (allLevels !! li)) seed) 15
+    [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
     | li <- [0 .. campaign38 - 1]
     , seed <- [1, 2 :: Int]
     ]
     ++ concat
-      [ runGame ("D" ++ show seed) (newDailyGame (GameConfig 20 (GoalScore 900)) seed) 10
+      [ runGame ("D" ++ show seed) (newDailyGame (GameConfig 20 (goalScore 900)) seed) 10
       | seed <- [20260929, 20260101 :: Int]
       ]
     ++ handmade
@@ -354,7 +373,7 @@ handmade :: [String]
 handmade =
   let base = newGame defaultConfig 7
       snailGs = base {gsBoard = setCell (setCell (gsBoard base) (0, 0) (Snail 0 (-1))) (3, 3) (Snail 0 1)}
-      chocoGs = newGameAtLevel 4 (levelConfig (allLevels !! 4)) 1
+      chocoGs = levelGame 4 1
       comboGs =
         case [ gs0 | seed <- [1 .. 400 :: Int], let gs0 = newGameAtLevel 0 (levelConfig firstLevel) seed
              , Just (p1, p2) <- [findHint (gsBoard gs0)], let (gs1, out) = trySwap p1 p2 gs0, out /= NoMatch, gsCombo gs1 >= 3 ] of
@@ -382,7 +401,7 @@ cascadeLines =
   | seed <- [1 .. 30 :: Int]
   , (k, (ufos, portals)) <- zip [0 :: Int ..] [([], []), ([mkUfo (2, 3) C1], []), ([], [((0, 1), (7, 6)), ((0, 6), (7, 1))])]
   , let (b0, g1) = randomBoard (mkStdGen seed)
-        run = cascadeMatches Nothing ufos portals g1 b0
+        run = cascadeMatches Nothing (builtinHooks ufos portals) g1 b0
         runP = pRun run
         trP = pTr run
   ]
@@ -390,22 +409,23 @@ cascadeLines =
        | seed <- [1 .. 20 :: Int]
        , (k, (seeds, ufos)) <- zip [0 :: Int ..] [([(3, 3)], []), ([(r, 4) | r <- [0 .. 7]], [mkUfo (1, 1) C2]), ([(2, c) | c <- [0 .. 7]] ++ [(r, 2) | r <- [0 .. 7]], [])]
        , let (b0, g1) = randomPlayableBoard (mkStdGen seed)
-             run = cascadeSeeds Nothing seeds ufos [] g1 b0
+             run = cascadeSeeds Nothing seeds (builtinHooks ufos []) g1 b0
        ]
   where
     -- 结算投影（原 15 元组的字段顺序）与回放投影（原 (轮次, 终盘, 飞碟, 生成器)）都从同一个 CascadeRun 取。
     pRun r =
-      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctColors = tallies, ctStones = stones
-                       , ctChests = chests, ctHoney = honey, ctBalloons = balloons, ctCookies = cookies, ctCakes = cakes
-                       , ctUfoAbsorbed = uAbs, ctCleared = cleared} = crTally r
-          (b, ufos', g) = (crBoard r, crUfos r, crGen r)
+      let CascadeTally {ctCells = cells, ctScore = score, ctMaxWave = maxW, ctCounts = cnts, ctCleared = cleared} = crTally r
+          c k = countOf k cnts
+          (stones, chests, honey, balloons) = (c CountStones, c CountChests, c CountHoney, c CountBalloons)
+          (cookies, cakes, uAbs) = (c CountCookies, c CountCakes, c CountUfo)
+          (b, ufos', g) = (crBoard r, levelUfos (hookLevel (crHooks r)), crGen r)
       in unwords
-        [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag tallies
+        [ "b#" ++ fnv1a (pBoard b), "cells=" ++ show cells, "score=" ++ show score, "maxw=" ++ show maxW, "bag=" ++ pBag (colorBag cnts)
         , "stone=" ++ show stones, "chest=" ++ show chests, "honey=" ++ show honey, "balloon=" ++ show balloons
         , "cookie=" ++ show cookies, "cake=" ++ show cakes, "uabs=" ++ show uAbs, "ufos=" ++ pUfos ufos'
         , "cleared=" ++ pPosList cleared, "gen=" ++ show (g :: StdGen) ]
     pTr r =
-      let (ws, b, ufos', g) = (crWaves r, crBoard r, crUfos r, crGen r)
+      let (ws, b, ufos', g) = (crWaves r, crBoard r, levelUfos (hookLevel (crHooks r)), crGen r)
       in unwords
         [ "w" ++ show (length ws) ++ "#" ++ fnv1a (intercalate "\n" (map pWave ws)), "b#" ++ fnv1a (pBoard b), "ufos=" ++ pUfos ufos', "gen=" ++ show (g :: StdGen) ]
 
@@ -415,11 +435,11 @@ levelLines =
   [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
   | li <- [0 .. campaign38 - 1]
   , s <- [0, 5, 99 :: Int]
-  , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
+  , let gs = levelGame li s
   ]
-    ++ [ "R" ++ pad2 (li + 1) ++ " s" ++ show s ++ " restart " ++ pState (startHistory (restartLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) s))
+    ++ [ "R" ++ pad2 (li + 1) ++ " s" ++ show s ++ " restart " ++ pState (startHistory (restartLevel (levelGame li 1) s))
        | li <- [0, 10, 27, 35], s <- [4, 8 :: Int] ]
-    ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (startHistory (nextLevel (newGameAtLevel li (levelConfig (allLevels !! li)) 1) 4))
+    ++ [ "X" ++ pad2 (li + 1) ++ " next " ++ pState (startHistory (nextLevel (levelGame li 1) 4))
        | li <- [0, 10, 27] ]
 
 --------------------------------------------------------------------------------
@@ -439,13 +459,13 @@ layered b p fallback ice ov = case getCell b p of
 
 -- | 长局：不因分数 / 步数提前结束。
 longRun :: GameState -> GameState
-longRun gs = gs {gsGoal = GoalScore 100000, gsMoves = 30}
+longRun gs = gs {gsGoal = goalScore 100000, gsMoves = 30}
 
 -- | H4：步末全阶段 + 蔓延紧贴本步消除留下的空洞（第 28 关：皮带、传送门、地毯；再放藤 / 巧 / 蒸汽、
 -- 蜗牛、将归零的倒计时和饼干）。锁住「步末之后是否还要补结算」这一处的现有行为。
 h4Gs :: GameState
 h4Gs =
-  let base = longRun (newGameAtLevel 27 (levelConfig (allLevels !! 27)) 3)
+  let base = longRun (levelGame 27 3)
       b0 = gsBoard base
       cells =
         [ layered b0 (5, 1) C1 0 (Just Vine), layered b0 (5, 2) C2 0 (Just Vine)
@@ -460,7 +480,7 @@ h4Gs =
 -- | H5：多种叠层同格（冰 × 锁链 / 草 / 迷雾 / 冰冻 / 窗帘 / 藤 / 巧 / 蒸汽，含特殊块），压在第 37 关的地毯上。
 h5Gs :: GameState
 h5Gs =
-  let base = longRun (newGameAtLevel 36 (levelConfig (allLevels !! 36)) 3)
+  let base = longRun (levelGame 36 3)
       b0 = gsBoard base
       cells =
         [ layered b0 (3, 2) C1 2 (Just (Chain 1)), layered b0 (3, 3) C2 1 (Just Grass)
@@ -476,7 +496,7 @@ h5Gs =
 -- | H6 的开局：第 28 关再放直线 / 炸弹 / 冰宝石 / 石头（洗牌必须原样保留的格）。
 h6Gs :: GameState
 h6Gs =
-  let base = longRun (newGameAtLevel 27 (levelConfig (allLevels !! 27)) 5)
+  let base = longRun (levelGame 27 5)
       b0 = gsBoard base
       cells =
         [ ((2, 2), Gem C1 LineH 0 Nothing), ((5, 5), Gem C2 Bomb 0 Nothing)
@@ -547,7 +567,7 @@ handmade2 =
 -- （pState 不含这两个字段，为了不改旧行，只在新行里补）。再加开局行（同 levelLines 的 G 行格式）。
 
 pExt :: History GameState -> String
-pExt h = "gnd=" ++ show (gsGround (histNow h)) ++ " named=" ++ show (gsElementCounts (histNow h))
+pExt h = "gnd=" ++ show (gsGround (histNow h)) ++ " named=" ++ show (namedCounts (gsCounts (histNow h)))
 
 runGame5 :: String -> GameState -> Int -> [String]
 runGame5 tag gs0 n =
@@ -563,12 +583,12 @@ runGame5 tag gs0 n =
 seg5Lines :: [String]
 seg5Lines =
   concat
-    [ runGame5 ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (newGameAtLevel li (levelConfig (allLevels !! li)) seed) 15
+    [ runGame5 ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
     | li <- [campaign38 .. length allLevels - 1]
     , seed <- [1, 2 :: Int]
     ]
     ++ [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " " ++ pExt (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
        | li <- [campaign38 .. length allLevels - 1]
        , s <- [0, 5, 99 :: Int]
-       , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) s
+       , let gs = levelGame li s
        ]

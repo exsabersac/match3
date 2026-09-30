@@ -11,26 +11,42 @@ build-type:         Simple
 
 executable match3-web
   main-is:          WebMain.hs
-  -- ../app 只取纯模块 ComboFx（逐轮回放阶段机，不依赖 SDL）；其余 app/ 模块不参与编译
-  hs-source-dirs:   hs ../src ../app
+  -- ../app/pure 只放桌面前端的纯模块（ComboFx 逐轮回放阶段机、UI.Presentation 表现表，不依赖 SDL）；其余 app/ 模块不参与编译
+  hs-source-dirs:   hs ../src ../app/pure
   other-modules:
     Match3Web.Api
     Match3Web.Anim
     Match3Web.Json
-    -- 桌面前端的纯表现逻辑（../app/ComboFx.hs）：网页与桌面共用同一条回放时间线
+    -- 桌面前端的纯表现逻辑（../app/pure）：网页与桌面共用同一条回放时间线与表现表的帧数
     ComboFx
+    UI.Presentation
     -- 以下为核心模块（../src），与 package.yaml 的 library.exposed-modules 一致（通用层 Engine.* + 三消 Match3.*）
     Engine.Game
     Engine.Effect
     Engine.Playback
     Engine.History
+    Engine.GridUI
     Match3.Core
     Match3.Engine
+    Match3.View
     Match3.Types
+    Match3.Types.Name
+    Match3.Types.Cell
+    Match3.Types.Overlay
+    Match3.Types.Body
+    Match3.Types.Board
+    Match3.Types.Game
+    Match3.Levels.Level
+    Match3.Levels.Campaign
+    Match3.Color
+    Match3.Counts
+    Match3.Goal
     Match3.Board.Grid
     Match3.Board.Match
     Match3.Board.Clear
     Match3.Board.Gravity
+    Match3.Board.Hooks
+    Match3.Board.Refill
     Match3.Board.Cascade
     Match3.Board.Random
     Match3.Board.Default
@@ -40,6 +56,7 @@ executable match3-web
     Match3.Game.Shuffle
     Match3.Game.Level
     Match3.Game.Trace
+    Match3.Game.EndPhase
     Match3.Game.Resolve
     Match3.Game.Move
     Match3.Game.Boosters
@@ -58,6 +75,7 @@ executable match3-web
     Match3.Element
     Match3.Element.Types
     Match3.Element.Registry
+    Match3.Element.Special
     Match3.Element.Builtin
     Match3.Element.Builtin.Common
     Match3.Element.Builtin.Gem
@@ -69,13 +87,16 @@ executable match3-web
     Match3.Element.Builtin.Level
     Match3.Element.Event
     Match3.Element.Class
+    Match3.Element.Caps
     Match3.Element.Message
+    Match3.Element.Level
   default-language: Haskell2010
   -- random / splitmix 钉在与桌面版 stack.yaml extra-deps 相同的版本（random-1.2.1.1 / splitmix-0.1.0.5，
   -- 桌面版为 GHC 9.14.1：lts-24.60 + compiler 覆盖），保证同种子同盘面；splitmix 的 ==0.1.0.5 在 cabal.project
   build-depends:
       base
     , array
+    , containers
     , random ==1.2.1.1
     , ghc-experimental
   ghc-options:

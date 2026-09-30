@@ -6,10 +6,11 @@ module Spec.Specials
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, clearMatches)
+import Match3.Board.Default (cascadeMatches, clearMatches, noHooks)
 import Data.List (sort)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard, crTally), CascadeTally(CascadeTally, ctCells))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -51,7 +52,7 @@ special_line_from_4 = do
         [ (r, c, k)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [ (mb !! r) !! c ]
+        , Just cell <- [ atM mb (r, c) ]
         , Just k <- [cellKind cell]
         , k /= Normal
         ]
@@ -70,7 +71,7 @@ special_rainbow_from_5 = do
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , Just cell <- [ (mb !! r) !! c ]
+        , Just cell <- [ atM mb (r, c) ]
         , cellKind cell == Just Rainbow
         ]
   assertBool ("rainbow spawned: " ++ show rainbows) (not (null rainbows))
@@ -301,13 +302,11 @@ rainbow_swap_partner_not_own_color = do
   assertEqual "expand == seeds (no rainbow self-blast)" (length seeds) (length expanded)
   -- Live swap still applies and consumes rainbow
   let gs0 =
-        (newGame defaultConfig 3)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 3)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 8
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, out) = trySwap (4, 4) (4, 5) gs0
   case out of
     NoMatch -> assertFailure "rainbow swap must apply"
@@ -342,14 +341,12 @@ rainbow_x_bomb_blast_expands = do
     all (`elem` expanded) bomb3x3
   assertBool "expanded beyond color seeds" (length expanded > length seeds)
   let gs0 =
-        (newGame defaultConfig 4)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 4)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 6
-          , gsBelts = []
-          , gsUfos = []
           , gsScore = 0
-          }
+          })
       (gs1, out) = trySwap (3, 3) (3, 4) gs0
   case out of
     NoMatch -> assertFailure "must apply"
@@ -394,15 +391,13 @@ rainbow_swap_flip_partner = do
   assertBool "no longer flip" (not (isFlip (getCell bIced (0, 0))))
   -- Live trySwap must apply (regression: used to NoMatch-rollback)
   let gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 8
           , gsScore = 0
-          , gsBelts = []
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (0, 0) (0, 1) gs0
   case out of
     NoMatch -> assertFailure "rainbow×flip must not roll back as NoMatch"
@@ -438,7 +433,7 @@ soft_lock_blocks_special_expand = do
   assertBool "ice match" (not (null (findMatches boardIce)))
   let expIce = expandSpecials boardIce (findMatches boardIce)
   assertEqual "ice>1 LineH does not expand row" (sort (findMatches boardIce)) (sort expIce)
-  let CascadeRun {crBoard = bIce, crTally = CascadeTally {ctCells = nIce}} = cascadeMatches Nothing [] [] (mkStdGen 31) boardIce
+  let CascadeRun {crBoard = bIce, crTally = CascadeTally {ctCells = nIce}} = cascadeMatches Nothing noHooks (mkStdGen 31) boardIce
   assertEqual "only two match partners clear" (2 :: Int) nIce
   assertEqual "LineH survives" (Just LineH) (cellKind (getCell bIce (3, 1)))
   assertEqual "ice chipped 2→1" (1 :: Int) (iceLayers (getCell bIce (3, 1)))
@@ -469,17 +464,15 @@ soft_lock_blocks_special_expand = do
   -- Hammer on Chain+LineH: peel one layer only (no row clear / no double peel).
   let boardCh = setCell stableBoard (4, 4) (Gem C2 LineH 0 (Just (Chain 2)))
       gsCh0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = boardCh
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
-          }
+          })
       (gsCh1, outCh) = useHammer (4, 4) gsCh0
   case outCh of
     NoMatch -> assertFailure "hammer peel should apply"
@@ -529,27 +522,27 @@ line_blast_no_double_peel = do
           (mkGem C3)
   assertBool "line match" (not (null (findMatches (lineBoard (mkGem C2)))))
   -- Chain 2 on blast path: peel once → Chain 1 (not fully unlocked).
-  let CascadeRun {crBoard = bCh} = cascadeMatches Nothing [] [] (mkStdGen 41) (lineBoard (Gem C2 Normal 0 (Just (Chain 2))))
+  let CascadeRun {crBoard = bCh} = cascadeMatches Nothing noHooks (mkStdGen 41) (lineBoard (Gem C2 Normal 0 (Just (Chain 2))))
       cellCh = getCell bCh (3, 5)
   assertBool "chain survives" (hasChain cellCh)
   assertEqual "chain peeled once 2→1" (1 :: Int) (chainLayers cellCh)
   -- Curtain 2: same single peel.
-  let CascadeRun {crBoard = bCu} = cascadeMatches Nothing [] [] (mkStdGen 42) (lineBoard (Gem C2 Normal 0 (Just (Curtain 2))))
+  let CascadeRun {crBoard = bCu} = cascadeMatches Nothing noHooks (mkStdGen 42) (lineBoard (Gem C2 Normal 0 (Just (Curtain 2))))
       cellCu = getCell bCu (3, 5)
   assertBool "curtain survives" (hasCurtain cellCu)
   assertEqual "curtain peeled once 2→1" (1 :: Int) (curtainLayers cellCu)
   -- Stone 2: chip once → Stone 1 (not removed).
-  let CascadeRun {crBoard = bSt} = cascadeMatches Nothing [] [] (mkStdGen 43) (lineBoard (mkStoneLayers 2))
+  let CascadeRun {crBoard = bSt} = cascadeMatches Nothing noHooks (mkStdGen 43) (lineBoard (mkStoneLayers 2))
       cellSt = getCell bSt (3, 5)
   assertBool "stone survives" (isStone cellSt)
   assertEqual "stone chipped once 2→1" (1 :: Int) (stoneLayers cellSt)
   -- Safe 2: chip once → Safe 1 (not opened to Cookie).
-  let CascadeRun {crBoard = bSa} = cascadeMatches Nothing [] [] (mkStdGen 44) (lineBoard (mkSafeLayers 2))
+  let CascadeRun {crBoard = bSa} = cascadeMatches Nothing noHooks (mkStdGen 44) (lineBoard (mkSafeLayers 2))
       cellSa = getCell bSa (3, 5)
   assertBool "safe survives" (isSafe cellSa)
   assertEqual "safe chipped once 2→1" (1 :: Int) (safeLayers cellSa)
   -- Control: Chain 1 on path fully unlocks (single peel strips last layer).
-  let CascadeRun {crBoard = bC1} = cascadeMatches Nothing [] [] (mkStdGen 45) (lineBoard (Gem C2 Normal 0 (Just (Chain 1))))
+  let CascadeRun {crBoard = bC1} = cascadeMatches Nothing noHooks (mkStdGen 45) (lineBoard (Gem C2 Normal 0 (Just (Chain 1))))
   assertBool "chain1 unlocked" (not (hasChain (getCell bC1 (3, 5))))
   -- Control: adjacent-only Chain 2 (not on blast) still peels once.
   let boardAdj =
@@ -563,7 +556,7 @@ line_blast_no_double_peel = do
              (mkGem C1))
           (4, 1)
           (Gem C2 Normal 0 (Just (Chain 2)))
-      CascadeRun {crBoard = bAdj} = cascadeMatches Nothing [] [] (mkStdGen 46) boardAdj
+      CascadeRun {crBoard = bAdj} = cascadeMatches Nothing noHooks (mkStdGen 46) boardAdj
       cellAdj = getCell bAdj (4, 1)
   assertBool "adj chain survives" (hasChain cellAdj)
   assertEqual "adj chain peeled 2→1" (1 :: Int) (chainLayers cellAdj)
@@ -578,16 +571,14 @@ line_blast_no_double_peel = do
 soft_lock_blocks_rainbow_swap :: Assertion
 soft_lock_blocks_rainbow_swap = do
   let mkGs board =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       countC4 b =
         length
           [ ()
@@ -654,16 +645,14 @@ soft_lock_blocks_rainbow_swap = do
 soft_lock_blocks_special_combo :: Assertion
 soft_lock_blocks_special_combo = do
   let mkGs board =
-        (newGame defaultConfig 13)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 13)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
   -- ice=2 LineH × Bomb: combo blocked.
   let boardIce =
         setCell
@@ -720,17 +709,15 @@ soft_lock_blocks_special_combo = do
 soft_lock_blocks_freeswap_activation :: Assertion
 soft_lock_blocks_freeswap_activation = do
   let mkGs board =
-        (newGame defaultConfig 17)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 17)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsFreeSwaps = 2
-          }
+          })
   -- ice=2 Rainbow × C4 via free-swap (non-adjacent also OK for booster).
   let boardIce =
         setCell
@@ -783,16 +770,14 @@ soft_lock_blocks_freeswap_activation = do
 soft_lock_blocks_double_rainbow :: Assertion
 soft_lock_blocks_double_rainbow = do
   let mkGs board =
-        (newGame defaultConfig 19)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 19)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       countGems b =
         length
           [ ()

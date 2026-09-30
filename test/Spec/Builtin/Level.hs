@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 关卡级元素（对应 Element/Builtin/Level）：皮带、传送门、飞碟、地毯。
@@ -8,12 +9,14 @@ module Spec.Builtin.Level
 
 import Control.Monad (when)
 import Data.List (nub, sort)
-import Match3.Board.Default (cascadeMatches, clearMatches)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctUfoAbsorbed))
+import Match3.Board.Default (cascadeMatches, clearMatches, builtinHooks)
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Core
+import Match3.Board.Grid (atM, setM, mboardFromRows)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (noCounts, singleCount)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -89,15 +92,14 @@ conveyor_shifts_after_move = do
              (mkGem C2))
           (5, 2)
           (mkGem C3)
-      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 1 }  -- terminal => no shuffle
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 1 }  -- terminal => no shuffle
       gs0 =
-        (newGameAtLevel 0 cfg 3)
+        (setBelts [belt] $ (newGameAtLevel 0 cfg 3)
           { gsBoard = board1
-          , gsBelts = [belt]
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          }
+          })
       before = map (getCell (gsBoard gs0)) belt
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
   assertBool "move ok" $
@@ -151,15 +153,14 @@ conveyor_can_create_match = do
              (mkGem C5))
           (0, 3)
           (mkGem C4)
-      cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+      cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 99999 }
       gs0 =
-        (newGameAtLevel 0 cfg 9)
+        (setBelts [belt] $ (newGameAtLevel 0 cfg 9)
           { gsBoard = boardM
-          , gsBelts = [belt]
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -175,24 +176,21 @@ conveyor_can_create_match = do
 portal_teleports_gem :: Assertion
 portal_teleports_gem = do
   -- Build MBoard: gem at (0,0), hole at (7,7)
-  let setMBoard b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+  let setMBoard = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       mb1 = setMBoard mb0 (0, 0) (Just (mkGem C1))
       mb2 = setMBoard mb1 (7, 7) Nothing
       portals = [((0, 0), (7, 7))]
-      mb3 = applyPortalTeleports portals mb2
-  assertEqual "entrance emptied" Nothing ((mb3 !! 0) !! 0)
-  case (mb3 !! 7) !! 7 of
+      mb3 = applyPortalTeleports (builtinHooks [] portals) mb2
+  assertEqual "entrance emptied" Nothing (atM mb3 (0, 0))
+  case atM mb3 (7, 7) of
     Just cell -> do
       assertBool "exit got gem" (isGem cell)
       assertEqual "teleported color" (Just C1) (cellColor cell)
     Nothing -> assertFailure "expected gem at exit"
-  assertBool "identity on full board" (applyPortalTeleports portals mb0 == mb0)
-  let gs = newGameAtLevel 26 (levelConfig (allLevels !! 26)) 42
+  assertBool "identity on full board" (applyPortalTeleports (builtinHooks [] portals) mb0 == mb0)
+  let gs = levelGame 26 42
   assertEqual "two portal pairs" (2 :: Int) (length (gsPortals gs))
 
 -- UFO / 飞碟 (absorb same-color neighbors; move each cascade wave)
@@ -230,8 +228,8 @@ ufo_moves_each_cascade = do
   assertEqual "no absorb when no C1 neighbor" ([] :: [Pos]) abs1
   assertBool "first step moves" (ufoCell u1 /= ufoCell u0)
   assertBool "second step moves again" (ufoCell u2 /= ufoCell u1)
-  let cfg = GameConfig 20 (GoalUfo 99)
-      gs0 = (newGameAtLevel 12 cfg 91) { gsBoard = b1, gsUfos = [u0], gsUfoCollected = 0 }
+  let cfg = GameConfig 20 (goalCount CountUfo 99)
+      gs0 = (setUfos [u0] $ (newGameAtLevel 12 cfg 91) { gsBoard = b1, gsCounts = noCounts })
   case findHint (gsBoard gs0) of
     Nothing -> assertFailure "board should be playable"
     Just (p1, p2) -> do
@@ -250,10 +248,10 @@ ufo_moves_each_cascade = do
 -- | GoalUfo progress increments with UFO absorbs.
 ufo_goal_counts :: Assertion
 ufo_goal_counts = do
-  assertBool "goal unmet at 0" (not (goalMetEx (GoalUfo 2) 0 0 [] 0 0 0 0 0 0 0 0))
-  assertBool "goal met at 2" (goalMetEx (GoalUfo 2) 0 0 [] 0 2 0 0 0 0 0 0)
-  assertEqual "progress" (2 :: Int) (goalProgressEx (GoalUfo 5) 0 0 [] 0 2 0 0 0 0 0 0)
-  assertEqual "target" (5 :: Int) (goalTarget (GoalUfo 5))
+  assertBool "goal unmet at 0" (not (goalMet (goalCount CountUfo 2) 0 noCounts))
+  assertBool "goal met at 2" (goalMet (goalCount CountUfo 2) 0 (singleCount CountUfo 2))
+  assertEqual "progress" (2 :: Int) (goalProgress (goalCount CountUfo 5) 0 (singleCount CountUfo 2))
+  assertEqual "target" (5 :: Int) (goalTarget (goalCount CountUfo 5))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       b1 = setCell b0 (3, 3) (mkGem C5)
       b2 = setCell b1 (3, 2) (mkGem C1)
@@ -263,40 +261,24 @@ ufo_goal_counts = do
       targets = ufoAbsorbTargets b4 ufo
       n = length targets
   assertBool "has absorb targets" (n >= 2)
-  let cfg = GameConfig 15 (GoalUfo n)
+  let cfg = GameConfig 15 (goalCount CountUfo n)
       gs0 =
-        (newGameAtLevel 12 cfg 55)
+        (setUfos [ufo] $ (newGameAtLevel 12 cfg 55)
           { gsBoard = b4
-          , gsUfos = [ufo]
-          , gsUfoCollected = 0
-          , gsCollected = 0
-          }
+          , gsCounts = noCounts
+          })
       (_, ufo') = stepUfo b4 ufo
       gsSim =
-        gs0
-          { gsUfoCollected = n
-          , gsCollected = n
-          , gsUfos = [ufo']
-          }
+        (setUfos [ufo'] $ gs0
+          { gsCounts = singleCount CountUfo n
+          })
   assertBool
     "simulated goal met"
-    (goalMetEx
-       (gsGoal gsSim)
-       (gsScore gsSim)
-       (gsCollected gsSim)
-       (gsColorBag gsSim)
-       (gsStonesCleared gsSim)
-       (gsUfoCollected gsSim)
-       (gsChestsCleared gsSim)
-       (gsHoneyCleared gsSim)
-       (gsBalloonsPopped gsSim)
-       (gsCookiesCollected gsSim)
-       (gsCakesCleared gsSim)
-       (gsSafesOpened gsSim))
+    (gsGoalMet gsSim)
   -- Level table includes GoalUfo stages
   assertBool
     "campaign has GoalUfo"
-    (any (\g -> case g of GoalUfo _ -> True; _ -> False) (map lvlGoal allLevels))
+    (any (\g -> case goalView g of ViewCount CountUfo _ -> True; _ -> False) (map lvlGoal allLevels))
 
 --------------------------------------------------------------------------------
 -- Carpet / 地毯 (floor tiles covered when gems on them clear)
@@ -313,19 +295,16 @@ carpet_covers_on_clear = do
              (mkGem C1))
           (3, 2)
           (mkGem C1)
-      cfg = GameConfig 20 (GoalCarpet 8)
+      cfg = GameConfig 20 (goalCount CountCarpets 8)
       gs0 =
-        (newGameAtLevel 0 cfg 7)
+        (setBelts [] . setCarpetOpen [(3, 0), (3, 1), (3, 2), (4, 4)] $ (newGameAtLevel 0 cfg 7)
           { gsBoard = board0
-          , gsBelts = []
           , gsOver = Nothing
           , gsMoves = 20
           , gsScore = 0
-          , gsCarpetOpen = [(3, 0), (3, 1), (3, 2), (4, 4)]
-          , gsCarpetsCovered = 0
-          , gsGoal = GoalCarpet 8
-          , gsCollected = 0
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalCount CountCarpets 8
+          })
   assertBool "match ready" (hasAnyMatch board0)
   -- Force cascade via trySwap of a neighboring pair that creates/uses the match
   -- Board already has match; use hammer on one carpet cell to clear seeds then cascade
@@ -334,12 +313,12 @@ carpet_covers_on_clear = do
     InvalidSwap -> assertFailure "hammer should apply"
     _ -> pure ()
   assertBool
-    ("carpet covered some of match cells, covered=" ++ show (gsCarpetsCovered gs1)
+    ("carpet covered some of match cells, covered=" ++ show (gsCount CountCarpets gs1)
        ++ " open=" ++ show (gsCarpetOpen gs1))
-    (gsCarpetsCovered gs1 >= 1)
+    (gsCount CountCarpets gs1 >= 1)
   assertBool "covered cells removed from open" $
     all (`notElem` gsCarpetOpen gs1) [(3, 0), (3, 1), (3, 2)]
-      || gsCarpetsCovered gs1 >= 1
+      || gsCount CountCarpets gs1 >= 1
   -- Pure unit
   let (open', n) = coverCarpets [(3, 0), (3, 1), (4, 4)] [(3, 0), (3, 1), (5, 5)]
   assertEqual "pure cover count" (2 :: Int) n
@@ -359,23 +338,19 @@ carpet_already_covered_noop = do
   assertEqual "empty open stays empty" ([] :: [Pos]) open3
   assertEqual "no spurious covers" (0 :: Int) n3
   -- Game path: cover once, then clear same cell again with empty open → count unchanged
-  let cfg = GameConfig 15 (GoalCarpet 3)
+  let cfg = GameConfig 15 (goalCount CountCarpets 3)
       gs0 =
-        (newGameAtLevel 0 cfg 3)
-          { gsCarpetOpen = [(5, 5)]
-          , gsCarpetsCovered = 0
-          , gsCollected = 0
-          , gsGoal = GoalCarpet 3
+        (setCarpetOpen [(5, 5)] . setBelts [] . setUfos [] $ (newGameAtLevel 0 cfg 3)
+          { gsCounts = noCounts
+          , gsGoal = goalCount CountCarpets 3
           , gsHammers = 3
           , gsBoard = setCell stableBoard (5, 5) (mkGem C2)
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
       (gs1, _) = useHammer (5, 5) gs0
-  assertEqual "covered once" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "covered once" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "open emptied" ([] :: [Pos]) (gsCarpetOpen gs1)
   let (gs2, _) = useHammer (5, 5) gs1 { gsHammers = 2, gsOver = Nothing }
-  assertEqual "second clear does not double-count" (1 :: Int) (gsCarpetsCovered gs2)
+  assertEqual "second clear does not double-count" (1 :: Int) (gsCount CountCarpets gs2)
   assertEqual "still empty open" ([] :: [Pos]) (gsCarpetOpen gs2)
 
 --------------------------------------------------------------------------------
@@ -414,17 +389,14 @@ carpet_ice_partial_no_cover = do
           (3, 3)
           (mkGem C1)
       gs0 =
-        (newGame defaultConfig 3)
+        (setBelts [] . setUfos [] . setCarpetOpen [(3, 0)] $ (newGame defaultConfig 3)
           { gsBoard = board0
           , gsMoves = 10
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsCarpetOpen = [(3, 0)]
-          , gsCarpetsCovered = 0
-          , gsGoal = GoalCarpet 1
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalCount CountCarpets 1
+          })
       (gs1, out) = trySwap (3, 2) (3, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -432,8 +404,8 @@ carpet_ice_partial_no_cover = do
     _ -> pure ()
   -- Partial ice must not cover on the chip-only wave; covered stays 0 if gem survived.
   -- Cascades may later clear the cell — only assert we never over-count past 1 open tile.
-  assertBool "covered in {0,1}" (gsCarpetsCovered gs1 <= 1)
-  assertBool "open consistent" (length (gsCarpetOpen gs1) + gsCarpetsCovered gs1 == 1)
+  assertBool "covered in {0,1}" (gsCount CountCarpets gs1 <= 1)
+  assertBool "open consistent" (length (gsCarpetOpen gs1) + gsCount CountCarpets gs1 == 1)
 
 -- | Last ice layer (ice==1) on carpet: gem clears and carpet covers.
 carpet_ice_last_layer_covers :: Assertion
@@ -458,23 +430,20 @@ carpet_ice_last_layer_covers = do
           (5, 3)
           (mkGem C2)
       gs0 =
-        (newGame defaultConfig 4)
+        (setBelts [] . setUfos [] . setCarpetOpen [(5, 0)] $ (newGame defaultConfig 4)
           { gsBoard = board0
           , gsMoves = 10
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsCarpetOpen = [(5, 0)]
-          , gsCarpetsCovered = 0
-          , gsGoal = GoalCarpet 1
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalCount CountCarpets 1
+          })
       (gs1, out) = trySwap (5, 2) (5, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertEqual "last ice covers carpet" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "last ice covers carpet" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "open emptied" ([] :: [Pos]) (gsCarpetOpen gs1)
 
 -- | Belt shift forms a match that clears portal A; portal teleports B→A before re-gravity.
@@ -504,22 +473,22 @@ portal_after_belt_match_teleports = do
   assertEqual "B is C5" (Just C5) (cellColor (getCell shifted (7, 2)))
   let (mb, n) = clearMatches shifted
   assertBool "cleared triple+" (n >= 3)
-  assertEqual "A hole pre-portal" Nothing ((mb !! 0) !! 2)
-  assertEqual "B still C5" (Just (mkGem C5)) ((mb !! 7) !! 2)
+  assertEqual "A hole pre-portal" Nothing (atM mb (0, 2))
+  assertEqual "B still C5" (Just (mkGem C5)) (atM mb (7, 2))
   -- Direct portal step (pre re-gravity): B→A
-  let ported = applyPortalTeleports portals mb
-  assertEqual "C5 teleported to A" (Just (mkGem C5)) ((ported !! 0) !! 2)
-  assertEqual "B emptied by portal" Nothing ((ported !! 7) !! 2)
+  let ported = applyPortalTeleports (builtinHooks [] portals) mb
+  assertEqual "C5 teleported to A" (Just (mkGem C5)) (atM ported (0, 2))
+  assertEqual "B emptied by portal" Nothing (atM ported (7, 2))
   -- Full settle: gravity may repack column, but B must not keep C5
-  let (settled, _, _) = settleBoardPortals portals mb
+  let (settled, _, _) = settleBoardPortals (builtinHooks [] portals) mb
   assertBool "B no longer holds C5 after settle" $
-    case (settled !! 7) !! 2 of
+    case atM settled (7, 2) of
       Just c -> not (isGem c && cellColor c == Just C5) || False
       Nothing -> True
   assertBool "C5 still somewhere in col 2" $
     any
       ( \r ->
-          case (settled !! r) !! 2 of
+          case atM settled (r, 2) of
             Just c -> isGem c && cellColor c == Just C5
             Nothing -> False
       )
@@ -537,16 +506,13 @@ portal_after_belt_match_teleports = do
           (2, 3)
           (mkGem C3)
       gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [belt] . setPortals portals . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = boardSwap
           , gsMoves = 12
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = [belt]
-          , gsPortals = portals
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (2, 2) (2, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match on row2"
@@ -561,27 +527,24 @@ cookie_bottom_portal_collects :: Assertion
 cookie_bottom_portal_collects = do
   let bottom = boardSize - 1
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
-      setMB b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
+      setMB = setM
       -- Cookie already on bottom portal A; exit B empty (buggy order teleports up)
       mb = setMB (setMB mb0 (bottom, 1) (Just Cookie)) (0, 6) Nothing
       portals = [((0, 6), (bottom, 1))]
-      (settled, fallen, _) = settleBoardPortals portals mb
+      (settled, fallen, _) = settleBoardPortals (builtinHooks [] portals) mb
       cookieLeft =
         [ (r, c)
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
-        , case (settled !! r) !! c of
+        , case atM settled (r, c) of
             Just Cookie -> True
             _ -> False
         ]
   assertEqual "cookie collected at bottom portal" (1 :: Int) fallen
   assertEqual "no cookie left on board" ([] :: [(Int, Int)]) cookieLeft
   assertBool "exit not holding snatch" $
-    case (settled !! 0) !! 6 of
+    case atM settled (0, 6) of
       Just Cookie -> False
       _ -> True
   -- trySwap path with portals: cookie on bottom portal drains into GoalCookie
@@ -597,24 +560,21 @@ cookie_bottom_portal_collects = do
           (3, 2)
           (mkGem C1)
       gs0 =
-        (newGame defaultConfig 23)
+        (setBelts [] . setUfos [] . setPortals portals $ (newGame defaultConfig 23)
           { gsBoard = board0
           , gsMoves = 15
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsBelts = []
-          , gsUfos = []
-          , gsPortals = portals
-          , gsCookiesCollected = 0
-          , gsGoal = GoalCookie 1
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalCount CountCookies 1
+          })
       (gs1, out) = trySwap (3, 1) (3, 2) gs0
   case out of
     NoMatch -> assertFailure "expected match"
     InvalidSwap -> assertFailure "expected valid"
     _ -> pure ()
-  assertBool ("trySwap collected cookie, got " ++ show (gsCookiesCollected gs1))
-    (gsCookiesCollected gs1 >= 1)
+  assertBool ("trySwap collected cookie, got " ++ show (gsCount CountCookies gs1))
+    (gsCount CountCookies gs1 >= 1)
   assertBool "trySwap cookie gone from bottom" (not (isCookie (getCell (gsBoard gs1) (bottom, 1))))
   assertBool "trySwap cookie not at portal exit" (not (isCookie (getCell (gsBoard gs1) (0, 6))))
 
@@ -664,17 +624,14 @@ belt_delivers_cookie_bottom_drains = do
   assertBool "belt parks cookie on bottom" (isCookie (getCell afterBelt (7, 2)))
   assertBool "belt alone forms no match" (not (hasAnyMatch afterBelt))
   let gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [belt] . setUfos [] . setPortals [] $ (newGame defaultConfig 9)
           { gsBoard = board0
-          , gsBelts = [belt]
           , gsMoves = 12
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsUfos = []
-          , gsPortals = []
-          , gsCookiesCollected = 0
-          , gsGoal = GoalCookie 1
-          }
+          , gsCounts = noCounts
+          , gsGoal = goalCount CountCookies 1
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "row0 match should apply"
@@ -688,8 +645,8 @@ belt_delivers_cookie_bottom_drains = do
         ]
   assertBool ("cookie must drain after belt, left=" ++ show left) (null left)
   assertBool
-    ("GoalCookie must count belt-delivered cookie, got " ++ show (gsCookiesCollected gs1))
-    (gsCookiesCollected gs1 >= 1)
+    ("GoalCookie must count belt-delivered cookie, got " ++ show (gsCount CountCookies gs1))
+    (gsCount CountCookies gs1 >= 1)
 
 --------------------------------------------------------------------------------
 -- Stability cruise: GoalCookie/Carpet décor seed + portal Flip
@@ -698,18 +655,15 @@ belt_delivers_cookie_bottom_drains = do
 -- | Portal teleports Flip (dual-face) the same as gems/countdowns/cookies.
 portal_teleports_flip :: Assertion
 portal_teleports_flip = do
-  let setMBoard b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+  let setMBoard = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       mb1 = setMBoard mb0 (0, 0) (Just (mkFlip C1 C2))
       mb2 = setMBoard mb1 (7, 7) Nothing
       portals = [((0, 0), (7, 7))]
-      mb3 = applyPortalTeleports portals mb2
-  assertEqual "Flip left entrance" Nothing ((mb3 !! 0) !! 0)
-  case (mb3 !! 7) !! 7 of
+      mb3 = applyPortalTeleports (builtinHooks [] portals) mb2
+  assertEqual "Flip left entrance" Nothing (atM mb3 (0, 0))
+  case atM mb3 (7, 7) of
     Just cell -> do
       assertBool "exit is Flip" (isFlip cell)
       assertEqual "front color" (Just C1) (flipFront cell)
@@ -721,9 +675,9 @@ portal_teleports_flip = do
           (setMBoard mb0 (1, 1) (Just (Countdown C3 2)))
           (6, 6)
           Nothing
-      mbC' = applyPortalTeleports [((1, 1), (6, 6))] mbC
-  assertEqual "CD entrance empty" Nothing ((mbC' !! 1) !! 1)
-  case (mbC' !! 6) !! 6 of
+      mbC' = applyPortalTeleports (builtinHooks [] [((1, 1), (6, 6))]) mbC
+  assertEqual "CD entrance empty" Nothing (atM mbC' (1, 1))
+  case atM mbC' (6, 6) of
     Just (Countdown C3 2) -> pure ()
     other -> assertFailure ("expected Countdown at exit, got " ++ show other)
 
@@ -736,7 +690,7 @@ portal_endpoints_not_immortal_blocked = do
   let portalLevels =
         [ (li, gs)
         | li <- [0 .. length allLevels - 1]
-        , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) 42
+        , let gs = levelGame li 42
         , not (null (gsPortals gs))
         ]
   assertBool "campaign has portal levels" (not (null portalLevels))
@@ -766,17 +720,14 @@ portal_endpoints_not_immortal_blocked = do
           assertBool "finale snail off portal row" (isSnail (getCell (gsBoard gs) (2, 0)))
           assertBool "finale portal A not snail" (not (isSnail (getCell (gsBoard gs) (0, 3))))
           let portals = gsPortals gs
-              setMBoard b (r, c) v =
-                take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-                where
-                  row = b !! r
+              setMBoard = setM
               fill = Just (mkGem C5)
-              mb0 = replicate boardSize (replicate boardSize fill)
+              mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
               mb1 = setMBoard mb0 (0, 3) (Just (mkGem C1))
               mb2 = setMBoard mb1 (7, 4) Nothing
-              mb3 = applyPortalTeleports portals mb2
-          assertEqual "finale A emptied" Nothing ((mb3 !! 0) !! 3)
-          case (mb3 !! 7) !! 4 of
+              mb3 = applyPortalTeleports (builtinHooks [] portals) mb2
+          assertEqual "finale A emptied" Nothing (atM mb3 (0, 3))
+          case atM mb3 (7, 4) of
             Just cell -> do
               assertBool "finale B got gem" (isGem cell)
               assertEqual "finale teleported C1" (Just C1) (cellColor cell)
@@ -795,7 +746,7 @@ belt_cells_not_stuck_immortal = do
   let beltLevels =
         [ (li, gs)
         | li <- [0 .. length allLevels - 1]
-        , let gs = newGameAtLevel li (levelConfig (allLevels !! li)) 42
+        , let gs = levelGame li 42
         , not (null (gsBelts gs))
         ]
   assertBool "campaign has belt levels" (not (null beltLevels))
@@ -876,7 +827,7 @@ ufo_absorb_no_special_expand = do
           (mkGem C3)
       swapped = swapCells boardMatch (0, 2) (0, 3)
   assertBool "setup match" (hasAnyMatch swapped)
-  let CascadeRun {crBoard = b2, crTally = CascadeTally {ctUfoAbsorbed = uAbs2}} = cascadeMatches (Just (0, 3)) [u] [] (mkStdGen 5) swapped
+  let CascadeRun {crBoard = b2, crTally = CascadeTally {ctCounts = (countOf CountUfo -> uAbs2)}} = cascadeMatches (Just (0, 3)) (builtinHooks [u] []) (mkStdGen 5) swapped
   assertBool "UFO absorbed bomb" (uAbs2 >= 1)
   assertBool "bomb cell no longer Bomb" $
     case getCell b2 (3, 3) of
@@ -899,7 +850,7 @@ ufo_absorb_no_special_expand = do
           (mkGem C3)
       swappedL = swapCells boardLM (6, 2) (6, 3)
   assertBool "line setup match" (hasAnyMatch swappedL)
-  let CascadeRun {crBoard = bL, crTally = CascadeTally {ctUfoAbsorbed = uAbsL}} = cascadeMatches (Just (6, 3)) [uL] [] (mkStdGen 11) swappedL
+  let CascadeRun {crBoard = bL, crTally = CascadeTally {ctCounts = (countOf CountUfo -> uAbsL)}} = cascadeMatches (Just (6, 3)) (builtinHooks [uL] []) (mkStdGen 11) swappedL
   assertBool "absorbed line" (uAbsL >= 1)
   assertBool "line cell no longer LineH" $
     case getCell bL (2, 3) of
@@ -916,20 +867,14 @@ carpet_covers_on_cookie_vacate :: Assertion
 carpet_covers_on_cookie_vacate = do
   let board = setCell stableBoard (3, 3) Cookie
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 1)
+        (setCarpetOpen [(3, 3)] . setBelts [] . setPortals [] . setUfos [] $ (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 1)
           { gsBoard = board
-          , gsCarpetOpen = [(3, 3)]
-          , gsCarpetsCovered = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
-          , gsBelts = []
-          , gsPortals = []
-          , gsUfos = []
           , gsCrossClears = 1
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
-          , gsCookiesCollected = 0
-          }
+          , gsGoal = goalCount CountCarpets 1
+          })
       (gs1, out) = useCrossClear (5, 3) gs0
   case out of
     InvalidSwap -> assertFailure "cross should fire"
@@ -937,7 +882,7 @@ carpet_covers_on_cookie_vacate = do
     _ -> pure ()
   assertBool "cookie drained or left (3,3)" $
     not (isCookie (getCell (gsBoard gs1) (3, 3)))
-  assertEqual "carpet covered by cookie vacate" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "carpet covered by cookie vacate" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
   assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
 
@@ -947,20 +892,14 @@ carpet_covers_on_safe_open :: Assertion
 carpet_covers_on_safe_open = do
   let board = setCell stableBoard (3, 3) (mkSafeLayers 1)
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 2)
+        (setCarpetOpen [(3, 3)] . setBelts [] . setPortals [] . setUfos [] $ (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 2)
           { gsBoard = board
-          , gsCarpetOpen = [(3, 3)]
-          , gsCarpetsCovered = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
-          , gsBelts = []
-          , gsPortals = []
-          , gsUfos = []
           , gsHammers = 2
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
-          , gsSafesOpened = 0
-          }
+          , gsGoal = goalCount CountCarpets 1
+          })
       -- Hammer an orthogonal neighbor: adj peel opens Safe → Cookie
       (gs1, out) = useHammer (3, 2) gs0
   case out of
@@ -969,8 +908,8 @@ carpet_covers_on_safe_open = do
     _ -> pure ()
   assertBool "safe opened to cookie" $
     isCookie (getCell (gsBoard gs1) (3, 3)) || not (isSafe (getCell (gsBoard gs1) (3, 3)))
-  assertEqual "safes opened" (1 :: Int) (gsSafesOpened gs1)
-  assertEqual "carpet covered on safe open" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "safes opened" (1 :: Int) (gsCount CountSafes gs1)
+  assertEqual "carpet covered on safe open" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "carpet closed" ([] :: [Pos]) (gsCarpetOpen gs1)
 
 --------------------------------------------------------------------------------
@@ -984,19 +923,16 @@ carpet_covers_on_cookie_bottom_drain :: Assertion
 carpet_covers_on_cookie_bottom_drain = do
   let bottom = boardSize - 1
       -- Unit: settle drains Cookie that fell onto bottom; sites include that cell
-      setMB b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+      setMB = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       -- Hole under Cookie at (3,4) so gravity packs Cookie to bottom col 4
       mb =
         foldl
           (\m r -> setMB m (r, 4) Nothing)
           (setMB mb0 (3, 4) (Just Cookie))
           [4 .. bottom]
-      (_, fallen, sites) = settleBoardPortals [] mb
+      (_, fallen, sites) = settleBoardPortals (builtinHooks [] []) mb
   assertEqual "one cookie drained" (1 :: Int) fallen
   assertEqual "drain site is bottom carpet col" [(bottom, 4)] sites
   -- Live: Cookie starts OFF the bottom so the match-cascade settle cannot
@@ -1019,31 +955,25 @@ carpet_covers_on_cookie_bottom_drain = do
   assertBool "belt alone forms no match" $
     not (hasAnyMatch (shiftBelts board [belt]))
   let gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 3)
+        (setCarpetOpen [(bottom, 4)] . setBelts [belt] . setPortals [] . setUfos [] $ (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 3)
           { gsBoard = board
-          , gsCarpetOpen = [(bottom, 4)]
-          , gsCarpetsCovered = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
-          , gsBelts = [belt]
-          , gsPortals = []
-          , gsUfos = []
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
-          , gsCookiesCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           , gsLastCleared = []
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match swap"
     InvalidSwap -> assertFailure "expected valid swap"
     _ -> pure ()
-  assertBool ("cookie collected via belt drain, got " ++ show (gsCookiesCollected gs1)) (gsCookiesCollected gs1 >= 1)
+  assertBool ("cookie collected via belt drain, got " ++ show (gsCount CountCookies gs1)) (gsCount CountCookies gs1 >= 1)
   assertBool "cookie not left on carpet" $
     not (isCookie (getCell (gsBoard gs1) (bottom, 4)))
   assertBool ("drain site in lastCleared, got " ++ show (gsLastCleared gs1)) $
     (bottom, 4) `elem` gsLastCleared gs1
-  assertEqual "bottom carpet covered by drain" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "bottom carpet covered by drain" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
   assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
 
@@ -1058,16 +988,13 @@ carpet_covers_on_cookie_bottom_drain = do
 carpet_covers_on_portal_cookie_drain :: Assertion
 carpet_covers_on_portal_cookie_drain = do
   let bottom = boardSize - 1
-      setMB b (r, c) v =
-        take r b ++ [take c row ++ [v] ++ drop (c + 1) row] ++ drop (r + 1) b
-        where
-          row = b !! r
+      setMB = setM
       fill = Just (mkGem C5)
-      mb0 = replicate boardSize (replicate boardSize fill)
+      mb0 = mboardFromRows (replicate boardSize (replicate boardSize fill))
       -- Empty exit column 6; Cookie at portal A (4,2) → B (bottom,6)
       mb1 = foldl (\m r -> setMB m (r, 6) Nothing) mb0 [0 .. bottom]
       mb = setMB mb1 (4, 2) (Just Cookie)
-      (_, fallen, sites) = settleBoardPortals [((4, 2), (bottom, 6))] mb
+      (_, fallen, sites) = settleBoardPortals (builtinHooks [] [((4, 2), (bottom, 6))]) mb
   assertEqual "portal-delivered cookie drained" (1 :: Int) fallen
   assertEqual "drain site is portal B bottom" [(bottom, 6)] sites
   let (open', hit) = coverCarpets [(bottom, 6)] sites
@@ -1076,28 +1003,22 @@ carpet_covers_on_portal_cookie_drain = do
   -- Live: Cookie at A; cross-clear empties exit column so settle can teleport+drain
   let board = setCell stableBoard (5, 3) Cookie
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 4)
+        (setCarpetOpen [(bottom, 6)] . setBelts [] . setPortals [((5, 3), (bottom, 6))] . setUfos [] $ (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 4)
           { gsBoard = board
-          , gsCarpetOpen = [(bottom, 6)]
-          , gsCarpetsCovered = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
-          , gsBelts = []
-          , gsPortals = [((5, 3), (bottom, 6))]
-          , gsUfos = []
           , gsCrossClears = 2
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
-          , gsCookiesCollected = 0
+          , gsGoal = goalCount CountCarpets 1
           , gsLastCleared = []
-          }
+          })
       (gs1, out) = useCrossClear (3, 6) gs0
   case out of
     InvalidSwap -> assertFailure "cross should fire"
     NoMatch -> assertFailure "cross should apply"
     _ -> pure ()
-  assertBool ("portal cookie collected, got " ++ show (gsCookiesCollected gs1)) $
-    gsCookiesCollected gs1 >= 1
+  assertBool ("portal cookie collected, got " ++ show (gsCount CountCookies gs1)) $
+    gsCount CountCookies gs1 >= 1
   assertBool "cookie not left on board" $
     null
       [ (r, c)
@@ -1107,7 +1028,7 @@ carpet_covers_on_portal_cookie_drain = do
       ]
   assertBool ("portal drain in lastCleared, got " ++ show (gsLastCleared gs1)) $
     (bottom, 6) `elem` gsLastCleared gs1
-  assertEqual "bottom carpet covered by portal drain" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "bottom carpet covered by portal drain" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
   assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)
 
@@ -1124,34 +1045,27 @@ carpet_covers_on_surprise_safe_bottom = do
           (bottom, 3)
           (mkSafeLayers 1)
       gs0 =
-        (newGameAtLevel 0 (GameConfig 20 (GoalCarpet 1)) 5)
+        (setCarpetOpen [(bottom, 3)] . setBelts [] . setPortals [] . setUfos [] $ (newGameAtLevel 0 (GameConfig 20 (goalCount CountCarpets 1)) 5)
           { gsBoard = board
-          , gsCarpetOpen = [(bottom, 3)]
-          , gsCarpetsCovered = 0
+          , gsCounts = noCounts
           , gsOver = Nothing
-          , gsBelts = []
-          , gsPortals = []
-          , gsUfos = []
           , gsHammers = 2
           , gsMoves = 20
-          , gsGoal = GoalCarpet 1
-          , gsCollected = 0
-          , gsCookiesCollected = 0
-          , gsSafesOpened = 0
+          , gsGoal = goalCount CountCarpets 1
           , gsLastCleared = []
-          }
+          })
       (gs1, out) = useHammer (6, 3) gs0
   case out of
     InvalidSwap -> assertFailure "hammer Surprise should fire"
     NoMatch -> assertFailure "hammer Surprise should apply"
     _ -> pure ()
-  assertEqual "safe opened" (1 :: Int) (gsSafesOpened gs1)
-  assertBool ("cookie drained after safe open, got " ++ show (gsCookiesCollected gs1)) $
-    gsCookiesCollected gs1 >= 1
+  assertEqual "safe opened" (1 :: Int) (gsCount CountSafes gs1)
+  assertBool ("cookie drained after safe open, got " ++ show (gsCount CountCookies gs1)) $
+    gsCount CountCookies gs1 >= 1
   assertBool "no cookie left on bottom carpet" $
     not (isCookie (getCell (gsBoard gs1) (bottom, 3)))
   assertBool ("drain site in lastCleared, got " ++ show (gsLastCleared gs1)) $
     (bottom, 3) `elem` gsLastCleared gs1
-  assertEqual "bottom carpet covered" (1 :: Int) (gsCarpetsCovered gs1)
+  assertEqual "bottom carpet covered" (1 :: Int) (gsCount CountCarpets gs1)
   assertEqual "no open carpets" ([] :: [Pos]) (gsCarpetOpen gs1)
   assertEqual "GoalCarpet meter" (1 :: Int) (gsCollected gs1)

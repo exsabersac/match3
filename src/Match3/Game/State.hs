@@ -2,12 +2,29 @@
 
 -- | 对局状态：GameState 及其（部分字段）相等语义、撤销快照、本步特效 MoveFx 的边沿触发、提示与撤销。
 --
--- 依赖：Match3.Types、Match3.Board.*（findHint）、Ufo / Conveyor（字段类型）。
+-- 依赖：Match3.Types、Match3.Board.*（findHint）、Element.Level（关卡级元素的读写）、Ufo / Conveyor（读数类型）。
 -- 不变量：gsCombo / gsLastCleared 只描述最近一次**真正结算**的一步；任何被拒操作经
 -- clearMoveFx / rejectMove 清零，moveFx 对 NoMatch / InvalidSwap / 已终局一律返回空，
 -- 前端因此不会重播上一步的连击（护栏 failed_swap_resets_combo_feedback 等）。
 module Match3.Game.State
   ( GameState(..)
+    -- * 关卡级元素（第 7 刀：第 7 刀前的五个字段改为派生读数 + 写入函数）
+  , gsBelts
+  , gsPortals
+  , gsUfos
+  , gsCarpetOpen
+  , gsGround
+  , setLevelElem
+  , setUfos
+  , setBelts
+  , setPortals
+  , setCarpetOpen
+  , setGround
+  , gsCount
+  , gsProgress
+  , gsGoalMet
+  , gsCollected
+  , gsColorBag
   , clearMoveFx
   , rejectMove
   , MoveFx(..)
@@ -17,8 +34,11 @@ module Match3.Game.State
   ) where
 
 import Data.Maybe (isJust)
+import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Builtin (BeltLevel(..), CarpetLevel(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
+import Match3.Element.Class (LevelElement, SomeLevelElement, fromLevelElement)
+import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
 import Match3.Element.Registry (Registry)
 import Match3.Ufo (Ufo(..))
 import Match3.Conveyor (Belt)
@@ -31,35 +51,129 @@ data GameState = GameState
   , gsScore         :: Score
   , gsMoves         :: MovesLeft
   , gsGoal          :: LevelGoal
-  , gsCollected     :: Int          -- primary collect-color cleared (GoalCollect)
-  , gsColorBag      :: [(Color, Int)] -- cumulative clears per color
-  , gsStonesCleared :: Int          -- fully destroyed stones
-  , gsChestsCleared :: Int          -- fully opened treasure chests (宝箱)
-  , gsHoneyCleared  :: Int          -- fully smashed honey jars (蜂蜜罐)
-  , gsBalloonsPopped :: Int         -- balloons popped (气球)
-  , gsCookiesCollected :: Int       -- biscuits collected at bottom (饼干)
-  , gsCakesCleared  :: Int          -- cakes fully cleared (蛋糕)
-  , gsSafesOpened   :: Int          -- vaults / safes opened (保险箱)
+  , gsCounts        :: Counts       -- 第 4 刀：按计数键累计（各色清除 CountColor / 石块 / 宝箱 / 蜂蜜罐 / 气球 / 饼干 / 蛋糕 /
+                                    -- 保险箱 / 时间精灵 / 飞碟吸收 CountUfo / 地毯覆盖 CountCarpets / 扩展元素 CountNamed 名字），
+                                    -- 读法见 gsCount；第 5 刀起颜色袋也在这里（gsColorBag / gsCollected 改为派生读数）
   , gsGen           :: StdGen
   , gsOver          :: Maybe Outcome
   , gsLevel         :: Int
   , gsHint          :: Maybe (Pos, Pos)
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
   , gsShuffled      :: Bool  -- True if last ensurePlayable reshuffled
-  , gsBelts         :: [Belt] -- conveyor paths (开心消消乐传送带)
-  , gsPortals       :: [(Pos, Pos)] -- bidirectional portal pairs (传送门)
   , gsHammers       :: Int    -- hammer booster charges
   , gsFreeSwaps     :: Int    -- free-swap booster charges (any two cells)
   , gsCrossClears   :: Int    -- cross-clear booster charges
-  , gsUfos          :: [Ufo]  -- flying saucers (飞碟)
-  , gsUfoCollected  :: Int    -- gems absorbed by UFOs
-  , gsCarpetOpen    :: [Pos]  -- uncovered carpet / floor tiles (地毯目标)
-  , gsCarpetsCovered :: Int   -- carpet tiles covered this level
   , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
   , gsDaily         :: Bool   -- True for date-seeded daily challenge (通关≠战役推进)
-  , gsElementCounts :: [(String, Int)] -- 自定义元素计数（counter / diffCounter = CountNamed 名字），内置关卡恒为 []
-  , gsGround        :: Ground -- 地面层（段 2c，元素名 + 层数；内置关卡恒为 []）
-  } deriving (Show)
+  , gsLevelElems    :: [SomeLevelElement]
+    -- ^ 第 7 刀：一局的全部关卡级元素（状态在元素值里；内置 = 飞碟 / 皮带 / 传送门 / 地毯 / 地面层，
+    -- 取代第 7 刀前的 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround 五个字段，旧名现在是派生读数）。
+    -- 开局见 Match3.Element.Level.startLevelsWith，节拍与写回见同模块。
+  }
+
+-- | 传送带路径（第 7 刀前的字段；派生读数）。
+gsBelts :: GameState -> [Belt]
+gsBelts = levelBelts . gsLevelElems
+
+-- | 双向传送门对（第 7 刀前的字段；派生读数）。
+gsPortals :: GameState -> [(Pos, Pos)]
+gsPortals = levelPortals . gsLevelElems
+
+-- | 飞碟（第 7 刀前的字段；派生读数）。
+gsUfos :: GameState -> [Ufo]
+gsUfos = levelUfos . gsLevelElems
+
+-- | 未覆盖的地毯格（第 7 刀前的字段；派生读数）。
+gsCarpetOpen :: GameState -> [Pos]
+gsCarpetOpen = levelCarpetOpen . gsLevelElems
+
+-- | 地面层（第 7 刀前的字段；派生读数；段 2c，元素名 + 层数）。
+gsGround :: GameState -> Ground
+gsGround = levelGround . gsLevelElems
+
+-- | 写入一个关卡级元素的状态（同名替换，没有则追加）。
+setLevelElem :: LevelElement l => l -> GameState -> GameState
+setLevelElem l gs = gs {gsLevelElems = putLevel l (gsLevelElems gs)}
+
+-- | 第 7 刀前的记录更新 @gs {gsUfos = us}@。
+setUfos :: [Ufo] -> GameState -> GameState
+setUfos = setLevelElem . UfoLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsBelts = bs}@。
+setBelts :: [Belt] -> GameState -> GameState
+setBelts = setLevelElem . BeltLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsPortals = ps}@。
+setPortals :: [(Pos, Pos)] -> GameState -> GameState
+setPortals = setLevelElem . PortalLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsCarpetOpen = ps}@。
+setCarpetOpen :: [Pos] -> GameState -> GameState
+setCarpetOpen = setLevelElem . CarpetLevel
+
+-- | 第 7 刀前的记录更新 @gs {gsGround = g}@。
+setGround :: Ground -> GameState -> GameState
+setGround = setLevelElem . GroundLayer
+
+-- | 内置五种关卡级元素之一（Show 按第 7 刀前的字段名打印它们的状态）。
+builtinLevel :: SomeLevelElement -> Bool
+builtinLevel e =
+  isJust (fromLevelElement e :: Maybe UfoLevel)
+    || isJust (fromLevelElement e :: Maybe BeltLevel)
+    || isJust (fromLevelElement e :: Maybe PortalLevel)
+    || isJust (fromLevelElement e :: Maybe CarpetLevel)
+    || isJust (fromLevelElement e :: Maybe GroundLayer)
+
+-- | 与第 4 刀前派生的 Show 逐字相同（第 7 刀：皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影，仍按旧字段名、旧位置打印）：各计数仍按旧字段名、旧位置打印（元素查询快照对 show 取散列）。
+-- gsElementCounts 打印 namedCounts（按名字升序；旧实现按首次出现，快照里每局至多一个名字）。
+-- 没有旧字段的键（CountSpirits、扩展元素借用的其余内置键）不打印，相等判断仍比较全部计数。
+instance Show GameState where
+  showsPrec d gs =
+    showParen (d >= 11) $
+      showString "GameState {"
+        . field "gsBoard" (gsBoard gs) . sep
+        . field "gsScore" (gsScore gs) . sep
+        . field "gsMoves" (gsMoves gs) . sep
+        . field "gsGoal" (gsGoal gs) . sep
+        . field "gsCollected" (gsCollected gs) . sep
+        . field "gsColorBag" (gsColorBag gs) . sep
+        . field "gsStonesCleared" (cnt CountStones) . sep
+        . field "gsChestsCleared" (cnt CountChests) . sep
+        . field "gsHoneyCleared" (cnt CountHoney) . sep
+        . field "gsBalloonsPopped" (cnt CountBalloons) . sep
+        . field "gsCookiesCollected" (cnt CountCookies) . sep
+        . field "gsCakesCleared" (cnt CountCakes) . sep
+        . field "gsSafesOpened" (cnt CountSafes) . sep
+        . field "gsGen" (gsGen gs) . sep
+        . field "gsOver" (gsOver gs) . sep
+        . field "gsLevel" (gsLevel gs) . sep
+        . field "gsHint" (gsHint gs) . sep
+        . field "gsCombo" (gsCombo gs) . sep
+        . field "gsShuffled" (gsShuffled gs) . sep
+        . field "gsBelts" (gsBelts gs) . sep
+        . field "gsPortals" (gsPortals gs) . sep
+        . field "gsHammers" (gsHammers gs) . sep
+        . field "gsFreeSwaps" (gsFreeSwaps gs) . sep
+        . field "gsCrossClears" (gsCrossClears gs) . sep
+        . field "gsUfos" (gsUfos gs) . sep
+        . field "gsUfoCollected" (cnt CountUfo) . sep
+        . field "gsCarpetOpen" (gsCarpetOpen gs) . sep
+        . field "gsCarpetsCovered" (cnt CountCarpets) . sep
+        . field "gsLastCleared" (gsLastCleared gs) . sep
+        . field "gsDaily" (gsDaily gs) . sep
+        . field "gsElementCounts" (namedCounts (gsCounts gs)) . sep
+        . field "gsGround" (gsGround gs)
+        . extras
+        . showChar '}'
+    where
+      -- 内置五种之外的关卡级元素（扩展）：有才打印，内置对局与第 7 刀前逐字相同
+      extras = case [e | e <- gsLevelElems gs, not (builtinLevel e)] of
+        [] -> id
+        es -> sep . field "gsLevelExtra" es
+      cnt k = gsCount k gs
+      sep = showString ", "
+      field :: Show a => String -> a -> ShowS
+      field name v = showString name . showString " = " . showsPrec 0 v
 
 instance Eq GameState where
   a == b =
@@ -67,29 +181,35 @@ instance Eq GameState where
       && gsScore a == gsScore b
       && gsMoves a == gsMoves b
       && gsGoal a == gsGoal b
-      && gsCollected a == gsCollected b
-      && gsColorBag a == gsColorBag b
-      && gsStonesCleared a == gsStonesCleared b
-      && gsChestsCleared a == gsChestsCleared b
-      && gsHoneyCleared a == gsHoneyCleared b
-      && gsBalloonsPopped a == gsBalloonsPopped b
-      && gsCookiesCollected a == gsCookiesCollected b
-      && gsCakesCleared a == gsCakesCleared b
-      && gsSafesOpened a == gsSafesOpened b
+      && gsCounts a == gsCounts b
       && gsOver a == gsOver b
       && gsLevel a == gsLevel b
       && gsDaily a == gsDaily b
-      && gsBelts a == gsBelts b
-      && gsPortals a == gsPortals b
       && gsHammers a == gsHammers b
       && gsFreeSwaps a == gsFreeSwaps b
       && gsCrossClears a == gsCrossClears b
-      && gsUfos a == gsUfos b
-      && gsUfoCollected a == gsUfoCollected b
-      && gsCarpetOpen a == gsCarpetOpen b
-      && gsCarpetsCovered a == gsCarpetsCovered b
-      && gsElementCounts a == gsElementCounts b
-      && gsGround a == gsGround b
+      && gsLevelElems a == gsLevelElems b
+
+-- | 某计数键的累计个数（缺省 0；第 4 刀前是各自的字段，如 gsStonesCleared = gsCount CountStones）。
+gsCount :: CounterKey -> GameState -> Int
+gsCount k = countOf k . gsCounts
+
+-- | 目标进度（HUD / 标题 / 网页的主进度，Match3.Goal.goalProgress）。
+gsProgress :: GameState -> Int
+gsProgress gs = goalProgress (gsGoal gs) (gsScore gs) (gsCounts gs)
+
+-- | 当前计数是否满足关卡目标。
+gsGoalMet :: GameState -> Bool
+gsGoalMet gs = goalMet (gsGoal gs) (gsScore gs) (gsCounts gs)
+
+-- | 第 5 刀前的 gsCollected 字段（派生读数）：不计分数的目标进度——分数目标恒 0，其余等于 gsProgress。
+-- 旧字段只在结算时按目标种类更新、开局为 0，数值与此处逐步相同（金标准 col= 锁定）。
+gsCollected :: GameState -> Int
+gsCollected gs = goalProgress (gsGoal gs) 0 (gsCounts gs)
+
+-- | 第 5 刀前的 gsColorBag 字段（派生读数）：各色累计清除数，按 allColors 顺序、含 0。
+gsColorBag :: GameState -> [(Color, Int)]
+gsColorBag = colorBag . gsCounts
 
 -- | 清空「上一步」的 UI 反馈字段（连击波数 / 本步清除格）。
 -- 这两个字段只描述最近一次**真正结算**的一步；任何没有结算的操作（无匹配回滚、

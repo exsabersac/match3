@@ -6,7 +6,7 @@
 --   * 初始化：加载贴图、建立初始 App（开局提示 / 展示模式）、写窗口标题；
 --   * 帧首：同步渲染倍率（UI.Env.syncScale）；
 --   * 事件：输入映射 UI.Input.foldEvents（规则经通用接口 gameStep：Match3.Engine.match3Shell，撤销在 Engine.History）；
---   * 推进：UI.Playback.tickAnim（逐轮回放用通用播放器 Engine.Playback）；
+--   * 推进：UI.Playback.tickAnim（逐轮回放用通用播放器 Engine.Playback），随后把排队的音效交给 UI.Sound（当前空操作）；
 --   * 绘制：UI.Draw.draw。
 module UI.Plugin
   ( Match3Opts(..)
@@ -14,6 +14,7 @@ module UI.Plugin
   , match3ShellConfig
   ) where
 
+import Data.Maybe (fromMaybe)
 import Engine.History (startHistory)
 import Art
 import Data.IORef
@@ -27,6 +28,7 @@ import UI.Env
 import UI.Input
 import UI.Layout
 import UI.Playback
+import UI.Sound (playSounds)
 import UI.Types
 
 -- | 启动参数（来自环境变量，见 UI.Env）。
@@ -59,7 +61,7 @@ match3Plugin o =
         -- 每帧同步倍率（两次查询很便宜）：窗口拖到不同 DPI 的显示器上也能立刻跟上
         syncScale window renderer ref
     , plugEvents = \window events ref -> foldEvents ref window events
-    , plugTick = \ref -> modifyIORef' ref tickAnim
+    , plugTick = \ref -> modifyIORef' ref tickAnim >> drainSounds ref
     , plugDraw = \renderer ref -> draw renderer =<< readIORef ref
     }
 
@@ -68,8 +70,8 @@ initialApp :: Match3Opts -> Maybe Art -> App
 initialApp o art =
   let startIdx = moStart o
       showcase = moShowcase o
-      lvl = allLevels !! startIdx
-      gs0 = newGameAtLevel startIdx (levelConfig lvl) (moSeed o)
+      -- MATCH3_LEVEL 已在 envStartLevel 校验过范围；万一没有这一关就按默认配置开局
+      gs0 = fromMaybe (newGameAtLevel startIdx defaultConfig (moSeed o)) (campaignGame startIdx (moSeed o))
       (gsHinted0, _) = applyHint gs0
       gsHinted = if showcase then showcaseState gsHinted0 else gsHinted0
   in App
@@ -88,7 +90,7 @@ initialApp o art =
        , appTipFrames = if startIdx == 0 && not showcase then 240 else 0
        , appHelpFrames = if showcase then 0 else 300
        , appPaused = False
-       , appStartMoves = lvlMoves lvl
+       , appStartMoves = gsMoves gs0  -- 开局步数 = 该关印制步数
        , appDragFrom = Nothing
        , appTool = ToolNone
        , appMapOpen = False
@@ -96,4 +98,14 @@ initialApp o art =
        , appArt = art
        , appScale = 0
        , appMouseScale = 1
+       , appSounds = []
        }
+
+-- | 音效钩子：把本帧排队的音效名交给 UI.Sound.playSounds（当前为空操作）并清空队列。
+-- 内置表现表的音效全为 Nothing，队列恒为空，这里什么也不做。
+drainSounds :: IORef App -> IO ()
+drainSounds ref = do
+  a <- readIORef ref
+  case appSounds a of
+    [] -> pure ()
+    ss -> playSounds ss >> writeIORef ref a {appSounds = []}

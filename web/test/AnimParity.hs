@@ -3,7 +3,7 @@
 -- 「frames=帧数 events=事件数」。每第 3 步从第 5 帧起加速（覆盖 fast 路径）。
 -- 与 node-anim-parity.mjs（wasm 一侧）的输出逐字节比较；另外在原生一侧核对：不加速的步，
 -- 逐帧循环的帧数 / 事件数与 Engine.Playback.runPlayer 一口气播完的结果相同（不一致则退出码 1）。
--- 用法（仓库根目录）：stack exec -- runghc -isrc -iapp -iweb/hs web/test/AnimParity.hs 12 42 20
+-- 用法（仓库根目录）：stack exec -- runghc -isrc -iapp/pure -iweb/hs web/test/AnimParity.hs 12 42 20
 module Main (main) where
 
 import Control.Monad (unless, when)

@@ -6,6 +6,8 @@ module Match3.Core
   , GemKind(..)
   , CellContents(..)
   , Cell
+  , ElementName(..)
+  , CustomState(..)
   , mkGem
   , mkIceGem
   , iceLayers
@@ -139,16 +141,26 @@ module Match3.Core
   , TargetScore
   , Outcome(..)
   , LevelGoal(..)
+  , Meter(..)
+  , Quota(..)
+  , goalScore
+  , goalCollect
+  , goalColors
+  , goalCount
+  , GoalView(..)
+  , goalView
+  , meterValue
   , goalMet
-  , goalMetEx
   , goalProgress
-  , goalProgressEx
   , goalTarget
-  , lookupCount
   , GameConfig(..)
   , defaultConfig
   , Level(..)
+  , level
   , allLevels
+  , lookupLevel
+  , levelCount
+  , clampLevelIndex
   , levelConfig
   , getCell
   , setCell
@@ -170,8 +182,34 @@ module Match3.Core
   , MatchRun(..)
   , countColor
   , GameState(..)
+  , gsCount
+  , gsProgress
+  , gsGoalMet
+  , gsCollected
+  , gsColorBag
+    -- ** 关卡级元素（第 7 刀：第 7 刀前的五个字段改为派生读数 + 写入函数）
+  , gsBelts
+  , gsPortals
+  , gsUfos
+  , gsCarpetOpen
+  , gsGround
+  , setLevelElem
+  , setUfos
+  , setBelts
+  , setPortals
+  , setCarpetOpen
+  , setGround
+  , SomeLevelElement
+  , CounterKey(..)
+  , Counts
+  , countOf
+  , countsFromList
+  , countsToList
+  , namedCounts
+  , colorBag
   , newGame
   , newGameAtLevel
+  , campaignGame
   , newDailyGame
   , trySwap
   , MoveFx(..)
@@ -180,9 +218,10 @@ module Match3.Core
   , MoveTrace(..)
   , EndStep(..)
   , EndEffect(..)
-  , SpreadKind(..)
-  , SnailMove(..)
+  , EndItem(..)
   , applyEndEffect
+  , endEffectPairs
+  , endItemDir
   , traceSwap
   , traceFreeSwap
   , traceHammer
@@ -257,6 +296,7 @@ import Match3.Board.Clear (scoreForCleared, scoreForWave)
 import Match3.Board.Grid (adjacent, getCell, inBounds, setCell, swapCells)
 import Match3.Board.Match (MatchRun(..))
 import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
+import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, countsFromList, countsToList, namedCounts)
 import Match3.Ice (chipIceOnClear)
 import Match3.Grass
   ( clearOverlaysOn
@@ -276,7 +316,9 @@ import Match3.Grass
   , spreadChoco
   , spreadSteam
   )
-import Match3.Carpet (coverCarpets, levelCarpets)
+import Match3.Carpet (coverCarpets)
+import Match3.Levels.Campaign (allLevels, clampLevelIndex, levelCarpets, levelCount, lookupLevel)
+import Match3.Levels.Level (Level(..), level, levelConfig)
 import Match3.Snail
   ( stepSnails
   , stepSnailsAvoiding
@@ -293,6 +335,7 @@ import Match3.Ufo
   , stepUfo
   , stepUfos
   )
+import Match3.Element.Class (SomeLevelElement)
 import Match3.Game.Boosters
 import Match3.Game.Level
 import Match3.Game.Move

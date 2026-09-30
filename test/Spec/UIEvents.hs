@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 前端反馈与效果事件：失败 / 无效 / 道具空操作 / 撤销洗牌清掉连击反馈，MoveFx 与 gsLastCleared，事件与回放一致。
@@ -53,16 +54,14 @@ last_cleared_skips_belt_snail = do
           (6, 2)
           (mkGem C4)
       gs0 =
-        (newGame defaultConfig 8)
+        (setBelts [belt] . setUfos [] $ (newGame defaultConfig 8)
           { gsBoard = board0
-          , gsBelts = [belt]
           , gsMoves = 10
           , gsOver = Nothing
           , gsHint = Nothing
-          , gsUfos = []
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsLastCleared = []
-          }
+          })
       (gs1, out) = trySwap (1, 2) (1, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -92,17 +91,14 @@ last_cleared_includes_countdown_explode = do
           (mkGem C1)
       board = spawnCountdown board0 (4, 4) C5 1
       gs0 =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] . setPortals [] $ (newGame defaultConfig 11)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 10
-          , gsBelts = []
-          , gsUfos = []
-          , gsPortals = []
           , gsLastCleared = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "match must apply"
@@ -241,7 +237,7 @@ trace_events_consistent_with_trace = do
         [ (li, gs, p1, p2)
         | li <- [0 .. length allLevels - 1]
         , s <- [1, 2]
-        , let lvl = allLevels !! li
+        , let lvl = levelAt li
               gs = newGameAtLevel li (levelConfig lvl) s
         , (p1, p2) <- take 3 [(a, b) | (a, b) <- allSwapsSpec, moveApplied (snd (trySwap a b gs))]
         ]

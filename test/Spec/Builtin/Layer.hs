@@ -6,9 +6,10 @@ module Spec.Builtin.Layer
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard))
 import Match3.Core
+import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
 import System.Random (mkStdGen)
@@ -136,15 +137,14 @@ vine_spreads_after_move = do
           (mkVineGem C4)
   assertBool "vine placed" (hasVine (getCell board0 (5, 5)))
   assertBool "neighbor bare" (cellOverlay (getCell board0 (5, 4)) == Nothing)
-  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 99999 }
       gs0 =
-        (newGameAtLevel 0 cfg 12)
+        (setBelts [] $ (newGameAtLevel 0 cfg 12)
           { gsBoard = board0
-          , gsBelts = []
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -235,15 +235,14 @@ choco_spreads_after_move = do
           (mkChocoGem C4)
   assertBool "choco placed" (hasChoco (getCell board0 (5, 5)))
   assertBool "neighbor bare" (cellOverlay (getCell board0 (5, 4)) == Nothing)
-  let cfg = GameConfig { cfgMoves = 10, cfgGoal = GoalScore 99999 }
+  let cfg = GameConfig { cfgMoves = 10, cfgGoal = goalScore 99999 }
       gs0 =
-        (newGameAtLevel 0 cfg 12)
+        (setBelts [] $ (newGameAtLevel 0 cfg 12)
           { gsBoard = board0
-          , gsBelts = []
           , gsOver = Nothing
           , gsMoves = 10
           , gsScore = 0
-          }
+          })
       (gs1, out) = trySwap (0, 2) (0, 3) gs0
   case out of
     NoMatch -> assertFailure "expected match"
@@ -369,7 +368,7 @@ fog_cleared_by_adjacent = do
   assertBool "fog gone" (not (hasFog (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
   -- Via cascade clear path
-  let CascadeRun {crBoard = board1} = cascadeSeeds Nothing ms [] [] (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeSeeds Nothing ms noHooks (mkStdGen 1) board0
   assertBool "fog cleared in cascade" (not (hasFog (getCell board1 (2, 1))))
 
 fog_layer_decrement :: Assertion
@@ -393,7 +392,7 @@ fog_layer_decrement = do
   assertEqual "now fully peeled" (1 :: Int) cleared2
   assertBool "fog gone" (not (hasFog (getCell b2 (4, 1))))
   -- Campaign décor includes fog on 巧饼 / 终章
-  let gs = newGameAtLevel 22 (levelConfig (allLevels !! 22)) 42
+  let gs = levelGame 22 42
       nFog =
         length
           [ ()
@@ -458,7 +457,7 @@ chain_cleared_by_adjacent = do
   assertEqual "one chain unlocked" (1 :: Int) cleared
   assertBool "chain gone" (not (hasChain (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
-  let CascadeRun {crBoard = board1} = cascadeSeeds Nothing ms [] [] (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeSeeds Nothing ms noHooks (mkStdGen 1) board0
   assertBool "chain cleared in cascade" (not (hasChain (getCell board1 (2, 1))))
 
 chain_layer_decrement :: Assertion
@@ -481,7 +480,7 @@ chain_layer_decrement = do
   let (b2, cleared2) = chipAdjacentChain b1 ms
   assertEqual "now unlocked" (1 :: Int) cleared2
   assertBool "chain gone" (not (hasChain (getCell b2 (4, 1))))
-  let gs = newGameAtLevel 25 (levelConfig (allLevels !! 25)) 42
+  let gs = levelGame 25 42
       nChain =
         length
           [ ()
@@ -543,7 +542,7 @@ freeze_cleared_by_adjacent = do
   assertBool "freeze gone" (not (hasFreeze (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
   -- Cascade path also peels
-  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing noHooks (mkStdGen 1) board0
   assertBool "freeze cleared in cascade" (not (hasFreeze (getCell board1 (2, 1))))
 
 freeze_layer_decrement :: Assertion
@@ -570,7 +569,7 @@ freeze_layer_decrement = do
   let iced = mkIceGem C1 2
   assertEqual "ice layers" (2 :: Int) (iceLayers iced)
   assertBool "ice is not freeze overlay" (not (hasFreeze iced))
-  let gs = newGameAtLevel 29 (levelConfig (allLevels !! 29)) 42
+  let gs = levelGame 29 42
       nFreeze =
         length
           [ ()
@@ -617,7 +616,7 @@ curtain_cleared_by_adjacent = do
   assertEqual "fully opened" (1 :: Int) cleared
   assertBool "curtain gone" (not (hasCurtain (getCell b1 (2, 1))))
   assertBool "gem remains" (isGem (getCell b1 (2, 1)))
-  let CascadeRun {crBoard = board1} = cascadeMatches Nothing [] [] (mkStdGen 1) board0
+  let CascadeRun {crBoard = board1} = cascadeMatches Nothing noHooks (mkStdGen 1) board0
   assertBool "curtain cleared in cascade" (not (hasCurtain (getCell board1 (2, 1))))
 
 curtain_layer_decrement :: Assertion
@@ -640,7 +639,7 @@ curtain_layer_decrement = do
   let (b2, cleared2) = chipAdjacentCurtain b1 ms
   assertEqual "now clear" (1 :: Int) cleared2
   assertBool "curtain gone" (not (hasCurtain (getCell b2 (4, 1))))
-  let gs = newGameAtLevel 30 (levelConfig (allLevels !! 30)) 42
+  let gs = levelGame 30 42
       nCurt =
         length
           [ ()
@@ -692,7 +691,7 @@ steam_spreads_after_move = do
   assertBool "neighbor bare" (cellOverlay (getCell board0 (3, 4)) == Nothing)
   let b1 = spreadSteam board0
   assertBool "steam spread" (hasSteam (getCell b1 (3, 4)))
-  let gs = newGameAtLevel 35 (levelConfig (allLevels !! 35)) 42
+  let gs = levelGame 35 42
       nSt =
         length
           [ ()
@@ -731,11 +730,11 @@ chain_freeze_both_peel = do
   -- Full clearMatches also leaves both cells as bare gems (not holes)
   let (mb, _) = clearMatches board0
   assertBool "chain cell not holed" $
-    case (mb !! 2) !! 1 of
+    case atM mb (2, 1) of
       Just c -> isGem c && not (hasChain c)
       Nothing -> False
   assertBool "freeze cell not holed" $
-    case (mb !! 4) !! 1 of
+    case atM mb (4, 1) of
       Just c -> isGem c && not (hasFreeze c)
       Nothing -> False
 
@@ -767,14 +766,12 @@ freeze_blocks_freeswap_and_swap = do
           (2, 3)
           (mkGem C2)
       gs0 =
-        (newGame defaultConfig 5)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 5)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 10
           , gsFreeSwaps = 2
-          , gsBelts = []
-          , gsUfos = []
-          }
+          })
   assertBool "swapBlocked" (swapBlockedWith defaultRegistry board (2, 2) (2, 3))
   let (gs1, out1) = trySwap (2, 2) (2, 3) gs0
   assertEqual "trySwap NoMatch" NoMatch out1
@@ -809,7 +806,7 @@ soft_hit_preserves_choco_steam = do
   let expanded = expandSpecials boardIce (findMatches boardIce)
       (_, iceFree) = chipIceOnClear boardIce expanded
   assertBool "soft ice not a hole" ((3, 1) `notElem` iceFree)
-  let CascadeRun {crBoard = boardI1} = cascadeMatches Nothing [] [] (mkStdGen 21) boardIce
+  let CascadeRun {crBoard = boardI1} = cascadeMatches Nothing noHooks (mkStdGen 21) boardIce
   assertEqual "ice chipped once" (1 :: Int) (iceLayers (getCell boardI1 (3, 1)))
   assertBool "choco survives ice soft-hit" (hasChoco (getCell boardI1 (2, 1)))
   -- Control: same layout with bare mid gem — true clear *does* strip choco.
@@ -824,7 +821,7 @@ soft_hit_preserves_choco_steam = do
              (mkGem C1))
           (2, 1)
           (mkChocoGem C2)
-      CascadeRun {crBoard = boardH1} = cascadeMatches Nothing [] [] (mkStdGen 22) boardHard
+      CascadeRun {crBoard = boardH1} = cascadeMatches Nothing noHooks (mkStdGen 22) boardHard
   assertBool "true clear strips choco" (not (hasChoco (getCell boardH1 (2, 1))))
   -- Flip in a 3-match: flips to back, stays; adjacent steam must survive.
   let boardFlip =
@@ -841,7 +838,7 @@ soft_hit_preserves_choco_steam = do
   assertBool "flip match present" (not (null (findMatches boardFlip)))
   let (_, iceF) = chipIceOnClear boardFlip (expandSpecials boardFlip (findMatches boardFlip))
   assertBool "flip not a hole" ((4, 1) `notElem` iceF)
-  let CascadeRun {crBoard = boardF1} = cascadeMatches Nothing [] [] (mkStdGen 23) boardFlip
+  let CascadeRun {crBoard = boardF1} = cascadeMatches Nothing noHooks (mkStdGen 23) boardFlip
   assertBool "became back gem" $
     isGem (getCell boardF1 (4, 1)) && not (isFlip (getCell boardF1 (4, 1)))
   assertEqual "back color C5" (Just C5) (cellColor (getCell boardF1 (4, 1)))
@@ -858,17 +855,15 @@ soft_hit_preserves_choco_steam = do
 soft_hit_preserves_oncell_overlays :: Assertion
 soft_hit_preserves_oncell_overlays = do
   let mkGs board =
-        (newGame defaultConfig 11)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 11)
           { gsBoard = board
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
-          }
+          })
   -- Hammer ice=2 + Choco: chip ice, Choco stays (no true clear / no adj clear).
   let boardCh = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just Choco))
       (gsCh, outCh) = useHammer (4, 4) (mkGs boardCh)
@@ -935,7 +930,7 @@ soft_hit_no_adj_side_effects = do
   assertEqual "soft ice peels no Curtain" (0 :: Int) nCu
   assertEqual "Curtain2 unchanged" (2 :: Int) (curtainLayers (getCell bCuU (2, 1)))
   -- Live cascade: Maker of match color must not charge on soft ice wave.
-  let CascadeRun {crBoard = bMk} = cascadeMatches Nothing [] [] (mkStdGen 72) (boardIce (mkMakerCharges C1 3))
+  let CascadeRun {crBoard = bMk} = cascadeMatches Nothing noHooks (mkStdGen 72) (boardIce (mkMakerCharges C1 3))
   assertBool "Maker still maker" (isMaker (getCell bMk (2, 1)))
   assertEqual "Maker uncharged" (3 :: Int) (makerCharges (getCell bMk (2, 1)))
   -- Soft Flip match: Balloon same front-color must not pop; Bottle must not dye.
@@ -955,7 +950,7 @@ soft_hit_no_adj_side_effects = do
           (mkGem C3)
   assertBool "flip match" (not (null (findMatches boardFlip)))
   let boardFlipBot = setCell boardFlip (3, 1) (mkBottle C4)
-      CascadeRun {crBoard = bFlip} = cascadeMatches Nothing [] [] (mkStdGen 73) boardFlipBot
+      CascadeRun {crBoard = bFlip} = cascadeMatches Nothing noHooks (mkStdGen 73) boardFlipBot
   assertBool "Balloon survives soft Flip" (isBalloon (getCell bFlip (5, 1)))
   assertEqual "Bottle did not dye neighbor" (Just C3) (cellColor (getCell bFlip (5, 2)))
   -- Control: true clear mid gem *does* peel Fog / charge Maker.
@@ -983,17 +978,15 @@ soft_hit_no_adj_side_effects = do
 soft_hit_preserves_oncell_fog_steam :: Assertion
 soft_hit_preserves_oncell_fog_steam = do
   let mkGs board =
-        (newGame defaultConfig 13)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 13)
           { gsBoard = board
           , gsHammers = 2
           , gsOver = Nothing
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
+          , gsGoal = goalScore 99999
           , gsMoves = 20
           , gsScore = 0
-          }
+          })
   -- Hammer ice=2 + Fog2: chip ice, Fog stays.
   let boardFog = setCell stableBoard (4, 4) (Gem C2 Normal 2 (Just (Fog 2)))
       (gsFog, outFog) = useHammer (4, 4) (mkGs boardFog)

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 单格绘制的元素查表（第三刀）：键 = 规则层注册表的元素名（elementName defaultRegistry），
 -- 值 = 同一元素的两个渲染后端 —— 几何降级版（UI.Cell.Prim）与贴图版（UI.Cell.Art）——
 -- 以及它的主贴图名（缺图检测用）。UI.BoardPrim.drawGemAt 与 UI.BoardArt.drawCellArt 都经这张表分派。
@@ -35,7 +36,7 @@ data CellRenderer = CellRenderer
   }
 
 -- | 元素名 → 渲染器。
-cellTable :: [(String, CellRenderer)]
+cellTable :: [(ElementName, CellRenderer)]
 cellTable =
   [ ("gem", gemRenderer)
   , ("line_h", gemRenderer)
@@ -70,12 +71,12 @@ gemRenderer =
 customRenderer :: CellRenderer
 customRenderer =
   CellRenderer primCustom artCustom $ \c -> case c of
-    Custom n _ -> n
+    Custom n _ -> unElementName n
     _ -> ""
 
 -- | 有专门画法的 Custom 元素（段 5：气泡）：键 = Custom 的名字，与 cellTable 分开，名字不会和内置键冲突。
 -- 查不到的 Custom 名字走 customRenderer（贴图名 = 元素名 + 层数角标，缺图画灰块）。
-customTable :: [(String, CellRenderer)]
+customTable :: [(ElementName, CellRenderer)]
 customTable =
   [ ("bubble", CellRenderer primBubble artBubble (const "bubble"))
   ]

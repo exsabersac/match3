@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（原 test/Spec.hs 的非测试顶层定义，逐字搬运），
@@ -13,6 +14,8 @@ module Spec.Support
   , tripleMove
   , isWin
   , firstLevel
+  , levelAt
+  , levelGame
   , firstWave
     -- * 原有助手
   , findNoMatchPair
@@ -39,10 +42,13 @@ module Spec.Support
 
 import Control.Monad (foldM)
 import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import Match3.Core
-import Match3.Element (Entry, Counter(CountNamed), AdjacentRule(AdjacentRule), AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
-import Match3.Element.Class (Archetype(Fixed), Element(..), Hit(..), SomeElement(..))
+import Match3.Board.Grid (mboardRows)
+import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
+import Match3.Element.Caps (Element(..), Hit(..), SomeElement(..), counts, fixed, hit, onAdjacent)
 import Match3.Types (isCustom)
+import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), startHistory)
 import Match3.Element.Registry (Registry)
@@ -59,11 +65,11 @@ setCells :: Board -> [(Pos, Cell)] -> Board
 setCells = foldl (\b (p, c) -> setCell b p c)
 
 -- | 盘上名字为 n 的自定义格位置（行优先）。
-customsOn :: String -> Board -> [Pos]
+customsOn :: ElementName -> Board -> [Pos]
 customsOn n b = [p | p <- allPos, isCustomNamed n (getCell b p)]
 
 -- | 是否是名字为 n 的自定义格。
-isCustomNamed :: String -> Cell -> Bool
+isCustomNamed :: ElementName -> Cell -> Bool
 isCustomNamed n cell = case cell of
   Custom m _ -> m == n
   _ -> False
@@ -83,10 +89,16 @@ isWin o = case o of
   _ -> False
 
 -- | 战役第 1 关（allLevels 的第一项；关卡表为空时直接报错）。
-firstLevel :: Level
-firstLevel = case allLevels of
-  (l : _) -> l
-  [] -> error "firstLevel: allLevels is empty"
+firstLevel :: HasCallStack => Level
+firstLevel = levelAt 0
+
+-- | 第 li 关（0 基）的关卡记录；没有这一关直接报错（第 6 刀：测试里取代 allLevels !! li）。
+levelAt :: HasCallStack => Int -> Level
+levelAt li = fromMaybe (error ("levelAt: no level " ++ show li)) (lookupLevel li)
+
+-- | 第 li 关按该关步数与目标、给定种子开局（= newGameAtLevel li (levelConfig (levelAt li)) seed）。
+levelGame :: HasCallStack => Int -> Int -> GameState
+levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
 -- | 走步报告的第一轮连锁；没有任何一轮时断言失败。
 firstWave :: HasCallStack => MoveTrace -> IO CascadeWave
@@ -210,7 +222,7 @@ checkWaveChain tag start ws final = do
     [] -> start @?= final
     (w : _) -> assertEqual (tag ++ ": first wave starts from start board") start (cwBefore w)
   sequence_
-    [ assertEqual (tag ++ ": wave " ++ show i ++ " holes -> after keeps shape") boardSize (length (cwHoles a))
+    [ assertEqual (tag ++ ": wave " ++ show i ++ " holes -> after keeps shape") boardSize (length (mboardRows (cwHoles a)))
     | (i, a) <- zip [1 :: Int ..] ws
     ]
   case reverse ws of
@@ -252,37 +264,37 @@ replayTimeline tag mt = go 0 (mtStart mt) (mtWaves mt) (mtEnd mt) []
           assertEqual (tag ++ ": wave " ++ show i ++ " starts from current board") cur' (cwBefore w)
           go (i + 1) (cwAfter w) rest later acc'
 
+-- | 步末效果的名字 = 元素名（countdown / belt / vine / choco / steam / snail）。
 effectName :: EndEffect -> String
-effectName e = case e of
-  EndCountdownTick _ -> "tick"
-  EndBeltShift _ -> "belt"
-  EndSpread k _ -> show k
-  EndSnail _ -> "snail"
+effectName = unElementName . endEffectElement
 
 -- | 细节自洽：蔓延来源正交相邻且之前就带该覆盖层；蜗牛只走一格或原地掉头；皮带 / 倒计时格真的变了。
 checkEffectDetail :: String -> EndStep -> Assertion
-checkEffectDetail tag e = case esEffect e of
-  EndSpread k pairs -> do
-    let ov = case k of
-          SpreadVine -> Vine
-          SpreadChoco -> Choco
-          SpreadSteam -> Steam
+checkEffectDetail tag e = case endEffectKind eff of
+  EvSpread -> do
+    let ov = case endEffectElement eff of
+          "vine" -> Vine
+          "choco" -> Choco
+          _ -> Steam
     sequence_
       [ do
           assertBool (tag ++ ": spread source adjacent " ++ show (src, q)) (adjacent src q)
           assertEqual (tag ++ ": spread source had overlay") (Just ov) (cellOverlay (getCell (esBefore e) src))
           assertEqual (tag ++ ": spread target was bare") Nothing (cellOverlay (getCell (esBefore e) q))
-      | (src, q) <- pairs
+      | (src, q) <- endEffectPairs eff
       ]
-  EndSnail ms ->
+  EvMove ->
     sequence_
-      [ assertBool (tag ++ ": snail moves at most one cell " ++ show m) (smFrom m == smTo m || adjacent (smFrom m) (smTo m))
-      | m <- ms
+      [ assertBool (tag ++ ": snail moves at most one cell " ++ show m) (eiFrom m == eiTo m || adjacent (eiFrom m) (eiTo m))
+      | m <- endEffectItems eff
       ]
-  EndBeltShift mv -> assertBool (tag ++ ": belt moves listed") (not (null mv))
-  EndCountdownTick ps ->
+  EvBelt -> assertBool (tag ++ ": belt moves listed") (not (null (endEffectItems eff)))
+  EvTick ->
     sequence_
-      [ assertBool (tag ++ ": countdown ticked at " ++ show p) (getCell (esBefore e) p /= getCell (esAfter e) p) | p <- ps ]
+      [ assertBool (tag ++ ": countdown ticked at " ++ show p) (getCell (esBefore e) p /= getCell (esAfter e) p) | p <- map eiTo (endEffectItems eff) ]
+  k -> assertFailure (tag ++ ": unexpected end effect kind " ++ show k)
+  where
+    eff = esEffect e
 
 --------------------------------------------------------------------------------
 -- 第二刀 2b：元素框架
@@ -295,34 +307,32 @@ newtype Crate = Crate Int
 
 instance Element Crate where
   name _ = "crate"
-  toCell (Crate n) = Custom "crate" n
-  archetype _ = Fixed
-  onHit (Crate n)
-    | n <= 1 = Destroy
-    | otherwise = Absorb (SomeElement (Crate (n - 1)))
-  adjacentRule _ = Just (AdjacentRule 200 crateAdjacent)
-    where
-      isCrate c = case c of
+  toCell (Crate n) = Custom "crate" (CustomState n)
+  caps (Crate n) =
+    fixed [hit (if n <= 1 then Destroy else Absorb (SomeElement (Crate (n - 1)))), onAdjacent 200 crateAdjacent, counts (CountNamed "crate")]
+
+-- | 木箱的邻格规则：真消除格的正交邻格里的木箱（直接命中格除外）耐久 -1，耐久 1 的碎掉。
+crateAdjacent :: AdjCtx -> Board -> AdjOut
+crateAdjacent ctx b =
+  let isCrate c = case c of
         Custom "crate" _ -> True
         _ -> False
-      crateAdjacent ctx b =
-        let targets =
-              nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
-            hit (bd, dead) q = case getCell bd q of
-              Custom _ n | n <= 1 -> (bd, dead ++ [q])
-                         | otherwise -> (setCell bd q (Custom "crate" (n - 1)), dead)
-              _ -> (bd, dead)
-            (b', dead') = foldl hit (b, []) targets
-        in AdjOut b' dead' []
-  counter _ = Just (CountNamed "crate")
+      targets =
+        nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
+      bump (bd, dead) q = case getCell bd q of
+        Custom _ (CustomState n) | n <= 1 -> (bd, dead ++ [q])
+                   | otherwise -> (setCell bd q (Custom "crate" (CustomState (n - 1))), dead)
+        _ -> (bd, dead)
+      (b', dead') = foldl bump (b, []) targets
+  in AdjOut b' dead' []
 
 crateDef :: Entry
-crateDef = customEntry (Crate 1) Crate
+crateDef = customEntry (Crate 1) (Crate . unCustomState)
 
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
 crateBoard :: Int -> Board
 crateBoard durability =
-  setCells stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5), ((0, 1), Custom "crate" durability)]
+  setCells stableBoard [((1, 0), mkGem C5), ((1, 1), mkGem C5), ((0, 1), Custom "crate" (CustomState durability))]
 
 -- | 这一手是否真正结算（不是 NoMatch / InvalidSwap）。
 moveApplied :: Outcome -> Bool

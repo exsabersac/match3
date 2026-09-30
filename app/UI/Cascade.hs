@@ -4,7 +4,7 @@
 -- | 棋盘动画绘制：静止盘、交换补间、轻落，以及逐轮回放的高亮 → 消失 → 下落补子（和步末阶段的分派），
 -- 震屏视口偏移 withShake。
 --
--- 依赖：ComboFx（阶段机与下落映射）、UI.EndStage、UI.BoardArt、UI.BoardPrim、UI.Types、UI.Layout。
+-- 依赖：ComboFx（阶段机与下落映射）、UI.Presentation（光圈贴图）、UI.EndStage、UI.BoardArt、UI.BoardPrim、UI.Types、UI.Layout。
 module UI.Cascade
   ( drawBoard
   , withShake
@@ -29,6 +29,7 @@ import UI.BoardArt
 import UI.BoardPrim
 import UI.EndStage
 import UI.Layout
+import UI.Presentation (clearSprite)
 import UI.Types
 
 -- | 按当前动画分派棋盘绘制：交换 / 轻落 / 逐轮回放 / 静止。
@@ -101,9 +102,9 @@ drawWaveFlash ren app p v = do
         cell = getCell (cwBefore w) pos
     case appArt app of
       Just art -> do
-        void (drawSpriteAdd ren art "spark" (rect (x - 12) (y - 12) (cellPx + 24) (cellPx + 24)) tint (round (90 + 120 * blink)))
+        void (drawSpriteAdd ren art clearSprite (rect (x - 12) (y - 12) (cellPx + 24) (cellPx + 24)) tint (round (90 + 120 * blink)))
         drawCellArt ren art (appPulse app) x y cell False
-        void (drawSpriteAdd ren art "spark" (cellRect x y) (V3 255 255 255) (round (80 * blink)))
+        void (drawSpriteAdd ren art clearSprite (cellRect x y) (V3 255 255 255) (round (80 * blink)))
         void (drawSpriteMod ren art "sel_ring" (rect (x - 2) (y - 2) (cellPx + 4) (cellPx + 4)) tint 235)
       Nothing -> do
         rendererDrawColor ren $= V4 60 54 84 255
@@ -137,7 +138,7 @@ drawWavePop ren app p v = do
         a = round (255 * (1 - t)) :: Word8
         ring = round (fromIntegral cellPx * (1 + 0.9 * t)) :: CInt
     forM_ (appArt app) $ \art ->
-      void (drawSpriteAdd ren art "spark" (rect (cx - ring `div` 2) (cy - ring `div` 2) ring ring) tint a)
+      void (drawSpriteAdd ren art clearSprite (rect (cx - ring `div` 2) (cy - ring `div` 2) ring ring) tint a)
     drawCellScaled ren app cx cy s a (getCell (cwBefore w) pos)
     case holeAt w pos of
       Just cell -> drawCellScaled ren app cx cy (max 0.05 t) 255 cell

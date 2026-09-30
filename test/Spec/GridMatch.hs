@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 盘面与匹配：交换回滚、稳定盘面、三连判定、提示、可玩开局。
@@ -33,7 +34,7 @@ cell_accessors_total = do
   assertEqual "flip front color" (Just C2) (cellColor (mkFlip C2 C4))
   assertEqual "countdown color" (Just C5) (cellColor (Countdown C5 2))
   assertEqual "stone has no color" Nothing (cellColor mkStone)
-  assertEqual "custom has no color" Nothing (cellColor (Custom "x" 1))
+  assertEqual "custom has no color" Nothing (cellColor (Custom "x" (CustomState 1)))
   assertEqual "gem kind" (Just Bomb) (cellKind (Gem C1 Bomb 0 Nothing))
   assertEqual "countdown kind" (Just Normal) (cellKind (Countdown C1 1))
   assertEqual "cookie has no kind" Nothing (cellKind mkCookie)

@@ -8,7 +8,7 @@
 -- 单格绘制经 UI.CellTable 按元素名分派到 UI.Cell.Art（贴图）/ UI.Cell.Prim（几何）；colorKey / gemSprite /
 -- breathe / 角标 / primarySprite 从那里再导出，原调用方不变。
 --
--- 依赖：UI.BoardPrim（降级）、UI.CellTable、UI.Cell.Art、Art、UI.Types、UI.Layout。
+-- 依赖：UI.BoardPrim（降级）、Match3.View（棋盘底层读数）、Engine.GridUI（高亮）、UI.CellTable、UI.Cell.Art、Art、UI.Types、UI.Layout。
 module UI.BoardArt
   ( drawBoardBase
   , waveTint
@@ -33,17 +33,19 @@ module UI.BoardArt
   ) where
 
 import Art
-import ComboFx
 import Control.Monad (forM_, unless, void, when)
 import Data.Word (Word8)
+import Engine.GridUI (Highlight (..), isFlashing)
 import Foreign.C.Types (CDouble, CInt)
 import Match3.Core
+import Match3.View (BoardView (..), CarpetMark (..), boardView, carpetAt, groundAtView)
 import SDL hiding (Normal)
 import UI.BoardPrim
 import UI.Cell.Art (breathe, colorKey, drawBadgeAt, drawLayerBadge, gemSprite)
 import UI.CellTable (CellRenderer (..), cellRenderer, primarySprite)
-import UI.Ground (drawGroundArtAt, groundAt)
+import UI.Ground (drawGroundArtAt)
 import UI.Layout
+import UI.Presentation (clearTint)
 import UI.Types
 
 -- | 棋盘底层（格子 / 地毯 / 地面层 / 传送带 / 传送门），不画棋子。
@@ -56,11 +58,9 @@ drawBoardBase ren app = case appArt app of
       rendererDrawColor ren $= if even (r + c) then V4 36 36 48 255 else V4 28 28 40 255
       fillRect ren (Just (cellRect x y))
 
--- | 高亮 / 光圈颜色：第 1 轮柔白，连击轮用等级色。
+-- | 高亮 / 光圈颜色：查表现表（第 1 轮取 EvClear 行的柔白，连击轮用等级色；见 UI.Presentation.clearTint）。
 waveTint :: App -> Int -> V3 Word8
-waveTint app k
-  | k <= 1 = V3 255 250 220
-  | otherwise = let (r, g, b) = styleRGB (comboStyle k) (appPulse app) in V3 r g b
+waveTint app k = let (r, g, b) = clearTint k (appPulse app) in V3 r g b
 
 -- | 棋盘底 + 除 hidden 以外的所有格（移动中的格由调用方另画）。
 drawCellsExcept :: Renderer -> App -> Board -> [Pos] -> IO ()
@@ -134,23 +134,23 @@ beltAngles belt = go Nothing (zip belt (drop 1 belt ++ take 1 belt))
 -- | 棋盘底层：圆角框 + 棋盘格 + 地毯 + 地面层（果冻）+ 传送带 + 传送门（都在棋子下面）。
 drawBoardBgArt :: Renderer -> Art -> App -> IO ()
 drawBoardBgArt ren art app = do
-  let gs = appGame app
-      carpets = levelCarpets (gsLevel gs)
+  let bv = boardView (appGame app)  -- 第 11 刀：地毯 / 地面层 / 传送带 / 传送门读视图模型
   _ <- drawPanel ren art "panel_dark" (rect (padPx - 8) (hudH + padPx - 8) (boardPx + 16) (boardPx + 16)) 16
-  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \pos@(r, c) -> do
+  forM_ allCells $ \pos@(r, c) -> do
     let (x, y) = cellOrigin pos
-        carpetOpen = pos `elem` gsCarpetOpen gs
-        carpetCovered = pos `elem` carpets && not carpetOpen
+        carpet = carpetAt bv pos
+        carpetOpen = carpet == CarpetOpen
+        carpetCovered = carpet == CarpetCovered
     void (drawSprite ren art (if even (r + c) then "tile_a" else "tile_b") (cellRect x y))
     when carpetCovered $ void (drawSprite ren art "carpet_covered" (cellRect x y))
     when carpetOpen $ void (drawSprite ren art "carpet_open" (cellRect x y))
     -- 地面层（段 5：双层果冻）：棋盘格之上、棋子之下
-    mapM_ (drawGroundArtAt ren art x y) (groundAt gs pos)
-  forM_ (gsBelts gs) $ \belt ->
+    mapM_ (drawGroundArtAt ren art x y) (groundAtView bv pos)
+  forM_ (bvBelts bv) $ \belt ->
     forM_ (beltAngles belt) $ \(pos, ang) -> do
       let (x, y) = cellOrigin pos
       void (drawSpriteEx ren art "belt" (cellRect x y) ang False)
-  forM_ (gsPortals gs) $ \(a, b) ->
+  forM_ (bvPortals bv) $ \(a, b) ->
     forM_ [a, b] $ \pos -> do
       let (x, y) = cellOrigin pos
           spin = fromIntegral (appPulse app * 3 `mod` 360) :: CDouble
@@ -159,23 +159,23 @@ drawBoardBgArt ren art app = do
 -- | 精灵版棋盘：底层 → 提示光 → 棋子（下落时带 yOff）→ 选中框 → 蔓延预告 → 飞碟。
 drawStaticArt :: Renderer -> Art -> App -> Board -> CInt -> IO ()
 drawStaticArt ren art app board yOff = do
-  let gs = appGame app
+  let bv = boardView (appGame app)
       pulse = appPulse app
-      flashSet = map fst (appFlash app)
-      hintCells = maybe [] (\(a, b) -> [a, b]) (gsHint gs)
+      hl = appHighlight app  -- 第 11 刀：选中 / 提示 / 闪光 / 固定高亮读 Engine.GridUI.Highlight
+      hintCells = hlHint hl
       hintA = round (120 + 135 * breathe pulse 60) :: Int
   drawBoardBgArt ren art app
   forM_ hintCells $ \pos -> do
     let (x, y) = cellOrigin pos
     void (drawSpriteMod ren art "hint_glow" (rect (x - 3) (y - 3) (cellPx + 6) (cellPx + 6)) (V3 255 255 255) (fromIntegral hintA))
-  forM_ [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]] $ \pos -> do
+  forM_ allCells $ \pos -> do
     let (x, y) = cellOrigin pos
-    drawCellArt ren art pulse x (y + yOff) (getCell board pos) (pos `elem` flashSet)
+    drawCellArt ren art pulse x (y + yOff) (getCell board pos) (isFlashing hl pos)
   -- 提示格再叠一层淡淡的加色光，便于一眼看到
   forM_ hintCells $ \pos -> do
     let (x, y) = cellOrigin pos
     void (drawSpriteAdd ren art "hint_glow" (cellRect x y) (V3 255 230 150) (fromIntegral (hintA `div` 3)))
-  forM_ (appSel app) $ \pos -> do
+  forM_ (hlSelected hl) $ \pos -> do
     let (x, y) = cellOrigin pos
         tint = case appTool app of
           ToolHammer -> V3 255 170 80
@@ -185,19 +185,17 @@ drawStaticArt ren art app board yOff = do
         grow = round (2 * breathe pulse 30) :: CInt
     void (drawSpriteMod ren art "sel_ring" (rect (x - 2 - grow) (y - 2 - grow) (cellPx + 4 + 2 * grow) (cellPx + 4 + 2 * grow)) tint 255)
   -- 自由交换第一格：保持高亮
-  case appTool app of
-    ToolFreeSwap (Just p) -> do
-      let (x, y) = cellOrigin p
-      void (drawSpriteMod ren art "sel_ring" (cellRect x y) (V3 110 190 255) 220)
-    _ -> pure ()
+  forM_ (hlPinned hl) $ \p -> do
+    let (x, y) = cellOrigin p
+    void (drawSpriteMod ren art "sel_ring" (cellRect x y) (V3 110 190 255) 220)
   -- 藤蔓 / 巧克力下一步可能蔓延到的格子：绿 / 棕色柔光呼吸。
   -- 只在静止时画：预告基于结算后的盘面，回放 / 步末动画中画出来会和正在长出的格子混淆。
   let spreadA = fromIntegral (round (70 + 110 * breathe pulse 60) :: Int) :: Word8
   unless (animBusy app) $ do
-    forM_ (spreadTargets hasVine (gsBoard gs)) $ \pos -> do
+    forM_ (spreadTargets hasVine (bvBoard bv)) $ \pos -> do
       let (x, y) = cellOrigin pos
       void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 90 255 120) spreadA)
-    forM_ (spreadTargets hasChoco (gsBoard gs)) $ \pos -> do
+    forM_ (spreadTargets hasChoco (bvBoard bv)) $ \pos -> do
       let (x, y) = cellOrigin pos
       void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 210 120 60) spreadA)
   drawUfosArt ren art app yOff

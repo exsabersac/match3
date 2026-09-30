@@ -4,13 +4,10 @@
 -- | HUD 与叠层的贴图绘制：九宫格面板、目标图标与进度、道具次数、连击徽章与「N 连击！」总结、
 -- 提示 / 道具横幅、键位条、暂停帮助、结算面板、「连击 xN」弹字与得分浮字。
 --
--- 依赖：UI.TextArt、UI.BoardArt（宝石小图标）、Art、ComboFx（样式与浮字曲线）、UI.Types、UI.Layout。
+-- 依赖：Match3.View（HUD 读数 / 进度点 / 分数徽章）、UI.TextArt、UI.BoardArt（宝石小图标）、UI.GoalStyle（目标图标 / 色调）、Art、ComboFx（样式与浮字曲线）、UI.Types、UI.Layout。
 -- 不变量：结算面板在回放播完后才画；连击总结只在最高连击 ≥ 2 时显示。
 module UI.HudArt
-  ( goalIcon
-  , hudProgress
-  , goalTint
-  , drawHudArt
+  ( drawHudArt
   , drawComboSummaryArt
   , drawTipBannerArt
   , drawToolBannerArt
@@ -29,70 +26,23 @@ import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import UI.BoardArt
+import UI.GoalStyle (goalIcon, goalTint)
 import UI.Layout
+import UI.Presentation (comboPopSprite, scorePopRGB)
 import UI.TextArt
+import Match3.View
 import UI.Types
 
 --------------------------------------------------------------------------------
 -- 贴图版 HUD / 横幅 / 暂停 / 结算 / 地图
 --------------------------------------------------------------------------------
 
--- | 目标图标（复用棋子贴图）。
-goalIcon :: LevelGoal -> String
-goalIcon g = case g of
-  GoalScore _ -> "icon_score"
-  GoalCollect c _ -> gemSprite c
-  GoalCollectMulti _ -> "icon_multi"
-  GoalClearStone _ -> "stone_3"
-  GoalChest _ -> "chest"
-  GoalHoney _ -> "honey"
-  GoalBalloon _ -> "balloon_c1"
-  GoalCookie _ -> "cookie"
-  GoalCake _ -> "cake_1"
-  GoalSafe _ -> "safe"
-  GoalUfo _ -> "ufo_c3"
-  GoalCarpet _ -> "carpet_covered"
-  GoalNamed name _ -> name
-
--- | HUD 目标进度（与窗口标题使用同一组计数器）。
-hudProgress :: GameState -> Int
-hudProgress gs = case gsGoal gs of
-  GoalScore _ -> gsScore gs
-  GoalCollect _ _ -> gsCollected gs
-  GoalCollectMulti reqs -> sum [min n (lookupCount (gsColorBag gs) c) | (c, n) <- reqs]
-  GoalClearStone _ -> gsStonesCleared gs
-  GoalChest _ -> gsChestsCleared gs
-  GoalHoney _ -> gsHoneyCleared gs
-  GoalBalloon _ -> gsBalloonsPopped gs
-  GoalCookie _ -> gsCookiesCollected gs
-  GoalCake _ -> gsCakesCleared gs
-  GoalSafe _ -> gsSafesOpened gs
-  GoalUfo _ -> gsUfoCollected gs
-  GoalCarpet _ -> gsCarpetsCovered gs
-  GoalNamed _ _ -> gsCollected gs
-
-goalTint :: LevelGoal -> V3 Word8
-goalTint g = case g of
-  GoalScore _ -> V3 110 230 150
-  GoalCollect c _ -> let (r, gg, b) = colorRGB c in V3 r gg b
-  GoalCollectMulti _ -> V3 240 190 100
-  GoalClearStone _ -> V3 180 184 200
-  GoalChest _ -> V3 230 170 70
-  GoalHoney _ -> V3 250 190 50
-  GoalBalloon _ -> V3 255 120 160
-  GoalCookie _ -> V3 220 160 90
-  GoalCake _ -> V3 255 140 190
-  GoalSafe _ -> V3 200 180 90
-  GoalUfo _ -> V3 170 130 255
-  GoalCarpet _ -> V3 220 90 150
-  GoalNamed name _ -> let (r, gg, b) = namedRGB name in V3 r gg b
-
 -- | 贴图版 HUD：关卡徽章、目标与进度条、步数、分数（回放中滚动）、道具次数、连击徽章 / 总结。
 drawHudArt :: Renderer -> Art -> App -> IO ()
 drawHudArt ren art app = do
-  let gs = appGame app
-      li = min (gsLevel gs) (length allLevels - 1)
-      lvl = allLevels !! li
+  -- 第 11 刀：全部读数来自视图模型 Match3.View（关卡下标已夹紧、步数上限、道具、目标、分数徽章）
+  let gv = gameView (appGame app)
+      li = gvLevelIndex gv
       white = V4 245 245 255 255
       dim = V4 150 145 190 255
       gold = V4 255 214 90 255
@@ -100,26 +50,28 @@ drawHudArt ren art app = do
   -- 关卡徽章 + 名称
   _ <- drawSprite ren art "medal" (rect 14 11 44 44)
   textAC ren art 36 24 3 white (show (li + 1))
-  _ <- if gsDaily gs
+  _ <- if gvDaily gv
     then zhA ren art "zh_daily" 66 12 22
     else zhA ren art ("name_" ++ show li) 66 11 24
   -- 关卡进度点：已过绿、当前金、未解锁暗
   -- 间距 6（38 关时与段 5 之前逐像素相同）；关卡更多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
-  let dotStep = min 6 (228 `div` max 1 (length allLevels)) :: Int
-  forM_ [0 .. length allLevels - 1] $ \i -> do
+  let dots = levelDots li (appMaxReached app)  -- 每关一个点（levelCount 个）
+      dotStep = min 6 (228 `div` max 1 (length dots)) :: Int
+  forM_ (zip [0 ..] dots) $ \(i, ld) -> do
     let xD = 66 + fromIntegral (i * dotStep)
-        (col, yy, hh)
-          | i == li = (V4 255 214 90 255, 38, 10)
-          | i < li = (V4 90 210 130 255, 40, 6)
-          | i <= appMaxReached app = (V4 120 180 140 255, 40, 6)
-          | otherwise = (V4 80 72 130 255, 40, 6)
+        (col, yy, hh) = case ld of
+          DotCurrent -> (V4 255 214 90 255, 38, 10)
+          DotDone -> (V4 90 210 130 255, 40, 6)
+          DotUnlocked -> (V4 120 180 140 255, 40, 6)
+          DotLocked -> (V4 80 72 130 255, 40, 6)
     rendererDrawColor ren $= col
     fillRect ren (Just (rect xD yy 4 hh))
   -- 道具：锤子 / 自由交换 / 十字消（当前模式金框）
-  let chips =
-        [ ("icon_hammer", gsHammers gs, appTool app == ToolHammer)
-        , ("icon_swap", gsFreeSwaps gs, case appTool app of ToolFreeSwap _ -> True; _ -> False)
-        , ("icon_cross", gsCrossClears gs, appTool app == ToolCross)
+  let bs = gvBoosters gv
+      chips =
+        [ ("icon_hammer", bHammers bs, appTool app == ToolHammer)
+        , ("icon_swap", bFreeSwaps bs, case appTool app of ToolFreeSwap _ -> True; _ -> False)
+        , ("icon_cross", bCrossClears bs, appTool app == ToolCross)
         ]
   forM_ (zip [0 :: CInt ..] chips) $ \(i, (ic, n, active)) -> do
     let cx = 298 + i * 57
@@ -127,14 +79,15 @@ drawHudArt ren art app = do
     _ <- drawSprite ren art ic (rect (cx + 4) 15 24 24)
     textA ren art (cx + 30) 18 3 (if n > 0 then white else dim) (show n)
   -- 目标条
-  let goal = gsGoal gs
-      prog = hudProgress gs
-      targ = goalTarget goal
+  let gi = gvGoal gv
+      goal = giGoal gi
+      prog = giProgress gi  -- 第 5 刀：与窗口标题 / 网页版同一个数（第 5 刀前是本模块的 hudProgress）
+      targ = giTarget gi
   _ <- drawSprite ren art (goalIcon goal) (rect 12 50 26 26)
   meterA ren art 42 53 332 prog targ (goalTint goal) (show prog ++ "/" ++ show targ)
   -- 步数条（≤5 步时变红并闪烁）
-  let mv = gsMoves gs
-      moveCap = max mv (lvlMoves lvl)
+  let mv = gvMoves gv
+      moveCap = gvMoveCap gv
       low = mv <= 5
       tintMv
         | low = let k = round (160 + 95 * breathe (appPulse app) 40) :: Int in V3 255 (fromIntegral (k `div` 2)) 80
@@ -143,23 +96,22 @@ drawHudArt ren art app = do
   meterA ren art 42 79 332 mv (max 1 moveCap) tintMv (show mv)
   -- 右下：回放中显示当前轮「连击 xN」；播完后短暂显示本步总结「N 连击！」；否则得分。
   -- 回放期间分数随每一轮消失逐步滚动上涨（结算值早已写入 gsScore，这里只是显示）。
-  case playingCascade app of
-    Just c
-      | cCombo c >= 2 -> do
-          let (r, g, b) = styleRGB (comboStyle (cCombo c)) (appPulse app)
-          _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
-          zhAC ren art "zh_combo" 424 56 18
-          textAC ren art 424 76 3 (V4 r g b 255) ("x" ++ show (cCombo c))
-      | otherwise -> do
-          _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
-          zhAC ren art "zh_score" 424 56 18
-          textAC ren art 424 76 3 gold (show (cBase c + cGain c))
-    Nothing
-      | appComboShow app > 0 && appComboBest app >= 2 -> drawComboSummaryArt ren art app
-      | otherwise -> do
-          _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
-          zhAC ren art (if gsShuffled gs then "zh_shuffle" else "zh_score") 424 56 18
-          textAC ren art 424 76 3 gold (show (gsScore gs))
+  let replay = fmap (\c -> ReplayView (cCombo c) (cBase c + cGain c)) (playingCascade app)
+  case scoreBadge replay (appComboShow app) (appComboBest app) gv of
+    BadgeCombo n -> do
+      let (r, g, b) = styleRGB (comboStyle n) (appPulse app)
+      _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
+      zhAC ren art comboPopSprite 424 56 18
+      textAC ren art 424 76 3 (V4 r g b 255) ("x" ++ show n)
+    BadgeRolling shown -> do
+      _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
+      zhAC ren art "zh_score" 424 56 18
+      textAC ren art 424 76 3 gold (show shown)
+    BadgeSummary _ -> drawComboSummaryArt ren art app
+    BadgeScore shuffled score -> do
+      _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
+      zhAC ren art (if shuffled then "zh_shuffle" else "zh_score") 424 56 18
+      textAC ren art 424 76 3 gold (show score)
 
 -- | HUD 右下「N 连击！」总结：放大弹入 + 等级色光晕，最后 16 帧淡出（回到得分）。
 drawComboSummaryArt :: Renderer -> Art -> App -> IO ()
@@ -330,7 +282,7 @@ drawPopsArt ren art app
                 h = round (fromIntegral (csHeight st) * sc) :: CInt
                 gh = round (fromIntegral h * 1.2 :: Double) :: CInt
                 numS = "x" ++ show k
-                zw = zhW art "zh_combo" h
+                zw = zhW art comboPopSprite h
                 nw = glyphTextW gh numS
                 gap = h `div` 6
                 total = zw + gap + nw
@@ -341,10 +293,10 @@ drawPopsArt ren art app
             -- 柔光底：等级色，让文字在任何宝石颜色上都读得清
             void (drawSpriteMod ren art "spark" (rect (hx - haloW `div` 2) (cy - haloH `div` 2) haloW haloH) (V3 20 10 40) (a `div` 2 + a `div` 4))
             void (drawSpriteAdd ren art "spark" (rect (hx - haloW `div` 2) (cy - haloH `div` 2) haloW haloH) (V3 r g b) (a `div` 3))
-            void (drawSpriteMod ren art "zh_combo" (rect x0 (cy - h `div` 2) zw h) (V3 r g b) a)
+            void (drawSpriteMod ren art comboPopSprite (rect x0 (cy - h `div` 2) zw h) (V3 r g b) a)
             glyphText ren art (x0 + zw + gap) (cy - gh `div` 2) gh (V4 r g b a) numS
           PopScore n k -> do
-            let (r, g, b) = if k >= 2 then styleRGB (comboStyle k) (appPulse app) else (255, 244, 200)
+            let (r, g, b) = scorePopRGB k (appPulse app) -- 表现表 EvScore 行（连击轮用等级色）
                 h = round ((20 + 2 * fromIntegral (min 4 (max 0 (k - 1)))) * scorePopScale (tpAge p) :: Double) :: CInt
                 str = "+" ++ show n
                 w = glyphTextW h str

@@ -3,7 +3,7 @@
 
 -- | 选关地图：章节分隔、节点位置、点击命中，以及地图的几何 / 贴图两种绘制。
 --
--- 依赖：UI.TextArt、UI.Glyph、UI.HudArt（目标图标）、UI.BoardArt（呼吸光）、UI.Types、UI.Layout。
+-- 依赖：UI.TextArt、UI.Glyph、UI.GoalStyle（目标图标 / 小点颜色）、UI.BoardArt（呼吸光）、UI.Types、UI.Layout。
 -- 同步：mapNodePos 与 mapHitTest 共用同一套坐标；章节起点 chapterStarts 要与 allLevels 的章节划分一致。
 module UI.LevelMap
   ( chapterStarts
@@ -24,7 +24,7 @@ import Match3.Core
 import SDL hiding (Normal)
 import UI.BoardArt
 import UI.Glyph
-import UI.HudArt
+import UI.GoalStyle (goalIcon, goalPip)
 import UI.Layout
 import UI.TextArt
 import UI.Types
@@ -72,7 +72,7 @@ mapHitTest :: Int32 -> Int32 -> Maybe Int
 mapHitTest mx my =
   let hits =
         [ i
-        | i <- [0 .. length allLevels - 1]
+        | i <- [0 .. levelCount - 1]
         , let (nx, ny) = mapNodePos i
               r = 22 :: CInt
         , fromIntegral mx >= nx - r
@@ -103,7 +103,7 @@ drawLevelMap ren app
           drawBannerWord ren 20 (ny - 32) 2 (V4 160 190 220 255) lab
       -- Path lines between consecutive nodes (skip visual break at chapter edges)
       rendererDrawColor ren $= V4 60 80 100 255
-      forM_ [0 .. length allLevels - 2] $ \i -> do
+      forM_ [0 .. levelCount - 2] $ \i -> do
         let (x0, y0) = mapNodePos i
             (x1, y1) = mapNodePos (i + 1)
         drawLine ren (P (V2 x0 y0)) (P (V2 x1 y1))
@@ -129,20 +129,7 @@ drawLevelMap ren app
           drawRect ren (Just (Rectangle (P (V2 (nx - 20) (ny - 20))) (V2 40 40)))
         drawNumber ren (nx - 10) (ny - 8) 2 (V4 240 240 255 255) (i + 1)
         -- Tiny goal color pip
-        let pip = case lvlGoal lvl of
-              GoalScore _ -> V4 100 220 140 255
-              GoalCollect c _ -> let (r,g,b) = colorRGB c in V4 r g b 255
-              GoalCollectMulti _ -> V4 220 180 100 255
-              GoalClearStone _ -> V4 160 160 170 255
-              GoalChest _ -> V4 220 170 60 255
-              GoalHoney _ -> V4 240 180 40 255
-              GoalBalloon _ -> V4 255 120 160 255
-              GoalCookie _ -> V4 210 160 90 255
-              GoalCake _ -> V4 255 140 180 255
-              GoalSafe _ -> V4 200 170 50 255
-              GoalUfo _ -> V4 180 120 255 255
-              GoalCarpet _ -> V4 180 100 160 255
-              GoalNamed name _ -> let (r, g, b) = namedRGB name in V4 r g b 255
+        let pip = goalPip (lvlGoal lvl)
         rendererDrawColor ren $= pip
         fillRect ren (Just (Rectangle (P (V2 (nx - 6) (ny + 22))) (V2 12 6)))
 
@@ -160,7 +147,7 @@ drawLevelMapArt ren art app
         rendererDrawColor ren $= V4 110 100 190 160
         fillRect ren (Just (rect 16 (ny - 36) (winW - 32) 1))
       rendererDrawColor ren $= V4 140 130 220 200
-      forM_ [0 .. length allLevels - 2] $ \i -> do
+      forM_ [0 .. levelCount - 2] $ \i -> do
         let (x0, y0) = mapNodePos i
             (x1, y1) = mapNodePos (i + 1)
         forM_ [-1, 0, 1] $ \d -> drawLine ren (P (V2 x0 (y0 + d))) (P (V2 x1 (y1 + d)))

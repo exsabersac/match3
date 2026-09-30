@@ -4,7 +4,7 @@
 -- | 布局常量与几何：逻辑像素尺寸（格 56 px、边距、HUD 高度、窗口大小）、格子坐标换算、
 -- 矩形与插值小工具、调色板（宝石颜色 / 叠层蔓延色）、浮字左边界。
 --
--- 依赖：只依赖 Match3.Core 与 SDL 类型。所有绘制与点选都以这里的逻辑坐标为准，
+-- 依赖：只依赖 Match3.Core、Engine.GridUI（第 11 刀：像素 ↔ 格经通用网格几何 boardGrid）与 SDL 类型。所有绘制与点选都以这里的逻辑坐标为准，
 -- 物理像素倍率由 UI.Env.syncScale 交给 SDL 缩放。
 -- 同步：colorRGB 必须与 tools/gen_assets.py 的调色板一致。
 module UI.Layout
@@ -15,16 +15,16 @@ module UI.Layout
   , winW
   , winH
   , colorRGB
-  , spreadRGB
-  , elementRGBTable
+  , elementRGBTable -- 再导出自 UI.Presentation（第 10 刀起元素色在表现表模块）
   , namedRGB
   , cellRGB
+  , boardGrid
   , pixelToCell
   , cellOrigin
   , lerpI
   , boardRect
   , allCells
-  , smoothT
+  , smoothT  -- 再导出自 UI.Presentation
   , easeOutT
   , lerpC
   , rect
@@ -35,10 +35,11 @@ module UI.Layout
 
 import Data.Int (Int32)
 import Data.Word (Word8)
+import Engine.GridUI (GridGeom (..), gridCellAt, gridCellOrigin, gridCells)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.Element.Event (endEffectElement)
 import SDL hiding (Normal)
+import UI.Presentation (easeOutT, elementRGBTable, smoothT)
 
 -- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口 = 棋盘 + 两侧边距 + HUD。
 cellPx, padPx, hudH, boardPx, winW, winH :: CInt
@@ -57,24 +58,10 @@ colorRGB C3 = (56, 128, 246)  -- 蓝·菱
 colorRGB C4 = (255, 194, 36)  -- 黄·星
 colorRGB C5 = (172, 88, 236)  -- 紫·三角
 
--- | 蔓延覆盖层的主色（碎屑 / 生长前沿光）。
-spreadRGB :: SpreadKind -> (Word8, Word8, Word8)
-spreadRGB k = maybe (255, 255, 255) id (lookup (endEffectElement (EndSpread k [])) elementRGBTable)
 
--- | GoalNamed 目标 / 自定义元素按名字取色；表里没有的名字为灰蓝。
-namedRGB :: String -> (Word8, Word8, Word8)
+-- | 名字目标（goalCount (CountNamed …)） / 自定义元素按名字取色；表里没有的名字为灰蓝。
+namedRGB :: ElementName -> (Word8, Word8, Word8)
 namedRGB n = maybe (200, 200, 220) id (lookup n elementRGBTable)
-
--- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色；
--- 段 5 起也给 GoalNamed 目标与自定义格取色（果冻 / 气泡，见 namedRGB）。
-elementRGBTable :: [(String, (Word8, Word8, Word8))]
-elementRGBTable =
-  [ ("vine", (110, 220, 90))
-  , ("choco", (150, 90, 45))
-  , ("steam", (225, 225, 235))
-  , ("jelly", (240, 110, 180))
-  , ("bubble", (150, 215, 250))
-  ]
 
 -- | 格子对应的粒子 / 退回画法颜色。
 cellRGB :: Cell -> (Word8, Word8, Word8)
@@ -97,23 +84,16 @@ cellRGB cell = case cell of
   Gem col _ _ _ -> colorRGB col
   Custom n _ -> maybe (160, 160, 170) id (lookup n elementRGBTable)
 
+-- | 棋盘在窗口里的网格几何（第 11 刀：像素 ↔ 格子的换算交给通用组件 Engine.GridUI）。
+boardGrid :: GridGeom CInt
+boardGrid = GridGeom {ggLeft = padPx, ggTop = padPx + hudH, ggCell = cellPx, ggRows = boardSize, ggCols = boardSize}
+
 -- | 逻辑坐标 → 棋盘格；棋盘外返回 Nothing。
 pixelToCell :: Int32 -> Int32 -> Maybe Pos
-pixelToCell mx my =
-  let x = fromIntegral mx - padPx
-      y = fromIntegral my - padPx - hudH
-  in if x < 0 || y < 0 || x >= boardPx || y >= boardPx
-       then Nothing
-       else
-         let c = fromIntegral (x `div` cellPx)
-             r = fromIntegral (y `div` cellPx)
-         in if inBounds (r, c) then Just (r, c) else Nothing
+pixelToCell mx my = gridCellAt boardGrid (fromIntegral mx) (fromIntegral my)
 
 cellOrigin :: Pos -> (CInt, CInt)
-cellOrigin (r, c) =
-  ( padPx + fromIntegral c * cellPx
-  , padPx + hudH + fromIntegral r * cellPx
-  )
+cellOrigin = gridCellOrigin boardGrid
 
 -- | 整数坐标线性插值（t ∈ [0,1]）。
 lerpI :: CInt -> CInt -> Int -> Int -> CInt
@@ -131,15 +111,7 @@ boardRect = rect padPx (padPx + hudH) boardPx boardPx
 
 -- | 8×8 全部坐标（行优先）。
 allCells :: [Pos]
-allCells = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
-
--- | smoothstep 缓动（两端慢）。
-smoothT :: Double -> Double
-smoothT x = let y = max 0 (min 1 x) in y * y * (3 - 2 * y)
-
--- | 先快后慢的缓动。
-easeOutT :: Double -> Double
-easeOutT x = let y = max 0 (min 1 x) in 1 - (1 - y) * (1 - y)
+allCells = gridCells boardGrid
 
 -- | 颜色 / 数值的线性插值。
 lerpC :: CInt -> CInt -> Double -> CInt

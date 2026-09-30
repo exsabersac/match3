@@ -4,7 +4,7 @@
 -- 每种元素一个函数，签名相同（渲染器、格左上角、格子内容、是否闪白），由 UI.CellTable 按元素名查表分派。
 -- 函数只认自己的构造子，其它格子什么也不画。
 --
--- 依赖：UI.Layout（格子尺寸 / 颜色）、Match3.Core、SDL。没有贴图时使用，保证缺图时仍可玩。
+-- 依赖：UI.Layout（格子尺寸 / 颜色）、UI.Cell.PrimOverlay（覆盖层，本模块再导出 primOverlay）、Match3.Core、SDL。没有贴图时使用，保证缺图时仍可玩。
 module UI.Cell.Prim
   ( primCustom
   , primBubble
@@ -25,7 +25,7 @@ module UI.Cell.Prim
   , primCountdown
   , primGem
   , primIce
-  , primOverlay
+  , primOverlay -- 再导出自 UI.Cell.PrimOverlay
   , primMark
   ) where
 
@@ -33,6 +33,7 @@ import Control.Monad (forM_, when)
 import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
+import UI.Cell.PrimOverlay (primOverlay)
 import UI.Layout
 
 -- | 几何版：自定义元素。
@@ -536,120 +537,6 @@ primIce ren x y ice = do
     when (ice > 1) $ do
       drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
       drawLine ren (P (V2 (x + 10) (y + cellPx `div` 2))) (P (V2 (x + cellPx - 10) (y + cellPx `div` 2 + 4)))
-
--- | 几何版：宝石上的覆盖层（草 / 藤 / 巧克力 / 迷雾 / 锁链 / 冰冻 / 窗帘 / 蒸汽）。
-primOverlay :: Renderer -> CInt -> CInt -> Maybe CellOverlay -> IO ()
-primOverlay ren x y ov = do
-  -- Grass / vine / chocolate overlays (开心消消乐草·藤蔓·巧克力)
-  case ov of
-    Just Grass -> do
-      rendererDrawColor ren $= V4 40 140 50 200
-      fillRect ren (Just (Rectangle (P (V2 (x + 6) (y + cellPx - 14))) (V2 (cellPx - 12) 8)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx - 20))) (V2 8 8)))
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx - 18) (y + cellPx - 18))) (V2 8 6)))
-    Just Vine -> do
-      rendererDrawColor ren $= V4 20 100 40 230
-      drawRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
-      drawLine ren (P (V2 (x + 8) (y + 8))) (P (V2 (x + cellPx - 10) (y + cellPx - 12)))
-      drawLine ren (P (V2 (x + cellPx - 12) (y + 10))) (P (V2 (x + 12) (y + cellPx - 10)))
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + 6))) (V2 8 8)))
-    Just Choco -> do
-      -- Brown chocolate slab with bite notches (不改六色宝石本体)
-      rendererDrawColor ren $= V4 110 60 30 220
-      fillRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
-      rendererDrawColor ren $= V4 80 40 20 255
-      fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + 8))) (V2 (cellPx - 16) 4)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + cellPx `div` 2 - 2))) (V2 (cellPx - 16) 4)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + cellPx - 16))) (V2 (cellPx - 16) 4)))
-      rendererDrawColor ren $= V4 150 90 50 200
-      fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 14))) (V2 6 6)))
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx - 20) (y + cellPx - 22))) (V2 6 6)))
-    Just (Fog layers) -> do
-      -- Soft white/gray cloud veil (迷雾); layer pips
-      rendererDrawColor ren $= V4 200 210 230 200
-      fillRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
-      rendererDrawColor ren $= V4 240 245 255 180
-      fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + 10))) (V2 14 10)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 22) (y + 18))) (V2 16 12)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 12) (y + 26))) (V2 18 10)))
-      rendererDrawColor ren $= V4 120 140 180 255
-      forM_ [0 .. min 3 layers - 1] $ \i ->
-        fillRect
-          ren
-          (Just
-             (Rectangle
-                (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
-                (V2 7 5)))
-    Just (Chain layers) -> do
-      -- Iron chain lock (锁链): gray links over gem
-      rendererDrawColor ren $= V4 70 75 90 220
-      drawRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
-      rendererDrawColor ren $= V4 140 150 170 255
-      fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + cellPx `div` 2 - 4))) (V2 (cellPx - 20) 8)))
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 4) (y + 10))) (V2 8 (cellPx - 20))))
-      rendererDrawColor ren $= V4 200 210 230 255
-      fillRect ren (Just (Rectangle (P (V2 (x + cellPx `div` 2 - 6) (y + cellPx `div` 2 - 6))) (V2 12 12)))
-      rendererDrawColor ren $= V4 180 190 210 255
-      forM_ [0 .. min 3 layers - 1] $ \i ->
-        fillRect
-          ren
-          (Just
-             (Rectangle
-                (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
-                (V2 7 5)))
-    Just (Freeze layers) -> do
-      -- Rocket freeze (火箭冰冻): deep-blue glaze + snowflake ticks; ≠ cyan ice cracks
-      rendererDrawColor ren $= V4 40 90 200 180
-      fillRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
-      rendererDrawColor ren $= V4 180 220 255 230
-      drawRect ren (Just (Rectangle (P (V2 (x + 5) (y + 5))) (V2 (cellPx - 10) (cellPx - 10))))
-      -- Snowflake cross
-      drawLine ren (P (V2 (x + cellPx `div` 2) (y + 10))) (P (V2 (x + cellPx `div` 2) (y + cellPx - 10)))
-      drawLine ren (P (V2 (x + 10) (y + cellPx `div` 2))) (P (V2 (x + cellPx - 10) (y + cellPx `div` 2)))
-      drawLine ren (P (V2 (x + 14) (y + 14))) (P (V2 (x + cellPx - 14) (y + cellPx - 14)))
-      drawLine ren (P (V2 (x + cellPx - 14) (y + 14))) (P (V2 (x + 14) (y + cellPx - 14)))
-      rendererDrawColor ren $= V4 220 240 255 255
-      forM_ [0 .. min 3 layers - 1] $ \i ->
-        fillRect
-          ren
-          (Just
-             (Rectangle
-                (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
-                (V2 7 5)))
-    Just (Curtain layers) -> do
-      -- Curtain / roller shade (窗帘): vertical fabric stripes; ≠ soft Fog clouds
-      rendererDrawColor ren $= V4 160 50 90 200
-      fillRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
-      rendererDrawColor ren $= V4 200 80 120 220
-      forM_ [0 .. 3 :: Int] $ \i ->
-        fillRect
-          ren
-          (Just
-             (Rectangle
-                (P (V2 (x + 8 + fromIntegral i * 10) (y + 6)))
-                (V2 5 (cellPx - 14))))
-      -- Rod
-      rendererDrawColor ren $= V4 220 180 100 255
-      fillRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) 5)))
-      rendererDrawColor ren $= V4 255 220 180 255
-      forM_ [0 .. min 3 layers - 1] $ \i ->
-        fillRect
-          ren
-          (Just
-             (Rectangle
-                (P (V2 (x + 8 + fromIntegral i * 10) (y + cellPx - 12)))
-                (V2 7 5)))
-    Just Steam -> do
-      -- Steam cloud (蒸汽): soft gray wisps; blocks match until adjacent clear
-      rendererDrawColor ren $= V4 170 180 190 190
-      fillRect ren (Just (Rectangle (P (V2 (x + 4) (y + 4))) (V2 (cellPx - 8) (cellPx - 8))))
-      rendererDrawColor ren $= V4 220 230 240 200
-      fillRect ren (Just (Rectangle (P (V2 (x + 8) (y + 8))) (V2 16 10)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 20) (y + 16))) (V2 18 12)))
-      fillRect ren (Just (Rectangle (P (V2 (x + 10) (y + 28))) (V2 20 10)))
-      rendererDrawColor ren $= V4 140 160 180 255
-      drawRect ren (Just (Rectangle (P (V2 (x + 3) (y + 3))) (V2 (cellPx - 6) (cellPx - 6))))
-    Nothing -> pure ()
 
 -- | 几何版：特殊块标记（横 / 竖直线、炸弹、彩虹）。
 primMark :: Renderer -> CInt -> CInt -> GemKind -> IO ()

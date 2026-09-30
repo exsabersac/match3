@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | 回放、撤销与洗牌：回放脚本（trace*）的终盘 / 逐轮 / 步末重放与结算一致，撤销恢复，洗牌保留装饰与目标进度。
 -- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
@@ -6,17 +7,21 @@ module Spec.ReplayUndo
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, builtinHooks, hookLevel)
+import Match3.Element.Level (levelUfos)
 import Control.Monad (when)
 import Data.List (nub, sort)
 import Data.Maybe (isJust)
-import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crUfos), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
+import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crHooks), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
+import Match3.Element.Event (EventKind(..))
+import Match3.Board.Grid (atM)
 import Match3.Element (defaultRegistry)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
+import Match3.Counts (singleCount)
 import Spec.Support
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
@@ -82,7 +87,7 @@ shuffle_when_no_moves = do
 -- Also preserves Curtain / Freeze overlay positions and Carpet open-cell set.
 shuffle_preserves_decor :: Assertion
 shuffle_preserves_decor = do
-  let cfg = GameConfig 20 (GoalScore 999)
+  let cfg = GameConfig 20 (goalScore 999)
       gs0 = newGameAtLevel 7 cfg 33  -- stones + belt level
       stonesBefore =
         [ p
@@ -145,7 +150,7 @@ shuffle_preserves_decor = do
   assertBool "freeze present before shuffle" (not (null freezeBefore))
   assertEqual "freeze survive shuffle" (sort freezeBefore) (sort freezeAfter)
   -- Carpet open cells are unchanged by shuffle (count + positions)
-  let gsCa = newGameAtLevel 36 (levelConfig (allLevels !! 36)) 77
+  let gsCa = levelGame 36 77
       openBefore = sort (gsCarpetOpen gsCa)
       gsCa' = shuffleGame gsCa
   assertBool "carpet open cells present" (not (null openBefore))
@@ -157,7 +162,7 @@ shuffle_preserves_decor = do
 undo_restores_carry_moves :: Assertion
 undo_restores_carry_moves = do
   let gs0 =
-        (newGameAtLevel 0 (levelConfig (allLevels !! 0)) 42)
+        (levelGame 0 42)
           { gsMoves = 7 }
   case findMatchPair (gsBoard gs0) of
     Nothing -> assertFailure "need match"
@@ -171,24 +176,23 @@ undo_restores_carry_moves = do
           -- nextLevel carry still caps at 3 from leftover
           let gsClear = gsU { gsOver = Just (LevelClear 10 1), gsMoves = 7 }
               gsNext = nextLevel gsClear 99
-              base = lvlMoves (allLevels !! 1)
+              base = lvlMoves (levelAt 1)
           assertEqual "carry cap 3" (base + 3) (gsMoves gsNext)
 
 -- | Shuffle / ensurePlayable must not wipe goal tallies.
 shuffle_preserves_goal_progress :: Assertion
 shuffle_preserves_goal_progress = do
   let gs0 =
-        (newGameAtLevel 7 (GameConfig 20 (GoalClearStone 8)) 33)
-          { gsStonesCleared = 3
-          , gsCollected = 3
+        (newGameAtLevel 7 (GameConfig 20 (goalCount CountStones 8)) 33)
+          { gsCounts = singleCount CountStones 3
           , gsScore = 120
           , gsOver = Nothing
           }
       gs1 = shuffleGame gs0
-  assertEqual "stones tally kept" (3 :: Int) (gsStonesCleared gs1)
+  assertEqual "stones tally kept" (3 :: Int) (gsCount CountStones gs1)
   assertEqual "collected kept" (3 :: Int) (gsCollected gs1)
   assertEqual "score kept" (120 :: Int) (gsScore gs1)
-  assertEqual "goal kept" (GoalClearStone 8) (gsGoal gs1)
+  assertEqual "goal kept" (goalCount CountStones 8) (gsGoal gs1)
 
 
 --------------------------------------------------------------------------------
@@ -213,15 +217,13 @@ shuffle_preserves_specials = do
           (1, 4)
           (Gem C4 Rainbow 0 Nothing)
       gs0 =
-        (newGame defaultConfig 9)
+        (setBelts [] . setUfos [] $ (newGame defaultConfig 9)
           { gsBoard = board
           , gsOver = Nothing
           , gsMoves = 20
-          , gsBelts = []
-          , gsUfos = []
           , gsHint = Nothing
-          , gsGoal = GoalScore 99999
-          }
+          , gsGoal = goalScore 99999
+          })
       gs1 = shuffleGame gs0
       b1 = gsBoard gs1
   assertEqual "bomb kept" (Just Bomb) (cellKind (getCell b1 (1, 1)))
@@ -253,8 +255,8 @@ trace_cascade_final_equals_stabilized = do
     ( \(seed, ufos, portals) -> do
         let g = mkStdGen seed
             (b0, g1) = randomBoard g
-            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctMaxWave = maxW, ctCleared = clearedR}, crUfos = ufosR, crGen = gR} = cascadeMatches Nothing ufos portals g1 b0
-            CascadeRun {crWaves = ws, crBoard = bT, crUfos = ufosT, crGen = gT} = cascadeMatches Nothing ufos portals g1 b0
+            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctMaxWave = maxW, ctCleared = clearedR}, crHooks = (levelUfos . hookLevel -> ufosR), crGen = gR} = cascadeMatches Nothing (builtinHooks ufos portals) g1 b0
+            CascadeRun {crWaves = ws, crBoard = bT, crHooks = (levelUfos . hookLevel -> ufosT), crGen = gT} = cascadeMatches Nothing (builtinHooks ufos portals) g1 b0
             tag = "seed " ++ show seed
         bT @?= bR
         show gT @?= show gR
@@ -275,8 +277,8 @@ trace_seeds_final_equals_stabilized =
   mapM_
     ( \(seed, seeds, ufos) -> do
         let (b0, g1) = randomPlayableBoard (mkStdGen seed)
-            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctCleared = clearedR}, crUfos = ufosR, crGen = gR} = cascadeSeeds Nothing seeds ufos [] g1 b0
-            CascadeRun {crWaves = ws, crBoard = bT, crUfos = ufosT, crGen = gT} = cascadeSeeds Nothing seeds ufos [] g1 b0
+            CascadeRun {crBoard = bR, crTally = CascadeTally {ctScore = score, ctCleared = clearedR}, crHooks = (levelUfos . hookLevel -> ufosR), crGen = gR} = cascadeSeeds Nothing seeds (builtinHooks ufos []) g1 b0
+            CascadeRun {crWaves = ws, crBoard = bT, crHooks = (levelUfos . hookLevel -> ufosT), crGen = gT} = cascadeSeeds Nothing seeds (builtinHooks ufos []) g1 b0
             tag = "seed " ++ show seed
         bT @?= bR
         show gT @?= show gR
@@ -301,7 +303,7 @@ trace_swap_final_equals_trySwap = do
         [ (li, seed, (p1, p2), gs0, gs1, out)
         | li <- levels
         , seed <- [1 .. 3 :: Int]
-        , let lvl = allLevels !! li
+        , let lvl = levelAt li
               gs0 = newGameAtLevel li (levelConfig lvl) seed
         , r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
@@ -344,7 +346,7 @@ trace_boosters_final_equal_result :: Assertion
 trace_boosters_final_equal_result =
   mapM_
     ( \(li, seed) -> do
-        let lvl = allLevels !! li
+        let lvl = levelAt li
             gs0 = newGameAtLevel li (levelConfig lvl) seed
             check tag gs1 out mt = case out of
               MoveApplied _ -> do
@@ -396,7 +398,7 @@ trace_rejected_move_is_empty = withComboState $ \_ gs1 -> do
     Nothing -> assertFailure "need a no-match swap"
     Just (p1, p2) -> assertBool "no-match swap has no end steps" (null (mtEnd (traceSwap p1 p2 gs1)))
   -- 带巧克力的关卡里无匹配交换同样不蔓延
-  let gsC = newGameAtLevel 4 (levelConfig (allLevels !! 4)) 1
+  let gsC = levelGame 4 1
   case findNoMatchPair (gsBoard gsC) of
     Nothing -> assertFailure "need a no-match pair on choco level"
     Just (p1, p2) -> do
@@ -429,7 +431,7 @@ trace_multi_wave_each_round_visible =
       -- 空洞盘面在被消格上确实是空的（除非放下了新特殊块）
       sequence_
         [ assertBool "holes at cleared cells"
-            (all (\(r, c) -> case (cwHoles w !! r) !! c of
+            (all (\(r, c) -> case atM (cwHoles w) (r, c) of
                                 Nothing -> True
                                 Just cell -> isGem cell) (cwCleared w))
         | w <- ws
@@ -448,7 +450,7 @@ trace_end_steps_replay_to_trySwap_final = do
         pure ks
     | li <- [0 .. length allLevels - 1]
     , seed <- [1 .. 3 :: Int]
-    , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+    , let gs0 = levelGame li seed
     , r <- [0 .. boardSize - 1]
     , c <- [0 .. boardSize - 1]
     , let p1 = (r, c)
@@ -459,7 +461,7 @@ trace_end_steps_replay_to_trySwap_final = do
     ]
   sequence_
     [ assertBool ("sample covers end effect " ++ k ++ " (seen " ++ show (length (filter (== k) names)) ++ ")") (k `elem` names)
-    | k <- ["tick", "belt", "SpreadVine", "SpreadChoco", "SpreadSteam", "snail"]
+    | k <- ["countdown", "belt", "vine", "choco", "steam", "snail"]
     ]
 
 -- | 道具（锤子 / 十字 / 自由交换）只有蔓延类步末效果，重放后同样到达终盘。
@@ -472,11 +474,11 @@ trace_end_steps_boosters_replay = do
         case out of
           MoveApplied _ | not (gsShuffled gs1) -> assertEqual (tag ++ ": final") (gsBoard gs1) (mtFinal mt)
           _ -> pure ()
-        assertBool (tag ++ ": boosters only spread") (all (`elem` ["SpreadVine", "SpreadChoco", "SpreadSteam"]) ks)
+        assertBool (tag ++ ": boosters only spread") (all (`elem` ["vine", "choco", "steam"]) ks)
         pure ks
     | li <- [4, 9, 15, 27, 35]
     , seed <- [1 .. 2 :: Int]
-    , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+    , let gs0 = levelGame li seed
     , (name, (gs1, out), mt) <-
         [ ("hammer " ++ show p, useHammer p gs0, traceHammer p gs0) | p <- [(0, 0), (3, 4), (5, 2)] ]
           ++ [ ("cross " ++ show p, useCrossClear p gs0, traceCrossClear p gs0) | p <- [(2, 2), (6, 5)] ]
@@ -484,7 +486,8 @@ trace_end_steps_boosters_replay = do
     ]
   assertBool "booster sample includes a spread" (not (null names))
 
--- | 蜗牛：碰壁原地掉头（smFrom == smTo，朝向反转），前方是宝石则爬过去、宝石换到原格。
+-- | 蜗牛：碰壁原地掉头（eiFrom == eiTo，朝向反转），前方是宝石则爬过去、宝石换到原格
+-- （第 7 刀 7b：通用 EndEffect，事件类型 EvMove、元素名 snail，逐项 EndItem）。
 trace_end_snail_push_and_turn :: Assertion
 trace_end_snail_push_and_turn = do
   let base = newGame defaultConfig 7
@@ -506,14 +509,15 @@ trace_end_snail_push_and_turn = do
     ((p1, p2, gs1) : _) -> do
       let mt = traceSwap p1 p2 gs0
       _ <- replayTimeline "snail" mt
-      case [(e, ms) | e <- mtEnd mt, EndSnail ms <- [esEffect e]] of
+      case [(e, endEffectItems (esEffect e)) | e <- mtEnd mt, endEffectKind (esEffect e) == EvMove] of
         [(e, ms)] -> do
-          assertBool "wall snail turns in place" (SnailMove (0, 0) (0, 0) (0, 1) Nothing `elem` ms)
-          case [m | m <- ms, smFrom m == (3, 3)] of
+          unElementName (endEffectElement (esEffect e)) @?= "snail"
+          assertBool "wall snail turns in place" (EndItem (0, 0) (0, 0) (mkSnail 0 1) Nothing `elem` ms)
+          case [m | m <- ms, eiFrom m == (3, 3)] of
             [m] -> do
-              smTo m @?= (3, 4)
-              smDir m @?= (0, 1)
-              smPushed m @?= Just (getCell (esBefore e) (3, 4))
+              eiTo m @?= (3, 4)
+              endItemDir m @?= Just (0, 1)
+              eiBack m @?= Just (getCell (esBefore e) (3, 4))
             other -> assertFailure ("expected one move for snail at (3,3), got " ++ show other)
         other -> assertFailure ("expected exactly one snail end step, got " ++ show (length other))
       when (not (gsShuffled gs1)) $ gsBoard gs1 @?= mtFinal mt
@@ -526,16 +530,17 @@ trace_end_snail_push_and_turn = do
 trace_end_spread_from_adjacent_source :: Assertion
 trace_end_spread_from_adjacent_source = do
   let found =
-        [ (kind, pairs)
+        [ (unElementName (endEffectElement eff), endEffectPairs eff)
         | li <- [4, 9]
         , seed <- [1 .. 3 :: Int]
-        , let gs0 = newGameAtLevel li (levelConfig (allLevels !! li)) seed
+        , let gs0 = levelGame li seed
         , Just (p1, p2) <- [findHint (gsBoard gs0)]
         , e <- mtEnd (traceSwap p1 p2 gs0)
-        , EndSpread kind pairs <- [esEffect e]
+        , let eff = esEffect e
+        , endEffectKind eff == EvSpread
         ]
-  assertBool "choco spread seen" (SpreadChoco `elem` map fst found)
-  assertBool "vine spread seen" (SpreadVine `elem` map fst found)
+  assertBool "choco spread seen" ("choco" `elem` map fst found)
+  assertBool "vine spread seen" ("vine" `elem` map fst found)
   assertBool "every spread has targets" (all (not . null . snd) found)
 
 -- | 补上「自动洗牌步」的逐帧比对缺口（第二刀：MoveTrace 新增 mtGen / mtShuffle）。
@@ -569,7 +574,7 @@ trace_shuffle_step_replays = do
         [ (li, seed, st)
         | li <- [0 .. length allLevels - 1]
         , seed <- [1 .. 3 :: Int]
-        , st <- chains (newGameAtLevel li (levelConfig (allLevels !! li)) seed)
+        , st <- chains (levelGame li seed)
         ]
   counts <- mapM
     ( \(li, seed, (gs0, p1, p2, gs1)) -> do

@@ -1,7 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 地面层（GameState.gsGround，段 2c 的扩展槽；段 5 起内置有双层果冻）的绘制查表：
 -- 键 = 地面层元素名，值 = 几何降级版与贴图版两个画法（参数：格左上角、剩余层数）。
 -- 贴图版画在棋盘格之上、棋子之下；几何版画在棋子之上（框）。表里没有的名字画一道淡灰框。
--- 贴图版主贴图缺失时逐格退回几何版。
+-- 贴图版主贴图缺失时逐格退回几何版。某格的地面层第 11 刀起由视图模型 Match3.View.groundAtView 取。
 --
 -- 新增地面层元素：在这里加一行（贴图由 tools/gen_assets.py 生成，名字 = 元素名 / 元素名_层数）。
 --
@@ -10,7 +11,6 @@ module UI.Ground
   ( groundTable
   , drawGroundPrimAt
   , drawGroundArtAt
-  , groundAt
   ) where
 
 import Art
@@ -21,17 +21,13 @@ import SDL hiding (Normal)
 import UI.Layout
 
 -- | 名字 → (几何版, 贴图名(层数))。
-groundTable :: [(String, (Renderer -> CInt -> CInt -> Int -> IO (), Int -> String))]
+groundTable :: [(ElementName, (Renderer -> CInt -> CInt -> Int -> IO (), Int -> String))]
 groundTable =
   [ ("jelly", (primJelly, \n -> if n >= 2 then "jelly_2" else "jelly"))
   ]
 
--- | 某格的地面层（名字, 层数）。
-groundAt :: GameState -> Pos -> Maybe (String, Int)
-groundAt gs p = lookup p (gsGround gs)
-
 -- | 几何版：按名字查表，查不到画淡灰底。
-drawGroundPrimAt :: Renderer -> CInt -> CInt -> (String, Int) -> IO ()
+drawGroundPrimAt :: Renderer -> CInt -> CInt -> (ElementName, Int) -> IO ()
 drawGroundPrimAt ren x y (name, n) = case lookup name groundTable of
   Just (prim, _) -> prim ren x y n
   Nothing -> do
@@ -39,7 +35,7 @@ drawGroundPrimAt ren x y (name, n) = case lookup name groundTable of
     drawRect ren (Just (Rectangle (P (V2 (x + 2) (y + 2))) (V2 (cellPx - 4) (cellPx - 4))))
 
 -- | 贴图版：主贴图缺失时退回几何版。
-drawGroundArtAt :: Renderer -> Art -> CInt -> CInt -> (String, Int) -> IO ()
+drawGroundArtAt :: Renderer -> Art -> CInt -> CInt -> (ElementName, Int) -> IO ()
 drawGroundArtAt ren art x y g@(name, n) = case lookup name groundTable of
   Just (_, sprite) | hasSprite art (sprite n) -> void (drawSprite ren art (sprite n) (cellRect x y))
   _ -> drawGroundPrimAt ren x y g

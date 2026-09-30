@@ -1,4 +1,4 @@
--- | 网页端的逐轮回放：直接复用桌面版的纯阶段机 app/ComboFx.hs（cascadeStages + Engine.Playback 的播放器），
+-- | 网页端的逐轮回放：直接复用桌面版的纯阶段机 app/pure/ComboFx.hs（cascadeStages + Engine.Playback 的播放器），
 -- 因此网页与桌面的时间线（每阶段帧数、加速、步末段压缩、触发的一次性事件）逐帧相同。
 --
 -- 数据流（每步一次 + 每帧一次）：

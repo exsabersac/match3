@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 元素注册表：测试专用木箱证明可扩展，内置表与旧谓词逐格一致。
@@ -40,12 +41,12 @@ element_registry_custom_crate_extensibility = do
   let (gsB, oB) = trySwapWith reg (0, 1) (0, 2) gs0
   assertEqual "crate blocks swap" NoMatch oB
   assertEqual "blocked swap leaves board" (gsBoard gs0) (gsBoard gsB)
-  assertEqual "no match colour" Nothing (matchColorWith reg (Custom "crate" 2))
+  assertEqual "no match colour" Nothing (matchColorWith reg (Custom "crate" (CustomState 2)))
   -- 第 1 手：邻格真消除波及一次 → 耐久 2 → 1，不碎、不计数；木箱不随重力下落（仍在 (0,1)）
   let (gs1, o1, mt1) = resolveSwapWith reg (1, 2) (2, 2) gs0
   assertBool "move 1 applied" (moveApplied o1)
-  assertEqual "move 1: crate chipped once, stays put" [((0, 1), Custom "crate" 1)] (cratesOn (gsBoard gs1))
-  assertEqual "move 1: not counted yet" [] (gsElementCounts gs1)
+  assertEqual "move 1: crate chipped once, stays put" [((0, 1), Custom "crate" (CustomState 1))] (cratesOn (gsBoard gs1))
+  assertEqual "move 1: not counted yet" [] (namedCounts (gsCounts gs1))
   w1 <- firstWave mt1
   assertBool "move 1: crate absent from first-wave clears" ((0, 1) `notElem` cwCleared w1)
   assertBool "move 1: EvHit on crate"
@@ -57,25 +58,25 @@ element_registry_custom_crate_extensibility = do
   assertEqual "move 2: crate broken" [] (cratesOn (gsBoard gs2))
   w2 <- firstWave mt2
   assertBool "move 2: crate in first-wave clears" ((0, 1) `elem` cwCleared w2)
-  assertEqual "move 2: counted by name" [("crate", 1)] (gsElementCounts gs2)
+  assertEqual "move 2: counted by name" [("crate", 1)] (namedCounts (gsCounts gs2))
   assertBool "move 2: EvClear of crate"
     (any (\e -> evKind e == EvClear && evElement e == "crate") (traceEventsWith reg mt2))
   -- 直接命中（锤子）：耐久 -1；洗牌保留
   let (gsH, oH, _) = resolveHammerWith reg (0, 1) gs0
   assertBool "hammer applied" (moveApplied oH)
-  assertEqual "hammer chips crate" [((0, 1), Custom "crate" 1)] (cratesOn (gsBoard gsH))
+  assertEqual "hammer chips crate" [((0, 1), Custom "crate" (CustomState 1))] (cratesOn (gsBoard gsH))
   assertBool "shuffle keeps crate" ((0, 1) `elem` map cdPos (extractDecorWith reg (gsBoard gs0)))
   -- 对照：不注册时同一局面里它只是惰性占格（打不动、不被波及、不计数），行为完全来自注册
   let (gsD, oD) = trySwap (1, 2) (2, 2) gs0
   assertBool "default applied" (moveApplied oD)
-  assertEqual "unregistered: inert, untouched" [Custom "crate" 2] (map snd (cratesOn (gsBoard gsD)))
-  assertBool "unregistered: hammer immune" (hitImmuneWith defaultRegistry (Custom "crate" 2))
-  assertEqual "unregistered: not counted" [] (gsElementCounts gsD)
+  assertEqual "unregistered: inert, untouched" [Custom "crate" (CustomState 2)] (map snd (cratesOn (gsBoard gsD)))
+  assertBool "unregistered: hammer immune" (hitImmuneWith defaultRegistry (Custom "crate" (CustomState 2)))
+  assertEqual "unregistered: not counted" [] (namedCounts (gsCounts gsD))
   -- 主流程没有为它改动：src/ 与 app/ 下全部源码（含注释）里都没有这个元素名的字面量 "crate" 或「木箱」
   coreFiles <- sourcesUnderAll ["src", "app"]
   assertBool "scanned the core sources" ("src/Match3/Board/Cascade.hs" `elem` coreFiles && "src/Match3/Element/Builtin.hs" `elem` coreFiles)
   srcs <- mapM readFile coreFiles
-  let mentions = [f | (f, src) <- zip coreFiles srcs, show "crate" `isInfixOf` src || "木箱" `isInfixOf` src]
+  let mentions = [f | (f, src) <- zip coreFiles srcs, show ("crate" :: String) `isInfixOf` src || "木箱" `isInfixOf` src]
   assertEqual "core sources do not mention the test element" [] mentions
 
 -- | 注册表的查询与第二刀之前按构造器写死的谓词逐格等价（对所有内置本体 × 冰层 × 叠层）。

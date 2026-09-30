@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | 会动或会生成东西的元素：在邻格真消除时改动周围的格子，或在步末自己行动。
 --
 -- 共同特征：它们的规则改写的是「别的格子」——魔法帽 / 染色瓶给相邻宝石换色 / 染色（只改 recolorable 的格），
@@ -21,7 +22,7 @@ module Match3.Element.Builtin.Actor
 import Match3.Board.Grid (getCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
 import Match3.Element.Builtin.Common (colorPlace)
-import Match3.Element.Class
+import Match3.Element.Caps
 import Match3.Element.Event
 import Match3.Element.Registry
 import Match3.Element.Types
@@ -37,8 +38,7 @@ data MagicHatE = MagicHatE
 instance Element MagicHatE where
   name _ = "magic_hat"
   toCell _ = MagicHat
-  archetype _ = Fixed
-  adjacentRule _ = Just (AdjacentRule 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] []))
+  caps _ = fixed [onAdjacent 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
@@ -47,8 +47,7 @@ data MakerE = MakerE Color Int
 instance Element MakerE where
   name _ = "maker"
   toCell (MakerE c n) = Maker c n
-  archetype _ = Fixed
-  adjacentRule _ = Just (AdjacentRule 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit))
+  caps _ = fixed [onAdjacent 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit)]
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
@@ -57,8 +56,7 @@ data SnailE = SnailE Int Int
 instance Element SnailE where
   name _ = "snail"
   toCell (SnailE dr dc) = Snail dr dc
-  archetype _ = Fixed
-  endRule _ = Just (EndRule PhaseMove 10 snailRun (const []) (const []))
+  caps _ = fixed [atEnd (EndRule PhaseMove 10 snailRun (const []) (const []))]
 
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
 newtype BottleE = BottleE Color
@@ -67,8 +65,7 @@ newtype BottleE = BottleE Color
 instance Element BottleE where
   name _ = "bottle"
   toCell (BottleE c) = Bottle c
-  archetype _ = Fixed
-  adjacentRule _ = Just (AdjacentRule 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] []))
+  caps _ = fixed [onAdjacent 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
@@ -77,45 +74,41 @@ data CountdownE = CountdownE Color Int
 instance Element CountdownE where
   name _ = "countdown"
   toCell (CountdownE c n) = Countdown c n
-  archetype _ = Blocker
-  color (CountdownE c _) = Just c
-  blocksSwap _ = False
-  portal _ = True
-  pushable _ = True
-  recolorable _ = True
-  onHit _ = Destroy
-  endRule _ = Just (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))
+  caps (CountdownE c _) = blocker [colorIs c, swappable, teleports, pushes, recolors, breaks, atEnd (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))]
 
 -- | 倒计时减一；列出数值真的变了的格。
 tickRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 tickRun _ b =
   let b' = tickCountdowns b
       ticked = [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p /= getCell b' p]
-  in (if null ticked then Nothing else Just (EndCountdownTick ticked), b')
+  in (if null ticked then Nothing else Just (EndEffect EvTick "countdown" [EndItem p p (getCell b' p) Nothing | p <- ticked]), b')
 
 -- | 蜗牛爬行（跳过本步被皮带移过的格，传送门端点当墙）。
 snailRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 snailRun ctx b =
   let (ms, b') = traceSnailsBy (ecPushable ctx) (ecAvoid ctx) (ecWalls ctx) b
-  in (if null ms then Nothing else Just (EndSnail ms), b')
+  in (if null ms then Nothing else Just (EndEffect EvMove "snail" ms), b')
 
 -- | stepSnailsAvoidingBlocked 的逐只记录版：对同一快照顺序逐只调用 stepSnailAtBlocked，
 -- 结果盘面与原函数完全一致（测试锁定）。
-traceSnails :: [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
+traceSnails :: [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnails = traceSnailsBy Snail.pushable
 
 -- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 注册表的 pushable）。
-traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([SnailMove], Board)
-traceSnailsBy canPush avoid walls b0 = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
+traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([EndItem], Board)
+traceSnailsBy canPush avoid walls b0 =
+  let (movesRev, b1) = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
+  in (reverse movesRev, b1)
   where
+    -- 反向累积，收尾再反转
     one (acc, board) pos = case getCell board pos of
       Snail dr dc ->
         let board' = stepSnailAtBy canPush walls board pos
             next = (fst pos + dr, snd pos + dc)
             mv = case getCell board' pos of
-              Snail dr' dc' -> SnailMove pos pos (dr', dc') Nothing
-              pushed -> SnailMove pos next (dr, dc) (Just pushed)
-        in (acc ++ [mv], board')
+              Snail dr' dc' -> EndItem pos pos (Snail dr' dc') Nothing
+              pushed -> EndItem pos next (Snail dr dc) (Just pushed)
+        in (mv : acc, board')
       _ -> (acc, board)
 
 --------------------------------------------------------------------------------

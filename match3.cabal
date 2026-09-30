@@ -28,13 +28,28 @@ library
       Engine.Effect
       Engine.Playback
       Engine.History
+      Engine.GridUI
       Match3.Core
       Match3.Engine
+      Match3.View
       Match3.Types
+      Match3.Types.Name
+      Match3.Types.Cell
+      Match3.Types.Overlay
+      Match3.Types.Body
+      Match3.Types.Board
+      Match3.Types.Game
+      Match3.Levels.Level
+      Match3.Levels.Campaign
+      Match3.Color
+      Match3.Counts
+      Match3.Goal
       Match3.Board.Grid
       Match3.Board.Match
       Match3.Board.Clear
       Match3.Board.Gravity
+      Match3.Board.Hooks
+      Match3.Board.Refill
       Match3.Board.Cascade
       Match3.Board.Random
       Match3.Board.Default
@@ -44,6 +59,7 @@ library
       Match3.Game.Shuffle
       Match3.Game.Level
       Match3.Game.Trace
+      Match3.Game.EndPhase
       Match3.Game.Resolve
       Match3.Game.Move
       Match3.Game.Boosters
@@ -62,6 +78,7 @@ library
       Match3.Element
       Match3.Element.Types
       Match3.Element.Registry
+      Match3.Element.Special
       Match3.Element.Builtin
       Match3.Element.Builtin.Common
       Match3.Element.Builtin.Gem
@@ -73,7 +90,9 @@ library
       Match3.Element.Builtin.Level
       Match3.Element.Event
       Match3.Element.Class
+      Match3.Element.Caps
       Match3.Element.Message
+      Match3.Element.Level
   other-modules:
       Paths_match3
   autogen-modules:
@@ -84,6 +103,7 @@ library
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
     , random
   default-language: Haskell2010
 
@@ -91,7 +111,6 @@ executable match3-sdl
   main-is: Main.hs
   other-modules:
       Art
-      ComboFx
       Shell.Loop
       UI.Actions
       UI.BoardArt
@@ -99,13 +118,16 @@ executable match3-sdl
       UI.Cascade
       UI.Cell.Art
       UI.Cell.Prim
+      UI.Cell.PrimOverlay
       UI.CellTable
       UI.Draw
       UI.EndStage
       UI.Env
       UI.Glyph
+      UI.GoalStyle
       UI.Ground
       UI.HudArt
+      UI.HudBlocks
       UI.HudPrim
       UI.Input
       UI.Layout
@@ -114,11 +136,15 @@ executable match3-sdl
       UI.Plugin
       UI.TextArt
       UI.Types
+      ComboFx
+      UI.Presentation
+      UI.Sound
       Paths_match3
   autogen-modules:
       Paths_match3
   hs-source-dirs:
       app
+      app/pure
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -Wno-partial-fields
   build-depends:
       array
@@ -143,6 +169,7 @@ test-suite match3-test
       Spec.Builtin.Layer
       Spec.Builtin.Level
       Spec.Builtin.Obstacle
+      Spec.Caps
       Spec.Cascade
       Spec.Element
       Spec.ElementClass
@@ -153,22 +180,30 @@ test-suite match3-test
       Spec.Gravity
       Spec.GridMatch
       Spec.JellyBubble
+      Spec.Levels
+      Spec.Presentation
       Spec.Properties
       Spec.ReplayUndo
       Spec.SourceScan
       Spec.Specials
       Spec.Support
+      Spec.Support.LegacyElement
       Spec.Support.Source
       Spec.UIEvents
+      Spec.View
       Toy
       ElementQueries
       Golden
+      ComboFx
+      UI.Presentation
+      UI.Sound
       Paths_match3
   autogen-modules:
       Paths_match3
   hs-source-dirs:
       test
       test/golden
+      app/pure
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array

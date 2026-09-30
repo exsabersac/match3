@@ -34,7 +34,7 @@ module Match3.Engine
   , eventKindTag
   ) where
 
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Engine.Effect (Effect(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, HistoryPolicy(..), Undoable, withHistory)
@@ -44,7 +44,7 @@ import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Element.Registry (Registry)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveFreeSwapWith, resolveHammerWith)
-import Match3.Game.Level (newDailyGame, newGame, newGameAtLevel)
+import Match3.Game.Level (campaignGame, newDailyGame, newGame, newGameAtLevel)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Shuffle (shuffleGameWith)
 import Match3.Game.State (GameState(..), MoveFx(..), applyHintWith, clearMoveFx, moveFx)
@@ -99,7 +99,7 @@ playWith reg act gs = case act of
     in (other gs' [] True) {pdHint = h}
   Shuffle
     | isJust (gsOver gs) -> other gs [] False
-    | otherwise -> other (shuffleGameWith reg gs) [Event EvShuffle 0 "shuffle" [] 0] True
+    | otherwise -> other (shuffleGameWith reg gs) [Event EvShuffle 0 (ElementName "shuffle") [] 0] True
   where
     move (gs', out, mt) =
       let fx = moveFx gs gs' out
@@ -141,7 +141,8 @@ match3GameWith reg =
     }
   where
     newFrom setup seed = case setup of
-      Campaign li -> newGameAtLevel li (levelConfig (allLevels !! li)) seed
+      -- 没有这一关（越界下标）时按默认配置开局（第 6 刀前 allLevels !! li 直接报错）
+      Campaign li -> fromMaybe (newGameAtLevel li defaultConfig seed) (campaignGame li seed)
       CustomLevel cfg -> newGame cfg seed
       Daily y m d -> newDailyGame (dailyConfig y m d) (dailySeed y m d)
 
@@ -186,7 +187,7 @@ match3Status gs =
 
 -- | 规则层事件 → 通用效果：节拍 = 轮次（evWave），格 = 每对的目标格。
 toEffect :: Event -> Effect
-toEffect e = Effect (evWave e) (eventKindTag (evKind e)) (evElement e) (map snd (evCells e)) (evAmount e)
+toEffect e = Effect (evWave e) (eventKindTag (evKind e)) (unElementName (evElement e)) (map snd (evCells e)) (evAmount e)
 
 -- | 事件种类的字符串标签。
 eventKindTag :: EventKind -> String

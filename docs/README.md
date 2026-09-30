@@ -12,6 +12,7 @@
 | [ui-controls.md](ui-controls.md) | SDL 键位与道具点选流（前端 `app/UI/Input.hs` / `Actions.hs`）；回放加速键与[播放锁定](ui-controls.md#播放锁定animbusy) |
 | [web.md](web.md) | 网页版（GHC wasm 技术验证）：wasm 核心与导出接口、ComboFx 进 wasm、JS 渲染器、自适应布局、资源管线、构建 / 本地与局域网运行 / Mac 与 itch.io 部署、一致性测试与 e2e、已知限制与 TODO |
 | [refactor-2026-09.md](refactor-2026-09.md) | 2026-09 的 11 刀重构总结：各刀 SHA 与要点、验收方式、行为差异汇总、现在怎样新增元素 / 关卡级元素 / 关卡 / 规则 / 表现 |
+| [backlog.md](backlog.md) | 新玩法待办清单（2026-09-30 解冻后）：现有元素 / 机制盘点，对照开心消消乐的缺口，按收益 / 工作量排序，标注可并行的独立项 |
 | [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |
 | [ui-art.md § 连击表现](ui-art.md#连击表现逐轮回放) | 连锁逐轮回放时间线、[步末阶段（PhEnd）](ui-art.md#步末阶段phend)、[连击等级样式](ui-art.md#连击等级样式combostyle)、截图与复现 seed |
 

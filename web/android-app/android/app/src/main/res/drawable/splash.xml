@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动画面（API < 31 的主题背景；API 31+ 由系统 SplashScreen 显示图标 + windowSplashScreenBackground） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/game_bg" />
+    <item>
+        <bitmap android:gravity="center" android:src="@drawable/splash_gems" />
+    </item>
+</layer-list>

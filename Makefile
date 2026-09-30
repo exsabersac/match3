@@ -9,6 +9,8 @@
 #   GHC_WASM_PREFIX    ghc-wasm-meta 安装目录；FLAVOUR 工具链版本系列
 #   NODE / CHROME      一致性测试与 e2e 用的 node、Chrome
 #   SHOTS              e2e 截图目录；STEPS / CASES 一致性测试的步数 / 「关卡:种子」列表
+#   APK_OUT            apk / apk-release / aab 产物复制到的路径（默认 web/android-app/out/）
+#   ANDROID_HOME       Android SDK 目录（默认 ~/android-sdk）；ANDROID_SHOTS 安卓网页层检查的截图目录
 
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
@@ -28,6 +30,8 @@ CHROME          ?= /usr/bin/google-chrome
 SHOTS           ?= /workspace/match3-web-shots
 STEPS           ?=
 CASES           ?=
+ANDROID_APP     := $(WEB)/android-app
+ANDROID_SHOTS   ?= /workspace/match3-android-shots
 BOOTSTRAP_URL   := https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh
 
 export GHC_WASM_PREFIX NODE CHROME PORT BIND CASES
@@ -37,6 +41,7 @@ NEED_DIST = @[ -f "$(WEB)/dist/match3-web.wasm" ] || { echo "没有 web/dist，�
 # 原生 stack 不能带着 ~/.ghc-wasm/env 的编译器变量
 NATIVE_ENV = env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP
 
+.PHONY: android-sync apk apk-release aab android-check
 .PHONY: help desktop-build run test-native build atlas serve parity anim-parity e2e test check size pack \
         deploy-install deploy-start deploy-stop deploy-status clean toolchain doctor
 
@@ -130,6 +135,28 @@ deploy-status: ## 查看部署状态（launchd、lsof 端口监听、curl 自检
 clean: ## 只清网页版：web/dist、web/dist-newstyle、web/.cache、web/*.tgz；不碰 ~/.ghc-wasm 与 .stack-work
 	rm -rf "$(WEB)/dist" "$(WEB)/dist-newstyle" "$(WEB)/.cache"
 	rm -f "$(WEB)"/*.tgz
+
+##@ 安卓（Capacitor WebView 包装网页版，web/android-app/，见 docs/android.md）
+
+android-sync: ## 把 web/dist 复制进安卓工程并 cap sync（不打包；需 Node ≥ 22）
+	$(NEED_DIST)
+	"$(ANDROID_APP)/build-apk.sh" sync
+
+apk: ## 构建调试版 APK（build-apk.sh；需 JDK 21 + Android SDK）；APK_OUT= 可改输出路径
+	$(NEED_DIST)
+	"$(ANDROID_APP)/build-apk.sh" debug
+
+apk-release: ## 构建正式版 APK（有 android/keystore.properties 才签名，否则产出未签名包）
+	$(NEED_DIST)
+	"$(ANDROID_APP)/build-apk.sh" release
+
+aab: ## 构建正式版 AAB（Google Play 上传用，需签名配置）
+	$(NEED_DIST)
+	"$(ANDROID_APP)/build-apk.sh" aab
+
+android-check: ## 无模拟器时的替代验证：桌面 Chrome 手机视口跑打进 APK 的页面（wasm MIME 兜底、触摸、返回键）
+	@[ -f "$(ANDROID_APP)/www/android-shim.js" ] || { echo "没有 web/android-app/www：先 make android-sync" >&2; exit 1; }
+	NODE_PATH="$(dir $(NODE))../lib/node_modules" "$(NODE)" "$(ANDROID_APP)/test/check-www.mjs" "$(ANDROID_SHOTS)"
 
 ##@ 环境（前置检查与网页版工具链）
 

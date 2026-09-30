@@ -1,0 +1,23 @@
+{
+  "name": "match3-android",
+  "version": "0.1.0",
+  "private": true,
+  "description": "消消乐 Android 壳：Capacitor WebView 包装 web/dist（GHC wasm 网页版）",
+  "license": "BSD-3-Clause",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare-www": "node prepare-www.mjs",
+    "sync": "node prepare-www.mjs && cap sync android",
+    "apk": "./build-apk.sh"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

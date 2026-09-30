@@ -165,6 +165,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
 | `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
 | `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（桌面版用 `stack clean`） |
+| `make android-sync` / `apk` / `apk-release` / `aab` / `android-check` | 安卓：同步 dist 进 Capacitor 工程 / 调试版 APK / 正式版 APK / Play 用 AAB / 桌面 Chrome 手机视口替代验证（`web/android-app/build-apk.sh`，见 [`android.md`](android.md)） |
 
 ## 4. 本地运行
 
@@ -230,6 +231,11 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 桌面版的上传清单见 [`ITCH.md`](../ITCH.md)；网页版可以作为同一项目的在线试玩，或单独一个页面。
 其他静态托管（GitHub Pages、Netlify、任意 nginx）同理，只要 `.wasm` 的 MIME 类型正确。
 
+### 5.3 安卓应用（Capacitor）
+
+同一份 `web/dist` 可以用 Capacitor 包成 Android 应用（WebView 离线加载，`.wasm` 由 Capacitor 本地服务器按
+`application/wasm` 提供）：`make build apk` 产出调试版 APK。前置、签名、AAB、装机方法与已知限制见 [`android.md`](android.md)。
+
 ## 6. 调试要点
 
 - 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.perf`；URL `?level=0..39&seed=N` 复现一局；
@@ -261,7 +267,7 @@ e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32，外加 `re
 
 - [ ] 道具与洗牌按钮：导出 `m3Hammer` / `m3FreeSwap` / `m3Cross` / `m3Shuffle`（`match3Shell` 已支持），HUD 加按钮与点选流
 - [ ] 每日挑战与选关地图（CH1–CH7）
-- [ ] 真机测试：iPhone（dpr3）、Android、iPad；确认安全区与手势
+- [ ] 真机测试：iPhone（dpr3）、Android、iPad；确认安全区与手势（安卓应用壳见 [`android.md`](android.md)）
 - [ ] 小屏触控：iPhone SE 竖排考虑缩小棋盘边距，让格子到 44 px
 - [ ] 按 dpr 选 3x 图集（约 +400 KB，只给 dpr3 / 平板）
 - [ ] 音效（Web Audio）

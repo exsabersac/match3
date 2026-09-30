@@ -282,6 +282,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
 `make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-snow-boss 合入 main 9f5504e 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 23 组、动画一致性 21 组全部一致（含第 43 / 44 关与第 45 关种子 1–3）；e2e 89 项全过（46 关逐关贴图护栏全空（含多格护栏）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证，无控制台错误）；`make android-check` 6 项全过。
+feat/chameleon 合入 main 42e1173 后（第 47 关变色龙 + `Match3.GoalLabel`）再跑 `make check`：`stack test` 381 通过；状态一致性 23 组、动画一致性 21 组全部一致；e2e 89 项全过（47 关逐关贴图护栏全空，第 47 关 HUD「目标 变色龙」，无控制台错误）。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

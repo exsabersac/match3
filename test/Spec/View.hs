@@ -432,6 +432,9 @@ outcome_lose_hint_no_internal_names = do
   assertEqual "view lose hints" [] [(i, giLoseHint (goalInfo g 0)) | (i, g) <- goals, rawIdent (giLoseHint (goalInfo g 0))]
   assertEqual "title goal segments" [] [(i, goalLine (goalInfo g 0)) | (i, g) <- goals, rawIdent (goalLine (goalInfo g 0))]
   assertEqual "bracket suffixes" [] [(i, goalBracket (goalInfo g 0)) | (i, g) <- goals, rawIdent (goalBracket (goalInfo g 0))]
+  -- 测试跑手报告过漏出内部名的四关（jelly / bubble / fuzzball / snow_boss，含 Boss 目标）逐字核对
+  assertEqual "level 39 lose hint" "消除果冻，目标 32 个" (loseHint (gsGoal (levelGame 38 1)))
+  assertEqual "level 40 lose hint" "消除气泡，目标 12 个" (loseHint (gsGoal (levelGame 39 1)))
   assertEqual "level 47 lose hint" "消除变色龙，目标 30 个" (loseHint (gsGoal (levelGame 46 1)))
   assertEqual "level 43 lose hint" "消除毛球，目标 14 个" (loseHint (gsGoal (levelGame 42 1)))
   assertEqual "level 45 lose hint" "用身边的消除和特效打雪怪，目标 40 点血" (loseHint (gsGoal (levelGame 44 1)))

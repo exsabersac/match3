@@ -42,6 +42,7 @@ export function cellRGB(cell) {
 
 // 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
 export function primarySprite(cell) {
+  if (cell.t === "custom" && cell.name === "snow_boss") return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同桌面 customTable）
   switch (cell.t) {
     case "G": return cell.k === "R" ? "rainbow" : gemSprite(cell.c);
     case "stone": return "stone_3";
@@ -124,6 +125,34 @@ const CELL_ART = {
   },
 };
 
+// 按 Custom 名字分派的专门画法（同桌面 UI.CellTable.customTable；查不到的名字走 CELL_ART.custom）。
+// 新玩法 5 雪怪 Boss（Custom "snow_boss"，占 2×2）：同桌面 UI.Cell.Art.artSnowBoss——每格画整只雪怪的四分之一
+// snow_boss_<象限>（血量 ≤ 满血一半换 snow_boss_hurt_<象限> 受伤表情）；右下格底部画召唤进度小点（每 3 次交换召唤一块雪块，
+// 点亮已走的次数）。象限 q / 受伤 hurt / 计数 turn / 周期 every 由 Api 按 Match3.View.bossPart 解码给出，这里不拆 v。
+// 四块拼成一只：画布缩放时双线性采样会从图集里贴图外的透明缝取色，格子边又落在小数像素上，四块之间会露出一条细缝（十字线）。
+// 这里在朝向另外三块的两条内边上把源矩形各收 1 个源像素，并把目标矩形对齐到后备缓冲的整像素（相邻格算出的边界相同）；
+// 桌面按 1:1 画，没有这个问题。
+function drawSnowBoss(ctx, art, pulse, x, y, c) {
+  const s = art.S[`${c.hurt ? "snow_boss_hurt_" : "snow_boss_"}${c.q}`];
+  if (!s) return;
+  const left = c.q % 2 === 0, top = c.q < 2;
+  const src = [s[0] + (left ? 0 : 1), s[1] + (top ? 0 : 1), s[2] - 1, s[3] - 1];
+  const m = ctx.getTransform ? ctx.getTransform() : null;
+  if (m && m.b === 0 && m.c === 0) {
+    const X0 = Math.round(m.a * x + m.e), Y0 = Math.round(m.d * y + m.f);
+    const X1 = Math.round(m.a * (x + CELL) + m.e), Y1 = Math.round(m.d * (y + CELL) + m.f);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(art.img, ...src, X0, Y0, X1 - X0, Y1 - Y0);
+    ctx.restore();
+  } else ctx.drawImage(art.img, ...src, x, y, CELL, CELL);
+  if (c.q !== 3) return;
+  for (let i = 0; i < c.every; i++) {
+    ctx.fillStyle = i < c.turn ? "rgb(120,210,255)" : "rgba(40,60,110,0.784)";
+    ctx.fillRect(x + CELL - 12 - (c.every - 1 - i) * 9, y + CELL - 11, 6, 6);
+  }
+}
+const CUSTOM_ART = { snow_boss: drawSnowBoss };
+
 // 回归护栏：走几何降级（drawCellPrim，以及缩放画法 drawCellScaled 的色块分支）的次数，按元素名计
 // （custom 取 name，如 "magic_stone"；其余取 t）。贴图在开局前就加载好，正常游戏里它应当一直为空；
 // 非空 = 有元素在网页图集里没有贴图 / cells.js 没有画法（新元素合入 main 后要在本文件补）。main.js 以 m3debug.fallbacks 暴露给 e2e。
@@ -146,7 +175,7 @@ function drawCellPrim(ctx, x, y, cell) {
 // 单格：按元素查表画贴图；闪白统一叠一层柔光（UI.BoardArt.drawCellArt）
 export function drawCell(ctx, art, pulse, x, y, cell, flashing = false) {
   if (!cell) return;
-  const f = CELL_ART[cell.t];
+  const f = (cell.t === "custom" && CUSTOM_ART[cell.name]) || CELL_ART[cell.t];
   if (!f || !art.has(primarySprite(cell))) drawCellPrim(ctx, x, y, cell);
   else f(ctx, art, pulse, x, y, cell);
   if (flashing) art.add(ctx, "spark", x - 10, y - 10, CELL + 20, CELL + 20, [255, 255, 230], 210);

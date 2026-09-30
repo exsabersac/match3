@@ -122,6 +122,27 @@ function goalBar(ctx, art, x, y, w, h, info) {
   }
 }
 
+// 雪怪 Boss 血条（新玩法 5；state.boss = 视图模型 gvBoss {hp, max}）：目标是「击败 Boss」时替换目标条，同桌面 UI.HudArt——
+// 左边 snow_boss 头像，红色进度条长度 = 剩余 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后变深红并随呼吸计数闪烁
+// （桌面 150 + 80 × breathe(pulse, 30)）。返回血条矩形与读数（e2e 检查用）。
+function bossBar(ctx, art, x, y, w, h, boss, pulse) {
+  const s = h, bx = x + s + 6, bw = w - s - 6;
+  if (!art.draw(ctx, "snow_boss", x, y, s, s)) { ctx.fillStyle = "rgb(214,232,250)"; ctx.fillRect(x + 4, y + 4, s - 8, s - 8); }
+  const mx = Math.max(1, boss.max), hp = clampHp(boss.hp, mx);
+  text(ctx, "HP", bx + 2, y + 9, 15, "#f3eefc", "left", 800);
+  text(ctx, `${hp}/${boss.max}`, bx + bw - 2, y + 9, 15, "#ffe082", "right", 800);
+  const by = y + 20, bh = h - 20;
+  if (!art.panel(ctx, "panel_bar", bx, by, bw, bh, bh / 2)) { ctx.fillStyle = "#2a2340"; ctx.fillRect(bx, by, bw, bh); }
+  const half = hp * 2 <= mx;
+  const tint = half ? [Math.round(150 + 80 * (0.5 + 0.5 * Math.sin((pulse * 2 * Math.PI) / 30))), 40, 60] : [235, 70, 80];
+  if (hp > 0) {
+    const fw = Math.max(bh, (bw * hp) / mx);
+    if (!art.panel(ctx, "panel_fill", bx, by, fw, bh, bh / 2, tint)) { ctx.fillStyle = `rgb(${tint.join(",")})`; ctx.fillRect(bx, by, fw, bh); }
+  }
+  return { x, y, w, h, hp, max: boss.max, half };
+}
+const clampHp = (hp, mx) => Math.max(0, Math.min(mx, hp));
+
 function button(ctx, art, b, enabled, pressed) {
   ctx.save();
   ctx.globalAlpha = enabled ? 1 : 0.45;
@@ -133,17 +154,18 @@ function button(ctx, art, b, enabled, pressed) {
   ctx.restore();
 }
 
-// info：{level, name, rules, score, moves, goalText, progress, target, msg, undo, busy}；pressed：当前按下的按钮 id
+// info：{level, name, rules, score, moves, goalText, progress, target, boss, pulse, msg, undo, busy}（boss = state.boss，非 null 时画血条）；pressed：当前按下的按钮 id
 // 返回关卡面板各部件（面板 / 标签 / 关名 / 规则角标）的矩形，供调试钩子与 e2e 检查布局。
 export function drawHud(ctx, art, L, info, pressed) {
   const h = L.hud;
-  let lv;
+  let lv, boss = null;
   if (L.mode === "portrait") {
     const g = 10, wl = h.w - 2 * (130 + g);
     lv = levelChip(ctx, art, h.x, h.y, wl, 48, info, 15, 11);
     chip(ctx, art, h.x + wl + g, h.y, 130, 48, "分数", info.score);
     chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
-    goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info);
+    if (info.boss) boss = bossBar(ctx, art, h.x, h.y + 56, h.w, 36, info.boss, info.pulse);
+    else goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info);
     ctx.font = `600 16px ${FONT}`;
     text(ctx, fit(ctx, info.msg, h.w), h.x + 2, h.y + 110, 16, "#fff8e1", "left", 600);
   } else {
@@ -151,7 +173,8 @@ export function drawHud(ctx, art, L, info, pressed) {
     const hw = (h.w - 8) / 2;
     chip(ctx, art, h.x, h.y + 64, hw, 56, "分数", info.score);
     chip(ctx, art, h.x + hw + 8, h.y + 64, hw, 56, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
-    goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info);
+    if (info.boss) boss = bossBar(ctx, art, h.x, h.y + 130, h.w, 40, info.boss, info.pulse);
+    else goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info);
     const top = h.y + 186, bottom = L.buttons[0].y - 8;
     ctx.font = `600 16px ${FONT}`;
     const lines = wrap(ctx, info.msg, h.w - 4, Math.max(1, Math.floor((bottom - top) / 22)));
@@ -161,7 +184,7 @@ export function drawHud(ctx, art, L, info, pressed) {
     const enabled = !info.busy && (b.id !== "undo" || info.undo > 0);
     button(ctx, art, b, enabled, pressed === b.id);
   }
-  return lv;
+  return { ...lv, boss };
 }
 
 // 结局面板（盖在棋盘上）

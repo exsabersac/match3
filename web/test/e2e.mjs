@@ -1,6 +1,7 @@
 // 无头浏览器端到端测试：起静态服务器 → 打开页面 → 用真实指针（点选 / 拖划 / 按钮）操作 → 关键时刻逐帧截图 + 报告。
 // 用法（先 ./build.sh）：
 //   NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules node web/test/e2e.mjs [截图目录]
+//   [E2E_PORT=8765]：serve.py 监听 127.0.0.1 的端口（默认 8765）；端口被占用时直接报错退出，换一个再跑
 // 需要 playwright-core（ghc-wasm-meta 自带）和本机 Chrome/Chromium（CHROME=路径 可覆盖）。
 //
 // 关键时刻截图用页面的调试断点：m3debug.breakWhen(info) 为真时帧循环冻结（画面停在那一帧），截图后解冻继续。
@@ -9,11 +10,14 @@
 //   2. 特殊块爆炸（直线消除）的「消失」帧；步末效果（皮带 / 蜗牛 / 蔓延 / 倒计时）中间帧；
 //   3. 第 39 关果冻、第 40 关气泡：静止 + 连锁中；
 //   4. 分辨率矩阵：7 种视口截图，并检查布局完整落在视口 / 安全区内、格子与按钮的 CSS 尺寸；
+//   4b. 规则开关角标：第 41 关 state.rules 与 HUD 角标（竖屏 / 横屏手机 / 桌面，截图 rules-badge-*.png），第 1 关没有角标；
+//   4c. 贴图护栏：每一关开局 + 走 3 步后 m3debug.fallbacks（走几何降级的格子）为空；第 42 关魔法石 0–3 格充能截图；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import fs from "node:fs";
+import net from "node:net";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
@@ -23,11 +27,27 @@ const dist = path.resolve(here, "../dist");
 const shots = path.resolve(process.argv[2] || "/workspace/match3-web-shots");
 fs.rmSync(shots, { recursive: true, force: true });
 fs.mkdirSync(shots, { recursive: true });
-const PORT = 8765;
+// 服务器端口：环境变量 E2E_PORT（默认 8765；make e2e / make check 传入）。同机并行跑多份 e2e 时各用各的端口
+const PORT = Number(process.env.E2E_PORT || 8765);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) { console.error(`E2E_PORT 无效：${process.env.E2E_PORT}（要 1–65535 的整数）`); process.exit(2); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 端口已被别的进程占用时直接失败（否则会连到别人的服务器、测到别的 dist）
+const portFree = await new Promise((r) => { const t = net.createServer(); t.once("error", () => r(false)); t.listen(PORT, "127.0.0.1", () => t.close(() => r(true))); });
+if (!portFree) { console.error(`端口 ${PORT} 已被占用：换一个再跑，例如 E2E_PORT=8799 make e2e`); process.exit(2); }
 // 用仓库自带的 web/serve.py（与本地试玩 / 部署同一个服务器，顺带验证它的 Content-Type）
 const server = spawn("python3", [path.resolve(here, "../serve.py"), "--dir", dist, "--port", String(PORT), "--bind", "127.0.0.1", "--quiet"], { stdio: "ignore" });
-await sleep(800);
+let serverExit = null;
+server.on("exit", (code) => { serverExit = code; });
+// 等服务器就绪（最多 10 秒），并确认它给的是本次的 web/dist
+{
+  const want = fs.readFileSync(path.join(dist, "index.html"), "utf8");
+  let ok = false;
+  for (let i = 0; i < 100 && !ok && serverExit === null; i++) {
+    await sleep(100);
+    try { const r = await fetch(`http://127.0.0.1:${PORT}/index.html`); ok = r.status === 200 && (await r.text()) === want; } catch { /* 还没起来 */ }
+  }
+  if (!ok) { console.error(`serve.py 没有在端口 ${PORT} 上提供 ${dist}（退出码 ${serverExit}）`); server.kill(); process.exit(2); }
+}
 const serverTypes = {};
 for (const [f, want] of [["index.html", "text/html"], ["match3-web.wasm", "application/wasm"], ["atlas.webp", "image/webp"], ["atlas.json", "application/json"], ["main.js", "text/javascript"]]) {
   const r = await fetch(`http://127.0.0.1:${PORT}/${f}`);
@@ -200,6 +220,126 @@ try {
     }
     await P.shot(`20-分辨率-${vp.name}`);
     report.layouts.push({ name: vp.name, mode: L.mode, cellCss: +L.cellCss.toFixed(1), minButtonCss: +L.minButtonCss.toFixed(1), cellPxPhysical: +(L.cellCss * L.dpr).toFixed(1) });
+    await P.ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3b. 规则开关角标：第 41 关（下标 40，打开 bomb_shapes）的 state.rules 与 HUD 角标；竖屏 / 横屏手机 / 桌面三种布局
+  //     角标都画出来、文字完整、落在关卡面板里，不压「第 N 关」标签、不压关名、彼此不重叠；第 1 关没有角标
+  {
+    const wantRules = [{ name: "bomb_shapes", text: "L/T 形出炸弹", icons: ["bomb_glow", "bomb_mark"] }];
+    const inside = (a, b) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5;
+    const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    report.ruleBadges = [];
+    for (const vp of [
+      { name: "portrait-390x844", w: 390, h: 844, dpr: 3, touch: true, mobile: true },
+      { name: "landscape-phone-844x390", w: 844, h: 390, dpr: 3, touch: true, mobile: true },
+      { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 },
+    ]) {
+      const P = await openPage(vp, 40, 20260929);
+      await sleep(150);
+      const s = await P.st();
+      check(`第 41 关 state.rules：${vp.name}`, JSON.stringify(s.rules) === JSON.stringify(wantRules), s.rules);
+      const hud = await P.page.evaluate(() => window.m3debug.hud);
+      const b = hud?.badges || [];
+      const labelsOk = b.length === wantRules.length && b.every((x, i) => x.name === wantRules[i].name && x.label === wantRules[i].text);
+      check(`第 41 关 HUD 画出完整角标：${vp.name}`, labelsOk, b);
+      const layoutOk = b.length > 0 && b.every((x) => inside(x, hud.chip) && !overlap(x, hud.label) && x.y + x.h <= hud.name.y + 0.5)
+        && b.every((x, i) => b.every((y, j) => i === j || !overlap(x, y)));
+      check(`角标在关卡面板内、不压标签 / 关名 / 彼此：${vp.name}`, layoutOk, { chip: hud?.chip, label: hud?.label, name: hud?.name, badges: b });
+      const mode = await P.page.evaluate(() => window.m3debug.layout.mode);
+      report.ruleBadges.push({ name: vp.name, mode, badges: b.map((x) => ({ x: +x.x.toFixed(1), y: +x.y.toFixed(1), w: +x.w.toFixed(1), h: x.h, label: x.label })) });
+      await P.shot(`rules-badge-${vp.name}`);
+      // 走一步：新状态里规则仍在（每步的 state 都带 rules）
+      await P.swap(s.hint[0], s.hint[1], !!vp.touch); await sleep(30); await P.idle();
+      const s2 = await P.st();
+      check(`走一步后 state.rules 不变：${vp.name}`, s2.moves === s.moves - 1 && JSON.stringify(s2.rules) === JSON.stringify(wantRules));
+      await P.ctx.close();
+    }
+    const P = await openPage({ w: 390, h: 844, dpr: 3 }, 0, 20260929);
+    await sleep(100);
+    const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
+    check("第 1 关没有规则角标", Array.isArray(s.rules) && s.rules.length === 0 && hud && hud.badges.length === 0, { rules: s.rules, badges: hud?.badges });
+    await P.ctx.close();
+    // 第 42 关「魔石」（下标 41，新玩法 2）：魔法石是元素（Custom "magic_stone"）不是规则开关，lvlRules 为空 → 没有角标
+    // （与桌面 gvRules 相同）；盘面上有 4 块魔法石，图集里有 magic_stone_0..3 贴图。截图 rules-badge-l42-*.png
+    const atlas = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
+    check("图集含魔法石贴图 magic_stone_0..3", [0, 1, 2, 3].every((k) => atlas[`magic_stone_${k}`]));
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const Q = await openPage(vp, 41, 20260929);
+      await sleep(150);
+      const s42 = await Q.st(), hud42 = await Q.page.evaluate(() => window.m3debug.hud);
+      const stones = s42.board.flat().filter((c) => c.t === "custom" && c.name === "magic_stone").length;
+      // 魔法石走贴图（不是几何降级）：cells.js 为它选的贴图在图集里
+      const sprites = await Q.page.evaluate(async (b) => { const m = await import("/cells.js"); return b.flat().filter((c) => c.t === "custom").map((c) => m.primarySprite(c)); }, s42.board);
+      check(`第 42 关魔法石有贴图：${vp.name}`, sprites.length === 4 && sprites.every((n) => atlas[n]), sprites);
+      check(`第 42 关：没有规则角标、盘面 4 块魔法石：${vp.name}`, s42.level === 41 && s42.rules.length === 0 && hud42.badges.length === 0 && stones === 4, { rules: s42.rules, stones });
+      await Q.shot(`rules-badge-l42-${vp.name}`);
+      await Q.ctx.close();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3c. 贴图护栏：每一关开局 + 按提示走 3 步（空格加速），图集加载后 m3debug.fallbacks（走几何降级的格子，按元素名计）必须为空。
+  //     新元素合入 main 却没在 cells.js 补画法 / 网页图集里没有贴图时，这里会列出元素名和关卡。
+  {
+    const P = await openPage({ w: 390, h: 844, dpr: 1 }, 0, 7);
+    const nLevels = await P.page.evaluate(() => window.m3debug.levels);
+    const bad = [];
+    for (let li = 0; li < nLevels; li++) {
+      await P.page.goto(`http://127.0.0.1:${PORT}/?level=${li}&seed=7`);
+      await P.page.waitForFunction(() => window.m3debug && window.m3debug.state, null, { timeout: 30000 });
+      await sleep(60);
+      for (let k = 0; k < 3; k++) {
+        const s = await P.st();
+        if (s.over || !s.hint) break;
+        await P.swap(s.hint[0], s.hint[1], k % 2 === 1); await sleep(30);
+        await P.page.keyboard.press(" "); await P.idle();
+      }
+      await sleep(60);
+      const fb = await P.page.evaluate(() => window.m3debug.fallbacks);
+      if (Object.keys(fb).length) bad.push({ level: li + 1, fallbacks: fb });
+    }
+    report.fallbackLevels = nLevels;
+    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 42 && bad.length === 0, bad);
+    await P.ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3d. 魔法石 0–3 格充能的贴图：第 42 关种子 2 按提示走，直到盘面上同时出现 0 / 1 / 2 / 3 格（按提示走法第 11 步后为 1,3,2,0），
+  //     截四块魔法石所在区域 magic-stone-charges-0123.png 与每种充能的单格放大 magic-stone-charge-<v>.png
+  {
+    const P = await openPage({ w: 390, h: 844, dpr: 3 }, 41, 2);
+    const want = [0, 1, 2, 3], got = new Set();
+    let all = false;
+    for (let k = 0; k < 30 && !all; k++) {
+      const s = await P.st();
+      const stones = [];
+      s.board.forEach((row, r) => row.forEach((c, col) => { if (c.t === "custom" && c.name === "magic_stone") stones.push({ p: [r, col], v: c.v }); }));
+      // 有新充能要截图时先等连击 / 得分浮字散掉（否则会压在魔法石上）
+      if (stones.some((st) => st.v <= 3 && !got.has(st.v))) await sleep(1600);
+      for (const st of stones) {
+        if (st.v > 3 || got.has(st.v)) continue;
+        got.add(st.v);
+        const [x, y] = await P.center(st.p), half = await P.page.evaluate(() => 28 * window.m3debug.layout.u + 4);
+        await P.page.screenshot({ path: `${shots}/magic-stone-charge-${st.v}.png`, clip: { x: x - half, y: y - half - 4, width: 2 * half, height: 2 * half + 4 } });
+        report.shots.push(`${shots}/magic-stone-charge-${st.v}.png`);
+      }
+      if (want.every((v) => stones.some((st) => st.v === v))) {
+        all = true;
+        const [x0, y0] = await P.center([2, 2]), [x1, y1] = await P.center([5, 5]), m = await P.page.evaluate(() => 34 * window.m3debug.layout.u);
+        await P.page.screenshot({ path: `${shots}/magic-stone-charges-0123.png`, clip: { x: x0 - m, y: y0 - m, width: x1 - x0 + 2 * m, height: y1 - y0 + 2 * m } });
+        report.shots.push(`${shots}/magic-stone-charges-0123.png`);
+        report.magicStoneCharges = stones;
+        await P.shot("magic-stone-charges-全盘");
+        break;
+      }
+      if (s.over || !s.hint) break;
+      await P.swap(s.hint[0], s.hint[1], false); await sleep(30);
+      await P.page.keyboard.press(" "); await P.idle();
+    }
+    check("第 42 关魔法石 0 / 1 / 2 / 3 格充能都截到（同盘出现四种）", all && want.every((v) => got.has(v)), [...got]);
+    check("魔法石画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0);
     await P.ctx.close();
   }
 

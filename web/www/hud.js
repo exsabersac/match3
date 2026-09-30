@@ -37,6 +37,78 @@ function chip(ctx, art, x, y, w, h, label, value, valueColor = "#ffe082") {
   text(ctx, fit(ctx, String(value), w - 24), x + 12, y + h * 0.68, 21, valueColor, "left", 800);
 }
 
+// 圆角矩形路径（不依赖 ctx.roundRect，老 WebView 也能画）
+function roundPath(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// 规则开关角标（state.rules = [{name, text, icons}]：视图模型 gvRules 查 Match3.View.ruleBadge，与桌面 HUD 同一张表）。
+// 通用画法：每个规则一枚「叠放图标 + 文字」小胶囊，从 (x, cy) 起向右排，总宽不超过 maxW；
+// 放不下时先把各枚的文字截断（省略号），再不够就只留图标，仍放不下的不画。文字用画布字体（网页图集没有文字贴图）。
+// 返回画出的各枚矩形（设计单位，e2e 检查不重叠 / 不出框）。
+const BADGE_PAD = 5, BADGE_GAP = 6;
+function drawRuleBadges(ctx, art, rules, x, cy, maxW, h, size) {
+  if (!rules || !rules.length) return [];
+  ctx.font = `700 ${size}px ${FONT}`;
+  const iconW = (r) => (r.icons && r.icons.length ? h - 2 + 3 : 0);
+  const natural = rules.map((r) => BADGE_PAD * 2 + iconW(r) + ctx.measureText(r.text).width);
+  const total = natural.reduce((a, b) => a + b, 0) + BADGE_GAP * (rules.length - 1);
+  // 超宽：平均分给每枚，文字按剩余宽度截断
+  const share = total <= maxW ? null : (maxW - BADGE_GAP * (rules.length - 1)) / rules.length;
+  const out = [];
+  let bx = x;
+  rules.forEach((r, i) => {
+    const iw = iconW(r);
+    let w = natural[i], label = r.text;
+    if (share !== null && w > share) {
+      const room = share - BADGE_PAD * 2 - iw;
+      // 太窄：有图标就只留图标；没图标至少留文字的第一个字
+      label = room >= size * 1.5 ? fit(ctx, r.text, room) : (iw ? "" : [...r.text][0] || "");
+      w = label ? BADGE_PAD * 2 + iw + ctx.measureText(label).width : Math.max(h, BADGE_PAD + iw);
+    }
+    if (bx + w > x + maxW + 0.5) return;
+    const by = cy - h / 2;
+    ctx.save();
+    roundPath(ctx, bx, by, w, h, h / 2);
+    ctx.fillStyle = "rgba(40,20,70,.72)"; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,214,90,.85)"; ctx.stroke();
+    ctx.restore();
+    let tx = bx + BADGE_PAD;
+    if (iw) {
+      // 图标从下往上叠画（如 bomb_glow + bomb_mark，同桌面 HudArt）；缺图时退回一个金色圆点
+      const s = h - 2, ix = bx + (label ? BADGE_PAD - 2 : (w - s) / 2), iy = cy - s / 2;
+      let drawn = false;
+      for (const ic of r.icons) drawn = art.draw(ctx, ic, ix, iy, s, s) || drawn;
+      if (!drawn) { ctx.fillStyle = "#ffd65a"; ctx.beginPath(); ctx.arc(ix + s / 2, cy, s / 3, 0, Math.PI * 2); ctx.fill(); }
+      tx = ix + s + 3;
+    }
+    if (label) text(ctx, label, tx, cy + 0.5, size, "#ffe9a8", "left", 700);
+    out.push({ name: r.name, x: bx, y: by, w, h, label });
+    bx += w + BADGE_GAP;
+  });
+  return out;
+}
+
+// 关卡小面板：chip + 标签行右侧的规则角标（标签「第 N 关」之后到面板右边距之间）。返回各部件矩形（e2e 用）。
+function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
+  chip(ctx, art, x, y, w, h, `第 ${info.level + 1} 关`, info.name, "#fff");
+  ctx.font = `600 13px ${FONT}`;
+  const labelW = ctx.measureText(`第 ${info.level + 1} 关`).width;
+  const bx = x + 12 + labelW + 8;
+  const badges = drawRuleBadges(ctx, art, info.rules, bx, y + h * 0.3, x + w - 8 - bx, badgeH, badgeSize);
+  return {
+    chip: { x, y, w, h },
+    label: { x: x + 12, y: y + h * 0.3 - 6.5, w: labelW, h: 13 },
+    name: { x: x + 12, y: y + h * 0.68 - 10.5, w: w - 24, h: 21 },
+    badges,
+  };
+}
+
 function goalBar(ctx, art, x, y, w, h, info) {
   const frac = info.target > 0 ? Math.min(1, info.progress / info.target) : 0;
   ctx.font = `700 15px ${FONT}`;
@@ -61,19 +133,21 @@ function button(ctx, art, b, enabled, pressed) {
   ctx.restore();
 }
 
-// info：{level, name, score, moves, goalText, progress, target, msg, undo, busy}；pressed：当前按下的按钮 id
+// info：{level, name, rules, score, moves, goalText, progress, target, msg, undo, busy}；pressed：当前按下的按钮 id
+// 返回关卡面板各部件（面板 / 标签 / 关名 / 规则角标）的矩形，供调试钩子与 e2e 检查布局。
 export function drawHud(ctx, art, L, info, pressed) {
   const h = L.hud;
+  let lv;
   if (L.mode === "portrait") {
     const g = 10, wl = h.w - 2 * (130 + g);
-    chip(ctx, art, h.x, h.y, wl, 48, `第 ${info.level + 1} 关`, info.name, "#fff");
+    lv = levelChip(ctx, art, h.x, h.y, wl, 48, info, 15, 11);
     chip(ctx, art, h.x + wl + g, h.y, 130, 48, "分数", info.score);
     chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
     goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info);
     ctx.font = `600 16px ${FONT}`;
     text(ctx, fit(ctx, info.msg, h.w), h.x + 2, h.y + 110, 16, "#fff8e1", "left", 600);
   } else {
-    chip(ctx, art, h.x, h.y, h.w, 56, `第 ${info.level + 1} 关`, info.name, "#fff");
+    lv = levelChip(ctx, art, h.x, h.y, h.w, 56, info, 17, 12);
     const hw = (h.w - 8) / 2;
     chip(ctx, art, h.x, h.y + 64, hw, 56, "分数", info.score);
     chip(ctx, art, h.x + hw + 8, h.y + 64, hw, 56, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
@@ -87,6 +161,7 @@ export function drawHud(ctx, art, L, info, pressed) {
     const enabled = !info.busy && (b.id !== "undo" || info.undo > 0);
     button(ctx, art, b, enabled, pressed === b.id);
   }
+  return lv;
 }
 
 // 结局面板（盖在棋盘上）

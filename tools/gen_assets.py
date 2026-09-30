@@ -648,6 +648,29 @@ def stone(n):
     return img
 
 
+def magic_stone(k):
+    """魔法石（新玩法 2）：紫色八角石板 + 中央十字符文 + 底部 3 个充能槽（点亮 k 个）；满 3 格时外发光、符文变亮。"""
+    img = new()
+    oct_pts = [(0.3, 0.1), (0.7, 0.1), (0.9, 0.3), (0.9, 0.7), (0.7, 0.9), (0.3, 0.9), (0.1, 0.7), (0.1, 0.3)]
+    m = poly_mask(pts_px(oct_pts))
+    if k >= 3:
+        img = comp(img, fill_layer(blur(dilate(m, U(0.05)), U(0.04)), (255, 120, 255), 0.75))
+    img = paint(img, m, ("r", (150, 110, 220), (52, 30, 104), (0.4, 0.32)), outline=(26, 12, 58), ow=0.022, shadow=0.5)
+    inner = erode(m, U(0.07))
+    img = comp(img, fill_layer(sub_mask(inner, erode(inner, U(0.012))), (200, 170, 255), 0.55))
+    rune = add_mask(rrect_mask((U(0.44), U(0.2), U(0.56), U(0.62)), U(0.03)), rrect_mask((U(0.24), U(0.35), U(0.76), U(0.47)), U(0.03)))
+    img = paint(img, rune, (255, 236, 150) if k >= 3 else (170, 140, 230), outline=(60, 30, 110), ow=0.008)
+    for i, cx in enumerate((0.32, 0.5, 0.68)):
+        r = 0.055
+        sock = ellipse_mask((U(cx - r), U(0.7 - r), U(cx + r), U(0.7 + r)))
+        lit = i < k
+        img = paint(img, sock, ("r", (255, 250, 200), (255, 170, 30), (0.4, 0.35)) if lit else (40, 26, 70), outline=(30, 14, 50), ow=0.008)
+    img = gloss(img, m, (U(0.22), U(0.14), U(0.56), U(0.34)), 0.35, 0.03)
+    if k >= 3:
+        img = sparkle(img, U(0.74), U(0.22), U(0.07), 0.9)
+    return img
+
+
 def chest():
     img = new()
     body = rrect_mask((U(0.12), U(0.42), U(0.88), U(0.86)), U(0.05))
@@ -1524,6 +1547,8 @@ def build_sprites():
     sp["jelly"] = down(jelly(1))
     sp["jelly_2"] = down(jelly(2))
     sp["bubble"] = down(bubble())
+    for k in range(4):
+        sp["magic_stone_%d" % k] = down(magic_stone(k))
     sp["belt"] = down(belt())
     sp["portal"] = down(portal())
     sp["sel_ring"] = down(sel_ring())
@@ -1574,7 +1599,8 @@ LEGEND = [
                         ("chest", "宝箱", "Chest n"), ("honey", "蜂蜜罐", "Honey n"), ("cake_1", "蛋糕 1", "Cake 1"),
                         ("cake_2", "蛋糕 2", "Cake 2"), ("cake_3", "蛋糕 3+", "Cake 3+"), ("safe", "保险箱", "Safe n"),
                         ("cookie", "饼干", "Cookie"), ("magic_hat", "魔法帽", "Magic hat"), ("snail", "蜗牛", "Snail"),
-                        ("surprise", "彩蛋", "Surprise"), ("time_spirit", "时间精灵", "Time spirit"), ("bubble", "气泡", "Bubble")]),
+                        ("surprise", "彩蛋", "Surprise"), ("time_spirit", "时间精灵", "Time spirit"), ("bubble", "气泡", "Bubble"),
+                        ("magic_stone_1", "魔法石", "Magic stone"), ("magic_stone_3", "魔法石 满", "Magic stone full")]),
     ("带颜色的障碍 Colored（同样用形状徽记）", [("balloon_" + k, "气球", "Balloon " + k.upper()) for k in GEMS]
      + [("bottle_" + k, "染色瓶", "Bottle " + k.upper()) for k in GEMS]
      + [("maker_" + k, "果汁机", "Maker " + k.upper()) for k in GEMS] + [("ufo_" + k, "飞碟", "UFO " + k.upper()) for k in GEMS]),

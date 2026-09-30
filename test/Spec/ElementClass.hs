@@ -218,7 +218,7 @@ ec_open_messages = do
   assertBool "fromMessage wrong type" (not (isJust (fromMessage (SomeMessage (Other ())) :: Maybe Warm)))
 
 -- | 阶段 2 消掉的遗留项：源码里没有扁平记录 / 封闭钩子；findHint 不再点名彩虹；
--- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 31 个，名字与阶段 1 相同由快照锁定）。
+-- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 32 个：新玩法 2 追加魔法石，名字与阶段 1 相同由快照锁定）。
 ec_flat_record_removed :: Assertion
 ec_flat_record_removed = do
   srcFiles <- sourcesUnderAll ["src/Match3/Element", "src/Match3/Board", "src/Match3/Game"]
@@ -232,7 +232,7 @@ ec_flat_record_removed = do
   flowFiles <- pipelineSources
   flow <- mapM readFile flowFiles
   assertEqual "main flow does not call level element implementations" [] [(f, w) | (f, s) <- zip flowFiles flow, w <- ["stepUfos", "beltMoves", "coverCarpets"], mentionsIdent w s]
-  assertEqual "31 builtin entries" 31 (length builtinDefs)
+  assertEqual "32 builtin entries" 32 (length builtinDefs)
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes"] (map levelNameOf builtinLevelDefs)
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；

@@ -5,7 +5,7 @@
 --
 -- * Gem          普通宝石、特殊块（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则，特殊块形状规则表（第 8 刀）
 -- * Layer        冰层与 8 种叠层（修饰器）
--- * Obstacle     打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋
+-- * Obstacle     打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋、魔法石（新玩法 2）
 -- * Collectible  收集与计数类：饼干、时间精灵、气泡
 -- * Actor        会动或会生成东西的：魔法帽、果汁机、蜗牛、染色瓶、倒计时
 -- * Ground       地面层：果冻
@@ -30,6 +30,10 @@ module Match3.Element.Builtin
   , PlainGem(..)
   , SpecialGem(..)
   , SurpriseEgg(..)
+  , MagicStone(..)
+  , magicStoneFull
+  , magicStoneFiring
+  , magicStoneSeeds
   , Ice(..)
   , Jelly(..)
   , Bubble(..)
@@ -100,6 +104,7 @@ builtinDefs =
   , countdownEntry                                      -- Actor
   , jellyEntry                                          -- Ground
   , bubbleEntry                                         -- Collectible
+  , magicStoneEntry                                     -- Obstacle（新玩法 2）
   ]
 
 -- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 levelStart 按关卡记录给出）：按消息回复流水线节拍；去掉某项（removeLevel）即该机制不生效。

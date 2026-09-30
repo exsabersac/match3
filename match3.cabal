@@ -182,6 +182,7 @@ test-suite match3-test
       Spec.GridMatch
       Spec.JellyBubble
       Spec.Levels
+      Spec.MagicStone
       Spec.Presentation
       Spec.Properties
       Spec.ReplayUndo

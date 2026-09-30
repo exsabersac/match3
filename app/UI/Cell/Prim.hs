@@ -8,6 +8,7 @@
 module UI.Cell.Prim
   ( primCustom
   , primBubble
+  , primMagicStone
   , primStone
   , primChest
   , primHoney
@@ -58,6 +59,21 @@ primBubble ren x y cell flashing = case cell of
     rendererDrawColor ren $= V4 200 240 255 255
     drawRect ren (Just body)
     fillRect ren (Just (Rectangle (P (V2 (x + gap + 6) (y + gap + 6))) (V2 10 6)))
+  _ -> pure ()
+
+-- | 几何版：魔法石（新玩法 2）——紫色方块 + 底部 3 个充能格（点亮的金色）；满格时亮紫边。
+primMagicStone :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
+primMagicStone ren x y cell flashing = case cell of
+  Custom _ (CustomState k) -> do
+    let gap = 5 :: CInt
+        body = Rectangle (P (V2 (x + gap) (y + gap))) (V2 (cellPx - 2 * gap) (cellPx - 2 * gap))
+    rendererDrawColor ren $= if flashing then V4 230 210 255 255 else V4 92 60 160 255
+    fillRect ren (Just body)
+    rendererDrawColor ren $= if k >= 3 then V4 255 140 255 255 else V4 40 24 80 255
+    drawRect ren (Just body)
+    forM_ [0 .. 2 :: Int] $ \i -> do
+      rendererDrawColor ren $= if i < k then V4 255 200 60 255 else V4 40 26 70 255
+      fillRect ren (Just (Rectangle (P (V2 (x + 14 + fromIntegral i * 11) (y + cellPx - 18))) (V2 7 7)))
   _ -> pure ()
 
 -- | 几何版：石头。

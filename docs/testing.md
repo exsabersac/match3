@@ -283,7 +283,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `view_cell_face_and_level_list_match_legacy` | 全部样本盘面的格子与每种构造器 / 叠层组合：`cellFace` 与旧 `encodeCell` 的字段（`t` 在前、顺序相同）逐项相同；`levelViews` 与 `allLevels` 的序号 / 名字 / 步数 / 目标相同 |
 | `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
-| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图 |
+| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、没登记的名字目标退回元素名 |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
@@ -354,7 +354,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
   和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
-- **一致性用例**：`web/test/parity.sh` 默认状态 14 组、动画 12 组（「关卡:种子」列表，含第 41 关「爆破」与第 42 关「魔石」），`CASES=` 可改。
+- **一致性用例**：`web/test/parity.sh` 默认状态 19 组、动画 18 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
+  第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）与第 44 关「魔力鸟」），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
+  `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）；
+  提示不会主动选彩虹组合，第 44 关的变身步（`rainbow_line` / `rainbow_bomb`）靠后两种走法覆盖，`parity.sh` 会检查这些用例真的走到了变身步
+  （状态 JSON 里有 `"kind":"rainbow_…"`、动画帧里有蔓延段）。原生 `Parity.hs` / `AnimParity.hs` 与 node 两侧的 `pickMove` 逐条相同。
 - **e2e 端口 `E2E_PORT`**：e2e 临时起 `web/serve.py`，只监听 `127.0.0.1`，端口取环境变量 `E2E_PORT`（默认 **8765**）。
   同一台机器上并行跑多份 e2e（多个工作树 / 多个任务）时各设一个端口，例如 `make check E2E_PORT=18765` 或 `E2E_PORT=18765 make e2e`，
   直接跑脚本时 `E2E_PORT=18765 node web/test/e2e.mjs`。端口已被占用时 e2e 立刻报错退出；服务器起来后还会核对它提供的
@@ -364,7 +368,17 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
   e2e 对全部关卡（当前 44 关）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
   **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
-  `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。
+  `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。`report.json` 的 `fallbacksByLevel` 逐关记录计数，
+  第 43 / 44 关（毛球、彩虹组合）另有单独的「fallbacks 为空」检查项。
+- **HUD 目标中文标签（每关）**：同一轮逐关检查 `m3debug.hud.goal`（HUD 实际画出的目标标签）= 「目标 」+ `state.goal.label`，
+  且 `goal.label` 不含 `[a-z_]`（不漏出 `fuzzball` / `GoalNamed` 这类内部名）；逐关结果在 `report.json` 的 `goalLabels`。
+  `goal.label` 来自视图模型 `Match3.View.goalLabel`（名字目标查 `namedGoalLabelTable`），`stack test` 的 `frontends_read_view_model` 也核对全部关卡与每日挑战。
+- **第 43 关毛球**：静止时冻结在浮动偏移 −2 与 +2 设计像素的两帧（同桌面 `sprBob`），截 `fuzzball-float-a-up.png` / `fuzzball-float-b-down.png`，
+  并在页面里对两帧格内像素做纵向平移搜索，最佳平移须在 4 设计像素 × `u` × dpr（1280×800 dpr2 下 12.8 物理像素）±2.5 以内；
+  步末跳格冻结在皮带段中间（`trace.end` 的 belt 项从毛球格出发），截 `fuzzball-jump-mid-l43-*.png`；HUD「目标 毛球」竖屏 / 横屏截 `goal-label-l43-*.png`。
+- **第 44 关彩虹组合**：`state.rules` = `[{name:"rainbow_combos", text:"彩虹组合变身", icons:["rainbow"]}]`，竖屏 / 横屏角标完整画在关卡面板里
+  （`rules-badge-l44-*.png`）；开局的彩虹 × 直线、彩虹 × 炸弹各走一次，冻结在第一轮之前的蔓延段中间（`trace.end[0]` 为 `afterWaves = 0` 的
+  `rainbow_line` / `rainbow_bomb`，此时轮次 0、连击 0），截 `rainbow-transform-{line,bomb}-mid-l44-*.png`，播完 `fallbacks` 仍为空。
 - **规则开关角标**：e2e 检查第 41 关 `state.rules` = `[{name:"bomb_shapes", text:"L/T 形出炸弹", icons:["bomb_glow","bomb_mark"]}]`，
   竖屏 390×844、横屏手机 844×390、桌面 1280×800 三种布局下 HUD 角标都完整画出、落在关卡面板里、不压「第 N 关」标签与关名、
   彼此不重叠（读 `m3debug.hud`），走一步后仍在；第 1 关与第 42 关（魔法石是元素不是规则开关）没有角标。截图
@@ -441,7 +455,17 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## shell 脚本检查（`make lint-sh`）
 
-`make check` 第一步跑 `make lint-sh`（`python3 web/tools/lint-sh.py`），检查仓库里（`git ls-files`）全部 `*.sh`、`*.mk` 与 `Makefile`：
+`make check` 第一步跑 `make lint-sh`（`python3 web/tools/lint-sh.py`），检查仓库里（`git ls-files`）全部 `*.sh`、`*.mk` 与 `Makefile`。
+
+注意两处盲区：
+
+- **只扫已跟踪的文件**：文件清单来自 `git ls-files`，新建但还没 `git add` 的脚本不在清单里，`make lint-sh` 不会扫它（照样显示 0 处问题）。
+  提交前先 `git add`，或者直接把路径传给脚本：`python3 web/tools/lint-sh.py 新脚本.sh`（传了路径就只查这些文件，不管是否已跟踪）。
+- **只按扩展名选文件**：没有扩展名的脚本（例如 Gradle 生成的 `web/android-app/android/gradlew`、自己写的无后缀可执行脚本）不在范围内，
+  即使带 `#!/bin/bash` 也不查；需要时同样用路径参数单独查。
+
+规则与细节：
+
 
 - **规则**：`$` 后接命名变量 `[A-Za-z_][A-Za-z0-9_]*`，紧跟一个 ≥ 0x80 的字节（中文、全角标点等 UTF-8 字符的首字节）就报错，
   逐条打印 `文件:行号: $变量 …: 该行`，退出码 1。修法是加花括号：`"…$LABEL）"` → `"…${LABEL}）"`。

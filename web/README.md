@@ -200,8 +200,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-09-30，web-fuzzball-rainbow 合入 main b53a917 后）：46 关，`stack test` 372 个用例全过，
-状态一致性 20 组、动画一致性 18 组（都含第 43 / 44 关），e2e 71 项全过，`make android-check` 见 docs/web.md §7。
+下面是各自的底层命令。当前（2026-09-30，web-cookie-drop，基于 main 9f5504e）：46 关，`stack test` 372 个用例全过，
+状态一致性 23 组、动画一致性 21 组（都含第 43 / 44 / 46 关），e2e 77 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json

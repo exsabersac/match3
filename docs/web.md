@@ -273,7 +273,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（21 组，含第 41–44 关与第 46 关种子 1 / 28 / 30；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 46 关掉落口（标记、补下饼干的下落段）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-fuzzball-rainbow 合入 main b53a917 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 20 组、动画一致性 18 组全部一致（含第 43 / 44 关）；e2e 71 项全过（46 关逐关贴图护栏全空、HUD 目标全是中文名，无控制台错误）；`make android-check` 6 项全过。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-cookie-drop，基于 main 9f5504e，`make clean && make check`）：`stack test` 372 通过；状态一致性 23 组、动画一致性 21 组全部一致（含第 43 / 44 关与第 46 关种子 1 / 28 / 30）；e2e 77 项全过（46 关逐关贴图护栏全空、HUD 目标全是中文名、第 46 关掉落口标记与补下饼干的下落段，无控制台错误）；`make android-check` 6 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

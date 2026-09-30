@@ -13,7 +13,8 @@ export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
 // 五色主色（与 tools/gen_assets.py 调色板、UI.Layout.colorRGB 一致）
 export const COLOR_RGB = { 1: [236, 62, 78], 2: [52, 196, 96], 3: [56, 128, 246], 4: [255, 194, 36], 5: [172, 88, 236] };
 // 按元素名取色（UI.Layout.elementRGBTable）：蔓延碎屑 / 生长前沿光 / 自定义格
-export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [92, 60, 160] };
+export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [92, 60, 160],
+  fuzzball: [196, 150, 170] };   // 毛球：同桌面几何版 UI.Cell.Prim.primFuzzball 的灰粉色（降级色 / 消灭时的粒子色）
 
 export const clamp = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
 export const breathe = (pulse, period) => 0.5 + 0.5 * Math.sin((pulse * 2 * Math.PI) / period);
@@ -80,6 +81,9 @@ const OVERLAY_SPRITE = {
   fog: (n) => `fog_${clamp(1, 2, n)}`, chain: (n) => `chain_${clamp(1, 2, n)}`,
   freeze: (n) => `freeze_${clamp(1, 2, n)}`, curtain: (n) => `curtain_${clamp(1, 2, n)}`,
 };
+// 轻微上下浮动（桌面 UI.Cell.Art.cellKit 的 sprBob：bob = round (2 * sin (pulse / 9))，振幅 2 设计像素、周期 2π×9 ≈ 56.5 个呼吸计数）。
+// 气球 / 时间精灵 / 气泡 / 满格魔法石 / 毛球共用。呼吸计数每个逻辑帧 +1：桌面固定 16 ms 一帧（≈ 0.90 s 一个周期），
+// 网页固定 1/60 s 一帧（≈ 0.94 s），同一个公式、慢约 4%，与其它浮动元素保持一致，不单独折算。
 const bobY = (pulse) => Math.round(2 * Math.sin(pulse / 9));
 const CELL_ART = {
   G(ctx, art, pulse, x, y, cell) {
@@ -120,7 +124,10 @@ const CELL_ART = {
     // 新玩法 2 魔法石：按充能 v 画 magic_stone_0..3（满 3 格时浮动），同桌面 UI.Cell.Art.artMagicStone；不画层数角标
     else if (c.name === "magic_stone") {
       art.draw(ctx, primarySprite(c), x, y + (c.v >= 3 ? bobY(p) : 0), CELL, CELL);
-    } else { art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
+    }
+    // 新玩法 3 毛球：贴图 fuzzball，一直轻微浮动（它每步会跳），同桌面 UI.Cell.Art.artFuzzball（sprBob "fuzzball"）；不画状态角标
+    else if (c.name === "fuzzball") art.draw(ctx, "fuzzball", x, y + bobY(p), CELL, CELL);
+    else { art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
   },
 };
 

@@ -2,7 +2,7 @@
 -- | 地面层（GameState.gsGround，段 2c 的扩展槽；段 5 起内置有双层果冻）的绘制查表：
 -- 键 = 地面层元素名，值 = 几何降级版与贴图版两个画法（参数：格左上角、剩余层数）。
 -- 贴图版画在棋盘格之上、棋子之下；几何版画在棋子之上（框）。表里没有的名字画一道淡灰框。
--- 贴图版主贴图缺失时逐格退回几何版。
+-- 贴图版主贴图缺失时逐格退回几何版。某格的地面层第 11 刀起由视图模型 Match3.View.groundAtView 取。
 --
 -- 新增地面层元素：在这里加一行（贴图由 tools/gen_assets.py 生成，名字 = 元素名 / 元素名_层数）。
 --
@@ -11,7 +11,6 @@ module UI.Ground
   ( groundTable
   , drawGroundPrimAt
   , drawGroundArtAt
-  , groundAt
   ) where
 
 import Art
@@ -26,10 +25,6 @@ groundTable :: [(ElementName, (Renderer -> CInt -> CInt -> Int -> IO (), Int -> 
 groundTable =
   [ ("jelly", (primJelly, \n -> if n >= 2 then "jelly_2" else "jelly"))
   ]
-
--- | 某格的地面层（名字, 层数）。
-groundAt :: GameState -> Pos -> Maybe (ElementName, Int)
-groundAt gs p = lookup p (gsGround gs)
 
 -- | 几何版：按名字查表，查不到画淡灰底。
 drawGroundPrimAt :: Renderer -> CInt -> CInt -> (ElementName, Int) -> IO ()

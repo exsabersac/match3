@@ -4,7 +4,7 @@
 -- | 布局常量与几何：逻辑像素尺寸（格 56 px、边距、HUD 高度、窗口大小）、格子坐标换算、
 -- 矩形与插值小工具、调色板（宝石颜色 / 叠层蔓延色）、浮字左边界。
 --
--- 依赖：只依赖 Match3.Core 与 SDL 类型。所有绘制与点选都以这里的逻辑坐标为准，
+-- 依赖：只依赖 Match3.Core、Engine.GridUI（第 11 刀：像素 ↔ 格经通用网格几何 boardGrid）与 SDL 类型。所有绘制与点选都以这里的逻辑坐标为准，
 -- 物理像素倍率由 UI.Env.syncScale 交给 SDL 缩放。
 -- 同步：colorRGB 必须与 tools/gen_assets.py 的调色板一致。
 module UI.Layout
@@ -18,6 +18,7 @@ module UI.Layout
   , elementRGBTable -- 再导出自 UI.Presentation（第 10 刀起元素色在表现表模块）
   , namedRGB
   , cellRGB
+  , boardGrid
   , pixelToCell
   , cellOrigin
   , lerpI
@@ -34,6 +35,7 @@ module UI.Layout
 
 import Data.Int (Int32)
 import Data.Word (Word8)
+import Engine.GridUI (GridGeom (..), gridCellAt, gridCellOrigin, gridCells)
 import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
@@ -82,23 +84,16 @@ cellRGB cell = case cell of
   Gem col _ _ _ -> colorRGB col
   Custom n _ -> maybe (160, 160, 170) id (lookup n elementRGBTable)
 
+-- | 棋盘在窗口里的网格几何（第 11 刀：像素 ↔ 格子的换算交给通用组件 Engine.GridUI）。
+boardGrid :: GridGeom CInt
+boardGrid = GridGeom {ggLeft = padPx, ggTop = padPx + hudH, ggCell = cellPx, ggRows = boardSize, ggCols = boardSize}
+
 -- | 逻辑坐标 → 棋盘格；棋盘外返回 Nothing。
 pixelToCell :: Int32 -> Int32 -> Maybe Pos
-pixelToCell mx my =
-  let x = fromIntegral mx - padPx
-      y = fromIntegral my - padPx - hudH
-  in if x < 0 || y < 0 || x >= boardPx || y >= boardPx
-       then Nothing
-       else
-         let c = fromIntegral (x `div` cellPx)
-             r = fromIntegral (y `div` cellPx)
-         in if inBounds (r, c) then Just (r, c) else Nothing
+pixelToCell mx my = gridCellAt boardGrid (fromIntegral mx) (fromIntegral my)
 
 cellOrigin :: Pos -> (CInt, CInt)
-cellOrigin (r, c) =
-  ( padPx + fromIntegral c * cellPx
-  , padPx + hudH + fromIntegral r * cellPx
-  )
+cellOrigin = gridCellOrigin boardGrid
 
 -- | 整数坐标线性插值（t ∈ [0,1]）。
 lerpI :: CInt -> CInt -> Int -> Int -> CInt
@@ -116,7 +111,7 @@ boardRect = rect padPx (padPx + hudH) boardPx boardPx
 
 -- | 8×8 全部坐标（行优先）。
 allCells :: [Pos]
-allCells = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+allCells = gridCells boardGrid
 
 -- | 颜色 / 数值的线性插值。
 lerpC :: CInt -> CInt -> Double -> CInt

@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 322 通过
+stack test                            # 库测，无需显示器；期望 331 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -176,9 +176,10 @@ GHC **9.14.1**；Stackage 快照 **lts-24.60**（快照本身对应 GHC 9.10.3�
 ## 目录结构
 
 ```
-src/Engine/   Game Effect Playback History（多游戏通用层：接口 / 通用效果 / 纯播放层 / 撤销历史；不依赖 Match3）
-src/Match3/   Types Counts Core Engine Obstacles Rainbow Combos Ice
+src/Engine/   Game Effect Playback History GridUI（多游戏通用层：接口 / 通用效果 / 纯播放层 / 撤销历史 / 通用网格 UI 组件（第 11 刀）；不依赖 Match3）
+src/Match3/   Types Counts Core Engine View Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
+              （View = 第 11 刀的视图模型：从 GameState 算出 HUD / 目标 / 棋盘读数，桌面与网页都读）
               （Engine = 三消作为通用接口的第一个实现）
 src/Match3/Types/  Name Cell Overlay Body Board Game（第 6 刀从 Types.hs 按职责拆出，Name 为第 6b 刀的 ElementName / CustomState；Types.hs 为再导出门面）
 src/Match3/Levels/ Level Campaign（关卡记录 / 40 关关卡表与 lookupLevel，第 6 刀）
@@ -197,7 +198,7 @@ app/pure/     不依赖 SDL 的纯前端模块（桌面、测试、网页共用�
               UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/Sound（音效钩子，预留、不播放）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；322 命名用例）
+test/Spec.hs  测试入口（只汇总；331 命名用例）
 test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、第 9 刀前元素类的对照副本 Support.LegacyElement）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
@@ -209,5 +210,5 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 ## 发布状态
 
 - 战役：**40** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **322**（Tasty + QuickCheck）
+- 测试：`stack test` **331**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

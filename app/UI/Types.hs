@@ -4,7 +4,7 @@
 -- | 前端状态类型：App（整个界面状态）、Anim（交换 / 下落 / 逐轮回放）、粒子、道具点选模式，
 -- 以及动画帧数常量、是否在播放（animBusy）等只读查询。
 --
--- 依赖：Match3.Core、ComboFx（Cascade / TextPop）、Art。不含 IO。
+-- 依赖：Match3.Core、Engine.GridUI（Highlight）、ComboFx（Cascade / TextPop）、Art。不含 IO。
 -- 不变量：appAnim ≠ AnimNone 期间视为「播放中」，输入层据此锁定交换 / 道具 / 撤销 / 洗牌。
 module UI.Types
   ( swapFrames
@@ -18,12 +18,14 @@ module UI.Types
   , animBusy
   , playingCascade
   , playingPlayer
+  , appHighlight
   ) where
 
 import Art
 import ComboFx
 import Data.Text (Text)
 import Data.Word (Word8)
+import Engine.GridUI (Highlight (..))
 import Engine.History (History (..))
 import Engine.Playback (Player (..))
 import Foreign.C.Types (CInt)
@@ -126,3 +128,16 @@ playingPlayer app = case appAnim app of
 -- | 当前（或交换之后）的逐轮回放进度（阶段状态）。
 playingCascade :: App -> Maybe Cascade
 playingCascade = fmap plStage . playingPlayer
+
+-- | 本帧棋盘高亮（第 11 刀：通用网格组件 Engine.GridUI.Highlight）：选中格、提示格（gsHint 的两格，
+-- 按顺序）、闪光格、自由交换已点的第一格。贴图版与几何版都按它画选中环 / 提示光 / 闪光。
+appHighlight :: App -> Highlight Pos
+appHighlight app =
+  Highlight
+    { hlSelected = appSel app
+    , hlHint = maybe [] (\(a, b) -> [a, b]) (gsHint (appGame app))
+    , hlFlash = map fst (appFlash app)
+    , hlPinned = case appTool app of
+        ToolFreeSwap (Just p) -> Just p
+        _ -> Nothing
+    }

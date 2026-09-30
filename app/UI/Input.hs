@@ -8,7 +8,7 @@
 -- 每个键、每条鼠标路径各一个函数；规则调用一律经通用接口 gameStep（UI.Actions.stepShell / playMove，实例 Match3.Engine.match3Shell），
 -- 结果与原来直接调用 trySwap / use* / applyHint / shuffleGame 逐位相同；撤销由 Engine.History 处理（终局后同样可撤销）。
 --
--- 依赖：UI.Actions、UI.Playback、UI.LevelMap（地图点选）、UI.Env（鼠标坐标换算）、UI.Types、UI.Layout、Match3.Engine。
+-- 依赖：UI.Actions、UI.Playback、UI.LevelMap（地图点选）、UI.Env（鼠标坐标换算）、UI.Types、UI.Layout、Match3.Engine、Match3.View（收集进度后缀）、Engine.GridUI（点选 / 拖动判定）。
 module UI.Input
   ( foldEvents
   , handleEvent
@@ -31,7 +31,8 @@ import SDL hiding (Normal)
 import System.Random (randomIO)
 import UI.Actions
 import UI.Env
-import UI.GoalStyle (countTag)
+import Engine.GridUI (Click (..), gridClick, gridDragRelease)
+import Match3.View (GameView (..), gameView, goalBracket)
 import UI.Layout
 import UI.LevelMap
 import UI.Types
@@ -312,12 +313,12 @@ handleMouseUp ref window me = do
       Nothing -> pure False
       Just p1 -> do
         let P (V2 mx my) = mouseButtonEventPos me
-        case pixelToCell mx my of
-          Just p2 | p1 /= p2 && adjacent p1 p2 -> do
+        case gridDragRelease adjacent p1 (pixelToCell mx my) of
+          Just (_, p2) -> do
             app <- readIORef ref
             commit ref window (swapTo dragMsg app p1 p2)
             pure False
-          _ -> do
+          Nothing -> do
             writeIORef ref app0 { appDragFrom = Nothing }
             pure False
 
@@ -383,28 +384,28 @@ cellClick ref window pos = do
     ToolCross
       | gsCrossClears (appGame app) <= 0 -> commit ref window app { appTool = ToolNone, appMsg = "No cross-clears left" }
       | otherwise -> () <$ applyCrossClear ref window app pos
-    ToolFreeSwap Nothing ->
-      commit ref window
-        app
-          { appTool = ToolFreeSwap (Just pos)
-          , appSel = Just pos
-          , appMsg = "Free-swap: click second cell"
-          }
-    ToolFreeSwap (Just p1)
-      | p1 == pos ->
-          commit ref window
-            app
-              { appTool = ToolFreeSwap Nothing
-              , appSel = Nothing
-              , appMsg = "Free-swap: pick first cell again"
-              }
-      | otherwise -> applyFreeSwap ref window app p1 pos
+    -- 两步点选（Engine.GridUI.gridClick）：自由交换的第一格记在工具模式里，普通模式记在 appSel
+    ToolFreeSwap first -> case gridClick first pos of
+      ClickSelect p ->
+        commit ref window
+          app
+            { appTool = ToolFreeSwap (Just p)
+            , appSel = Just p
+            , appMsg = "Free-swap: click second cell"
+            }
+      ClickDeselect ->
+        commit ref window
+          app
+            { appTool = ToolFreeSwap Nothing
+            , appSel = Nothing
+            , appMsg = "Free-swap: pick first cell again"
+            }
+      ClickPair p1 p2 -> applyFreeSwap ref window app p1 p2
     ToolNone ->
-      case appSel app of
-        Nothing -> commit ref window app { appSel = Just pos, appDragFrom = Just pos, appMsg = "Selected; click/drag adjacent" }
-        Just p1
-          | p1 == pos -> commit ref window app { appSel = Nothing, appMsg = "Deselected" }
-          | otherwise -> commit ref window (swapTo clickMsg app p1 pos)
+      case gridClick (appSel app) pos of
+        ClickSelect p -> commit ref window app { appSel = Just p, appDragFrom = Just p, appMsg = "Selected; click/drag adjacent" }
+        ClickDeselect -> commit ref window app { appSel = Nothing, appMsg = "Deselected" }
+        ClickPair p1 p2 -> commit ref window (swapTo clickMsg app p1 p2)
 
 --------------------------------------------------------------------------------
 -- 交换
@@ -468,13 +469,6 @@ clickMsg before gs' fx out =
            <> " (N/Space/click)"
        Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal before)) <> " — R/click"
 
--- | 收集类目标的进度后缀。
+-- | 收集类目标的进度后缀（第 11 刀起读 Match3.View.goalBracket）。
 collectMsg :: GameState -> Text
-collectMsg gs' = case goalView (gsGoal gs') of
-  ViewCollect col n -> bracket (colorTag col) n
-  ViewCollectMulti _ -> bracket "multi" (goalTarget (gsGoal gs'))
-  ViewCount k n -> bracket (countTag k) n
-  _ -> ""
-  where
-    bracket tag n =
-      " [" <> T.pack tag <> " " <> T.pack (show (gsProgress gs')) <> "/" <> T.pack (show n) <> "]"
+collectMsg gs' = T.pack (goalBracket (gvGoal (gameView gs')))

@@ -1,6 +1,6 @@
 # SDL 键位与操作（match3-sdl）
 
-前端：`app/UI/Input.hs`（三消插件的输入映射：`handleKey` 按键表每键一个函数，`handleMouseUp` 拖拽交换，`handleMouseDown` 地图 / 加速 / 结束浮层 / 点格）与 `app/UI/Actions.hs`（道具 / 过关等动作）；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell` → `Match3.Engine.match3Shell`；撤销历史在 `Engine.History`）。规则侧不读键盘；此处仅描述 UI 绑定。
+前端：`app/UI/Input.hs`（三消插件的输入映射：`handleKey` 按键表每键一个函数，`handleMouseUp` 拖拽交换，`handleMouseDown` 地图 / 加速 / 结束浮层 / 点格）与 `app/UI/Actions.hs`（道具 / 过关等动作）；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell` → `Match3.Engine.match3Shell`；撤销历史在 `Engine.History`）。点选（含自由交换的两步点选）与拖动松手的判定第 11 刀起用通用网格组件 `Engine.GridUI`（`gridClick` / `gridDragRelease adjacent`，像素 ↔ 格经 `UI.Layout.boardGrid`）。规则侧不读键盘；此处仅描述 UI 绑定。
 
 ## 基本操作
 
@@ -62,7 +62,7 @@
 
 ### HUD 的实现（第 10 刀）
 
-- 几何降级版 HUD（无贴图时）按区块拆在 `app/UI/HudBlocks.hs`，`UI.HudPrim.drawHud` 只按固定顺序调用：`hudFrame`（底板）→ `hudLevel`（关卡号 + 各关进度点）→ `hudGoal`（目标条与数字）→ `hudGoalSwatch`（收集目标色块）→ `hudMoves`（步数条）→ `hudBoosters`（锤子 / 自由交换 / 十字次数与当前工具模式字样）→ `hudComboBadge`（连击徽章）→ `hudStatus`（右侧结局色条）。顺序即绘制层次；新增区块写一个 `hudXxx` 函数、在 `drawHud` 里加一行。
+- 几何降级版 HUD（无贴图时）按区块拆在 `app/UI/HudBlocks.hs`，`UI.HudPrim.drawHud` 只按固定顺序调用：`hudFrame`（底板）→ `hudLevel`（关卡号 + 各关进度点）→ `hudGoal`（目标条与数字）→ `hudGoalSwatch`（收集目标色块）→ `hudMoves`（步数条）→ `hudBoosters`（锤子 / 自由交换 / 十字次数与当前工具模式字样）→ `hudComboBadge`（连击徽章）→ `hudStatus`（右侧结局色条）。第 11 刀起各区块收视图模型（`GameView` / `GoalInfo` / `Boosters` / `PlayStatus`，见 [architecture.md § 视图模型](architecture.md#视图模型第-11-刀)），不再收 `GameState`。顺序即绘制层次；新增区块写一个 `hudXxx` 函数、在 `drawHud` 里加一行。
 - 几何版格子上的覆盖层（草 / 藤 / 巧克力 / 迷雾 / 锁链 / 冰冻 / 窗帘 / 蒸汽）在 `app/UI/Cell/PrimOverlay.hs`，每种一个函数，`primOverlay` 只分派。
 - 弹字 / 浮字 / 连击徽章的颜色与贴图名、各动画的帧数读表现表 `UI.Presentation`（见 [ui-art.md「表现表」](ui-art.md#表现表第-10-刀)）；操作触发的音效钩子（`effectSound`，内置全部无声）同在那张表里，前端不播放声音。
 - 拆分与改为查表都不改变画面：与 `ac211d8` 的截图逐帧相同，窗口标题逐字相同。

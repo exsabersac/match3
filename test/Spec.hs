@@ -29,6 +29,7 @@ import qualified Spec.Properties
 import qualified Spec.SourceScan
 import qualified Spec.Caps
 import qualified Spec.Presentation
+import qualified Spec.View
 
 main :: IO ()
 main = defaultMain tests
@@ -62,6 +63,7 @@ tests =
         , Spec.Properties.tests
         , Spec.Caps.tests
         , Spec.Presentation.tests
+        , Spec.View.tests
         , Spec.SourceScan.tests
         ]
     )

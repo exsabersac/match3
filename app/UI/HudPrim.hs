@@ -3,7 +3,7 @@
 
 -- | HUD 与叠层的几何降级绘制：顶部信息栏、键位条、首关提示、暂停帮助、弹字、结算面板、进度条。
 --
--- 依赖：UI.HudBlocks（HUD 各区块与进度条 drawMeter，本模块再导出 drawMeter）、UI.Glyph、UI.Types、UI.Layout、ComboFx（弹字曲线）。
+-- 依赖：Match3.View（gameView）、UI.HudBlocks（HUD 各区块与进度条 drawMeter，本模块再导出 drawMeter）、UI.Glyph、UI.Types、UI.Layout、ComboFx（弹字曲线）。
 -- 不变量：结算面板在回放播完（animBusy 为假）后才画，不挡住最后几轮。
 module UI.HudPrim
   ( drawKeyChip
@@ -23,6 +23,7 @@ import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
+import Match3.View (GameView (..), gameView)
 import UI.Glyph
 import UI.HudBlocks
 import UI.Layout
@@ -123,15 +124,15 @@ drawPauseHelp ren app
 -- | 几何降级版 HUD：按区块依次绘制（各区块在 UI.HudBlocks；顺序即层次）。
 drawHud :: Renderer -> App -> IO ()
 drawHud ren app = do
-  let gs = appGame app
+  let gv = gameView (appGame app)  -- 第 11 刀：各区块读视图模型
   hudFrame ren
-  hudLevel ren gs
-  hudGoal ren gs
-  hudGoalSwatch ren gs
-  hudMoves ren gs
-  hudBoosters ren app gs
-  hudComboBadge ren app
-  hudStatus ren gs
+  hudLevel ren gv
+  hudGoal ren (gvGoal gv)
+  hudGoalSwatch ren (gvGoal gv)
+  hudMoves ren gv
+  hudBoosters ren app (gvBoosters gv)
+  hudComboBadge ren app gv
+  hudStatus ren (gvStatus gv)
 
 
 -- | 退回画法（无贴图）的浮字：「COMBO N」+ 本轮得分「+N」，同样放大弹出再淡出。

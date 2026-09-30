@@ -4,7 +4,7 @@
 -- 底板、关卡号与进度点、目标进度条、收集目标色块、步数条、道具次数与工具模式、连击徽章、结局色条。
 -- UI.HudPrim.drawHud 按固定顺序依次调用它们（顺序即绘制层次，不要调换）。
 --
--- 依赖：UI.Glyph（点阵数字 / 字）、UI.GoalStyle（进度条颜色）、UI.Presentation（连击等级色）、UI.Layout、UI.Types。
+-- 依赖：Match3.View（第 11 刀起各区块读视图模型，不再从 GameState 现算）、UI.Glyph（点阵数字 / 字）、UI.GoalStyle（进度条颜色）、UI.Presentation（连击等级色）、UI.Layout、UI.Types。
 -- 新增一个 HUD 区块：在这里写一个 @hudXxx :: Renderer -> …@，再在 drawHud 的顺序表里加一行。
 module UI.HudBlocks
   ( hudWhite
@@ -26,6 +26,7 @@ import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
+import Match3.View
 import UI.Glyph
 import UI.GoalStyle (goalPip)
 import UI.Layout
@@ -47,28 +48,29 @@ hudFrame ren = do
   fillRect ren (Just (Rectangle (P (V2 0 0)) (V2 winW hudH)))
 
 -- | 关卡号 + 各关进度点（当前关金色、已过绿色、未到灰色；38 关以 7px 间距排进 HUD）。
-hudLevel :: Renderer -> GameState -> IO ()
-hudLevel ren gs = do
+hudLevel :: Renderer -> GameView -> IO ()
+hudLevel ren gv = do
   let white = hudWhite
-  drawNumber ren 10 8 3 white (gsLevel gs + 1)
-  forM_ (zip [0 :: Int ..] allLevels) $ \(i, _) -> do
-    let col =
-          if i == gsLevel gs
-            then V4 255 200 80 255
-            else if i < gsLevel gs then V4 80 180 120 255 else V4 60 60 80 255
+  drawNumber ren 10 8 3 white (gvLevel gv + 1)
+  -- 几何版按 gsLevel 原值画点，只分当前 / 已过 / 其余（不区分已解锁）
+  forM_ (zip [0 :: Int ..] (levelDots (gvLevel gv) (-1))) $ \(i, ld) -> do
+    let col = case ld of
+          DotCurrent -> V4 255 200 80 255
+          DotDone -> V4 80 180 120 255
+          _ -> V4 60 60 80 255
         -- 38 levels fit in HUD: 7px stride
         xDot = 60 + fromIntegral i * 7
     rendererDrawColor ren $= col
     fillRect ren (Just (Rectangle (P (V2 xDot 10)) (V2 7 14)))
 
 -- | 目标进度条（分数或收集），下方「当前 / 目标」数字。
-hudGoal :: Renderer -> GameState -> IO ()
-hudGoal ren gs = do
+hudGoal :: Renderer -> GoalInfo -> IO ()
+hudGoal ren gi = do
   let white = hudWhite
       dim = hudDim
-  let prog = gsProgress gs
-      targ = goalTarget (gsGoal gs)
-      meterCol = goalPip (gsGoal gs)
+  let prog = giProgress gi
+      targ = giTarget gi
+      meterCol = goalPip (giGoal gi)
   drawMeter ren 10 36 prog targ meterCol
   drawNumber ren 10 40 2 white prog
   rendererDrawColor ren $= dim
@@ -76,10 +78,10 @@ hudGoal ren gs = do
   drawNumber ren 90 40 2 dim targ
 
 -- | 收集目标的色块（宝箱 / 蜂蜜 / 气球 / 饼干 / 蛋糕 / 保险箱 / UFO / 地毯 / 名字目标 / 颜色）；分数等目标不画。
-hudGoalSwatch :: Renderer -> GameState -> IO ()
-hudGoalSwatch ren gs = do
+hudGoalSwatch :: Renderer -> GoalInfo -> IO ()
+hudGoalSwatch ren gi = do
   let white = hudWhite
-  case goalView (gsGoal gs) of
+  case giView gi of
     ViewCount CountChests _ -> do
       rendererDrawColor ren $= V4 220 170 60 255
       fillRect ren (Just (Rectangle (P (V2 200 42)) (V2 20 16)))
@@ -143,28 +145,27 @@ hudGoalSwatch ren gs = do
     _ -> pure ()  -- 分数 / 多色 / 石块 / 其余：无色块
 
 -- | 剩余步数条（满格 = 该关印制步数）。
-hudMoves :: Renderer -> GameState -> IO ()
-hudMoves ren gs = do
+hudMoves :: Renderer -> GameView -> IO ()
+hudMoves ren gv = do
   let white = hudWhite
-      mlvl = lookupLevel (min (gsLevel gs) (levelCount - 1))
-  let moveCap = max (gsMoves gs) (maybe (gsMoves gs) lvlMoves mlvl)
-  drawMeter ren 10 68 (gsMoves gs) (max 1 moveCap) (V4 100 160 240 255)
-  drawNumber ren 10 72 2 white (gsMoves gs)
+  let moveCap = gvMoveCap gv
+  drawMeter ren 10 68 (gvMoves gv) (max 1 moveCap) (V4 100 160 240 255)
+  drawNumber ren 10 72 2 white (gvMoves gv)
 
 -- | 道具次数（锤子 / 自由交换 / 十字）与当前工具模式字样。
-hudBoosters :: Renderer -> App -> GameState -> IO ()
-hudBoosters ren app gs = do
+hudBoosters :: Renderer -> App -> Boosters -> IO ()
+hudBoosters ren app bs = do
   let white = hudWhite
   let hx = winW - 200
   rendererDrawColor ren $= V4 255 140 80 255
   fillRect ren (Just (Rectangle (P (V2 hx 8)) (V2 14 14)))
-  drawNumber ren (hx + 18) 8 2 white (gsHammers gs)
+  drawNumber ren (hx + 18) 8 2 white (bHammers bs)
   rendererDrawColor ren $= V4 100 180 255 255
   fillRect ren (Just (Rectangle (P (V2 (hx + 50) 8)) (V2 14 14)))
-  drawNumber ren (hx + 68) 8 2 white (gsFreeSwaps gs)
+  drawNumber ren (hx + 68) 8 2 white (bFreeSwaps bs)
   rendererDrawColor ren $= V4 220 80 220 255
   fillRect ren (Just (Rectangle (P (V2 (hx + 100) 8)) (V2 14 14)))
-  drawNumber ren (hx + 118) 8 2 white (gsCrossClears gs)
+  drawNumber ren (hx + 118) 8 2 white (bCrossClears bs)
   case appTool app of
     ToolHammer -> do
       rendererDrawColor ren $= V4 255 180 80 255
@@ -176,14 +177,13 @@ hudBoosters ren app gs = do
     ToolNone -> pure ()
 
 -- | 连击徽章（连击反馈）：回放中显示当前轮连击，播完后短暂显示本步最高连击。
-hudComboBadge :: Renderer -> App -> IO ()
-hudComboBadge ren app = do
-  let badge = case playingCascade app of
-        Just c | cCombo c >= 2 -> Just (cCombo c, False)
-        Just _ -> Nothing
-        Nothing
-          | appComboShow app > 0 && appComboBest app >= 2 -> Just (appComboBest app, True)
-          | otherwise -> Nothing
+hudComboBadge :: Renderer -> App -> GameView -> IO ()
+hudComboBadge ren app gv = do
+  let replay = fmap (\c -> ReplayView (cCombo c) (cBase c + cGain c)) (playingCascade app)
+      badge = case scoreBadge replay (appComboShow app) (appComboBest app) gv of
+        BadgeCombo n -> Just (n, False)
+        BadgeSummary n -> Just (n, True)
+        _ -> Nothing  -- 几何版不画滚动分数 / 得分徽章
   forM_ badge $ \(n, summary) -> do
     let (cr, cg, cb) = styleRGB (comboStyle n) (appPulse app)
         pulseBright = fromIntegral (200 + (appPulse app `mod` 40)) :: Word8
@@ -202,15 +202,14 @@ hudComboBadge ren app = do
         drawNumber ren (winW - 70) 52 3 badgeCol n
 
 -- | 右侧结局色条（胜 / 过关 / 负 / 已洗牌 / 进行中）。
-hudStatus :: Renderer -> GameState -> IO ()
-hudStatus ren gs = do
-  case gsOver gs of
-    Just (Won _) -> rendererDrawColor ren $= V4 60 180 90 255
-    Just (LevelClear _ _) -> rendererDrawColor ren $= V4 220 180 60 255
-    Just (Lost _) -> rendererDrawColor ren $= V4 200 70 70 255
-    _ ->
-      rendererDrawColor ren $=
-        if gsShuffled gs then V4 180 140 220 255 else V4 70 70 90 255
+hudStatus :: Renderer -> PlayStatus -> IO ()
+hudStatus ren st = do
+  rendererDrawColor ren $= case st of
+    PlayWon _ -> V4 60 180 90 255
+    PlayCleared _ _ -> V4 220 180 60 255
+    PlayLost _ -> V4 200 70 70 255
+    PlayShuffled -> V4 180 140 220 255
+    PlayOn -> V4 70 70 90 255
   fillRect ren (Just (Rectangle (P (V2 (winW - 24) 8)) (V2 16 (hudH - 16))))
 
 -- | 进度条：底 + 按 value / cap 填充 + 边框。

@@ -3,7 +3,7 @@
 
 -- | 界面动作（IO）：刷新窗口标题、关卡重置、走步（交换 / 三种道具）的执行、回放加速、过关后前进 / 重试、解锁记录。
 --
--- 依赖：UI.Types、UI.Playback、Match3.Engine（动作执行 / 状态摘要）、Match3.Core、SDL（窗口标题）。
+-- 依赖：UI.Types、UI.Playback、Match3.Engine（动作执行）、Match3.View（标题 titleLine）、Match3.Core、SDL（窗口标题）。
 -- 规则结果一律来自通用接口 gameStep（M3E.match3Shell；每个动作只结算一次，整步报告里有状态、Outcome、MoveFx、回放脚本、效果事件），
 -- 这里只更新 App。
 module UI.Actions
@@ -32,53 +32,15 @@ import Match3.Core
 import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
 import System.Random (randomIO)
-import UI.GoalStyle (colorTag, countTag)
+import Match3.View (colorTag, gameView, titleLine)
 import UI.Playback
 import UI.Types
 
 -- | 把关卡、步数、分数、道具次数、状态与最近提示写到窗口标题（调试 / 无贴图时也能看到）。
 updateTitle :: Window -> App -> IO ()
 updateTitle window app = do
-  let gs = appGame app
-      levelName = maybe "?" lvlName (lookupLevel (min (gsLevel gs) (levelCount - 1)))
-      status = case gsOver gs of
-        Just (Won s) -> " CLEAR! score=" <> show s
-        Just (LevelClear s n) -> " LEVEL UP ->" <> show (n + 1) <> " score=" <> show s
-        Just (Lost s) -> " LOSE score=" <> show s
-        _ -> ""
-      -- 连击数经通用接口的状态摘要取（不直接读 gsCombo）
-      combo = fromMaybe 0 (lookup "combo" (gameStatus M3E.match3Game gs))
-      comboBits =
-        if combo > 1
-          then "  combo x" ++ show combo
-          else ""
-      prog = gsProgress gs
-      goalBits = case goalView (gsGoal gs) of
-        ViewScore t -> "score=" ++ show prog ++ "/" ++ show t
-        ViewCollect col n -> "collect " ++ colorTag col ++ "=" ++ show prog ++ "/" ++ show n
-        ViewCollectMulti _ -> "multi " ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
-        ViewCount k n -> countTag k ++ "=" ++ show prog ++ "/" ++ show n
-        ViewOther _ -> "goal=" ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
-      title =
-        T.pack $
-          "L"
-            ++ show (gsLevel gs + 1)
-            ++ " "
-            ++ levelName
-            ++ "  "
-            ++ goalBits
-            ++ "  moves="
-            ++ show (gsMoves gs)
-            ++ comboBits
-            ++ "  Hm="
-            ++ show (gsHammers gs)
-            ++ " Sw="
-            ++ show (gsFreeSwaps gs)
-            ++ " Cr="
-            ++ show (gsCrossClears gs)
-            ++ status
-            ++ "  |  "
-            ++ T.unpack (appMsg app)
+  -- 第 11 刀：标题全部读视图模型（Match3.View.titleLine；连击数经通用接口的状态摘要取）
+  let title = T.pack (titleLine (gameView (appGame app)) ++ "  |  " ++ T.unpack (appMsg app))
   windowTitle window $= title
 
 -- | 外壳执行一个动作：只调通用接口 M3E.match3Shell 的 gameStep（撤销历史由 Engine.History 维护，段 3）。

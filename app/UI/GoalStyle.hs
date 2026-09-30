@@ -1,5 +1,5 @@
--- | 关卡目标的前端外观（第 5 刀：一处表）：图标、两套色调、文字标签，全部按 Match3.Goal.goalView 的
--- 目标形状 / 计数键分派。进度与目标值不在这里：统一由核心 gsProgress / goalTarget 算（第 5 刀前
+-- | 关卡目标的前端外观（第 5 刀：一处表）：图标、两套色调，全部按 Match3.Goal.goalView 的
+-- 目标形状 / 计数键分派（标题 / 状态栏的文字标签 countTag / colorTag 第 11 刀起在 Match3.View）。进度与目标值不在这里：统一由核心 gsProgress / goalTarget 算（第 5 刀前
 -- HudArt / HudPrim / LevelMap / Actions / Input 各有一份「目标构造器 → 计数字段 / 颜色」的 case）。
 --
 -- 依赖：Match3.Core、UI.Layout（调色板）、UI.Cell.Art（宝石贴图名）。
@@ -8,8 +8,6 @@ module UI.GoalStyle
   ( goalIcon
   , goalTint
   , goalPip
-  , countTag
-  , colorTag
   ) where
 
 import Data.Word (Word8)
@@ -78,27 +76,3 @@ goalPip g = case goalView g of
   _ -> multi
   where
     multi = V4 220 180 100 255
-
--- | 计数键在窗口标题 / 状态栏里的标签（stones=3/8、[chest 1/4] …；名字目标用元素名）。
-countTag :: CounterKey -> String
-countTag k = case k of
-  CountStones -> "stones"
-  CountChests -> "chest"
-  CountHoney -> "honey"
-  CountBalloons -> "balloon"
-  CountCookies -> "cookie"
-  CountCakes -> "cake"
-  CountSafes -> "safe"
-  CountUfo -> "ufo"
-  CountCarpets -> "carpet"
-  CountSpirits -> "spirit"
-  CountColor c -> colorTag c
-  CountNamed name -> unElementName name
-
--- | 颜色的三字母标签。
-colorTag :: Color -> String
-colorTag C1 = "RED"
-colorTag C2 = "GRN"
-colorTag C3 = "BLU"
-colorTag C4 = "YEL"
-colorTag C5 = "PRP"

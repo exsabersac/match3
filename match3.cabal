@@ -28,8 +28,10 @@ library
       Engine.Effect
       Engine.Playback
       Engine.History
+      Engine.GridUI
       Match3.Core
       Match3.Engine
+      Match3.View
       Match3.Types
       Match3.Types.Name
       Match3.Types.Cell
@@ -188,6 +190,7 @@ test-suite match3-test
       Spec.Support.LegacyElement
       Spec.Support.Source
       Spec.UIEvents
+      Spec.View
       Toy
       ElementQueries
       Golden

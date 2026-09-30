@@ -355,17 +355,23 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
   和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
-- **一致性用例**：`web/test/parity.sh` 默认状态 14 组、动画 12 组（「关卡:种子」列表，含第 41 关「爆破」与第 42 关「魔石」），`CASES=` 可改。
+- **一致性用例**：`web/test/parity.sh` 默认状态 17 组、动画 15 组（「关卡:种子」列表，含第 41 关「爆破」、第 42 关「魔石」与第 45 关「雪怪」种子 1–3），`CASES=` 可改。
 - **e2e 端口 `E2E_PORT`**：e2e 临时起 `web/serve.py`，只监听 `127.0.0.1`，端口取环境变量 `E2E_PORT`（默认 **8765**）。
   同一台机器上并行跑多份 e2e（多个工作树 / 多个任务）时各设一个端口，例如 `make check E2E_PORT=18765` 或 `E2E_PORT=18765 make e2e`，
   直接跑脚本时 `E2E_PORT=18765 node web/test/e2e.mjs`。端口已被占用时 e2e 立刻报错退出；服务器起来后还会核对它提供的
   `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
 - **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
-  e2e 对全部关卡（网页版当前 44 关；桌面核心第 45 关「雪怪」尚未接入网页端，接入前 e2e 会把 `snow_boss` 报成降级）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
+  e2e 对全部关卡（当前 45 关，含第 45 关「雪怪」）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
   **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
   `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。
+- **雪怪 Boss（第 45 关）**：图集含 `snow_boss` / `snow_boss_0..3` / `snow_boss_hurt_0..3`；竖屏 390×844 与横屏 1280×800 下四格在
+  (2,3)–(3,4)、象限 0–3、贴图正确，`state.boss` = HUD 血条读数 = 40/40（`m3debug.hud.boss`），第 42 关 `state.boss = null`；
+  多格护栏：带 `q` 的 Custom 格走通用「元素名贴图 + 角标」画法时计入 `fallbacks`（键 `<元素名>#多格通用画法`），反证为页面里强制
+  `forceGeneric.add("snow_boss")` 后护栏必须报出、撤掉后不再增加（前后对比 `snow-boss-crop-before-generic.png` / `snow-boss-crop-after.png`）；
+  按提示走截「扣血那一轮的高亮」与「召唤雪块的步末」，种子 32 走到血量过半截受伤表情（四格 `hurt`、血条进入过半状态）；全程 `fallbacks` 为空。
+  截图 `snow-boss-l45-*.png`、`snow-boss-hit-flash.png`、`snow-boss-summon-tick.png`、`snow-boss-hurt.png`。
 - **规则开关角标**：e2e 检查第 41 关 `state.rules` = `[{name:"bomb_shapes", text:"L/T 形出炸弹", icons:["bomb_glow","bomb_mark"]}]`，
   竖屏 390×844、横屏手机 844×390、桌面 1280×800 三种布局下 HUD 角标都完整画出、落在关卡面板里、不压「第 N 关」标签与关名、
   彼此不重叠（读 `m3debug.hud`），走一步后仍在；第 1 关与第 42 关（魔法石是元素不是规则开关）没有角标。截图

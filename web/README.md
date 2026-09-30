@@ -1,7 +1,7 @@
 # 网页版技术验证（GHC WebAssembly 后端）
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
-在浏览器里用桌面版同一套美术（2x 精灵图集）把 44 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
+在浏览器里用桌面版同一套美术（2x 精灵图集）把 45 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
@@ -64,7 +64,7 @@ make check           # CI：lint-sh + 构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 358 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 365 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
@@ -121,8 +121,8 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：111 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
-1024×1350，WebP 约 327 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
+图集：121 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
+1024×1464，WebP 约 368 KB；`atlas.json` 约 3.5 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
 dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
@@ -170,7 +170,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
   播放期间锁输入，点击或空格加速（对应 `m3AnimTick(1)`）；
 - 换了不能消：换过去再换回，不扣步；过关 / 通关 / 步数用完时出现结局遮罩；
 - 按钮：‹ / › 切关、重开、提示（高亮核心 `findHint`）、撤销（核心 `Engine.History`，最多 20 步）；
-  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..39&seed=N`。
+  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..44&seed=N`。
 
 ### 自适应布局（layout.js）
 - 画布铺满视口，监听 `visualViewport` resize、`resize`、`orientationchange` 和 `ResizeObserver`；
@@ -223,8 +223,9 @@ cmp /tmp/native-anim.txt /tmp/wasm-anim.txt && echo 一致
 e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局、无效交换退回、连锁三帧、撤销、结局），
 `07–12` 特殊块爆炸、步末蜗牛 / 传送带 / 蔓延、第 39 关果冻、第 40 关气泡，`20-分辨率-*` 七种视口，
 `30–32` 下落中改尺寸前后与播完，`rules-badge-*` 第 41 关规则开关角标（竖屏 390×844、横屏手机 844×390、桌面 1280×800）
-与 `rules-badge-l42-*` 第 42 关「魔石」（魔法石是元素不是规则开关，没有角标），`magic-stone-charge*` 魔法石 0–3 格充能。
-另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败。报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
+与 `rules-badge-l42-*` 第 42 关「魔石」（魔法石是元素不是规则开关，没有角标），`magic-stone-charge*` 魔法石 0–3 格充能，
+`snow-boss-*` 第 45 关「雪怪」Boss（竖屏 / 横屏开局与血条、扣血那一轮的高亮、召唤雪块的步末、血量过半的受伤表情）。
+另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败。报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
 
 ## 5. 网页端与核心的接口
 
@@ -240,8 +241,9 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 | `m3AnimStart()` | – | 为上一次被接受的 `m3Swap` 建动画播放器：`{ok,anim:true,boards,base,fall}`；不需要播放时 `{ok,anim:false}` |
 | `m3AnimTick(fast)` | 0 / 1（1 = 加速） | 推进一帧（60 fps 固定步长）：播放中 `{p,fr,n,w,k,g,b[,s][,ev]}`，播完 `{done:true,b,best,g,fall}` |
 
-- `state`：`level/name/rules/score/moves/goal/progress/target/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
-  （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal.name` 为 `GoalNamed` 的元素名）；
+- `state`：`level/name/rules/score/moves/goal/progress/target/boss/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
+  （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal.name` 为 `GoalNamed` 的元素名；
+  `boss` = 雪怪 Boss 血条 `{hp,max}`（视图模型 `gvBoss`，目标不是「击败 Boss」时为 `null`），`hud.js` 用它把目标条换成血条）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
 - 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
   表现数据全部取自 `stepReport`（`Played`），规则每步只算一次；
@@ -261,7 +263,8 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - `board`：行 × 列（每关不同），结构化编码，每格都带 `"s"`（核心 show 文本）：
   宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名|null,"n":覆盖层数}`；
   其他 `t` ∈ `stone/chest/honey/balloon/cookie/cake/hat/maker/snail(dr,dc)/safe/flip(c,b)/surprise/bottle/spirit/countdown/custom(name,v)`，
-  各带自己的字段；前端 `cells.js` 按 `t` 取精灵。
+  各带自己的字段；雪怪格（`custom` `snow_boss`）另带 `q/hurt/turn/every`（`Match3.View.bossPart` 的解码：象限、血量是否过半、召唤计数、周期）；
+  前端 `cells.js` 按 `t` 取精灵（`custom` 先按名字查 `CUSTOM_ART`）。
 
 ### 动画接口
 - 播放器就是桌面 `UI.ComboFx` 的状态机（同一份源码），建立条件与桌面 `withMovePlayback` 相同；前端每帧调一次 `m3AnimTick`，

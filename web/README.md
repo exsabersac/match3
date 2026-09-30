@@ -121,8 +121,8 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：111 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
-1024×1350，WebP 约 327 KB；`atlas.json` 约 3 KB；背景 WebP 约 17 KB。
+图集：122 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
+1024×1464，WebP 约 372 KB；`atlas.json` 约 3.5 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
 dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
@@ -233,7 +233,8 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 与 `rules-badge-l42-*` 第 42 关「魔石」（魔法石是元素不是规则开关，没有角标），`magic-stone-charge*` 魔法石 0–3 格充能，
 `fuzzball-float-a-up` / `fuzzball-float-b-down` 第 43 关毛球浮动的两帧（偏移 −2 / +2 设计像素，e2e 按像素测出两帧纵向平移 ≈ 4 设计像素 × 缩放）、
 `fuzzball-jump-mid-l43-*` 毛球步末跳格（皮带段）中间帧、`goal-label-l43-*` 第 43 关 HUD「目标 毛球」（竖屏 390×844 / 横屏 1280×800）、
-`rules-badge-l44-*` 第 44 关规则角标「彩虹组合变身」、`rainbow-transform-{line,bomb}-mid-l44-*` 彩虹 × 直线 / 炸弹变身段中间帧。
+`rules-badge-l44-*` 第 44 关规则角标「彩虹组合变身」、`rainbow-transform-{line,bomb}-mid-l44-*` 彩虹 × 直线 / 炸弹变身段中间帧、
+`cookie-drop-*` 第 46 关「掉落口」（竖屏 / 横屏开局的掉落口标记、掉落口补下饼干的下落段与补完后的盘面）。
 另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败
 （`report.json` 的 `fallbacksByLevel` 逐关记录，第 43 / 44 / 46 关另有单独的检查项；第 45 关雪怪网页端尚未按象限画，但贴图 `snow_boss` 在图集里、不走降级，护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
 报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
@@ -273,7 +274,7 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
   如第 41 关 `[{"name":"bomb_shapes","text":"L/T 形出炸弹","icons":["bomb_glow","bomb_mark"]}]`，其余关卡与每日挑战为 `[]`）。
   前端 `hud.js` 在关卡面板「第 N 关」右侧逐个画「叠放图标 + 文字」小胶囊（文字用画布字体，图集里没有文字贴图），
   竖屏 / 横屏同一套；放不下时先截断文字、再只留图标。新规则只要在 `ruleBadgeTable` 登记一行，两个前端自动显示；
-- `state` 另含关卡级元素：`belts`（皮带路径）、`portals`（传送门对）、`ufos[{p,c}]`、`carpets`、`carpetOpen`；
+- `state` 另含关卡级元素：`belts`（皮带路径）、`portals`（传送门对）、`ufos[{p,c}]`、`carpets`、`carpetOpen`、`drops`（饼干掉落口格，视图模型 `bvDrops`；`cells.js` 的 `drawDrops` 在格子上沿画 `cookie_drop`）；
 - `board`：行 × 列（每关不同），结构化编码，每格都带 `"s"`（核心 show 文本）：
   宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名|null,"n":覆盖层数}`；
   其他 `t` ∈ `stone/chest/honey/balloon/cookie/cake/hat/maker/snail(dr,dc)/safe/flip(c,b)/surprise/bottle/spirit/countdown/custom(name,v)`，

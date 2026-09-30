@@ -114,8 +114,10 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 待跟进（网页版未改）：第 45 关雪怪 Boss `{t:"custom", name:"snow_boss", v}`（v = ((满血 × 256 + 血量) × 4 + 召唤计数) × 4 + 象限，
   解码同核心 `Match3.View.bossPart`）应按象限画 `snow_boss_<象限>` / 血量过半画 `snow_boss_hurt_<象限>`，HUD 血条读 `gvBoss`
   （`Match3.View.BossView`，Api 尚未编码）；在跟进之前网页端对四格各画一张整图 `snow_boss`（图集里有这张贴图，所以不走几何降级，e2e 的 `fallbacks` 护栏查不出来）、没有血条；HUD 目标标签已由核心 `goalLabel` 给出「雪怪」。
-- 待跟进（网页版未改）：第 46 关饼干掉落口——饼干格本身网页端已有画法（`cookie`）、玩法由核心结算自动生效；
-  只缺掉落口标记：核心 `Match3.View.BoardView.bvDrops`（掉落口格）尚未经 Api 编码，网页端要画的话按格子上沿画 `cookie_drop`。
+- 第 46 关饼干掉落口——饼干格沿用 `cookie` 画法，补子由核心结算（新补的饼干和宝石一样按 `fall` 表从上沿落入）；掉落口格经 Api
+  `state.drops`（视图模型 `bvDrops`）给出，`cells.js` 的 `drawDrops` 同桌面 `UI.BoardArt.drawDropsArt`：棋子之上、格子上沿（上移 6）
+  画 `cookie_drop`，不随下落偏移；画的时机也同桌面（静止盘 / 高亮段 / 轻落 / 皮带 / 蜗牛段画，消失 / 下落段不画；唯一不同是交换补间里也画，
+  桌面 `drawSwap` 不画）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -135,7 +137,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 ```
 tools/gen_assets.py（桌面版，已有）→ assets/*.bmp（2x，112 px/格）
                                           │  只读
-web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（111 张，1024×1350，约 327 KB）
+web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张，1024×1464，约 372 KB）
                                             atlas.json（约 3 KB，名字 → 矩形）
                                             background.webp（约 17 KB）
 ```
@@ -267,9 +269,9 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
 | `stack test` | 核心规则（372 个） | `make test-native` |
-| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（20 组，含第 41–44 关；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
-| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（18 组，含第 41–44 关；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
-| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
+| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（23 组，含第 41–44 关与第 46 关种子 1 / 28 / 30；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
+| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（21 组，含第 41–44 关与第 46 关种子 1 / 28 / 30；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
+| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 46 关掉落口（标记、补下饼干的下落段）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
 `make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-fuzzball-rainbow 合入 main b53a917 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 20 组、动画一致性 18 组全部一致（含第 43 / 44 关）；e2e 71 项全过（46 关逐关贴图护栏全空、HUD 目标全是中文名，无控制台错误）；`make android-check` 6 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。

@@ -124,6 +124,9 @@ function startCascade() {
   anim = { kind: "cascade", cas, tk: { p: "start", fr: 0, n: 0, w: 0, k: 0, g: 0, b: 0 }, best: 0 };
 }
 
+// 步末碎屑色（桌面 UI.Presentation.elementRGBTable 里会出现在蔓延步末的几行）
+const SPREAD_CRUMB_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235] };
+
 function stepCascade() {
   const t0 = performance.now();
   const tk = JSON.parse(X.m3AnimTick(fastReq ? 1 : 0));
@@ -147,7 +150,10 @@ function stepCascade() {
     if (e.e === "end" && tk.s) {
       for (const i of tk.s.e) {
         const ef = cas.ends[i].effect;
-        if (ef.type === "spread") fx.crumbs({ vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235] }[ef.kind] || [255, 255, 255], ef.pairs.map((p) => p[1]));
+        // 蔓延碎屑按元素名取色（桌面 UI.Playback.endCrumbs 的 CrumbsByElement：表里没有的元素不迸，
+        // 例如第 44 关彩虹组合的变身步 rainbow_line / rainbow_bomb）
+        const crumbRGB = ef.type === "spread" && SPREAD_CRUMB_RGB[ef.kind];
+        if (crumbRGB) fx.crumbs(crumbRGB, ef.pairs.map((p) => p[1]));
         if (ef.type === "tick") fx.crumbs([255, 110, 70], ef.cells);
       }
     }

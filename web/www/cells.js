@@ -236,6 +236,22 @@ export function drawUfos(ctx, art, st, pulse, yOff = 0) {
   }
 }
 
+// 饼干掉落口标记（新玩法 6，state.drops = 视图模型 bvDrops）：同桌面 UI.BoardArt.drawDropsArt——画在棋子之上、掉落口格上沿
+// （上移 6 压在棋盘框上），固定不随下落偏移；缺图时退回几何画法（同 UI.BoardPrim.drawDropMark：三级金色台阶 + 白色箭头），
+// 并按 "cookie_drop" 计进 fallbacks（e2e 逐关护栏）。
+export function drawDrops(ctx, art, st) {
+  for (const p of st.drops || []) {
+    const [x, y] = origin(p);
+    if (art.draw(ctx, "cookie_drop", x, y - 6, CELL, CELL)) continue;
+    fallbacks.cookie_drop = (fallbacks.cookie_drop || 0) + 1;
+    const box = (rgb, bx, by, bw, bh) => { ctx.fillStyle = `rgb(${rgb})`; ctx.fillRect(bx, by, bw, bh); }, yy = y - 3, m = x + CELL / 2;
+    box("120,70,20", x + 4, yy, CELL - 8, 3);
+    box("240,190,90", x + 6, yy + 3, CELL - 12, 4); box("240,190,90", x + 11, yy + 7, CELL - 22, 4);
+    box("200,130,50", x + 16, yy + 11, CELL - 32, 3);
+    box("255,250,230", m - 2, yy + 3, 4, 5); box("255,250,230", m - 5, yy + 8, 10, 2); box("255,250,230", m - 2, yy + 10, 4, 2);
+  }
+}
+
 // 藤蔓 / 巧克力下一步可能蔓延到的格（与 UI.BoardArt.spreadTargets 相同的判定）
 export function spreadTargets(board, overlay) {
   const out = [];

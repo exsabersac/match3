@@ -3,7 +3,7 @@
 -- 「frames=帧数 events=事件数」。每第 3 步从第 5 帧起加速（覆盖 fast 路径）。
 -- 与 node-anim-parity.mjs（wasm 一侧）的输出逐字节比较；另外在原生一侧核对：不加速的步，
 -- 逐帧循环的帧数 / 事件数与 Engine.Playback.runPlayer 一口气播完的结果相同（不一致则退出码 1）。
--- 用法（仓库根目录）：stack exec -- runghc -isrc -iapp/pure -iweb/hs web/test/AnimParity.hs 12 42 20 [hint|combo|combo-bomb|cham-rainbow]
+-- 用法（仓库根目录）：stack exec -- runghc -isrc -iapp/pure -iweb/hs web/test/AnimParity.hs 12 42 20 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]
 -- 第 4 个参数是走法（见 pickMove）：combo 先换盘上的「彩虹 × 直线 / 炸弹」，覆盖第 44 关的变身步。
 module Main (main) where
 
@@ -13,7 +13,12 @@ import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
+import Data.Char (digitToInt)
+import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import Match3.Core
+import Match3.Element.Event (Event(..), EventKind(..))
+import Match3.Engine (Action(..), Played(..), play)
 import Match3.Element.Builtin (chameleonColor)
 import Match3Web.Anim (animRunPlayer, animStart, animTick)
 import Match3Web.Api (apiNew, apiSwapAnim, webState)
@@ -23,7 +28,7 @@ main = do
   args <- getArgs
   let (li, seed, n) = case map read (take 3 args) of
         [a, b, c] -> (a, b, c)
-        _ -> error "用法：AnimParity 关卡 种子 步数 [hint|combo|combo-bomb|cham-rainbow]"
+        _ -> error "用法：AnimParity 关卡 种子 步数 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]"
       mode = case drop 3 args of
         (m : _) -> m
         [] -> "hint"
@@ -36,10 +41,12 @@ main = do
             let gs = webState h
             case (gsOver gs, findHint (gsBoard gs)) of
               (Nothing, Just hint) -> do
-                let (a, b) = pickMove mode (gsBoard gs) hint
+                let (a, b) = fromMaybe (pickMove mode (gsBoard gs) hint) (fixedMove mode k)
                     (h', ms, _) = apiSwapAnim a b h
                 when (mode == "cham-rainbow" && (a, b) `elem` chamRainbowPairs (gsBoard gs)) $
                   hPutStrLn stderr ("走法 cham-rainbow：第 " ++ show k ++ " 步换彩虹 × 变色龙 " ++ show (a, b))
+                when (take 4 mode == "fix-") $
+                  mapM_ (\l -> hPutStrLn stderr ("走法 fix：第 " ++ show k ++ " 步魔法地格扩爆 " ++ l)) (magicBlasts gs a b)
                 putStrLn ("step " ++ show k)
                 case ms of
                   Nothing -> putStrLn "noanim"
@@ -119,3 +126,27 @@ chamRainbowPairs b =
       Gem _ Rainbow 0 Nothing -> True
       _ -> False
     cham cell = chameleonColor cell /= Nothing
+
+-- | 走法 fix-RCRC-RCRC-…（第 48 关魔法地格的固定用例）：第 k 步（0 起）换第 k 对（每对 4 个数字 r1 c1 r2 c2），
+-- 列表用完后按提示。与 node 两侧的 fixedMove 逐条相同。
+fixedMove :: String -> Int -> Maybe (Pos, Pos)
+fixedMove mode k = case splitDash mode of
+  ("fix" : mvs) | k < length mvs, [a, b, c, d] <- map digitToInt (mvs !! k) -> Just ((a, b), (c, d))
+  _ -> Nothing
+  where
+    splitDash s = case break (== '-') s of
+      (w, []) -> [w]
+      (w, _ : rest) -> w : splitDash rest
+
+-- | 魔法地格扩爆（第 48 关）：本步的 EvBlast 里来源格在魔法地格上的，每个来源一行
+-- 「元素@(r,c) N 格 R 行 C 列」（N = 该来源的目标格数，含扩出来的一圈）。node 两侧按接口 JSON 的 events 算出同样的行。
+magicBlasts :: GameState -> Pos -> Pos -> [String]
+magicBlasts gs a b =
+  [ unElementName (evElement e) ++ "@" ++ show s ++ " " ++ show (length ts) ++ " 格 "
+      ++ show (length (nub (map fst ts))) ++ " 行 " ++ show (length (nub (map snd ts))) ++ " 列"
+  | e <- pdEvents (play (Swap a b) gs), evKind e == EvBlast
+  , s <- nub (map fst (evCells e)), s `elem` magic
+  , let ts = nub [t | (s', t) <- evCells e, s' == s]
+  ]
+  where
+    magic = [p | (p, (nm, _)) <- gsGround gs, unElementName nm == "magic"]

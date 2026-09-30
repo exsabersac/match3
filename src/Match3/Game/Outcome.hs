@@ -76,7 +76,7 @@ loseHint g = case goalView g of
   ViewCollect _ n -> "优先收集该色宝石，目标 " ++ show n ++ " 个"
   ViewCollectMulti reqs -> "兼顾多色收集：" ++ show (length reqs) ++ " 种配额"
   ViewCount k n -> case k of
-    CountStones -> "用邻消或特效砸箱子，目标 " ++ show n ++ " 个"
+    CountStones -> "用邻消或特效砸开" ++ countLabel k ++ "，目标 " ++ show n ++ " 个"  -- 碎石（第 8 / 41 / 42 / 44 / 48 关；原写「砸箱子」）
     CountChests -> "邻消打开宝箱，目标 " ++ show n ++ " 个"
     CountHoney -> "邻消砸开蜂蜜罐，目标 " ++ show n ++ " 个"
     CountBalloons -> "用同色邻消戳破气球，目标 " ++ show n ++ " 个"

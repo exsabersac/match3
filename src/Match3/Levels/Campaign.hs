@@ -329,7 +329,36 @@ allLevels =
       { lvlPlacements = [Place "chameleon" [] chameleonCells]
       , lvlDrops = [DropSpec chameleonDropCells (mkCustom "chameleon" 0) chameleonKeep]
       }
+    -- 魔法地格（新玩法 8）：地面层 "magic"（不会被消耗），特效在魔法地格上引爆时范围向外扩一圈
+    -- （直线一行 → 三行、炸弹 3×3 → 5×5）；本关打开 L / T 形出炸弹（规则开关 bomb_shapes，新玩法 1），特效多一些。
+    -- 四块魔法地格在 (6,2) / (6,5) / (5,3) / (5,4)，底行是 8 块三层石头：在第 6 行魔法地格上引爆的横消扩成三行、
+    -- 正好扫到底行一整排；18 步打碎 8 块
+  , (level 47 "魔法格" magicGroundMoves (goalCount CountStones magicGroundGoal))
+      { lvlGround = [(p, ("magic", 1)) | p <- magicGroundCells]
+      , lvlPlacements = [Place "stone" [AInt magicGroundStoneLayers] magicGroundStones]
+      , lvlRules = ["bomb_shapes"]
+      }
   ]
+
+-- | 第 48 关的魔法地格。
+magicGroundCells :: [Pos]
+magicGroundCells = [(6, 2), (6, 5), (5, 3), (5, 4)]
+
+-- | 第 48 关开局的石头（三层，见 magicGroundStoneLayers）。
+magicGroundStones :: [Pos]
+magicGroundStones = [(7, c) | c <- [0 .. 7]]
+
+-- | 第 48 关石头的层数。
+magicGroundStoneLayers :: Int
+magicGroundStoneLayers = 3
+
+-- | 第 48 关的目标块数（打碎的石头）。
+magicGroundGoal :: Int
+magicGroundGoal = 8
+
+-- | 第 48 关的步数。
+magicGroundMoves :: MovesLeft
+magicGroundMoves = 18
 
 -- | 第 47 关开局的变色龙格。
 chameleonCells :: [Pos]

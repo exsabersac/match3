@@ -1149,6 +1149,29 @@ def jelly(n):
     return img
 
 
+def magic_ground():
+    """魔法地格（新玩法 8，地面层 "magic"）：紫色符文地砖，画在棋子下面——径向紫光底 + 发光描边 +
+    四角菱形符点 + 中央淡淡的八角星（棋子挡住中间，露在外面的是边框与四角）。不随消除变化（永久）。"""
+    img = new()
+    m = rrect_mask((U(0.04), U(0.04), U(0.96), U(0.96)), U(0.14))
+    img = comp(img, fill_layer(m, ("r", (190, 120, 255), (70, 30, 150), (0.5, 0.5)), 0.62))
+    glow = sub_mask(blur(m, U(0.03)), erode(m, U(0.09)))
+    img = comp(img, fill_layer(glow, (215, 170, 255), 0.7))
+    rim = sub_mask(m, erode(m, U(0.035)))
+    img = comp(img, fill_layer(rim, (245, 215, 255), 0.95))
+    # 八角星（两个方块叠成），只作底纹
+    sq1 = poly_mask(pts_px([(0.5, 0.2), (0.8, 0.5), (0.5, 0.8), (0.2, 0.5)]))
+    sq2 = rrect_mask((U(0.29), U(0.29), U(0.71), U(0.71)), U(0.01))
+    star8 = add_mask(sq1, sq2)
+    img = comp(img, fill_layer(sub_mask(star8, erode(star8, U(0.03))), (240, 200, 255), 0.55))
+    # 四角菱形符点
+    for cx, cy in ((0.15, 0.15), (0.85, 0.15), (0.15, 0.85), (0.85, 0.85)):
+        d = poly_mask(pts_px([(cx, cy - 0.06), (cx + 0.06, cy), (cx, cy + 0.06), (cx - 0.06, cy)]))
+        img = comp(img, fill_layer(blur(dilate(d, U(0.02)), U(0.012)), (200, 140, 255), 0.8))
+        img = comp(img, fill_layer(d, (255, 245, 255), 0.95))
+    return img
+
+
 def bubble():
     """气泡（段 5）：透明水泡，蓝青色边缘 + 虹彩 + 高光；无颜色徽记（不参与匹配）。"""
     img = new()
@@ -1673,6 +1696,7 @@ def build_sprites():
     sp["carpet_covered"] = down(carpet(True))
     sp["jelly"] = down(jelly(1))
     sp["jelly_2"] = down(jelly(2))
+    sp["magic"] = down(magic_ground())
     sp["bubble"] = down(bubble())
     sp["cookie_drop"] = down(cookie_drop())
     for k in range(4):
@@ -1749,7 +1773,7 @@ LEGEND = [
      + [("bottle_" + k, "染色瓶", "Bottle " + k.upper()) for k in GEMS]
      + [("maker_" + k, "果汁机", "Maker " + k.upper()) for k in GEMS] + [("ufo_" + k, "飞碟", "UFO " + k.upper()) for k in GEMS]),
     ("地面与标记 Floor & UI", [("@tiles", "棋盘格", "Cells"), ("carpet_open", "地毯目标", "Carpet target"), ("carpet_covered", "已铺地毯", "Carpet"),
-                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("cookie_drop", "饼干掉落口", "Cookie drop"), ("sel_ring", "选中框", "Selection"),
+                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("magic", "魔法地格", "Magic ground"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("cookie_drop", "饼干掉落口", "Cookie drop"), ("sel_ring", "选中框", "Selection"),
                              ("hint_glow", "提示光", "Hint"), ("@badge", "层数角标", "Layer badge")]),
 ]
 

@@ -47,6 +47,7 @@ module Match3.Element.Caps
     -- * 步末与变化（StepCaps）
   , atEnd
   , ground
+  , widens
   , onMessage
     -- * 按组直接改字段（上面的简写不够用时）
   , withMatch
@@ -201,6 +202,10 @@ atEnd r = withStep (\x -> x {stEnd = Just r})
 -- | 地面层规则：上方格子被消除一次时，层数 → 新层数（Nothing = 清掉）。
 ground :: (Int -> Maybe Int) -> Cap
 ground f = withStep (\x -> x {stGround = Just f})
+
+-- | 地面层（新玩法 8）：本格上的特效引爆时，爆炸范围 → 新范围（魔法地格 = 向外扩一圈）。
+widens :: ([Pos] -> [Pos]) -> Cap
+widens f = withStep (\x -> x {stWiden = Just f})
 
 -- | 处理消息：Nothing = 不关心；Just = 新的元素值。
 onMessage :: (SomeMessage -> Maybe SomeElement) -> Cap

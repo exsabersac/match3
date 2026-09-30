@@ -42,7 +42,7 @@ import Match3.Conveyor (Belt)
 import Match3.Element.Builtin.Level (BeltLevel(..), CarpetLevel(..), CookieDrop(..), GroundLayer(..), PortalLevel(..), UfoLevel(..))
 import Match3.Element.Class
 import Match3.Element.Message
-import Match3.Element.Registry (Registry, hitGroundWith, levelDefs, portalWith, refillPolicyWith, setShapeRules, shapeRules)
+import Match3.Element.Registry (Registry, groundWideningWith, hitGroundWith, levelDefs, portalWith, refillPolicyWith, setShapeRules, setWidening, shapeRules)
 import Match3.Levels.Level (DropSpec(..), Level)
 import Match3.Types
 import Match3.Ufo (Ufo)
@@ -152,8 +152,14 @@ levelHooksWith reg elems = hooks
 
 -- | 本关的注册表：问一次形状表（'Shaping'，初值 = 注册表的表）；有元素回复就换上回复的表，否则原样。
 -- 每步结算开始时调用（Game.Resolve.resolveMoveWith）；内置关卡里只有规则开关 BombShapes 打开时回复。
+-- 新玩法 8：地面层里有带扩爆规则的格（魔法地格）时，再把它们设为本步的扩爆格（'setWidening'）；
+-- 没有这种格时注册表原样（其余关卡与每日挑战不受影响）。
 levelRegistryIn :: Registry -> [SomeLevelElement] -> Registry
-levelRegistryIn reg elems = maybe reg (\(Shaping rs, _) -> setShapeRules rs reg) (askLevelsIn reg elems (Shaping (shapeRules reg)))
+levelRegistryIn reg elems = widened (maybe reg (\(Shaping rs, _) -> setShapeRules rs reg) (askLevelsIn reg elems (Shaping (shapeRules reg))))
+  where
+    widened r = case groundWideningWith r (levelGround elems) of
+      [] -> r
+      ws -> setWidening ws r
 
 -- | 交换变身节拍（'Morphing'，新玩法 4）：玩家交换成立前问一次；Just = 本步先变身再按种子起手。
 -- 内置关卡里只有规则开关 RainbowCombos（"rainbow_combos"）打开时回复。

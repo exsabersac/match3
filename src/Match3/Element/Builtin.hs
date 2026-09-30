@@ -8,7 +8,7 @@
 -- * Obstacle     打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋、魔法石（新玩法 2）、雪怪 Boss（新玩法 5，2×2）
 -- * Collectible  收集与计数类：饼干、时间精灵、气泡、变色龙（新玩法 7）
 -- * Actor        会动或会生成东西的：魔法帽、果汁机、蜗牛、染色瓶、倒计时、毛球（新玩法 3）
--- * Ground       地面层：果冻
+-- * Ground       地面层：果冻、魔法地格（新玩法 8：本格上的特效引爆时范围扩一圈）
 -- * Level        关卡级元素：飞碟、皮带、传送门、地毯、规则开关 L / T 炸弹（可注册 / 去掉）与地面层（核心元素）；状态在元素值里（第 7 刀）
 -- * Common       跨分组共用的规则 / 放置辅助函数
 --
@@ -47,6 +47,9 @@ module Match3.Element.Builtin
   , decodeBoss
   , Ice(..)
   , Jelly(..)
+  , MagicGround(..)
+  , magicGroundName
+  , magicWiden
   , Bubble(..)
   , Chameleon(..)
   , chameleonName
@@ -128,6 +131,7 @@ builtinDefs =
   , fuzzballEntry                                       -- Actor（新玩法 3）
   , snowBossEntry                                       -- Obstacle（新玩法 5）
   , chameleonEntry                                      -- Collectible（新玩法 7）
+  , magicGroundEntry                                    -- Ground（新玩法 8）
   ]
 
 -- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 levelStart 按关卡记录给出）：按消息回复流水线节拍；去掉某项（removeLevel）即该机制不生效。

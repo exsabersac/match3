@@ -33,6 +33,9 @@ export class Art {
 
   has(name) { return Object.prototype.hasOwnProperty.call(this.S, name); }
 
+  // 贴图原始尺寸 [w, h]（2x 像素）；缺图返回 null
+  size(name) { const s = this.S[name]; return s ? [s[2], s[3]] : null; }
+
   // 整张贴图画进 (x,y,w,h)；缺图返回 false，调用方退回几何画法
   draw(ctx, name, x, y, w, h) {
     const s = this.S[name];

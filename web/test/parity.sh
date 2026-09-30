@@ -8,6 +8,7 @@
 #   CASES   "关卡:种子[:走法] …"（关卡 0 起），默认见下；走法 hint（缺省，按核心提示）或 combo
 #           （先换盘上的「彩虹 × 直线 / 炸弹」再按提示，覆盖第 44 关 rainbow_combos 的变身步；见 Parity.hs 的 pickMove）
 #           或 combo-bomb（同 combo，但先换「彩虹 × 炸弹」）或 cham-rainbow（先换「彩虹 × 变色龙」，第 47 关成对交换规则 15）
+#           或 fix-RCRC-RCRC-…（先按写死的交换走：第 k 步换第 k 对，每对 4 个数字 r1 c1 r2 c2，用完后按提示；第 48 关魔法地格）
 #           默认另含第 46 关「掉落口」种子 1 / 28 / 30（后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干）
 #   NODE    默认 ~/.ghc-wasm/nodejs/bin/node
 #   OUT     输出与原生二进制目录，默认 web/.cache/parity
@@ -35,6 +36,10 @@ DEF="$DEF 45:1 45:28 45:30"
 # 第 47 关「变色龙」（下标 46，新玩法 7）：两组都跑种子 1、2（每步都有步末换色 EvTick "chameleon"）与种子 140 的
 # cham-rainbow 走法（第 6 步换彩虹 × 变色龙，覆盖成对交换规则 15）
 DEF="$DEF 46:1 46:2 46:140:cham-rainbow"
+# 第 48 关「魔法格」（下标 47，新玩法 8）：测试跑手找到的 4 组「特效在魔法地格上引爆」的走法（原生穷举 ≤ 3 步搜出，写死在这里），
+# 第 3 步引爆、爆炸范围扩一圈：种子 2 炸弹@(5,3) 25 格（5×5）；种子 3 横线@(6,2) 24 格（3 行）；种子 4 横线@(5,4) 24 格；
+# 种子 5 横线@(5,3) 24 格。走完 3 步后按提示走满
+DEF="$DEF 47:2:fix-3536-4445-4252 47:3:fix-0414-4445-5262 47:4:fix-1415-5455-5455 47:5:fix-1516-2434-4243"
 CASES="${CASES:-$DEF}"
 
 [ -f "$HERE/dist/match3-web.wasm" ] || { echo "没有 web/dist/match3-web.wasm，先 make build" >&2; exit 1; }
@@ -62,7 +67,12 @@ for c in $CASES; do
   fi
   # combo 走法必须真的走到变身步（状态 JSON 的 trace.end 里有 rainbow_line / rainbow_bomb；动画帧里有蔓延段 spread）
   # cham-rainbow 走法必须真的换到了「彩虹 × 变色龙」（两侧 stderr 都记了这一步）
-  if [ "${how}" = cham-rainbow ]; then
+  # fix 走法（第 48 关）必须真的在魔法地格上引爆了扩圈的爆炸，且两侧记下的扩爆行（元素、来源、格数、行列数）逐字相同
+  if [ "${how#fix-}" != "${how}" ]; then
+    if ! grep -q "魔法地格扩爆" "$nat.err" || [ "$(grep "魔法地格扩爆" "$nat.err")" != "$(grep "魔法地格扩爆" "$was.err")" ]; then
+      echo "✗ 第 $((li + 1)) 关 种子 ${seed}${tag}：没有在魔法地格上引爆，或两侧扩爆记录不同"; fail=$((fail + 1)); continue
+    fi
+  elif [ "${how}" = cham-rainbow ]; then
     if ! grep -q "走法 cham-rainbow：" "$nat.err" || ! grep -q "走法 cham-rainbow：" "$was.err"; then
       echo "✗ 第 $((li + 1)) 关 种子 ${seed}${tag}：没有走到彩虹 × 变色龙"; fail=$((fail + 1)); continue
     fi
@@ -71,6 +81,7 @@ for c in $CASES; do
   fi
   if cmp -s "$nat" "$was"; then
     echo "✓ 第 $((li + 1)) 关 种子 ${seed}${tag}：一致（$(wc -c < "$nat" | tr -d ' ') 字节）$( [ "$MODE" = anim ] && echo "  $(tail -1 "$was.err")")"
+    if [ "${how#fix-}" != "${how}" ]; then grep "魔法地格扩爆" "$was.err" | sed 's/^/    /'; fi
   else
     echo "✗ 第 $((li + 1)) 关 种子 ${seed}${tag}：不一致 → diff $nat $was"; fail=$((fail + 1))
   fi

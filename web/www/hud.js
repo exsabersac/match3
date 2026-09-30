@@ -30,11 +30,31 @@ function wrap(ctx, s, w, maxLines) {
   return lines;
 }
 
+// value 为 null 时只画底板和标签（关名由 levelName 画）
 function chip(ctx, art, x, y, w, h, label, value, valueColor = "#ffe082") {
   if (!art.panel(ctx, "panel_chip", x, y, w, h, 12)) { ctx.fillStyle = "rgba(30,24,60,.8)"; ctx.fillRect(x, y, w, h); }
   text(ctx, label, x + 12, y + h * 0.3, 13, "rgba(235,230,255,.8)", "left", 600);
+  if (value === null) return;
   ctx.font = `800 21px ${FONT}`;
   text(ctx, fit(ctx, String(value), w - 24), x + 12, y + h * 0.68, 21, valueColor, "left", 800);
+}
+
+// 关名（同桌面 UI.HudArt：zhA ren art ("name_" ++ show li) 66 11 24）：画预渲染文字图 name_<关卡下标 0 起>（tools/gen_assets.py
+// 按关卡表烘焙，与桌面同一张图；第 N 关 = name_<N−1>），高 21 设计单位、按原图宽高比（与原来浏览器字体 21 px 的关名槽同高，规则角标布局不变），超出槽宽时等比缩小；
+// 图集里没有这张图时退回浏览器字体画 state.name。返回实际画出的矩形与贴图名 / 文字（e2e 检查每关画的是对应的 name_N）。
+const NAME_H = 21;
+function levelName(ctx, art, x, cy, maxW, info) {
+  const sprite = `name_${info.level}`, sz = art.size(sprite);
+  if (sz) {
+    let h = NAME_H, w = (sz[0] * NAME_H) / sz[1];
+    if (w > maxW) { h = (h * maxW) / w; w = maxW; }
+    art.draw(ctx, sprite, x, cy - h / 2, w, h);
+    return { x, y: cy - h / 2, w, h, sprite, text: null };
+  }
+  ctx.font = `800 21px ${FONT}`;
+  const t = fit(ctx, String(info.name), maxW);
+  text(ctx, t, x, cy, 21, "#fff", "left", 800);
+  return { x, y: cy - 10.5, w: Math.min(maxW, ctx.measureText(t).width), h: 21, sprite: null, text: t };
 }
 
 // 圆角矩形路径（不依赖 ctx.roundRect，老 WebView 也能画）
@@ -96,7 +116,8 @@ function drawRuleBadges(ctx, art, rules, x, cy, maxW, h, size) {
 
 // 关卡小面板：chip + 标签行右侧的规则角标（标签「第 N 关」之后到面板右边距之间）。返回各部件矩形（e2e 用）。
 function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
-  chip(ctx, art, x, y, w, h, `第 ${info.level + 1} 关`, info.name, "#fff");
+  chip(ctx, art, x, y, w, h, `第 ${info.level + 1} 关`, null);
+  const name = levelName(ctx, art, x + 12, y + h * 0.68, w - 24, info);
   ctx.font = `600 13px ${FONT}`;
   const labelW = ctx.measureText(`第 ${info.level + 1} 关`).width;
   const bx = x + 12 + labelW + 8;
@@ -104,7 +125,7 @@ function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
   return {
     chip: { x, y, w, h },
     label: { x: x + 12, y: y + h * 0.3 - 6.5, w: labelW, h: 13 },
-    name: { x: x + 12, y: y + h * 0.68 - 10.5, w: w - 24, h: 21 },
+    name,
     badges,
   };
 }

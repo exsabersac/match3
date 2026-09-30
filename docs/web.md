@@ -71,7 +71,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3New(level, seed)` | 开一局（清空历史与动画） |
 | `m3Swap(r1,c1,r2,c2)` | 交换一步：`{accepted, outcome, trace, events, state}` |
 | `m3Undo()` | 撤销（核心 `Engine.History`，最多 20 步） |
-| `m3State()` / `m3Levels()` | 当前状态 / 45 关列表 |
+| `m3State()` / `m3Levels()` | 当前状态 / 46 关列表 |
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
 
@@ -106,6 +106,8 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   待跟进（网页版未改）：第 45 关雪怪 Boss `{t:"custom", name:"snow_boss", v}`（v = ((满血 × 256 + 血量) × 4 + 召唤计数) × 4 + 象限，
   解码同核心 `Match3.View.bossPart`）应按象限画 `snow_boss_<象限>` / 血量过半画 `snow_boss_hurt_<象限>`，HUD 血条读 `gvBoss`
   （`Match3.View.BossView`，Api 尚未编码）；在跟进之前该关会走几何降级，e2e 的 `fallbacks` 护栏会把它报出来。
+  待跟进（网页版未改）：第 46 关饼干掉落口——饼干格本身网页端已有画法（`cookie`）、玩法由核心结算自动生效；
+  只缺掉落口标记：核心 `Match3.View.BoardView.bvDrops`（掉落口格）尚未经 Api 编码，网页端要画的话按格子上沿画 `cookie_drop`。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -163,7 +165,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（111 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 365 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 372 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -256,7 +258,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（365 个） | `make test-native` |
+| `stack test` | 核心规则（372 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（14 组，含第 41 / 42 关） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（12 组，含第 41 / 42 关） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 关规则角标（三种布局不出框不重叠）与第 42 关无角标、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |

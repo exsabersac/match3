@@ -60,6 +60,7 @@ import Engine.Game (Game (..))
 import Match3.Core
 import Match3.Element.Builtin (SnowBoss (..), decodeBoss, snowBossEvery, snowBossHp, snowBossName)
 import Match3.Engine (match3Game)
+import Match3.Element.Level (levelDrops)
 
 --------------------------------------------------------------------------------
 -- 整局视图
@@ -316,6 +317,7 @@ data BoardView = BoardView
   , bvUfos :: [Ufo]
   , bvCarpets :: [Pos]               -- ^ 本关地毯格（levelCarpets gsLevel）
   , bvCarpetOpen :: [Pos]
+  , bvDrops :: [Pos]                 -- ^ 掉落口格（新玩法 6，Element.Level.levelDrops）；没有掉落口为空
   }
 
 boardView :: GameState -> BoardView
@@ -331,6 +333,7 @@ boardView gs =
     , bvUfos = gsUfos gs
     , bvCarpets = levelCarpets (gsLevel gs)
     , bvCarpetOpen = gsCarpetOpen gs
+    , bvDrops = levelDrops (gsLevelElems gs)
     }
 
 -- | 一格的地毯标记：已铺优先；未铺 = 本关地毯格且未铺。

@@ -28,6 +28,8 @@ module UI.BoardArt
   , drawStaticArt
   , drawUfosArt
   , drawUfosAny
+  , drawDropsArt
+  , drawDropsAny
   , spreadTargets
   , drawParticlesAny
   ) where
@@ -71,6 +73,7 @@ drawCellsExcept ren app board hidden = do
       let (x, y) = cellOrigin pos
       drawCellAny ren app x y (getCell board pos) False
   drawUfosAny ren app
+  drawDropsAny ren app
 
 -- | 以格子中心 (cx, cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记）。
 drawCellScaled :: Renderer -> App -> CInt -> CInt -> Double -> Word8 -> Cell -> IO ()
@@ -199,6 +202,20 @@ drawStaticArt ren art app board yOff = do
       let (x, y) = cellOrigin pos
       void (drawSpriteMod ren art "hint_glow" (cellRect x (y + yOff)) (V3 210 120 60) spreadA)
   drawUfosArt ren art app yOff
+  drawDropsArt ren art app
+
+-- | 掉落口标记（新玩法 6，贴图版 cookie_drop，缺图时退回几何画法）：画在棋子之上、掉落口格的上沿（固定不随下落偏移）。
+drawDropsArt :: Renderer -> Art -> App -> IO ()
+drawDropsArt ren art app =
+  forM_ (bvDrops (boardView (appGame app))) $ \pos -> do
+    let (x, y) = cellOrigin pos
+    ok <- drawSprite ren art "cookie_drop" (rect x (y - 6) cellPx cellPx)
+    unless ok $ drawDropMark ren pos
+
+drawDropsAny :: Renderer -> App -> IO ()
+drawDropsAny ren app = case appArt app of
+  Just art -> drawDropsArt ren art app
+  Nothing -> mapM_ (drawDropMark ren) (bvDrops (boardView (appGame app)))
 
 -- | 飞碟（贴图版，缺图时退回几何画法）。
 drawUfosArt :: Renderer -> Art -> App -> CInt -> IO ()

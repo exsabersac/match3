@@ -83,6 +83,7 @@
 | `carpet_open` / `carpet_covered` | 地毯目标格：虚线品红框表示未铺，编织纹品红地毯表示已铺 |
 | `belt` | 传送带：青色边轨 + 箭头，箭头朝向就是移动方向 |
 | `portal` | 紫色旋转传送门环 |
+| `cookie_drop` | 饼干掉落口（新玩法 6）：金色漏斗（上宽下窄 + 深色口沿 + 两颗铆钉）+ 白色向下箭头，只占格子上部四分之一。和其它地砖不同，画在**棋子之上**、掉落口格上沿（上移 6 px 压在棋盘框上），不随下落动画偏移（`UI.BoardArt.drawDropsArt`，读 `Match3.View.bvDrops`）；几何降级版 `drawDropMark`：三级金色台阶 + 白色箭头 |
 | `jelly_2` / `jelly` | 双层果冻（地面层 `gsGround`，段 5）：双层为深粉果冻块 + 一道白色层线；单层为淡粉半透明。经 `UI.Ground.groundTable` 按名字分派，画在棋盘格之上、棋子之下。几何降级版画在**棋子之上**（整格色块会盖住底层）：双层粗粉框 + 内框，单层细框 |
 
 ### 交互 / HUD
@@ -102,7 +103,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 脚本会生成：
 
-- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2048 + 1024×886），共 477 个贴图（含尺寸变体；新玩法 5 新增雪怪 `snow_boss`、`snow_boss_0..3`、`snow_boss_hurt_0..3` 及其 `@56`、关卡名 `name_44`「雪怪」；新玩法 4 新增关卡名 `name_43`「魔力鸟」与角标文字 `zh_rule_rainbow`；新玩法 3 新增毛球 `fuzzball` 及其 `@56`、关卡名 `name_42`「毛球」；新玩法 2 新增魔法石 `magic_stone_0..3` 及其 `@56`、关卡名 `name_41`「魔石」；新玩法 1 新增关卡名 `name_40`「爆破」与 HUD 角标文字 `zh_rule_bomb`「L/T 形出炸弹」；段 5 新增 `jelly` / `jelly_2` / `bubble` 及其 `@56`，另有第 39 / 40 关的关卡名 `name_38` / `name_39`）
+- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2048 + 1024×888），共 480 个贴图（含尺寸变体；新玩法 6 新增掉落口 `cookie_drop` 及其 `@56`、关卡名 `name_45`「掉落口」；新玩法 5 新增雪怪 `snow_boss`、`snow_boss_0..3`、`snow_boss_hurt_0..3` 及其 `@56`、关卡名 `name_44`「雪怪」；新玩法 4 新增关卡名 `name_43`「魔力鸟」与角标文字 `zh_rule_rainbow`；新玩法 3 新增毛球 `fuzzball` 及其 `@56`、关卡名 `name_42`「毛球」；新玩法 2 新增魔法石 `magic_stone_0..3` 及其 `@56`、关卡名 `name_41`「魔石」；新玩法 1 新增关卡名 `name_40`「爆破」与 HUD 角标文字 `zh_rule_bomb`「L/T 形出炸弹」；段 5 新增 `jelly` / `jelly_2` / `bubble` 及其 `@56`，另有第 39 / 40 关的关卡名 `name_38` / `name_39`）
 - `assets/atlas.txt`：索引文件，每行 `name x y w h page`（第 6 列页号；旧的 5 列格式视为第 0 页）
 - `assets/background.bmp`：窗口背景（960×1176，即 480×588 的 2 倍，24 位不透明）
 - `docs/images/legend.png`：图例

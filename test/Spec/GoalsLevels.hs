@@ -13,6 +13,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Match3.Counts (noCounts, singleCount)
 import Spec.Support
+import Match3.Levels.Level (DropSpec(..))
 
 -- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
 tests :: [TestTree]
@@ -522,7 +523,7 @@ goal_carpet_counts = do
   let gs = levelGame 36 42
   assertEqual "level 36 carpet open" (8 :: Int) (length (gsCarpetOpen gs))
   assertEqual "goal" (goalCount CountCarpets 8) (gsGoal gs)
-  assertEqual "campaign levels" (45 :: Int) (length allLevels)
+  assertEqual "campaign levels" (46 :: Int) (length allLevels)
 
 carry_moves_on_next_level :: Assertion
 carry_moves_on_next_level = do
@@ -567,7 +568,7 @@ daily_goal_rotates_ten = do
 -- board size in bounds, décor enough for obstacle goals, legal move after ensure.
 campaign_levels_batch_ok :: Assertion
 campaign_levels_batch_ok = do
-  assertEqual "45 levels (38 + 段 5 的果冻 / 气泡 + 第 41 关爆破 + 第 42 关魔石 + 第 43 关毛球 + 第 44 关魔力鸟 + 第 45 关雪怪)" (45 :: Int) (length allLevels)
+  assertEqual "46 levels (38 + 段 5 的果冻 / 气泡 + 第 41 关爆破 + 第 42 关魔石 + 第 43 关毛球 + 第 44 关魔力鸟 + 第 45 关雪怪 + 第 46 关掉落口)" (46 :: Int) (length allLevels)
   let seeds = [42, 99, 7] :: [Int]
   mapM_
     ( \seed ->
@@ -591,8 +592,12 @@ campaign_levels_batch_ok = do
                   assertBool ("honey L" ++ show i) (countCells isHoney b >= n)
                 ViewCount CountBalloons n ->
                   assertBool ("balloons L" ++ show i) (countCells isBalloon b >= n)
-                ViewCount CountCookies n ->
-                  assertBool ("cookies L" ++ show i) (countCells isCookie b >= n)
+                ViewCount CountCookies n
+                  -- 新玩法 6：有掉落口的关卡开局只有掉落口上的几块，其余由掉落口陆续补进场
+                  | not (null (lvlDrops lvl)) ->
+                      assertBool ("cookies L" ++ show i ++ " (drop level)") (countCells isCookie b >= 1 && any ((== Cookie) . dropCell) (lvlDrops lvl))
+                  | otherwise ->
+                      assertBool ("cookies L" ++ show i) (countCells isCookie b >= n)
                 ViewCount CountCakes n ->
                   assertBool ("cakes L" ++ show i) (countCells isCake b >= n)
                 ViewCount CountSafes n ->

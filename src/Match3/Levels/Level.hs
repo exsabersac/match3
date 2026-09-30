@@ -5,6 +5,7 @@
 -- 关卡表本身在 Match3.Levels.Campaign；开局如何用这些字段见 Match3.Game.Level.newGameAtLevel。
 module Match3.Levels.Level
   ( Level(..)
+  , DropSpec(..)
   , level
   , levelConfig
   , placeEach
@@ -28,6 +29,15 @@ data Level = Level
   , lvlCarpets    :: [Pos]         -- ^ 未铺的地毯格（第 6 刀前的 Match3.Carpet.levelCarpets）
   , lvlGround     :: Ground        -- ^ 地面层（第 6 刀前的 levelGround）
   , lvlRules      :: [ElementName] -- ^ 本关打开的规则开关（按名字，关卡级元素在 levelStart 里读；如 "bomb_shapes" = L / T 形生成炸弹）
+  , lvlDrops      :: [DropSpec]    -- ^ 掉落口（新玩法 6，关卡级元素 CookieDrop 在 levelStart 里读）；空 = 没有掉落口
+  } deriving (Eq, Show)
+
+-- | 掉落口（新玩法 6）：补子时 'dropCells' 里的空洞若盘上的 'dropCell' 少于 'dropKeep' 个，就补 'dropCell'
+-- （如饼干 'Cookie'）而不是宝石。规则完全由盘面决定，不额外消耗随机数（见 Element.Builtin.Level.dropRefill）。
+data DropSpec = DropSpec
+  { dropCells :: [Pos]   -- ^ 掉落口格（一般是顶行）
+  , dropCell  :: Cell    -- ^ 掉下来的格子
+  , dropKeep  :: Int     -- ^ 盘上少于这么多个 dropCell 时才掉
   } deriving (Eq, Show)
 
 -- | 只有名字 / 步数 / 目标、没有任何装饰与关卡级元素的关（关卡表用记录更新补字段；每日挑战直接用）。
@@ -45,6 +55,7 @@ level i name moves goal =
     , lvlCarpets = []
     , lvlGround = []
     , lvlRules = []
+    , lvlDrops = []
     }
 
 levelConfig :: Level -> GameConfig

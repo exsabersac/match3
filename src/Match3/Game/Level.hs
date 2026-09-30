@@ -99,7 +99,10 @@ newGameAtLevelWith reg li cfg seed =
       (board0, g1) = randomPlayableBoard g0
       lvl = lookupLevel li
       decorate l = placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith reg l
-      goalDecor = placeStatic ("目标 " ++ show (cfgGoal cfg) ++ " 的补齐装饰") . goalDecorWith reg (cfgGoal cfg)
+      -- 新玩法 6：有掉落口的关卡不做目标补齐（收集物由掉落口陆续补进场）；没有掉落口（lvlDrops = []）时与原来相同
+      goalDecor
+        | maybe False (not . null . lvlDrops) lvl = id
+        | otherwise = placeStatic ("目标 " ++ show (cfgGoal cfg) ++ " 的补齐装饰") . goalDecorWith reg (cfgGoal cfg)
       board = goalDecor (maybe id decorate lvl board0)
       start = (fromMaybe (level li "" (cfgMoves cfg) (cfgGoal cfg)) lvl) {lvlGoal = cfgGoal cfg}
       gs0 =

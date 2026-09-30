@@ -1519,7 +1519,7 @@ R end [(PhaseTick,[10,20]),(PhaseSpread,[10,20,30]),(PhaseMove,[10,20,30])]
 R swap [10,20]
 R names ["gem","line_h","line_v","bomb","rainbow","ice","grass","vine","choco","fog","chain","freeze","curtain","steam","stone","chest","honey","balloon","cookie","cake","magic_hat","maker","snail","safe","flip","surprise","bottle","time_spirit","countdown","jelly","bubble","magic_stone","fuzzball","snow_boss"]
 R diff [("safe",Just CountSafes,0),("time_spirit",Just CountSpirits,2),("snow_boss",Just (CountNamed "snow_boss"),0)]
-R level ["ufo","belt","portal","carpet","bomb_shapes","rainbow_combos"]
+R level ["ufo","belt","portal","carpet","bomb_shapes","rainbow_combos","cookie_drop"]
 A 0 [(3,3)] f8e87b773c8badf4
 A 0 [(2,2),(2,3),(2,4),(2,5),(3,2),(3,3),(3,4),(3,5),(4,2),(4,3),(4,4),(4,5),(5,2),(5,3),(5,4),(5,5)] 7e2df37eb596d25c
 A 0 [(0,0),(0,2),(0,4),(0,6),(1,1),(1,3),(1,5),(1,7),(2,0),(2,2),(2,4),(2,6),(3,1),(3,3),(3,5),(3,7),(4,0),(4,2),(4,4),(4,6),(5,1),(5,3),(5,5),(5,7),(6,0),(6,2),(6,4),(6,6),(7,1),(7,3),(7,5),(7,7)] f2f353c959a40421
@@ -1656,3 +1656,5 @@ M 44 1 a222d70675a7be40
 M 44 2 410a2b1657e103e9
 M 45 1 eb63d55ae455872a
 M 45 2 c4d777c5e14b6c4f
+M 46 1 3213e9f7a41543f
+M 46 2 6986f60c1fc73057

@@ -9,7 +9,7 @@
 -- * Collectible  收集与计数类：饼干、时间精灵、气泡
 -- * Actor        会动或会生成东西的：魔法帽、果汁机、蜗牛、染色瓶、倒计时
 -- * Ground       地面层：果冻
--- * Level        关卡级元素：飞碟、皮带、传送门、地毯（可注册 / 去掉）与地面层（核心元素）；状态在元素值里（第 7 刀）
+-- * Level        关卡级元素：飞碟、皮带、传送门、地毯、规则开关 L / T 炸弹（可注册 / 去掉）与地面层（核心元素）；状态在元素值里（第 7 刀）
 -- * Common       跨分组共用的规则 / 放置辅助函数
 --
 -- 具体效果仍复用原机制模块（Obstacles / Grass / Snail / Countdown / Rainbow / Combos / Ufo / Conveyor /
@@ -38,6 +38,9 @@ module Match3.Element.Builtin
   , PortalLevel(..)
   , CarpetLevel(..)
   , GroundLayer(..)
+  , BombShapes(..)
+  , ltBombRule
+  , withBombShapes
   , portalTeleport
   , specialBlast
   , putOverlay
@@ -101,4 +104,4 @@ builtinDefs =
 
 -- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 levelStart 按关卡记录给出）：按消息回复流水线节拍；去掉某项（removeLevel）即该机制不生效。
 builtinLevelDefs :: [SomeLevelElement]
-builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel [])]
+builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel []), SomeLevelElement (BombShapes False)]

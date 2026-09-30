@@ -162,6 +162,7 @@ test-suite match3-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Spec.BombShapes
       Spec.Boosters
       Spec.Branches
       Spec.Builtin.Actor

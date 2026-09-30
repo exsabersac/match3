@@ -26,6 +26,7 @@ module Match3.Element.Level
   , levelGround
     -- * 节拍
   , levelHooksWith
+  , levelRegistryIn
   , beltShiftIn
   , avoidCellsIn
   , wallCellsIn
@@ -39,7 +40,7 @@ import Match3.Conveyor (Belt)
 import Match3.Element.Builtin.Level (BeltLevel(..), CarpetLevel(..), GroundLayer(..), PortalLevel(..), UfoLevel(..))
 import Match3.Element.Class
 import Match3.Element.Message
-import Match3.Element.Registry (Registry, hitGroundWith, levelDefs, portalWith, refillPolicyWith)
+import Match3.Element.Registry (Registry, hitGroundWith, levelDefs, portalWith, refillPolicyWith, setShapeRules, shapeRules)
 import Match3.Levels.Level (Level)
 import Match3.Types
 import Match3.Ufo (Ufo)
@@ -142,6 +143,11 @@ levelHooksWith reg elems = hooks
         , hookRefill = (\(Refilling p, _) -> p) <$> askLevelsIn reg elems (Refilling (refillPolicyWith reg))
         , hookLevel = elems
         }
+
+-- | 本关的注册表：问一次形状表（'Shaping'，初值 = 注册表的表）；有元素回复就换上回复的表，否则原样。
+-- 每步结算开始时调用（Game.Resolve.resolveMoveWith）；内置关卡里只有规则开关 BombShapes 打开时回复。
+levelRegistryIn :: Registry -> [SomeLevelElement] -> Registry
+levelRegistryIn reg elems = maybe reg (\(Shaping rs, _) -> setShapeRules rs reg) (askLevelsIn reg elems (Shaping (shapeRules reg)))
 
 -- | 皮带节拍（'EndTicked'）：Just (移位, 推进后的元素)；没人回复时 Nothing（没有皮带，也没有皮带后的再连锁）。
 beltShiftIn :: Registry -> [SomeLevelElement] -> Maybe ([(Pos, Pos)], [SomeLevelElement])

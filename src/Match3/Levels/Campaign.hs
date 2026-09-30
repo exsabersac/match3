@@ -283,4 +283,9 @@ allLevels =
   , (level 39 "气泡" 22 (goalCount (CountNamed "bubble") 12))
       { lvlPlacements = [Place "bubble" [] [(1, 1), (1, 6), (2, 3), (2, 4), (3, 0), (3, 7), (4, 2), (4, 5), (5, 1), (5, 6), (6, 3), (6, 4)]]
       }
+    -- 爆破（新玩法：规则开关 bomb_shapes）：本关 L / T 形消除生成炸弹；10 块石头分两堆，炸弹 3×3 一次能砸好几块
+  , (level 40 "爆破" 24 (goalCount CountStones 10))
+      { lvlPlacements = [Place "stone" [] [(5, 1), (5, 2), (6, 1), (6, 2), (7, 1), (5, 5), (5, 6), (6, 5), (6, 6), (7, 6)]]
+      , lvlRules = ["bomb_shapes"]
+      }
   ]

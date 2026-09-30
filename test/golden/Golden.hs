@@ -346,7 +346,7 @@ runGame tag gs0 n = (tag ++ " start " ++ pState (startHistory gs0) ++ " board=" 
           in ls ++ maybe [tag ++ " #" ++ pad2 i ++ " end"] (go (i + 1)) next
 
 -- | 前 2344 行覆盖的关卡数：段 5 起关卡表在其后追加（第 39 / 40 关），原有各段只跑前 38 关，
--- 新关卡的行统一追加在文件末尾（seg5Lines），原有行逐字不变。
+-- 新关卡的行统一追加在文件末尾（seg5Lines / seg6Lines），原有行逐字不变。
 campaign38 :: Int
 campaign38 = 38
 
@@ -367,6 +367,7 @@ goldenLines =
     ++ levelLines
     ++ handmade2
     ++ seg5Lines
+    ++ seg6Lines
 
 -- | 手工局面（护栏测试用到的几个）：蜗牛撞墙 / 推格、巧克力关无匹配交换、首个 3 连锁。
 handmade :: [String]
@@ -581,14 +582,26 @@ runGame5 tag gs0 n =
           in ls ++ maybe [tag ++ " #" ++ pad2 i ++ " end"] (\h1 -> (tag ++ " #" ++ pad2 i ++ " ext " ++ pExt h1) : go (i + 1) h1) next
 
 seg5Lines :: [String]
-seg5Lines =
+seg5Lines = levelBlock [campaign38 .. campaign40 - 1]
+
+-- | 段 5 之后的 40 关原有关卡数（第 1–40 关）。
+campaign40 :: Int
+campaign40 = 40
+
+-- | 新玩法关卡（第 41 关起，2026-09-30 解冻后追加）：同段 5 的投影，整块追加在文件末尾，前面的行不动。
+seg6Lines :: [String]
+seg6Lines = levelBlock [campaign40 .. length allLevels - 1]
+
+-- | 一批关卡的逐步投影（种子 1–2 × 15 步）与开局（种子 0 / 5 / 99）。
+levelBlock :: [Int] -> [String]
+levelBlock lis =
   concat
     [ runGame5 ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
-    | li <- [campaign38 .. length allLevels - 1]
+    | li <- lis
     , seed <- [1, 2 :: Int]
     ]
     ++ [ "G" ++ pad2 (li + 1) ++ " s" ++ show s ++ " new " ++ pState (startHistory gs) ++ " " ++ pExt (startHistory gs) ++ " board=" ++ pBoard (gsBoard gs)
-       | li <- [campaign38 .. length allLevels - 1]
+       | li <- lis
        , s <- [0, 5, 99 :: Int]
        , let gs = levelGame li s
        ]

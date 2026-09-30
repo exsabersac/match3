@@ -20,7 +20,7 @@ module UI.HudArt
 
 import Art
 import ComboFx
-import Control.Monad (forM_, void)
+import Control.Monad (forM_, void, when)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
@@ -53,6 +53,12 @@ drawHudArt ren art app = do
   _ <- if gvDaily gv
     then zhA ren art "zh_daily" 66 12 22
     else zhA ren art ("name_" ++ show li) 66 11 24
+  -- 规则开关角标（新玩法）：本关打开 L / T 形出炸弹时，关名右侧画炸弹标记 + 「L/T 形出炸弹」
+  when ("bomb_shapes" `elem` gvRules gv) $ do
+    let xR = 66 + zhW art ("name_" ++ show li) 24 + 10
+    _ <- drawSprite ren art "bomb_glow" (rect xR 12 22 22)
+    _ <- drawSprite ren art "bomb_mark" (rect xR 12 22 22)
+    void (zhA ren art "zh_rule_bomb" (xR + 26) 14 18)
   -- 关卡进度点：已过绿、当前金、未解锁暗
   -- 间距 6（38 关时与段 5 之前逐像素相同）；关卡更多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
   let dots = levelDots li (appMaxReached app)  -- 每关一个点（levelCount 个）

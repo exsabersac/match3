@@ -71,7 +71,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3New(level, seed)` | 开一局（清空历史与动画） |
 | `m3Swap(r1,c1,r2,c2)` | 交换一步：`{accepted, outcome, trace, events, state}` |
 | `m3Undo()` | 撤销（核心 `Engine.History`，最多 20 步） |
-| `m3State()` / `m3Levels()` | 当前状态 / 40 关列表 |
+| `m3State()` / `m3Levels()` | 当前状态 / 41 关列表 |
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
 
@@ -154,7 +154,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 331 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 337 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -246,7 +246,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（331 个） | `make test-native` |
+| `stack test` | 核心规则（337 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（12 组） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（10 组） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `make e2e` |

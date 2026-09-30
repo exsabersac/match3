@@ -10,10 +10,13 @@ module Match3.Element.Builtin.Gem
   , SpecialGem(..)
   , specialBlast
   , builtinShapeRules
+  , ltBombRule
+  , withBombShapes
   , plainGemEntry
   , specialEntry
   ) where
 
+import Data.List (intersect)
 import Match3.Board.Grid (inBounds)
 import Match3.Element.Caps
 import Match3.Element.Registry
@@ -59,6 +62,27 @@ builtinShapeRules =
   ]
   where
     runLen = length . runPos
+
+-- | L / T 形 → 炸弹（开心消消乐的「爆炸特效」）：同色的一横一竖两条连线交叉时，横线在交点放一颗炸弹
+-- （交点这一轮真被挖空时；否则认领但不生成），竖线认领但不生成（否则竖线的直线规则会在交点上覆盖）。
+-- 不交叉的连线不认领，交给后面的直线规则。不在内置表里：只在打开规则开关 "bomb_shapes" 的关卡里
+-- 由关卡级元素 'Match3.Element.Builtin.Level.BombShapes' 经 'withBombShapes' 插进本关的形状表。
+ltBombRule :: ShapeRule
+ltBombRule = ShapeRule "l/t→bomb" spawn
+  where
+    spawn ctx run =
+      case [x | o <- scRuns ctx, runColor o == runColor run, runIsH o /= runIsH run, x <- runPos run `intersect` runPos o] of
+        [] -> Nothing
+        (x : _)
+          | runIsH run -> Just [(x, Gem (runColor run) Bomb 0 Nothing) | x `elem` scClearable ctx]
+          | otherwise -> Just []
+
+-- | 把 'ltBombRule' 插进形状表：放在「直线 5 → 彩虹」之后（五连仍出彩虹）、直线 4 规则之前（L / T 里有四连时出炸弹）；
+-- 表里没有五连规则时放最前面。
+withBombShapes :: [ShapeRule] -> [ShapeRule]
+withBombShapes rules = case break ((== "line5→rainbow") . shapeName) rules of
+  (pre, r5 : post) -> pre ++ [r5, ltBombRule] ++ post
+  _ -> ltBombRule : rules
 
 -- | 按种类的爆炸范围。
 specialBlast :: GemKind -> Maybe (Pos -> [Pos])

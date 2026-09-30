@@ -27,6 +27,7 @@ data Level = Level
   , lvlUfos       :: [Ufo]         -- ^ 飞碟初始位置（第 6 刀前的 levelUfos）
   , lvlCarpets    :: [Pos]         -- ^ 未铺的地毯格（第 6 刀前的 Match3.Carpet.levelCarpets）
   , lvlGround     :: Ground        -- ^ 地面层（第 6 刀前的 levelGround）
+  , lvlRules      :: [ElementName] -- ^ 本关打开的规则开关（按名字，关卡级元素在 levelStart 里读；如 "bomb_shapes" = L / T 形生成炸弹）
   } deriving (Eq, Show)
 
 -- | 只有名字 / 步数 / 目标、没有任何装饰与关卡级元素的关（关卡表用记录更新补字段；每日挑战直接用）。
@@ -43,6 +44,7 @@ level i name moves goal =
     , lvlUfos = []
     , lvlCarpets = []
     , lvlGround = []
+    , lvlRules = []
     }
 
 levelConfig :: Level -> GameConfig

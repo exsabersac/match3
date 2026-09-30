@@ -6,7 +6,7 @@
 -- 主流程只在节拍上发消息、按类型收回复；谁在哪个节拍反应由关卡级元素自己决定（见 Match3.Element.Class 的
 -- 'LevelElement'）。
 --
--- 依赖：Match3.Types、Board.Grid（MBoard）、Board.Refill（补子策略）。
+-- 依赖：Match3.Types、Board.Grid（MBoard）、Board.Refill（补子策略）、Element.Types（形状规则）。
 module Match3.Element.Message
   ( Message
   , SomeMessage(..)
@@ -14,6 +14,7 @@ module Match3.Element.Message
     -- * 流水线节拍（关卡级元素）
   , Refilled(..)
   , Refilling(..)
+  , Shaping(..)
   , EndTicked(..)
   , Settling(..)
   , Covering(..)
@@ -25,6 +26,7 @@ module Match3.Element.Message
 import Data.Typeable (Typeable, cast)
 import Match3.Board.Grid (MBoard)
 import Match3.Board.Refill (RefillPolicy)
+import Match3.Element.Types (ShapeRule)
 import Match3.Types
 
 -- | 消息：任何 Typeable 类型声明一个空 instance 即可。
@@ -48,6 +50,10 @@ data Refilled = Refilled Board [Pos]
 -- 没有元素回复 = 用注册表的策略。
 newtype Refilling = Refilling RefillPolicy
 
+-- | 查询（新玩法「L / T 形炸弹」）：本关用的特殊块形状规则表（初值 = 注册表的表；回复者可以插入 / 换掉规则再交回）。
+-- 没有元素回复 = 用注册表的表。每步结算开始时问一次（Game.Resolve）。
+newtype Shaping = Shaping [ShapeRule]
+
 -- | 玩家交换的步末、倒计时（PhaseTick）之后、蔓延之前（皮带节拍）：「原格 → 新格」移位（回复者追加）。
 -- 没有元素回复 = 没有皮带（也没有皮带后的再连锁）。
 newtype EndTicked = EndTicked [(Pos, Pos)]
@@ -70,6 +76,7 @@ newtype WallCells = WallCells [Pos]
 
 instance Message Refilled
 instance Message Refilling
+instance Message Shaping
 instance Message EndTicked
 instance Message Settling
 instance Message Covering

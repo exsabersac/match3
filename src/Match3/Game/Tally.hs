@@ -19,7 +19,7 @@ module Match3.Game.Tally
 
 import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, countElementWith, diffCountersWith, elementName, vacatesCarpetWith)
+import Match3.Element.Registry (Registry, countElementWith, diffCountersWith, elementName, vacatesCarpetWith, weighElementWith)
 import Match3.Element.Types (CounterKey)
 import Match3.Types
 
@@ -39,12 +39,12 @@ data DiffCount = DiffCount
   , dcBonus   :: Int  -- ^ 奖励步数 = dcCount * bonusMoves
   } deriving (Eq, Show)
 
--- | 注册表里所有带 diffCounter 的元素，按步前 / 步后盘面算个数差。
+-- | 注册表里所有带 diffCounter 的元素，按步前 / 步后盘面算个数差（格子按 diffWeight 加权，缺省每格 1）。
 diffCountsWith :: Registry -> Board -> Board -> [DiffCount]
 diffCountsWith reg before after =
   [ DiffCount n k cnt (cnt * bonus)
   | (n, k, bonus) <- diffCountersWith reg
-  , let cnt = max 0 (countElementWith reg n before - countElementWith reg n after)
+  , let cnt = max 0 (weighElementWith reg n before - weighElementWith reg n after)
   ]
 
 -- | 地毯补充种子：饼干腾空或保险箱开启离开格子时，即使未进 clear-holes 也要计入覆盖。

@@ -311,4 +311,27 @@ allLevels =
           ]
       , lvlRules = ["rainbow_combos"]
       }
+    -- 雪怪（新玩法 5）：Boss 占 (2,3)–(3,4) 的 2×2，挡交换、不下落；身边的消除与打到它的特效扣血，
+    -- 血量归零即过关（目标 = 击败 Boss）；每 3 次交换在身边召唤一块雪块（1 层石头）
+  , (level 44 "雪怪" 24 (goalCount (CountNamed "snow_boss") snowBossLevelHp))
+      { lvlPlacements = bossAt (2, 3) snowBossLevelHp
+      }
+    -- 饼干掉落口（新玩法 6）：顶行 (0,1) / (0,3) / (0,4) / (0,6) 是掉落口，开局各有一块饼干；盘上饼干少于 4 块时
+    -- 补子在掉落口补饼干（不额外消耗随机数）；饼干落到底行被收走（原有的底边收集），目标收 8 块
+  , (level 45 "掉落口" 26 (goalCount CountCookies 8))
+      { lvlPlacements = [Place "cookie" [] cookieDropCells]
+      , lvlDrops = [DropSpec cookieDropCells Cookie 4]
+      }
   ]
+
+-- | 第 46 关的掉落口格。
+cookieDropCells :: [Pos]
+cookieDropCells = [(0, 1), (0, 3), (0, 4), (0, 6)]
+
+-- | 第 45 关雪怪的满血值（= 关卡目标值）。
+snowBossLevelHp :: Int
+snowBossLevelHp = 40
+
+-- | 一只雪怪 Boss 的放置表：左上角 + 血量 → 四格（放置参数 [血量, 象限]，象限 0 左上 / 1 右上 / 2 左下 / 3 右下）。
+bossAt :: Pos -> Int -> [Placement]
+bossAt (r, c) hp = [Place "snow_boss" [AInt hp, AInt q] [p] | (q, p) <- zip [0 ..] [(r, c), (r, c + 1), (r + 1, c), (r + 1, c + 1)]]

@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 358 通过
+stack test                            # 库测，无需显示器；期望 372 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -68,7 +68,9 @@ stack build && stack exec match3-sdl
 - **魔法石**（`Custom "magic_stone"`，新玩法 2）：固定、打不动；旁边每轮有消除充能 1 格，满 3 格后在交换的步末发射，清掉所在整行和整列，然后归零；底部 3 个充能槽显示进度（第 42 关「魔石」）
 - **毛球**（`Custom "fuzzball"`，新玩法 3）：挡交换、随重力下落；旁边有消除或被特效 / 道具打到即被消灭；每次交换的步末跳到旁边一格普通宝石上（与之换位，选格按盘面散列，不影响其他关卡的随机序列）（第 43 关「毛球」）
 - **魔力鸟组合增强**（关卡规则开关 `rainbow_combos`，新玩法 4）：彩虹 × 直线 → 同色普通宝石全部变成直线（横竖交替）再一起引爆；彩虹 × 炸弹 → 全部变成炸弹再引爆；变身过程先播放再爆炸。只在打开开关的关卡生效（第 44 关「魔力鸟」），HUD 关名右侧有彩虹角标「彩虹组合变身」
-- 连击波次计分、提示、撤销、自动洗牌、**44** 关战役地图（CH1–CH7 章节分隔）
+- **雪怪 Boss**（`Custom "snow_boss"`，新玩法 5）：占 2×2 格，挡交换、不下落；身外一圈每消掉一格扣 1 血，特效 / 道具每打到它一格扣 1 血，血量归零整只消失即过关（目标「击败 Boss」= `goalCount (CountNamed "snow_boss") 满血`）；每 3 次交换在身边召唤一块雪块（1 层石头，选格按盘面散列，不影响其他关卡）。HUD 目标条换成血条（`HP 剩余/满血`，过半后变深红闪烁），雪怪血量过半换受伤表情（第 45 关「雪怪」）
+- **饼干掉落口**（关卡记录 `lvlDrops`，关卡级元素 `CookieDrop`，新玩法 6）：指定的顶行格是掉落口（格子上沿画金色漏斗），补子时掉落口的空洞在盘上饼干少于规定块数时补一块饼干而不是宝石；饼干沿用原有的底边收集。掉不掉完全由盘面决定，随机数消耗与没有掉落口时相同（第 46 关「掉落口」）
+- 连击波次计分、提示、撤销、自动洗牌、**46** 关战役地图（CH1–CH7 章节分隔）
 - HUD、道具次数、粒子、交换/下落补间、连锁逐轮回放与连击分级（见下节）、藤蔓蔓延提示、飞碟叠层、暂停帮助、过关/胜利/失败叠层
 
 ## 画面与反馈
@@ -133,7 +135,9 @@ stack build && stack exec match3-sdl
 | 41 | 爆破 | 24 | 碎 10 石头 | 规则开关：L / T 形出炸弹 + 两堆石头（新玩法 1） |
 | 42 | 魔石 | 24 | 碎 8 石头 | 四块魔法石 + 行列尽头的双层石头（新玩法 2） |
 | 43 | 毛球 | 22 | 消灭 14 毛球 | 14 个毛球分散在全盘（隔行错开），每步末跳一格（新玩法 3） |
-| 44 | 魔力鸟 | 24 | 碎 12 石头 | 规则开关：魔力鸟组合增强 + 开局两组彩虹组合 + 四边双层石头（新玩法 4；终章） |
+| 44 | 魔力鸟 | 24 | 碎 12 石头 | 规则开关：魔力鸟组合增强 + 开局两组彩虹组合 + 四边双层石头（新玩法 4） |
+| 45 | 雪怪 | 24 | 击败雪怪（40 血） | 2×2 雪怪 Boss 在 (2,3)–(3,4)，每 3 步召唤一块雪块（新玩法 5） |
+| 46 | 掉落口 | 26 | 收 8 块饼干 | 顶行 4 个掉落口（第 2 / 4 / 5 / 7 列），盘上饼干少于 4 块时补饼干（新玩法 6；终章） |
 
 按 `D` 进入**每日**挑战（日历日期作种子）。
 
@@ -190,7 +194,7 @@ src/Match3/   Types Counts Core Engine View Obstacles Rainbow Combos Ice
               （View = 第 11 刀的视图模型：从 GameState 算出 HUD / 目标 / 棋盘读数，桌面与网页都读）
               （Engine = 三消作为通用接口的第一个实现）
 src/Match3/Types/  Name Cell Overlay Body Board Game（第 6 刀从 Types.hs 按职责拆出，Name 为第 6b 刀的 ElementName / CustomState；Types.hs 为再导出门面）
-src/Match3/Levels/ Level Campaign（关卡记录 / 44 关关卡表与 lookupLevel，第 6 刀）
+src/Match3/Levels/ Level Campaign（关卡记录 / 46 关关卡表与 lookupLevel，第 6 刀）
 src/Match3/Board/  Grid Match Clear Gravity Cascade Hooks Refill Random Default（Hooks = 第 7 刀的关卡级钩子记录；Refill = 第 8 刀的补子策略；Default = 不带 With 的内置表便捷入口）
 src/Match3/Game/   State Tally Outcome Shuffle Level Trace EndPhase Resolve Move Boosters（EndPhase = 第 7b 刀的步末表）
 src/Match3/Element/ Types Class Caps Message Registry Special Builtin Event Level（元素框架：规则类型 / 元素类与能力记录 / 能力声明简写（第 9 刀）/ 消息 / 注册表 / 规则表解释器（第 8 刀：特殊块形状、特殊块组合）/ 内置元素汇总 / 效果事件 / 一局的关卡级元素（第 7 刀）；Element.hs 为再导出外观）
@@ -206,7 +210,7 @@ app/pure/     不依赖 SDL 的纯前端模块（桌面、测试、网页共用�
               UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/Sound（音效钩子，预留、不播放）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；358 命名用例）
+test/Spec.hs  测试入口（只汇总；372 命名用例）
 test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、第 9 刀前元素类的对照副本 Support.LegacyElement）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
@@ -217,6 +221,6 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 
 ## 发布状态
 
-- 战役：**44** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球，第 44 关「魔力鸟」是新玩法魔力鸟组合增强），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **358**（Tasty + QuickCheck）
+- 战役：**46** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球，第 44 关「魔力鸟」是新玩法魔力鸟组合增强，第 45 关「雪怪」是新玩法雪怪 Boss，第 46 关「掉落口」是新玩法饼干掉落口），批量可构造 / 可玩 / 装饰与目标对齐
+- 测试：`stack test` **372**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

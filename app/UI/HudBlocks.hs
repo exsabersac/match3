@@ -12,6 +12,7 @@ module UI.HudBlocks
   , hudFrame
   , hudLevel
   , hudGoal
+  , hudBoss
   , hudGoalSwatch
   , hudMoves
   , hudBoosters
@@ -76,6 +77,17 @@ hudGoal ren gi = do
   rendererDrawColor ren $= dim
   fillRect ren (Just (Rectangle (P (V2 78 48)) (V2 8 2)))
   drawNumber ren 90 40 2 dim targ
+
+-- | 雪怪 Boss 血条（新玩法 5，几何版）：目标是「击败 Boss」时盖在目标条上——红色剩余血量 + 剩余 / 满血数字。
+hudBoss :: Renderer -> Maybe BossView -> IO ()
+hudBoss ren mbv = case mbv of
+  Nothing -> pure ()
+  Just bv -> do
+    drawMeter ren 10 36 (bvHp bv) (max 1 (bvMax bv)) (V4 235 70 80 255)
+    drawNumber ren 10 40 2 hudWhite (bvHp bv)
+    rendererDrawColor ren $= hudDim
+    fillRect ren (Just (Rectangle (P (V2 78 48)) (V2 8 2)))
+    drawNumber ren 90 40 2 hudDim (bvMax bv)
 
 -- | 收集目标的色块（宝箱 / 蜂蜜 / 气球 / 饼干 / 蛋糕 / 保险箱 / UFO / 地毯 / 名字目标 / 颜色）；分数等目标不画。
 hudGoalSwatch :: Renderer -> GoalInfo -> IO ()

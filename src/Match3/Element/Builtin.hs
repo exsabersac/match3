@@ -5,7 +5,7 @@
 --
 -- * Gem          普通宝石、特殊块（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则，特殊块形状规则表（第 8 刀）
 -- * Layer        冰层与 8 种叠层（修饰器）
--- * Obstacle     打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋、魔法石（新玩法 2）
+-- * Obstacle     打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋、魔法石（新玩法 2）、雪怪 Boss（新玩法 5，2×2）
 -- * Collectible  收集与计数类：饼干、时间精灵、气泡
 -- * Actor        会动或会生成东西的：魔法帽、果汁机、蜗牛、染色瓶、倒计时、毛球（新玩法 3）
 -- * Ground       地面层：果冻
@@ -17,7 +17,8 @@
 --
 -- 邻格波及的顺序（arOrder）：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 魔法帽 60 → 迷雾 70 →
 -- 锁链 80 → 火箭冰冻 90 → 窗帘 100 → 保险箱 110 → 时间精灵 120 → 果汁机 130 → 染色瓶 140 → 巧克力 150 →
--- 蒸汽 160 → 气泡 170。步末：倒计时（PhaseTick）；藤 10 → 巧 20 → 蒸汽 30（PhaseSpread）；蜗牛（PhaseMove）。
+-- 蒸汽 160 → 气泡 170 → 魔法石 180 → 毛球 190 → 雪怪 200。步末：倒计时 10 → 魔法石 20（PhaseTick）；藤 10 → 巧 20 → 蒸汽 30（PhaseSpread）；
+-- 蜗牛 10 → 毛球 20 → 雪怪 30（PhaseMove）。
 -- 成对交换：彩虹取色 10 → 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）按消息回复流水线节拍。
 module Match3.Element.Builtin
   ( defaultRegistry
@@ -36,6 +37,14 @@ module Match3.Element.Builtin
   , magicStoneSeeds
   , Fuzzball(..)
   , fuzzballJumps
+  , SnowBoss(..)
+  , snowBossName
+  , snowBossEvery
+  , snowBossCells
+  , snowBosses
+  , snowBossHp
+  , snowBossSpawn
+  , decodeBoss
   , Ice(..)
   , Jelly(..)
   , Bubble(..)
@@ -46,6 +55,8 @@ module Match3.Element.Builtin
   , GroundLayer(..)
   , BombShapes(..)
   , RainbowCombos(..)
+  , CookieDrop(..)
+  , dropRefill
   , ltBombRule
   , withBombShapes
   , portalTeleport
@@ -109,8 +120,9 @@ builtinDefs =
   , bubbleEntry                                         -- Collectible
   , magicStoneEntry                                     -- Obstacle（新玩法 2）
   , fuzzballEntry                                       -- Actor（新玩法 3）
+  , snowBossEntry                                       -- Obstacle（新玩法 5）
   ]
 
 -- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 levelStart 按关卡记录给出）：按消息回复流水线节拍；去掉某项（removeLevel）即该机制不生效。
 builtinLevelDefs :: [SomeLevelElement]
-builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel []), SomeLevelElement (BombShapes False), SomeLevelElement (RainbowCombos False)]
+builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel []), SomeLevelElement (BombShapes False), SomeLevelElement (RainbowCombos False), SomeLevelElement (CookieDrop [])]

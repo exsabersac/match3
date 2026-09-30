@@ -10,6 +10,7 @@ module UI.Cell.Prim
   , primBubble
   , primMagicStone
   , primFuzzball
+  , primSnowBoss
   , primStone
   , primChest
   , primHoney
@@ -34,6 +35,7 @@ module UI.Cell.Prim
 import Control.Monad (forM_, when)
 import Foreign.C.Types (CInt)
 import Match3.Core
+import Match3.View (BossPart (..), bossPart)
 import SDL hiding (Normal)
 import UI.Cell.PrimOverlay (primOverlay)
 import UI.Layout
@@ -76,6 +78,45 @@ primMagicStone ren x y cell flashing = case cell of
       rendererDrawColor ren $= if i < k then V4 255 200 60 255 else V4 40 26 70 255
       fillRect ren (Just (Rectangle (P (V2 (x + 14 + fromIntegral i * 11) (y + cellPx - 18))) (V2 7 7)))
   _ -> pure ()
+
+-- | 几何版：雪怪 Boss（新玩法 5，占 2×2）——四格拼成一只冰蓝大方块：上两格各一只眼（受伤时左眼画成横杠）、
+-- 下两格各半张嘴 + 獠牙；只描整只的外边（四格之间不画缝）；右下格底部画召唤进度小点。
+primSnowBoss :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
+primSnowBoss ren x y cell flashing = case bossPart cell of
+  Just bp -> do
+    let q = bpQuad bp
+        left = even q
+        top = q < 2
+        g = 4 :: CInt
+        x0 = if left then x + g else x
+        y0 = if top then y + g else y
+        w = cellPx - g
+        box bx by bw bh = fillRect ren (Just (Rectangle (P (V2 bx by)) (V2 bw bh)))
+    rendererDrawColor ren $= if flashing then V4 255 255 255 255 else V4 214 232 250 255
+    box x0 y0 w w
+    rendererDrawColor ren $= V4 34 54 104 255
+    if top then box x0 y0 w 2 else box x0 (y0 + w - 2) w 2
+    if left then box x0 y0 2 w else box (x0 + w - 2) y0 2 w
+    let eyeX = if left then x + cellPx - 22 else x + 8
+    if top
+      then
+        if bpHurt bp && left
+          then box eyeX (y + cellPx - 16) 14 4
+          else do
+            rendererDrawColor ren $= V4 255 255 255 255
+            box eyeX (y + cellPx - 22) 14 14
+            rendererDrawColor ren $= V4 200 30 40 255
+            box (eyeX + 4) (y + cellPx - 17) 6 7
+      else do
+        let mx = if left then x + cellPx - 18 else x
+        rendererDrawColor ren $= V4 60 20 50 255
+        box mx (y + 6) 18 12
+        rendererDrawColor ren $= V4 255 255 255 255
+        box (mx + 6) (y + 6) 5 6
+        when (q == 3) $ forM_ [0 .. bpEvery bp - 1] $ \i -> do
+          rendererDrawColor ren $= if i < bpTurn bp then V4 120 210 255 255 else V4 60 80 130 255
+          box (x + cellPx - 14 - fromIntegral (bpEvery bp - 1 - i) * 9) (y + cellPx - 12) 6 6
+  Nothing -> pure ()
 
 -- | 几何版：毛球（新玩法 3）——灰粉色毛团（大方块 + 四角小方块当绒毛）+ 两只白眼黑瞳。
 primFuzzball :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()

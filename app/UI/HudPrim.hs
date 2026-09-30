@@ -128,6 +128,7 @@ drawHud ren app = do
   hudFrame ren
   hudLevel ren gv
   hudGoal ren (gvGoal gv)
+  hudBoss ren (gvBoss gv)
   hudGoalSwatch ren (gvGoal gv)
   hudMoves ren gv
   hudBoosters ren app (gvBoosters gv)

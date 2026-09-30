@@ -172,6 +172,7 @@ test-suite match3-test
       Spec.Builtin.Obstacle
       Spec.Caps
       Spec.Cascade
+      Spec.CookieDrop
       Spec.Element
       Spec.ElementClass
       Spec.Engine
@@ -188,6 +189,7 @@ test-suite match3-test
       Spec.Properties
       Spec.RainbowCombos
       Spec.ReplayUndo
+      Spec.SnowBoss
       Spec.SourceScan
       Spec.Specials
       Spec.Support

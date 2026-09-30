@@ -7,6 +7,7 @@
 -- 与会走元素的避让格（AvoidCells）、传送门 = 沉降时（Settling）与会走元素的墙（WallCells）、
 -- 地毯 = 步末结算（Covering）、地面层 = 每轮之后（GroundHit）。开局状态由关卡记录给出（levelStart）。
 -- 规则开关 BombShapes = 每步结算开始时（Shaping）改本关的形状表。
+-- 掉落口 CookieDrop（新玩法 6）= 补子策略查询（Refilling）时包一层「掉落口格补收集物」。
 -- 前四种与规则开关去掉（removeLevel）即不生效；地面层是核心元素（levelCore），其中每层的行为由注册表的地面层条目决定。
 module Match3.Element.Builtin.Level
   ( UfoLevel(..)
@@ -16,18 +17,22 @@ module Match3.Element.Builtin.Level
   , GroundLayer(..)
   , BombShapes(..)
   , RainbowCombos(..)
+  , CookieDrop(..)
+  , dropRefill
   , portalTeleport
   ) where
 
+import Data.Foldable (toList)
 import Data.List (nub)
 import Match3.Board.Grid (MBoard, atM, setM)
+import Match3.Board.Refill (RefillCtx(..), RefillPolicy(..))
 import Match3.Carpet (coverCarpets)
 import Match3.Counts (CounterKey(..))
 import Match3.Conveyor (Belt, beltMoves)
 import Match3.Combos (rainbowComboMorph)
 import Match3.Element.Builtin.Gem (withBombShapes)
 import Match3.Element.Class
-import Match3.Levels.Level (Level(..))
+import Match3.Levels.Level (DropSpec(..), Level(..))
 import Match3.Element.Message
 import Match3.Types
 import Match3.Ufo (Ufo, mkUfo, stepUfos)
@@ -135,6 +140,32 @@ instance LevelElement RainbowCombos where
         Just (SomeMessage (Morphing b0 swapped p1 p2 (Just (Morph n cells seeds))), RainbowCombos on)
     | otherwise = Nothing
   levelStart lvl _ = RainbowCombos ("rainbow_combos" `elem` lvlRules lvl)
+
+-- | 掉落口（新玩法 6，开心消消乐的金豆荚掉落口）：本关的 lvlDrops 非空时，回复补子策略查询（Refilling），
+-- 把收到的策略包一层 'dropRefill'；没有掉落口时什么都不回复（= 原策略，原有关卡与每日挑战不受影响）。
+-- 状态不变；GameState 的 Show 不打印它（内置元素）。
+newtype CookieDrop = CookieDrop [DropSpec]
+  deriving (Eq, Show)
+
+instance LevelElement CookieDrop where
+  levelName _ = "cookie_drop"
+  levelReply (CookieDrop ds) msg
+    | not (null ds), Just (Refilling p) <- fromMessage msg = Just (SomeMessage (Refilling (dropRefill ds p)), CookieDrop ds)
+    | otherwise = Nothing
+  levelStart lvl _ = CookieDrop (lvlDrops lvl)
+
+-- | 掉落口补子：每个空洞先照原策略补（随机数照常消耗，所以生成器的推进与没有掉落口时相同），
+-- 若空洞是某个掉落口格、且此刻盘上（已补的格子算在内）该口的 dropCell 少于 dropKeep 个，就换成 dropCell。
+-- 多个掉落口规格取第一个满足的；同一次补子里先补的掉落口先占名额（行优先）。
+dropRefill :: [DropSpec] -> RefillPolicy -> RefillPolicy
+dropRefill ds base = RefillPolicy (refillName base ++ "+drop") pick
+  where
+    pick ctx g =
+      let (c, g') = refillCell base ctx g
+          onBoard d = length (filter (== Just (dropCell d)) (toList (rcBoard ctx)))
+      in case [d | d <- ds, rcPos ctx `elem` dropCells d, onBoard d < dropKeep d] of
+           d : _ -> (dropCell d, g')
+           [] -> (c, g')
 
 -- | 传送门的实现（PortalLevel 回复 Settling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由注册表给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard

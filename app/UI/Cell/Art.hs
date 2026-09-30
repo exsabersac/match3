@@ -33,12 +33,14 @@ module UI.Cell.Art
   , artBubble
   , artMagicStone
   , artFuzzball
+  , artSnowBoss
   ) where
 
 import Art
-import Control.Monad (void, when)
+import Control.Monad (forM_, void, when)
 import Foreign.C.Types (CDouble, CInt)
 import Match3.Core
+import Match3.View (BossPart (..), bossPart)
 import SDL hiding (Normal)
 import UI.Layout
 
@@ -275,6 +277,20 @@ artFuzzball :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
 artFuzzball ren art pulse x y cell = case cell of
   Custom _ _ -> sprBob "fuzzball"
   _ -> pure ()
+  where
+    Kit {..} = cellKit ren art pulse x y
+
+-- | 贴图版：雪怪 Boss（新玩法 5，占 2×2）——每格画整只雪怪的四分之一（snow_boss_<象限>，血量过半换
+-- snow_boss_hurt_<象限> 受伤表情）；右下格底部画召唤进度小点（每 3 次交换召唤一块雪块，点亮已走的次数）。
+artSnowBoss :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
+artSnowBoss ren art pulse x y cell = case bossPart cell of
+  Just bp -> do
+    spr ((if bpHurt bp then "snow_boss_hurt_" else "snow_boss_") ++ show (bpQuad bp))
+    when (bpQuad bp == 3) $
+      forM_ [0 .. bpEvery bp - 1] $ \i -> do
+        rendererDrawColor ren $= if i < bpTurn bp then V4 120 210 255 255 else V4 40 60 110 200
+        fillRect ren (Just (rect (x + cellPx - 12 - fromIntegral (bpEvery bp - 1 - i) * 9) (y + cellPx - 11) 6 6))
+  Nothing -> pure ()
   where
     Kit {..} = cellKit ren art pulse x y
 

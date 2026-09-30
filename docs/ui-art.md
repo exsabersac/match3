@@ -73,6 +73,7 @@
 | `countdown_1..9` | `Countdown c n` | 宝石上叠一个红色倒计时炸弹，中间写剩余步数 |
 | `ufo_c1..c5` | 飞碟 `Ufo` | 对应颜色的飞碟，悬停在格子上方 |
 | `bubble` | 气泡 `Custom "bubble" 1`（段 5） | 透明水泡：蓝青边缘 + 虹彩 + 高光，无颜色徽记，轻微上下浮动。按 Custom 名字经 `UI.CellTable.customTable` 分派（不画层数角标）；几何降级版 `primBubble`：浅蓝方块 + 亮边 + 左上高光 |
+| `snow_boss_0..3` / `snow_boss_hurt_0..3` | 雪怪 Boss `Custom "snow_boss" v`（新玩法 5，2×2） | 冰蓝雪怪：一整只按 2 格（224 px）画好再切成四块，每格画自己的象限（0 左上 / 1 右上 / 2 左下 / 3 右下，读 `Match3.View.bossPart`），拼起来是一只：毛茸茸的雪白身体 + 冰蓝阴影、冰角、两只眼睛（怒眉）与獠牙；血量 ≤ 满血一半时换 `snow_boss_hurt_*`（皱眉 + 裂纹 + 创可贴 + 汗滴）；右下块底部三个小点显示召唤进度（每 3 步召唤一块雪块，雪块就是 1 层石头 `stone_1`）。按 Custom 名字经 `UI.CellTable.customTable` 分派；`snow_boss`（整只缩到一格）只给 HUD 血条当头像。几何降级版 `primSnowBoss`：每格一块浅冰蓝方块，四块之间不留缝、外缘深蓝描边，上两块画白眼红瞳（受伤时左眼变一道横线），下两块画嘴和獠牙，右下块另画召唤进度点 |
 
 ### 地砖（宝石之下）
 
@@ -82,11 +83,14 @@
 | `carpet_open` / `carpet_covered` | 地毯目标格：虚线品红框表示未铺，编织纹品红地毯表示已铺 |
 | `belt` | 传送带：青色边轨 + 箭头，箭头朝向就是移动方向 |
 | `portal` | 紫色旋转传送门环 |
+| `cookie_drop` | 饼干掉落口（新玩法 6）：金色漏斗（上宽下窄 + 深色口沿 + 两颗铆钉）+ 白色向下箭头，只占格子上部四分之一。和其它地砖不同，画在**棋子之上**、掉落口格上沿（上移 6 px 压在棋盘框上），不随下落动画偏移（`UI.BoardArt.drawDropsArt`，读 `Match3.View.bvDrops`）；几何降级版 `drawDropMark`：三级金色台阶 + 白色箭头 |
 | `jelly_2` / `jelly` | 双层果冻（地面层 `gsGround`，段 5）：双层为深粉果冻块 + 一道白色层线；单层为淡粉半透明。经 `UI.Ground.groundTable` 按名字分派，画在棋盘格之上、棋子之下。几何降级版画在**棋子之上**（整格色块会盖住底层）：双层粗粉框 + 内框，单层细框 |
 
 ### 交互 / HUD
 
 `sel_ring`（选中框，颜色随道具模式变化）、`hint_glow`（提示呼吸光）、`spark`（消除闪光）、`star_on/off`、`medal`、`node_cur/done/lock`（地图节点）、`icon_*`（锤子 / 交换 / 十字 / 步数 / 分数 / 多色）、`badge_1..9`、`g_*`（字形）、`zh_*`（中文标签）、`name_*`（关卡名）。魔法石（新玩法 2）：`magic_stone_<充能>`，满 3 格的贴图外发光并轻微浮动。毛球（新玩法 3）：`fuzzball`（灰粉色毛团 + 大眼睛，轻微浮动；步末跳格借用皮带的平移动画）。魔力鸟组合增强（新玩法 4）：没有新棋子贴图，变身段借用蔓延的「长出新格」动画（第一轮之前，同色宝石从格子中心长成直线 / 炸弹；与彩虹格恰好差一行或一列的目标沿蔓延方向擦出，是 `drawEndSpread` 按来源方向分支的结果）。网页版（`web/www/cells.js` / `render.js`）画法相同：毛球用同一个浮动公式 `round(2·sin(pulse/9))`（网页逻辑帧 1/60 s、桌面 16 ms，周期约 0.94 s 对 0.90 s），跳格走皮带段，变身走蔓延段的同一组分支（匀速、白色前沿光、不迸碎屑）。规则开关角标：打开 `bomb_shapes` 的关卡，关名右侧画 `bomb_glow` + `bomb_mark`（22 px）和 `zh_rule_bomb`（18 px）；打开 `rainbow_combos` 的关卡画 `rainbow`（22 px）+ `zh_rule_rainbow`「彩虹组合变身」（18 px）。角标表在 `Match3.View.ruleBadgeTable`（规则名 → 文字、叠放图标、文字贴图），桌面 `UI.HudArt` 与网页版都按它通用地画；网页图集不含 `zh_*`，网页版在关卡面板「第 N 关」右侧画同样的图标 + 画布字体文字（小胶囊）。新增规则开关的角标：`ruleBadgeTable` 加一行 + gen_assets.py 的 `ZH` / `ZH_SIZES` 加文字贴图（`stack test` 核对两边文字一致）。
+
+**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随 `appPulse` 呼吸闪烁。几何版 `UI.HudBlocks.hudBoss` 在目标条位置画同样的红条和两个数字。
 
 名字里带 `@` 的是同一贴图的**尺寸变体**（`基名@像素高`），例如 `zh_combo@68`（「连击」34 px 大字版）、`g_48@60`（5 号字形「0」）、`gem_c1@56`（半尺寸宝石，给 HUD 小图标用）、`panel_gold@80`（小圆角面板）。代码里始终只写基名，运行时自动挑变体。
 
@@ -99,7 +103,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 脚本会生成：
 
-- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×1992 + 1024×818），共 458 个贴图（含尺寸变体；新玩法 4 新增关卡名 `name_43`「魔力鸟」与角标文字 `zh_rule_rainbow`；新玩法 3 新增毛球 `fuzzball` 及其 `@56`、关卡名 `name_42`「毛球」；新玩法 2 新增魔法石 `magic_stone_0..3` 及其 `@56`、关卡名 `name_41`「魔石」；新玩法 1 新增关卡名 `name_40`「爆破」与 HUD 角标文字 `zh_rule_bomb`「L/T 形出炸弹」；段 5 新增 `jelly` / `jelly_2` / `bubble` 及其 `@56`，另有第 39 / 40 关的关卡名 `name_38` / `name_39`）
+- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2048 + 1024×888），共 480 个贴图（含尺寸变体；新玩法 6 新增掉落口 `cookie_drop` 及其 `@56`、关卡名 `name_45`「掉落口」；新玩法 5 新增雪怪 `snow_boss`、`snow_boss_0..3`、`snow_boss_hurt_0..3` 及其 `@56`、关卡名 `name_44`「雪怪」；新玩法 4 新增关卡名 `name_43`「魔力鸟」与角标文字 `zh_rule_rainbow`；新玩法 3 新增毛球 `fuzzball` 及其 `@56`、关卡名 `name_42`「毛球」；新玩法 2 新增魔法石 `magic_stone_0..3` 及其 `@56`、关卡名 `name_41`「魔石」；新玩法 1 新增关卡名 `name_40`「爆破」与 HUD 角标文字 `zh_rule_bomb`「L/T 形出炸弹」；段 5 新增 `jelly` / `jelly_2` / `bubble` 及其 `@56`，另有第 39 / 40 关的关卡名 `name_38` / `name_39`）
 - `assets/atlas.txt`：索引文件，每行 `name x y w h page`（第 6 列页号；旧的 5 列格式视为第 0 页）
 - `assets/background.bmp`：窗口背景（960×1176，即 480×588 的 2 倍，24 位不透明）
 - `docs/images/legend.png`：图例

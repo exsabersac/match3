@@ -31,6 +31,9 @@
 毛球跳格 fuzzballJumps（PhaseMove 20，新玩法 3；同样跳过皮带格、传送门端点当墙；按盘面散列选格，不耗 gsGen）
     │
     ▼
+雪怪召唤 snowBossRun（PhaseMove 30，新玩法 5；召唤计数 +1，每 3 次把身外一圈的一颗普通宝石变成 1 层石头；避让格 / 墙同上，按盘面散列选格）
+    │
+    ▼
 若蜗牛 / 毛球后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
     │
     ▼
@@ -59,9 +62,9 @@
 
 每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
-1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊（第 8 刀起按注册表的有序形状规则表 `shapeRules`：每条连线取第一条认领它的规则；内置 = 长度 ≥5 彩虹 → 横 4 横消 → 竖 4 竖消，放在交换落点或连线可清格的中间，横线在前、竖线在后，后写的覆盖先写的；新玩法 1：规则开关 `bomb_shapes` 打开的关卡在「长度 ≥5 彩虹」之后多一条 L / T 规则——同色横竖连线交叉时横线在交点放炸弹、竖线认领不生成）。本关的形状表在每步结算开始时确定：`resolveMoveWith` 先用 `levelRegistryIn` 问关卡级元素 `Shaping`，有回复就换上回复的表，这一步的所有轮次都用它。
+1. `clearMatchesDetailed`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），魔法石充能（180）、毛球消灭（190）、雪怪扣血（新玩法 5，200：身外一圈的真消除 + 直接命中的 Boss 格各扣 1，归零四格并入清除格），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊（第 8 刀起按注册表的有序形状规则表 `shapeRules`：每条连线取第一条认领它的规则；内置 = 长度 ≥5 彩虹 → 横 4 横消 → 竖 4 竖消，放在交换落点或连线可清格的中间，横线在前、竖线在后，后写的覆盖先写的；新玩法 1：规则开关 `bomb_shapes` 打开的关卡在「长度 ≥5 彩虹」之后多一条 L / T 规则——同色横竖连线交叉时横线在交点放炸弹、竖线认领不生成）。本关的形状表在每步结算开始时确定：`resolveMoveWith` 先用 `levelRegistryIn` 问关卡级元素 `Shaping`，有回复就换上回复的表，这一步的所有轮次都用它。
 2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级元素：元素类迁移后为 `Settling` 消息，内置回复者调 `portalTeleport`；第 7 刀起 Board 层经钩子 `onSettle` 调用）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`；第 7 刀起是关卡级元素 `GroundLayer`，按轮发 `GroundHit`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
-3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则注册表的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。
+3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则注册表的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。新玩法 6：有掉落口（关卡记录 `lvlDrops`）的关卡，关卡级元素 `CookieDrop` 回复 `Refilling`，把策略包一层 `dropRefill`——每个空洞仍照原策略补一次（随机数照常消耗），若空洞在掉落口格上、且此刻盘上（已补的算在内）的饼干少于 `dropKeep` 块，就换成饼干；饼干之后照常下落、到底行被收走。
 4. 飞碟吸收（段 4：注册表关卡级元素回复 `Refilled` 消息，内置 = `stepUfos`；去掉 `ufo` 即不吸收；第 7 刀起经钩子 `onAbsorb`，飞碟位置在 `UfoLevel` 的值里）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbed`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 
 波次分：`scoreForWave wave n`。
@@ -110,10 +113,11 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 - 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。只推注册表里 `pushable` 的格（段 4，内置 = 宝石 / 倒计时 / 双面块）；魔法帽 / 染色瓶同样只改 `recolorable` 的格。
 - 蜗牛推动后若形成匹配：再 `cascadeMatches` 一次；**不再**重复倒计时/皮带/蜗牛/蔓延。
 - 毛球（新玩法 3，`PhaseMove` 20，在蜗牛之后）：每个毛球跳到一个正交相邻的普通宝石格并与之换位；避让格 / 墙与蜗牛相同，同一步已被别的毛球占过的格不选；跳后成消同样由步末补结算处理。道具路径没有 `PhaseMove`，毛球不跳。
+- 雪怪 Boss（新玩法 5，`PhaseMove` 30，在毛球之后）：每只 Boss 召唤计数 +1，满 3 次归零并把身外一圈（与四格正交相邻的 8 格）里的一颗普通宝石（无冰无叠层、不在避让格 / 墙上）变成雪块（1 层石头）；选格按这一步步末开始时的盘面散列，不耗 `gsGen`；一圈里没有候选时本次不召唤。每步记一条 `EvTick "snow_boss"`（四格的新计数 + 雪块格）。道具路径没有 `PhaseMove`，计数不走。
 
 ## 6. 结算
 
-- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`，按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；第 5 刀起各色清除数也在里面（`CountColor 色`，由各段的 `ctCounts` 带来），`gsColorBag` / `gsCollected` 改为派生读数，目标进度 / 达成由目标数据（`Match3.Goal`）统一从 `gsScore` + `gsCounts` 算，结算不再按目标种类分支。
+- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeeds`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`（按步前 / 步后盘面差计的元素，新玩法 5 起按 `diffWeight` 加权求差：缺省每格 1；雪怪左上格 = 剩余血量、其余 0，所以 `CountNamed "snow_boss"` 的增量 = 本步扣掉的血），按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；第 5 刀起各色清除数也在里面（`CountColor 色`，由各段的 `ctCounts` 带来），`gsColorBag` / `gsCollected` 改为派生读数，目标进度 / 达成由目标数据（`Match3.Goal`）统一从 `gsScore` + `gsCounts` 算，结算不再按目标种类分支。
 - 步数：`gsMoves - 1 + 2 * spiritHit`。
 - `decideOutcome`：目标满足 → 每日则 `Won`，否则战役 `LevelClear` 或终章 `Won`；步数用尽 → `Lost`；否则 `MoveApplied`。
 - `MoveApplied` 时 `ensurePlayable`：无合法手则洗牌并 `restoreDecor`（保留障碍/特殊/叠层等装饰）。
@@ -138,4 +142,4 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 **逐轮回放用的纯函数**：`traceSwap`（`Match3.Game.Move`）/ `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Boosters`）与对应的结算 API 是同一次 `resolveMove` 计算的两个投影；连锁层同理，`Match3.Board.Cascade` 的记录版 `cascade*` 同时产出计数（`CascadeTally`）与每一轮（`CascadeWave`），调用方直接读 `CascadeRun` 的字段（第三刀删掉了旧的元组 API `runCascade*` / `traceCascade*`）。`MoveTrace` 含每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮）；`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器，没有自动洗牌时就等于结算结果的 `gsBoard` / `gsGen`，洗牌时 `mtShuffle` 记下洗牌后的盘面。`trace_*` 系列测试保留作回归，现在天然成立。
 
-`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EvTick` / `countdown`）→ 皮带移位（`EvBelt` / `belt`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EvSpread` / `vine` · `choco` · `steam`，带来源格）→ 蜗牛爬行（`EvMove` / `snail`，每只的起点、终点、写入的新朝向蜗牛和被推的格子）→ 毛球跳格（`EvBelt` / `fuzzball`，新玩法 3：`PhaseMove` 20，每跳一次两项：毛球 原格 → 新格、宝石 新格 → 原格）。第 7 刀 7b 起每个效果都是同一种通用形状 `EndEffect { endEffectKind, endEffectElement, endEffectItems :: [EndItem] }`（`EndItem { eiFrom, eiTo, eiCell, eiBack }`：目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它），原来的四个构造器、`SpreadKind`、`SnailMove` 已删；`Show` 手写成原构造器的文本，金标准与快照散列不变。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。
+`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EvTick` / `countdown`）→ 皮带移位（`EvBelt` / `belt`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EvSpread` / `vine` · `choco` · `steam`，带来源格）→ 蜗牛爬行（`EvMove` / `snail`，每只的起点、终点、写入的新朝向蜗牛和被推的格子）→ 毛球跳格（`EvBelt` / `fuzzball`，新玩法 3：`PhaseMove` 20，每跳一次两项：毛球 原格 → 新格、宝石 新格 → 原格）→ 雪怪召唤（`EvTick` / `snow_boss`，新玩法 5：`PhaseMove` 30，每项原地改写：四格的新计数，召唤时再加雪块格）。第 7 刀 7b 起每个效果都是同一种通用形状 `EndEffect { endEffectKind, endEffectElement, endEffectItems :: [EndItem] }`（`EndItem { eiFrom, eiTo, eiCell, eiBack }`：目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它），原来的四个构造器、`SpreadKind`、`SnailMove` 已删；`Show` 手写成原构造器的文本，金标准与快照散列不变。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。

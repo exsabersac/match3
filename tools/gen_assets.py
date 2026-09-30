@@ -696,6 +696,72 @@ def fuzzball():
     return img
 
 
+def snow_boss(hurt=False):
+    """雪怪 Boss（新玩法 5）：整只画在一张图上（占 2×2 格），游戏里切成四块 snow_boss_<象限>（hurt = 血量过半后的受伤表情）。
+    冰蓝雪怪：毛茸茸的白色身体 + 两只冰角 + 浅蓝脸 + 怒眉獠牙，两侧短胳膊；受伤版一只眼打叉、头上贴创可贴、身上裂纹、汗滴。"""
+    img = new()
+    # 身体：大椭圆 + 一圈绒球
+    m = ellipse_mask((U(0.1), U(0.16), U(0.9), U(0.97)))
+    for i in range(22):
+        a = i / 22 * math.pi * 2
+        cx, cy, r = 0.5 + 0.39 * math.cos(a), 0.57 + 0.39 * math.sin(a), 0.07
+        m = add_mask(m, ellipse_mask((U(cx - r), U(cy - r), U(cx + r), U(cy + r))))
+    # 胳膊
+    for sx in (-1, 1):
+        cx = 0.5 + sx * 0.4
+        arm = ellipse_mask((U(cx - 0.1), U(0.56), U(cx + 0.1), U(0.84)))
+        img = paint(img, arm, ("r", (250, 252, 255), (150, 180, 220), (0.45, 0.35)), outline=(40, 60, 110), ow=0.012, shadow=0.4)
+    # 冰角
+    for sx in (-1, 1):
+        pts = [(0.5 + sx * 0.18, 0.2), (0.5 + sx * 0.3, 0.02), (0.5 + sx * 0.33, 0.1), (0.5 + sx * 0.28, 0.24)]
+        horn = poly_mask(pts_px(pts))
+        img = paint(img, horn, ("v", (235, 250, 255), (120, 190, 240)), outline=(30, 70, 130), ow=0.01)
+    img = paint(img, m, ("r", (255, 255, 255), (170, 196, 232), (0.42, 0.36)), outline=(34, 54, 104), ow=0.014, shadow=0.55)
+    for i in range(16):
+        a = i / 16 * math.pi * 2 + 0.2
+        cx, cy = 0.5 + 0.3 * math.cos(a), 0.6 + 0.3 * math.sin(a)
+        img = line(img, [(U(cx - 0.02), U(cy)), (U(cx + 0.02), U(cy - 0.015))], (205, 222, 245), U(0.008))
+    # 脸
+    face = ellipse_mask((U(0.27), U(0.32), U(0.73), U(0.74)))
+    img = paint(img, face, ("r", (214, 236, 255), (120, 170, 226), (0.5, 0.4)), outline=(40, 70, 130), ow=0.008)
+    # 眼睛
+    for sx in (-1, 1):
+        ex = 0.5 + sx * 0.1
+        if hurt and sx < 0:
+            img = line(img, [(U(ex - 0.045), U(0.42)), (U(ex + 0.045), U(0.5))], (30, 30, 60), U(0.016))
+            img = line(img, [(U(ex - 0.045), U(0.5)), (U(ex + 0.045), U(0.42))], (30, 30, 60), U(0.016))
+        else:
+            eye = ellipse_mask((U(ex - 0.055), U(0.4), U(ex + 0.055), U(0.52)))
+            img = paint(img, eye, (255, 255, 255), outline=(30, 40, 80), ow=0.006)
+            img = comp(img, fill_layer(ellipse_mask((U(ex - 0.025), U(0.44), U(ex + 0.025), U(0.51))), (200, 30, 40) if not hurt else (30, 30, 60)))
+            img = comp(img, fill_layer(ellipse_mask((U(ex - 0.008), U(0.45), U(ex + 0.012), U(0.47))), (255, 255, 255)))
+        # 眉毛：怒 = 内低外高；受伤 = 内高外低（皱眉）
+        inner, outer = (0.37, 0.33) if not hurt else (0.33, 0.37)
+        img = line(img, [(U(0.5 + sx * 0.035), U(inner)), (U(0.5 + sx * 0.16), U(outer))], (26, 40, 90), U(0.02))
+    # 嘴 + 獠牙
+    mouth = ellipse_mask((U(0.38), U(0.56), U(0.62), U(0.68))) if not hurt else ellipse_mask((U(0.41), U(0.58), U(0.59), U(0.66)))
+    img = paint(img, mouth, (60, 20, 50), outline=(30, 20, 50), ow=0.006)
+    for fx in (0.44, 0.56):
+        fang = poly_mask(pts_px([(fx - 0.025, 0.565), (fx + 0.025, 0.565), (fx, 0.62)]))
+        img = paint(img, fang, (255, 255, 255), outline=(60, 60, 90), ow=0.004)
+    img = gloss(img, m, (U(0.2), U(0.2), U(0.55), U(0.4)), 0.3, 0.03)
+    if hurt:
+        # 创可贴
+        band = poly_mask(pts_px([(0.56, 0.2), (0.7, 0.14), (0.73, 0.2), (0.59, 0.26)]))
+        img = paint(img, band, (250, 210, 170), outline=(150, 100, 70), ow=0.005)
+        for d in (0.0, 0.03):
+            img = comp(img, fill_layer(ellipse_mask((U(0.62 + d), U(0.19 - d / 3), U(0.635 + d), U(0.205 - d / 3))), (190, 140, 110)))
+        # 裂纹
+        for c in ([(0.2, 0.5), (0.25, 0.58), (0.21, 0.66), (0.27, 0.72)], [(0.8, 0.62), (0.74, 0.7), (0.79, 0.8)]):
+            img = line(img, pts_px(c), (60, 90, 150), U(0.01))
+        # 汗滴
+        drop = add_mask(ellipse_mask((U(0.74), U(0.36), U(0.8), U(0.43))), poly_mask(pts_px([(0.745, 0.385), (0.77, 0.32), (0.795, 0.385)])))
+        img = paint(img, drop, ("v", (220, 245, 255), (110, 190, 250)), outline=(40, 90, 160), ow=0.004)
+    else:
+        img = sparkle(img, U(0.82), U(0.2), U(0.06), 0.9)
+    return img
+
+
 def chest():
     img = new()
     body = rrect_mask((U(0.12), U(0.42), U(0.88), U(0.86)), U(0.05))
@@ -1025,6 +1091,23 @@ def carpet(covered):
                 d.line(pts_px(list(seg)), fill=255, width=int(U(0.03)))
         img = comp(img, fill_layer(dash, (255, 150, 220), 0.95))
         img = comp(img, fill_layer(poly_mask(pts_px([(0.5, 0.36), (0.64, 0.5), (0.5, 0.64), (0.36, 0.5)])), (255, 150, 220), 0.35))
+    return img
+
+
+def cookie_drop():
+    """饼干掉落口（新玩法 6）：顶行格子上沿的金色漏斗 + 白色向下箭头，画在棋子之上（只占格子上部四分之一）。"""
+    img = new()
+    fun = poly_mask(pts_px([(0.06, 0.02), (0.94, 0.02), (0.74, 0.24), (0.26, 0.24)]))
+    img = comp(img, fill_layer(blur(fun, U(0.03)), (40, 20, 0), 0.45))
+    img = comp(img, fill_layer(fun, ("v", (255, 222, 130), (190, 120, 45)), 0.97))
+    rim = poly_mask(pts_px([(0.06, 0.02), (0.94, 0.02), (0.91, 0.06), (0.09, 0.06)]))
+    img = comp(img, fill_layer(rim, (110, 62, 18), 0.95))
+    lip = poly_mask(pts_px([(0.27, 0.20), (0.73, 0.20), (0.74, 0.24), (0.26, 0.24)]))
+    img = comp(img, fill_layer(lip, (92, 50, 14), 0.95))
+    for x0 in (0.16, 0.8):
+        img = comp(img, fill_layer(ellipse_mask((U(x0 - 0.022), U(0.058), U(x0 + 0.022), U(0.102))), (255, 246, 210), 0.9))
+    arr = poly_mask(pts_px([(0.44, 0.07), (0.56, 0.07), (0.56, 0.12), (0.63, 0.12), (0.5, 0.21), (0.37, 0.12), (0.44, 0.12)]))
+    img = comp(img, fill_layer(arr, (255, 252, 236), 0.97))
     return img
 
 
@@ -1572,9 +1655,18 @@ def build_sprites():
     sp["jelly"] = down(jelly(1))
     sp["jelly_2"] = down(jelly(2))
     sp["bubble"] = down(bubble())
+    sp["cookie_drop"] = down(cookie_drop())
     for k in range(4):
         sp["magic_stone_%d" % k] = down(magic_stone(k))
     sp["fuzzball"] = down(fuzzball())
+    # 雪怪 Boss：整只一张（HUD 目标 / 血条图标）+ 切成 2×2 四块（象限 0 左上 / 1 右上 / 2 左下 / 3 右下），正常与受伤两套
+    for tag, hurt in (("", False), ("_hurt", True)):
+        whole = snow_boss(hurt)
+        if not hurt:
+            sp["snow_boss"] = down(whole)
+        big = down(whole, 2 * S)
+        for q, (ox, oy) in enumerate([(0, 0), (S, 0), (0, S), (S, S)]):
+            sp["snow_boss%s_%d" % (tag, q)] = big.crop((ox, oy, ox + S, oy + S))
     sp["belt"] = down(belt())
     sp["portal"] = down(portal())
     sp["sel_ring"] = down(sel_ring())
@@ -1627,12 +1719,12 @@ LEGEND = [
                         ("cookie", "饼干", "Cookie"), ("magic_hat", "魔法帽", "Magic hat"), ("snail", "蜗牛", "Snail"),
                         ("surprise", "彩蛋", "Surprise"), ("time_spirit", "时间精灵", "Time spirit"), ("bubble", "气泡", "Bubble"),
                         ("magic_stone_1", "魔法石", "Magic stone"), ("magic_stone_3", "魔法石 满", "Magic stone full"),
-                        ("fuzzball", "毛球", "Fuzzball")]),
+                        ("fuzzball", "毛球", "Fuzzball"), ("snow_boss", "雪怪 Boss（2×2）", "Snow boss 2x2")]),
     ("带颜色的障碍 Colored（同样用形状徽记）", [("balloon_" + k, "气球", "Balloon " + k.upper()) for k in GEMS]
      + [("bottle_" + k, "染色瓶", "Bottle " + k.upper()) for k in GEMS]
      + [("maker_" + k, "果汁机", "Maker " + k.upper()) for k in GEMS] + [("ufo_" + k, "飞碟", "UFO " + k.upper()) for k in GEMS]),
     ("地面与标记 Floor & UI", [("@tiles", "棋盘格", "Cells"), ("carpet_open", "地毯目标", "Carpet target"), ("carpet_covered", "已铺地毯", "Carpet"),
-                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("sel_ring", "选中框", "Selection"),
+                             ("jelly_2", "双层果冻", "Jelly x2"), ("jelly", "果冻 1 层", "Jelly x1"), ("belt", "传送带", "Belt"), ("portal", "传送门", "Portal"), ("cookie_drop", "饼干掉落口", "Cookie drop"), ("sel_ring", "选中框", "Selection"),
                              ("hint_glow", "提示光", "Hint"), ("@badge", "层数角标", "Layer badge")]),
 ]
 

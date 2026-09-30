@@ -496,7 +496,7 @@ goal_carpet_counts = do
   let gs = levelGame 36 42
   assertEqual "level 36 carpet open" (8 :: Int) (length (gsCarpetOpen gs))
   assertEqual "goal" (goalCount CountCarpets 8) (gsGoal gs)
-  assertEqual "campaign levels" (41 :: Int) (length allLevels)
+  assertEqual "campaign levels" (42 :: Int) (length allLevels)
 
 carry_moves_on_next_level :: Assertion
 carry_moves_on_next_level = do
@@ -537,11 +537,11 @@ daily_goal_rotates_ten = do
       flavors
 
 
--- | Batch: all campaign levels (38 + 段 5 两关 + 第 41 关) constructible, positive goals/moves,
+-- | Batch: all campaign levels (38 + 段 5 两关 + 第 41 / 42 关) constructible, positive goals/moves,
 -- board size in bounds, décor enough for obstacle goals, legal move after ensure.
 campaign_levels_batch_ok :: Assertion
 campaign_levels_batch_ok = do
-  assertEqual "41 levels (38 + 段 5 的果冻 / 气泡 + 第 41 关爆破)" (41 :: Int) (length allLevels)
+  assertEqual "42 levels (38 + 段 5 的果冻 / 气泡 + 第 41 关爆破 + 第 42 关魔石)" (42 :: Int) (length allLevels)
   let seeds = [42, 99, 7] :: [Int]
   mapM_
     ( \seed ->

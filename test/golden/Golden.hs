@@ -588,9 +588,10 @@ seg5Lines = levelBlock [campaign38 .. campaign40 - 1]
 campaign40 :: Int
 campaign40 = 40
 
--- | 新玩法关卡（第 41 关起，2026-09-30 解冻后追加）：同段 5 的投影，整块追加在文件末尾，前面的行不动。
+-- | 新玩法关卡（第 41 关起，2026-09-30 解冻后追加）：同段 5 的投影，**每关一整块**依次追加在文件末尾
+-- （先一关的逐步投影再它的开局），再加新关卡时前面的行不动。
 seg6Lines :: [String]
-seg6Lines = levelBlock [campaign40 .. length allLevels - 1]
+seg6Lines = concatMap (levelBlock . pure) [campaign40 .. length allLevels - 1]
 
 -- | 一批关卡的逐步投影（种子 1–2 × 15 步）与开局（种子 0 / 5 / 99）。
 levelBlock :: [Int] -> [String]

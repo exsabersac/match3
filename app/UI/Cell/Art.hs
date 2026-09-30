@@ -31,6 +31,7 @@ module UI.Cell.Art
   , artCountdown
   , artCustom
   , artBubble
+  , artMagicStone
   ) where
 
 import Art
@@ -253,6 +254,17 @@ artCountdown ren art pulse x y cell = case cell of
 artBubble :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
 artBubble ren art pulse x y cell = case cell of
   Custom _ _ -> sprBob "bubble"
+  _ -> pure ()
+  where
+    Kit {..} = cellKit ren art pulse x y
+
+-- | 贴图版：魔法石（新玩法 2）——按充能格数选贴图 magic_stone_0..3（底部充能槽点亮 k 个；满 3 格外发光），
+-- 满格（含发射中）时轻微浮动提示「本步末会发射」。
+artMagicStone :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
+artMagicStone ren art pulse x y cell = case cell of
+  Custom _ (CustomState k)
+    | k >= 3 -> sprBob "magic_stone_3"
+    | otherwise -> spr ("magic_stone_" ++ show (max 0 k))
   _ -> pure ()
   where
     Kit {..} = cellKit ren art pulse x y

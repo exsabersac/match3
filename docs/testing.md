@@ -285,7 +285,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `view_cell_face_and_level_list_match_legacy` | 全部样本盘面的格子与每种构造器 / 叠层组合：`cellFace` 与旧 `encodeCell` 的字段（`t` 在前、顺序相同）逐项相同；`levelViews` 与 `allLevels` 的序号 / 名字 / 步数 / 目标相同 |
 | `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
-| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、没登记的名字目标退回元素名 |
+| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、第 45 关 =「雪怪」、第 46 关 =「饼干」、没登记的名字目标退回元素名 |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
@@ -356,7 +356,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
   和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
-- **一致性用例**：`web/test/parity.sh` 默认状态 19 组、动画 18 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
+- **一致性用例**：`web/test/parity.sh` 默认状态 20 组、动画 18 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
   第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）与第 44 关「魔力鸟」），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
   `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）；
   提示不会主动选彩虹组合，第 44 关的变身步（`rainbow_line` / `rainbow_bomb`）靠后两种走法覆盖，`parity.sh` 会检查这些用例真的走到了变身步
@@ -367,11 +367,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
   `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
 - **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
-  e2e 对全部关卡（网页版当前 44 关；桌面核心第 45 关「雪怪」尚未接入网页端，接入前 e2e 会把 `snow_boss` 报成降级；第 46 关「掉落口」只用饼干格，不会触发降级，掉落口标记网页端暂不画）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
+  e2e 对全部关卡（当前 46 关；第 45 关「雪怪」网页端尚未按象限画——图集里有整张 `snow_boss` 贴图，四格各画一张整图，不走降级，所以护栏查不出、要等跟进分支；第 46 关「掉落口」只用饼干格，不会触发降级，掉落口标记网页端暂不画）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
   **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
   `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。`report.json` 的 `fallbacksByLevel` 逐关记录计数，
-  第 43 / 44 关（毛球、彩虹组合）另有单独的「fallbacks 为空」检查项。
+  第 43 / 44 / 46 关（毛球、彩虹组合、掉落口）另有单独的「fallbacks 为空」检查项。
 - **HUD 目标中文标签（每关）**：同一轮逐关检查 `m3debug.hud.goal`（HUD 实际画出的目标标签）= 「目标 」+ `state.goal.label`，
   且 `goal.label` 不含 `[a-z_]`（不漏出 `fuzzball` / `GoalNamed` 这类内部名）；逐关结果在 `report.json` 的 `goalLabels`。
   `goal.label` 来自视图模型 `Match3.View.goalLabel`（名字目标查 `namedGoalLabelTable`），`stack test` 的 `frontends_read_view_model` 也核对全部关卡与每日挑战。

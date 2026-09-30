@@ -167,10 +167,8 @@ function drawSnowBoss(ctx, art, pulse, x, y, c) {
 // gem_c<c>（c = 1..5 由 Api 按核心 Match3.Element.Builtin.chameleonColor 解码，前端不拆 v），再叠一张缓慢旋转的五色描边环
 // chameleon（角度 = 呼吸计数 mod 360 度，每个逻辑帧 1 度：桌面 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈）。
 // 每步换色是步末 EvTick "chameleon"（原格改写），render.js 的倒计时段照常播：前半段旧色、后半段新色，全程红光脉冲。
-// skipChameleonGem：e2e 的反证用（页面里 import 本模块后置 true，只画环不画底层宝石，像素检查必须报错）。
-export const debugDraw = { skipChameleonGem: false };
 function drawChameleon(ctx, art, pulse, x, y, c) {
-  if (!debugDraw.skipChameleonGem) art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL);
+  art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL);
   if (!art.ex(ctx, "chameleon", x, y, CELL, CELL, pulse % 360)) fallbacks["chameleon#环"] = (fallbacks["chameleon#环"] || 0) + 1;
 }
 const CUSTOM_ART = { snow_boss: drawSnowBoss, chameleon: drawChameleon };

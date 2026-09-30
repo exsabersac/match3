@@ -1,7 +1,7 @@
 # 网页版技术验证（GHC WebAssembly 后端）
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
-在浏览器里用桌面版同一套美术（2x 精灵图集）把 46 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
+在浏览器里用桌面版同一套美术（2x 精灵图集）把 47 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
@@ -121,11 +121,11 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：122 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
-1024×1464，WebP 约 372 KB；`atlas.json` 约 3.6 KB；背景 WebP 约 17 KB。
+图集：124 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
+1024×1528，WebP 约 384 KB；`atlas.json` 约 3.6 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-09-30，web-cookie-drop 合入 main 42e1173 后）：wasm 原始 4,784,404 B → `-Oz` 1,983,306 B（gzip 751,037 B）；
-dist 合计 2,512,766 B，逐文件 gzip 合计 1,188,612 B（约 1.19 MB）（WebP 已压缩，gzip 基本无收益）。
+当前体积（2026-09-30，web-chameleon 合入 main 1cdd4e4 后）：wasm 原始 4,840,557 B → `-Oz` 2,004,667 B（gzip 758,417 B）；
+dist 合计 2,549,340 B，逐文件 gzip 合计 1,209,567 B（约 1.21 MB）（WebP 已压缩，gzip 基本无收益）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
@@ -170,7 +170,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
   播放期间锁输入，点击或空格加速（对应 `m3AnimTick(1)`）；
 - 换了不能消：换过去再换回，不扣步；过关 / 通关 / 步数用完时出现结局遮罩；
 - 按钮：‹ / › 切关、重开、提示（高亮核心 `findHint`）、撤销（核心 `Engine.History`，最多 20 步）；
-  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..45&seed=N`（关卡下标 0 起，共 46 关）；
+  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..46&seed=N`（关卡下标 0 起，共 47 关）；
 - HUD「目标 …」显示核心给的中文名（`state.goal.label`，如第 43 关「目标 毛球」），不显示内部名。
 
 ### 自适应布局（layout.js）
@@ -200,8 +200,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-09-30，web-cookie-drop 合入 main 42e1173 后）：46 关，`stack test` 372 个用例全过，
-状态一致性 26 组、动画一致性 24 组（都含第 43 / 44 / 45 / 46 关），e2e 97 项全过，`make android-check` 见 docs/web.md §7。
+下面是各自的底层命令。当前（2026-09-30，web-chameleon 合入 main 1cdd4e4 后）：47 关，`stack test` 381 个用例全过，
+状态一致性 29 组、动画一致性 27 组（都含第 43 / 44 / 45 / 46 / 47 关），e2e 123 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
@@ -222,7 +222,7 @@ stack exec -- ghc -O1 -isrc -iapp/pure -iweb/hs -outputdir /tmp/par/o -o /tmp/pa
 cmp /tmp/native-anim.txt /tmp/wasm-anim.txt && echo 一致
 
 # 第 4 个参数是走法：hint（缺省，按核心提示）/ combo（盘上有「彩虹 × 直线 / 炸弹」相邻就先换它，覆盖第 44 关的变身步；
-# 提示不会主动选彩虹组合）/ combo-bomb（同 combo，但先换「彩虹 × 炸弹」）。parity.sh 的 CASES 写成「关卡:种子:走法」
+# 提示不会主动选彩虹组合）/ combo-bomb（同 combo，但先换「彩虹 × 炸弹」）/ cham-rainbow（先换「彩虹 × 变色龙」，覆盖第 47 关的成对交换规则 15）。parity.sh 的 CASES 写成「关卡:种子:走法」
 /tmp/par/animparity 43 1 20 combo > /tmp/native-anim.txt
 ~/.ghc-wasm/nodejs/bin/node web/test/node-anim-parity.mjs 43 1 20 combo > /tmp/wasm-anim.txt
 ```
@@ -235,9 +235,11 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 `fuzzball-float-a-up` / `fuzzball-float-b-down` 第 43 关毛球浮动的两帧（偏移 −2 / +2 设计像素，e2e 按像素测出两帧纵向平移 ≈ 4 设计像素 × 缩放）、
 `fuzzball-jump-mid-l43-*` 毛球步末跳格（皮带段）中间帧、`goal-label-l43-*` 第 43 关 HUD「目标 毛球」（竖屏 390×844 / 横屏 1280×800）、
 `rules-badge-l44-*` 第 44 关规则角标「彩虹组合变身」、`rainbow-transform-{line,bomb}-mid-l44-*` 彩虹 × 直线 / 炸弹变身段中间帧、
-`cookie-drop-*` 第 46 关「掉落口」（竖屏 / 横屏开局的掉落口标记、掉落口补下饼干的下落段与补完后的盘面）。
+`cookie-drop-*` 第 46 关「掉落口」（竖屏 / 横屏开局的掉落口标记、掉落口补下饼干的下落段与补完后的盘面）、
+`chameleon-l47-*` 第 47 关「变色龙」（竖屏 / 横屏开局、HUD 目标图标）、`chameleon-crop-{before-generic,after}` 通用画法反证前后、
+`chameleon-shift-{before,mid}` 步末换色段前半 / 后半、`chameleon-l47-lost` 玩到失败的结算层。
 另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败
-（`report.json` 的 `fallbacksByLevel` 逐关记录，第 43 / 44 / 45 / 46 关另有单独的检查项；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`，第 45 关雪怪接入前就是这样画成每格一只整图 + 角标 9、原护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
+（`report.json` 的 `fallbacksByLevel` 逐关记录，第 43 / 44 / 45 / 46 关另有单独的检查项；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`，带颜色 `c` 的 Custom 格（第 47 关变色龙）走通用画法时记为 `<元素名>#通用画法缺底层宝石`，第 45 关雪怪接入前就是这样画成每格一只整图 + 角标 9、原护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
 报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。
 
 ## 5. 网页端与核心的接口

@@ -64,8 +64,75 @@ const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, ...(d
 report.serverTypes = serverTypes;
 check("serve.py 的 Content-Type 正确", Object.values(serverTypes).every((t) => t.status === 200 && (t.type || "").startsWith(t.want)), serverTypes);
 
+// 真实绘制钩子（每个页面注入）：包住 CanvasRenderingContext2D.prototype.drawImage，按调用序（seq）记录画到 #board 上的每次绘制——
+// 源矩形（在图集里反查贴图名）+ 经当前变换后的目标矩形（左上角 x0/y0、中心 cx/cy、宽高、是否旋转，后备缓冲像素）。
+// 只在 window.__captureFrame() 之后的下一个有绘制的 requestAnimationFrame 回调里记录（= 一整帧）。检查用它，不用页面自报的记录：
+// 页面代码画偏了、画错贴图或画反了顺序，这里都看得到。
+const DRAW_HOOK = `(() => {
+  const P = CanvasRenderingContext2D.prototype, orig = P.drawImage;
+  let cur = null, done = null, seq = 0;
+  P.drawImage = function (...a) {
+    if (cur && this.canvas && this.canvas.id === "board") {
+      const img = a[0], m = this.getTransform();
+      let sx = 0, sy = 0, sw = img.width, sh = img.height, dx, dy, dw = img.width, dh = img.height;
+      if (a.length >= 9) [, sx, sy, sw, sh, dx, dy, dw, dh] = a;
+      else if (a.length >= 5) [, dx, dy, dw, dh] = a;
+      else [, dx, dy] = a;
+      const pt = (x, y) => [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f];
+      const [x0, y0] = pt(dx, dy), [cx, cy] = pt(dx + dw / 2, dy + dh / 2);
+      cur.push({ seq: seq++, atlas: img instanceof HTMLImageElement && /atlas/.test(img.src), src: [sx, sy, sw, sh], x0, y0, cx, cy,
+        w: Math.hypot(m.a, m.b) * dw, h: Math.hypot(m.c, m.d) * dh, rot: Math.abs(m.b) > 1e-9 || Math.abs(m.c) > 1e-9 });
+    }
+    return orig.apply(this, a);
+  };
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => raf((t) => {
+    try { cb(t); } finally { if (cur && cur.length) { const d = done, log = cur; cur = null; done = null; d(log); } }
+  });
+  window.__captureFrame = () => new Promise((res) => { cur = []; done = res; });
+})();`;
+const atlasSprites = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
+const spriteAt = new Map(Object.entries(atlasSprites).map(([n, r]) => [r.join(","), n]));
+// 抓一整帧的真实绘制，按源矩形反查贴图名
+async function captureDraws(P) {
+  const log = await P.page.evaluate(() => window.__captureFrame());
+  return log.map((d) => ({ ...d, name: d.atlas ? spriteAt.get(d.src.map((v) => Math.round(v)).join(",")) ?? null : null }));
+}
+const near = (a, b, tol = 0.5) => Math.abs(a - b) <= tol;
+// 棋盘网格：从真实画出的底格 tile_a / tile_b 求 (0,0) 格左上角（设计坐标 (16,16)）与每设计单位的后备缓冲像素数 k；
+// 所有底格都要落在同一张 56k 网格上
+function boardGrid(draws, rows, cols) {
+  const tiles = draws.filter((d) => (d.name === "tile_a" || d.name === "tile_b") && !d.rot);
+  const uniq = new Map(tiles.map((t) => [`${t.x0.toFixed(2)},${t.y0.toFixed(2)}`, t]));
+  if (uniq.size !== rows * cols) return null;
+  const ts = [...uniq.values()], k = ts[0].w / 56, x = Math.min(...ts.map((t) => t.x0)), y = Math.min(...ts.map((t) => t.y0));
+  const ok = ts.every((t) => { const c = (t.x0 - x) / (56 * k), r = (t.y0 - y) / (56 * k); return near(c, Math.round(c), 0.01) && near(r, Math.round(r), 0.01) && near(t.w, 56 * k, 0.01) && near(t.h, 56 * k, 0.01); });
+  return ok ? { x, y, k } : null;
+}
+// 掉落口：桌面 UI.BoardArt.drawDropsArt 画在 (cellOrigin 的 x, y − 6)、56 × 56；设计坐标 (16 + 56c, 16 + 56r − 6) → 屏幕 = 网格原点 + (X − 16, Y − 16) × k
+function dropMarkCheck(draws, grid, drops) {
+  const got = draws.filter((d) => d.name === "cookie_drop").map((d) => ({ seq: d.seq, x: d.x0, y: d.y0, w: d.w, h: d.h, rot: d.rot }));
+  const want = drops.map(([r, c]) => ({ p: [r, c], x: grid.x + (16 + 56 * c - 16) * grid.k, y: grid.y + (16 + 56 * r - 6 - 16) * grid.k, w: 56 * grid.k }));
+  const ok = got.length === want.length && want.every((w) => got.some((g) => !g.rot && near(g.x, w.x) && near(g.y, w.y) && near(g.w, w.w) && near(g.h, w.w)));
+  return { ok, got, want };
+}
+// 变色龙：每只变色龙格（按给定盘面）在该格画了且只画了一次 gem_c<v+1>（v = 核心格子的原始值，不用 Api 的 c），调用序在环 chameleon 之前
+function chamCheck(draws, grid, board) {
+  const cells = [];
+  board.forEach((row, r) => row.forEach((cell, c) => {
+    if (!(cell.t === "custom" && cell.name === "chameleon")) return;
+    const s = 56 * grid.k, cx = grid.x + 56 * c * grid.k + s / 2, cy = grid.y + 56 * r * grid.k + s / 2;
+    const at = draws.filter((d) => near(d.cx, cx) && near(d.cy, cy) && near(d.w, s) && near(d.h, s));
+    const gems = at.filter((d) => /^gem_c\d$/.test(d.name || "")), ring = at.find((d) => d.name === "chameleon"), want = `gem_c${cell.v + 1}`;
+    const ok = gems.length === 1 && gems[0].name === want && !gems[0].rot && !!ring && gems[0].seq < ring.seq;
+    cells.push({ p: [r, c], v: cell.v, want, gems: gems.map((g) => [g.name, g.seq]), ring: ring ? ring.seq : null, ok });
+  }));
+  return { ok: cells.length > 0 && cells.every((x) => x.ok), cells };
+}
+
 async function openPage(vp, level, seed) {
   const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, deviceScaleFactor: vp.dpr, hasTouch: !!vp.touch, isMobile: !!vp.mobile });
+  await ctx.addInitScript(DRAW_HOOK);
   const page = await ctx.newPage();
   page.on("console", (m) => logs.push(`${m.type()}: ${m.text()}`));
   page.on("pageerror", (e) => logs.push(`pageerror: ${e.message}`));
@@ -435,12 +502,12 @@ try {
       if (Object.keys(fb).length) bad.push({ level: li + 1, fallbacks: fb });
     }
     report.fallbackLevels = nLevels;
-    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 46 && bad.length === 0, bad);
-    for (const lv of [43, 44, 45, 46]) {
+    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 47 && bad.length === 0, bad);
+    for (const lv of [43, 44, 45, 46, 47]) {
       const row = report.fallbacksByLevel.find((x) => x.level === lv);
       check(`第 ${lv} 关 m3debug.fallbacks 为空`, !!row && Object.keys(row.fallbacks).length === 0, row);
     }
-    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 46 && badGoal.length === 0, badGoal);
+    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 47 && badGoal.length === 0, badGoal);
     await P.ctx.close();
   }
 
@@ -697,6 +764,147 @@ try {
     check("第 46 关截到掉落口补下饼干的下落段、之后盘上仍是 4 块饼干", got && report.cookieDrop.cookies === 4 && report.cookieDrop.progress[1] >= 1, report.cookieDrop);
     check("第 46 关画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0, await P.page.evaluate(() => window.m3debug.fallbacks));
     await P.ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3h. 真实绘制核对（ctx.drawImage 钩子，见 DRAW_HOOK；不用页面自报的 m3debug.dropMarks）：
+  //     (a) 第 46 / 47 关掉落口标记 cookie_drop 的真实目标矩形 = 桌面 drawDropsArt 的 (16 + 56c, 16 + 56r − 6)（换算到屏幕：
+  //         以真实画出的底格 tile_a / tile_b 求 (0,0) 格位置与缩放），静止帧与交换补间帧都查；
+  //     (b) 第 47 关「变色龙」（下标 46，新玩法 7）：每只变色龙格真实画了 gem_c<v+1>（v 取核心格子的原始值）、位置在该格，
+  //         且调用序在环 chameleon 之前；HUD「目标 变色龙」+ 图标 chameleon_icon；换色（步末 tick 段）前半段旧色、后半段新色，
+  //         播完后 state 的颜色 = trace.end 的换色结果、真实绘制随之更新；截图 chameleon-l47-*.png / chameleon-shift-{before,mid}.png；
+  //     反证：页面里 forceGeneric.add("chameleon") 强制旧的通用画法（只有环），(b) 必须不成立、fallbacks 报出
+  //     「chameleon#通用画法缺底层宝石」；撤掉后恢复。裁图 chameleon-crop-{before-generic,after}.png
+  {
+    report.drawHook = { drops: [], chameleon: [] };
+    const chamCells = (b) => b.flatMap((row, r) => row.flatMap((x, c) => (x.t === "custom" && x.name === "chameleon" ? [{ p: [r, c], v: x.v, c: x.c }] : [])));
+    // (a) 掉落口：第 46 关（顶行 4 个）与第 47 关 (0,3)，静止帧 + 交换补间中间帧
+    for (const [li, seed, wantDrops] of [[45, 1, [[0, 1], [0, 3], [0, 4], [0, 6]]], [46, 1, [[0, 3]]]]) {
+      for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+        const P = await openPage(vp, li, seed);
+        await sleep(150);
+        const s = await P.st();
+        const d0 = await captureDraws(P), g0 = boardGrid(d0, s.board.length, s.board[0].length), r0 = g0 && dropMarkCheck(d0, g0, s.drops);
+        check(`第 ${li + 1} 关真实绘制（静止帧）：掉落口 cookie_drop 画在桌面 drawDropsArt 的 (16+56c, 16+56r−6)：${vp.name}`,
+          JSON.stringify(s.drops) === JSON.stringify(wantDrops) && !!r0?.ok, { drops: s.drops, grid: g0, ...r0 });
+        await P.breakAt((i) => i.kind === "swap" && i.fr >= 4);
+        await P.swap(s.hint[0], s.hint[1], false);
+        await P.frozenOrIdle();
+        let r1 = null, g1 = null, frozen = await P.isFrozen();
+        if (frozen) {
+          const d1 = await captureDraws(P);
+          g1 = boardGrid(d1, s.board.length, s.board[0].length); r1 = g1 ? dropMarkCheck(d1, g1, s.drops) : null;
+          if (r1) r1.swapFrame = (await P.info()).kind;
+        }
+        check(`第 ${li + 1} 关真实绘制（交换补间帧）：掉落口 cookie_drop 位置同上：${vp.name}`, frozen && !!r1?.ok && r1.swapFrame === "swap", { grid: g1, ...r1 });
+        report.drawHook.drops.push({ level: li + 1, vp: vp.name, static: r0, swap: r1 });
+        await P.clearBreak(); await P.resume(); await P.idle();
+        await P.ctx.close();
+      }
+    }
+    // (b) 变色龙：竖屏 / 横屏开局
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const P = await openPage(vp, 46, 1);
+      await sleep(150);
+      const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud), cs = chamCells(s.board);
+      check(`第 47 关开局：关名「变色龙」、两只变色龙、格子 c = v + 1（Api 按核心 chameleonColor 解码）：${vp.name}`,
+        s.level === 46 && s.name === "变色龙" && cs.length === 2 && cs.every((x) => x.c === x.v + 1), cs);
+      check(`第 47 关 HUD「目标 变色龙」、目标图标 chameleon_icon：${vp.name}`,
+        s.goal.label === "变色龙" && hud?.goal === "目标 变色龙" && s.goal.icon === "chameleon_icon" && hud?.goalIcon === "chameleon_icon",
+        { label: s.goal.label, icon: s.goal.icon, hud: { goal: hud?.goal, goalIcon: hud?.goalIcon } });
+      const d = await captureDraws(P), g = boardGrid(d, s.board.length, s.board[0].length), cc = g && chamCheck(d, g, s.board);
+      check(`第 47 关真实绘制：变色龙格先画 gem_c<v+1>（在该格）再叠环 chameleon：${vp.name}`, !!cc?.ok, cc);
+      report.drawHook.chameleon.push({ vp: vp.name, cells: cc?.cells });
+      await P.shot(`chameleon-l47-${vp.name}`);
+      await P.ctx.close();
+    }
+    // 反证：强制通用画法（接入前的样子：只画环 + 角标，没有底层宝石）
+    {
+      const P = await openPage({ w: 390, h: 844, dpr: 3 }, 46, 1);
+      await sleep(150);
+      const s = await P.st(), cs = chamCells(s.board);
+      const crop = async (name) => {
+        const [x, y] = await P.center(cs[0].p), m = await P.page.evaluate(() => 40 * window.m3debug.layout.u), f = `${shots}/${name}.png`;
+        await P.page.screenshot({ path: f, clip: { x: x - m, y: y - m, width: 2 * m, height: 2 * m } }); report.shots.push(f);
+      };
+      await crop("chameleon-crop-after");
+      await P.page.evaluate(async () => { const c = await import("/cells.js"); c.forceGeneric.add("chameleon"); });
+      await sleep(80);
+      const dF = await captureDraws(P), gF = boardGrid(dF, s.board.length, s.board[0].length), ccF = gF && chamCheck(dF, gF, s.board);
+      const fb1 = await P.page.evaluate(() => window.m3debug.fallbacks);
+      await crop("chameleon-crop-before-generic");
+      await P.page.evaluate(async () => { const c = await import("/cells.js"); c.forceGeneric.delete("chameleon"); });
+      await sleep(80);
+      const dR = await captureDraws(P), gR = boardGrid(dR, s.board.length, s.board[0].length), ccR = gR && chamCheck(dR, gR, s.board);
+      report.drawHook.forcedGeneric = { forced: ccF, fallbacks: fb1, restored: ccR?.ok };
+      check("反证：强制变色龙走通用画法时，真实绘制核对不成立（没有 gem_c<v+1>）且 fallbacks 报出 chameleon#通用画法缺底层宝石",
+        !!ccF && !ccF.ok && (fb1["chameleon#通用画法缺底层宝石"] || 0) > 0, { forced: ccF, fb1 });
+      check("反证撤掉后：真实绘制核对恢复成立", !!ccR?.ok, ccR);
+      await P.ctx.close();
+    }
+    // 换色：步末 tick 段前半段（旧色）/ 后半段（新色）各冻结一次，核对真实绘制；播完后 state 颜色 = 换色结果
+    {
+      const P = await openPage({ w: 390, h: 844, dpr: 3 }, 46, 1);
+      await sleep(150);
+      const s0 = await P.st(), rows = s0.board.length, cols = s0.board[0].length;
+      const tickEnd = () => P.page.evaluate(() => {
+        const e = window.m3debug.pending.trace.end.find((x) => x.effect.type === "tick");
+        return e ? { cells: e.effect.cells, before: e.before, after: e.after } : null;
+      });
+      await P.breakAt((i) => i.p === "end" && i.stage === "tick" && i.fr >= 1 && i.fr <= Math.floor(i.n * 0.3));
+      await P.swap(s0.hint[0], s0.hint[1], false);
+      await P.frozenOrIdle();
+      let early = null, late = null, te = null;
+      if (await P.isFrozen()) {
+        te = await tickEnd();
+        const d = await captureDraws(P), g = boardGrid(d, rows, cols);
+        early = g && chamCheck(d, g, te.before);
+        await P.shot("chameleon-shift-before");
+        await P.breakAt((i) => i.p === "end" && i.stage === "tick" && i.fr >= Math.ceil(i.n * 0.6));
+        await P.resume();
+        await P.frozenOrIdle();
+        if (await P.isFrozen()) {
+          const d2 = await captureDraws(P), g2 = boardGrid(d2, rows, cols);
+          late = g2 && chamCheck(d2, g2, te.after);
+          await P.shot("chameleon-shift-mid");
+        }
+      }
+      await P.clearBreak(); await P.resume(); await P.idle();
+      await sleep(100);
+      const s1 = await P.st(), after = te ? te.cells.map(([r, c]) => te.after[r][c]) : [], before = te ? te.cells.map(([r, c]) => te.before[r][c]) : [];
+      const d3 = await captureDraws(P), g3 = boardGrid(d3, rows, cols), idle = g3 && chamCheck(d3, g3, s1.board);
+      const changed = before.some((b, i) => b.v !== after[i].v);
+      report.chameleonShift = { cells: te?.cells, before: before.map((x) => x.v), after: after.map((x) => x.v), early: early?.cells, late: late?.cells, idle: idle?.cells };
+      check("第 47 关换色段前半段：真实绘制是换色前的颜色（gem_c<旧 v+1> 在环之前）", !!early?.ok, report.chameleonShift);
+      check("第 47 关换色段后半段：真实绘制是换色后的颜色（gem_c<新 v+1> 在环之前）", !!late?.ok && changed, report.chameleonShift);
+      check("第 47 关换色播完：state 里变色龙 = trace.end 的换色结果，真实绘制随之更新",
+        !!te && te.cells.every(([r, c]) => JSON.stringify(s1.board[r][c]) === JSON.stringify(te.after[r][c])) && !!idle?.ok, report.chameleonShift);
+      check("第 47 关画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0, await P.page.evaluate(() => window.m3debug.fallbacks));
+      await P.ctx.close();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3i. 失败提示不漏内部名：第 39 / 40 / 43 / 45 / 47 关按提示走到步数用完（空格加速），结局面板实际画出的文字（m3debug.overlay）
+  //     标题「步数用完了」、副标题含 state.loseHint（核心中文失败提示）且不含 [a-z_]
+  {
+    report.loseOverlays = [];
+    for (const li of [38, 39, 42, 44, 46]) {
+      const P = await openPage({ w: 390, h: 844, dpr: 1 }, li, 7);
+      for (let k = 0; k < 80; k++) {
+        const s = await P.st();
+        if (s.over || !s.hint) break;
+        await P.swap(s.hint[0], s.hint[1], false); await sleep(20);
+        await P.page.keyboard.press(" "); await P.idle();
+      }
+      await sleep(120);
+      const s = await P.st(), ov = await P.page.evaluate(() => window.m3debug.overlay);
+      report.loseOverlays.push({ level: li + 1, over: s.over, loseHint: s.loseHint, overlay: ov });
+      check(`第 ${li + 1} 关失败面板：副标题含核心失败提示、不含 [a-z_] 内部名`,
+        s.over?.tag === "Lost" && ov && ov.title === "步数用完了" && ov.sub.includes(s.loseHint) && !/[a-z_]/.test(ov.title + ov.sub), { over: s.over, loseHint: s.loseHint, overlay: ov });
+      if (li === 46 && s.over?.tag === "Lost") await P.shot("chameleon-l47-lost");
+      await P.ctx.close();
+    }
   }
 
   // -------------------------------------------------------------------------

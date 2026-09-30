@@ -51,16 +51,18 @@ export function computeLayout(W, H, rows, cols, ins = { t: 0, r: 0, b: 0, l: 0 }
   return L;
 }
 
-// 按钮：选关 ‹ ›、重开、提示、撤销（设计单位矩形）
-const BUTTONS = [["prev", "‹"], ["next", "›"], ["restart", "重开"], ["hint", "提示"], ["undo", "撤销"]];
+// 按钮：本关说明 ?、选关 ‹ ›、重开、提示、撤销（设计单位矩形）。问号跟按钮条走，不压在棋盘格子上。
+const BUTTONS = [["help", "?"], ["prev", "‹"], ["next", "›"], ["restart", "重开"], ["hint", "提示"], ["undo", "撤销"]];
+const SMALL_BTN = new Set(["help", "prev", "next"]);
 function layoutButtons(L) {
   const out = [];
   if (L.bar) {
     const { x, y, w, h } = L.bar, gap = 8, n = BUTTONS.length;
-    const small = 56, big = (w - 2 * small - gap * (n - 1)) / (n - 2);
+    const small = 48, nSmall = BUTTONS.filter(([id]) => SMALL_BTN.has(id)).length;
+    const big = (w - nSmall * small - gap * (n - 1)) / (n - nSmall);
     let cx = x;
     for (const [id, label] of BUTTONS) {
-      const bw = id === "prev" || id === "next" ? small : big;
+      const bw = SMALL_BTN.has(id) ? small : big;
       out.push({ id, label, x: cx, y: y + 6, w: bw, h: h - 10 });
       cx += bw + gap;
     }
@@ -68,12 +70,13 @@ function layoutButtons(L) {
     // 横排：侧栏底部两行按钮，高度至少 MIN_TOUCH_CSS（消息区相应变矮）
     const { x, y, w, h } = L.hud, gap = 8, bh = Math.round(Math.max(54, Math.min(72, MIN_TOUCH_CSS / L.u)));
     const row2 = y + h - bh, row1 = row2 - gap - bh;
-    const half = (w - gap) / 2, nav = 54;
+    const third = (w - 2 * gap) / 3, nav = 54;
     out.push({ id: "prev", label: "‹", x, y: row1, w: nav, h: bh });
     out.push({ id: "next", label: "›", x: x + nav + gap, y: row1, w: nav, h: bh });
     out.push({ id: "restart", label: "重开", x: x + 2 * (nav + gap), y: row1, w: w - 2 * (nav + gap), h: bh });
-    out.push({ id: "hint", label: "提示", x, y: row2, w: half, h: bh });
-    out.push({ id: "undo", label: "撤销", x: x + half + gap, y: row2, w: half, h: bh });
+    out.push({ id: "hint", label: "提示", x, y: row2, w: third, h: bh });
+    out.push({ id: "undo", label: "撤销", x: x + third + gap, y: row2, w: third, h: bh });
+    out.push({ id: "help", label: "?", x: x + 2 * (third + gap), y: row2, w: third, h: bh });
   }
   return out;
 }

@@ -156,7 +156,7 @@ const clampHp = (hp, mx) => Math.max(0, Math.min(mx, hp));
 function button(ctx, art, b, enabled, pressed) {
   ctx.save();
   ctx.globalAlpha = enabled ? 1 : 0.45;
-  const name = b.id === "hint" || b.id === "undo" || b.id === "restart" ? "panel_gold" : "panel_chip";
+  const name = b.id === "hint" || b.id === "undo" || b.id === "restart" || b.id === "help" ? "panel_gold" : "panel_chip";
   if (!art.panel(ctx, name, b.x, b.y + (pressed ? 2 : 0), b.w, b.h, 14)) { ctx.fillStyle = "#554"; ctx.fillRect(b.x, b.y, b.w, b.h); }
   const big = b.label.length === 1;
   const gold = name === "panel_gold";

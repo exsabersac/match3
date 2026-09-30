@@ -9,7 +9,7 @@ import { CELL, PAD, dropMarks, fallbacks, setDims } from "./cells.js";
 import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
-import { drawGuide, drawHelpButton, guideEntries, helpButtonRect, noteSpecials } from "./guide.js";
+import { drawGuide, guideEntries, noteSpecials } from "./guide.js";
 
 // ---------------------------------------------------------------------------
 // 1. 加载 wasm 与贴图（并行），记录耗时
@@ -233,8 +233,6 @@ function render() {
     overlayDrawn = { title, sub };
   } else overlayDrawn = null;
   ctx.restore();
-  const hb = helpButtonRect(L);
-  drawHelpButton(ctx, art, hb, pressed === "help");
   if (showGuide) {
     drawGuide(ctx, art, { x: L.board.x + PAD, y: L.board.y + PAD, w: L.cols * CELL, h: L.rows * CELL }, guideEntries(seenSpecials));
   }
@@ -266,8 +264,6 @@ canvas.addEventListener("pointerdown", (ev) => {
   const [x, y] = unitsOf(ev);
   const b = buttonAtUnits(L, x, y);
   if (b) { pressed = b.id; return; }
-  const hb = helpButtonRect(L);
-  if (x >= hb.x && x < hb.x + hb.w && y >= hb.y && y < hb.y + hb.h) { pressed = "help"; return; }
   if (showGuide) { showGuide = false; return; }
   const p = cellAtUnits(L, x, y);
   if (!p) return;
@@ -290,11 +286,6 @@ canvas.addEventListener("pointerup", (ev) => {
   if (!pressed) return;
   const [x, y] = unitsOf(ev), b = buttonAtUnits(L, x, y), id = pressed;
   pressed = null;
-  if (id === "help") {
-    const hb = helpButtonRect(L);
-    if (x >= hb.x && x < hb.x + hb.w && y >= hb.y && y < hb.y + hb.h) showGuide = !showGuide;
-    return;
-  }
   if (b && b.id === id) onButton(id);
 });
 canvas.addEventListener("pointercancel", () => { drag = null; pressed = null; });
@@ -313,6 +304,7 @@ function onButton(id) {
   if (id === "prev") newGame((state.level + levels.length - 1) % levels.length, seed);
   else if (id === "next") newGame((state.level + 1) % levels.length, seed);
   else if (id === "restart") newGame(state.level, seed);
+  else if (id === "help") showGuide = !showGuide;
   else if (id === "hint") { showHint = state.hint; msg = showHint ? "提示：交换高亮的两格" : "没有可走的步"; }
   else if (id === "undo") {
     // 撤销：历史在核心的 Engine.History（最多 20 步，终局后也能撤销）

@@ -92,23 +92,6 @@ function wrap(ctx, s, w) {
   return lines;
 }
 
-// 问号按钮（设计单位），贴在棋盘右上角，不挤原来的按钮条。
-export function helpButtonRect(L) {
-  const size = 36;
-  return { id: "help", label: "?", x: L.board.x + L.VW - 8 - size, y: L.board.y + 8, w: size, h: size };
-}
-
-export function drawHelpButton(ctx, art, rect, pressed) {
-  const y = rect.y + (pressed ? 2 : 0);
-  if (!art.panel(ctx, "panel_gold", rect.x, y, rect.w, rect.h, 12)) {
-    ctx.fillStyle = "#554"; ctx.fillRect(rect.x, y, rect.w, rect.h);
-  }
-  ctx.font = `800 22px ${FONT}`;
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillStyle = "#ffe9a8";
-  ctx.fillText("?", rect.x + rect.w / 2, y + rect.h / 2);
-}
-
 // 盖在棋盘上的说明。entries 为空时告诉玩家这一关没有特殊格子。
 export function drawGuide(ctx, art, board, entries) {
   const pad = 16;

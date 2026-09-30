@@ -401,3 +401,12 @@ frontends_read_view_model = do
     [rbRule b | b <- ruleBadgeTable, not (("\"" ++ drop 3 (rbTextSprite b) ++ "\": \"" ++ rbText b ++ "\"") `isInfixOf` gen)]
   assertEqual "badge icons are generated sprites" []
     [ic | b <- ruleBadgeTable, ic <- rbIcons b, not (("sp[\"" ++ ic ++ "\"]") `isInfixOf` gen)]
+  -- 目标中文显示名（goalLabel，网页 HUD「目标 …」的唯一来源）：网页接口输出它；全部关卡与每日挑战的目标都有中文名
+  -- （不含英文标识符，即元素名目标都在 namedGoalLabelTable 登记了）；没登记的名字退回元素名本身
+  assertBool "web Api encodes goalLabel" ("goalLabel" `mentionsIdent` api)
+  let rawIdent = any (\ch -> (ch >= 'a' && ch <= 'z') || ch == '_')
+      dailyGoals = [goalInfo (cfgGoal (dailyConfig 2026 m d)) 0 | m <- [1 .. 12], d <- [1 .. 28]]
+  assertEqual "every level goal has a Chinese label" [] [(lvIndex l, goalLabel (lvGoal l)) | l <- levelViews, rawIdent (goalLabel (lvGoal l))]
+  assertEqual "every daily goal has a Chinese label" [] [goalLabel g | g <- dailyGoals, rawIdent (goalLabel g)]
+  assertEqual "level 43 goal label" "毛球" (goalLabel (gvGoal (gameView (levelGame 42 1))))
+  assertEqual "unregistered named goal falls back to its name" "x_elem" (goalLabel (goalInfo (goalCount (CountNamed (ElementName "x_elem")) 3) 0))

@@ -59,10 +59,6 @@ new ResizeObserver(scheduleRelayout).observe(document.documentElement);
 
 // ---------------------------------------------------------------------------
 // 3. 对局状态
-const GOAL_NAMES = { GoalScore: "分数", GoalCollect: "收集", GoalCollectMulti: "多色收集", GoalClearStone: "碎石",
-  GoalChest: "宝箱", GoalHoney: "蜂蜜罐", GoalBalloon: "气球", GoalCookie: "饼干", GoalCake: "蛋糕",
-  GoalSafe: "保险箱", GoalUfo: "飞碟", GoalCarpet: "地毯" };
-const NAMED_GOALS = { jelly: "果冻", bubble: "气泡" };
 const levels = call("m3Levels");
 
 let state = null;        // 最近一次核心返回的（已生效的）状态
@@ -74,10 +70,9 @@ let hudDrawn = null;   // 上一帧 HUD 关卡面板各部件的矩形（drawHud
 let pressed = null, frozen = false, frames = 0;
 const fx = new Fx();
 
-function goalText(s) {
-  if (s.goal.kind === "GoalNamed") return `${NAMED_GOALS[s.goal.name] || s.goal.name}`;
-  return GOAL_NAMES[s.goal.kind] || s.goal.text;
-}
+// HUD「目标 …」的中文显示名：直接用核心给的 goal.label（视图模型 Match3.View.goalLabel，唯一来源；
+// 名字目标在 namedGoalLabelTable 登记）。JS 不再自带「目标种类 → 中文」映射表，新目标 / 新元素不用改这里。
+function goalText(s) { return s.goal.label ?? s.goal.text; }
 
 function newGame(level, seed) {
   const t0 = performance.now();

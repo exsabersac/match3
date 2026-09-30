@@ -12,6 +12,11 @@ module Match3.View
   , Boosters (..)
   , PlayStatus (..)
   , titleLine
+    -- * Boss 血条
+  , BossView (..)
+  , bossView
+  , BossPart (..)
+  , bossPart
     -- * 规则开关角标
   , RuleBadge (..)
   , ruleBadgeTable
@@ -53,6 +58,7 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Core
+import Match3.Element.Builtin (SnowBoss (..), decodeBoss, snowBossEvery, snowBossHp, snowBossName)
 import Match3.Engine (match3Game)
 
 --------------------------------------------------------------------------------
@@ -92,6 +98,7 @@ data GameView = GameView
   , gvOver :: Maybe Outcome
   , gvStatus :: PlayStatus
   , gvGoal :: GoalInfo
+  , gvBoss :: Maybe BossView  -- ^ 雪怪 Boss 血条（新玩法 5）：目标是「击败 Boss」的关卡才有
   , gvBoard :: BoardView
   }
 
@@ -117,6 +124,7 @@ gameView gs =
         Just (Lost s) -> PlayLost s
         _ -> if gsShuffled gs then PlayShuffled else PlayOn
     , gvGoal = goalInfo (gsGoal gs) (gsProgress gs)
+    , gvBoss = bossView gs
     , gvBoard = boardView gs
     }
   where
@@ -124,6 +132,34 @@ gameView gs =
     li = min lvl (levelCount - 1)
     mlvl = lookupLevel li
     mv = gsMoves gs
+
+-- | HUD 血条（新玩法 5 雪怪 Boss）：剩余血量（盘上全部 Boss 的血量之和，击败后为 0）与满血值（= 目标值）。
+data BossView = BossView
+  { bvHp :: Int
+  , bvMax :: Int
+  }
+  deriving (Eq, Show)
+
+-- | 目标里有「击败 Boss」（CountNamed "snow_boss"）配额时给出血条；满血值 = 该配额的目标值。
+bossView :: GameState -> Maybe BossView
+bossView gs = case [t | Quota (MeterCount (CountNamed n)) t <- goalQuotas (gsGoal gs), n == snowBossName] of
+  t : _ -> Just (BossView (max 0 (min t (snowBossHp (gsBoard gs)))) t)
+  [] -> Nothing
+
+-- | 雪怪 Boss 的一格怎么画（新玩法 5）：象限（0 左上 / 1 右上 / 2 左下 / 3 右下，贴图 snow_boss[_hurt]_<象限>）、
+-- 是否受伤（血量 ≤ 满血一半，换受伤表情）、召唤计数与周期（右下格画进度小点）。
+data BossPart = BossPart
+  { bpQuad :: Int
+  , bpHurt :: Bool
+  , bpTurn :: Int
+  , bpEvery :: Int
+  }
+  deriving (Eq, Show)
+
+bossPart :: Cell -> Maybe BossPart
+bossPart cell = case cell of
+  Custom n st | n == snowBossName -> let b = decodeBoss st in Just (BossPart (sbQuad b) (sbHp b * 2 <= sbMax b) (sbTurn b) snowBossEvery)
+  _ -> Nothing
 
 -- | 桌面版窗口标题（不含末尾的 "  |  " 与提示消息）。
 titleLine :: GameView -> String

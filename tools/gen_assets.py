@@ -696,6 +696,72 @@ def fuzzball():
     return img
 
 
+def snow_boss(hurt=False):
+    """雪怪 Boss（新玩法 5）：整只画在一张图上（占 2×2 格），游戏里切成四块 snow_boss_<象限>（hurt = 血量过半后的受伤表情）。
+    冰蓝雪怪：毛茸茸的白色身体 + 两只冰角 + 浅蓝脸 + 怒眉獠牙，两侧短胳膊；受伤版一只眼打叉、头上贴创可贴、身上裂纹、汗滴。"""
+    img = new()
+    # 身体：大椭圆 + 一圈绒球
+    m = ellipse_mask((U(0.1), U(0.16), U(0.9), U(0.97)))
+    for i in range(22):
+        a = i / 22 * math.pi * 2
+        cx, cy, r = 0.5 + 0.39 * math.cos(a), 0.57 + 0.39 * math.sin(a), 0.07
+        m = add_mask(m, ellipse_mask((U(cx - r), U(cy - r), U(cx + r), U(cy + r))))
+    # 胳膊
+    for sx in (-1, 1):
+        cx = 0.5 + sx * 0.4
+        arm = ellipse_mask((U(cx - 0.1), U(0.56), U(cx + 0.1), U(0.84)))
+        img = paint(img, arm, ("r", (250, 252, 255), (150, 180, 220), (0.45, 0.35)), outline=(40, 60, 110), ow=0.012, shadow=0.4)
+    # 冰角
+    for sx in (-1, 1):
+        pts = [(0.5 + sx * 0.18, 0.2), (0.5 + sx * 0.3, 0.02), (0.5 + sx * 0.33, 0.1), (0.5 + sx * 0.28, 0.24)]
+        horn = poly_mask(pts_px(pts))
+        img = paint(img, horn, ("v", (235, 250, 255), (120, 190, 240)), outline=(30, 70, 130), ow=0.01)
+    img = paint(img, m, ("r", (255, 255, 255), (170, 196, 232), (0.42, 0.36)), outline=(34, 54, 104), ow=0.014, shadow=0.55)
+    for i in range(16):
+        a = i / 16 * math.pi * 2 + 0.2
+        cx, cy = 0.5 + 0.3 * math.cos(a), 0.6 + 0.3 * math.sin(a)
+        img = line(img, [(U(cx - 0.02), U(cy)), (U(cx + 0.02), U(cy - 0.015))], (205, 222, 245), U(0.008))
+    # 脸
+    face = ellipse_mask((U(0.27), U(0.32), U(0.73), U(0.74)))
+    img = paint(img, face, ("r", (214, 236, 255), (120, 170, 226), (0.5, 0.4)), outline=(40, 70, 130), ow=0.008)
+    # 眼睛
+    for sx in (-1, 1):
+        ex = 0.5 + sx * 0.1
+        if hurt and sx < 0:
+            img = line(img, [(U(ex - 0.045), U(0.42)), (U(ex + 0.045), U(0.5))], (30, 30, 60), U(0.016))
+            img = line(img, [(U(ex - 0.045), U(0.5)), (U(ex + 0.045), U(0.42))], (30, 30, 60), U(0.016))
+        else:
+            eye = ellipse_mask((U(ex - 0.055), U(0.4), U(ex + 0.055), U(0.52)))
+            img = paint(img, eye, (255, 255, 255), outline=(30, 40, 80), ow=0.006)
+            img = comp(img, fill_layer(ellipse_mask((U(ex - 0.025), U(0.44), U(ex + 0.025), U(0.51))), (200, 30, 40) if not hurt else (30, 30, 60)))
+            img = comp(img, fill_layer(ellipse_mask((U(ex - 0.008), U(0.45), U(ex + 0.012), U(0.47))), (255, 255, 255)))
+        # 眉毛：怒 = 内低外高；受伤 = 内高外低（皱眉）
+        inner, outer = (0.37, 0.33) if not hurt else (0.33, 0.37)
+        img = line(img, [(U(0.5 + sx * 0.035), U(inner)), (U(0.5 + sx * 0.16), U(outer))], (26, 40, 90), U(0.02))
+    # 嘴 + 獠牙
+    mouth = ellipse_mask((U(0.38), U(0.56), U(0.62), U(0.68))) if not hurt else ellipse_mask((U(0.41), U(0.58), U(0.59), U(0.66)))
+    img = paint(img, mouth, (60, 20, 50), outline=(30, 20, 50), ow=0.006)
+    for fx in (0.44, 0.56):
+        fang = poly_mask(pts_px([(fx - 0.025, 0.565), (fx + 0.025, 0.565), (fx, 0.62)]))
+        img = paint(img, fang, (255, 255, 255), outline=(60, 60, 90), ow=0.004)
+    img = gloss(img, m, (U(0.2), U(0.2), U(0.55), U(0.4)), 0.3, 0.03)
+    if hurt:
+        # 创可贴
+        band = poly_mask(pts_px([(0.56, 0.2), (0.7, 0.14), (0.73, 0.2), (0.59, 0.26)]))
+        img = paint(img, band, (250, 210, 170), outline=(150, 100, 70), ow=0.005)
+        for d in (0.0, 0.03):
+            img = comp(img, fill_layer(ellipse_mask((U(0.62 + d), U(0.19 - d / 3), U(0.635 + d), U(0.205 - d / 3))), (190, 140, 110)))
+        # 裂纹
+        for c in ([(0.2, 0.5), (0.25, 0.58), (0.21, 0.66), (0.27, 0.72)], [(0.8, 0.62), (0.74, 0.7), (0.79, 0.8)]):
+            img = line(img, pts_px(c), (60, 90, 150), U(0.01))
+        # 汗滴
+        drop = add_mask(ellipse_mask((U(0.74), U(0.36), U(0.8), U(0.43))), poly_mask(pts_px([(0.745, 0.385), (0.77, 0.32), (0.795, 0.385)])))
+        img = paint(img, drop, ("v", (220, 245, 255), (110, 190, 250)), outline=(40, 90, 160), ow=0.004)
+    else:
+        img = sparkle(img, U(0.82), U(0.2), U(0.06), 0.9)
+    return img
+
+
 def chest():
     img = new()
     body = rrect_mask((U(0.12), U(0.42), U(0.88), U(0.86)), U(0.05))
@@ -1575,6 +1641,14 @@ def build_sprites():
     for k in range(4):
         sp["magic_stone_%d" % k] = down(magic_stone(k))
     sp["fuzzball"] = down(fuzzball())
+    # 雪怪 Boss：整只一张（HUD 目标 / 血条图标）+ 切成 2×2 四块（象限 0 左上 / 1 右上 / 2 左下 / 3 右下），正常与受伤两套
+    for tag, hurt in (("", False), ("_hurt", True)):
+        whole = snow_boss(hurt)
+        if not hurt:
+            sp["snow_boss"] = down(whole)
+        big = down(whole, 2 * S)
+        for q, (ox, oy) in enumerate([(0, 0), (S, 0), (0, S), (S, S)]):
+            sp["snow_boss%s_%d" % (tag, q)] = big.crop((ox, oy, ox + S, oy + S))
     sp["belt"] = down(belt())
     sp["portal"] = down(portal())
     sp["sel_ring"] = down(sel_ring())
@@ -1627,7 +1701,7 @@ LEGEND = [
                         ("cookie", "饼干", "Cookie"), ("magic_hat", "魔法帽", "Magic hat"), ("snail", "蜗牛", "Snail"),
                         ("surprise", "彩蛋", "Surprise"), ("time_spirit", "时间精灵", "Time spirit"), ("bubble", "气泡", "Bubble"),
                         ("magic_stone_1", "魔法石", "Magic stone"), ("magic_stone_3", "魔法石 满", "Magic stone full"),
-                        ("fuzzball", "毛球", "Fuzzball")]),
+                        ("fuzzball", "毛球", "Fuzzball"), ("snow_boss", "雪怪 Boss（2×2）", "Snow boss 2x2")]),
     ("带颜色的障碍 Colored（同样用形状徽记）", [("balloon_" + k, "气球", "Balloon " + k.upper()) for k in GEMS]
      + [("bottle_" + k, "染色瓶", "Bottle " + k.upper()) for k in GEMS]
      + [("maker_" + k, "果汁机", "Maker " + k.upper()) for k in GEMS] + [("ufo_" + k, "飞碟", "UFO " + k.upper()) for k in GEMS]),

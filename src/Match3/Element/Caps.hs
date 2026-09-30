@@ -41,6 +41,7 @@ module Match3.Element.Caps
     -- * 计数与目标（CountCaps）
   , counts
   , countsDiff
+  , weighs
   , bonus
   , vacates
     -- * 步末与变化（StepCaps）
@@ -179,6 +180,11 @@ counts k = withCount (\x -> x {ccCounter = Just k})
 -- | 按步前 / 步后的个数差计数。
 countsDiff :: CounterKey -> Cap
 countsDiff k = withCount (\x -> x {ccDiffCounter = Just k})
+
+-- | 按差计数时这一格算几个（缺省 1）。新玩法 5：雪怪 Boss 的左上格 = 当前血量、其余三格 0，
+-- 个数差就是本步扣掉的血。
+weighs :: Int -> Cap
+weighs n = withCount (\x -> x {ccDiffWeight = n})
 
 -- | 每少一个奖励的步数。
 bonus :: Int -> Cap

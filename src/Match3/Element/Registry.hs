@@ -54,6 +54,7 @@ module Match3.Element.Registry
   , counterWith
   , diffCountersWith
   , countElementWith
+  , weighElementWith
   , vacatesCarpetWith
   , keepOnShuffleWith
   , blastWith
@@ -418,6 +419,11 @@ diffCountersWith = regDiff
 -- | 盘上本体为该元素的格数。
 countElementWith :: Registry -> ElementName -> Board -> Int
 countElementWith reg n b = length [() | cell <- boardCells b, elementName reg cell == n]
+
+-- | 盘上本体为该元素的格按 'diffWeight' 加权的总数（按差计数用）。权重缺省 1，这时与 'countElementWith' 相同；
+-- 新玩法 5 雪怪 Boss 的左上格权重 = 血量，其余格 0。
+weighElementWith :: Registry -> ElementName -> Board -> Int
+weighElementWith reg n b = sum [diffWeight (bodyOf reg cell) | cell <- boardCells b, elementName reg cell == n]
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
 vacatesCarpetWith :: Registry -> Cell -> Bool

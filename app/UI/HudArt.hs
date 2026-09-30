@@ -91,8 +91,19 @@ drawHudArt ren art app = do
       goal = giGoal gi
       prog = giProgress gi  -- 第 5 刀：与窗口标题 / 网页版同一个数（第 5 刀前是本模块的 hudProgress）
       targ = giTarget gi
-  _ <- drawSprite ren art (goalIcon goal) (rect 12 50 26 26)
-  meterA ren art 42 53 332 prog targ (goalTint goal) (show prog ++ "/" ++ show targ)
+  case gvBoss gv of
+    -- 雪怪 Boss（新玩法 5）：目标条换成血条——雪怪头像 + 红色剩余血量（过半后变深红并闪烁），文字 HP 剩余/满血
+    Just bv -> do
+      let hp = bvHp bv
+          half = hp * 2 <= bvMax bv
+          tintHp
+            | half = let k = round (150 + 80 * breathe (appPulse app) 30) :: Int in V3 (fromIntegral k) 40 60
+            | otherwise = V3 235 70 80
+      _ <- drawSprite ren art "snow_boss" (rect 11 49 28 28)
+      meterA ren art 42 53 332 hp (max 1 (bvMax bv)) tintHp ("HP " ++ show hp ++ "/" ++ show (bvMax bv))
+    Nothing -> do
+      _ <- drawSprite ren art (goalIcon goal) (rect 12 50 26 26)
+      meterA ren art 42 53 332 prog targ (goalTint goal) (show prog ++ "/" ++ show targ)
   -- 步数条（≤5 步时变红并闪烁）
   let mv = gvMoves gv
       moveCap = gvMoveCap gv

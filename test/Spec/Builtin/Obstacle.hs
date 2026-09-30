@@ -604,7 +604,7 @@ surprise_opens_to_special = do
           , isSurprise (getCell (gsBoard gs) (r, c))
           ]
   assertBool ("decor surprises >= 8, got " ++ show nSur) (nSur >= 8)
-  assertEqual "campaign levels" (44 :: Int) (length allLevels)
+  assertEqual "campaign levels" (45 :: Int) (length allLevels)
 
 surprise_explodes_small :: Assertion
 surprise_explodes_small = do

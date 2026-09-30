@@ -54,6 +54,7 @@ module Match3.Element.Class
   , pushable
   , counter
   , diffCounter
+  , diffWeight
   , bonusMoves
   , vacatesCarpet
   , endRule
@@ -146,6 +147,7 @@ data MoveCaps = MoveCaps
 data CountCaps = CountCaps
   { ccCounter       :: Maybe CounterKey
   , ccDiffCounter   :: Maybe CounterKey  -- ^ 按步前 / 步后盘面上的个数差计数（保险箱开启、时间精灵）
+  , ccDiffWeight    :: Int               -- ^ 按差计数时这一格算几个（缺省 1 = 数格子；新玩法 5 雪怪 Boss：左上格 = 血量、其余 0）
   , ccBonusMoves    :: Int
   , ccVacatesCarpet :: Bool              -- ^ 离开格子（不进清除格）也算覆盖地毯
   }
@@ -201,7 +203,7 @@ moveCaps a =
     }
 
 countCaps :: CountCaps
-countCaps = CountCaps {ccCounter = Nothing, ccDiffCounter = Nothing, ccBonusMoves = 0, ccVacatesCarpet = False}
+countCaps = CountCaps {ccCounter = Nothing, ccDiffCounter = Nothing, ccDiffWeight = 1, ccBonusMoves = 0, ccVacatesCarpet = False}
 
 stepCaps :: StepCaps
 stepCaps = StepCaps {stEnd = Nothing, stGround = Nothing, stMessage = const Nothing}
@@ -287,6 +289,10 @@ counter = ccCounter . capCount . caps
 
 diffCounter :: Element e => e -> Maybe CounterKey
 diffCounter = ccDiffCounter . capCount . caps
+
+-- | 按差计数时这一格的权重（缺省 1；见 'ccDiffWeight'）。
+diffWeight :: Element e => e -> Int
+diffWeight = ccDiffWeight . capCount . caps
 
 bonusMoves :: Element e => e -> Int
 bonusMoves = ccBonusMoves . capCount . caps

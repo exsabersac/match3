@@ -33,6 +33,7 @@ import qualified Spec.View
 import qualified Spec.BombShapes
 import qualified Spec.MagicStone
 import qualified Spec.Fuzzball
+import qualified Spec.SnowBoss
 import qualified Spec.RainbowCombos
 
 main :: IO ()
@@ -71,6 +72,7 @@ tests =
         , Spec.BombShapes.tests
         , Spec.MagicStone.tests
         , Spec.Fuzzball.tests
+        , Spec.SnowBoss.tests
         , Spec.RainbowCombos.tests
         , Spec.SourceScan.tests
         ]

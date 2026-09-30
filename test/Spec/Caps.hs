@@ -222,7 +222,7 @@ caps_element_class_is_thin = do
   assertEqual "class methods" ["name", "toCell", "caps"] [m | l <- body, (m, rest) <- [span isIdent (dropWhile isSpace l)], not (null m), "::" `isPrefixOf` dropWhile isSpace rest]
   srcs <- builtinSources
   insts <- concat <$> mapM (fmap instanceMethods . readCode) srcs
-  assertEqual "builtin body instances" 21 (length insts)
+  assertEqual "builtin body instances" 22 (length insts)
   assertEqual "builtin instances only define name / toCell / caps" [] (filter (`notElem` ["name", "toCell", "caps"]) (nub (concat insts)))
   where
     indented l = case l of

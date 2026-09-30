@@ -9,6 +9,7 @@ import { CELL, PAD, dropMarks, fallbacks, setDims } from "./cells.js";
 import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
+import { drawGuide, drawHelpButton, guideEntries, helpButtonRect, noteSpecials } from "./guide.js";
 
 // ---------------------------------------------------------------------------
 // 1. 加载 wasm 与贴图（并行），记录耗时
@@ -65,7 +66,7 @@ let state = null;        // 最近一次核心返回的（已生效的）状态
 let pending = null;      // 正在播放的一步的 m3Swap 结果（播完后才把 state 换成它）
 let anim = null;         // null | {kind:"swap"|"cascade"|"fall", ...}
 let busy = false, fastReq = false;
-let sel = null, showHint = null, msg = "", pulse = 0, shownScore = 0;
+let sel = null, showHint = null, showGuide = false, seenSpecials = new Set(), msg = "", pulse = 0, shownScore = 0;
 let hudDrawn = null;   // 上一帧 HUD 关卡面板各部件的矩形（drawHud 返回；调试钩子 / e2e 检查规则角标布局）
 let pressed = null, frozen = false, frames = 0;
 let overlayDrawn = null;   // 上一帧画出的结局面板文字 {title, sub}（e2e 查失败提示不漏内部名）
@@ -81,6 +82,7 @@ function newGame(level, seed) {
   if (perf.firstNewMs === undefined) perf.firstNewMs = performance.now() - t0;
   setDims(state.board.length, state.board[0].length);
   pending = null; anim = null; busy = false; fastReq = false; sel = null; showHint = null;
+  showGuide = false; seenSpecials = new Set(); noteSpecials(state, seenSpecials);
   shownScore = state.score; fx.clear();
   msg = `第 ${state.level + 1} 关：交换相邻两格（点选或拖划），凑 3 个以上同色消除`;
   relayout();
@@ -222,6 +224,7 @@ function render() {
   else if (anim.kind === "cascade") drawCascade(ctx, art, v, anim.cas, anim.tk);
   else drawLightFall(ctx, art, v, anim.board, anim.frame / FALL_FRAMES);
   fx.draw(ctx, art, pulse, FONT);
+  noteSpecials(v.st, seenSpecials);
   if (!anim && state.over) {
     const o = state.over;
     const title = { LevelClear: "过关！", Won: "通关！", Lost: "步数用完了" }[o.tag] || o.tag;
@@ -230,6 +233,11 @@ function render() {
     overlayDrawn = { title, sub };
   } else overlayDrawn = null;
   ctx.restore();
+  const hb = helpButtonRect(L);
+  drawHelpButton(ctx, art, hb, pressed === "help");
+  if (showGuide) {
+    drawGuide(ctx, art, { x: L.board.x + PAD, y: L.board.y + PAD, w: L.cols * CELL, h: L.rows * CELL }, guideEntries(seenSpecials));
+  }
   perf.drawMs += performance.now() - t0; perf.draws++;
 }
 
@@ -258,6 +266,9 @@ canvas.addEventListener("pointerdown", (ev) => {
   const [x, y] = unitsOf(ev);
   const b = buttonAtUnits(L, x, y);
   if (b) { pressed = b.id; return; }
+  const hb = helpButtonRect(L);
+  if (x >= hb.x && x < hb.x + hb.w && y >= hb.y && y < hb.y + hb.h) { pressed = "help"; return; }
+  if (showGuide) { showGuide = false; return; }
   const p = cellAtUnits(L, x, y);
   if (!p) return;
   if (busy) { if (anim && anim.kind === "cascade") fastReq = true; return; }
@@ -279,6 +290,11 @@ canvas.addEventListener("pointerup", (ev) => {
   if (!pressed) return;
   const [x, y] = unitsOf(ev), b = buttonAtUnits(L, x, y), id = pressed;
   pressed = null;
+  if (id === "help") {
+    const hb = helpButtonRect(L);
+    if (x >= hb.x && x < hb.x + hb.w && y >= hb.y && y < hb.y + hb.h) showGuide = !showGuide;
+    return;
+  }
   if (b && b.id === id) onButton(id);
 });
 canvas.addEventListener("pointercancel", () => { drag = null; pressed = null; });

@@ -224,6 +224,100 @@ try {
   }
 
   // -------------------------------------------------------------------------
+  // 3a. 第 45 关「雪怪」（下标 44，新玩法 5）：Boss 占 (2,3)–(3,4) 的 2×2，四格按象限画 snow_boss_<q>（过半受伤换 snow_boss_hurt_<q>），
+  //     HUD 目标条换成血条（state.boss = 视图模型 gvBoss）。竖屏 390×844 / 横屏 1280×800 截图 snow-boss-l45-*.png；
+  //     按提示走，截「扣血那一轮的高亮」snow-boss-hit-flash.png 与「召唤雪块的步末」snow-boss-summon-tick.png；全程不走几何降级
+  {
+    const atlas = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
+    const bossSprites = ["snow_boss", ...[0, 1, 2, 3].flatMap((q) => [`snow_boss_${q}`, `snow_boss_hurt_${q}`])];
+    check("图集含雪怪贴图 snow_boss / snow_boss_0..3 / snow_boss_hurt_0..3", bossSprites.every((n) => atlas[n]), bossSprites.filter((n) => !atlas[n]));
+    const bossCells = (b) => { const o = []; b.forEach((row, r) => row.forEach((c, col) => { if (c.t === "custom" && c.name === "snow_boss") o.push({ p: [r, col], q: c.q, hurt: c.hurt, turn: c.turn }); })); return o; };
+    report.snowBoss = [];
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const P = await openPage(vp, 44, 1);
+      await sleep(150);
+      const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
+      const cells = bossCells(s.board);
+      const layoutOk = cells.length === 4 && JSON.stringify(cells.map((c) => [c.p, c.q])) === JSON.stringify([[[2, 3], 0], [[2, 4], 1], [[3, 3], 2], [[3, 4], 3]]);
+      check(`第 45 关：Boss 四格在 (2,3)–(3,4)、象限 0–3：${vp.name}`, s.level === 44 && layoutOk, cells);
+      check(`第 45 关 state.boss = 40/40、HUD 画出血条：${vp.name}`, s.boss && s.boss.hp === 40 && s.boss.max === 40 && hud.boss && hud.boss.hp === 40 && hud.boss.max === 40, { boss: s.boss, hud: hud.boss });
+      const sprites = await P.page.evaluate(async (b) => { const m = await import("/cells.js"); return b.flat().filter((c) => c.t === "custom").map((c) => m.primarySprite(c)); }, s.board);
+      check(`第 45 关 Boss 四格有贴图：${vp.name}`, JSON.stringify(sprites) === JSON.stringify(["snow_boss_0", "snow_boss_1", "snow_boss_2", "snow_boss_3"]), sprites);
+      await P.shot(`snow-boss-l45-${vp.name}`);
+      report.snowBoss.push({ name: vp.name, boss: s.boss, hudBoss: hud.boss });
+      await P.ctx.close();
+    }
+    // 其它关卡没有血条
+    {
+      const P = await openPage({ w: 390, h: 844, dpr: 1 }, 41, 1);
+      await sleep(100);
+      const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
+      check("第 42 关没有 Boss 血条（state.boss = null）", s.boss === null && hud.boss === null, { boss: s.boss, hud: hud.boss });
+      await P.ctx.close();
+    }
+    // 扣血 / 召唤动画：竖屏按提示走，命中断点即截图（扣血轮 = 本轮前后 Boss 左上格的 v 不同；召唤 = 步末 tick 段里有格变成石头）
+    const P = await openPage({ w: 390, h: 844, dpr: 3 }, 44, 1);
+    const hitCond = (i) => {
+      if (i.p !== "flash" || i.fr < 6) return false;
+      const w = window.m3debug.pending?.trace.waves[i.w];
+      const v = (b) => b.flat().find((c) => c.t === "custom" && c.name === "snow_boss" && c.q === 0)?.v ?? -1;
+      return !!w && v(w.before) !== v(w.after);
+    };
+    const tickCond = (i) => {
+      if (i.p !== "end" || i.stage !== "tick" || i.fr < Math.floor(i.n / 2) - 2) return false;
+      const ends = window.m3debug.pending?.trace.end || [];
+      return ends.some((e) => e.effect.type === "tick" && e.effect.cells.some(([r, c]) => e.after[r][c].t === "stone" && e.before[r][c].t === "G"));
+    };
+    let gotHit = false, gotTick = false, hpSeen = [];
+    for (let k = 0; k < 24 && !(gotHit && gotTick); k++) {
+      const s = await P.st();
+      if (s.over || !s.hint) break;
+      hpSeen.push(s.boss.hp);
+      await P.breakAt(gotHit ? tickCond : hitCond);
+      await P.swap(s.hint[0], s.hint[1], k % 2 === 0);
+      await P.frozenOrIdle();
+      if (await P.isFrozen()) {
+        if (!gotHit) {
+          gotHit = true; await P.shot("snow-boss-hit-flash");
+          // 同一步里也可能召唤：换成召唤断点继续
+          await P.breakAt(tickCond); await P.resume(); await P.frozenOrIdle();
+          if (await P.isFrozen()) { gotTick = true; await P.shot("snow-boss-summon-tick"); }
+        } else { gotTick = true; await P.shot("snow-boss-summon-tick"); }
+      }
+      await P.clearBreak(); await P.resume(); await P.idle();
+    }
+    const s2 = await P.st();
+    hpSeen.push(s2.boss.hp);
+    report.snowBossPlay = { hpSeen, stones: s2.board.flat().filter((c) => c.t === "stone").length };
+    check("第 45 关截到扣血那一轮的高亮", gotHit, hpSeen);
+    check("第 45 关截到召唤雪块的步末", gotTick);
+    check("第 45 关走完后 Boss 血量下降、血条与 state 一致", s2.boss.hp < 40 && (await P.page.evaluate(() => window.m3debug.hud.boss.hp)) === s2.boss.hp, hpSeen);
+    check("第 45 关画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0, await P.page.evaluate(() => window.m3debug.fallbacks));
+    await P.ctx.close();
+    // 受伤表情：种子 32 按提示走约 22 步后血量 ≤ 满血一半，四格 hurt = true、画 snow_boss_hurt_<q>，血条变深红闪烁。截图 snow-boss-hurt.png
+    {
+      const Q = await openPage({ w: 390, h: 844, dpr: 3 }, 44, 32);
+      let hurt = null;
+      for (let k = 0; k < 24; k++) {
+        const s = await Q.st();
+        if (s.boss.hp * 2 <= s.boss.max) { hurt = s; break; }
+        if (s.over || !s.hint) break;
+        await Q.swap(s.hint[0], s.hint[1], false); await sleep(30);
+        await Q.page.keyboard.press(" "); await Q.idle();
+      }
+      if (hurt) {
+        await sleep(1600);   // 等浮字散掉
+        const cells = bossCells(hurt.board);
+        const sprites = await Q.page.evaluate(() => window.m3debug.hud.boss);
+        check("第 45 关血量过半：四格 hurt、HUD 血条进入过半状态", cells.length === 4 && cells.every((c) => c.hurt) && sprites && sprites.half, { boss: hurt.boss, cells, hud: sprites });
+        await Q.shot("snow-boss-hurt");
+      } else check("第 45 关种子 32 按提示走到血量过半", false);
+      check("受伤画面没有走几何降级", Object.keys(await Q.page.evaluate(() => window.m3debug.fallbacks)).length === 0);
+      await Q.ctx.close();
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // 3b. 规则开关角标：第 41 关（下标 40，打开 bomb_shapes）的 state.rules 与 HUD 角标；竖屏 / 横屏手机 / 桌面三种布局
   //     角标都画出来、文字完整、落在关卡面板里，不压「第 N 关」标签、不压关名、彼此不重叠；第 1 关没有角标
   {

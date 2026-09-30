@@ -12,6 +12,8 @@ module UI.Layout
   , padPx
   , hudH
   , boardPx
+  , boardWPx
+  , boardHPx
   , winW
   , winH
   , colorRGB
@@ -19,11 +21,16 @@ module UI.Layout
   , namedRGB
   , cellRGB
   , boardGrid
+  , boardGridFor
   , pixelToCell
+  , pixelToCellOn
   , cellOrigin
+  , cellOriginOn
   , lerpI
   , boardRect
+  , boardRectOn
   , allCells
+  , allCellsOn
   , smoothT  -- 再导出自 UI.Presentation
   , easeOutT
   , lerpC
@@ -42,14 +49,20 @@ import Match3.Element.Builtin (chameleonColor)
 import SDL hiding (Normal)
 import UI.Presentation (easeOutT, elementRGBTable, smoothT)
 
--- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口 = 棋盘 + 两侧边距 + HUD。
+-- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口按允许的最大盘面（maxBoardDim）留足空间，不假设正方形棋盘。
 cellPx, padPx, hudH, boardPx, winW, winH :: CInt
 cellPx = 56
 padPx = 16
 hudH = 108
-boardPx = cellPx * fromIntegral boardSize
+-- | 最大边长像素（窗口 / 居中参照）；实际棋盘宽高用 boardWPx / boardHPx。
+boardPx = cellPx * fromIntegral maxBoardDim
 winW = padPx * 2 + boardPx
 winH = padPx * 2 + boardPx + hudH
+
+-- | 实际棋盘宽 / 高（列数 / 行数 × 格宽）；可矩形。
+boardWPx, boardHPx :: Int -> CInt
+boardWPx cols = cellPx * fromIntegral cols
+boardHPx rows = cellPx * fromIntegral rows
 
 -- | 五色的主色（与 tools/gen_assets.py 调色板一致）。
 colorRGB :: Color -> (Word8, Word8, Word8)
@@ -87,16 +100,27 @@ cellRGB cell = case cell of
     | Just col <- chameleonColor cell -> colorRGB col -- 变色龙（新玩法 7）：当前颜色
     | otherwise -> maybe (160, 160, 170) id (lookup n elementRGBTable)
 
--- | 棋盘在窗口里的网格几何（第 11 刀：像素 ↔ 格子的换算交给通用组件 Engine.GridUI）。
-boardGrid :: GridGeom CInt
-boardGrid = GridGeom {ggLeft = padPx, ggTop = padPx + hudH, ggCell = cellPx, ggRows = boardSize, ggCols = boardSize}
+-- | 按行列数的棋盘网格几何（可不正方形）。
+boardGridFor :: Int -> Int -> GridGeom CInt
+boardGridFor rows cols = GridGeom {ggLeft = padPx, ggTop = padPx + hudH, ggCell = cellPx, ggRows = rows, ggCols = cols}
 
--- | 逻辑坐标 → 棋盘格；棋盘外返回 Nothing。
+-- | 缺省 8×8 网格（测试 / 未指定关卡尺寸时）；对局绘制与点选请用 boardGridFor / *On。
+boardGrid :: GridGeom CInt
+boardGrid = boardGridFor boardSize boardSize
+
+-- | 逻辑坐标 → 棋盘格（缺省 8×8）；棋盘外返回 Nothing。
 pixelToCell :: Int32 -> Int32 -> Maybe Pos
 pixelToCell mx my = gridCellAt boardGrid (fromIntegral mx) (fromIntegral my)
 
+-- | 按实际行列点选。
+pixelToCellOn :: Int -> Int -> Int32 -> Int32 -> Maybe Pos
+pixelToCellOn rows cols mx my = gridCellAt (boardGridFor rows cols) (fromIntegral mx) (fromIntegral my)
+
 cellOrigin :: Pos -> (CInt, CInt)
 cellOrigin = gridCellOrigin boardGrid
+
+cellOriginOn :: Int -> Int -> Pos -> (CInt, CInt)
+cellOriginOn rows cols = gridCellOrigin (boardGridFor rows cols)
 
 -- | 整数坐标线性插值（t ∈ [0,1]）。
 lerpI :: CInt -> CInt -> Int -> Int -> CInt
@@ -108,13 +132,21 @@ lerpI a b frame maxF
           u = t / m
       in a + round (fromIntegral (b - a) * u)
 
--- | 整个棋盘区域的矩形。
+-- | 整个棋盘区域的矩形（缺省按最大边长的正方形窗口区；对局绘制用 boardRectOn）。
 boardRect :: Rectangle CInt
 boardRect = rect padPx (padPx + hudH) boardPx boardPx
 
--- | 8×8 全部坐标（行优先）。
+-- | 按实际行列的棋盘矩形（可矩形）。
+boardRectOn :: Int -> Int -> Rectangle CInt
+boardRectOn rows cols = rect padPx (padPx + hudH) (boardWPx cols) (boardHPx rows)
+
+-- | 缺省 8×8 全部坐标（行优先）。
 allCells :: [Pos]
 allCells = gridCells boardGrid
+
+-- | 按实际行列的全部坐标。
+allCellsOn :: Int -> Int -> [Pos]
+allCellsOn rows cols = gridCells (boardGridFor rows cols)
 
 -- | 颜色 / 数值的线性插值。
 lerpC :: CInt -> CInt -> Double -> CInt

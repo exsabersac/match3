@@ -15,6 +15,7 @@ module Match3.Snail
   ) where
 
 import Data.List (sort)
+import Match3.Board.Grid (inBounds)
 import Match3.Types
 
 at :: Board -> Pos -> Cell
@@ -23,9 +24,6 @@ at = boardAt
 setAt :: Board -> Pos -> Cell -> Board
 setAt = boardSet
 
-inBoard :: Pos -> Bool
-inBoard (r, c) =
-  r >= 0 && r < boardSize && c >= 0 && c < boardSize
 
 -- | Solids that stop a snail (reverse instead of push).
 blocksSnail :: Cell -> Bool
@@ -53,10 +51,9 @@ pushable _ = False
 snailPositions :: Board -> [Pos]
 snailPositions b =
   sort
-    [ (r, c)
-    | r <- [0 .. boardSize - 1]
-    , c <- [0 .. boardSize - 1]
-    , isSnail (at b (r, c))
+    [ p
+    | p <- boardPositions b
+    , isSnail (at b p)
     ]
 
 -- | Crawl one snail at @pos@: push gem ahead, or reverse at wall/blocker.
@@ -74,7 +71,7 @@ stepSnailAtBy :: (Cell -> Bool) -> [Pos] -> Board -> Pos -> Board
 stepSnailAtBy canPush walls b pos = case at b pos of
   Snail dr dc ->
     let next = (fst pos + dr, snd pos + dc)
-    in if not (inBoard next) || next `elem` walls || blocksSnail (at b next)
+    in if not (inBounds b next) || next `elem` walls || blocksSnail (at b next)
          then setAt b pos (Snail (-dr) (-dc))
          else if canPush (at b next)
            then

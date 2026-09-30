@@ -65,7 +65,7 @@ bubbleAdjacent :: AdjCtx -> Board -> AdjOut
 bubbleAdjacent ctx b =
   let popped =
         [ q
-        | q <- nubOrd [q' | p <- acTrue ctx, q' <- orthoNeighbors p, inBounds q']
+        | q <- nubOrd [q' | p <- acTrue ctx, q' <- orthoNeighbors p, inBounds b q']
         , q `notElem` acDirect ctx
         , q `notElem` acTrue ctx
         , isBubble (getCell b q)
@@ -128,7 +128,7 @@ instance Element Chameleon where
 -- 立刻连成三消的颜色；五种都会连成时取下一种（由步末补结算照常消除）。「连成」按 'plainColor' 判断：普通 / 特殊宝石（不带叠层）
 -- 与变色龙的颜色，其余格打断连线。
 chameleonShift :: Board -> ([Pos], Board)
-chameleonShift b0 = foldl one ([], b0) [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+chameleonShift b0 = foldl one ([], b0) (boardPositions b0)
   where
     one (ps, b) p = case chameleonColor (getCell b0 p) of
       Just col ->
@@ -144,7 +144,7 @@ runsThrough :: Board -> Pos -> Color -> Bool
 runsThrough b (r, c) col = span1 (0, 1) + span1 (0, -1) >= 2 || span1 (1, 0) + span1 (-1, 0) >= 2
   where
     span1 (dr, dc) = length (takeWhile same [(r + k * dr, c + k * dc) | k <- [1 .. 2]])
-    same q = inBounds q && plainColor (getCell b q) == Just col
+    same q = inBounds b q && plainColor (getCell b q) == Just col
 
 -- | 换色时判断连线用的颜色：不带叠层的宝石（含冰、特殊块）与变色龙；其余 Nothing。
 plainColor :: Cell -> Maybe Color
@@ -169,7 +169,7 @@ chameleonRainbowSeeds b p1 p2 = case [(q, col) | q <- [p1, p2], Just col <- [cha
   ((q, col) : _) ->
     nub
       ( rainbowClearSeeds (setCell b q (mkGem col)) p1 p2
-          ++ [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), chameleonColor (getCell b p) == Just col]
+          ++ [p | p <- boardPositions b, chameleonColor (getCell b p) == Just col]
       )
   [] -> []
 

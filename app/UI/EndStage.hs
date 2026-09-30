@@ -79,7 +79,8 @@ drawEndBelt ren app t st = do
   let moves = stageMoves st
       e = smoothT t
   drawCellsExcept ren app (stBefore st) (map snd moves)
-  rendererClipRect ren $= Just boardRect
+  let (nr, nc) = boardDims (stBefore st)
+  rendererClipRect ren $= Just (boardRectOn nr nc)
   forM_ moves $ \(o, d) -> do
     let cell = getCell (stBefore st) o
         (x0, y0) = cellOrigin o
@@ -179,14 +180,15 @@ drawEndShuffle ren app t st = do
       cx = mx + cellPx `div` 2
       cy = my + cellPx `div` 2
   drawBoardBase ren app
-  forM_ allCells $ \pos -> do
+  let (nr, nc) = boardDims board
+  forM_ (boardPositions board) $ \pos -> do
     let (x, y) = cellOrigin pos
         x' = lerpC x (cx - cellPx `div` 2) (0.3 * k)
         y' = lerpC y (cy - cellPx `div` 2) (0.3 * k)
     drawCellAny ren app x' y' (getCell board pos) False
   drawUfosAny ren app
   rendererDrawColor ren $= V4 20 12 40 (round (230 * k))
-  fillRect ren (Just boardRect)
+  fillRect ren (Just (boardRectOn nr nc))
   forM_ ((,) <$> appArt app <*> prSprite pr) $ \(art, sp) -> do
     let sz = round (fromIntegral boardPx * (0.2 + 0.5 * k)) :: CInt
     void (drawSpriteAdd ren art sp (rect (cx - sz `div` 2) (cy - sz `div` 2) sz sz) (V3 gr gg gb) (round (160 * k)))

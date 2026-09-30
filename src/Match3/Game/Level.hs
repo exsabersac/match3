@@ -26,7 +26,7 @@ module Match3.Game.Level
   ) where
 
 import Data.Maybe (fromMaybe)
-import Match3.Board.Random (randomPlayableBoard)
+import Match3.Board.Random (randomPlayableBoardSized)
 import Match3.Counts (CounterKey(..), noCounts)
 import Match3.Element.Level (startLevelsWith)
 import Match3.Element.Builtin (defaultRegistry)
@@ -96,8 +96,10 @@ newGameAtLevel = newGameAtLevelWith defaultRegistry
 newGameAtLevelWith :: Registry -> Int -> GameConfig -> Int -> GameState
 newGameAtLevelWith reg li cfg seed =
   let g0 = mkStdGen seed
-      (board0, g1) = randomPlayableBoard g0
       lvl = lookupLevel li
+      rows = maybe boardSize lvlRows lvl
+      cols = maybe boardSize lvlCols lvl
+      (board0, g1) = randomPlayableBoardSized rows cols g0
       decorate l = placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith reg l
       -- 新玩法 6：有掉落口的关卡不做目标补齐（收集物由掉落口陆续补进场）；没有掉落口（lvlDrops = []）时与原来相同
       goalDecor

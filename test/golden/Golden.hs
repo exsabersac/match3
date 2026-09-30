@@ -28,7 +28,7 @@ import Data.Maybe (fromMaybe)
 import Data.Word (Word64)
 import Match3.Board.Cascade (CascadeRun(..), CascadeTally(..), CascadeWave(..))
 import Match3.Counts (CounterKey(..), colorBag, countOf, namedCounts)
-import Match3.Board.Grid (getCell, inBounds, setCell, MBoard, mboardRows)
+import Match3.Board.Grid (getCell, setCell, MBoard, mboardRows)
 import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), historyDepth, pushHistory, replaceNow, startHistory, undoHistory)
@@ -274,7 +274,7 @@ allPairs =
   | r <- [0 .. boardSize - 1]
   , c <- [0 .. boardSize - 1]
   , p2 <- [(r, c + 1), (r + 1, c)]
-  , inBounds p2
+  , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
   ]
 
 applied :: Outcome -> Bool

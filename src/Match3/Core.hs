@@ -133,6 +133,15 @@ module Match3.Core
   , boardAssocs
   , mapBoard
   , boardSize
+  , minBoardDim
+  , maxBoardDim
+  , validBoardDim
+  , boardDims
+  , boardNRows
+  , boardNCols
+  , boardPositions
+  , boardRowIndices
+  , boardColIndices
   , numColors
   , allColors
   , colorAt

@@ -41,6 +41,7 @@ module Match3.Obstacles
   ) where
 
 import Data.List (nub, sort)
+import Match3.Board.Grid (inBounds)
 import Match3.Types
   ( Board
   , boardAt
@@ -48,7 +49,6 @@ import Match3.Types
   , Cell
   , Color(..)
   , Pos
-  , boardSize
   , isStone
   , isChest
   , isHoney
@@ -90,9 +90,6 @@ orthoNeighbors :: Pos -> [Pos]
 orthoNeighbors (r, c) =
   [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
 
-inBoard :: Pos -> Bool
-inBoard (r, c) =
-  r >= 0 && r < boardSize && c >= 0 && c < boardSize
 
 -- | Stone positions orthogonally adjacent to any of the given cleared positions.
 stonesAdjacentTo :: Board -> [Pos] -> [Pos]
@@ -101,7 +98,7 @@ stonesAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isStone (at b p)
     ]
 
@@ -112,7 +109,7 @@ chestsAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isChest (at b p)
     ]
 
@@ -160,7 +157,7 @@ honeysAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isHoney (at b p)
     ]
 
@@ -192,7 +189,7 @@ balloonsAdjacentSameColor b cleared =
     , isGem clearedCell
     , Just col <- [cellColor clearedCell]
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , balloonColor (at b p) == Just col
     ]
 
@@ -213,7 +210,7 @@ cakesAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isCake (at b p)
     ]
 
@@ -242,7 +239,7 @@ safesAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isSafe (at b p)
     ]
 
@@ -273,7 +270,7 @@ hatsAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isMagicHat (at b p)
     ]
 
@@ -308,7 +305,7 @@ triggerAdjacentHatsBy recolorable b cleared protected =
       let nbrs =
             [ p
             | p <- orthoNeighbors hatPos
-            , inBoard p
+            , inBounds b p
             , p `notElem` skip
             , let cell = at board p
             , recolorable cell
@@ -335,7 +332,7 @@ makersAdjacentSameColor b cleared =
     , isGem clearedCell
     , Just col <- [cellColor clearedCell]
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , makerColor (at b p) == Just col
     ]
 
@@ -368,7 +365,7 @@ surprisesAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isSurprise (at b p)
     ]
 
@@ -387,12 +384,12 @@ surpriseSpecial (r, c) =
   in Gem col kind 0 Nothing
 
 -- | 3×3 blast centered at pos (same footprint as countdown / bomb).
-surpriseBlast :: Pos -> [Pos]
-surpriseBlast (r, c) =
+surpriseBlast :: Board -> Pos -> [Pos]
+surpriseBlast b (r, c) =
   [ (rr, cc)
   | rr <- [r - 1 .. r + 1]
   , cc <- [c - 1 .. c + 1]
-  , inBoard (rr, cc)
+  , inBounds b (rr, cc)
   ]
 
 -- | Open surprises adjacent to clears *or* sitting on a clear seed
@@ -415,7 +412,7 @@ openSurprises b clearedGems =
       case at board p of
         Surprise
           | surpriseOutcome p == 3 ->
-              (board, nub (surpriseBlast p ++ explodes), saved)
+              (board, nub (surpriseBlast board p ++ explodes), saved)
           | otherwise ->
               (setAt board p (surpriseSpecial p), explodes, nub (p : saved))
         _ -> (board, explodes, saved)
@@ -433,7 +430,7 @@ bottlesAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isBottle (at b p)
     ]
 
@@ -460,7 +457,7 @@ triggerAdjacentBottlesBy recolorable b cleared protected =
           let nbrs =
                 [ p
                 | p <- orthoNeighbors bottlePos
-                , inBoard p
+                , inBounds b p
                 , p `notElem` skip
                 , let cell = at board p
                 , recolorable cell
@@ -476,7 +473,7 @@ spiritsAdjacentTo b cleared =
     [ p
     | cpos <- cleared
     , p <- orthoNeighbors cpos
-    , inBoard p
+    , inBounds b p
     , isTimeSpirit (at b p)
     ]
 

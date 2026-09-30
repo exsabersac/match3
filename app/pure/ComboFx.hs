@@ -327,16 +327,18 @@ enterWave c = case cWaves c of
 -- 幸存格依次落到底部、顶上补新格。若预测与 cwAfter 不符（饼干底收 / 传送门换位），该列
 -- 退回「就地淡入」：只有变了的格从上一行落下。
 fallTable :: CascadeWave -> [[(Int, Bool)]]
-fallTable w = transpose [colInfo c | c <- [0 .. boardSize - 1]]
+fallTable w = transpose [colInfo c | c <- cols]
   where
-    rows = [0 .. boardSize - 1]
+    rows = boardRowIndices (cwAfter w)
+    cols = boardColIndices (cwAfter w)
+    nRows = length rows
     colInfo c =
       let holes = [holeAt w (r, c) | r <- rows]
           afterAt r = getCell (cwAfter w) (r, c)
           segs = segments (zip rows holes)
           predicted = concatMap segPredict segs -- [(targetRow, drop, isNew, expected)]
           ok =
-            length predicted == boardSize
+            length predicted == nRows
               && and [maybe True (== afterAt rt) ex | (rt, _, _, ex) <- predicted]
           byRow = [(d, n) | (_, d, n, _) <- sortRows predicted]
           fallback =

@@ -54,8 +54,8 @@ instance Element MagicGround where
   caps _ = piece [widens magicWiden]
 
 -- | 扩一圈：原范围按原顺序在前，新并进来的格（原范围各格的八邻格、在盘内、不在原范围里）按行优先接在后面。
-magicWiden :: [Pos] -> [Pos]
-magicWiden area = area ++ sort (nub [q | (r, c) <- area, dr <- [-1, 0, 1], dc <- [-1, 0, 1], let q = (r + dr, c + dc), inBounds q, q `notElem` area])
+magicWiden :: Board -> [Pos] -> [Pos]
+magicWiden b area = area ++ sort (nub [q | (r, c) <- area, dr <- [-1, 0, 1], dc <- [-1, 0, 1], let q = (r + dr, c + dc), inBounds b q, q `notElem` area])
 
 -- | 条目：地面层（同果冻，放在关卡记录 lvlGround 里）。
 magicGroundEntry :: Entry

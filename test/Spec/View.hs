@@ -305,7 +305,7 @@ legacyPixelToCell mx my =
        else
          let c = x `div` 56
              r = y `div` 56
-         in if inBounds (r, c) then Just (r, c) else Nothing
+         in if r >= 0 && r < boardSize && c >= 0 && c < boardSize then Just (r, c) else Nothing
 
 boardGeom :: GridGeom Int
 boardGeom = GridGeom {ggLeft = 16, ggTop = 16 + 108, ggCell = 56, ggRows = boardSize, ggCols = boardSize}

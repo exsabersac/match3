@@ -114,6 +114,15 @@ module Match3.Types
   , boardFromArray
   , mapBoard
   , boardSize
+  , minBoardDim
+  , maxBoardDim
+  , validBoardDim
+  , boardDims
+  , boardNRows
+  , boardNCols
+  , boardPositions
+  , boardRowIndices
+  , boardColIndices
   , numColors
   , allColors
   , colorAt

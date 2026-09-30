@@ -89,13 +89,14 @@ drawWaveFlash :: Renderer -> App -> CascadePlayer -> WaveView -> IO ()
 drawWaveFlash ren app p v = do
   let t = phaseT p
       w = wvWave v
+      (nr, nc) = boardDims (cwBefore w)
       tint@(V3 tr tg tb) = waveTint app (cCombo (plStage p))
       veilA = round (min 1 (t * 4) * 120 :: Double) :: Word8
       blink = 0.5 + 0.5 * cos (t * 2 * pi * 2) :: Double
       bounce = round (3 * sin (t * pi) :: Double) :: CInt
   drawStatic ren app (cwBefore w) 0
   rendererDrawColor ren $= V4 8 6 24 veilA
-  fillRect ren (Just boardRect)
+  fillRect ren (Just (boardRectOn nr nc))
   forM_ (wvCleared v) $ \pos -> do
     let (x, y0) = cellOrigin pos
         y = y0 - bounce
@@ -119,17 +120,18 @@ drawWavePop :: Renderer -> App -> CascadePlayer -> WaveView -> IO ()
 drawWavePop ren app p v = do
   let t = phaseT p
       w = wvWave v
+      (nr, nc) = boardDims (cwBefore w)
       tint = waveTint app (cCombo (plStage p))
       cleared = wvCleared v
       veilA = round ((1 - t) * 120) :: Word8
   drawBoardBase ren app
-  forM_ allCells $ \pos -> do
+  forM_ (boardPositions (cwBefore w)) $ \pos -> do
     let (x, y) = cellOrigin pos
     case holeAt w pos of
       Just cell | pos `notElem` cleared -> drawCellAny ren app x y cell False
       _ -> pure ()
   rendererDrawColor ren $= V4 8 6 24 veilA
-  fillRect ren (Just boardRect)
+  fillRect ren (Just (boardRectOn nr nc))
   forM_ cleared $ \pos -> do
     let (x, y) = cellOrigin pos
         cx = x + cellPx `div` 2
@@ -149,11 +151,12 @@ drawWaveFall :: Renderer -> App -> CascadePlayer -> WaveView -> IO ()
 drawWaveFall ren app p v = do
   let t = phaseT p
       w = wvWave v
+      (nr, nc) = boardDims (cwAfter w)
       e = t * t
       table = fallTable w
   drawBoardBase ren app
-  rendererClipRect ren $= Just boardRect
-  forM_ allCells $ \pos -> do
+  rendererClipRect ren $= Just (boardRectOn nr nc)
+  forM_ (boardPositions (cwAfter w)) $ \pos -> do
     let (d, _new) = fallAt table pos
         (x, y) = cellOrigin pos
         off = round (fromIntegral (fromIntegral d * cellPx) * (1 - e)) :: CInt
@@ -182,7 +185,7 @@ drawSwap ren app board p1 p2 frame = do
           let (x0, y0) = cellOrigin pos
           drawCellAny ren app x0 y0 (getCell board pos) (pos `elem` flashSet)
     )
-    [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
+    (boardPositions board)
   drawCellAny ren app xa ya c1 (p1 `elem` flashSet)
   drawCellAny ren app xb yb c2 (p2 `elem` flashSet)
 

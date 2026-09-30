@@ -15,6 +15,15 @@ module Match3.Types.Board
   , boardFromArray
   , mapBoard
   , boardSize
+  , minBoardDim
+  , maxBoardDim
+  , validBoardDim
+  , boardDims
+  , boardNRows
+  , boardNCols
+  , boardPositions
+  , boardRowIndices
+  , boardColIndices
   ) where
 
 import Data.Array (Array, assocs, bounds, elems, listArray, (!), (//))
@@ -79,5 +88,38 @@ boardFromArray = Board
 mapBoard :: (Cell -> Cell) -> Board -> Board
 mapBoard f (Board a) = Board (fmap f a)
 
+-- | 缺省盘面边长（关卡未指定行列时用；旧关卡均为 8×8）。
 boardSize :: Int
 boardSize = 8
+
+-- | 关卡允许的行列闭区间下界 / 上界（含）。
+minBoardDim, maxBoardDim :: Int
+minBoardDim = 5
+maxBoardDim = 10
+
+-- | 行列是否在允许范围内（含端点）；越界在加载时拒绝，不静默夹取。
+validBoardDim :: Int -> Bool
+validBoardDim n = n >= minBoardDim && n <= maxBoardDim
+
+-- | 盘面实际行列数（行, 列）；由数组下界推出，可矩形。
+boardDims :: Board -> (Int, Int)
+boardDims (Board a) =
+  let ((r0, c0), (r1, c1)) = bounds a
+  in (r1 - r0 + 1, c1 - c0 + 1)
+
+boardNRows, boardNCols :: Board -> Int
+boardNRows b = fst (boardDims b)
+boardNCols b = snd (boardDims b)
+
+-- | 全部坐标（行优先）。
+boardPositions :: Board -> [Pos]
+boardPositions b =
+  [(r, c) | r <- boardRowIndices b, c <- boardColIndices b]
+
+boardRowIndices, boardColIndices :: Board -> [Int]
+boardRowIndices b =
+  let ((r0, _), (r1, _)) = bounds (boardArray b)
+  in [r0 .. r1]
+boardColIndices b =
+  let ((_, c0), (_, c1)) = bounds (boardArray b)
+  in [c0 .. c1]

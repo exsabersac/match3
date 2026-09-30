@@ -35,7 +35,7 @@ resolveSwap = resolveSwapWith defaultRegistry
 resolveSwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveSwapWith reg p1 p2 gs
   | Just o <- gsOver gs = (gs, o, emptyTrace gs)
-  | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
+  | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
   | isNothing morph && pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)

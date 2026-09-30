@@ -62,11 +62,10 @@ carpetVacateSeeds = carpetVacateSeedsWith defaultRegistry
 -- | carpetVacateSeeds（指定注册表）：步前本体 vacatesCarpet 的格，步后本体换成了别的元素。
 carpetVacateSeedsWith :: Registry -> Board -> Board -> [Pos]
 carpetVacateSeedsWith reg before after =
-  [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
-  , let cell0 = getCell before (r, c)
-        cell1 = getCell after (r, c)
+  [ p
+  | p <- boardPositions before
+  , let cell0 = getCell before p
+        cell1 = getCell after p
   , vacatesCarpetWith reg cell0
   , elementName reg cell1 /= elementName reg cell0
   ]

@@ -47,6 +47,7 @@ module Match3.Grass
   ) where
 
 import Data.List (nub)
+import Match3.Board.Grid (inBounds)
 import Match3.Types
 
 at :: Board -> Pos -> Cell
@@ -55,13 +56,9 @@ at = boardAt
 setAt :: Board -> Pos -> Cell -> Board
 setAt = boardSet
 
-inBoard :: Pos -> Bool
-inBoard (r, c) =
-  r >= 0 && r < boardSize && c >= 0 && c < boardSize
-
-ortho :: Pos -> [Pos]
-ortho (r, c) =
-  filter inBoard [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+ortho :: Board -> Pos -> [Pos]
+ortho b (r, c) =
+  filter (inBounds b) [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
 
 -- | Strip Grass/Vine/Choco on *true clear* cells (so they will not spread).
 -- Callers must pass iceFree/trueClears — not raw expand seeds — so soft hits
@@ -92,7 +89,7 @@ clearChocoAdjacent b seeds =
       nub
         [ q
         | p <- nub seeds
-        , q <- ortho p
+        , q <- ortho b p
         , hasChoco (at b q)
         ]
     strip board p =
@@ -115,7 +112,7 @@ chipAdjacentFogExcept b seeds except =
       nub
         [ q
         | p <- nub seeds
-        , q <- ortho p
+        , q <- ortho b p
         , q `notElem` except
         , hasFog (at b q)
         ]
@@ -131,24 +128,21 @@ chipAdjacentFogExcept b seeds except =
 vinePositions :: Board -> [Pos]
 vinePositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasVine (at b (r, c))
   ]
 
 chocoPositions :: Board -> [Pos]
 chocoPositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasChoco (at b (r, c))
   ]
 
 fogPositions :: Board -> [Pos]
 fogPositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasFog (at b (r, c))
   ]
 
@@ -166,7 +160,7 @@ chipAdjacentChainExcept b seeds except =
       nub
         [ q
         | p <- nub seeds
-        , q <- ortho p
+        , q <- ortho b p
         , q `notElem` except
         , hasChain (at b q)
         ]
@@ -182,8 +176,7 @@ chipAdjacentChainExcept b seeds except =
 chainPositions :: Board -> [Pos]
 chainPositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasChain (at b (r, c))
   ]
 
@@ -202,7 +195,7 @@ chipAdjacentFreezeExcept b seeds except =
       nub
         [ q
         | p <- nub seeds
-        , q <- ortho p
+        , q <- ortho b p
         , q `notElem` except
         , hasFreeze (at b q)
         ]
@@ -218,8 +211,7 @@ chipAdjacentFreezeExcept b seeds except =
 freezePositions :: Board -> [Pos]
 freezePositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasFreeze (at b (r, c))
   ]
 
@@ -237,7 +229,7 @@ chipAdjacentCurtainExcept b seeds except =
       nub
         [ q
         | p <- nub seeds
-        , q <- ortho p
+        , q <- ortho b p
         , q `notElem` except
         , hasCurtain (at b q)
         ]
@@ -253,8 +245,7 @@ chipAdjacentCurtainExcept b seeds except =
 curtainPositions :: Board -> [Pos]
 curtainPositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasCurtain (at b (r, c))
   ]
 
@@ -267,7 +258,7 @@ spreadVines b =
         nub
           [ q
           | p <- sources
-          , q <- ortho p
+          , q <- ortho b p
           , case at b q of
               Gem _ _ _ Nothing -> True
               _ -> False
@@ -289,7 +280,7 @@ spreadChoco b =
         nub
           [ q
           | p <- sources
-          , q <- ortho p
+          , q <- ortho b p
           , case at b q of
               Gem _ _ _ Nothing -> True
               _ -> False
@@ -305,8 +296,7 @@ spreadChoco b =
 steamPositions :: Board -> [Pos]
 steamPositions b =
   [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions b
   , hasSteam (at b (r, c))
   ]
 
@@ -320,7 +310,7 @@ clearSteamAdjacent b seeds =
       nub
         [ q
         | p <- nub seeds
-        , q <- ortho p
+        , q <- ortho b p
         , hasSteam (at b q)
         ]
     strip board p =
@@ -337,7 +327,7 @@ spreadSteam b =
         nub
           [ q
           | p <- sources
-          , q <- ortho p
+          , q <- ortho b p
           , case at b q of
               Gem _ _ _ Nothing -> True
               _ -> False

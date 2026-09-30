@@ -128,7 +128,7 @@ data MatchCaps = MatchCaps
 data HitCaps = HitCaps
   { hcActivates :: Maybe Bool                -- ^ 特殊块能否点火（自上而下第一个 Just 决定；缺省 Just (原型 == Piece)）
   , hcOnHit     :: Hit                       -- ^ 直接命中（缺省：Piece 命中即消，其余打不动）
-  , hcBlast     :: Maybe (Pos -> [Pos])      -- ^ 被消除且能点火时的爆炸范围
+  , hcBlast     :: Maybe (Board -> Pos -> [Pos])  -- ^ 被消除且能点火时的爆炸范围（由盘面行列决定）
   , hcStrip     :: Bool                      -- ^ 真消除时随格清掉的上层（修饰器用；本体恒 False）
   , hcAdjacent  :: Maybe AdjacentRule        -- ^ 邻格真消除时的反应（在原型值上取）
   , hcOpen      :: Maybe OpenRule            -- ^ 开启规则（彩蛋类；在原型值上取）
@@ -157,7 +157,7 @@ data CountCaps = CountCaps
 data StepCaps = StepCaps
   { stEnd     :: Maybe EndRule                 -- ^ 步末规则（在原型值上取）
   , stGround  :: Maybe (Int -> Maybe Int)      -- ^ 地面层：上方格子被消除一次时，层数 → 新层数（Nothing = 清掉）
-  , stWiden   :: Maybe ([Pos] -> [Pos])        -- ^ 地面层（新玩法 8）：本格上的特效引爆时，爆炸范围 → 新范围（Nothing = 不改）
+  , stWiden   :: Maybe (Board -> [Pos] -> [Pos])  -- ^ 地面层（新玩法 8）：本格上的特效引爆时，爆炸范围 → 新范围（Nothing = 不改）
   , stMessage :: SomeMessage -> Maybe SomeElement  -- ^ 处理一条消息：Nothing = 不关心；Just = 新的元素值
   }
 
@@ -256,7 +256,7 @@ activates = hcActivates . capHit . caps
 onHit :: Element e => e -> Hit
 onHit = hcOnHit . capHit . caps
 
-blast :: Element e => e -> Maybe (Pos -> [Pos])
+blast :: Element e => e -> Maybe (Board -> Pos -> [Pos])
 blast = hcBlast . capHit . caps
 
 stripOnClear :: Element e => e -> Bool
@@ -309,7 +309,7 @@ groundRule :: Element e => e -> Maybe (Int -> Maybe Int)
 groundRule = stGround . capStep . caps
 
 -- | 地面层（新玩法 8）：本格上的特效引爆时改写爆炸范围（Nothing = 不改；内置只有魔法地格）。
-widenRule :: Element e => e -> Maybe ([Pos] -> [Pos])
+widenRule :: Element e => e -> Maybe (Board -> [Pos] -> [Pos])
 widenRule = stWiden . capStep . caps
 
 -- | 处理一条消息：Nothing = 不关心；Just = 新的元素值。

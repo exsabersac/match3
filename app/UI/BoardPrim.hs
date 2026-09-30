@@ -115,7 +115,7 @@ drawStaticPrim ren app board yOff = do
           rendererDrawColor ren $= V4 255 255 100 255
           drawRect ren (Just (Rectangle (P (V2 x0 y)) (V2 cellPx cellPx)))
     )
-    allCells
+    (boardPositions (bvBoard bv))
   -- Conveyor belt path markers (teal chevrons)
   mapM_ (drawBelt ren yOff) (bvBelts bv)
   -- Portal pair markers (violet rings)
@@ -132,15 +132,10 @@ drawStaticPrim ren app board yOff = do
 -- | Pulse outline on cells a vine would spread onto next move.
 drawVineSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
 drawVineSpreadHints ren yOff pulse board = do
-  let sources =
-        [ (r, c)
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , hasVine (getCell board (r, c))
-        ]
+  let sources = [p | p <- boardPositions board, hasVine (getCell board p)]
       neigh (r, c) =
         filter
-          (\(rr, cc) -> rr >= 0 && rr < boardSize && cc >= 0 && cc < boardSize)
+          (inBounds board)
           [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
       targets =
         [ q
@@ -163,15 +158,10 @@ drawVineSpreadHints ren yOff pulse board = do
 -- | Draw flying saucer overlay at its cell (飞碟).
 drawChocoSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
 drawChocoSpreadHints ren yOff pulse board = do
-  let sources =
-        [ (r, c)
-        | r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
-        , hasChoco (getCell board (r, c))
-        ]
+  let sources = [p | p <- boardPositions board, hasChoco (getCell board p)]
       neigh (r, c) =
         filter
-          (\(rr, cc) -> rr >= 0 && rr < boardSize && cc >= 0 && cc < boardSize)
+          (inBounds board)
           [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
       targets =
         [ q

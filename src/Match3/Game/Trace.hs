@@ -145,7 +145,7 @@ traceEventsWith reg t =
             | p <- cleared
             , let cell = getCell before p
             , activatesWith reg cell
-            , let fp = [q | q <- blastWith reg cell p, q `elem` touched]
+            , let fp = [q | q <- blastWith reg before cell p, q `elem` touched]
             , not (null fp)
             ]
           grouped kind nameOf ps =

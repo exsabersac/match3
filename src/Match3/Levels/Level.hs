@@ -10,6 +10,8 @@ module Match3.Levels.Level
   , levelConfig
   , placeEach
   , layersAt
+  , checkLevelDims
+  , assertLevelDims
   ) where
 
 import Match3.Conveyor (Belt)
@@ -30,6 +32,8 @@ data Level = Level
   , lvlGround     :: Ground        -- ^ 地面层（第 6 刀前的 levelGround）
   , lvlRules      :: [ElementName] -- ^ 本关打开的规则开关（按名字，关卡级元素在 levelStart 里读；如 "bomb_shapes" = L / T 形生成炸弹）
   , lvlDrops      :: [DropSpec]    -- ^ 掉落口（新玩法 6，关卡级元素 CookieDrop 在 levelStart 里读）；空 = 没有掉落口
+  , lvlRows       :: Int           -- ^ 盘面行数（缺省 8；允许 minBoardDim..maxBoardDim）
+  , lvlCols       :: Int           -- ^ 盘面列数（缺省 8；允许 minBoardDim..maxBoardDim；可与行数不同）
   } deriving (Eq, Show)
 
 -- | 掉落口（新玩法 6）：补子时 'dropCells' 里的空洞若盘上的 'dropCell' 少于 'dropKeep' 个，就补 'dropCell'
@@ -56,7 +60,31 @@ level i name moves goal =
     , lvlGround = []
     , lvlRules = []
     , lvlDrops = []
+    , lvlRows = boardSize
+    , lvlCols = boardSize
     }
+
+-- | 校验关卡行列是否在允许范围内；越界返回 Left（加载时拒绝，不静默夹取）。
+checkLevelDims :: Level -> Either String Level
+checkLevelDims l
+  | validBoardDim (lvlRows l) && validBoardDim (lvlCols l) = Right l
+  | otherwise =
+      Left
+        ( "关卡「"
+            ++ lvlName l
+            ++ "」尺寸 "
+            ++ show (lvlRows l)
+            ++ "×"
+            ++ show (lvlCols l)
+            ++ " 超出允许范围 "
+            ++ show minBoardDim
+            ++ "–"
+            ++ show maxBoardDim
+        )
+
+-- | 加载边界：尺寸合法则原样返回，否则 error（不夹取）。
+assertLevelDims :: Level -> Level
+assertLevelDims l = either error id (checkLevelDims l)
 
 levelConfig :: Level -> GameConfig
 levelConfig l = GameConfig { cfgMoves = lvlMoves l, cfgGoal = lvlGoal l }

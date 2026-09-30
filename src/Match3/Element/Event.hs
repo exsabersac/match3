@@ -104,12 +104,12 @@ endItemDir i = case eiCell i of
 spreadPairs :: CellOverlay -> Board -> Board -> [(Pos, Pos)]
 spreadPairs ov before after =
   [ (src, q)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | r <- boardRowIndices before
+  , c <- boardColIndices before
   , let q = (r, c)
   , cellOverlay (getCell before q) == Nothing
   , cellOverlay (getCell after q) == Just ov
-  , let srcs = [n | n <- [(r - 1, c), (r, c - 1), (r, c + 1), (r + 1, c)], inBounds n, cellOverlay (getCell before n) == Just ov]
+  , let srcs = [n | n <- [(r - 1, c), (r, c - 1), (r, c + 1), (r + 1, c)], inBounds before n, cellOverlay (getCell before n) == Just ov]
   , let src = case srcs of
           (n : _) -> n
           [] -> q

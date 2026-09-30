@@ -10,6 +10,7 @@ module Match3.Ufo
   ) where
 
 import Data.List (nub, sort)
+import Match3.Board.Grid (inBounds)
 import Match3.Types
 
 -- | UFO overlay: sits over a cell and targets one gem color.
@@ -21,13 +22,9 @@ data Ufo = Ufo
 mkUfo :: Pos -> Color -> Ufo
 mkUfo = Ufo
 
-inBoard :: Pos -> Bool
-inBoard (r, c) =
-  r >= 0 && r < boardSize && c >= 0 && c < boardSize
-
-ortho :: Pos -> [Pos]
-ortho (r, c) =
-  filter inBoard [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+ortho :: Board -> Pos -> [Pos]
+ortho b (r, c) =
+  filter (inBounds b) [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
 
 at :: Board -> Pos -> Cell
 at = boardAt
@@ -52,17 +49,17 @@ matchesTarget b col p =
 -- | Orthogonally adjacent gems / countdowns matching the UFO target color.
 ufoAbsorbTargets :: Board -> Ufo -> [Pos]
 ufoAbsorbTargets b (Ufo cell col) =
-  sort [p | p <- ortho cell, matchesTarget b col p]
+  sort [p | p <- ortho b cell, matchesTarget b col p]
 
 -- | Relocate one step: prefer first absorbed cell; else cycle right→down→left→up.
-moveUfo :: [Pos] -> Ufo -> Ufo
-moveUfo absorbed (Ufo pos col) =
+moveUfo :: Board -> [Pos] -> Ufo -> Ufo
+moveUfo b absorbed (Ufo pos col) =
   case sort absorbed of
     (p : _) -> Ufo p col
     [] ->
       let (r, c) = pos
           cands =
-            filter inBoard [(r, c + 1), (r + 1, c), (r, c - 1), (r - 1, c)]
+            filter (inBounds b) [(r, c + 1), (r + 1, c), (r, c - 1), (r - 1, c)]
       in case cands of
            (p : _) -> Ufo p col
            [] -> Ufo pos col
@@ -72,7 +69,7 @@ moveUfo absorbed (Ufo pos col) =
 stepUfo :: Board -> Ufo -> ([Pos], Ufo)
 stepUfo b u =
   let targets = ufoAbsorbTargets b u
-  in (targets, moveUfo targets u)
+  in (targets, moveUfo b targets u)
 
 -- | Step every UFO on the current board. Absorbed positions are unioned;
 -- each UFO moves based on its own targets (using pre-move board).

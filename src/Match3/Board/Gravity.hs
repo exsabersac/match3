@@ -76,12 +76,12 @@ drainBottomCookiesWith reg mb =
 -- 内置只有饼干 = [EdgeBottom]，因此与旧的「底行收饼干、重力、再收」逐位相同。
 drainEdgesMWith :: Registry -> MBoard -> (MBoard, [(Pos, Cell)])
 drainEdgesMWith reg mb =
-  let n = boardSize - 1
+  let ((r0, c0), (r1, c1)) = bounds mb
       edgeCells e = case e of
-        EdgeBottom -> [(n, c) | c <- [0 .. n]]
-        EdgeLeft -> [(r, 0) | r <- [0 .. n]]
-        EdgeRight -> [(r, n) | r <- [0 .. n]]
-        EdgeTop -> [(0, c) | c <- [0 .. n]]
+        EdgeBottom -> [(r1, c) | c <- [c0 .. c1]]
+        EdgeLeft -> [(r, c0) | r <- [r0 .. r1]]
+        EdgeRight -> [(r, c1) | r <- [r0 .. r1]]
+        EdgeTop -> [(r0, c) | c <- [c0 .. c1]]
       hits0 =
         [ (p, cell)
         | e <- [EdgeBottom, EdgeLeft, EdgeRight, EdgeTop]

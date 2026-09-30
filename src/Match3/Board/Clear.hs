@@ -40,7 +40,7 @@ expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
   where
     go acc [] = acc
     go acc (p : ps) =
-      let extra = blastWith reg (getCell b p) p
+      let extra = blastWith reg b (getCell b p) p
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 

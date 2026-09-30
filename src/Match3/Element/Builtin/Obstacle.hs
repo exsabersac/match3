@@ -177,13 +177,13 @@ magicStoneFiring = 4
 
 -- | 盘上魔法石的位置与状态（行优先）。
 magicStones :: Board -> [(Pos, Int)]
-magicStones b = [((r, c), k) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], Custom "magic_stone" (CustomState k) <- [getCell b (r, c)]]
+magicStones b = [(p, k) | p <- boardPositions b, Custom "magic_stone" (CustomState k) <- [getCell b p]]
 
 -- | 邻格规则：与本轮真消除格正交相邻的每块魔法石充能 1 格（每轮最多 1 格，满 3 为止）。
 -- 本轮被直接命中的魔法石不充能——发射那一轮它被自己的种子命中，所以不会被自己清掉的邻格充能。
 magicStoneCharge :: AdjCtx -> Board -> AdjOut
 magicStoneCharge ctx b =
-  let near p = any (`elem` acTrue ctx) (filter inBounds (orthoNeighbors p))
+  let near p = any (`elem` acTrue ctx) (filter (inBounds b) (orthoNeighbors p))
       charged = [(p, Custom "magic_stone" (CustomState (k + 1))) | (p, k) <- magicStones b, k < magicStoneFull, p `notElem` acDirect ctx, near p]
   in AdjOut (foldl (\bd (p, cell) -> boardSet bd p cell) b charged) [] []
 
@@ -199,7 +199,7 @@ magicStoneArm _ b =
 magicStoneSeeds :: Board -> [Pos]
 magicStoneSeeds b =
   let firing = [p | (p, k) <- magicStones b, k >= magicStoneFiring]
-      cross (r, c) = [(r, x) | x <- [0 .. boardSize - 1]] ++ [(y, c) | y <- [0 .. boardSize - 1], y /= r]
+      cross (r, c) = [(r, x) | x <- boardColIndices b] ++ [(y, c) | y <- boardRowIndices b, y /= r]
   in foldr (\x acc -> if x `elem` acc then acc else x : acc) [] (concatMap cross firing)
 
 -- | 雪怪 Boss（新玩法 5，开心消消乐的 Boss 关）：一只 Boss 占 2×2 的四格，每格本体都是 Custom "snow_boss" v，
@@ -262,7 +262,7 @@ snowBossCells (r, c) = [(r, c), (r, c + 1), (r + 1, c), (r + 1, c + 1)]
 
 -- | 盘上的 Boss：(左上角, 左上格的状态)（行优先；左上格 = 象限 0 的格）。
 snowBosses :: Board -> [(Pos, SnowBoss)]
-snowBosses b = [(p, s) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), Just s <- [bossAt b p], sbQuad s == 0]
+snowBosses b = [(p, s) | p <- boardPositions b, Just s <- [bossAt b p], sbQuad s == 0]
 
 -- | 盘上全部 Boss 的剩余血量之和（HUD 血条）。
 snowBossHp :: Board -> Int
@@ -270,13 +270,13 @@ snowBossHp = sum . map (sbHp . snd) . snowBosses
 
 -- | 一只 Boss 在盘上真实存在的格（象限对得上的）。
 bossParts :: Board -> Pos -> [(Pos, SnowBoss)]
-bossParts b anchor = [(p, s) | (q, p) <- zip [0 ..] (snowBossCells anchor), inBounds p, Just s <- [bossAt b p], sbQuad s == q]
+bossParts b anchor = [(p, s) | (q, p) <- zip [0 ..] (snowBossCells anchor), inBounds b p, Just s <- [bossAt b p], sbQuad s == q]
 
 -- | Boss 身外一圈：与四格正交相邻、本身不是这四格的格（行优先去重）。
-bossRing :: Pos -> [Pos]
-bossRing anchor =
+bossRing :: Board -> Pos -> [Pos]
+bossRing b anchor =
   let body = snowBossCells anchor
-  in foldr (\q acc -> if q `elem` acc then acc else q : acc) [] [q | x <- body, q <- orthoNeighbors x, inBounds q, q `notElem` body]
+  in foldr (\q acc -> if q `elem` acc then acc else q : acc) [] [q | x <- body, q <- orthoNeighbors x, inBounds b q, q `notElem` body]
 
 -- | 邻格规则：每只 Boss 按本轮伤害扣血；归零的四格并入清除格。
 snowBossDamage :: AdjCtx -> Board -> AdjOut
@@ -284,7 +284,7 @@ snowBossDamage ctx b0 = foldl one (AdjOut b0 [] []) (snowBosses b0)
   where
     one out@(AdjOut b dead sit) (anchor, s) =
       let parts = bossParts b anchor
-          dmg = length [q | q <- bossRing anchor, q `elem` acTrue ctx] + length [p | (p, _) <- parts, p `elem` acDirect ctx]
+          dmg = length [q | q <- bossRing b anchor, q `elem` acTrue ctx] + length [p | (p, _) <- parts, p `elem` acDirect ctx]
           hp' = max 0 (sbHp s - dmg)
       in if dmg == 0
            then out
@@ -295,7 +295,7 @@ snowBossDamage ctx b0 = foldl one (AdjOut b0 [] []) (snowBosses b0)
 -- | 召唤选格（纯函数，测试直接调用）：避让格 / 墙之外、身外一圈里的普通宝石（无冰无叠层）按盘面散列选一格。
 snowBossSpawn :: [Pos] -> [Pos] -> Board -> Pos -> Maybe Pos
 snowBossSpawn avoid walls b anchor =
-  case [q | q <- bossRing anchor, q `notElem` avoid, q `notElem` walls, plainGem (getCell b q)] of
+  case [q | q <- bossRing b anchor, q `notElem` avoid, q `notElem` walls, plainGem (getCell b q)] of
     [] -> Nothing
     cands -> Just (cands !! fromIntegral ((fnv (show b) `xor` fnv (show anchor)) `mod` fromIntegral (length cands)))
   where

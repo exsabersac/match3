@@ -100,7 +100,7 @@ booster_free_swap_any_cells = do
 
 booster_cross_clears_row_col :: Assertion
 booster_cross_clears_row_col = do
-  let seeds = crossClearSeeds (3, 4)
+  let seeds = crossClearSeeds (boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))) (3, 4)
   assertEqual "row+col size" (15 :: Int) (length seeds)  -- 8+8-1
   assertBool "has row" (all (\c -> (3, c) `elem` seeds) [0 .. boardSize - 1])
   assertBool "has col" (all (\r -> (r, 4) `elem` seeds) [0 .. boardSize - 1])

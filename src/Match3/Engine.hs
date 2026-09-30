@@ -131,11 +131,11 @@ match3GameWith reg =
     , gameActions = \s ->
         [ Swap p q
         | not (isJust (gsOver s))
-        , r <- [0 .. boardSize - 1]
-        , c <- [0 .. boardSize - 1]
+        , let b = gsBoard s
+        , (r, c) <- boardPositions b
         , let p = (r, c)
         , q <- [(r, c + 1), (r + 1, c)]
-        , inBounds q
+        , inBounds b q
         , adjacent p q
         , pdAccepted (playWith reg (Swap p q) s)
         ]

@@ -177,7 +177,7 @@ data Registry = Registry
   , regShapes   :: [ShapeRule]                      -- 特殊块形状规则表（有序；第 8 刀）
   , regCombos   :: [ComboRule]                      -- 特殊块组合表（有序；第 8 刀）
   , regRefill   :: RefillPolicy                     -- 补子策略（第 8 刀；关卡级元素可经 Refilling 换掉）
-  , regWiden    :: [(Pos, [Pos] -> [Pos])]          -- 本步的扩爆格（新玩法 8）：格 → 爆炸范围改写；缺省空，
+  , regWiden    :: [(Pos, Board -> [Pos] -> [Pos])]  -- 本步的扩爆格（新玩法 8）：格 → 爆炸范围改写；缺省空，
                                                     -- 每步由 Element.Level.levelRegistryIn 按地面层的 widenRule 填
   }
 
@@ -443,22 +443,22 @@ keepOnShuffleWith reg = keepOnShuffle . elementOf reg
 
 -- | 本体被消除且能点火时的爆炸范围（不能点火 / 没有爆炸 → []）。新玩法 8：引爆格是本步的扩爆格
 -- （'setWidening'，魔法地格）时再按它的改写函数扩大；没有扩爆格（缺省）时就是本体的 blast。
-blastWith :: Registry -> Cell -> Pos -> [Pos]
-blastWith reg cell p = case blast (bodyOf reg cell) of
-  Just f | activatesWith reg cell -> widenAtWith reg p (f p)
+blastWith :: Registry -> Board -> Cell -> Pos -> [Pos]
+blastWith reg b cell p = case blast (bodyOf reg cell) of
+  Just f | activatesWith reg cell -> widenAtWith reg b p (f b p)
   _ -> []
 
 -- | 按本步的扩爆格改写一个爆炸范围（p = 引爆格；p 不是扩爆格时原样返回）。
-widenAtWith :: Registry -> Pos -> [Pos] -> [Pos]
-widenAtWith reg p area = foldl (\a w -> w a) area [w | (q, w) <- regWiden reg, q == p]
+widenAtWith :: Registry -> Board -> Pos -> [Pos] -> [Pos]
+widenAtWith reg b p area = foldl (\a w -> w b a) area [w | (q, w) <- regWiden reg, q == p]
 
 -- | 地面层里带扩爆规则（'widenRule'）的格（新玩法 8：魔法地格）与各自的改写函数；地面层按格序。
-groundWideningWith :: Registry -> Ground -> [(Pos, [Pos] -> [Pos])]
+groundWideningWith :: Registry -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
 groundWideningWith reg g =
   [(p, w) | (p, (n, _)) <- g, Just e <- [lookup n (regGround reg)], Just w <- [widenRule e]]
 
 -- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelRegistryIn 调用）。
-setWidening :: [(Pos, [Pos] -> [Pos])] -> Registry -> Registry
+setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> Registry -> Registry
 setWidening ws reg = reg {regWiden = ws}
 
 -- | 本步的扩爆格（测试 / 文档用）。

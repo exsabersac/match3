@@ -110,7 +110,7 @@ fuzzballAdjacent ctx b =
         [ q
         | p <- acTrue ctx
         , q <- orthoNeighbors p
-        , inBounds q
+        , inBounds b q
         , q `notElem` acDirect ctx
         , q `notElem` acTrue ctx
         , isFuzzball (getCell b q)
@@ -122,11 +122,11 @@ fuzzballAdjacent ctx b =
 fuzzballJumps :: [Pos] -> [Pos] -> Board -> ([(Pos, Pos)], Board)
 fuzzballJumps avoid walls b0 = (reverse movesRev, bEnd)
   where
-    balls = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], isFuzzball (getCell b0 (r, c))]
+    balls = [p | p <- boardPositions b0, isFuzzball (getCell b0 p)]
     seed = fnv (show b0)
     (movesRev, bEnd, _) = foldl' one ([], b0, []) balls
     one (acc, b, touched) p =
-      let cands = [q | q <- orthoNeighbors p, inBounds q, q `notElem` avoid, q `notElem` walls, q `notElem` touched, plainGem (getCell b q)]
+      let cands = [q | q <- orthoNeighbors p, inBounds b q, q `notElem` avoid, q `notElem` walls, q `notElem` touched, plainGem (getCell b q)]
       in case cands of
            [] -> (acc, b, touched)
            _ ->
@@ -150,7 +150,7 @@ fuzzballRun ctx b =
 tickRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 tickRun _ b =
   let b' = tickCountdowns b
-      ticked = [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p /= getCell b' p]
+      ticked = [p | p <- boardPositions b, getCell b p /= getCell b' p]
   in (if null ticked then Nothing else Just (EndEffect EvTick "countdown" [EndItem p p (getCell b' p) Nothing | p <- ticked]), b')
 
 -- | 蜗牛爬行（跳过本步被皮带移过的格，传送门端点当墙）。

@@ -76,8 +76,9 @@ mg_caps_ground_not_consumed :: Assertion
 mg_caps_ground_not_consumed = do
   assertEqual "name" "magic" magicGroundName
   assertEqual "display cell" (Custom "magic" (CustomState 1)) (toCell (MagicGround 1))
-  assertEqual "widen rule = magicWiden" (Just (magicWiden [(3, 3)])) (fmap ($ [(3, 3)]) (widenRule (MagicGround 1)))
-  assertBool "jelly does not widen" (null (fmap ($ [(3, 3)]) (widenRule (Jelly 2))))
+  let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
+  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\f -> f b8 [(3, 3)]) (widenRule (MagicGround 1)))
+  assertBool "jelly does not widen" (null (fmap (\f -> f b8 [(3, 3)]) (widenRule (Jelly 2))))
   let g0 = [(p, ("magic", 1)) | p <- mgCells]
   assertEqual "hit: kept, no counter" (g0, []) (hitGroundWith defaultRegistry mgCells g0)
   let gs0 = levelGame mgLevel 2
@@ -93,26 +94,28 @@ mg_caps_ground_not_consumed = do
 -- | 扩一圈的几何：原范围在前、新并进来的格按行优先接在后面；盘边截断。
 mg_widen_one_ring :: Assertion
 mg_widen_one_ring = do
-  let row6 = [(6, c) | c <- [0 .. 7]]
-  assertEqual "line: rows 5-7" (row6 ++ [(r, c) | r <- [5, 7], c <- [0 .. 7]]) (magicWiden row6)
+  let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
+      row6 = [(6, c) | c <- [0 .. 7]]
+  assertEqual "line: rows 5-7" (row6 ++ [(r, c) | r <- [5, 7], c <- [0 .. 7]]) (magicWiden b8 row6)
   let bomb33 = [(r, c) | r <- [2 .. 4], c <- [2 .. 4]]
-  assertEqual "bomb: 5x5" 25 (length (magicWiden bomb33))
-  assertEqual "bomb: same cells" [(r, c) | r <- [1 .. 5], c <- [1 .. 5]] (filter (`elem` magicWiden bomb33) [(r, c) | r <- [0 .. 7], c <- [0 .. 7]])
-  assertEqual "corner clipped" [(0, 0), (0, 1), (1, 0), (1, 1)] (magicWiden [(0, 0)])
-  assertEqual "empty stays empty" [] (magicWiden [])
+  assertEqual "bomb: 5x5" 25 (length (magicWiden b8 bomb33))
+  assertEqual "bomb: same cells" [(r, c) | r <- [1 .. 5], c <- [1 .. 5]] (filter (`elem` magicWiden b8 bomb33) [(r, c) | r <- [0 .. 7], c <- [0 .. 7]])
+  assertEqual "corner clipped" [(0, 0), (0, 1), (1, 0), (1, 1)] (magicWiden b8 [(0, 0)])
+  assertEqual "empty stays empty" [] (magicWiden b8 [])
 
 -- | 第 48 关的注册表：本步扩爆格 = 4 格魔法地格；直线 / 炸弹只在引爆格是魔法地格时扩（别的格原样），
 -- 缺省注册表不扩；非特效没有爆炸。
 mg_blast_widened_only_at_magic_cell :: Assertion
 mg_blast_widened_only_at_magic_cell = do
   let gs = levelGame mgLevel 1
+      b = gsBoard gs
       reg = levelRegistryIn defaultRegistry (gsLevelElems gs)
-      plainH p = blastWith defaultRegistry (line LineH) p
+      plainH p = blastWith defaultRegistry b (line LineH) p
   assertEqual "widened cells" mgCells (widenedCells reg)
-  mapM_ (\p -> assertEqual ("widened at " ++ show p) (magicWiden (plainH p)) (blastWith reg (line LineH) p)) mgCells
-  mapM_ (\p -> assertEqual ("plain at " ++ show p) (plainH p) (blastWith reg (line LineH) p)) [(6, 3), (5, 2), (4, 3), (7, 2)]
-  assertEqual "bomb at (6,2): 5x5 clipped" 20 (length (blastWith reg (line Bomb) (6, 2)))
-  assertEqual "plain gem: no blast" [] (blastWith reg (mkGem C1) (6, 2))
+  mapM_ (\p -> assertEqual ("widened at " ++ show p) (magicWiden b (plainH p)) (blastWith reg b (line LineH) p)) mgCells
+  mapM_ (\p -> assertEqual ("plain at " ++ show p) (plainH p) (blastWith reg b (line LineH) p)) [(6, 3), (5, 2), (4, 3), (7, 2)]
+  assertEqual "bomb at (6,2): 5x5 clipped" 20 (length (blastWith reg b (line Bomb) (6, 2)))
+  assertEqual "plain gem: no blast" [] (blastWith reg b (mkGem C1) (6, 2))
   assertEqual "default registry: not widened" 8 (length (plainH (6, 2)))
 
 -- | 实战：
@@ -224,7 +227,7 @@ mg_level48_layout_and_difficulty = do
       | gsOver gs /= Nothing = gs
       | otherwise =
           case [ ((negate (countOf CountStones (gsCounts g')), negate (gsScore g'), i), g')
-               | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], inBounds d]
+               | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], fst d >= 0 && fst d < boardSize && snd d >= 0 && snd d < boardSize]
                , let (g', o, _) = resolveSwapWith defaultRegistry p q gs
                , o `notElem` [NoMatch, InvalidSwap] ] of
             [] -> gs

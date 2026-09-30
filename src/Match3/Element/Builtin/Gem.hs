@@ -84,12 +84,12 @@ withBombShapes rules = case break ((== "line5→rainbow") . shapeName) rules of
   (pre, r5 : post) -> pre ++ [r5, ltBombRule] ++ post
   _ -> ltBombRule : rules
 
--- | 按种类的爆炸范围。
-specialBlast :: GemKind -> Maybe (Pos -> [Pos])
+-- | 按种类的爆炸范围（由盘面行列决定整行 / 整列；炸弹 3×3 再裁到盘内）。
+specialBlast :: GemKind -> Maybe (Board -> Pos -> [Pos])
 specialBlast k = case k of
-  LineH -> Just (\(r, _) -> [(r, c) | c <- [0 .. boardSize - 1]])
-  LineV -> Just (\(_, c) -> [(r, c) | r <- [0 .. boardSize - 1]])
-  Bomb -> Just (\(r, c) -> [(rr, cc) | rr <- [r - 1 .. r + 1], cc <- [c - 1 .. c + 1], inBounds (rr, cc)])
+  LineH -> Just (\b (r, _) -> [(r, c) | c <- boardColIndices b])
+  LineV -> Just (\b (_, c) -> [(r, c) | r <- boardRowIndices b])
+  Bomb -> Just (\b (r, c) -> [(rr, cc) | rr <- [r - 1 .. r + 1], cc <- [c - 1 .. c + 1], inBounds b (rr, cc)])
   _ -> Nothing
 
 -- | 条目：普通宝石（槽位 0；宝石不经关卡放置表放置）。

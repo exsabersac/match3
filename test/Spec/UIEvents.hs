@@ -266,4 +266,4 @@ trace_events_consistent_with_trace = do
   assertBool "enough cases" (length cases > 150)
   assertEqual "event/trace mismatches" [] problems
   where
-    allSwapsSpec = [((r, c), p2) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], p2 <- [(r, c + 1), (r + 1, c)], inBounds p2]
+    allSwapsSpec = [((r, c), p2) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], p2 <- [(r, c + 1), (r + 1, c)], fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize]

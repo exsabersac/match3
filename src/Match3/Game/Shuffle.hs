@@ -18,7 +18,7 @@ module Match3.Game.Shuffle
 
 import Match3.Board.Grid (setCell, getCell)
 import Match3.Board.Match (hasValidMoveWith)
-import Match3.Board.Random (shufflePlayable)
+import Match3.Board.Random (shufflePlayableSized)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, keepOnShuffleWith)
 import Match3.Types
@@ -38,10 +38,9 @@ extractDecor = extractDecorWith defaultRegistry
 -- 只有普通宝石会被洗走；直线 / 炸弹 / 彩虹特殊块与所有障碍原样放回。
 extractDecorWith :: Registry -> Board -> [CellDecor]
 extractDecorWith reg b =
-  [ CellDecor (r, c) cell
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
-  , let cell = getCell b (r, c)
+  [ CellDecor p cell
+  | p <- boardPositions b
+  , let cell = getCell b p
   , keepOnShuffleWith reg cell
   ]
 
@@ -61,15 +60,18 @@ ensurePlayableWith reg gs
   | hasValidMoveWith reg (gsBoard gs) = gs { gsShuffled = False }
   | otherwise = go (24 :: Int) gs
   where
-    go 0 g =
-      let decor = extractDecorWith reg (gsBoard g)
-          (board0, g') = shufflePlayable (gsGen g)
+    dims g = boardDims (gsBoard g)
+    reshuffle g =
+      let (rows, cols) = dims g
+          decor = extractDecorWith reg (gsBoard g)
+          (board0, g') = shufflePlayableSized rows cols (gsGen g)
           board = restoreDecor board0 decor
+      in (board, g')
+    go 0 g =
+      let (board, g') = reshuffle g
       in g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
     go n g =
-      let decor = extractDecorWith reg (gsBoard g)
-          (board0, g') = shufflePlayable (gsGen g)
-          board = restoreDecor board0 decor
+      let (board, g') = reshuffle g
           g2 = g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
       in if hasValidMoveWith reg board then g2 else go (n - 1) g2
 
@@ -82,8 +84,9 @@ shuffleGame = shuffleGameWith defaultRegistry
 -- （如测试专用元素）按它自己的 keepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
 shuffleGameWith :: Registry -> GameState -> GameState
 shuffleGameWith reg gs =
-  let decor = extractDecorWith reg (gsBoard gs)
-      (board0, g') = shufflePlayable (gsGen gs)
+  let (rows, cols) = boardDims (gsBoard gs)
+      decor = extractDecorWith reg (gsBoard gs)
+      (board0, g') = shufflePlayableSized rows cols (gsGen gs)
       board = restoreDecor board0 decor
   -- 洗牌不是一步消除：清掉上一步的连击 / 清除格反馈
   in (clearMoveFx gs) { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True, gsOver = Nothing }

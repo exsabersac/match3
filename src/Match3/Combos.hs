@@ -23,6 +23,7 @@ import Data.List (nub)
 import Match3.Element.Special (comboFires, comboSeedsFor)
 import Match3.Element.Types (ComboRule(..))
 import Match3.Rainbow (rainbowClearSeeds)
+import Match3.Board.Grid (inBounds)
 import Match3.Types
 
 at :: Board -> Pos -> Cell
@@ -114,8 +115,8 @@ rainbowComboMorph b0 swapped p1 p2 = case (at b0 p1, at b0 p2) of
       Just
         ( if isBombK k then "rainbow_bomb" else "rainbow_line"
         , [ (src, q, Gem col (kindFor k q) 0 Nothing)
-          | r <- [0 .. boardSize - 1]
-          , c <- [0 .. boardSize - 1]
+          | r <- boardRowIndices swapped
+          , c <- boardColIndices swapped
           , let q = (r, c)
           , Gem col' Normal 0 Nothing <- [at swapped q]
           , col' == col
@@ -129,35 +130,30 @@ rainbowComboMorph b0 swapped p1 p2 = case (at b0 p1, at b0 p2) of
 
 -- | 5×5 blast centered at pos.（炸弹 × 炸弹一端的范围）
 bigBomb :: Board -> Pos -> [Pos]
-bigBomb _ (r, c) =
+bigBomb b (r, c) =
   [ (rr, cc)
   | rr <- [r - 2 .. r + 2]
   , cc <- [c - 2 .. c + 2]
-  , rr >= 0
-  , rr < boardSize
-  , cc >= 0
-  , cc < boardSize
+  , inBounds b (rr, cc)
   ]
 
 -- | 整行 + 整列（直线 × 直线一端的范围）。
 fullRowCol :: Board -> Pos -> [Pos]
-fullRowCol _ (r, c) =
-  [(r, cc) | cc <- [0 .. boardSize - 1]]
-    ++ [(rr, c) | rr <- [0 .. boardSize - 1]]
+fullRowCol b (r, c) =
+  [(r, cc) | cc <- boardColIndices b]
+    ++ [(rr, c) | rr <- boardRowIndices b]
 
 -- | 3 行 + 3 列（直线 × 炸弹，以炸弹端为中心）。
 lineBombCross :: Board -> Pos -> [Pos]
-lineBombCross _ (r, c) =
+lineBombCross b (r, c) =
   nub $
     [ (rr, cc)
     | rr <- [r - 1 .. r + 1]
-    , rr >= 0
-    , rr < boardSize
-    , cc <- [0 .. boardSize - 1]
+    , rr >= 0 && rr < boardNRows b
+    , cc <- boardColIndices b
     ]
       ++ [ (rr, cc)
          | cc <- [c - 1 .. c + 1]
-         , cc >= 0
-         , cc < boardSize
-         , rr <- [0 .. boardSize - 1]
+         , cc >= 0 && cc < boardNCols b
+         , rr <- boardRowIndices b
          ]

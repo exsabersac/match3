@@ -7,6 +7,7 @@
 -- randomR，refill / randomBoard 的随机数顺序依赖于此，改动会改变所有固定种子的盘面。
 module Match3.Board.Grid
   ( inBounds
+  , mInBounds
   , getCell
   , setCell
   , swapCells
@@ -26,9 +27,13 @@ import Data.Array (Array, accum, bounds, inRange, listArray, (!))
 import Match3.Types
 import System.Random (RandomGen, randomR)
 
--- | 坐标是否落在 8×8 盘内（行、列都在 [0, boardSize)）。
-inBounds :: Pos -> Bool
-inBounds (r, c) = r >= 0 && r < boardSize && c >= 0 && c < boardSize
+-- | 坐标是否落在给定盘面内（由数组下界判定，支持矩形盘）。
+inBounds :: Board -> Pos -> Bool
+inBounds b p = inRange (bounds (boardArray b)) p
+
+-- | 坐标是否落在可空盘面内。
+mInBounds :: MBoard -> Pos -> Bool
+mInBounds mb p = inRange (bounds mb) p
 
 -- | 读一格，O(1)（Board 是二维数组；调用方保证 inBounds，越界会直接报错）。
 getCell :: Board -> Pos -> Cell

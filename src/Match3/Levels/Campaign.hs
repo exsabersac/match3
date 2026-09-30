@@ -18,12 +18,12 @@ import Match3.Levels.Level
 import Match3.Types
 import Match3.Ufo (mkUfo)
 
--- | 第 i 关（0 基下标）；越界为 Nothing。
+-- | 第 i 关（0 基下标）；越界为 Nothing。取关时校验行列（越界尺寸 error，不夹取）。
 lookupLevel :: Int -> Maybe Level
 lookupLevel i
   | i < 0 = Nothing
   | otherwise = case drop i allLevels of
-      l : _ -> Just l
+      l : _ -> Just (assertLevelDims l)
       [] -> Nothing
 
 -- | 关卡数（= length allLevels）。
@@ -338,6 +338,11 @@ allLevels =
       , lvlPlacements = [Place "stone" [AInt magicGroundStoneLayers] magicGroundStones]
       , lvlRules = ["bomb_shapes"]
       }
+    -- 可变矩形盘面验收：6×9（行×列），无新元素；仅得分目标，装饰为空，证明非 8×8 可玩
+  , (level 48 "宽域" wideBoardMoves (goalScore wideBoardGoal))
+      { lvlRows = 6
+      , lvlCols = 9
+      }
   ]
 
 -- | 第 48 关的魔法地格。
@@ -359,6 +364,14 @@ magicGroundGoal = 8
 -- | 第 48 关的步数。
 magicGroundMoves :: MovesLeft
 magicGroundMoves = 18
+
+-- | 第 49 关（宽域）步数。
+wideBoardMoves :: MovesLeft
+wideBoardMoves = 24
+
+-- | 第 49 关得分目标。
+wideBoardGoal :: Int
+wideBoardGoal = 500
 
 -- | 第 47 关开局的变色龙格。
 chameleonCells :: [Pos]

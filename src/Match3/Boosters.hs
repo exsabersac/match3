@@ -18,8 +18,8 @@ clearCellSeeds :: Pos -> [Pos]
 clearCellSeeds = hammerClearSeeds
 
 -- | Cross clear (十字清除): entire row + column through the target cell.
-crossClearSeeds :: Pos -> [Pos]
-crossClearSeeds (r, c) =
+crossClearSeeds :: Board -> Pos -> [Pos]
+crossClearSeeds b (r, c) =
   nub $
-    [(r, c') | c' <- [0 .. boardSize - 1]]
-      ++ [(r', c) | r' <- [0 .. boardSize - 1]]
+    [(r, c') | c' <- boardColIndices b]
+      ++ [(r', c) | r' <- boardRowIndices b]

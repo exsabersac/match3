@@ -95,8 +95,8 @@ cellLine cell =
       , show (counterWith reg cell)
       , show (vacatesCarpetWith reg cell)
       , show (keepOnShuffleWith reg cell)
-      , show (blastWith reg cell (3, 3))
-      , show (blastWith reg cell (0, 7))
+      , show (blastWith reg base cell (3, 3))
+      , show (blastWith reg base cell (0, 7))
       , show (recolorableWith reg cell)
       , show (pushableWith reg cell)
       , show (elementName reg cell)
@@ -162,7 +162,7 @@ ruleLines =
        ]
     ++ [ "G " ++ show (hitGroundWith reg [(1, 1), (2, 2)] [((1, 1), ("jelly", 2)), ((2, 2), ("jelly", 1)), ((3, 3), ("jelly", 2)), ((1, 1), ("moss", 1))]) ]
   where
-    pairs = [((r, c), q) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], q <- [(r, c + 1), (r + 1, c)], inBounds q]
+    pairs = [((r, c), q) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], q <- [(r, c + 1), (r + 1, c)], inBounds base q]
 
 boardText :: Board -> String
 boardText b = show [getCell b (r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]

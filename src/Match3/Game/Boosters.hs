@@ -50,7 +50,7 @@ resolveHammerWith :: Registry -> Pos -> GameState -> (GameState, Outcome, MoveTr
 resolveHammerWith reg p gs
   | Just o <- gsOver gs = (gs, o, emptyTrace gs)
   | gsHammers gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | not (inBounds p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
+  | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | hitImmuneWith reg (getCell (gsBoard gs) p) = (rejectMove gs, NoMatch, emptyTrace gs)
   | otherwise = resolveMoveWith reg KindHammer (gsBoard gs) (OpenSeeds Nothing [p]) gs
 
@@ -63,7 +63,7 @@ resolveFreeSwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcom
 resolveFreeSwapWith reg p1 p2 gs
   | Just o <- gsOver gs = (gs, o, emptyTrace gs)
   | gsFreeSwaps gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | not (inBounds p1 && inBounds p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
+  | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | p1 == p2 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
   | pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
@@ -84,8 +84,8 @@ resolveCrossClearWith :: Registry -> Pos -> GameState -> (GameState, Outcome, Mo
 resolveCrossClearWith reg p gs
   | Just o <- gsOver gs = (gs, o, emptyTrace gs)
   | gsCrossClears gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | not (inBounds p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | otherwise = resolveMoveWith reg KindCross (gsBoard gs) (OpenSeeds Nothing (crossClearSeeds p)) gs
+  | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
+  | otherwise = resolveMoveWith reg KindCross (gsBoard gs) (OpenSeeds Nothing (crossClearSeeds (gsBoard gs) p)) gs
 
 -- | 锤子（结算结果）。
 useHammer :: Pos -> GameState -> (GameState, Outcome)

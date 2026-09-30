@@ -182,7 +182,7 @@ comboMoveState =
     , r <- [0 .. boardSize - 1]
     , c <- [0 .. boardSize - 1]
     , p2 <- [(r, c + 1), (r + 1, c)]
-    , inBounds p2
+    , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
     , let (gs1, out) = trySwap (r, c) p2 gs0
     , isApplied out
     , gsCombo gs1 >= 2
@@ -340,7 +340,7 @@ crateAdjacent ctx b =
         Custom "crate" _ -> True
         _ -> False
       targets =
-        nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds q, q `notElem` acDirect ctx, isCrate (getCell b q)]
+        nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds b q, q `notElem` acDirect ctx, isCrate (getCell b q)]
       bump (bd, dead) q = case getCell bd q of
         Custom _ (CustomState n) | n <= 1 -> (bd, dead ++ [q])
                    | otherwise -> (setCell bd q (Custom "crate" (CustomState (n - 1))), dead)

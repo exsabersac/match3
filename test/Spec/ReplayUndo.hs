@@ -289,7 +289,7 @@ trace_seeds_final_equals_stabilized =
     )
     [ (seed, seeds, ufos)
     | seed <- [1 .. 40 :: Int]
-    , seeds <- [[(3, 3)], crossClearSeeds (seed `mod` boardSize, (seed * 3) `mod` boardSize)]
+    , seeds <- [[(3, 3)], crossClearSeeds (boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))) (seed `mod` boardSize, (seed * 3) `mod` boardSize)]
     , ufos <- [[], [mkUfo (1, 3) C2]]
     ]
 
@@ -309,7 +309,7 @@ trace_swap_final_equals_trySwap = do
         , c <- [0 .. boardSize - 1]
         , let p1 = (r, c)
         , p2 <- [(r, c + 1), (r + 1, c)]
-        , inBounds p2
+        , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
         , let (gs1, out) = trySwap p1 p2 gs0
         ]
   counts <- mapM
@@ -423,7 +423,7 @@ trace_multi_wave_each_round_visible =
       length ws @?= gsCombo gs1
       assertBool "every round clears something" (all (not . null . cwCleared) ws)
       sequence_
-        [ assertBool ("round " ++ show i ++ " clears real cells") (all (\p -> inBounds p) (cwCleared w))
+        [ assertBool ("round " ++ show i ++ " clears real cells") (all (\(r,c) -> r >= 0 && r < boardSize && c >= 0 && c < boardSize) (cwCleared w))
         | (i, w) <- zip [1 :: Int ..] ws
         ]
       -- 每一轮都能从「消除前盘面」上找到匹配（第一轮之后都是天然掉落形成的连锁）
@@ -455,7 +455,7 @@ trace_end_steps_replay_to_trySwap_final = do
     , c <- [0 .. boardSize - 1]
     , let p1 = (r, c)
     , p2 <- [(r, c + 1), (r + 1, c)]
-    , inBounds p2
+    , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
     , let (gs1, out) = trySwap p1 p2 gs0
     , out /= NoMatch && out /= InvalidSwap
     ]
@@ -499,7 +499,7 @@ trace_end_snail_push_and_turn = do
         , c <- [0 .. boardSize - 1]
         , let p1 = (r, c)
         , p2 <- [(r, c + 1), (r + 1, c)]
-        , inBounds p2
+        , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
         , all (`notElem` [(0, 0), (3, 3), (3, 4)]) [p1, p2]
         , let (gs1, out) = trySwap p1 p2 gs0
         , isMoveApplied out
@@ -555,7 +555,7 @@ trace_shuffle_step_replays = do
         | r <- [0 .. boardSize - 1]
         , c <- [0 .. boardSize - 1]
         , p2 <- [(r, c + 1), (r + 1, c)]
-        , inBounds p2
+        , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
         ]
       firstApplied gs = [ (p1, p2, g) | (p1, p2) <- pairs, let (g, o) = trySwap p1 p2 gs, o /= NoMatch && o /= InvalidSwap ]
       -- 开局的全部成交交换，外加每条之后沿「第一手成交」再走两手

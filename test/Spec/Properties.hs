@@ -237,15 +237,16 @@ pickAction gs (Pick start dir booster which)
         (a : _) -> a
         [] -> M3E.Hint
   where
-    n = boardSize * boardSize
-    at i = let k = i `mod` n in (k `div` boardSize, k `mod` boardSize)
+    (nr, nc) = boardDims (gsBoard gs)
+    n = max 1 (nr * nc)
+    at i = let k = i `mod` n in (k `div` nc, k `mod` nc)
     candidates =
       [ M3E.Swap p q
       | i <- [start .. start + n - 1]
       , d <- [dir, 1 - dir]
       , let p@(r, c) = at i
             q = if d == 0 then (r, c + 1) else (r + 1, c)
-      , inBounds q
+      , fst q >= 0 && fst q < nr && snd q >= 0 && snd q < nc
       ]
     accepted a = stepAccepted (gameStep M3E.match3Game gs a)
 
@@ -664,7 +665,7 @@ findHintReference reg b =
       , let p1 = (r, c)
       , hintable (getCell b p1)
       , p2 <- [(r, c + 1), (r + 1, c)]
-      , inBounds p2
+      , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
       , hintable (getCell b p2)
       , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2)
       , hasAnyMatchWith reg (swapCells b p1 p2)
@@ -675,7 +676,7 @@ findHintReference reg b =
       , c <- [0 .. boardSize - 1]
       , let p1 = (r, c)
       , p2 <- [(r, c + 1), (r + 1, c)]
-      , inBounds p2
+      , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
       , srFires rule b p1 p2
       ]
@@ -774,9 +775,11 @@ qc_end_table_matches_legacy :: Property
 qc_end_table_matches_legacy =
   forAll genStart $ \start ->
     forAll (choose (0, 4) >>= \k -> vectorOf k genPick) $ \picks ->
-      forAll ((,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)) $ \seedPos ->
-        let s0 = startState start
-            gs = last (s0 : map stepState (snd (playPicks s0 picks)))
+      let s0 = startState start
+          gs0 = last (s0 : map stepState (snd (playPicks s0 picks)))
+          (nr, nc) = boardDims (gsBoard gs0)
+      in forAll ((,) <$> choose (0, nr - 1) <*> choose (0, nc - 1)) $ \seedPos ->
+        let gs = gs0
             reg = defaultRegistry
             hooks0 = levelHooksWith reg (gsLevelElems gs)
             summary (segs, ends, board, vacate) =

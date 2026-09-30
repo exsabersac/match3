@@ -55,7 +55,7 @@ drawBoardBase :: Renderer -> App -> IO ()
 drawBoardBase ren app = case appArt app of
   Just art -> drawBoardBgArt ren art app
   Nothing ->
-    forM_ allCells $ \pos@(r, c) -> do
+    forM_ (boardPositions (gsBoard (appGame app))) $ \pos@(r, c) -> do
       let (x, y) = cellOrigin pos
       rendererDrawColor ren $= if even (r + c) then V4 36 36 48 255 else V4 28 28 40 255
       fillRect ren (Just (cellRect x y))
@@ -68,7 +68,7 @@ waveTint app k = let (r, g, b) = clearTint k (appPulse app) in V3 r g b
 drawCellsExcept :: Renderer -> App -> Board -> [Pos] -> IO ()
 drawCellsExcept ren app board hidden = do
   drawBoardBase ren app
-  forM_ allCells $ \pos ->
+  forM_ (boardPositions board) $ \pos ->
     unless (pos `elem` hidden) $ do
       let (x, y) = cellOrigin pos
       drawCellAny ren app x y (getCell board pos) False
@@ -138,9 +138,10 @@ beltAngles belt = go Nothing (zip belt (drop 1 belt ++ take 1 belt))
 drawBoardBgArt :: Renderer -> Art -> App -> IO ()
 drawBoardBgArt ren art app = do
   let bv = boardView (appGame app)  -- 第 11 刀：地毯 / 地面层 / 传送带 / 传送门读视图模型
-  _ <- drawPanel ren art "panel_dark" (rect (padPx - 8) (hudH + padPx - 8) (boardPx + 16) (boardPx + 16)) 16
-  forM_ allCells $ \pos@(r, c) -> do
-    let (x, y) = cellOrigin pos
+      (nr, nc) = boardDims (gsBoard (appGame app))
+  _ <- drawPanel ren art "panel_dark" (rect (padPx - 8) (hudH + padPx - 8) (boardWPx nc + 16) (boardHPx nr + 16)) 16
+  forM_ (allCellsOn nr nc) $ \pos@(r, c) -> do
+    let (x, y) = cellOriginOn nr nc pos
         carpet = carpetAt bv pos
         carpetOpen = carpet == CarpetOpen
         carpetCovered = carpet == CarpetCovered
@@ -171,7 +172,7 @@ drawStaticArt ren art app board yOff = do
   forM_ hintCells $ \pos -> do
     let (x, y) = cellOrigin pos
     void (drawSpriteMod ren art "hint_glow" (rect (x - 3) (y - 3) (cellPx + 6) (cellPx + 6)) (V3 255 255 255) (fromIntegral hintA))
-  forM_ allCells $ \pos -> do
+  forM_ (boardPositions board) $ \pos -> do
     let (x, y) = cellOrigin pos
     drawCellArt ren art pulse x (y + yOff) (getCell board pos) (isFlashing hl pos)
   -- 提示格再叠一层淡淡的加色光，便于一眼看到
@@ -236,11 +237,10 @@ drawUfosAny ren app = case appArt app of
 spreadTargets :: (Cell -> Bool) -> Board -> [Pos]
 spreadTargets isSource board =
   [ q
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
+  | (r, c) <- boardPositions board
   , isSource (getCell board (r, c))
   , q <- [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
-  , inBounds q
+  , inBounds board q
   , case getCell board q of
       Gem _ _ _ Nothing -> True
       _ -> False

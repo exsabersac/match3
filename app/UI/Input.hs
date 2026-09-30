@@ -313,7 +313,8 @@ handleMouseUp ref window me = do
       Nothing -> pure False
       Just p1 -> do
         let P (V2 mx my) = mouseButtonEventPos me
-        case gridDragRelease adjacent p1 (pixelToCell mx my) of
+            (nr, nc) = boardDims (gsBoard (appGame app0))
+        case gridDragRelease adjacent p1 (pixelToCellOn nr nc mx my) of
           Just (_, p2) -> do
             app <- readIORef ref
             commit ref window (swapTo dragMsg app p1 p2)
@@ -347,7 +348,8 @@ handleMouseDown ref window me = do
           commit ref window (freshLevelUi (restartSame app seed) app) { appMsg = "Retry!" }
           pure False
         _ ->
-          case pixelToCell mx my of
+          let (nr, nc) = boardDims (gsBoard (appGame app0))
+          in case pixelToCellOn nr nc mx my of
             Nothing -> pure False
             Just pos -> False <$ cellClick ref window pos
 

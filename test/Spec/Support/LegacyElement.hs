@@ -239,7 +239,9 @@ instance LElement SpecialGem where
     Normal -> "gem"
   toCell (SpecialGem c k) = Gem c k 0 Nothing
   keepOnShuffle (SpecialGem _ k) = k /= Normal
-  blast (SpecialGem _ k) = specialBlast k
+  blast (SpecialGem _ k) = case specialBlast k of
+    Just f -> Just (\p -> f (boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))) p)
+    Nothing -> Nothing
   -- 彩虹不进普通匹配提示（只经成对交换规则给提示）
   hintable (SpecialGem _ k) = k /= Rainbow
   swapRule (SpecialGem _ k) = case k of
@@ -426,7 +428,7 @@ bubbleAdjacent :: AdjCtx -> Board -> AdjOut
 bubbleAdjacent ctx b =
   let popped =
         [ q
-        | q <- nubOrd [q' | p <- acTrue ctx, q' <- orthoNeighbors p, inBounds q']
+        | q <- nubOrd [q' | p <- acTrue ctx, q' <- orthoNeighbors p, inBounds b q']
         , q `notElem` acDirect ctx
         , q `notElem` acTrue ctx
         , isBubble (getCell b q)

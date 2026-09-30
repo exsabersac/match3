@@ -10,6 +10,7 @@ import Control.Monad (filterM)
 import Data.List (isInfixOf, isPrefixOf, nub)
 import Data.Maybe (isJust, isNothing)
 import Match3.Core
+import Match3.Levels.Level (Level(..), assertLevelDims, checkLevelDims, level)
 import Match3.Element (Arg(..), PlaceError(..), Placement(..), defaultRegistry, placeAllWith, placeWith)
 import Match3.Game.Level (decorateLevel, decorateLevelWith, goalDecorWith)
 import Spec.Support.Source (readCode, sourcesUnderAll, stripStrings)
@@ -28,6 +29,9 @@ tests =
   , testCase "campaign_game_matches_level_config" campaign_game_matches_level_config
   , testCase "restart_next_out_of_range_clamped" restart_next_out_of_range_clamped
   , testCase "no_all_levels_index_scan" no_all_levels_index_scan
+  , testCase "board_size_out_of_range_rejected" board_size_out_of_range_rejected
+  , testCase "wide_board_level_is_6x9" wide_board_level_is_6x9
+  , testCase "default_levels_stay_8x8" default_levels_stay_8x8
   ]
     ++ map fixedSeed
       [ testProperty "qc_lookup_level_in_range" (withMaxSuccess 500 qc_lookup_level_in_range)
@@ -154,3 +158,42 @@ qc_clamp_level_index_found =
     in isJust (lookupLevel c)
          .&&. (clampLevelIndex c === c)
          .&&. (if i >= 0 && i < levelCount then c === i else property True)
+
+-- | 行列越界在加载时拒绝（error，不夹取）。
+board_size_out_of_range_rejected :: Assertion
+board_size_out_of_range_rejected = do
+  let badRows = (level 0 "坏行" 20 (goalScore 100)) {lvlRows = 4, lvlCols = 8}
+      badCols = (level 0 "坏列" 20 (goalScore 100)) {lvlRows = 8, lvlCols = 11}
+      badBoth = (level 0 "双坏" 20 (goalScore 100)) {lvlRows = 3, lvlCols = 12}
+  assertEqual "rows too small" (Left "关卡「坏行」尺寸 4×8 超出允许范围 5–10") (checkLevelDims badRows)
+  assertEqual "cols too big" (Left "关卡「坏列」尺寸 8×11 超出允许范围 5–10") (checkLevelDims badCols)
+  assertEqual "both bad" (Left "关卡「双坏」尺寸 3×12 超出允许范围 5–10") (checkLevelDims badBoth)
+  assertEqual "ok 5×10" (Right ((level 0 "ok" 20 (goalScore 100)) {lvlRows = 5, lvlCols = 10})) (checkLevelDims ((level 0 "ok" 20 (goalScore 100)) {lvlRows = 5, lvlCols = 10}))
+  err <- try (evaluate (assertLevelDims badRows)) :: IO (Either ErrorCall Level)
+  case err of
+    Left (ErrorCall msg) -> assertBool "assert mentions size" ("4×8" `isInfixOf` msg || "超出允许范围" `isInfixOf` msg)
+    Right _ -> assertFailure "expected error for out-of-range size"
+
+-- | 第 49 关「宽域」为 6×9 矩形盘。
+wide_board_level_is_6x9 :: Assertion
+wide_board_level_is_6x9 = do
+  let Just lvl = lookupLevel 48
+  assertEqual "name" "宽域" (lvlName lvl)
+  assertEqual "rows" 6 (lvlRows lvl)
+  assertEqual "cols" 9 (lvlCols lvl)
+  let gs = newGameAtLevel 48 (levelConfig lvl) 1
+      b = gsBoard gs
+  assertEqual "board rows" 6 (length (boardRows b))
+  assertBool "board cols" (all ((== 9) . length) (boardRows b))
+  assertEqual "dims helper" (6, 9) (boardDims b)
+  assertBool "playable" (hasValidMove b)
+
+-- | 既有关卡未改尺寸配置（缺省 8×8）。
+default_levels_stay_8x8 :: Assertion
+default_levels_stay_8x8 = do
+  mapM_
+    ( \l -> do
+        assertEqual ("rows L" ++ show (lvlIndex l)) 8 (lvlRows l)
+        assertEqual ("cols L" ++ show (lvlIndex l)) 8 (lvlCols l)
+    )
+    (take 48 allLevels)

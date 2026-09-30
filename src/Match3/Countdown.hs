@@ -28,26 +28,23 @@ tickCountdowns = mapBoard tickCell
 -- | Positions whose countdown has reached 0 (about to explode).
 countdownsAtZero :: Board -> [Pos]
 countdownsAtZero b =
-  [ (r, c)
-  | r <- [0 .. boardSize - 1]
-  , c <- [0 .. boardSize - 1]
-  , case boardAt b (r, c) of
+  [ p
+  | p <- boardPositions b
+  , case boardAt b p of
       Countdown _ 0 -> True
       _ -> False
   ]
 
--- | 3×3 blast centered at a countdown that hit zero.
-explodeRadius :: Pos -> [Pos]
-explodeRadius (r, c) =
+-- | 3×3 blast centered at a countdown that hit zero (裁到盘内).
+explodeRadius :: Board -> Pos -> [Pos]
+explodeRadius b (r, c) =
   [ (rr, cc)
   | rr <- [r - 1 .. r + 1]
   , cc <- [c - 1 .. c + 1]
-  , rr >= 0
-  , rr < boardSize
-  , cc >= 0
-  , cc < boardSize
+  , rr >= 0 && rr < boardNRows b
+  , cc >= 0 && cc < boardNCols b
   ]
 
 -- | Union of explosion seeds for all zero countdowns.
 explodeSeedsFor :: Board -> [Pos]
-explodeSeedsFor b = nub (concatMap explodeRadius (countdownsAtZero b))
+explodeSeedsFor b = nub (concatMap (explodeRadius b) (countdownsAtZero b))

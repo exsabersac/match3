@@ -16,7 +16,7 @@
 //   4d. 第 43 关毛球：浮动两帧（按像素测上下偏移）、步末跳格（皮带段）中间帧、HUD「目标 毛球」竖屏 / 横屏；
 //   4e. 第 44 关彩虹组合：规则角标「彩虹组合变身」、彩虹 × 直线 / 炸弹的变身段（第一轮之前的蔓延段）中间帧；
 //   4f. 真实绘制钩子（drawImage 按调用序记录）：第 46 / 47 关掉落口、第 47 关变色龙；逐关地面层贴图与 HUD 关名 name_<i>；
-//   4g. 第 48 关魔法地格：地面层 magic 贴图与像素、4 组扩圈爆炸（真实绘制格数 = EvBlast 格数）、终章（第 47 关过关 → 第 48 关 Won）；
+//   4g. 第 48 关魔法地格：地面层 magic 贴图与像素、4 组扩圈爆炸（真实绘制格数 = EvBlast 格数）、终章（第 47→48 LevelClear，第 48→49 LevelClear，第 49 关 Won）；
 //   4h. 第 8 / 39–45 / 47 / 48 关玩到失败的结局面板文字（碎石关「用邻消或特效砸开碎石，目标 n 个」）、逐关失败提示无「箱子」/ [a-z_]；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
@@ -973,8 +973,8 @@ try {
   //         EvBlast（pending.events 的 blast）的来源 / 格数 / 行列数 = 原生（parity 的「魔法地格扩爆」行），扩出来的一圈与原范围的每个目标格
   //         都有真实绘制——被消格画了消失段（格中心的光环 + 缩小的棋子），碎石等受击不消的格画了受击后的样子（holes，层数变了）；
   //         两类合计 = EvBlast 格数；截图 magic-widen-seed<N>.png
-  //     (c) 终章：第 47 关种子 2 / 第 48 关种子 3 按核心测试的一步贪心走法（test/Spec/{Chameleon,MagicGround}.hs）走完：
-  //         第 47 关 LevelClear「过关！… 进入第 48 关」，第 48 关（最后一关）Won「通关！」
+  //     (c) 终章：第 47 关种子 2 / 第 48 关种子 3 / 第 49 关种子 1（宽域 golden 走法）走完：
+  //         第 47/48 关 LevelClear 进入下一关，第 49 关（宽域，最后一关）Won「通关！」
   {
     const MAGIC = [[6, 2], [6, 5], [5, 3], [5, 4]];
     report.magic = { layout: [], widen: [], ending: [] };
@@ -1064,10 +1064,11 @@ try {
       check(`第 48 关种子 ${seed}：没有走几何降级`, Object.keys(row.fallbacks).length === 0, row.fallbacks);
       await P.ctx.close();
     }
-    // (c) 终章：第 47 关过关进入第 48 关；第 48 关是最后一关，过关为 Won「通关！」
+    // (c) 终章：第 47 关过关进入第 48 关；第 48 关过关进入第 49 关；第 49 关（宽域 6×9）是最后一关，过关为 Won「通关！」
     const LINES = { 46: [2, "3132-7677-4353-4142-1213-3242-3637-6263-6171-3444-4555-4445-0212-1727-0414-3132"],
-      47: [3, "4445-5051-6364-4344-6667-6263-5060-0405-2526-4445-2636-5666-5556-4454-5565"] };
-    for (const li of [46, 47]) {
+      47: [3, "4445-5051-6364-4344-6667-6263-5060-0405-2526-4445-2636-5666-5556-4454-5565"],
+      48: [1, "1222-3444-0616-1626"] };
+    for (const li of [46, 47, 48]) {
       const [seed, line] = LINES[li];
       const P = await openPage({ w: 390, h: 844, dpr: 1 }, li, seed);
       for (const mv of line.split("-")) {
@@ -1079,11 +1080,13 @@ try {
       await sleep(120);
       const s = await P.st(), ov = await P.page.evaluate(() => window.m3debug.overlay), n = await P.page.evaluate(() => window.m3debug.levels);
       report.magic.ending.push({ level: li + 1, seed, over: s.over, overlay: ov, levels: n });
-      if (li === 46) check("第 47 关过关（LevelClear）：结局面板「过关！」、进入第 48 关（不再是终章）",
+      if (li === 46) check("第 47 关过关（LevelClear）：结局面板「过关！」、进入第 48 关",
         s.over?.tag === "LevelClear" && s.over.next === 47 && ov?.title === "过关！" && ov.sub.includes("进入第 48 关"), { over: s.over, overlay: ov });
+      else if (li === 47) check("第 48 关过关（LevelClear）：结局面板「过关！」、进入第 49 关（不再是终章）",
+        s.over?.tag === "LevelClear" && s.over.next === 48 && ov?.title === "过关！" && ov.sub.includes("进入第 49 关"), { over: s.over, overlay: ov, levels: n });
       else {
-        check("第 48 关是终章：最后一关、过关为 Won，结局面板「通关！」", n === 48 && s.over?.tag === "Won" && ov?.title === "通关！", { over: s.over, overlay: ov, levels: n });
-        await P.shot("magic-l48-won");
+        check("第 49 关是终章：最后一关、过关为 Won，结局面板「通关！」", n === 49 && s.over?.tag === "Won" && ov?.title === "通关！", { over: s.over, overlay: ov, levels: n });
+        await P.shot("wide-l49-won");
       }
       await P.ctx.close();
     }

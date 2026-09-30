@@ -68,7 +68,7 @@ greedyPlay gs
   | gsOver gs /= Nothing = []
   | otherwise =
       case [ (key g', g')
-           | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], inBounds d]
+           | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], fst d >= 0 && fst d < boardSize && snd d >= 0 && snd d < boardSize]
            , let (g', o, _) = resolveSwapWith defaultRegistry p q gs
            , o `notElem` [NoMatch, InvalidSwap]
            , let key g = (negate (gsCount CountCookies g), negate (sum (map fst (cookiesOn (gsBoard g)))), negate (gsScore g), i) ] of

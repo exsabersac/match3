@@ -98,7 +98,7 @@ pickMove mode b hint = case ordered of
       | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]
       , let p = (r, c)
       , q <- [(r, c + 1), (r + 1, c)]
-      , inBounds q
+      , inBounds b q
       , let (x, y) = (getCell b p, getCell b q)
       , (rainbow x && special y) || (special x && rainbow y)
       ]
@@ -117,7 +117,7 @@ chamRainbowPairs b =
   | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]
   , let p = (r, c)
   , q <- [(r, c + 1), (r + 1, c)]
-  , inBounds q
+  , inBounds b q
   , let (x, y) = (getCell b p, getCell b q)
   , (rainbow x && cham y) || (cham x && rainbow y)
   ]

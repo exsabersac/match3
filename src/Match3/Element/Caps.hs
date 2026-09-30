@@ -131,7 +131,7 @@ noFire :: Cap
 noFire = withHit (\x -> x {hcActivates = Just False})
 
 -- | 被消除且能点火时的爆炸范围。
-explodes :: (Pos -> [Pos]) -> Cap
+explodes :: (Board -> Pos -> [Pos]) -> Cap
 explodes f = withHit (\x -> x {hcBlast = Just f})
 
 -- | 邻格真消除时的反应（次序、规则）。
@@ -204,7 +204,7 @@ ground :: (Int -> Maybe Int) -> Cap
 ground f = withStep (\x -> x {stGround = Just f})
 
 -- | 地面层（新玩法 8）：本格上的特效引爆时，爆炸范围 → 新范围（魔法地格 = 向外扩一圈）。
-widens :: ([Pos] -> [Pos]) -> Cap
+widens :: (Board -> [Pos] -> [Pos]) -> Cap
 widens f = withStep (\x -> x {stWiden = Just f})
 
 -- | 处理消息：Nothing = 不关心；Just = 新的元素值。

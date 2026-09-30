@@ -228,7 +228,7 @@ ch_level47_layout_and_difficulty = do
       | gsOver gs /= Nothing = gs
       | otherwise =
           case [ ((negate (countOf (CountNamed "chameleon") (gsCounts g')), negate (gsScore g'), i), g')
-               | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], inBounds d]
+               | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], fst d >= 0 && fst d < boardSize && snd d >= 0 && snd d < boardSize]
                , let (g', o, _) = resolveSwapWith defaultRegistry p q gs
                , o `notElem` [NoMatch, InvalidSwap] ] of
             [] -> gs

@@ -227,7 +227,7 @@ instance Element Hopper where
       hop _ b0 =
         let step (items, b) p =
               let q = (fst p, snd p + 1)
-              in case (inBounds q, getCell b q) of
+              in case (inBounds b q, getCell b q) of
                    (True, g@Gem {}) -> (items ++ [EndItem p q (getCell b p) (Just g)], setCell (setCell b q (getCell b p)) p g)
                    _ -> (items, b)
             (its, b1) = foldl step ([], b0) (customsOn "hopper" b0)

@@ -53,7 +53,7 @@ newSig e =
   [ show (name e), show (toCell e), show (archetype e), show (color e), show (matchColor e)
   , show (blocksSwap e), show (activates e), show (falls e), show (portal e), show (drains e)
   , hitSig (onHit e), show (stripOnClear e), show (counter e), show (diffCounter e), show (bonusMoves e)
-  , show (vacatesCarpet e), show (keepOnShuffle e), show (fmap (\f -> map f blastProbes) (blast e))
+  , show (vacatesCarpet e), show (keepOnShuffle e), show (fmap (\f -> map (f (boardFromRows (replicate boardSize (replicate boardSize (mkGem C1))))) blastProbes) (blast e))
   , show (recolorable e), show (pushable e), show (hintable e)
   , show (fmap arOrder (adjacentRule e)), show (fmap (\r -> (erPhase r, erOrder r)) (endRule e))
   , show (fmap srOrder (swapRule e)), show (isJust (openRule e)), show (fmap (\g -> map g [0 .. 3]) (groundRule e))

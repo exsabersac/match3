@@ -103,7 +103,9 @@ library:
 executables:
   match3-sdl:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:
+    - app
+    - app/pure
     ghc-options:
     - -threaded
     - -rtsopts
@@ -123,6 +125,7 @@ tests:
     source-dirs:
     - test
     - test/golden
+    - app/pure
     ghc-options:
     - -threaded
     - -rtsopts

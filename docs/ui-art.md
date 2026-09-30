@@ -144,7 +144,7 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 
 ## 连击表现（逐轮回放）
 
-实现：纯逻辑在 `app/ComboFx.hs`（阶段机、时间线常量、等级样式、下落映射），表现编排在 `app/UI/Playback.hs`（`withMovePlayback`、阶段事件 → 弹字 / 粒子 / 震屏），绘制在 `app/UI/Cascade.hs`（`drawCascade` 与各轮阶段）、`app/UI/EndStage.hs`（步末阶段）、`app/UI/HudArt.hs` / `HudPrim.hs`（`drawPopsArt` / `drawPopsPrim`、`drawComboSummaryArt`），`AnimCascade` 定义在 `app/UI/Types.hs`（持有通用播放器 `Engine.Playback.Player Cascade`：帧号与加速在播放器里，阶段机是 `ComboFx.cascadeStages`；波次级的高亮 / 消失 / 粒子 / 得分浮字读 `WaveView` 里本轮的效果事件）。核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Move` / `Match3.Game.Boosters`，底层是 `Match3.Board.Cascade` 记录版连锁的 `crWaves`；前端经通用接口 `gameStep` 的整步报告一次拿到），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep] }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
+实现：纯逻辑在 `app/pure/ComboFx.hs`（阶段机、时间线常量、下落映射）与 `app/pure/UI/Presentation.hs`（第 10 刀：效果事件 → 表现的**表现表**，帧数 / 颜色 / 贴图 / 碎屑 / 音效名、连击等级样式、蔓延生长曲线都在这一张表里，见下文「表现表」），表现编排在 `app/UI/Playback.hs`（`withMovePlayback`、阶段事件 → 弹字 / 粒子 / 震屏 / 音效队列），绘制在 `app/UI/Cascade.hs`（`drawCascade` 与各轮阶段）、`app/UI/EndStage.hs`（步末阶段）、`app/UI/HudArt.hs` / `HudPrim.hs`（`drawPopsArt` / `drawPopsPrim`、`drawComboSummaryArt`），`AnimCascade` 定义在 `app/UI/Types.hs`（持有通用播放器 `Engine.Playback.Player Cascade`：帧号与加速在播放器里，阶段机是 `ComboFx.cascadeStages`；波次级的高亮 / 消失 / 粒子 / 得分浮字读 `WaveView` 里本轮的效果事件）。核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Move` / `Match3.Game.Boosters`，底层是 `Match3.Board.Cascade` 记录版连锁的 `crWaves`；前端经通用接口 `gameStep` 的整步报告一次拿到），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep] }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
 
 ### 时间线（60 fps，1 帧 ≈ 16.7 ms）
 
@@ -175,7 +175,7 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 | 4 | 蜗牛爬行 `EvMove` / snail | 蔓延之后（被推出匹配时，随后的普通轮再消） | `StSnail` | 18（≈300 ms） | 蜗牛沿朝向平滑挪一格并轻轻一拱，被推的宝石同时退到蜗牛原格（交错时侧让几像素）；碰壁的蜗牛原地横向压扁再展开，中点换朝向 |
 | 5 | 自动洗牌（`ensurePlayable`，无可走步）——**不是** `EndEffect`，也不在 `mtEnd` 里：`ComboFx` 发现 `mtFinal` ≠ 结算后的 `gsBoard` 时自己追加 | 最后 | `StShuffle` | 22（≈370 ms） | 旧盘向中心收拢、暗幕和紫色光团盖住，换盘后新盘从中心散开 |
 
-第 7 刀 7b 起 `EndEffect` 是通用形状（事件类型 `endEffectKind` + 元素名 `endEffectElement` + 逐项 `EndItem`）：表现段按事件类型选（`ComboFx.stageKindFor`），蔓延取色 / 生长节奏按元素名查表，蜗牛段从各项取起点 `eiFrom`、终点 `eiTo`、被推的格 `eiBack`、新朝向 `endItemDir`（写入的蜗牛）；画面与之前逐帧相同（22 个场景 + 3 个步末动画场景截图 AE=0）。
+第 7 刀 7b 起 `EndEffect` 是通用形状（事件类型 `endEffectKind` + 元素名 `endEffectElement` + 逐项 `EndItem`）：表现段按事件类型选（`ComboFx.stageKindFor`，第 10 刀起即查表现表的 `stageKindOf`），蔓延取色 / 生长节奏按元素名查表（`UI.Presentation.elementRGBTable` / `spreadCurves`），蜗牛段从各项取起点 `eiFrom`、终点 `eiTo`、被推的格 `eiBack`、新朝向 `endItemDir`（写入的蜗牛）；画面与之前逐帧相同（22 个场景 + 3 个步末动画场景截图 AE=0）。
 
 - **时长控制**：同一时刻连续的步末段（1～4）合计不超过 `endBudgetFrames` = 36 帧（≈0.6 s），超出时按比例压缩，每段至少 8 帧。常见情况：只有巧克力或藤蔓一段 0.3 s；蔓延 + 蜗牛 0.6 s；终章那种倒计时 + 皮带 + 蔓延 + 蜗牛全都有时压成 8 + 8 + 10 + 10 帧 = 0.6 s。自动洗牌很少出现、又需要让玩家看清，所以不计入预算，单独 0.37 s。
 - 道具（锤子 / 十字 / 自由交换）按规则只有蔓延，没有倒计时 / 皮带 / 蜗牛；无效交换 / `NoMatch` / 被拒道具规则上什么都不发生，`mtEnd` 为空，不会播任何步末动画（`trace_rejected_move_is_empty` 锁定）。
@@ -204,6 +204,22 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 - **得分浮字「+N」**：寿命 `scorePopLife` = 48 帧（0.8 s），从本轮消除格的中心飘起，颜色跟本轮等级色，字号随等级略增。
 - **震屏**：`shakeFrames` = 10 帧，振幅按上表线性衰减，只偏移棋盘、粒子和浮字（通过 `rendererViewport`），HUD 不动。
 - **HUD 右下角**：回放期间显示当前轮「连击 xN」（等级色），第 1 轮显示滚动上涨的分数。连锁结束后，如果最高连击 ≥ 2，显示总结「N 连击！」`comboSummaryFrames` = 96 帧（1.6 s）：先弹入放大，带光晕，然后淡出。
+
+### 表现表（第 10 刀）
+
+上面各表里的帧数、颜色和光效贴图，第 10 刀起全部来自 `app/pure/UI/Presentation.hs` 的 `presentationTable`（每种效果事件一行；结构与完整的行见 [architecture.md「前端表现表」](architecture.md#前端表现表第-10-刀)）。读表的地方：
+
+| 画面 | 读表 | 原来写在 |
+|------|------|----------|
+| 高亮 / 消失的光圈色（第 1 轮柔白，连击轮等级色）、`spark` 光效 | `clearTint` / `clearSprite`（`EvClear` 行） | `UI.BoardArt.waveTint`、`UI.Cascade` 的字面量 |
+| 高亮帧数、得分浮字 / 连击弹字寿命 | `prFrames`（`EvClear` / `EvScore` / `EvCombo` 行） | `ComboFx` 常量 |
+| 得分浮字色、「连击」贴图 | `scorePopRGB` / `comboPopSprite` | `UI.HudArt` / `UI.HudPrim` 的 `if k >= 2 …` |
+| 步末段种类与基础帧数 | `stageKindOf` / `stageFrames` | `ComboFx.endStageTable` |
+| 倒计时红光、洗牌紫光、蔓延前沿与蜗牛的贴图 | `stagePresentation 段` 的 `prColor` / `prSprite` | `UI.EndStage` 的字面量 |
+| 蔓延生长曲线、前沿柔光色 | `spreadCurveFor` / `spreadGlowFor`（按元素名，缺省匀速 / 白） | `UI.EndStage.spreadProgress` |
+| 步末碎屑 | `prCrumbs`（倒计时来源格火星、蔓延按元素色） | `UI.Playback.endCrumbTable` |
+
+表里的值与第 10 刀前逐一相同（测试 `presentation_*` 对照旧 case 的字面副本；22 个静态场景、6 个步末场景与连击 / 特殊块爆炸 / 组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同）。**给新元素加表现**：步末效果选一个已有事件种类即可按那一行播放；蔓延类在 `elementRGBTable` / `spreadCurves` 各加一行定颜色与生长节奏（不加就是白光、匀速、不迸碎屑）。**音效**：每行有 `prSound` 钩子（内置全部 `Nothing`，前端不引入音频依赖、不播放），填上名字后由 `UI.Sound.playSounds` 接收（现为空操作）。
 
 ### 贴图与降级
 

@@ -5,11 +5,11 @@
 
 ## 1. 一句话
 
-用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/ComboFx.hs`）
+用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/pure/ComboFx.hs`，帧数读同目录的表现表 `UI/Presentation.hs`）
 编成一个 `.wasm`，浏览器里的 JS 只做三件事：**加载、画、收输入**。规则判定、连锁时间轴、帧数都在 Haskell 里算，
 所以同关卡同种子，网页版与桌面版的每一步结果、每一帧动画相位都逐字节一致（有测试守着，见 §7）。
 
-核心源码一行未改：`web/match3-web.cabal` 直接用 `hs-source-dirs: hs ../src ../app` 引用仓库里的模块。
+核心源码一行未改：`web/match3-web.cabal` 直接用 `hs-source-dirs: hs ../src ../app/pure` 引用仓库里的模块。
 
 ## 2. 结构
 
@@ -153,7 +153,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（107 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 312 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 322 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -239,7 +239,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（312 个） | `make test-native` |
+| `stack test` | 核心规则（322 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（12 组） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（10 组） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、serve.py 的 Content-Type、无控制台错误 | `make e2e` |

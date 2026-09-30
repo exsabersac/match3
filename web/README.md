@@ -2,7 +2,7 @@
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
 在浏览器里用桌面版同一套美术（2x 精灵图集）把 40 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
-（动画状态机 `app/ComboFx.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
+（动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
 日常任务用**仓库根目录**的 `Makefile`（`make help`），见 §0。
@@ -64,7 +64,7 @@ make check           # CI：构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 312 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 322 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -210,8 +210,8 @@ NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules ~/.ghc-wasm/nodejs/bin/node web/te
 stack exec -- runghc -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 > /tmp/native.txt   # 需 LANG=C.UTF-8
 cmp /tmp/wasm.txt /tmp/native.txt && echo 一致
 
-# 动画帧一致性：原生 ComboFx 与 wasm 逐帧 JSON 相同（AnimParity 需 -iapp，因为 ComboFx 在 app/UI）
-stack exec -- ghc -O1 -isrc -iapp -iweb/hs -outputdir /tmp/par/o -o /tmp/par/animparity web/test/AnimParity.hs
+# 动画帧一致性：原生 ComboFx 与 wasm 逐帧 JSON 相同（AnimParity 需 -iapp/pure，因为 ComboFx 与 UI.Presentation 在 app/pure）
+stack exec -- ghc -O1 -isrc -iapp/pure -iweb/hs -outputdir /tmp/par/o -o /tmp/par/animparity web/test/AnimParity.hs
 /tmp/par/animparity 27 1 20 > /tmp/native-anim.txt
 ~/.ghc-wasm/nodejs/bin/node web/test/node-anim-parity.mjs 27 1 20 > /tmp/wasm-anim.txt
 cmp /tmp/native-anim.txt /tmp/wasm-anim.txt && echo 一致

@@ -60,4 +60,11 @@
 - 暂停叠层列全键；过关/胜利/失败叠层提示继续键（回放播完才出现）。
 - 连锁回放中右下角面板显示当前轮「连击 xN」（第 1 轮显示滚动上涨的分数），全部播完后若最高连击 ≥ 2 显示「N 连击！」约 1.6 s。
 
+### HUD 的实现（第 10 刀）
+
+- 几何降级版 HUD（无贴图时）按区块拆在 `app/UI/HudBlocks.hs`，`UI.HudPrim.drawHud` 只按固定顺序调用：`hudFrame`（底板）→ `hudLevel`（关卡号 + 各关进度点）→ `hudGoal`（目标条与数字）→ `hudGoalSwatch`（收集目标色块）→ `hudMoves`（步数条）→ `hudBoosters`（锤子 / 自由交换 / 十字次数与当前工具模式字样）→ `hudComboBadge`（连击徽章）→ `hudStatus`（右侧结局色条）。顺序即绘制层次；新增区块写一个 `hudXxx` 函数、在 `drawHud` 里加一行。
+- 几何版格子上的覆盖层（草 / 藤 / 巧克力 / 迷雾 / 锁链 / 冰冻 / 窗帘 / 蒸汽）在 `app/UI/Cell/PrimOverlay.hs`，每种一个函数，`primOverlay` 只分派。
+- 弹字 / 浮字 / 连击徽章的颜色与贴图名、各动画的帧数读表现表 `UI.Presentation`（见 [ui-art.md「表现表」](ui-art.md#表现表第-10-刀)）；操作触发的音效钩子（`effectSound`，内置全部无声）同在那张表里，前端不播放声音。
+- 拆分与改为查表都不改变画面：与 `ac211d8` 的截图逐帧相同，窗口标题逐字相同。
+
 更完整的功能与关卡表见根 [`README.md`](../README.md)。

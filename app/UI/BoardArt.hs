@@ -33,7 +33,6 @@ module UI.BoardArt
   ) where
 
 import Art
-import ComboFx
 import Control.Monad (forM_, unless, void, when)
 import Data.Word (Word8)
 import Foreign.C.Types (CDouble, CInt)
@@ -44,6 +43,7 @@ import UI.Cell.Art (breathe, colorKey, drawBadgeAt, drawLayerBadge, gemSprite)
 import UI.CellTable (CellRenderer (..), cellRenderer, primarySprite)
 import UI.Ground (drawGroundArtAt, groundAt)
 import UI.Layout
+import UI.Presentation (clearTint)
 import UI.Types
 
 -- | 棋盘底层（格子 / 地毯 / 地面层 / 传送带 / 传送门），不画棋子。
@@ -56,11 +56,9 @@ drawBoardBase ren app = case appArt app of
       rendererDrawColor ren $= if even (r + c) then V4 36 36 48 255 else V4 28 28 40 255
       fillRect ren (Just (cellRect x y))
 
--- | 高亮 / 光圈颜色：第 1 轮柔白，连击轮用等级色。
+-- | 高亮 / 光圈颜色：查表现表（第 1 轮取 EvClear 行的柔白，连击轮用等级色；见 UI.Presentation.clearTint）。
 waveTint :: App -> Int -> V3 Word8
-waveTint app k
-  | k <= 1 = V3 255 250 220
-  | otherwise = let (r, g, b) = styleRGB (comboStyle k) (appPulse app) in V3 r g b
+waveTint app k = let (r, g, b) = clearTint k (appPulse app) in V3 r g b
 
 -- | 棋盘底 + 除 hidden 以外的所有格（移动中的格由调用方另画）。
 drawCellsExcept :: Renderer -> App -> Board -> [Pos] -> IO ()

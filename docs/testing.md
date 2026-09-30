@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**312** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`）。
+- 期望：**322** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 312）：
+- 目录（用例数合计 322）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -59,6 +59,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`） |
 | `test/Spec/Properties.hs` | 24 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条 + 第 7a 刀关卡级钩子 / 读数 2 条 + 第 7b 刀步末表 / 折叠回复 2 条 + 第 8 刀形状表 / 组合表 / 组合对称 / 补子策略 4 条，见「性质测试」） |
 | `test/Spec/Caps.hs` | 5 | 第 9 刀：能力记录 Caps——内置元素（含冰 / 叠层组合）逐项查询与规则输出对照第 9 刀前的类（`Spec.Support.LegacyElement`）、缺省能力等价旧缺省方法、元素类只剩三个方法（源码扫描）、用 Caps 写的扩展元素「荆棘」不改主流程接入（见「能力记录验收」） |
+| `test/Spec/Presentation.hs` | 10 | 第 10 刀：前端表现表 `UI.Presentation` 与音效钩子 `UI.Sound`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效全为 `Nothing`、真实连锁全程无声、源码扫描（散落的表与颜色已收掉、`drawHud` / `primOverlay` 只剩分派） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
 | `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）等；并重新导出 `Spec.Support.Source` |
 | `test/Spec/Support/Source.hs` | — | 源码扫描工具（见「源码扫描约定」） |
@@ -262,6 +263,25 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 元素类迁移的等价性依据：上述快照全等；金标准 2534 行全等；showcase / l28 / l1map 三场景截图与 `25db84a` 基线 AE=0。
 
+## 前端表现表验收（第 10 刀）
+
+`test/Spec/Presentation.hs`；表结构见 [architecture.md](architecture.md#前端表现表第-10-刀)。测试套件的 `source-dirs` 含 `app/pure`，直接编译 `ComboFx` / `UI.Presentation` / `UI.Sound`（不依赖 SDL）。对照对象是本文件里第 10 刀前各处 case 与常量的字面副本。
+
+| 用例 | 断言 |
+|------|------|
+| `presentation_table_covers_every_event_kind` | 表的键 = `[minBound .. maxBound] :: [EventKind]`（每种恰一行、按定义顺序）；每个 `StageKind` 恰被一行使用；帧数非负 |
+| `presentation_stage_rows_match_legacy_end_stage_table` | 全部事件种类的 `stageKindOf` / `ComboFx.stageKindFor`、全部段的 `stageFrames` / `endStageBase` 与旧 `endStageTable`（含缺省：非步末种类 → 蔓延段、缺省 18 帧）相同 |
+| `presentation_frames_colors_match_legacy_constants` | 高亮 12 / 得分浮字 48 / 连击弹字 54 帧；`clearTint`（旧 `waveTint`）、`scorePopRGB`（旧 HudArt / HudPrim 的分支）在各等级与相位下相同；倒计时 / 洗牌主色与贴图、蔓延 / 蜗牛贴图、碎屑方式（旧 `endCrumbTable`）、`elementRGBTable`、缓动逐项相同 |
+| `presentation_spread_curves_match_legacy` | vine / choco / steam / 未知名字 / 空名 × 106 个采样点（含区间外）：`curveAt (spreadCurveFor n) t` 与旧 `spreadProgress`（缺省 `t`）逐位相等 |
+| `presentation_combo_style_matches_legacy` | 连击等级 −1..9 × 相位 0..80、399、4000：`comboStyle` 四个字段与 `styleRGB` 与旧定义（含 `hsv`）相同 |
+| `presentation_extension_defaults` | `defaultPresentation` = 蔓延段 18 帧、无颜色 / 贴图 / 碎屑 / 音效；空表查询全部落到缺省；未知元素名匀速、白光、不迸碎屑；`EvMove`（扩展 `hopper`）→ 蜗牛段 |
+| `effect_sound_defaults_to_nothing` | 每种事件 `effectSound` = `Nothing`、每行 `prSound` = `Nothing`；`playSounds` 是空操作 |
+| `cascade_sounds_silent_on_real_moves` | 第 8 关 7 轮连锁与第 16 关倒计时一步完整回放：阶段事件覆盖 EvClear / EvScore / EvCombo / EvTick，`cascadeSounds` 全为空 |
+| `presentation_scattered_cases_removed` | 源码扫描 `app/`：除 `UI.Presentation` 外不再定义 `endStageTable` / `spreadProgress` / `endCrumbTable` / `elementRGBTable` / `comboStyle` / `styleRGB` / `hsv` / `smoothT` / `easeOutT`，也不再出现搬走的颜色字面量与 `"zh_combo"`；`UI.Presentation` 不 import SDL；EndStage / Playback 确实读表 |
+| `draw_hud_and_prim_overlay_are_thin` | `drawHud` ≤ 10 行、依次调用 8 个 `hud*` 区块、自身不画；`primOverlay` ≤ 10 行、分派到 8 个 `overlay*` 函数、自身不画；`UI.Cell.Prim` 不再定义 `primOverlay` |
+
+画面等价性依据：22 个静态场景、6 个步末动画场景与连击逐轮高亮 / 特殊块爆炸 / 特殊块组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同（AE=0），窗口标题逐字相同。
+
 ## 能力记录验收（第 9 刀）
 
 `test/Spec/Caps.hs`；框架见 [architecture.md](architecture.md#元素的能力caps与调用时机)。对照对象 `test/Spec/Support/LegacyElement.hs` 是第 9 刀前的类与内置 instance 的逐字副本；性质挂固定种子 20260930。
@@ -294,7 +314,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 312，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 322，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

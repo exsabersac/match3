@@ -28,6 +28,7 @@ import SDL hiding (Normal)
 import UI.BoardArt
 import UI.GoalStyle (goalIcon, goalTint)
 import UI.Layout
+import UI.Presentation (comboPopSprite, scorePopRGB)
 import UI.TextArt
 import UI.Types
 
@@ -96,7 +97,7 @@ drawHudArt ren art app = do
       | cCombo c >= 2 -> do
           let (r, g, b) = styleRGB (comboStyle (cCombo c)) (appPulse app)
           _ <- drawPanel ren art "panel_gold" (rect 382 52 84 48) 12
-          zhAC ren art "zh_combo" 424 56 18
+          zhAC ren art comboPopSprite 424 56 18
           textAC ren art 424 76 3 (V4 r g b 255) ("x" ++ show (cCombo c))
       | otherwise -> do
           _ <- drawPanel ren art "panel_chip" (rect 382 52 84 48) 12
@@ -278,7 +279,7 @@ drawPopsArt ren art app
                 h = round (fromIntegral (csHeight st) * sc) :: CInt
                 gh = round (fromIntegral h * 1.2 :: Double) :: CInt
                 numS = "x" ++ show k
-                zw = zhW art "zh_combo" h
+                zw = zhW art comboPopSprite h
                 nw = glyphTextW gh numS
                 gap = h `div` 6
                 total = zw + gap + nw
@@ -289,10 +290,10 @@ drawPopsArt ren art app
             -- 柔光底：等级色，让文字在任何宝石颜色上都读得清
             void (drawSpriteMod ren art "spark" (rect (hx - haloW `div` 2) (cy - haloH `div` 2) haloW haloH) (V3 20 10 40) (a `div` 2 + a `div` 4))
             void (drawSpriteAdd ren art "spark" (rect (hx - haloW `div` 2) (cy - haloH `div` 2) haloW haloH) (V3 r g b) (a `div` 3))
-            void (drawSpriteMod ren art "zh_combo" (rect x0 (cy - h `div` 2) zw h) (V3 r g b) a)
+            void (drawSpriteMod ren art comboPopSprite (rect x0 (cy - h `div` 2) zw h) (V3 r g b) a)
             glyphText ren art (x0 + zw + gap) (cy - gh `div` 2) gh (V4 r g b a) numS
           PopScore n k -> do
-            let (r, g, b) = if k >= 2 then styleRGB (comboStyle k) (appPulse app) else (255, 244, 200)
+            let (r, g, b) = scorePopRGB k (appPulse app) -- 表现表 EvScore 行（连击轮用等级色）
                 h = round ((20 + 2 * fromIntegral (min 4 (max 0 (k - 1)))) * scorePopScale (tpAge p) :: Double) :: CInt
                 str = "+" ++ show n
                 w = glyphTextW h str

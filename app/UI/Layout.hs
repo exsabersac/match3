@@ -15,7 +15,7 @@ module UI.Layout
   , winW
   , winH
   , colorRGB
-  , elementRGBTable
+  , elementRGBTable -- 再导出自 UI.Presentation（第 10 刀起元素色在表现表模块）
   , namedRGB
   , cellRGB
   , pixelToCell
@@ -23,7 +23,7 @@ module UI.Layout
   , lerpI
   , boardRect
   , allCells
-  , smoothT
+  , smoothT  -- 再导出自 UI.Presentation
   , easeOutT
   , lerpC
   , rect
@@ -37,6 +37,7 @@ import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
+import UI.Presentation (easeOutT, elementRGBTable, smoothT)
 
 -- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口 = 棋盘 + 两侧边距 + HUD。
 cellPx, padPx, hudH, boardPx, winW, winH :: CInt
@@ -59,17 +60,6 @@ colorRGB C5 = (172, 88, 236)  -- 紫·三角
 -- | 名字目标（goalCount (CountNamed …)） / 自定义元素按名字取色；表里没有的名字为灰蓝。
 namedRGB :: ElementName -> (Word8, Word8, Word8)
 namedRGB n = maybe (200, 200, 220) id (lookup n elementRGBTable)
-
--- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色；
--- 段 5 起也给 名字目标与自定义格取色（果冻 / 气泡，见 namedRGB）。
-elementRGBTable :: [(ElementName, (Word8, Word8, Word8))]
-elementRGBTable =
-  [ ("vine", (110, 220, 90))
-  , ("choco", (150, 90, 45))
-  , ("steam", (225, 225, 235))
-  , ("jelly", (240, 110, 180))
-  , ("bubble", (150, 215, 250))
-  ]
 
 -- | 格子对应的粒子 / 退回画法颜色。
 cellRGB :: Cell -> (Word8, Word8, Word8)
@@ -127,14 +117,6 @@ boardRect = rect padPx (padPx + hudH) boardPx boardPx
 -- | 8×8 全部坐标（行优先）。
 allCells :: [Pos]
 allCells = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
-
--- | smoothstep 缓动（两端慢）。
-smoothT :: Double -> Double
-smoothT x = let y = max 0 (min 1 x) in y * y * (3 - 2 * y)
-
--- | 先快后慢的缓动。
-easeOutT :: Double -> Double
-easeOutT x = let y = max 0 (min 1 x) in 1 - (1 - y) * (1 - y)
 
 -- | 颜色 / 数值的线性插值。
 lerpC :: CInt -> CInt -> Double -> CInt

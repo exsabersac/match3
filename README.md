@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 312 通过
+stack test                            # 库测，无需显示器；期望 322 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -189,14 +189,16 @@ src/Match3/Element/Builtin/ Gem Layer Obstacle Collectible Actor Ground Level Co
 app/Main.hs   SDL2 前端入口（读环境变量 → runShell）
 app/Shell/    Loop（通用 SDL 外壳：窗口 / 固定步长主循环 / 插件钩子；不依赖 Match3）
 app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw Cascade EndStage
-              BoardArt BoardPrim CellTable Ground HudArt HudPrim TextArt Glyph LevelMap
-app/UI/Cell/  Prim Art（每种元素一个几何 / 贴图渲染函数，经 CellTable 查表）
+              BoardArt BoardPrim CellTable Ground HudArt HudPrim HudBlocks TextArt Glyph LevelMap
+              （HudBlocks = 第 10 刀从 drawHud 拆出的几何版 HUD 各区块）
+app/UI/Cell/  Prim Art PrimOverlay（每种元素一个几何 / 贴图渲染函数，经 CellTable 查表；PrimOverlay = 几何版覆盖层）
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
-app/ComboFx.hs 连锁逐轮回放 / 步末动画的纯阶段机与时间线常量
+app/pure/     不依赖 SDL 的纯前端模块（桌面、测试、网页共用）：ComboFx（连锁逐轮回放 / 步末动画的纯阶段机与时间线）、
+              UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/Sound（音效钩子，预留、不播放）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；312 命名用例）
-test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、第 9 刀前元素类的对照副本 Support.LegacyElement）
+test/Spec.hs  测试入口（只汇总；322 命名用例）
+test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、第 9 刀前元素类的对照副本 Support.LegacyElement）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
@@ -207,5 +209,5 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 ## 发布状态
 
 - 战役：**40** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **312**（Tasty + QuickCheck）
+- 测试：`stack test` **322**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

@@ -49,7 +49,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 - 步末表（第 7b 刀）：`Board.Cascade` / `Element.Level` / `Game.Trace`（`EndStep`、`traceSpreadsWith`）← `Game.EndPhase`（`runEndTable`）← `Game.Resolve`（`endTableFor`）；步末效果的通用形状在 `Element.Event`。
 - 类型层（第 6 刀拆分）：`Match3.Color` / `Types.Name` ← `Types.Cell ← Types.Overlay / Types.Body`、`Types.Cell ← Types.Board ← Types.Game`（`Types.Game` 另依赖 `Match3.Goal`；`Types.Name` 无依赖，`Match3.Counts` 的 `CountNamed` 也用它），`Match3.Types` 只再导出这六个模块（导出列表与拆分前相同，只少了移走的关卡表、多了第 6b 刀的 `ElementName` / `CustomState`）；关卡层 `Levels.Level ← Levels.Campaign` 在 `Types` / `Element.Types`（放置表）/ `Ufo` / `Conveyor`（`Belt`）之上、`Game.Level` / `Daily` / `Game.Outcome` 之下。
 - 机制子模块（障碍、彩虹、合成、冰、草系、地毯、蜗牛、飞碟、倒计时、传送带、道具种子、每日）尽量只依赖 `Types`（及彼此必要的窄依赖），由 `Board.*` / `Game.*` 编排调用顺序。
-- 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/ComboFx.hs`（纯阶段机，按时间线把它拆成帧）→ `UI.Playback`（阶段事件 → 弹字 / 粒子 / 震屏）→ `UI.Cascade` / `UI.EndStage`（绘制）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
+- 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/pure/ComboFx.hs`（纯阶段机，按时间线把它拆成帧；帧数读表现表 `UI.Presentation`）→ `UI.Playback`（阶段事件 → 弹字 / 粒子 / 震屏 / 音效队列）→ `UI.Cascade` / `UI.EndStage`（绘制，颜色 / 贴图读表现表）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
 
 ## 模块地图
 
@@ -132,33 +132,39 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ### 前端模块（`app/`）
 
+第 10 刀起 `app/pure/` 放**不依赖 SDL 的纯前端模块**（`ComboFx`、`UI.Presentation`、`UI.Sound`）：可执行文件、测试套件（`package.yaml` 的 test `source-dirs` 含 `app/pure`）与网页版（`web/match3-web.cabal` 的 `hs-source-dirs` 含 `../app/pure`）共用同一份源码；其余 `app/` 模块只进可执行文件。
+
 | 模块 | 职责 |
 |------|------|
 | `Main` | 入口：读环境变量（种子 / 起始关 / 展示盘 / 窗口倍数），`runShell (match3ShellConfig o) (match3Plugin o)` |
 | `Shell.Loop` | 通用 SDL 外壳（不 import Match3）：初始化、HiDPI 窗口、渲染器、alpha 混合、固定步长主循环（帧首钩子 → 取事件 → 事件钩子 → 推进 → 绘制 → present → 补足 16 ms）、`Plugin` 钩子 |
 | `UI.Plugin` | 三消插件：初始 `App`（开局提示 / 展示盘）、加载贴图、各钩子接到 `syncScale` / `foldEvents` / `tickAnim` / `draw` |
 | `UI.Types` | `App`、`Anim`（`AnimCascade` 持有 `Player Cascade`）、`Particle`、`ToolMode`，帧数常量，`animBusy` / `playingPlayer` / `playingCascade` |
-| `UI.Layout` | 逻辑像素布局常量、格子坐标换算、矩形 / 插值工具、调色板 |
+| `UI.Layout` | 逻辑像素布局常量、格子坐标换算、矩形 / 插值工具、调色板（`elementRGBTable` / `smoothT` / `easeOutT` 第 10 刀起定义在 `UI.Presentation`，这里再导出） |
 | `UI.Env` | 环境变量（`MATCH3_LEVEL` / `SEED` / `SCALE` / `SHOWCASE`）、展示盘、高分屏倍率与鼠标坐标换算 |
 | `UI.Input` | 输入映射：`handleEvent` 分派到 `handleKey`（每键一个函数）/ `handleMouseUp`（拖拽交换）/ `handleMouseDown`（地图 / 加速 / 结束浮层 / 点格）；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell`，实例 `Match3.Engine.match3Shell`；撤销是 `Undo`，由 `Engine.History` 处理）；播放锁定（见 [ui-controls.md](ui-controls.md#播放锁定animbusy)） |
 | `UI.Actions` | 标题栏（连击数经 `gameStatus` 取）、`stepShell`（外壳执行动作的唯一入口：`gameStep M3E.match3Shell`）、`playMove` / `playbackOf`（一次 `gameStep` 的整步报告 → 表现编排）、关卡重置、三种道具执行、回放加速、过关前进 / 重试 |
-| `UI.Playback` | 纯函数：每帧推进动画；按本次 `MoveFx` / `MoveTrace` 编排回放，阶段事件产生弹字 / 浮字 / 震屏 / 粒子 |
+| `UI.Playback` | 纯函数：每帧推进动画；按本次 `MoveFx` / `MoveTrace` 编排回放，阶段事件产生弹字 / 浮字 / 震屏 / 粒子；步末碎屑按表现表的 `prCrumbs` 解释（`endCrumbs`）；音效名排进 `appSounds` |
 | `UI.Draw` | 一帧的层次与贴图 / 几何分派 |
 | `UI.Cascade` | 静止盘、交换补间、轻落、逐轮回放（高亮 / 消失 / 下落）、震屏视口 |
-| `UI.EndStage` | 步末阶段绘制：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌 |
+| `UI.EndStage` | 步末阶段绘制：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌（绘制表 `endStageDrawers` 按 `StageKind` 查；颜色、光效贴图、蔓延生长曲线读表现表） |
 | `UI.BoardArt` | 棋盘贴图绘制与分派（`drawCellAny` / `drawCellArt` / `drawStatic` 等）、回放共用的底盘部件 |
 | `UI.BoardPrim` | 棋盘几何降级绘制（`drawGemAt` 查表分派、底盘 / 传送门 / 飞碟 / 皮带 / 蔓延预告 / 粒子） |
 | `UI.CellTable` | 单格绘制的元素查表：元素名（注册表）→ `CellRenderer{crPrim, crArt, crSprite}`；宝石 5 个名字共用一个渲染器；`Custom` 先查按名字的 `customTable`（段 5：气泡），查不到走自定义渲染器 |
 | `UI.Ground` | 段 5：地面层（`gsGround`）的绘制查表：名字 → 几何版 / 贴图名(层数)；贴图版画在棋子之下，几何版画在棋子之上（框） |
 | `UI.Cell.Prim` / `UI.Cell.Art` | 每种元素一个几何 / 贴图渲染函数（从原 `drawGemAt` / `drawCellArt` 的大 case 逐字拆出）；`Cell.Art` 另含 `colorKey` / `gemSprite` / `breathe` / 角标 |
-| `UI.HudArt` / `UI.HudPrim` | HUD、横幅、键位条、暂停帮助、结算面板、弹字的贴图版 / 几何降级版（目标进度读核心 `gsProgress`） |
+| `UI.Cell.PrimOverlay` | 第 10 刀：几何版宝石覆盖层，每种一个函数（`overlayGrass` / `Vine` / `Choco` / `Fog` / `Chain` / `Freeze` / `Curtain` / `Steam`，层数点共用 `overlayLayerPips`），`primOverlay` 只按构造子分派（`UI.Cell.Prim` 再导出） |
+| `UI.HudArt` / `UI.HudPrim` | HUD、横幅、键位条、暂停帮助、结算面板、弹字的贴图版 / 几何降级版（目标进度读核心 `gsProgress`；得分浮字色、连击贴图名读表现表）；几何版 `drawHud` 只按顺序调用 `UI.HudBlocks` 的区块 |
+| `UI.HudBlocks` | 第 10 刀：几何版 HUD 的区块（`hudFrame` 底板、`hudLevel` 关卡号与进度点、`hudGoal` 目标条、`hudGoalSwatch` 收集色块、`hudMoves` 步数条、`hudBoosters` 道具与工具模式、`hudComboBadge` 连击徽章、`hudStatus` 结局色条）与进度条 `drawMeter`（`UI.HudPrim` 再导出） |
 | `UI.GoalStyle` | 第 5 刀：目标外观的唯一一张表（图标 `goalIcon`、贴图版色调 `goalTint`、几何版 / 地图小点颜色 `goalPip`、标题文字标签 `countTag` / `colorTag`），按 `goalView` 分派；HUD、选关地图、标题栏、状态文字都读它 |
 | `UI.TextArt` / `UI.Glyph` | 烘焙文字 / 中文标签贴图的排版；缺字形时的像素字 |
 | `UI.LevelMap` | 选关地图：章节、节点坐标、点击命中、两种绘制 |
-| `ComboFx` | 连锁逐轮回放的纯逻辑（步末阶段种类查 `endStageTable`，按事件种类分派）：阶段机 `cascadeStages`（高亮→消失→下落→落定，以及步末阶段：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌；帧号与加速交给 `Engine.Playback.Player`）、波次视图 `WaveView`（快照 + 本轮效果事件）、时间线常量、连击等级样式、下落映射、浮字曲线；只消费 `MoveTrace` 与效果事件，不绘制 |
+| `ComboFx`（`app/pure`） | 连锁逐轮回放的纯逻辑（步末阶段种类与基础帧数、高亮 / 浮字 / 弹字帧数都查表现表 `UI.Presentation`，按事件种类分派；`StageKind` / 连击等级样式从那里再导出）：阶段机 `cascadeStages`（高亮→消失→下落→落定，以及步末阶段：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌；帧号与加速交给 `Engine.Playback.Player`）、波次视图 `WaveView`（快照 + 本轮效果事件）、时间线常量、连击等级样式、下落映射、浮字曲线；只消费 `MoveTrace` 与效果事件，不绘制 |
+| `UI.Presentation`（`app/pure`） | 第 10 刀：效果事件 → 前端表现的唯一一张表 `presentationTable`（表现方式、帧数、主色、贴图、步末碎屑、音效名），按元素名细分的生长曲线 `spreadCurves` 与颜色 `elementRGBTable`、缺省表现、连击等级样式、缓动；纯数据，不 import SDL，见[前端表现表](#前端表现表第-10-刀) |
+| `UI.Sound`（`app/pure`） | 第 10 刀：音效钩子。`cascadeEventKinds`（回放阶段事件 → 效果种类）、`cascadeSounds`（查表现表的 `effectSound`）、`playSounds`（预留，空操作，不引入音频依赖） |
 | `Art` | 贴图图集（BMP + 索引）加载、路径查找、九宫格面板、染色/加色绘制；缺资源时各绘制模块退回几何版 |
 
-前端依赖同样单向无环：`UI.Types` / `UI.Layout` 在最底层；`UI.Glyph ← UI.TextArt ← UI.HudArt`，`UI.GoalStyle ← UI.HudArt / UI.HudPrim / UI.LevelMap / UI.Actions / UI.Input`，`UI.Cell.Prim / UI.Cell.Art ← UI.CellTable ← UI.BoardPrim ← UI.BoardArt ← UI.EndStage ← UI.Cascade ← UI.Draw`，`UI.Playback ← UI.Actions ← UI.Input ← UI.Plugin ← Main`，`Shell.Loop ← UI.Plugin`（`A ← B` 表示 B 依赖 A）。
+前端依赖同样单向无环：纯模块 `UI.Presentation ← ComboFx ← UI.Sound` 在最底层（只依赖核心库），其上 `UI.Types` / `UI.Layout`；`UI.HudBlocks ← UI.HudPrim`、`UI.Cell.PrimOverlay ← UI.Cell.Prim`；`UI.Glyph ← UI.TextArt ← UI.HudArt`，`UI.GoalStyle ← UI.HudArt / UI.HudPrim / UI.LevelMap / UI.Actions / UI.Input`，`UI.Cell.Prim / UI.Cell.Art ← UI.CellTable ← UI.BoardPrim ← UI.BoardArt ← UI.EndStage ← UI.Cascade ← UI.Draw`，`UI.Playback ← UI.Actions ← UI.Input ← UI.Plugin ← Main`，`Shell.Loop ← UI.Plugin`（`A ← B` 表示 B 依赖 A）。
 
 ## 构建工具链
 
@@ -327,7 +333,47 @@ instance Element StoneE where
 | `EvTick` / `EvBelt` / `EvSpread` / `EvMove` | `mtEnd` 的每个 `EndStep` | countdown / belt / vine·choco·steam / snail | 原格 → 新格 |
 | `EvShuffle` | `mtShuffle` | — | — |
 
-前端步末阶段按事件种类查表分派：`ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.endStageDrawers`（阶段 → 绘制）、`UI.Layout.elementRGBTable`（元素名 → 颜色）。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
+前端按事件种类查**表现表** `UI.Presentation.presentationTable`（第 10 刀起的唯一一张表，取代原来的 `ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.spreadProgress`（生长曲线）以及散在 `UI.BoardArt.waveTint` / `UI.HudArt` / `UI.HudPrim` / `UI.EndStage` 的颜色与贴图常量）；步末阶段怎么画仍由 `UI.EndStage.endStageDrawers`（阶段 → 绘制）分派，元素名 → 颜色在 `UI.Presentation.elementRGBTable`。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
+
+### 前端表现表（第 10 刀）
+
+`app/pure/UI/Presentation.hs` 把「效果事件 → 前端表现」收成一张表，按 `EventKind` 查：
+
+```haskell
+data Presentation = Presentation
+  { prLook   :: Look              -- LookClear | LookScore | LookCombo | LookWithClear | LookStage StageKind
+  , prFrames :: Int               -- 基础帧数（1 帧 ≈ 16.7 ms；0 = 不单独占时长）
+  , prColor  :: Maybe RGB         -- 固定主色（Nothing = 按格子 / 连击等级 / 元素名取色）
+  , prSprite :: Maybe SpriteName  -- 贴图版用到的光效 / 精灵
+  , prCrumbs :: Crumbs            -- NoCrumbs | CrumbsAtSources RGB | CrumbsByElement
+  , prSound  :: Maybe SoundName   -- 音效钩子（内置全部 Nothing）
+  }
+```
+
+| 事件 | 表现方式 | 帧数 | 主色 | 贴图 | 碎屑 | 读取方 |
+|------|----------|------|------|------|------|--------|
+| `EvClear` | `LookClear`（高亮 → 消失） | 12 | (255,250,220)（第 1 轮；连击轮用等级色） | `spark` | — | `ComboFx.waveFlashFrames`、`UI.BoardArt.waveTint`（`clearTint`）、`UI.Cascade`（`clearSprite`） |
+| `EvHit` / `EvBlast` / `EvDrain` | `LookWithClear`（随消除一起表现） | 0 | — | — | — | — |
+| `EvScore` | `LookScore`（得分浮字） | 48 | (255,244,200)（第 1 轮；连击轮用等级色） | — | — | `ComboFx.scorePopLife`、`UI.HudArt` / `UI.HudPrim`（`scorePopRGB`） |
+| `EvCombo` | `LookCombo`（「连击 xN」弹字 + 震屏） | 54 | 等级色 | `zh_combo` | — | `ComboFx.comboPopLife`、`UI.HudArt`（`comboPopSprite`） |
+| `EvTick` | `LookStage StTick` | 10 | (255,90,60) | `spark` | 来源格 (255,110,70) | `ComboFx.endStageBase`、`UI.EndStage.drawEndTick`、`UI.Playback.endCrumbs` |
+| `EvBelt` | `LookStage StBelt` | 14 | — | — | — | 同上 |
+| `EvSpread` | `LookStage StSpread` | 18 | 按元素名（`spreadGlowFor`） | `spark` | 按元素名（`CrumbsByElement`） | 同上；生长曲线 `spreadCurveFor`（vine 分 4 段、choco 先快后慢、steam 匀速） |
+| `EvMove` | `LookStage StSnail` | 18 | — | `snail` | — | 同上 |
+| `EvShuffle` | `LookStage StShuffle` | 22 | (200,150,255) | `spark` | — | 同上 |
+
+查询函数：`presentationFor`（查内置表）/ `presentationIn`（查给定的表）、`stageKindOf`（事件 → 步末段，非步末种类按蔓延段）、`stagePresentation` / `stageFrames`（段 → 那一行 / 基础帧数）、`presentationRGB`、`effectSound`。几何版不用贴图，只用颜色与帧数。
+
+**缺省表现（扩展元素）**：`EventKind` 是封闭的，扩展元素的步末效果也落在某个已有种类上（例如测试里的 `hopper` 产出 `EvMove`，按蜗牛段播放）；按元素名细分的表里没有的名字用明确的缺省——生长曲线 `defaultSpreadCurve = CurveLinear`（匀速）、前沿柔光 `defaultSpreadGlow = (255,255,255)`（白）、`CrumbsByElement` 查不到颜色时不迸碎屑。整张表里查不到的种类（将来新增 `EventKind` 忘了加行）用 `defaultPresentation`：蔓延段、18 帧、无颜色 / 贴图 / 碎屑 / 音效（与第 10 刀前 `stageKindFor` / `endStageBase` 的缺省相同）。测试 `presentation_extension_defaults` 锁定这些缺省。
+
+**音效钩子**：`effectSound :: EventKind -> Maybe SoundName` = 表项的 `prSound`，内置全部 `Nothing`。回放每切换一个阶段，`UI.Playback.applyCascadeEvent` 经 `UI.Sound.cascadeSounds`（高亮 = `EvCombo`（连击轮）；消失 = 本轮的轮内事件种类；步末段 = 该段每步的种类）把查到的音效名追加到 `App.appSounds`；`UI.Plugin` 每帧推进后把队列交给 `UI.Sound.playSounds`（空操作）并清空。不引入音频依赖、不播放；内置表下队列恒为空，画面与帧序不变（`effect_sound_defaults_to_nothing`、`cascade_sounds_silent_on_real_moves`）。
+
+**给新元素加表现和音效**：
+
+1. 新元素的步末效果选一个已有 `EventKind`（蔓延类用 `EvSpread`、会走的用 `EvMove`……），不用改表就能按那一行播放；
+2. 蔓延类要自己的颜色 / 生长节奏：在 `elementRGBTable` 加 `("名字", (r, g, b))`（同时决定前沿柔光、碎屑、HUD 目标色块与几何版 `Custom` 格颜色），在 `spreadCurves` 加 `("名字", CurveSegments n | CurveEaseOut | CurveLinear)`；
+3. 要音效：给那一行填 `prSound = Just "名字"`（按事件种类，不按元素）；接入真实音频时只替换 `UI.Sound.playSounds` 的实现；
+4. 真正新的表现方式（新的 `StageKind`）才需要：`StageKind` 加构造子 → 表里加一行 `LookStage 新段` → `UI.EndStage.endStageDrawers` 加绘制函数；测试 `presentation_table_covers_every_event_kind` 会检查每种事件恰有一行、每个段恰有一种事件使用。
 
 ### 扩展钩子（段 2c）
 
@@ -353,7 +399,7 @@ instance Element StoneE where
    - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）、补子时生成自定义棋子。
 3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 里加一行（关卡级元素加进 `builtinLevelDefs`）；测试 / 扩展元素 = `register (customEntry 原型 (元素 . unCustomState)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevelElement 原型值)`，开局状态写在 `levelStart` 里，开局 / 走子用 `newGameAtLevelWith reg` 与 `*With reg` 入口），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由条目的放置函数落格（`customEntry` 缺省 = `Custom 名字 第一个整数参数`；要别的解析用 `customEntryWith`）。
-5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Layout.elementRGBTable`（HUD 目标 / 地图 / 几何版共用）；步末有新效果时在前端各查找表里加一行。
+5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Presentation.elementRGBTable`（HUD 目标 / 地图 / 几何版 / 步末前沿与碎屑共用）；步末效果的播放、生长曲线与音效见[前端表现表](#前端表现表第-10-刀)的「给新元素加表现和音效」。
 6. 测试：参照 `ext_caps_element_plugs_in`（`test/Spec/Caps.hs`，最短的完整例子）、`element_registry_custom_crate_extensibility`、`test/Spec/Extension.hs` 与 `test/Spec/ElementClass.hs`（测试专用「木箱」`Crate` 只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
 ### 专门分支的收编（段 4）
@@ -437,7 +483,7 @@ instance Element StoneE where
 └──────────────▲───────────────────────────────▲──────────────────────────▲────────────────┘
                │ 实现 Game                      │ 用 Player + 自己的 Stages  │ 实现 Plugin
 ┌──────────────┴─────────────┐  ┌──────────────┴──────────────┐  ┌────────┴──────────────────┐
-│ 三消实现（库）              │  │ 三消回放（app/ComboFx）       │  │ 三消插件（app/UI.*）        │
+│ 三消实现（库）              │  │ 三消回放（app/pure/ComboFx）  │  │ 三消插件（app/UI.*）        │
 │ Match3.Engine：match3Game、│  │ cascadeStages：高亮→消失→下落 │  │ UI.Plugin 钩子、UI.Input   │
 │ Action、match3Shell、toEffect│  │ →落定 / 步末阶段；WaveView    │  │ 输入映射、UI.Draw /        │
 │   ▲ Match3.Game.* / Board.* │  │                              │  │ UI.CellTable 绘制          │

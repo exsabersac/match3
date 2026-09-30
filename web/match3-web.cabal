@@ -11,14 +11,15 @@ build-type:         Simple
 
 executable match3-web
   main-is:          WebMain.hs
-  -- ../app 只取纯模块 ComboFx（逐轮回放阶段机，不依赖 SDL）；其余 app/ 模块不参与编译
-  hs-source-dirs:   hs ../src ../app
+  -- ../app/pure 只放桌面前端的纯模块（ComboFx 逐轮回放阶段机、UI.Presentation 表现表，不依赖 SDL）；其余 app/ 模块不参与编译
+  hs-source-dirs:   hs ../src ../app/pure
   other-modules:
     Match3Web.Api
     Match3Web.Anim
     Match3Web.Json
-    -- 桌面前端的纯表现逻辑（../app/ComboFx.hs）：网页与桌面共用同一条回放时间线
+    -- 桌面前端的纯表现逻辑（../app/pure）：网页与桌面共用同一条回放时间线与表现表的帧数
     ComboFx
+    UI.Presentation
     -- 以下为核心模块（../src），与 package.yaml 的 library.exposed-modules 一致（通用层 Engine.* + 三消 Match3.*）
     Engine.Game
     Engine.Effect

@@ -109,7 +109,6 @@ executable match3-sdl
   main-is: Main.hs
   other-modules:
       Art
-      ComboFx
       Shell.Loop
       UI.Actions
       UI.BoardArt
@@ -117,6 +116,7 @@ executable match3-sdl
       UI.Cascade
       UI.Cell.Art
       UI.Cell.Prim
+      UI.Cell.PrimOverlay
       UI.CellTable
       UI.Draw
       UI.EndStage
@@ -125,6 +125,7 @@ executable match3-sdl
       UI.GoalStyle
       UI.Ground
       UI.HudArt
+      UI.HudBlocks
       UI.HudPrim
       UI.Input
       UI.Layout
@@ -133,11 +134,15 @@ executable match3-sdl
       UI.Plugin
       UI.TextArt
       UI.Types
+      ComboFx
+      UI.Presentation
+      UI.Sound
       Paths_match3
   autogen-modules:
       Paths_match3
   hs-source-dirs:
       app
+      app/pure
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -Wno-partial-fields
   build-depends:
       array
@@ -174,6 +179,7 @@ test-suite match3-test
       Spec.GridMatch
       Spec.JellyBubble
       Spec.Levels
+      Spec.Presentation
       Spec.Properties
       Spec.ReplayUndo
       Spec.SourceScan
@@ -185,12 +191,16 @@ test-suite match3-test
       Toy
       ElementQueries
       Golden
+      ComboFx
+      UI.Presentation
+      UI.Sound
       Paths_match3
   autogen-modules:
       Paths_match3
   hs-source-dirs:
       test
       test/golden
+      app/pure
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array

@@ -35,7 +35,7 @@ BIN="$OUT/$SRC"
 echo "== 编译原生 $SRC（stack exec -- ghc -O1，增量）"
 # 不要带着 ~/.ghc-wasm/env 的 CC/AR 等变量编原生代码
 (cd "$ROOT" && env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP \
-   stack exec -- ghc -O1 -v0 -isrc -iapp -iweb/hs -outputdir "$OUT/obj-$SRC" -o "$BIN" "web/test/$SRC.hs")
+   stack exec -- ghc -O1 -v0 -isrc -iapp/pure -iweb/hs -outputdir "$OUT/obj-$SRC" -o "$BIN" "web/test/$SRC.hs")
 
 export LANG="${LANG:-C.UTF-8}" LC_ALL="${LC_ALL:-C.UTF-8}"
 fail=0; n=0

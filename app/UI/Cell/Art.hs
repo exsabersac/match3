@@ -32,6 +32,7 @@ module UI.Cell.Art
   , artCustom
   , artBubble
   , artMagicStone
+  , artFuzzball
   ) where
 
 import Art
@@ -265,6 +266,14 @@ artMagicStone ren art pulse x y cell = case cell of
   Custom _ (CustomState k)
     | k >= 3 -> sprBob "magic_stone_3"
     | otherwise -> spr ("magic_stone_" ++ show (max 0 k))
+  _ -> pure ()
+  where
+    Kit {..} = cellKit ren art pulse x y
+
+-- | 贴图版：毛球（新玩法 3）——贴图 fuzzball，轻微浮动（它每步会跳）；不画状态角标。
+artFuzzball :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
+artFuzzball ren art pulse x y cell = case cell of
+  Custom _ _ -> sprBob "fuzzball"
   _ -> pure ()
   where
     Kit {..} = cellKit ren art pulse x y

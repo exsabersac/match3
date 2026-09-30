@@ -28,7 +28,10 @@
 蜗牛 stepSnailsAvoidingBlocked（跳过皮带格；传送门端点当墙）
     │
     ▼
-若蜗牛后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
+毛球跳格 fuzzballJumps（PhaseMove 20，新玩法 3；同样跳过皮带格、传送门端点当墙；按盘面散列选格，不耗 gsGen）
+    │
+    ▼
+若蜗牛 / 毛球后出现匹配 → 再跑一轮连锁（不再二次皮带/蜗牛/倒计时）
     │
     ▼
 步末补结算 cascadeAfterWith (AfterEnd 空洞)（段 2c：挖 erHoles 空洞 → 边缘收集 + 补子 → 成消再连锁；内置元素下恒为空操作）
@@ -106,6 +109,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 - 本步已清除的藤/巧/蒸汽不蔓延。
 - 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。只推注册表里 `pushable` 的格（段 4，内置 = 宝石 / 倒计时 / 双面块）；魔法帽 / 染色瓶同样只改 `recolorable` 的格。
 - 蜗牛推动后若形成匹配：再 `cascadeMatches` 一次；**不再**重复倒计时/皮带/蜗牛/蔓延。
+- 毛球（新玩法 3，`PhaseMove` 20，在蜗牛之后）：每个毛球跳到一个正交相邻的普通宝石格并与之换位；避让格 / 墙与蜗牛相同，同一步已被别的毛球占过的格不选；跳后成消同样由步末补结算处理。道具路径没有 `PhaseMove`，毛球不跳。
 
 ## 6. 结算
 
@@ -134,4 +138,4 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 **逐轮回放用的纯函数**：`traceSwap`（`Match3.Game.Move`）/ `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Boosters`）与对应的结算 API 是同一次 `resolveMove` 计算的两个投影；连锁层同理，`Match3.Board.Cascade` 的记录版 `cascade*` 同时产出计数（`CascadeTally`）与每一轮（`CascadeWave`），调用方直接读 `CascadeRun` 的字段（第三刀删掉了旧的元组 API `runCascade*` / `traceCascade*`）。`MoveTrace` 含每一轮的消除前盘面、被消格、空洞、补子后盘面和得分（UFO 吸收单独算一轮）；`mtFinal` / `mtGen` 是 `ensurePlayable` 之前的稳定盘与生成器，没有自动洗牌时就等于结算结果的 `gsBoard` / `gsGen`，洗牌时 `mtShuffle` 记下洗牌后的盘面。`trace_*` 系列测试保留作回归，现在天然成立。
 
-`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EvTick` / `countdown`）→ 皮带移位（`EvBelt` / `belt`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EvSpread` / `vine` · `choco` · `steam`，带来源格）→ 蜗牛爬行（`EvMove` / `snail`，每只的起点、终点、写入的新朝向蜗牛和被推的格子）。第 7 刀 7b 起每个效果都是同一种通用形状 `EndEffect { endEffectKind, endEffectElement, endEffectItems :: [EndItem] }`（`EndItem { eiFrom, eiTo, eiCell, eiBack }`：目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它），原来的四个构造器、`SpreadKind`、`SnailMove` 已删；`Show` 手写成原构造器的文本，金标准与快照散列不变。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。
+`mtEnd :: [EndStep]` 记录一步里的步末效果（非消除的盘面变化），按发生顺序：倒计时减一（`EvTick` / `countdown`）→ 皮带移位（`EvBelt` / `belt`，多条皮带已合成为「原格 → 新格」）→ 藤 / 巧 / 蒸汽蔓延（`EvSpread` / `vine` · `choco` · `steam`，带来源格）→ 蜗牛爬行（`EvMove` / `snail`，每只的起点、终点、写入的新朝向蜗牛和被推的格子）→ 毛球跳格（`EvBelt` / `fuzzball`，新玩法 3：`PhaseMove` 20，每跳一次两项：毛球 原格 → 新格、宝石 新格 → 原格）。第 7 刀 7b 起每个效果都是同一种通用形状 `EndEffect { endEffectKind, endEffectElement, endEffectItems :: [EndItem] }`（`EndItem { eiFrom, eiTo, eiCell, eiBack }`：目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它），原来的四个构造器、`SpreadKind`、`SnailMove` 已删；`Show` 手写成原构造器的文本，金标准与快照散列不变。`esAfterWaves` 是它插在第几轮之后。道具路径只有蔓延。`applyEndEffect` 能把描述重放回盘面，测试按「轮 → 步末 → 轮」的时间线重放并与 `trySwap` 的终盘逐项比对。自动洗牌（`ensurePlayable`）不在 `mtEnd` 里，而是记在 `mtGen` / `mtShuffle`（`trace_shuffle_step_replays` 逐帧复现）；前端用 `mtFinal` 与结算后 `gsBoard` 的差异补一段洗牌动画。前端播放方式见 [`ui-art.md` 连击表现](ui-art.md#连击表现逐轮回放)，规则 / 回放两条路径需要同步的位置见 [`architecture.md`](architecture.md#逐轮回放与规则的同步)。

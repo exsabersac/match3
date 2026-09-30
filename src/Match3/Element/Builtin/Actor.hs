@@ -4,29 +4,36 @@
 -- 共同特征：它们的规则改写的是「别的格子」——魔法帽 / 染色瓶给相邻宝石换色 / 染色（只改 recolorable 的格），
 -- 果汁机充能后产出炸弹（本轮坐住），蜗牛步末爬行 / 推动（只推 pushable 的格），倒计时步末减一、归零 3×3 爆炸。
 -- 魔法帽 / 果汁机 / 蜗牛 / 染色瓶是固定格（原型 Fixed，不随重力下落）；倒计时按颜色匹配、可交换 / 推动。
--- 邻格规则顺序：魔法帽 60 → 果汁机 130 → 染色瓶 140。步末：倒计时（PhaseTick 10）、蜗牛（PhaseMove 10）。
+-- 毛球（新玩法 3，Custom "fuzzball"）：占格障碍，邻格真消除 / 命中即灭，步末跳到相邻的普通宝石格。
+-- 邻格规则顺序：魔法帽 60 → 果汁机 130 → 染色瓶 140 → 毛球 190。步末：倒计时（PhaseTick 10）、蜗牛（PhaseMove 10）、
+-- 毛球（PhaseMove 20）。
 module Match3.Element.Builtin.Actor
   ( MagicHatE(..)
   , MakerE(..)
   , SnailE(..)
   , BottleE(..)
   , CountdownE(..)
+  , Fuzzball(..)
+  , fuzzballJumps
   , traceSnails
   , magicHatEntry
   , makerEntry
   , snailEntry
   , bottleEntry
   , countdownEntry
+  , fuzzballEntry
   ) where
 
-import Match3.Board.Grid (getCell)
+import Data.Bits (xor)
+import Data.Char (ord)
+import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
 import Match3.Element.Builtin.Common (colorPlace)
 import Match3.Element.Caps
 import Match3.Element.Event
 import Match3.Element.Registry
 import Match3.Element.Types
-import Match3.Obstacles (chargeAdjacentMakersSit, triggerAdjacentBottlesBy, triggerAdjacentHatsBy)
+import Match3.Obstacles (chargeAdjacentMakersSit, orthoNeighbors, triggerAdjacentBottlesBy, triggerAdjacentHatsBy)
 import qualified Match3.Snail as Snail
 import Match3.Snail (snailPositions, stepSnailAtBy)
 import Match3.Types
@@ -76,6 +83,69 @@ instance Element CountdownE where
   toCell (CountdownE c n) = Countdown c n
   caps (CountdownE c _) = blocker [colorIs c, swappable, teleports, pushes, recolors, breaks, atEnd (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))]
 
+-- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，原型 Blocker（挡交换、无色、随重力下落、洗牌原地保留）。
+--
+-- * 正交邻格有真消除即被消灭（邻格规则 190），被直接命中（特效 / 道具）也消灭；消灭计 CountNamed "fuzzball"；
+-- * 玩家交换的步末（PhaseMove 20，蜗牛之后）：每个毛球跳到一个正交相邻的普通宝石格，和那颗宝石换位；
+--   选哪一格由这一步步末开始时的盘面散列决定（伪随机，不消耗 gsGen——没有毛球的关卡随机序列与盘面都不变）；
+--   没有可跳的格（四周都是障碍 / 特殊块 / 带冰或叠层的格、皮带本步移过的格、传送门端点）就不动。
+-- 步末效果记为 EvBelt "fuzzball"（前端按皮带的平移动画播放：毛球与宝石互换位置）。
+newtype Fuzzball = Fuzzball Int
+  deriving (Eq, Show)
+
+instance Element Fuzzball where
+  name _ = "fuzzball"
+  toCell (Fuzzball k) = Custom "fuzzball" (CustomState k)
+  caps _ = blocker [breaks, onAdjacent 190 fuzzballAdjacent, counts (CountNamed "fuzzball"), atEnd (EndRule PhaseMove 20 fuzzballRun (const []) (const []))]
+
+isFuzzball :: Cell -> Bool
+isFuzzball cell = case cell of
+  Custom "fuzzball" _ -> True
+  _ -> False
+
+-- | 邻格规则：与本轮真消除格正交相邻的毛球被消灭（并入清除格）；本轮已在清除 / 直接命中格里的不重复算。
+fuzzballAdjacent :: AdjCtx -> Board -> AdjOut
+fuzzballAdjacent ctx b =
+  let dead = foldr (\q acc -> if q `elem` acc then acc else q : acc) []
+        [ q
+        | p <- acTrue ctx
+        , q <- orthoNeighbors p
+        , inBounds q
+        , q `notElem` acDirect ctx
+        , q `notElem` acTrue ctx
+        , isFuzzball (getCell b q)
+        ]
+  in AdjOut b dead []
+
+-- | 步末跳格（纯函数，测试直接调用）：避让格（皮带本步移过的格）与墙（传送门端点）不跳；
+-- 返回逐个毛球的 (原格, 新格)（行优先）与跳完的盘面。
+fuzzballJumps :: [Pos] -> [Pos] -> Board -> ([(Pos, Pos)], Board)
+fuzzballJumps avoid walls b0 = (reverse movesRev, bEnd)
+  where
+    balls = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], isFuzzball (getCell b0 (r, c))]
+    seed = fnv (show b0)
+    (movesRev, bEnd, _) = foldl' one ([], b0, []) balls
+    one (acc, b, touched) p =
+      let cands = [q | q <- orthoNeighbors p, inBounds q, q `notElem` avoid, q `notElem` walls, q `notElem` touched, plainGem (getCell b q)]
+      in case cands of
+           [] -> (acc, b, touched)
+           _ ->
+             let q = cands !! fromIntegral ((seed `xor` fnv (show p)) `mod` fromIntegral (length cands))
+                 b' = setCell (setCell b q (getCell b p)) p (getCell b q)
+             in ((p, q) : acc, b', p : q : touched)
+    plainGem cell = case cell of
+      Gem _ Normal 0 Nothing -> True
+      _ -> False
+    fnv :: String -> Integer
+    fnv = foldl' (\h ch -> ((h `xor` fromIntegral (ord ch)) * 1099511628211) `mod` 18446744073709551616) 14695981039346656037
+
+-- | 步末：毛球跳格，每跳一次记两项（毛球 原格 → 新格、宝石 新格 → 原格）。
+fuzzballRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
+fuzzballRun ctx b =
+  let (ms, b') = fuzzballJumps (ecAvoid ctx) (ecWalls ctx) b
+      items = concat [[EndItem p q (getCell b p) Nothing, EndItem q p (getCell b q) Nothing] | (p, q) <- ms]
+  in (if null ms then Nothing else Just (EndEffect EvBelt "fuzzball" items), b')
+
 -- | 倒计时减一；列出数值真的变了的格。
 tickRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
 tickRun _ b =
@@ -114,7 +184,7 @@ traceSnailsBy canPush avoid walls b0 =
 --------------------------------------------------------------------------------
 -- 条目（槽位由原型推导 = cellSlot (toCell 原型)）
 
-magicHatEntry, makerEntry, snailEntry, bottleEntry, countdownEntry :: Entry
+magicHatEntry, makerEntry, snailEntry, bottleEntry, countdownEntry, fuzzballEntry :: Entry
 magicHatEntry = bodyEntry MagicHatE (\cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing) (\_ _ -> Just MagicHat)
 makerEntry = bodyEntry (MakerE C1 3) (\cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing) $ \args _ -> case args of
   [AColor c, AInt n] -> Just (Maker c (max 1 n))
@@ -129,3 +199,5 @@ countdownEntry = bodyEntry (CountdownE C1 1) (\cell -> case cell of Countdown c 
   ([AInt n], Gem col _ _ _) -> Just (mkCountdown col n)
   ([AInt n], Countdown col _) -> Just (mkCountdown col n)
   _ -> Nothing
+-- 毛球：Custom 本体（状态值不用，放置参数缺省 1）。
+fuzzballEntry = customEntry (Fuzzball 1) (Fuzzball . unCustomState)

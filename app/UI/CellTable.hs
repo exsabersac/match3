@@ -74,12 +74,13 @@ customRenderer =
     Custom n _ -> unElementName n
     _ -> ""
 
--- | 有专门画法的 Custom 元素（段 5：气泡；新玩法 2：魔法石）：键 = Custom 的名字，与 cellTable 分开，名字不会和内置键冲突。
+-- | 有专门画法的 Custom 元素（段 5：气泡；新玩法 2：魔法石；新玩法 3：毛球）：键 = Custom 的名字，与 cellTable 分开，名字不会和内置键冲突。
 -- 查不到的 Custom 名字走 customRenderer（贴图名 = 元素名 + 层数角标，缺图画灰块）。
 customTable :: [(ElementName, CellRenderer)]
 customTable =
   [ ("bubble", CellRenderer primBubble artBubble (const "bubble"))
   , ("magic_stone", CellRenderer primMagicStone artMagicStone (const "magic_stone_0"))
+  , ("fuzzball", CellRenderer primFuzzball artFuzzball (const "fuzzball"))
   ]
 
 -- | 某格的渲染器。

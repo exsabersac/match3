@@ -9,6 +9,7 @@ module UI.Cell.Prim
   ( primCustom
   , primBubble
   , primMagicStone
+  , primFuzzball
   , primStone
   , primChest
   , primHoney
@@ -74,6 +75,23 @@ primMagicStone ren x y cell flashing = case cell of
     forM_ [0 .. 2 :: Int] $ \i -> do
       rendererDrawColor ren $= if i < k then V4 255 200 60 255 else V4 40 26 70 255
       fillRect ren (Just (Rectangle (P (V2 (x + 14 + fromIntegral i * 11) (y + cellPx - 18))) (V2 7 7)))
+  _ -> pure ()
+
+-- | 几何版：毛球（新玩法 3）——灰粉色毛团（大方块 + 四角小方块当绒毛）+ 两只白眼黑瞳。
+primFuzzball :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
+primFuzzball ren x y cell flashing = case cell of
+  Custom _ _ -> do
+    let gap = 9 :: CInt
+        s = cellPx - 2 * gap
+    rendererDrawColor ren $= if flashing then V4 255 230 240 255 else V4 196 150 170 255
+    fillRect ren (Just (Rectangle (P (V2 (x + gap) (y + gap))) (V2 s s)))
+    forM_ [(x + gap - 4, y + gap - 4), (x + cellPx - gap - 4, y + gap - 4), (x + gap - 4, y + cellPx - gap - 4), (x + cellPx - gap - 4, y + cellPx - gap - 4)] $ \(fx, fy) ->
+      fillRect ren (Just (Rectangle (P (V2 fx fy)) (V2 8 8)))
+    forM_ [x + cellPx `div` 2 - 12, x + cellPx `div` 2 + 3] $ \eyeX -> do
+      rendererDrawColor ren $= V4 255 255 255 255
+      fillRect ren (Just (Rectangle (P (V2 eyeX (y + cellPx `div` 2 - 8))) (V2 9 10)))
+      rendererDrawColor ren $= V4 30 20 30 255
+      fillRect ren (Just (Rectangle (P (V2 (eyeX + 3) (y + cellPx `div` 2 - 4))) (V2 4 5)))
   _ -> pure ()
 
 -- | 几何版：石头。

@@ -176,6 +176,7 @@ test-suite match3-test
       Spec.ElementClass
       Spec.Engine
       Spec.Extension
+      Spec.Fuzzball
       Spec.GoalsLevels
       Spec.Golden
       Spec.Gravity

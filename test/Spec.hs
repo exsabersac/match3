@@ -32,6 +32,7 @@ import qualified Spec.Presentation
 import qualified Spec.View
 import qualified Spec.BombShapes
 import qualified Spec.MagicStone
+import qualified Spec.Fuzzball
 
 main :: IO ()
 main = defaultMain tests
@@ -68,6 +69,7 @@ tests =
         , Spec.View.tests
         , Spec.BombShapes.tests
         , Spec.MagicStone.tests
+        , Spec.Fuzzball.tests
         , Spec.SourceScan.tests
         ]
     )

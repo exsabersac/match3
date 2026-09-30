@@ -16,7 +16,7 @@ sudo apt-get install -y libsdl2-dev
 # macOS Apple Silicon（Homebrew SDL2）额外需要：
 # export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
-stack test                            # 库测，无需显示器；期望 343 通过
+stack test                            # 库测，无需显示器；期望 350 通过
 stack build && stack exec match3-sdl
 ```
 
@@ -66,7 +66,8 @@ stack build && stack exec match3-sdl
 - **气泡**（`Custom "bubble"`，段 5）：无色、挡交换、随重力下落；邻格有任意颜色的消除或被直接命中即破
 - **L / T 形出炸弹**（关卡规则开关 `bomb_shapes`，新玩法 1）：同色横竖两条连线交叉（L / T 形）时，交点生成炸弹；五连仍出彩虹，L / T 里带四连也出炸弹不出直线。只在打开开关的关卡生效（第 41 关「爆破」），HUD 关名右侧有炸弹角标「L/T 形出炸弹」
 - **魔法石**（`Custom "magic_stone"`，新玩法 2）：固定、打不动；旁边每轮有消除充能 1 格，满 3 格后在交换的步末发射，清掉所在整行和整列，然后归零；底部 3 个充能槽显示进度（第 42 关「魔石」）
-- 连击波次计分、提示、撤销、自动洗牌、**42** 关战役地图（CH1–CH7 章节分隔）
+- **毛球**（`Custom "fuzzball"`，新玩法 3）：挡交换、随重力下落；旁边有消除或被特效 / 道具打到即被消灭；每次交换的步末跳到旁边一格普通宝石上（与之换位，选格按盘面散列，不影响其他关卡的随机序列）（第 43 关「毛球」）
+- 连击波次计分、提示、撤销、自动洗牌、**43** 关战役地图（CH1–CH7 章节分隔）
 - HUD、道具次数、粒子、交换/下落补间、连锁逐轮回放与连击分级（见下节）、藤蔓蔓延提示、飞碟叠层、暂停帮助、过关/胜利/失败叠层
 
 ## 画面与反馈
@@ -129,7 +130,8 @@ stack build && stack exec match3-sdl
 | 39 | 果冻 | 24 | 去 32 层果冻 | 16 格双层果冻（段 5） |
 | 40 | 气泡 | 22 | 破 12 气泡 | 气泡（段 5） |
 | 41 | 爆破 | 24 | 碎 10 石头 | 规则开关：L / T 形出炸弹 + 两堆石头（新玩法 1） |
-| 42 | 魔石 | 24 | 碎 8 石头 | 四块魔法石 + 行列尽头的双层石头（新玩法 2；终章） |
+| 42 | 魔石 | 24 | 碎 8 石头 | 四块魔法石 + 行列尽头的双层石头（新玩法 2） |
+| 43 | 毛球 | 22 | 消灭 10 毛球 | 上方 10 个毛球，每步末跳一格（新玩法 3；终章） |
 
 按 `D` 进入**每日**挑战（日历日期作种子）。
 
@@ -186,7 +188,7 @@ src/Match3/   Types Counts Core Engine View Obstacles Rainbow Combos Ice
               （View = 第 11 刀的视图模型：从 GameState 算出 HUD / 目标 / 棋盘读数，桌面与网页都读）
               （Engine = 三消作为通用接口的第一个实现）
 src/Match3/Types/  Name Cell Overlay Body Board Game（第 6 刀从 Types.hs 按职责拆出，Name 为第 6b 刀的 ElementName / CustomState；Types.hs 为再导出门面）
-src/Match3/Levels/ Level Campaign（关卡记录 / 42 关关卡表与 lookupLevel，第 6 刀）
+src/Match3/Levels/ Level Campaign（关卡记录 / 43 关关卡表与 lookupLevel，第 6 刀）
 src/Match3/Board/  Grid Match Clear Gravity Cascade Hooks Refill Random Default（Hooks = 第 7 刀的关卡级钩子记录；Refill = 第 8 刀的补子策略；Default = 不带 With 的内置表便捷入口）
 src/Match3/Game/   State Tally Outcome Shuffle Level Trace EndPhase Resolve Move Boosters（EndPhase = 第 7b 刀的步末表）
 src/Match3/Element/ Types Class Caps Message Registry Special Builtin Event Level（元素框架：规则类型 / 元素类与能力记录 / 能力声明简写（第 9 刀）/ 消息 / 注册表 / 规则表解释器（第 8 刀：特殊块形状、特殊块组合）/ 内置元素汇总 / 效果事件 / 一局的关卡级元素（第 7 刀）；Element.hs 为再导出外观）
@@ -202,7 +204,7 @@ app/pure/     不依赖 SDL 的纯前端模块（桌面、测试、网页共用�
               UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/Sound（音效钩子，预留、不播放）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；343 命名用例）
+test/Spec.hs  测试入口（只汇总；350 命名用例）
 test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、第 9 刀前元素类的对照副本 Support.LegacyElement）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
@@ -213,6 +215,6 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 
 ## 发布状态
 
-- 战役：**42** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **343**（Tasty + QuickCheck）
+- 战役：**43** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球），批量可构造 / 可玩 / 装饰与目标对齐
+- 测试：`stack test` **350**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

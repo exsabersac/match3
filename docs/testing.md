@@ -358,8 +358,8 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - **0 警告**：`web/cabal.project` 对本包 `match3-web` 加了 `-Werror`（本包已开 `-Wall`），网页版自己的模块（`web/hs`）
   和它直接编译的 `../src`、`../app/pure` 模块有任何警告都会让 `make build` 失败；依赖包（random、splitmix 等）不受影响。
-- **一致性用例**：`web/test/parity.sh` 默认状态 23 组、动画 21 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
-  第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）、第 44 关「魔力鸟」与第 45 关「雪怪」种子 1–3），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
+- **一致性用例**：`web/test/parity.sh` 默认状态 26 组、动画 24 组（「关卡:种子[:走法]」列表，含第 41 关「爆破」、第 42 关「魔石」、
+  第 43 关「毛球」（每步都有毛球跳格 `EvBelt "fuzzball"`）、第 44 关「魔力鸟」、第 45 关「雪怪」种子 1–3 与第 46 关「掉落口」种子 1 / 28 / 30——后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干，种子 1 走满也不补），`CASES=` 可改。走法：`hint`（缺省，按核心提示）、
   `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）；
   提示不会主动选彩虹组合，第 44 关的变身步（`rainbow_line` / `rainbow_bomb`）靠后两种走法覆盖，`parity.sh` 会检查这些用例真的走到了变身步
   （状态 JSON 里有 `"kind":"rainbow_…"`、动画帧里有蔓延段）。原生 `Parity.hs` / `AnimParity.hs` 与 node 两侧的 `pickMove` 逐条相同。
@@ -369,11 +369,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
   `index.html` 就是本次的 `web/dist`，不会连到别人的服务器。其他测试不占固定端口：一致性测试不起服务器，
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
 - **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
-  e2e 对全部关卡（当前 46 关；第 45 关「雪怪」按象限画，多格护栏见下；第 46 关「掉落口」只用饼干格，不会触发降级，掉落口标记网页端暂不画；第 47 关「变色龙」网页端尚未跟进——图集里有 `chameleon` 环贴图，按名字画它、不走降级，护栏查不出）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
+  e2e 对全部关卡（当前 47 关；第 45 关「雪怪」按象限画，多格护栏见下；第 46 关掉落口标记 `cookie_drop` 缺图走几何版时计入 `fallbacks`；第 47 关变色龙见下）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
   **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART` / `ELEMENT_RGB`，贴图名要在网页图集里），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
   `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。`report.json` 的 `fallbacksByLevel` 逐关记录计数，
-  第 43 / 44 / 46 关（毛球、彩虹组合、掉落口）另有单独的「fallbacks 为空」检查项。
+  第 43 / 44 / 45 / 46 关（毛球、彩虹组合、雪怪、掉落口）另有单独的「fallbacks 为空」检查项。
 - **HUD 目标中文标签（每关）**：同一轮逐关检查 `m3debug.hud.goal`（HUD 实际画出的目标标签）= 「目标 」+ `state.goal.label`，
   且 `goal.label` 不含 `[a-z_]`（不漏出 `fuzzball` / `GoalNamed` 这类内部名）；逐关结果在 `report.json` 的 `goalLabels`。
   `goal.label` 来自视图模型 `Match3.View.goalLabel`（名字目标查 `namedGoalLabelTable`），`stack test` 的 `frontends_read_view_model` 也核对全部关卡与每日挑战。
@@ -389,6 +389,9 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
   `forceGeneric.add("snow_boss")` 后护栏必须报出、撤掉后不再增加（前后对比 `snow-boss-crop-before-generic.png` / `snow-boss-crop-after.png`）；
   按提示走截「扣血那一轮的高亮」与「召唤雪块的步末」，种子 32 走到血量过半截受伤表情（四格 `hurt`、血条进入过半状态）；全程 `fallbacks` 为空。
   截图 `snow-boss-l45-*.png`、`snow-boss-hit-flash.png`、`snow-boss-summon-tick.png`、`snow-boss-hurt.png`。
+- **饼干掉落口（第 46 关）**：图集含 `cookie_drop`；竖屏 390×844 与横屏 1280×800 下 `state.drops` = 顶行 (0,1)/(0,3)/(0,4)/(0,6)、开局饼干在口上，
+  第 1 关 `drops = []`；种子 30 按提示走，截「掉落口补下饼干的下落段」与补完后的盘面（收 1 块、盘上仍 4 块饼干）；全程 `fallbacks` 为空。
+  截图 `cookie-drop-l46-*.png`、`cookie-drop-fall.png`、`cookie-drop-after-refill.png`。
 - **规则开关角标**：e2e 检查第 41 关 `state.rules` = `[{name:"bomb_shapes", text:"L/T 形出炸弹", icons:["bomb_glow","bomb_mark"]}]`，
   竖屏 390×844、横屏手机 844×390、桌面 1280×800 三种布局下 HUD 角标都完整画出、落在关卡面板里、不压「第 N 关」标签与关名、
   彼此不重叠（读 `m3debug.hud`），走一步后仍在；第 1 关与第 42 关（魔法石是元素不是规则开关）没有角标。截图

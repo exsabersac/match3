@@ -143,6 +143,8 @@ encodeState h =
     , ("ufos", arr [obj [("p", encodePos (ufoCell u)), ("c", int (colorNum (ufoColor u)))] | u <- bvUfos bv])
     , ("carpets", arr (map encodePos (bvCarpets bv)))
     , ("carpetOpen", arr (map encodePos (bvCarpetOpen bv)))
+      -- 饼干掉落口格（新玩法 6，视图模型 bvDrops，与桌面 UI.BoardArt.drawDropsArt 同一份读数）；没有掉落口为 []
+    , ("drops", arr (map encodePos (bvDrops bv)))
     , ("board", encodeBoard (bvBoard bv))
     ]
   where

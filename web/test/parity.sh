@@ -8,6 +8,7 @@
 #   CASES   "关卡:种子[:走法] …"（关卡 0 起），默认见下；走法 hint（缺省，按核心提示）或 combo
 #           （先换盘上的「彩虹 × 直线 / 炸弹」再按提示，覆盖第 44 关 rainbow_combos 的变身步；见 Parity.hs 的 pickMove）
 #           或 combo-bomb（同 combo，但先换「彩虹 × 炸弹」）或 cham-rainbow（先换「彩虹 × 变色龙」，第 47 关成对交换规则 15）
+#           默认另含第 46 关「掉落口」种子 1 / 28 / 30（后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干）
 #   NODE    默认 ~/.ghc-wasm/nodejs/bin/node
 #   OUT     输出与原生二进制目录，默认 web/.cache/parity
 # 前置：已 make build（需要 web/dist）；原生侧用 stack 的 GHC 9.14.1 编译（首次约 1 分钟，之后增量）。
@@ -29,6 +30,8 @@ case "$MODE" in
 esac
 # 第 45 关「雪怪」Boss（下标 44，新玩法 5）：两组都跑 3 个种子
 DEF="$DEF 44:1 44:2 44:3"
+# 第 46 关「掉落口」（下标 45，新玩法 6）：种子 1 不补饼干，28 / 30 在第 5–6 步补
+DEF="$DEF 45:1 45:28 45:30"
 # 第 47 关「变色龙」（下标 46，新玩法 7）：两组都跑种子 1、2（每步都有步末换色 EvTick "chameleon"）与种子 140 的
 # cham-rainbow 走法（第 6 步换彩虹 × 变色龙，覆盖成对交换规则 15）
 DEF="$DEF 46:1 46:2 46:140:cham-rainbow"

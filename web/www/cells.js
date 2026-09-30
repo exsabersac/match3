@@ -296,6 +296,27 @@ export function drawUfos(ctx, art, st, pulse, yOff = 0) {
   }
 }
 
+// 饼干掉落口标记（新玩法 6，state.drops = 视图模型 bvDrops）：同桌面 UI.BoardArt.drawDropsArt——画在棋子之上、掉落口格上沿
+// （上移 6 压在棋盘框上），固定不随下落偏移；缺图时退回几何画法（同 UI.BoardPrim.drawDropMark：三级金色台阶 + 白色箭头），
+// 并按 "cookie_drop" 计进 fallbacks（e2e 逐关护栏）。
+// dropMarks 记下最近一次画的标记（格子与棋盘设计坐标，seq 每画一次加 1），main.js 以 m3debug.dropMarks 暴露，
+// e2e 用它核对交换补间中 / 补间结束后的标记格 = state.drops（bvDrops）、坐标 = 桌面 drawDropsArt 的 (cellOrigin, y − 6)。
+export const dropMarks = { seq: 0, marks: [] };
+export function drawDrops(ctx, art, st) {
+  dropMarks.seq++;
+  dropMarks.marks = (st.drops || []).map((p) => { const [x, y] = origin(p); return { p: [p[0], p[1]], x, y: y - 6 }; });
+  for (const p of st.drops || []) {
+    const [x, y] = origin(p);
+    if (art.draw(ctx, "cookie_drop", x, y - 6, CELL, CELL)) continue;
+    fallbacks.cookie_drop = (fallbacks.cookie_drop || 0) + 1;
+    const box = (rgb, bx, by, bw, bh) => { ctx.fillStyle = `rgb(${rgb})`; ctx.fillRect(bx, by, bw, bh); }, yy = y - 3, m = x + CELL / 2;
+    box("120,70,20", x + 4, yy, CELL - 8, 3);
+    box("240,190,90", x + 6, yy + 3, CELL - 12, 4); box("240,190,90", x + 11, yy + 7, CELL - 22, 4);
+    box("200,130,50", x + 16, yy + 11, CELL - 32, 3);
+    box("255,250,230", m - 2, yy + 3, 4, 5); box("255,250,230", m - 5, yy + 8, 10, 2); box("255,250,230", m - 2, yy + 10, 4, 2);
+  }
+}
+
 // 藤蔓 / 巧克力下一步可能蔓延到的格（与 UI.BoardArt.spreadTargets 相同的判定）
 export function spreadTargets(board, overlay) {
   const out = [];

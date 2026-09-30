@@ -124,8 +124,8 @@ make size            # 事后单独看体积
 图集：122 张 2x 精灵（每格 112 px；不含 `g_`/`zh_`/`name_` 文字图和 `@` 变体，保留 `badge_*`），
 1024×1464，WebP 约 372 KB；`atlas.json` 约 3.6 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm 原始 4,072,998 B → `-Oz` 1,737,478 B（gzip 674,329 B）；
-dist 合计 2,194,833 B，逐文件 gzip 合计 1,048,936 B（约 1.05 MB）（WebP 已压缩，gzip 基本无收益）。
+当前体积（2026-09-30，web-cookie-drop 合入 main 42e1173 后）：wasm 原始 4,784,404 B → `-Oz` 1,983,306 B（gzip 751,037 B）；
+dist 合计 2,512,766 B，逐文件 gzip 合计 1,188,612 B（约 1.19 MB）（WebP 已压缩，gzip 基本无收益）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
@@ -201,7 +201,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
 下面是各自的底层命令。当前（2026-09-30，web-cookie-drop 合入 main 42e1173 后）：46 关，`stack test` 372 个用例全过，
-状态一致性 26 组、动画一致性 24 组（都含第 43 / 44 / 45 / 46 关），e2e 95 项全过，`make android-check` 见 docs/web.md §7。
+状态一致性 26 组、动画一致性 24 组（都含第 43 / 44 / 45 / 46 关），e2e 97 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json

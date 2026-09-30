@@ -5,7 +5,7 @@
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
 import { loadArt } from "./art.js";
-import { CELL, PAD, fallbacks, setDims } from "./cells.js";
+import { CELL, PAD, dropMarks, fallbacks, setDims } from "./cells.js";
 import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
@@ -319,7 +319,9 @@ window.m3debug = {
   get state() { return state; }, get pending() { return pending; }, get busy() { return busy; }, get anim() { return debugInfo(); },
   get layout() { return L; }, get hud() { return hudDrawn; }, get levels() { return levels.length; },
   // 走几何降级的次数（按元素名，见 cells.js 的 fallbacks）；图集加载后应一直为空，e2e 每关检查
-  get fallbacks() { return { ...fallbacks }; }, get dpr() { return dpr; }, perf, breakWhen: null,
+  get fallbacks() { return { ...fallbacks }; },
+  // 最近一帧画的掉落口标记（cells.js 的 dropMarks：{seq, marks:[{p,x,y}]}，棋盘设计坐标）
+  get dropMarks() { return { seq: dropMarks.seq, marks: dropMarks.marks.map((m) => ({ ...m, p: [...m.p] })) }; }, get dpr() { return dpr; }, perf, breakWhen: null,
   get frozen() { return frozen; }, set frozen(v) { frozen = v; },
   cellCenter: (r, c) => cellCenterCss(L, [r, c]),
   buttonCenter: (id) => { const b = L.buttons.find((x) => x.id === id); return [L.ox + (b.x + b.w / 2) * L.u, L.oy + (b.y + b.h / 2) * L.u]; },

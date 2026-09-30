@@ -123,7 +123,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 第 46 关饼干掉落口——饼干格沿用 `cookie` 画法，补子由核心结算（新补的饼干和宝石一样按 `fall` 表从上沿落入）；掉落口格经 Api
   `state.drops`（视图模型 `bvDrops`）给出，`cells.js` 的 `drawDrops` 同桌面 `UI.BoardArt.drawDropsArt`：棋子之上、格子上沿（上移 6）
   画 `cookie_drop`，不随下落偏移；画的时机也同桌面（静止盘 / 高亮段 / 轻落 / 皮带 / 蜗牛段画，消失 / 下落段不画；唯一不同是交换补间里也画，
-  桌面 `drawSwap` 不画）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
+  桌面 `drawSwap` 不画，见 §8.1）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -144,7 +144,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 tools/gen_assets.py（桌面版，已有）→ assets/*.bmp（2x，112 px/格）
                                           │  只读
 web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张，1024×1464，约 372 KB）
-                                            atlas.json（约 3.5 KB，名字 → 矩形）
+                                            atlas.json（约 3.6 KB，名字 → 矩形）
                                             background.webp（约 17 KB）
 ```
 
@@ -153,7 +153,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-09-30，对齐桌面版 GHC 9.14.1 之后）：wasm `-Oz` 后 1,737,478 B ≈ 1.74 MB（gzip 674,329 B）；dist 合计 2,194,833 B ≈ 2.19 MB，逐文件 gzip 约 1.05 MB。
+体积（2026-09-30，web-cookie-drop 合入 main 42e1173 后）：wasm `-Oz` 后 1,983,306 B ≈ 1.98 MB（gzip 751,037 B）；dist 合计 2,512,766 B ≈ 2.51 MB，逐文件 gzip 约 1.19 MB。
 
 ## 3. 工具链与构建
 
@@ -266,7 +266,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 ## 6. 调试要点
 
-- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.perf`；URL `?level=0..45&seed=N` 复现一局；
+- 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.dropMarks`（最近一帧画的掉落口标记格与设计坐标）/ `m3debug.perf`；URL `?level=0..45&seed=N` 复现一局；
 - 快捷键：`u` / `z` 撤销，`h` 提示，空格加速；
 - 页面白屏先看网络面板里 `.wasm` 的 Content-Type（必须是 `application/wasm`）。
 
@@ -277,9 +277,9 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | `stack test` | 核心规则（372 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（26 组，含第 41–46 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（24 组，含第 41–46 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
-| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
+| e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-cookie-drop 合入 main 42e1173 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 26 组、动画一致性 24 组全部一致（含第 43 / 44 关、第 45 关种子 1–3 与第 46 关种子 1 / 28 / 30）；e2e 95 项全过（46 关逐关贴图护栏全空（含多格护栏）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证、第 46 关掉落口标记与补下饼干的下落段，无控制台错误）；`make android-check` 6 项全过。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-09-30，web-cookie-drop 合入 main 42e1173 后，`make clean && make check`）：`stack test` 372 通过；状态一致性 26 组、动画一致性 24 组全部一致（含第 43 / 44 关、第 45 关种子 1–3 与第 46 关种子 1 / 28 / 30）；e2e 97 项全过（46 关逐关贴图护栏全空（含多格护栏）、HUD 目标全是中文名、第 45 关雪怪按象限画与多格护栏反证、第 46 关掉落口标记与补下饼干的下落段，无控制台错误）；`make android-check` 6 项全过。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制
@@ -291,6 +291,13 @@ e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-b
 - `m3Swap` 每步返回完整 JSON（中位数约 30 KB，长连锁可达约 120 KB），未做增量；
 - 真机（iOS Safari / Android Chrome）和 itch.io 上线都还没实测，只在无头 Chrome 里验证过。
 
+### 8.1 已知差异（与桌面版，已确认接受）
+
+- **第 45 关雪怪血条的读数时机**：动画播放期间，网页 HUD 的雪怪血条显示**本步之前**的 HP（与网页目标条的进度一致，`main.js` 的 `hudInfo`
+  在 `anim` 非空时读 `state.boss`），桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（测试跑手已用 4 个种子 × 24 步核对）。
+- **第 46 关掉落口标记在交换补间里也画**：网页的交换补间走 `drawCellsExcept`，顺带画了 `cookie_drop`，桌面 `drawSwap` 不画；
+  标记是不动的装饰、不影响状态，补间中与补间结束后的标记格都等于核心 `bvDrops`、坐标同桌面 `drawDropsArt`（`cellOrigin`、上移 6）——
+  e2e 3g 用 `m3debug.dropMarks` 核对（「第 46 关交换补间中 / 补间结束后：掉落口标记格 = state.drops…」两项）。消失 / 下落段两边都不画。
 
 ## 9. TODO
 

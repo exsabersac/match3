@@ -631,7 +631,7 @@ try {
   // 3g. 第 46 关「掉落口」（下标 45，新玩法 6）：state.drops = 视图模型 bvDrops（顶行 4 个掉落口），掉落口格上沿画 cookie_drop；
   //     竖屏 390×844 / 横屏 1280×800 截图 cookie-drop-l46-*.png；按提示走，截「掉落口补下饼干的下落段」cookie-drop-fall.png
   //     与补完后的静止盘 cookie-drop-after-refill.png；
-  //     其它关卡 drops 为空；全程不走几何降级
+  //     交换补间中与补间结束后标记格 = state.drops（bvDrops）、坐标同桌面；其它关卡 drops 为空；全程不走几何降级
   {
     const atlas = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
     check("图集含掉落口贴图 cookie_drop", !!atlas.cookie_drop);
@@ -650,6 +650,27 @@ try {
       await sleep(100);
       const s = await P.st();
       check("第 1 关没有掉落口（state.drops = []）", Array.isArray(s.drops) && s.drops.length === 0, s.drops);
+      await P.ctx.close();
+    }
+    // 掉落口标记是不动的装饰：交换补间中（网页也画，桌面 drawSwap 不画）与补间结束后的静止盘上，标记格 = state.drops
+    // （核心 bvDrops），坐标 = 桌面 drawDropsArt 的 (cellOrigin, y − 6)，换成棋盘设计坐标即 (16 + 56c, 16 + 56r − 6)
+    {
+      const P = await openPage({ w: 390, h: 844, dpr: 1 }, 45, 1);
+      await sleep(150);
+      const want = (drops) => drops.map(([r, c]) => ({ p: [r, c], x: 16 + 56 * c, y: 16 + 56 * r - 6 }));
+      const fresh = async () => { const a = await P.page.evaluate(() => window.m3debug.dropMarks.seq); await sleep(80); const m = await P.page.evaluate(() => window.m3debug.dropMarks); return m.seq > a ? m : null; };
+      const s0 = await P.st(), idle0 = await fresh();
+      await P.breakAt((i) => i.kind === "swap" && i.fr >= 3);
+      await P.swap(s0.hint[0], s0.hint[1], false);
+      await P.frozenOrIdle();
+      const inSwap = (await P.isFrozen()) ? await P.page.evaluate(() => window.m3debug.dropMarks) : null;
+      await P.clearBreak(); await P.resume(); await P.idle();
+      const s1 = await P.st(), idle1 = await fresh();
+      report.dropMarks = { drops: s1.drops, idle0: idle0?.marks, inSwap: inSwap?.marks, idle1: idle1?.marks };
+      const ok = (m, drops) => !!m && JSON.stringify(m) === JSON.stringify(want(drops));
+      check("第 46 关交换补间中：掉落口标记格 = state.drops（bvDrops）、坐标同桌面 drawDropsArt", ok(inSwap?.marks, s0.drops), report.dropMarks);
+      check("第 46 关补间结束后：掉落口标记格 = state.drops（bvDrops）、坐标同桌面 drawDropsArt，与走之前相同",
+        s1.moves === s0.moves - 1 && ok(idle0?.marks, s0.drops) && ok(idle1?.marks, s1.drops) && JSON.stringify(s1.drops) === JSON.stringify(wantDrops), report.dropMarks);
       await P.ctx.close();
     }
     // 种子 30 按提示走第 5 步收走一块饼干，同一步补子时掉落口 (0,1) 补下新饼干（种子 1 走满 26 步也收不到饼干，不会补）

@@ -23,13 +23,13 @@ for a in "$@"; do
     debug|release|aab|sync) MODE="$a" ;;
     --web) BUILD_WEB=1 ;;
     -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
-    *) echo "未知参数：$a（--help 看用法）" >&2; exit 2 ;;
+    *) echo "未知参数：${a}（--help 看用法）" >&2; exit 2 ;;
   esac
 done
 
 # ---- 前置检查 ----
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/android-sdk}}"
-[ -d "$ANDROID_HOME/platforms" ] || { echo "找不到 Android SDK：$ANDROID_HOME（设 ANDROID_HOME，安装见 docs/android.md）" >&2; exit 1; }
+[ -d "$ANDROID_HOME/platforms" ] || { echo "找不到 Android SDK：${ANDROID_HOME}（设 ANDROID_HOME，安装见 docs/android.md）" >&2; exit 1; }
 
 node_major() { node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
 if [ -n "${NODE_DIR:-}" ]; then export PATH="$NODE_DIR:$PATH"; fi
@@ -71,5 +71,5 @@ ext="${src##*.}"
 out="${APK_OUT:-$HERE/out/match3-$MODE.$ext}"
 mkdir -p "$(dirname "$out")"
 cp "$src" "$out"
-echo "产物：$out（$(stat -c %s "$out" 2>/dev/null || stat -f %z "$out") 字节）"
+echo "产物：${out}（$(stat -c %s "$out" 2>/dev/null || stat -f %z "$out") 字节）"
 case "$src" in *unsigned*) echo "注意：没有 android/keystore.properties，release APK 未签名，不能直接安装（见 docs/android.md）" ;; esac

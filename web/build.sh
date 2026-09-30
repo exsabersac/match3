@@ -75,12 +75,12 @@ cp "$CACHE"/* "$DIST/vendor/browser_wasi_shim/"
 # 5) 体积报告
 raw=$(stat -c %s "$WASM_RAW"); rawgz=$(gzip -9 -c "$WASM_RAW" | wc -c)
 opt=$(stat -c %s "$DIST/match3-web.wasm"); gz=$(gzip -9 -c "$DIST/match3-web.wasm" | wc -c)
-echo "wasm 原始 $raw 字节（gzip -9 后 $rawgz）；wasm-opt -Oz 后 $opt 字节（gzip -9 后 $gz）"
+echo "wasm 原始 $raw 字节（gzip -9 后 ${rawgz}）；wasm-opt -Oz 后 $opt 字节（gzip -9 后 ${gz}）"
 total=0; totalgz=0
 while IFS= read -r f; do
   total=$((total + $(stat -c %s "$f"))); totalgz=$((totalgz + $(gzip -9 -c "$f" | wc -c)))
 done < <(find "$DIST" -type f)
-echo "dist 合计 $total 字节（逐文件 gzip -9 后合计 $totalgz；WebP 本身已压缩，gzip 几乎无收益）"
+echo "dist 合计 $total 字节（逐文件 gzip -9 后合计 ${totalgz}；WebP 本身已压缩，gzip 几乎无收益）"
 echo "产物在 $DIST"
 
 if [ "${1:-}" = "--serve" ]; then

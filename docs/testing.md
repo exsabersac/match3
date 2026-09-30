@@ -399,3 +399,18 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `ms_boosters_wait_for_next_swap` | 满格的魔法石遇锤子不发射、仍满；下一次交换的步末发射并归零 |
 | `ms_level42_layout_and_play` | 第 42 关种子 1–3 开局四块 0 格魔法石在固定位置；前 41 关开局没有魔法石；种子 1–6 按提示各走 20 步：魔法石始终原地、发射过、石头计数有进度 |
 
+## shell 脚本检查（`make lint-sh`）
+
+`make check` 第一步跑 `make lint-sh`（`python3 web/tools/lint-sh.py`），检查仓库里（`git ls-files`）全部 `*.sh`、`*.mk` 与 `Makefile`：
+
+- **规则**：`$` 后接命名变量 `[A-Za-z_][A-Za-z0-9_]*`，紧跟一个 ≥ 0x80 的字节（中文、全角标点等 UTF-8 字符的首字节）就报错，
+  逐条打印 `文件:行号: $变量 …: 该行`，退出码 1。修法是加花括号：`"…$LABEL）"` → `"…${LABEL}）"`。
+  Makefile 配方里的 `$$v，` 就是 shell 的 `$v，`，同样报（改成 `$${v}，`）。位置参数 / 特殊参数（`$1`、`$?`、`$@` 等）不查。
+- **为什么**：macOS 自带的 bash 3.2 在 UTF-8 区域设置下，libc 把 0x80–0xFF 字节当成字母，全角字符的字节会被读进变量名
+  （`$LABEL）` 被读成变量 `LABEL\xef…`），配合 `set -u` 直接报 `unbound variable` 退出；Linux 上的 bash 5 / glibc 不会这样，
+  本机跑不出问题，所以靠这条静态检查。
+- **严格、无白名单**：注释行也查（注释里写成 `${VAR}` 即可）。只按文件名选文件、不看 shebang——Gradle 生成的
+  `web/android-app/android/gradlew` 不是手写脚本，不在范围内。
+- **单独查几个文件**：`python3 web/tools/lint-sh.py 文件 …`。
+- **在 Linux 上复现 macOS 行为**（可选）：用 bash 3.2.57 源码编译的 bash，加 `LD_PRELOAD` 一个把 Latin-1 0xC0–0xFF 等标成
+  alpha / alnum 的 `__ctype_b_loc`（模拟 macOS libc），`LC_ALL=C.UTF-8`、`set -u` 下执行含 `$VAR）` 的行即可看到报错。

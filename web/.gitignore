@@ -3,3 +3,4 @@ dist/
 .cache/
 node_modules/
 match3-web-dist.tgz
+__pycache__/

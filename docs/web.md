@@ -110,7 +110,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   ComboFx 在第一轮之前插入蔓延段，`render.js` 按桌面 `drawEndSpread` 逐分支画：来源（彩虹格）与目标不相邻 → 变身后的直线 / 炸弹从格子中心的方块匀速长满，
   前沿白光、不迸碎屑（名字不在生长曲线 / 颜色表里，同桌面缺省）；目标恰好与彩虹差一行或一列（`dc = ±1` 或 `dr = ±1`）时桌面按方向擦出，网页相同。
 - **HUD 目标标签**：`state.goal.label`（视图模型 `Match3.View.goalLabel`，唯一来源），`main.js` 不再有「目标种类 → 中文」映射表；
-  新元素做成关卡目标时在 `namedGoalLabelTable` 登记（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
+  新元素做成关卡目标时在 `namedGoalLabelTable`（合 main 9f5504e 后定义在 `Match3.GoalLabel`，`Match3.View` 重新导出）登记（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
 - 待跟进（网页版未改）：第 45 关雪怪 Boss `{t:"custom", name:"snow_boss", v}`（v = ((满血 × 256 + 血量) × 4 + 召唤计数) × 4 + 象限，
   解码同核心 `Match3.View.bossPart`）应按象限画 `snow_boss_<象限>` / 血量过半画 `snow_boss_hurt_<象限>`，HUD 血条读 `gvBoss`
   （`Match3.View.BossView`，Api 尚未编码）；在跟进之前网页端对四格各画一张整图 `snow_boss`（图集里有这张贴图，所以不走几何降级，e2e 的 `fallbacks` 护栏查不出来）、没有血条；HUD 目标标签已由核心 `goalLabel` 给出「雪怪」。
@@ -177,7 +177,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（111 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 380 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 381 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -270,7 +270,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（380 个） | `make test-native` |
+| `stack test` | 核心规则（381 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（20 组，含第 41–44 关；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（18 组，含第 41–44 关；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |

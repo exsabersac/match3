@@ -41,6 +41,7 @@ executable match3-web
     Match3.Color
     Match3.Counts
     Match3.Goal
+    Match3.GoalLabel
     Match3.Board.Grid
     Match3.Board.Match
     Match3.Board.Clear

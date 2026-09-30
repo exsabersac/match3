@@ -3,7 +3,7 @@
 -- 补子时掉落口格（顶行）的空洞在盘上饼干少于 dropKeep 块时补饼干而不是宝石；饼干沿用原有的
 -- 底边收集（drains EdgeBottom，计 CountCookies）。每个空洞仍照原策略消耗一次随机数，所以生成器的推进与
 -- 没有掉落口时相同；掉落与否完全由盘面决定。有掉落口的关卡不做目标补齐（收集物由掉落口陆续补进场）。
--- 第 46 关「掉落口」用到它；其余关卡 lvlDrops 为空、CookieDrop 不回复，行为不变。
+-- 第 46 关「掉落口」用到它，第 47 关「变色龙」（新玩法 7）复用它掉变色龙；其余关卡 lvlDrops 为空、CookieDrop 不回复，行为不变。
 module Spec.CookieDrop
   ( tests
   ) where
@@ -75,8 +75,8 @@ greedyPlay gs
         [] -> []
         cs -> let (_, g') = foldr1 (\a b -> if fst a <= fst b then a else b) cs in g' : greedyPlay g'
 
--- | 关卡表里只有第 46 关写了 lvlDrops（四个顶行掉落口、饼干、保持 4 块）；开局的关卡级元素只有它回复；
--- 视图模型 bvDrops 给出掉落口格；GameState 的 Show 不打印这个内置元素。
+-- | 关卡表里只有第 46 关（四个顶行掉落口、饼干、保持 4 块）与第 47 关（(0,3)、变色龙 Custom "chameleon" 0、保持 2 只）
+-- 写了 lvlDrops；前 45 关与每日挑战开局没有掉落口；视图模型 bvDrops 给出第 46 关的掉落口格；GameState 的 Show 不打印这个内置元素。
 cd_drop_levels_are_46_and_47 :: Assertion
 cd_drop_levels_are_46_and_47 = do
   -- 第 46 关掉饼干；第 47 关（新玩法 7）复用掉落口掉变色龙（按 Custom 名字算同种，见 Spec.Chameleon 的 ch_drop_port_counts_any_color）

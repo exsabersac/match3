@@ -29,6 +29,7 @@ tests =
   , testCase "grid_ui_geometry_matches_legacy_layout" grid_ui_geometry_matches_legacy_layout
   , testCase "grid_ui_click_drag_highlight" grid_ui_click_drag_highlight
   , testCase "frontends_read_view_model" frontends_read_view_model
+  , testCase "outcome_lose_hint_no_internal_names" outcome_lose_hint_no_internal_names
   ]
 
 --------------------------------------------------------------------------------
@@ -69,23 +70,27 @@ legacyTitle gs =
       combo = gsCombo gs
       comboBits = if combo > 1 then "  combo x" ++ show combo else ""
       prog = gsProgress gs
+      -- 目标段：合 main 9f5504e 后换成中文标签（原为 score= / collect RED= / multi / countTag= / goal=，数字不变）
+      lbl = goalLabel (goalInfo (gsGoal gs) prog)
       goalBits = case goalView (gsGoal gs) of
-        ViewScore t -> "score=" ++ show prog ++ "/" ++ show t
-        ViewCollect col n -> "collect " ++ colorTag col ++ "=" ++ show prog ++ "/" ++ show n
-        ViewCollectMulti _ -> "multi " ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
-        ViewCount k n -> countTag k ++ "=" ++ show prog ++ "/" ++ show n
-        ViewOther _ -> "goal=" ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
+        ViewScore t -> lbl ++ "=" ++ show prog ++ "/" ++ show t
+        ViewCollect _ n -> lbl ++ "=" ++ show prog ++ "/" ++ show n
+        ViewCollectMulti _ -> lbl ++ "=" ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
+        ViewCount _ n -> lbl ++ "=" ++ show prog ++ "/" ++ show n
+        ViewOther _ -> lbl ++ "=" ++ show prog ++ "/" ++ show (goalTarget (gsGoal gs))
   in "L" ++ show (gsLevel gs + 1) ++ " " ++ levelName ++ "  " ++ goalBits ++ "  moves=" ++ show (gsMoves gs)
        ++ comboBits ++ "  Hm=" ++ show (gsHammers gs) ++ " Sw=" ++ show (gsFreeSwaps gs)
        ++ " Cr=" ++ show (gsCrossClears gs) ++ status
 
 legacyCollect :: GameState -> String
 legacyCollect gs' = case goalView (gsGoal gs') of
-  ViewCollect col n -> bracket (colorTag col) n
-  ViewCollectMulti _ -> bracket "multi" (goalTarget (gsGoal gs'))
-  ViewCount k n -> bracket (countTag k) n
+  ViewCollect _ n -> bracket lbl n
+  ViewCollectMulti _ -> bracket lbl (goalTarget (gsGoal gs'))
+  ViewCount _ n -> bracket lbl n
   _ -> ""
   where
+    -- 合 main 9f5504e 后标签换成中文（原为 colorTag / "multi" / countTag）
+    lbl = goalLabel (goalInfo (gsGoal gs') (gsProgress gs'))
     bracket tag n = " [" ++ tag ++ " " ++ show (gsProgress gs') ++ "/" ++ show n ++ "]"
 
 -- 几何版结局色条的分支（颜色换成标签）。
@@ -411,4 +416,25 @@ frontends_read_view_model = do
   assertEqual "level 43 goal label" "毛球" (goalLabel (gvGoal (gameView (levelGame 42 1))))
   assertEqual "level 45 goal label" "雪怪" (goalLabel (gvGoal (gameView (levelGame 44 1))))
   assertEqual "level 46 goal label" "饼干" (goalLabel (gvGoal (gameView (levelGame 45 1))))
+  assertEqual "level 47 goal label" "变色龙" (goalLabel (gvGoal (gameView (levelGame 46 1))))
   assertEqual "unregistered named goal falls back to its name" "x_elem" (goalLabel (goalInfo (goalCount (CountNamed (ElementName "x_elem")) 3) 0))
+
+-- | 失败提示（Match3.Game.Outcome.loseHint，视图字段 giLoseHint）与桌面窗口标题的目标段（goalLine）、提示后缀（goalBracket）
+-- 只用中文标签：全部关卡与每日挑战都不含 [a-z_]（不露出 fuzzball / chameleon 这类元素内部名，也不再有 score / stone 等英文标签）；
+-- 标签与 goalLabel 同源（Match3.GoalLabel）。
+outcome_lose_hint_no_internal_names :: Assertion
+outcome_lose_hint_no_internal_names = do
+  let rawIdent = any (\ch -> (ch >= 'a' && ch <= 'z') || ch == '_')
+      levelGoals = [(li + 1, lvlGoal l) | (li, l) <- zip [0 :: Int ..] allLevels]
+      dailyGoals = [(m * 100 + d, cfgGoal (dailyConfig 2026 m d)) | m <- [1 .. 12], d <- [1 .. 28]]
+      goals = levelGoals ++ dailyGoals
+  assertEqual "lose hints" [] [(i, loseHint g) | (i, g) <- goals, rawIdent (loseHint g)]
+  assertEqual "view lose hints" [] [(i, giLoseHint (goalInfo g 0)) | (i, g) <- goals, rawIdent (giLoseHint (goalInfo g 0))]
+  assertEqual "title goal segments" [] [(i, goalLine (goalInfo g 0)) | (i, g) <- goals, rawIdent (goalLine (goalInfo g 0))]
+  assertEqual "bracket suffixes" [] [(i, goalBracket (goalInfo g 0)) | (i, g) <- goals, rawIdent (goalBracket (goalInfo g 0))]
+  assertEqual "level 47 lose hint" "消除变色龙，目标 30 个" (loseHint (gsGoal (levelGame 46 1)))
+  assertEqual "level 43 lose hint" "消除毛球，目标 14 个" (loseHint (gsGoal (levelGame 42 1)))
+  assertEqual "level 45 lose hint" "用身边的消除和特效打雪怪，目标 40 点血" (loseHint (gsGoal (levelGame 44 1)))
+  assertEqual "level 47 title segment" "变色龙=6/30" (goalLine (goalInfo (gsGoal (levelGame 46 1)) 6))
+  outcome <- readCode "src/Match3/Game/Outcome.hs"
+  assertBool "loseHint reads the shared label table" ("countLabel" `mentionsIdent` outcome)

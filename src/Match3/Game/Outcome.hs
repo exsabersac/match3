@@ -16,6 +16,8 @@ module Match3.Game.Outcome
   ) where
 
 import Match3.Counts (CounterKey(..))
+import Match3.Element.Builtin (snowBossName)
+import Match3.GoalLabel (countLabel)
 import Match3.Levels.Campaign (levelCount)
 import Match3.Types
 import Match3.Game.State
@@ -66,7 +68,8 @@ mapClickJump curLevel reached clicked
   | clicked == curLevel = Nothing
   | otherwise = Just clicked
 
--- | Short tip shown after a Lost outcome (失败提示).
+-- | Short tip shown after a Lost outcome (失败提示)。按元素名计数的目标用中文标签（Match3.GoalLabel.countLabel），
+-- 不再露出元素内部名（outcome_lose_hint_no_internal_names 逐关核对）。
 loseHint :: LevelGoal -> String
 loseHint g = case goalView g of
   ViewScore t -> "再冲冲分数吧，目标 " ++ show t
@@ -82,7 +85,9 @@ loseHint g = case goalView g of
     CountSafes -> "邻消打开保险箱掉出饼干，目标 " ++ show n ++ " 个"
     CountUfo -> "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"
     CountCarpets -> "在地毯格上消除宝石以铺地毯，目标 " ++ show n ++ " 格"
-    CountNamed name -> "消除目标元素 " ++ unElementName name ++ "，目标 " ++ show n ++ " 个"
+    CountNamed name
+      | name == snowBossName -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血"
+      | otherwise -> "消除" ++ countLabel k ++ "，目标 " ++ show n ++ " 个"
     _ -> generic
   ViewOther _ -> generic
   where

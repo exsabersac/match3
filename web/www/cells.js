@@ -43,6 +43,7 @@ export function cellRGB(cell) {
 
 // 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
 export function primarySprite(cell) {
+  if (cell.t === "custom" && cell.name === "snow_boss" && !forceGeneric.has("snow_boss")) return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同桌面 customTable）
   switch (cell.t) {
     case "G": return cell.k === "R" ? "rainbow" : gemSprite(cell.c);
     case "stone": return "stone_3";
@@ -127,9 +128,49 @@ const CELL_ART = {
     }
     // 新玩法 3 毛球：贴图 fuzzball，一直轻微浮动（它每步会跳），同桌面 UI.Cell.Art.artFuzzball（sprBob "fuzzball"）；不画状态角标
     else if (c.name === "fuzzball") art.draw(ctx, "fuzzball", x, y + bobY(p), CELL, CELL);
-    else { art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
+    else { noteGenericMulti(c); art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
   },
 };
+
+// 按 Custom 名字分派的专门画法（同桌面 UI.CellTable.customTable；查不到的名字走 CELL_ART.custom）。
+// 新玩法 5 雪怪 Boss（Custom "snow_boss"，占 2×2）：同桌面 UI.Cell.Art.artSnowBoss——每格画整只雪怪的四分之一
+// snow_boss_<象限>（血量 ≤ 满血一半换 snow_boss_hurt_<象限> 受伤表情）；右下格底部画召唤进度小点（每 3 次交换召唤一块雪块，
+// 点亮已走的次数）。象限 q / 受伤 hurt / 计数 turn / 周期 every 由 Api 按 Match3.View.bossPart 解码给出，这里不拆 v。
+// 四块拼成一只：画布缩放时双线性采样会从图集里贴图外的透明缝取色，格子边又落在小数像素上，四块之间会露出一条细缝（十字线）。
+// 这里在朝向另外三块的两条内边上把源矩形各收 1 个源像素，并把目标矩形对齐到后备缓冲的整像素（相邻格算出的边界相同）；
+// 桌面按 1:1 画，没有这个问题。
+function drawSnowBoss(ctx, art, pulse, x, y, c) {
+  const s = art.S[`${c.hurt ? "snow_boss_hurt_" : "snow_boss_"}${c.q}`];
+  if (!s) return;
+  const left = c.q % 2 === 0, top = c.q < 2;
+  const src = [s[0] + (left ? 0 : 1), s[1] + (top ? 0 : 1), s[2] - 1, s[3] - 1];
+  const m = ctx.getTransform ? ctx.getTransform() : null;
+  if (m && m.b === 0 && m.c === 0) {
+    const X0 = Math.round(m.a * x + m.e), Y0 = Math.round(m.d * y + m.f);
+    const X1 = Math.round(m.a * (x + CELL) + m.e), Y1 = Math.round(m.d * (y + CELL) + m.f);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(art.img, ...src, X0, Y0, X1 - X0, Y1 - Y0);
+    ctx.restore();
+  } else ctx.drawImage(art.img, ...src, x, y, CELL, CELL);
+  if (c.q !== 3) return;
+  for (let i = 0; i < c.every; i++) {
+    ctx.fillStyle = i < c.turn ? "rgb(120,210,255)" : "rgba(40,60,110,0.784)";
+    ctx.fillRect(x + CELL - 12 - (c.every - 1 - i) * 9, y + CELL - 11, 6, 6);
+  }
+}
+const CUSTOM_ART = { snow_boss: drawSnowBoss };
+
+// 多格元素护栏：占多格的 Custom 元素（格子 JSON 带 q = 本格在整体里的编号，如雪怪 Boss 的象限）不能走通用的「贴图名 = 元素名
+// + 层数角标」画法——那样每格都画一只缩小的整只贴图，v 是打包值时角标还会夹成 9（第 45 关网页版接入前就是这样）；
+// 因为元素名贴图本身在图集里，普通降级护栏查不出来。走到通用画法时按「元素名#多格通用画法」计进 fallbacks，e2e 逐关要求为空。
+// forceGeneric：e2e 的反证用（在页面里 import 本模块后临时加入元素名，强制走旧的通用画法，护栏必须报错）。
+export const forceGeneric = new Set();
+const isMultiCell = (c) => c.t === "custom" && c.q !== undefined;
+function noteGenericMulti(c) {
+  if (!isMultiCell(c)) return;
+  const k = `${c.name}#多格通用画法`;
+  fallbacks[k] = (fallbacks[k] || 0) + 1;
+}
 
 // 回归护栏：走几何降级（drawCellPrim，以及缩放画法 drawCellScaled 的色块分支）的次数，按元素名计
 // （custom 取 name，如 "magic_stone"；其余取 t）。贴图在开局前就加载好，正常游戏里它应当一直为空；
@@ -153,7 +194,7 @@ function drawCellPrim(ctx, x, y, cell) {
 // 单格：按元素查表画贴图；闪白统一叠一层柔光（UI.BoardArt.drawCellArt）
 export function drawCell(ctx, art, pulse, x, y, cell, flashing = false) {
   if (!cell) return;
-  const f = CELL_ART[cell.t];
+  const f = (cell.t === "custom" && !forceGeneric.has(cell.name) && CUSTOM_ART[cell.name]) || CELL_ART[cell.t];
   if (!f || !art.has(primarySprite(cell))) drawCellPrim(ctx, x, y, cell);
   else f(ctx, art, pulse, x, y, cell);
   if (flashing) art.add(ctx, "spark", x - 10, y - 10, CELL + 20, CELL + 20, [255, 255, 230], 210);
@@ -164,6 +205,7 @@ export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
   if (!cell || s <= 0.03 || a <= 0) return;
   const sz = Math.max(1, Math.round(CELL * s)), x = cx - sz / 2, y = cy - sz / 2, name = primarySprite(cell);
   if (art.has(name)) {
+    if (cell.t === "custom" && name === cell.name) noteGenericMulti(cell);   // 缩放画法也按元素名取了整只贴图
     art.mod(ctx, name, x, y, sz, sz, null, a);
     const mark = cell.t === "G" && { H: "line_h", V: "line_v", B: "bomb_mark" }[cell.k];
     if (mark) art.mod(ctx, mark, x, y, sz, sz, null, a);

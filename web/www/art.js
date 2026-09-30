@@ -91,18 +91,18 @@ export class Art {
     return true;
   }
 
-  // 九宫格：源图四角各取 1/4 边长，目标角半径 c，中间拉伸（同 Art.drawPanelMod）
-  panel(ctx, name, x, y, w, h, c) {
+  // 九宫格：源图四角各取 1/4 边长，目标角半径 c，中间拉伸（同 Art.drawPanelMod）；rgb 给出时先着色（同 drawPanelTint）
+  panel(ctx, name, x, y, w, h, c, rgb = null) {
     const s = this.S[name];
     if (!s) return false;
-    const [sx, sy, sw, sh] = s, k = Math.floor(sw / 4);
+    const [img, sx, sy, sw, sh] = this.source(name, rgb), k = Math.floor(sw / 4);
     const cc = Math.max(1, Math.min(c, Math.floor(w / 2), Math.floor(h / 2)));
     const SX = [sx, sx + k, sx + sw - k], SW = [k, sw - 2 * k, k];
     const SY = [sy, sy + k, sy + sh - k], SH = [k, sh - 2 * k, k];
     const DX = [x, x + cc, x + w - cc], DW = [cc, w - 2 * cc, cc];
     const DY = [y, y + cc, y + h - cc], DH = [cc, h - 2 * cc, cc];
     for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++)
-      if (DW[i] > 0 && DH[j] > 0) ctx.drawImage(this.img, SX[i], SY[j], SW[i], SH[j], DX[i], DY[j], DW[i], DH[j]);
+      if (DW[i] > 0 && DH[j] > 0) ctx.drawImage(img, SX[i], SY[j], SW[i], SH[j], DX[i], DY[j], DW[i], DH[j]);
     return true;
   }
 }

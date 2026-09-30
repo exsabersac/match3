@@ -125,6 +125,8 @@ encodeState h =
     , ("goal", encodeGoal goal)
     , ("progress", int (giProgress goal))
     , ("target", int (giTarget goal))
+      -- 雪怪 Boss 血条（新玩法 5，视图模型 gvBoss，与桌面 HUD 同一份读数）：{hp: 剩余, max: 满血}；目标不是「击败 Boss」时为 null
+    , ("boss", maybe "null" encodeBoss (gvBoss gv))
     , ("over", maybe "null" encodeOutcome (gvOver gv))
     , ("loseHint", str (giLoseHint goal))
     , ("combo", int (gvCombo gv))
@@ -152,6 +154,10 @@ encodeState h =
 encodeRuleBadge :: RuleBadge -> String
 encodeRuleBadge rb =
   obj [("name", str (rbRule rb)), ("text", str (rbText rb)), ("icons", arr (map str (rbIcons rb)))]
+
+-- | Boss 血条：{hp, max}（Match3.View.BossView）。
+encodeBoss :: BossView -> String
+encodeBoss bv = obj [("hp", int (bvHp bv)), ("max", int (bvMax bv))]
 
 encodeOutcome :: Outcome -> String
 encodeOutcome o = case o of
@@ -248,6 +254,8 @@ encodeEvent e =
 --         覆盖物名：grass / vine / choco / fog / chain / freeze / curtain / steam（无层数的为 0）
 --   其他  {"t":<元素>, ...}：stone/chest/honey/cake/safe {"n"}；balloon/bottle {"c"}；cookie / hat / surprise / spirit；
 --         maker {"c","n"}；snail {"dr","dc"}；flip {"c":正面,"b":背面}；countdown {"c","n"}；custom {"name","v"}
+--         雪怪 Boss（custom "snow_boss"）另带 Match3.View.bossPart 的解码：{"q":象限 0–3,"hurt":血量是否过半,"turn":召唤计数,"every":召唤周期}，
+--         前端不自己拆 v
 --   每格另带 "s"（核心 show 文本，调试 / 未知元素占位用）。渲染层按 t 查表（www/cells.js，对应桌面 UI.CellTable）。
 
 encodeBoard :: Board -> String
@@ -255,8 +263,11 @@ encodeBoard b = arr [arr (map encodeCell row) | row <- boardRows b]
 
 -- | 单格：Match3.View.cellFace 的类型标签与字段，外加 "s"。
 encodeCell :: Cell -> String
-encodeCell cell = obj (("t", str tag) : map field fields ++ [("s", str (show cell))])
+encodeCell cell = obj (("t", str tag) : map field fields ++ boss ++ [("s", str (show cell))])
   where
+    boss = case bossPart cell of
+      Just bp -> [("q", int (bpQuad bp)), ("hurt", bool (bpHurt bp)), ("turn", int (bpTurn bp)), ("every", int (bpEvery bp))]
+      Nothing -> []
     (tag, fields) = cellFace cell
     field (k, v) = (k, case v of
       FieldInt i -> int i

@@ -196,7 +196,8 @@ function swapped(board, a, b) {
 function hudInfo() {
   const s = pending ? pending.state : state;
   return { level: s.level, name: s.name, rules: s.rules || [], score: shownScore, moves: s.moves, goalText: goalText(s),
-    progress: anim ? state.progress : s.progress, target: s.target, msg, undo: s.undo, busy };
+    progress: anim ? state.progress : s.progress, target: s.target, msg, undo: s.undo, busy,
+    boss: anim ? state.boss : s.boss, pulse };   // Boss 血条与目标条一样：播放期间显示本步之前的读数
 }
 function drawBackground(W, H) {
   ctx.fillStyle = "#1c1630"; ctx.fillRect(0, 0, W, H);

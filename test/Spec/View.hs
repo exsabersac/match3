@@ -438,6 +438,10 @@ outcome_lose_hint_no_internal_names = do
   assertEqual "level 47 lose hint" "消除变色龙，目标 30 个" (loseHint (gsGoal (levelGame 46 1)))
   assertEqual "level 43 lose hint" "消除毛球，目标 14 个" (loseHint (gsGoal (levelGame 42 1)))
   assertEqual "level 45 lose hint" "用身边的消除和特效打雪怪，目标 40 点血" (loseHint (gsGoal (levelGame 44 1)))
+  -- 碎石目标（测试跑手报告第 8 / 41 / 42 / 44 关写成「砸箱子」）：与 goalLabel 的「碎石」一致
+  assertEqual "level 8 lose hint" "用邻消或特效砸开碎石，目标 8 个" (loseHint (gsGoal (levelGame 7 1)))
+  assertEqual "level 48 lose hint" "用邻消或特效砸开碎石，目标 8 个" (loseHint (gsGoal (levelGame 47 1)))
+  assertEqual "stone lose hints use the stone label" [] [i | (i, g) <- goals, ViewCount CountStones _ <- [goalView g], not (goalLabel (goalInfo g 0) `isInfixOf` loseHint g) || "箱子" `isInfixOf` loseHint g]
   assertEqual "level 47 title segment" "变色龙=6/30" (goalLine (goalInfo (gsGoal (levelGame 46 1)) 6))
   outcome <- readCode "src/Match3/Game/Outcome.hs"
   assertBool "loseHint reads the shared label table" ("countLabel" `mentionsIdent` outcome)

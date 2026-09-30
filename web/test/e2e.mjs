@@ -1,6 +1,7 @@
 // 无头浏览器端到端测试：起静态服务器 → 打开页面 → 用真实指针（点选 / 拖划 / 按钮）操作 → 关键时刻逐帧截图 + 报告。
 // 用法（先 ./build.sh）：
 //   NODE_PATH=~/.ghc-wasm/nodejs/lib/node_modules node web/test/e2e.mjs [截图目录]
+//   [E2E_PORT=8765]：serve.py 监听 127.0.0.1 的端口（默认 8765）；端口被占用时直接报错退出，换一个再跑
 // 需要 playwright-core（ghc-wasm-meta 自带）和本机 Chrome/Chromium（CHROME=路径 可覆盖）。
 //
 // 关键时刻截图用页面的调试断点：m3debug.breakWhen(info) 为真时帧循环冻结（画面停在那一帧），截图后解冻继续。
@@ -9,11 +10,13 @@
 //   2. 特殊块爆炸（直线消除）的「消失」帧；步末效果（皮带 / 蜗牛 / 蔓延 / 倒计时）中间帧；
 //   3. 第 39 关果冻、第 40 关气泡：静止 + 连锁中；
 //   4. 分辨率矩阵：7 种视口截图，并检查布局完整落在视口 / 安全区内、格子与按钮的 CSS 尺寸；
+//   4b. 规则开关角标：第 41 关 state.rules 与 HUD 角标（竖屏 / 横屏手机 / 桌面，截图 rules-badge-*.png），第 1 关没有角标；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import fs from "node:fs";
+import net from "node:net";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
@@ -23,11 +26,27 @@ const dist = path.resolve(here, "../dist");
 const shots = path.resolve(process.argv[2] || "/workspace/match3-web-shots");
 fs.rmSync(shots, { recursive: true, force: true });
 fs.mkdirSync(shots, { recursive: true });
-const PORT = 8765;
+// 服务器端口：环境变量 E2E_PORT（默认 8765；make e2e / make check 传入）。同机并行跑多份 e2e 时各用各的端口
+const PORT = Number(process.env.E2E_PORT || 8765);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) { console.error(`E2E_PORT 无效：${process.env.E2E_PORT}（要 1–65535 的整数）`); process.exit(2); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 端口已被别的进程占用时直接失败（否则会连到别人的服务器、测到别的 dist）
+const portFree = await new Promise((r) => { const t = net.createServer(); t.once("error", () => r(false)); t.listen(PORT, "127.0.0.1", () => t.close(() => r(true))); });
+if (!portFree) { console.error(`端口 ${PORT} 已被占用：换一个再跑，例如 E2E_PORT=8799 make e2e`); process.exit(2); }
 // 用仓库自带的 web/serve.py（与本地试玩 / 部署同一个服务器，顺带验证它的 Content-Type）
 const server = spawn("python3", [path.resolve(here, "../serve.py"), "--dir", dist, "--port", String(PORT), "--bind", "127.0.0.1", "--quiet"], { stdio: "ignore" });
-await sleep(800);
+let serverExit = null;
+server.on("exit", (code) => { serverExit = code; });
+// 等服务器就绪（最多 10 秒），并确认它给的是本次的 web/dist
+{
+  const want = fs.readFileSync(path.join(dist, "index.html"), "utf8");
+  let ok = false;
+  for (let i = 0; i < 100 && !ok && serverExit === null; i++) {
+    await sleep(100);
+    try { const r = await fetch(`http://127.0.0.1:${PORT}/index.html`); ok = r.status === 200 && (await r.text()) === want; } catch { /* 还没起来 */ }
+  }
+  if (!ok) { console.error(`serve.py 没有在端口 ${PORT} 上提供 ${dist}（退出码 ${serverExit}）`); server.kill(); process.exit(2); }
+}
 const serverTypes = {};
 for (const [f, want] of [["index.html", "text/html"], ["match3-web.wasm", "application/wasm"], ["atlas.webp", "image/webp"], ["atlas.json", "application/json"], ["main.js", "text/javascript"]]) {
   const r = await fetch(`http://127.0.0.1:${PORT}/${f}`);
@@ -200,6 +219,46 @@ try {
     }
     await P.shot(`20-分辨率-${vp.name}`);
     report.layouts.push({ name: vp.name, mode: L.mode, cellCss: +L.cellCss.toFixed(1), minButtonCss: +L.minButtonCss.toFixed(1), cellPxPhysical: +(L.cellCss * L.dpr).toFixed(1) });
+    await P.ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3b. 规则开关角标：第 41 关（下标 40，打开 bomb_shapes）的 state.rules 与 HUD 角标；竖屏 / 横屏手机 / 桌面三种布局
+  //     角标都画出来、文字完整、落在关卡面板里，不压「第 N 关」标签、不压关名、彼此不重叠；第 1 关没有角标
+  {
+    const wantRules = [{ name: "bomb_shapes", text: "L/T 形出炸弹", icons: ["bomb_glow", "bomb_mark"] }];
+    const inside = (a, b) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5;
+    const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    report.ruleBadges = [];
+    for (const vp of [
+      { name: "portrait-390x844", w: 390, h: 844, dpr: 3, touch: true, mobile: true },
+      { name: "landscape-phone-844x390", w: 844, h: 390, dpr: 3, touch: true, mobile: true },
+      { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 },
+    ]) {
+      const P = await openPage(vp, 40, 20260929);
+      await sleep(150);
+      const s = await P.st();
+      check(`第 41 关 state.rules：${vp.name}`, JSON.stringify(s.rules) === JSON.stringify(wantRules), s.rules);
+      const hud = await P.page.evaluate(() => window.m3debug.hud);
+      const b = hud?.badges || [];
+      const labelsOk = b.length === wantRules.length && b.every((x, i) => x.name === wantRules[i].name && x.label === wantRules[i].text);
+      check(`第 41 关 HUD 画出完整角标：${vp.name}`, labelsOk, b);
+      const layoutOk = b.length > 0 && b.every((x) => inside(x, hud.chip) && !overlap(x, hud.label) && x.y + x.h <= hud.name.y + 0.5)
+        && b.every((x, i) => b.every((y, j) => i === j || !overlap(x, y)));
+      check(`角标在关卡面板内、不压标签 / 关名 / 彼此：${vp.name}`, layoutOk, { chip: hud?.chip, label: hud?.label, name: hud?.name, badges: b });
+      const mode = await P.page.evaluate(() => window.m3debug.layout.mode);
+      report.ruleBadges.push({ name: vp.name, mode, badges: b.map((x) => ({ x: +x.x.toFixed(1), y: +x.y.toFixed(1), w: +x.w.toFixed(1), h: x.h, label: x.label })) });
+      await P.shot(`rules-badge-${vp.name}`);
+      // 走一步：新状态里规则仍在（每步的 state 都带 rules）
+      await P.swap(s.hint[0], s.hint[1], !!vp.touch); await sleep(30); await P.idle();
+      const s2 = await P.st();
+      check(`走一步后 state.rules 不变：${vp.name}`, s2.moves === s.moves - 1 && JSON.stringify(s2.rules) === JSON.stringify(wantRules));
+      await P.ctx.close();
+    }
+    const P = await openPage({ w: 390, h: 844, dpr: 3 }, 0, 20260929);
+    await sleep(100);
+    const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
+    check("第 1 关没有规则角标", Array.isArray(s.rules) && s.rules.length === 0 && hud && hud.badges.length === 0, { rules: s.rules, badges: hud?.badges });
     await P.ctx.close();
   }
 

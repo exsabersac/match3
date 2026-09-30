@@ -8,3 +8,8 @@ constraints: random ==1.2.1.1, splitmix ==0.1.0.5
 -- splitmix-0.1.0.5 在 Hackage 上的 base 上界是 <4.21（GHC 9.14 带 base-4.22），
 -- 算法本身不依赖新 base 特性，这里只放宽这一个上界。
 allow-newer: splitmix:base
+
+-- 警告即错误：只对本包 match3-web（web/hs 与它直接编译的 ../src、../app/pure 模块）生效，
+-- 依赖包（random、splitmix 等）的警告不受影响。本包的 ghc-options 已开 -Wall，因此自家代码必须 0 警告才能构建通过。
+package match3-web
+  ghc-options: -Werror

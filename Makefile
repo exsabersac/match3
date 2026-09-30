@@ -9,6 +9,8 @@
 #   GHC_WASM_PREFIX    ghc-wasm-meta 安装目录；FLAVOUR 工具链版本系列
 #   NODE / CHROME      一致性测试与 e2e 用的 node、Chrome
 #   SHOTS              e2e 截图目录；STEPS / CASES 一致性测试的步数 / 「关卡:种子」列表
+#   E2E_PORT           e2e 临时起的 serve.py 端口（默认 8765，只监听 127.0.0.1；与别的任务同机并行时改开，
+#                      例如 `make check E2E_PORT=8799`；也可直接 export E2E_PORT）
 #   APK_OUT            apk / apk-release / aab 产物复制到的路径（默认 web/android-app/out/）
 #   ANDROID_HOME       Android SDK 目录（默认 ~/android-sdk）；ANDROID_SHOTS 安卓网页层检查的截图目录
 
@@ -28,13 +30,14 @@ TGZ             ?= $(WEB)/match3-web-dist.tgz
 NODE            ?= $(GHC_WASM_PREFIX)/nodejs/bin/node
 CHROME          ?= /usr/bin/google-chrome
 SHOTS           ?= /workspace/match3-web-shots
+E2E_PORT        ?= 8765
 STEPS           ?=
 CASES           ?=
 ANDROID_APP     := $(WEB)/android-app
 ANDROID_SHOTS   ?= /workspace/match3-android-shots
 BOOTSTRAP_URL   := https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh
 
-export GHC_WASM_PREFIX NODE CHROME PORT BIND CASES
+export GHC_WASM_PREFIX NODE CHROME PORT BIND CASES E2E_PORT
 
 # 没有 dist 时给出提示并失败（用于不自动构建的目标）
 NEED_DIST = @[ -f "$(WEB)/dist/match3-web.wasm" ] || { echo "没有 web/dist，先运行 make build" >&2; exit 1; }
@@ -52,7 +55,7 @@ help: ## 显示本帮助（默认目标）
 	@awk 'BEGIN { FS = ":[^#]*## " } /^##@ / { printf "\n%s\n", substr($$0, 5); next } /^[a-z][a-z0-9-]*:.*## / { printf "  %-16s %s\n", $$1, $$2 }' "$(ROOT)/Makefile"
 	@echo
 	@echo "变量：PORT=$(PORT) BIND=$(BIND) DEST=$(DEST)"
-	@echo "      GHC_WASM_PREFIX=$(GHC_WASM_PREFIX) FLAVOUR=$(FLAVOUR) SHOTS=$(SHOTS)"
+	@echo "      GHC_WASM_PREFIX=$(GHC_WASM_PREFIX) FLAVOUR=$(FLAVOUR) SHOTS=$(SHOTS) E2E_PORT=$(E2E_PORT)"
 
 ##@ 桌面版（Stack，SDL2）
 
@@ -94,10 +97,10 @@ anim-parity: ## 动画一致性：原生 ComboFx 与 wasm 逐帧 JSON 逐字节�
 	$(NEED_DIST)
 	"$(WEB)/test/parity.sh" anim $(STEPS)
 
-e2e: ## 无头 Chrome 端到端测试，截图与 report.json 写到 SHOTS
+e2e: ## 无头 Chrome 端到端测试，截图与 report.json 写到 SHOTS（服务器端口 E2E_PORT，默认 8765）
 	$(NEED_DIST)
 	@[ -x "$(CHROME)" ] || { echo "找不到 Chrome：$(CHROME)；设 CHROME=/path/to/chromium" >&2; exit 1; }
-	NODE_PATH="$(dir $(NODE))../lib/node_modules" "$(NODE)" "$(WEB)/test/e2e.mjs" "$(SHOTS)"
+	E2E_PORT="$(E2E_PORT)" NODE_PATH="$(dir $(NODE))../lib/node_modules" "$(NODE)" "$(WEB)/test/e2e.mjs" "$(SHOTS)"
 
 test: test-native parity anim-parity e2e ## 全部测试（stack test + 网页两组一致性 + e2e）
 	@echo "== 全部测试通过"

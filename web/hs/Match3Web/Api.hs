@@ -28,7 +28,7 @@ import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
 import Match3.Board.Grid (mboardRows)
 import Match3.Core
-import Match3.Element.Event (Event(..), EventKind(..), endEffectPairs, endItemDir)
+import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
 import Match3.Game.Trace (emptyTrace)
 import Match3.View
@@ -117,6 +117,9 @@ encodeState h =
   obj
     [ ("level", int (gvLevel gv))
     , ("name", str (gvRawName gv))
+      -- 本关打开的规则开关角标（视图模型 gvRules 查 Match3.View.ruleBadge，与桌面 HUD 同一张表）：
+      -- [{name, text, icons}]，前端 HUD 按列表逐个画，新规则登记进 ruleBadgeTable 就自动显示
+    , ("rules", arr (map encodeRuleBadge (ruleBadges gv)))
     , ("score", int (gvScore gv))
     , ("moves", int (gvMoves gv))
     , ("goal", encodeGoal goal)
@@ -142,6 +145,11 @@ encodeState h =
     gv = gameView (histNow h)
     goal = gvGoal gv
     bv = gvBoard gv
+
+-- | 规则开关角标：{name: 规则开关名, text: 角标文字, icons: [图标贴图名，从下往上叠画]}。
+encodeRuleBadge :: RuleBadge -> String
+encodeRuleBadge rb =
+  obj [("name", str (rbRule rb)), ("text", str (rbText rb)), ("icons", arr (map str (rbIcons rb)))]
 
 encodeOutcome :: Outcome -> String
 encodeOutcome o = case o of

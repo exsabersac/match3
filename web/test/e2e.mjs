@@ -12,6 +12,9 @@
 //   4. 分辨率矩阵：7 种视口截图，并检查布局完整落在视口 / 安全区内、格子与按钮的 CSS 尺寸；
 //   4b. 规则开关角标：第 41 关 state.rules 与 HUD 角标（竖屏 / 横屏手机 / 桌面，截图 rules-badge-*.png），第 1 关没有角标；
 //   4c. 贴图护栏：每一关开局 + 走 3 步后 m3debug.fallbacks（走几何降级的格子）为空；第 42 关魔法石 0–3 格充能截图；
+//       同时逐关检查 HUD 目标标签是中文显示名（state.goal.label，不含 [a-z_] 内部名）；
+//   4d. 第 43 关毛球：浮动两帧（按像素测上下偏移）、步末跳格（皮带段）中间帧、HUD「目标 毛球」竖屏 / 横屏；
+//   4e. 第 44 关彩虹组合：规则角标「彩虹组合变身」、彩虹 × 直线 / 炸弹的变身段（第一轮之前的蔓延段）中间帧；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -285,11 +288,19 @@ try {
   {
     const P = await openPage({ w: 390, h: 844, dpr: 1 }, 0, 7);
     const nLevels = await P.page.evaluate(() => window.m3debug.levels);
-    const bad = [];
+    const bad = [], badGoal = [];
+    report.fallbacksByLevel = [];
+    report.goalLabels = [];
     for (let li = 0; li < nLevels; li++) {
       await P.page.goto(`http://127.0.0.1:${PORT}/?level=${li}&seed=7`);
       await P.page.waitForFunction(() => window.m3debug && window.m3debug.state, null, { timeout: 30000 });
       await sleep(60);
+      // HUD 目标标签：画出来的文字 = 「目标 」+ 核心给的中文名 goal.label，且不含内部名（[a-z_] 标识符，如 fuzzball / GoalNamed）
+      const s0 = await P.st(), hudGoal = await P.page.evaluate(() => window.m3debug.hud?.goal ?? null);
+      report.goalLabels.push({ level: li + 1, kind: s0.goal.kind, label: s0.goal.label, hud: hudGoal });
+      if (typeof s0.goal.label !== "string" || /[a-z_]/.test(s0.goal.label) || hudGoal !== `目标 ${s0.goal.label}`) {
+        badGoal.push({ level: li + 1, goal: s0.goal, hud: hudGoal });
+      }
       for (let k = 0; k < 3; k++) {
         const s = await P.st();
         if (s.over || !s.hint) break;
@@ -298,10 +309,16 @@ try {
       }
       await sleep(60);
       const fb = await P.page.evaluate(() => window.m3debug.fallbacks);
+      report.fallbacksByLevel.push({ level: li + 1, fallbacks: fb });
       if (Object.keys(fb).length) bad.push({ level: li + 1, fallbacks: fb });
     }
     report.fallbackLevels = nLevels;
-    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 42 && bad.length === 0, bad);
+    check(`全部 ${nLevels} 关开局 + 走 3 步：没有格子走几何降级（m3debug.fallbacks 为空）`, nLevels >= 44 && bad.length === 0, bad);
+    for (const lv of [43, 44]) {
+      const row = report.fallbacksByLevel.find((x) => x.level === lv);
+      check(`第 ${lv} 关 m3debug.fallbacks 为空`, !!row && Object.keys(row.fallbacks).length === 0, row);
+    }
+    check(`全部 ${nLevels} 关 HUD 目标标签是中文显示名（无 [a-z_] 内部名，= 「目标 」+ state.goal.label）`, nLevels >= 44 && badGoal.length === 0, badGoal);
     await P.ctx.close();
   }
 
@@ -341,6 +358,151 @@ try {
     check("第 42 关魔法石 0 / 1 / 2 / 3 格充能都截到（同盘出现四种）", all && want.every((v) => got.has(v)), [...got]);
     check("魔法石画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0);
     await P.ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3e. 第 43 关「毛球」（下标 42，新玩法 3）
+  //     (1) 浮动：同桌面 sprBob（round(2·sin(pulse/9)) 设计像素）。静止时冻结在偏移 -2 与 +2 的两帧，截毛球所在格，
+  //         并在页面里对两帧的格内像素做纵向平移搜索：最佳平移应 ≈ 4 设计像素 × u × dpr；
+  //     (2) 步末跳格：核心记为 EvBelt "fuzzball"，按皮带段平移播放，冻结在段中间截图；
+  //     (3) HUD 目标标签「目标 毛球」：竖屏 390×844 / 横屏 1280×800
+  {
+    const fuzzAt = (board) => { for (let r = 0; r < board.length; r++) for (let c = 0; c < board[r].length; c++) if (board[r][c].t === "custom" && board[r][c].name === "fuzzball") return [r, c]; return null; };
+    const P = await openPage(desk, 42, 1);
+    await sleep(150);
+    const s = await P.st(), fz = fuzzAt(s.board);
+    const grab = (slot) => P.page.evaluate(([r, c, slot]) => {
+      // 取格子内部（±24 设计单位，避开棋盘格边缘）的后备缓冲像素
+      const cv = document.getElementById("board"), d = window.m3debug.dpr, u = window.m3debug.layout.u;
+      const [x, y] = window.m3debug.cellCenter(r, c), half = Math.round(24 * u * d);
+      window[slot] = cv.getContext("2d").getImageData(Math.round(x * d) - half, Math.round(y * d) - half, 2 * half, 2 * half);
+      return window.m3debug.anim.pulse;
+    }, [fz[0], fz[1], slot]);
+    // 截若干格（取外接框，四周各留 12 设计单位）
+    const cropShot = async (name, ...cells) => {
+      const cs = await Promise.all(cells.map((p) => P.center(p))), m = await P.page.evaluate(() => 40 * window.m3debug.layout.u);
+      const xs = cs.map((c) => c[0]), ys = cs.map((c) => c[1]), x0 = Math.min(...xs) - m, y0 = Math.min(...ys) - m;
+      const f = `${shots}/${name}.png`;
+      await P.page.screenshot({ path: f, clip: { x: x0, y: y0, width: Math.max(...xs) + m - x0, height: Math.max(...ys) + m - y0 } });
+      report.shots.push(f);
+    };
+    const floats = [];
+    for (const [bob, slot, name] of [[-2, "__fzA", "fuzzball-float-a-up"], [2, "__fzB", "fuzzball-float-b-down"]]) {
+      await P.page.evaluate((src) => { window.m3debug.breakWhen = new Function("i", src); }, `return i.kind === null && Math.round(2 * Math.sin(i.pulse / 9)) === ${bob};`);
+      await P.page.waitForFunction(() => window.m3debug.frozen, null, { timeout: 10000 });
+      await sleep(80);   // 等冻结帧画出来
+      const pulse = await grab(slot);
+      await cropShot(name, fz);
+      floats.push({ bob, pulse });
+      await P.resume();
+    }
+    const est = await P.page.evaluate(() => {
+      const A = window.__fzA, B = window.__fzB, w = A.width, h = A.height;
+      let best = 0, bestErr = Infinity, err0 = 0;
+      for (let dy = -40; dy <= 40; dy++) {
+        let err = 0, n = 0;
+        for (let y = Math.max(0, -dy); y < Math.min(h, h - dy); y++) for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4, j = ((y + dy) * w + x) * 4;
+          err += Math.abs(A.data[i] - B.data[j]) + Math.abs(A.data[i + 1] - B.data[j + 1]) + Math.abs(A.data[i + 2] - B.data[j + 2]); n++;
+        }
+        if (dy === 0) err0 = err / n;
+        if (err / n < bestErr) { bestErr = err / n; best = dy; }
+      }
+      return { best, bestErr: +bestErr.toFixed(2), err0: +err0.toFixed(2), expected: 4 * window.m3debug.layout.u * window.m3debug.dpr };
+    });
+    report.fuzzballFloat = { cell: fz, frames: floats, shiftPx: est };
+    check("第 43 关毛球浮动：两帧（偏移 -2 / +2 设计像素）的毛球纵向平移 ≈ 4 设计像素 × u × dpr", !!fz && Math.abs(est.best - est.expected) <= 2.5 && est.err0 > est.bestErr, report.fuzzballFloat);
+    // 步末跳格：冻结在皮带段中间（本关没有真正的传送带，皮带段就是毛球跳格）
+    let jumped = false;
+    for (let k = 0; k < 8 && !jumped; k++) {
+      const s1 = await P.st();
+      if (s1.over || !s1.hint) break;
+      await P.breakAt((i) => i.p === "end" && i.stage === "belt" && i.fr >= Math.floor(i.n / 2));
+      await P.swap(s1.hint[0], s1.hint[1], false);
+      await P.frozenOrIdle();
+      if (await P.isFrozen()) {
+        const jump = await P.page.evaluate(() => {
+          const tr = window.m3debug.pending.trace;
+          for (const e of tr.end) if (e.effect.type === "belt") for (const [o, d] of e.effect.pairs) { const c = e.before[o[0]][o[1]]; if (c.t === "custom" && c.name === "fuzzball") return { from: o, to: d }; }
+          return null;
+        });
+        const inf = await P.info();
+        if (jump) {
+          jumped = true;
+          await P.shot("fuzzball-jump-mid-l43-1280x800");
+          await cropShot("fuzzball-jump-mid-l43-crop", jump.from, jump.to);
+          report.fuzzballJump = { step: k, jump, frame: inf };
+        }
+      }
+      await P.clearBreak(); await P.resume(); await P.idle();
+    }
+    check("第 43 关毛球步末跳格：冻结在皮带段中间帧（trace.end 的 belt 项从毛球格出发）", jumped, report.fuzzballJump);
+    check("第 43 关（浮动 / 跳格画面）没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0);
+    await P.ctx.close();
+    // HUD 目标标签（竖屏 / 横屏）
+    report.goalLabelL43 = [];
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3, touch: true, mobile: true }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const Q = await openPage(vp, 42, 20260929);
+      await sleep(150);
+      const sq = await Q.st(), hud = await Q.page.evaluate(() => window.m3debug.hud);
+      report.goalLabelL43.push({ name: vp.name, label: sq.goal.label, hud: hud?.goal });
+      check(`第 43 关 HUD 目标标签「目标 毛球」：${vp.name}`, sq.goal.label === "毛球" && hud?.goal === "目标 毛球", { label: sq.goal.label, hud: hud?.goal });
+      await Q.shot(`goal-label-l43-${vp.name}`);
+      await Q.ctx.close();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3f. 第 44 关「魔力鸟」（下标 43，规则开关 rainbow_combos）
+  //     (1) state.rules 与 HUD 角标「彩虹组合变身」（通用 state.rules 角标，竖屏 / 横屏）；
+  //     (2) 彩虹 × 直线 / 彩虹 × 炸弹：核心在第一轮之前发一条蔓延步末（rainbow_line / rainbow_bomb），网页按蔓延段播放
+  //         （来源不相邻 → 从格子中心长出，同桌面 drawEndSpread），冻结在变身段中间截图
+  {
+    const want44 = [{ name: "rainbow_combos", text: "彩虹组合变身", icons: ["rainbow"] }];
+    const inside = (a, b) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5;
+    const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3, touch: true, mobile: true }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
+      const P = await openPage(vp, 43, 1);
+      await sleep(150);
+      const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud);
+      const b = hud?.badges || [];
+      check(`第 44 关 state.rules：${vp.name}`, JSON.stringify(s.rules) === JSON.stringify(want44), s.rules);
+      check(`第 44 关 HUD 角标「彩虹组合变身」完整、在关卡面板内、不压标签 / 关名：${vp.name}`,
+        b.length === 1 && b[0].name === "rainbow_combos" && b[0].label === "彩虹组合变身" && inside(b[0], hud.chip) && !overlap(b[0], hud.label) && b[0].y + b[0].h <= hud.name.y + 0.5, { badges: b, chip: hud?.chip });
+      await P.shot(`rules-badge-l44-${vp.name}`);
+      await P.ctx.close();
+    }
+    report.rainbowTransform = [];
+    for (const [kind, marks] of [["line", "HV"], ["bomb", "B"]]) {
+      const P = await openPage(desk, 43, 1);
+      await sleep(150);
+      const s = await P.st();
+      let pair = null;
+      for (let r = 0; r < s.board.length && !pair; r++) for (let c = 0; c < s.board[r].length && !pair; c++) for (const [qr, qc] of [[r, c + 1], [r + 1, c], [r, c - 1], [r - 1, c]]) {
+        const x = s.board[r][c], y = s.board[qr]?.[qc];
+        if (!pair && y && x.t === "G" && x.k === "R" && y.t === "G" && marks.includes(y.k)) pair = [[r, c], [qr, qc]];
+      }
+      let frozen = false, detail = { pair };
+      if (pair) {
+        await P.breakAt((i) => i.p === "end" && i.stage === "spread" && i.fr >= Math.floor(i.n / 2));
+        await P.swap(pair[0], pair[1], false);
+        await P.frozenOrIdle();
+        if (await P.isFrozen()) {
+          frozen = true;
+          const inf = await P.info();
+          const ends = await P.page.evaluate(() => window.m3debug.pending.trace.end.map((e) => ({ afterWaves: e.afterWaves, type: e.effect.type, kind: e.effect.kind, n: e.effect.pairs ? e.effect.pairs.length : 0 })));
+          detail = { pair, frame: inf, ends };
+          await P.shot(`rainbow-transform-${kind}-mid-l44-1280x800`);
+        }
+        await P.clearBreak(); await P.resume(); await P.idle();
+      }
+      const e0 = detail.ends?.[0];
+      report.rainbowTransform.push(detail);
+      check(`第 44 关彩虹 × ${kind === "line" ? "直线" : "炸弹"}：第一轮之前的变身段（rainbow_${kind}）冻结在中间帧`,
+        frozen && e0 && e0.type === "spread" && e0.kind === `rainbow_${kind}` && e0.afterWaves === 0 && detail.frame.w === 0 && detail.frame.k === 0, detail);
+      check(`第 44 关彩虹 × ${kind === "line" ? "直线" : "炸弹"}：播完没有走几何降级`, Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0);
+      await P.ctx.close();
+    }
   }
 
   // -------------------------------------------------------------------------

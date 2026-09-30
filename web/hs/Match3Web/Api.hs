@@ -167,6 +167,8 @@ encodeGoal gi =
   obj $
     [("kind", str (giKind gi)), ("text", str (giText gi)), ("target", int (giTarget gi))]
       ++ [("name", str (unElementName n)) | Just n <- [giName gi]]   -- 段 5：按元素名计数的目标（jelly / bubble）
+      -- 中文显示名（视图模型 Match3.View.goalLabel，唯一来源）：HUD「目标 …」直接画它，前端不再自带映射表
+      ++ [("label", str (goalLabel gi))]
 
 -- | 一步的逐轮回放：start → waves[0..] → end（步末效果，按 afterWaves 插在第 k 轮之后）→ final
 --   → shuffle（本步触发自动洗牌时的洗牌后盘面，否则 null）。

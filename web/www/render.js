@@ -1,5 +1,5 @@
 // 棋盘动画绘制（网页版）：对应桌面 app/UI/Cascade.hs（交换补间 / 逐轮 高亮→消失→下落→落定 / 轻落）、
-// app/UI/EndStage.hs（步末：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌）与 UI/Playback.hs 的粒子、浮字、震屏。
+// app/UI/EndStage.hs（步末：倒计时 / 皮带（含毛球跳格）/ 蔓延（含彩虹组合变身）/ 蜗牛 / 自动洗牌）与 UI/Playback.hs 的粒子、浮字、震屏。
 // 只画插值，不算规则：阶段、帧号、轮次由 wasm 里的 ComboFx 阶段机（m3AnimTick）给出，盘面快照来自 m3Swap。
 // 全部坐标为棋盘设计单位（格 56，见 cells.js）。
 import {
@@ -173,7 +173,8 @@ function drawEndStage(ctx, art, v, cas, s, t) {
       if (cell.t === "countdown") art.draw(ctx, `countdown_${clamp(1, 9, cell.n)}`, x - g, y - g, CELL + 2 * g, CELL + 2 * g);
     }
   } else if (s.kind === "belt") {
-    // 皮带移位：相邻格平滑滑过去；首尾相接的那一格在终点缩放淡入
+    // 皮带移位：相邻格平滑滑过去；首尾相接的那一格在终点缩放淡入。
+    // 第 43 关毛球的步末跳格也是这一段（核心记为 EvBelt "fuzzball"，pairs = 毛球与相邻宝石互换），同桌面 drawEndBelt
     const e = smoothT(t);
     drawCellsExcept(ctx, art, v, before, moves.map((m) => m[1]));
     clipBoard(ctx);
@@ -184,7 +185,10 @@ function drawEndStage(ctx, art, v, cas, s, t) {
     }
     ctx.restore();
   } else if (s.kind === "spread") {
-    // 蔓延：新格的覆盖层从来源格那一侧「长」过来；生长前沿带同色柔光
+    // 蔓延：新格的覆盖层从来源格那一侧「长」过来；生长前沿带同色柔光（桌面 UI.EndStage.drawEndSpread，逐分支对应）。
+    // 来源不相邻时从格子中心向外长（桌面 otherwise 分支）：第 44 关彩虹组合（规则开关 rainbow_combos）的变身步就走这里——
+    // 核心在第一轮之前发一条 {type:"spread", kind:"rainbow_line"|"rainbow_bomb"}，来源 = 彩虹格、目标 = 盘上同色普通宝石，
+    // 变身后的直线 / 炸弹从格子中心的小方块匀速长满整格（生长曲线与前沿光都不在表里 → 匀速、白光、不迸碎屑，同桌面缺省）。
     drawStatic(ctx, art, { ...v, busy: true }, before);
     for (const i of s.e) {
       const ef = cas.ends[i].effect, name = ef.kind;

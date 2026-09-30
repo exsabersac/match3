@@ -109,10 +109,12 @@ function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
   };
 }
 
+// 目标进度条：标签「目标 <中文名>」（info.goalText = state.goal.label）+ 进度数字 + 进度条。返回实际画出的标签文字（e2e 检查）。
 function goalBar(ctx, art, x, y, w, h, info) {
   const frac = info.target > 0 ? Math.min(1, info.progress / info.target) : 0;
   ctx.font = `700 15px ${FONT}`;
-  text(ctx, fit(ctx, `目标 ${info.goalText}`, w - 80), x + 2, y + 9, 15, "#f3eefc", "left", 700);
+  const label = fit(ctx, `目标 ${info.goalText}`, w - 80);
+  text(ctx, label, x + 2, y + 9, 15, "#f3eefc", "left", 700);
   text(ctx, `${Math.min(info.progress, info.target)}/${info.target}`, x + w - 2, y + 9, 15, "#ffe082", "right", 800);
   const by = y + 20, bh = h - 20;
   if (!art.panel(ctx, "panel_bar", x, by, w, bh, bh / 2)) { ctx.fillStyle = "#2a2340"; ctx.fillRect(x, by, w, bh); }
@@ -120,6 +122,7 @@ function goalBar(ctx, art, x, y, w, h, info) {
     const fw = Math.max(bh, w * frac);
     if (!art.panel(ctx, "panel_fill", x, by, fw, bh, bh / 2)) { ctx.fillStyle = "#7cd67c"; ctx.fillRect(x, by, fw, bh); }
   }
+  return label;
 }
 
 function button(ctx, art, b, enabled, pressed) {
@@ -134,7 +137,7 @@ function button(ctx, art, b, enabled, pressed) {
 }
 
 // info：{level, name, rules, score, moves, goalText, progress, target, msg, undo, busy}；pressed：当前按下的按钮 id
-// 返回关卡面板各部件（面板 / 标签 / 关名 / 规则角标）的矩形，供调试钩子与 e2e 检查布局。
+// 返回关卡面板各部件（面板 / 标签 / 关名 / 规则角标）的矩形与目标标签文字 goal，供调试钩子与 e2e 检查。
 export function drawHud(ctx, art, L, info, pressed) {
   const h = L.hud;
   let lv;
@@ -143,7 +146,7 @@ export function drawHud(ctx, art, L, info, pressed) {
     lv = levelChip(ctx, art, h.x, h.y, wl, 48, info, 15, 11);
     chip(ctx, art, h.x + wl + g, h.y, 130, 48, "分数", info.score);
     chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
-    goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info);
+    lv.goal = goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info);
     ctx.font = `600 16px ${FONT}`;
     text(ctx, fit(ctx, info.msg, h.w), h.x + 2, h.y + 110, 16, "#fff8e1", "left", 600);
   } else {
@@ -151,7 +154,7 @@ export function drawHud(ctx, art, L, info, pressed) {
     const hw = (h.w - 8) / 2;
     chip(ctx, art, h.x, h.y + 64, hw, 56, "分数", info.score);
     chip(ctx, art, h.x + hw + 8, h.y + 64, hw, 56, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
-    goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info);
+    lv.goal = goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info);
     const top = h.y + 186, bottom = L.buttons[0].y - 8;
     ctx.font = `600 16px ${FONT}`;
     const lines = wrap(ctx, info.msg, h.w - 4, Math.max(1, Math.floor((bottom - top) / 22)));

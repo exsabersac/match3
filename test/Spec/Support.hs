@@ -20,6 +20,7 @@ module Spec.Support
     -- * 原有助手
   , findNoMatchPair
   , findMatchPair
+  , findMatchPairNaive
   , stuckNoMoveBoard
   , stableBoard
   , comboMoveState
@@ -45,13 +46,13 @@ import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
 import Match3.Board.Grid (mboardRows)
-import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
+import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry, defaultRegistry)
 import Match3.Element.Caps (Element(..), Hit(..), SomeElement(..), counts, fixed, hit, onAdjacent)
 import Match3.Types (isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), startHistory)
-import Match3.Element.Registry (Registry)
+import Match3.Element.Registry (Registry, swapBlockedWith)
 import qualified Match3.Engine as M3E
 import Test.Tasty.HUnit
 import Spec.Support.Source
@@ -118,21 +119,28 @@ findNoMatchPair b =
     (p : _) -> Just p
     [] -> Nothing
 
+-- | 第一对「引擎会接受」的相邻交换（先横后竖、行优先）：两格都不挡交换（'swapBlockedWith'，同 'resolveSwap'
+-- 的拒绝条件），且交换后有三连。旧版只看交换后是否成消，在第 43 关会选中「宝石 × 毛球」这种被引擎以 NoMatch
+-- 拒绝的对（毛球是 Blocker）；回归见 GoalsLevels.find_match_pair_engine_accepts。
 findMatchPair :: Board -> Maybe (Pos, Pos)
 findMatchPair b =
-  case
-    [ ((r, c), (r, c + 1))
-    | r <- [0 .. boardSize - 1]
-    , c <- [0 .. boardSize - 2]
-    , hasAnyMatch (swapCells b (r, c) (r, c + 1))
-    ]
-      ++ [ ((r, c), (r + 1, c))
-         | r <- [0 .. boardSize - 2]
-         , c <- [0 .. boardSize - 1]
-         , hasAnyMatch (swapCells b (r, c) (r + 1, c))
-         ] of
+  case filter accepted (horizontalPairs ++ verticalPairs) of
     (p : _) -> Just p
     [] -> Nothing
+  where
+    accepted (p1, p2) = not (swapBlockedWith defaultRegistry b p1 p2) && hasAnyMatch (swapCells b p1 p2)
+
+-- | 旧版 'findMatchPair'（不查能否交换），只给回归测试对照用。
+findMatchPairNaive :: Board -> Maybe (Pos, Pos)
+findMatchPairNaive b =
+  case [pq | pq@(p1, p2) <- horizontalPairs ++ verticalPairs, hasAnyMatch (swapCells b p1 p2)] of
+    (p : _) -> Just p
+    [] -> Nothing
+
+-- | 全部相邻格对：先横向（行优先），再纵向。
+horizontalPairs, verticalPairs :: [(Pos, Pos)]
+horizontalPairs = [((r, c), (r, c + 1)) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 2]]
+verticalPairs = [((r, c), (r + 1, c)) | r <- [0 .. boardSize - 2], c <- [0 .. boardSize - 1]]
 
 -- | Cyclic (r+c) mod 5 board: stable and no valid adjacent swap.
 stuckNoMoveBoard :: Board

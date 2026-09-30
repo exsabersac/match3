@@ -48,7 +48,33 @@ tests =
   , testCase "goal_carpet_seeds_open_tiles" goal_carpet_seeds_open_tiles
   , testCase "daily_clear_is_won_not_levelclear" daily_clear_is_won_not_levelclear
   , testCase "daily_won_does_not_unlock_map" daily_won_does_not_unlock_map
+  , testCase "find_match_pair_engine_accepts" find_match_pair_engine_accepts
   ]
+
+-- | 回归（测试辅助 'findMatchPair' 的缺陷）：它选出的对引擎必须接受。逐关（全部战役关卡，含第 43 关毛球）
+-- 用 outcome_moves_or_score 的两种开局（'newGameAtLevel' 配置 5 步 / 1 分、种子 42）与 'campaignGame' 种子 1–3：
+-- 选出的对交给 'trySwap' 不是 NoMatch / InvalidSwap；并且旧版（不查能否交换）在这些开局里
+-- 至少一次选中了挡交换的对，说明本用例确实覆盖到了那个缺陷。
+find_match_pair_engine_accepts :: Assertion
+find_match_pair_engine_accepts = do
+  let cfgW = GameConfig { cfgMoves = 5, cfgGoal = goalScore 1 }
+      starts =
+        [ ("level " ++ show (i + 1) ++ " cfgW seed 42", newGameAtLevel i cfgW 42) | i <- [0 .. length allLevels - 1] ]
+          ++ [ ("level " ++ show (i + 1) ++ " seed " ++ show s, levelGame i s) | i <- [0 .. length allLevels - 1], s <- [1, 2, 3] ]
+      rejected gs (p1, p2) = case snd (trySwap p1 p2 gs) of
+        NoMatch -> True
+        InvalidSwap -> True
+        _ -> False
+  mapM_
+    ( \(lbl, gs) -> case findMatchPair (gsBoard gs) of
+        Nothing -> assertFailure (lbl ++ ": no match pair")
+        Just (p1, p2) -> do
+          assertBool (lbl ++ ": engine rejected " ++ show (p1, p2) ++ " (" ++ show (snd (trySwap p1 p2 gs)) ++ ")") (not (rejected gs (p1, p2)))
+    )
+    starts
+  assertBool
+    "naive finder picks a pair the engine rejects on some start (defect is covered)"
+    (or [maybe False (rejected gs) (findMatchPairNaive (gsBoard gs)) | (_, gs) <- starts])
 
 outcome_moves_or_score :: Assertion
 outcome_moves_or_score = do

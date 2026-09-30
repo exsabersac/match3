@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**357** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强）。
+- 期望：**358** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强） + 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 357）：
+- 目录（用例数合计 358）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -46,7 +46,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Builtin/Layer.hs` | 31 | 冰层与叠层（对应 `Element/Builtin/Layer`）：冰、草、藤、巧、迷雾、锁链、冰冻、窗帘、蒸汽、软命中 |
 | `test/Spec/Builtin/Level.hs` | 24 | 关卡级元素（对应 `Element/Builtin/Level`）：皮带、传送门、飞碟、地毯 |
 | `test/Spec/Boosters.hs` | 12 | 道具：锤子 / 自由交换 / 十字 |
-| `test/Spec/GoalsLevels.hs` | 31 | 目标、结局、星级、关卡表、每日、地图与步数结转 |
+| `test/Spec/GoalsLevels.hs` | 32 | 目标、结局、星级、关卡表、每日、地图与步数结转；`find_match_pair_engine_accepts`（测试辅助 `findMatchPair` 选出的对引擎必须接受） |
 | `test/Spec/Levels.hs` | 9 | 第 6a 刀：关卡记录与关卡表——全部内置关卡与每日挑战（两年每天，覆盖 10 种目标）的放置表都是 `Right`、`placeWith` 的 `UnknownElement` / `PlaceOutOfBounds`、坏放置表的报错带关卡名、`campaignGame` 与 `newGameAtLevel … (levelConfig …)` 相同、越界的重开 / 下一关夹到范围内、`allLevels !!` 源码扫描（src / app / web/hs / test），性质 `qc_lookup_level_in_range` / `qc_clamp_level_index_found` |
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `Crate` / 条目 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 11 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌；第 7b 刀通用步末效果（跳跳虫）；第 8 刀扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、两种补子策略（关卡级元素「金币雨」、关卡颜色数 `colorsRefill 3`）（样例元素苔藓 / 风筝 / 陷坑 / 浮尘 / 跳跳虫 / 金币雨与样例规则只定义在该模块里） |
@@ -338,7 +338,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 357，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 358，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 
@@ -378,7 +378,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 |------|----------|-----:|----------|
 | 1. L / T 形出炸弹（规则开关 `bomb_shapes`，第 41 关「爆破」） | `test/Spec/BombShapes.hs` | 6 | 金标准末尾追加第 41 关 105 行 + 第 40 关过关结局 4 行（`Won` → `LevelClear`）；元素查询快照 `R level` 1 行 + `M 40` 2 行 + 追加 `M 41` 2 行 |
 | 2. 魔法石（`Custom "magic_stone"`，第 42 关「魔石」） | `test/Spec/MagicStone.hs` | 6 | 金标准末尾追加第 42 关 85 行 + 第 41 关过关结局 2 行（`Won` → `LevelClear`）；元素查询快照 `R adjacent` / `R end` / `R names` 3 行（新条目与规则）+ 5 行 `E … PhaseTick`（该阶段规则列表多了魔法石；去掉魔法石条目重跑生成器，除 `M 41` 外与旧快照逐字相同）+ `M 41` 2 行 + 追加 `M 42` 2 行 |
-| 3. 毛球（`Custom "fuzzball"`，第 43 关「毛球」） | `test/Spec/Fuzzball.hs` | 7 | 金标准末尾追加第 43 关 76 行 + 第 42 关种子 2 十字道具过关 3 行（2714 / 2719 / 2720：`Won` → `LevelClear>42`，同行 / 辅助行整局状态散列随之变）；元素查询快照 `R adjacent` / `R end` / `R names` 3 行（新条目与规则）+ 5 行 `E … PhaseMove`（该阶段规则列表多了毛球；去掉毛球条目重跑生成器，除追加的 `M 43` 外与旧快照逐字相同）+ 追加 `M 43` 2 行 |
+| 3. 毛球（`Custom "fuzzball"`，第 43 关「毛球」） | `test/Spec/Fuzzball.hs` | 7 | 金标准末尾追加第 43 关 76 行（2026-09-30 加难后为 85 行，见下文「第 43 关加难」） + 第 42 关种子 2 十字道具过关 3 行（2714 / 2719 / 2720：`Won` → `LevelClear>42`，同行 / 辅助行整局状态散列随之变）；元素查询快照 `R adjacent` / `R end` / `R names` 3 行（新条目与规则）+ 5 行 `E … PhaseMove`（该阶段规则列表多了毛球；去掉毛球条目重跑生成器，除追加的 `M 43` 外与旧快照逐字相同）+ 追加 `M 43` 2 行 |
 | 4. 魔力鸟组合增强（规则开关 `rainbow_combos`，第 44 关「魔力鸟」） | `test/Spec/RainbowCombos.hs` | 7 | 金标准末尾追加第 44 关 105 行 + 第 43 关过关结局 8 行（2758 / 2768 / 2770 / 2771 / 2786 / 2794–2796：种子 1 / 2 的交换或道具过关，`Won` → `LevelClear>43`，同行 / 辅助行整局状态散列随之变）；元素查询快照 `R level` 1 行（多了 `rainbow_combos`）+ `M 43` 2 行（同上）+ 追加 `M 44` 2 行；原有关卡没有别的变化 |
 
 `test/Spec/BombShapes.hs` 的断言：
@@ -413,7 +413,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `fz_jumps_respect_walls_avoid_and_blockers` | 墙 + 避让格只剩一格时跳那一格；四周是石头 / 特殊块时不动、盘面不变；两个毛球相邻时只能跳普通宝石；两个毛球争同一格只有一个跳过去 |
 | `fz_step_end_belt_effect_replays` | `tripleBoard` 的交换后，远处 (6,6) 的毛球步末恰一条 `EvBelt "fuzzball"`、两项，`applyEndEffect` 由前盘重放得后盘，毛球落在相邻格 |
 | `fz_other_levels_unchanged` | 前 42 关开局没有毛球；去掉毛球条目的注册表与默认注册表按提示各走 6 步：盘面、得分、`gsGen` 逐关相同 |
-| `fz_level43_layout_and_play` | 第 43 关种子 1–3 开局 10 个毛球；种子 1–6 按提示各走 22 步：跳过格、每局都有消灭计数、至少一局过关 |
+| `fz_level43_layout_and_play` | 第 43 关种子 1–3 开局 14 个毛球；种子 1–6 按提示各走 22 步：跳过格、每局都有消灭计数、至少一局过关；难度护栏：种子 1–3 按提示走 8 步都还没过关 |
 
 `test/Spec/RainbowCombos.hs` 的断言：
 
@@ -428,6 +428,16 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `rc_level44_layout_and_play` | 第 44 关种子 1–3 开局两组组合在固定位置、石头共 24 层；打出彩虹 × 直线：恰一条 `rainbow_line` 变身，石头剩余层数 + 已碎数 ≤ 16 |
 
 改动了的旧测试：`test/Spec/Support.hs` 的 `checkEffectDetail`（逐轮回放护栏用）认识变身步：来源是彩虹、目标由同色普通宝石变成直线 / 炸弹且颜色不变（其余蔓延仍要求来源正交相邻）；`bs_switch_only_on_new_level` 的断言改为「只有第 41 关写了 `bomb_shapes`」；内置关卡级元素列表（`br_level_hooks_builtin_and_removable`、`ec_flat_record_removed`、`ec_level_elements_by_message`、`ec_level_element_stateful_extension`）多了 `rainbow_combos`（性质 `qc_level_elems_readers_roundtrip` 的开局元素列表同样）；关卡数 43 → 44。
+
+### 第 43 关加难（2026-09-30）
+
+网页端反映第 43 关种子 1 走 3 步就过关；桌面核心复现：原布局 10 个毛球挤在上三行，按提示走（`findHintWith`）种子 1 三步过关（第一步连锁灭 6 个），种子 1–30 里 26 局过关、种子 9 / 30 两步过关。改为 14 个毛球分散在全盘（隔行错开）、目标 14：种子 1 要 14 步，种子 1–30 里 19 局过关（其余 11 局 22 步用完）。快照变化只来自第 43 关：金标准第 43 关一段（原 2725–2800 行 76 行 → 新 2725–2809 行 85 行，`L43` / `G43` 行，目标 `namedfuzzball:10` → `:14`），前后各段逐字不变（第 42 关过关结局仍是 `LevelClear>42`）；元素查询快照只有 `M 43 1` / `M 43 2` 两行。`fz_level43_layout_and_play` 改为 14 个毛球并加难度护栏（种子 1–3 按提示 8 步内过不了关）。
+
+### 测试辅助 findMatchPair（2026-09-30 修正）
+
+`Spec.Support.findMatchPair`（`outcome_moves_or_score`、`release_core_invariants_green` 等 9 处用它挑一步能走的交换）原来只看「交换后有三连」，不查两格能否交换。第 43 关（`3fe0d9a` 时是最后一关）`newGameAtLevel 42 {5 步, 1 分} 42` 开局它选中 (1,4) 宝石 × (1,5) 毛球（毛球挡交换），引擎以 `NoMatch` 拒绝，`outcome_moves_or_score` 报「expected Won on last level, got NoMatch」（`release_core_invariants_green` 复用它，一起失败）。之后第 44 关成为最后一关、这一用例碰巧变绿，缺陷仍在（第 28 关同样会选中挡交换的对）。
+
+修正：`findMatchPair` 先过滤掉 `swapBlockedWith defaultRegistry`（与 `resolveSwap` 的拒绝条件相同）的对，再看是否成消；顺序（先横后竖、行优先）不变，旧版保留为 `findMatchPairNaive` 只给回归对照。回归用例 `find_match_pair_engine_accepts`（`GoalsLevels`）：全部战役关卡 × {`newGameAtLevel` 5 步 / 1 分 / 种子 42、`campaignGame` 种子 1–3}，选出的对交给 `trySwap` 不是 `NoMatch` / `InvalidSwap`；并断言旧版在这些开局里至少一次选中被拒的对（第 28 关 (0,0)–(0,1)），保证用例确实覆盖该缺陷。用原第 43 关布局复核过：旧版选 (1,4)–(1,5) → `NoMatch`，新版选 (3,4)–(3,5) → `LevelClear`。
 
 ## shell 脚本检查（`make lint-sh`）
 

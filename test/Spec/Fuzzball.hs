@@ -129,10 +129,11 @@ fz_other_levels_unchanged = do
     (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noFz (levelGame li 3) 6)) (key (play defaultRegistry (levelGame li 3) 6)))
     [0 .. fuzzLevel - 1]
 
--- | 第 43 关：10 个毛球在上两行附近开局；按提示走 22 步（种子 1–6）：实战里跳过格、被消灭计数，至少一局过关。
+-- | 第 43 关：14 个毛球分散开局（2026-09-30 加难：原 10 个挤在上三行，一次连锁常灭掉大半）；按提示走 22 步（种子 1–6）：
+-- 实战里跳过格、被消灭计数，至少一局过关；种子 1–3 按提示 8 步内都过不了（难度护栏）。
 fz_level43_layout_and_play :: Assertion
 fz_level43_layout_and_play = do
-  mapM_ (\s -> assertEqual ("level 43 seed " ++ show s) 10 (length (fuzzAt (gsBoard (levelGame fuzzLevel s))))) [1 .. 3]
+  mapM_ (\s -> assertEqual ("level 43 seed " ++ show s) 14 (length (fuzzAt (gsBoard (levelGame fuzzLevel s))))) [1 .. 3]
   let play gs n acc
         | n <= (0 :: Int) || gsOver gs /= Nothing = (gs, acc)
         | otherwise = case findHintWith defaultRegistry (gsBoard gs) of
@@ -145,3 +146,5 @@ fz_level43_layout_and_play = do
   assertBool "jumped in play" (sum (map snd runs) > 0)
   assertBool "fuzzball goal progressed" (all (\(gs, _) -> countOf (CountNamed "fuzzball") (gsCounts gs) > 0) runs)
   assertBool "some run wins" (any (\(gs, _) -> isWin (gsOver gs)) runs)
+  -- 难度护栏（网页端反映旧布局种子 1 三步即过）：种子 1–3 按提示走 8 步都还没过关
+  mapM_ (\s -> assertEqual ("level 43 seed " ++ show s ++ " not over after 8 hint moves") Nothing (gsOver (fst (play (levelGame fuzzLevel s) 8 0)))) [1 .. 3]

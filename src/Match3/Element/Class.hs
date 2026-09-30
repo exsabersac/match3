@@ -59,6 +59,7 @@ module Match3.Element.Class
   , vacatesCarpet
   , endRule
   , groundRule
+  , widenRule
   , handleMessage
   , Hit(..)
   , SomeElement(..)
@@ -156,6 +157,7 @@ data CountCaps = CountCaps
 data StepCaps = StepCaps
   { stEnd     :: Maybe EndRule                 -- ^ 步末规则（在原型值上取）
   , stGround  :: Maybe (Int -> Maybe Int)      -- ^ 地面层：上方格子被消除一次时，层数 → 新层数（Nothing = 清掉）
+  , stWiden   :: Maybe ([Pos] -> [Pos])        -- ^ 地面层（新玩法 8）：本格上的特效引爆时，爆炸范围 → 新范围（Nothing = 不改）
   , stMessage :: SomeMessage -> Maybe SomeElement  -- ^ 处理一条消息：Nothing = 不关心；Just = 新的元素值
   }
 
@@ -206,7 +208,7 @@ countCaps :: CountCaps
 countCaps = CountCaps {ccCounter = Nothing, ccDiffCounter = Nothing, ccDiffWeight = 1, ccBonusMoves = 0, ccVacatesCarpet = False}
 
 stepCaps :: StepCaps
-stepCaps = StepCaps {stEnd = Nothing, stGround = Nothing, stMessage = const Nothing}
+stepCaps = StepCaps {stEnd = Nothing, stGround = Nothing, stWiden = Nothing, stMessage = const Nothing}
 
 -- | 按原型的全套缺省能力。
 capsOf :: Archetype -> Caps
@@ -305,6 +307,10 @@ endRule = stEnd . capStep . caps
 
 groundRule :: Element e => e -> Maybe (Int -> Maybe Int)
 groundRule = stGround . capStep . caps
+
+-- | 地面层（新玩法 8）：本格上的特效引爆时改写爆炸范围（Nothing = 不改；内置只有魔法地格）。
+widenRule :: Element e => e -> Maybe ([Pos] -> [Pos])
+widenRule = stWiden . capStep . caps
 
 -- | 处理一条消息：Nothing = 不关心；Just = 新的元素值。
 handleMessage :: Element e => e -> SomeMessage -> Maybe SomeElement
@@ -433,6 +439,7 @@ instance Element Modified where
              StepCaps
                { stEnd = Nothing
                , stGround = Nothing
+               , stWiden = Nothing
                , stMessage = \msg -> case modHandleMessage m msg of
                    Just Nothing -> Just e
                    Just (Just m') -> Just (modify m' e)

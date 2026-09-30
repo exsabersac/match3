@@ -71,7 +71,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3New(level, seed)` | 开一局（清空历史与动画） |
 | `m3Swap(r1,c1,r2,c2)` | 交换一步：`{accepted, outcome, trace, events, state}` |
 | `m3Undo()` | 撤销（核心 `Engine.History`，最多 20 步） |
-| `m3State()` / `m3Levels()` | 当前状态 / 47 关列表 |
+| `m3State()` / `m3Levels()` | 当前状态 / 48 关列表 |
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
 
@@ -126,6 +126,10 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   解码同核心 `Match3.Element.Builtin.chameleonColor`）应先画 `gem_c${v+1}` 再叠一张慢转的 `chameleon` 环；HUD / 地图目标图标
   `chameleon_icon`，降级色 = 当前颜色。每步换色是步末 `EvTick`（元素 `chameleon`，每项原格改写），按类型复用倒计时段即可；
   彩虹 × 变色龙由核心成对规则结算。该关同样有掉落口（(0,3)，`bvDrops` 同上待编码）。HUD 目标标签已由核心 `goalLabel` 给出「变色龙」。跟进之前网页端按元素名画图集里的 `chameleon` 环贴图（不走几何降级，e2e 的 `fallbacks` 护栏查不出，底下也没有当前颜色的宝石）。
+- 待跟进（网页版未改）：第 48 关魔法地格——地面层已经由 Api 编码（`state.ground` 里 `{p:[r,c], name:"magic", layers:1}`，layers 恒为 1、只用于显示），
+  网页端 `cells.js` 的 `GROUND` 表还没有 `magic`，现在画的是表外名字的淡灰框（地面层走不到 `fallbacks` 计数，e2e 护栏查不出）；
+  补一行 `magic: () => "magic"` 即可（贴图 `magic` 在桌面图集里，重新生成网页图集后可用）。扩大的爆炸不需要新动画：核心的 `EvBlast`
+  覆盖格已含扩出来的一圈，网页端按事件格原样画直线 / 炸弹的高亮与清除；HUD 目标是碎石（`goal.label`「碎石」），不需要改。
 
 ### 2.4 自适应布局（`layout.js`）
 
@@ -183,7 +187,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（122 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 381 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 389 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -276,7 +280,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（381 个） | `make test-native` |
+| `stack test` | 核心规则（389 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（23 组，含第 41–45 关（第 45 关种子 1–3）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（21 组，含第 41–45 关（第 45 关种子 1–3）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |

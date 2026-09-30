@@ -24,6 +24,7 @@ import UI.Layout
 groundTable :: [(ElementName, (Renderer -> CInt -> CInt -> Int -> IO (), Int -> String))]
 groundTable =
   [ ("jelly", (primJelly, \n -> if n >= 2 then "jelly_2" else "jelly"))
+  , ("magic", (primMagic, const "magic"))
   ]
 
 -- | 几何版：按名字查表，查不到画淡灰底。
@@ -50,3 +51,14 @@ primJelly ren x y n = do
   when (n >= 2) $ do
     rendererDrawColor ren $= V4 255 215 238 235
     drawRect ren (Just (box 9))
+
+-- | 几何版魔法地格（新玩法 8）：棋子之上的紫色双线框 + 四角小方点（永久，不随层数变化）。
+primMagic :: Renderer -> CInt -> CInt -> Int -> IO ()
+primMagic ren x y _ = do
+  let box i = Rectangle (P (V2 (x + i) (y + i))) (V2 (cellPx - 2 * i) (cellPx - 2 * i))
+      corner dx dy = fillRect ren (Just (Rectangle (P (V2 (x + dx) (y + dy))) (V2 5 5)))
+  rendererDrawColor ren $= V4 170 90 255 245
+  mapM_ (drawRect ren . Just . box) [1, 2]
+  rendererDrawColor ren $= V4 225 190 255 235
+  drawRect ren (Just (box 5))
+  mapM_ (uncurry corner) [(4, 4), (cellPx - 9, 4), (4, cellPx - 9), (cellPx - 9, cellPx - 9)]

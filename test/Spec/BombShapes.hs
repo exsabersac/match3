@@ -39,13 +39,13 @@ shapeNames = map shapeName . shapeRules
 gameShapes :: GameState -> [String]
 gameShapes gs = shapeNames (levelRegistryIn defaultRegistry (gsLevelElems gs))
 
--- | 只有第 41 关打开开关：原有 40 关（种子 1 / 2）、每日挑战、自由开局的形状表都等于内置表；
--- 关卡记录里也只有第 41 关写了 lvlRules；GameState 的 Show 不打印这个内置元素。
+-- | 只有第 41 关与第 48 关（新玩法 8 魔法格复用这个开关）打开开关：原有 40 关（种子 1 / 2）、每日挑战、自由开局的形状表都等于内置表；
+-- 关卡记录里 bomb_shapes 只写在第 41 / 48 关；GameState 的 Show 不打印这个内置元素。
 bs_switch_only_on_new_level :: Assertion
 bs_switch_only_on_new_level = do
   let builtin = map shapeName builtinShapeRules
   assertEqual "builtin table unchanged" builtin (shapeNames defaultRegistry)
-  assertEqual "only level 41 has bomb_shapes" [(bombLevel, ["bomb_shapes"])] [(li, lvlRules l) | (li, l) <- zip [0 ..] allLevels, "bomb_shapes" `elem` lvlRules l]
+  assertEqual "only levels 41 / 48 have bomb_shapes" [(bombLevel, ["bomb_shapes"]), (47, ["bomb_shapes"])] [(li, lvlRules l) | (li, l) <- zip [0 ..] allLevels, "bomb_shapes" `elem` lvlRules l]
   mapM_
     (\(li, seed) -> assertEqual ("level " ++ show (li + 1) ++ " seed " ++ show seed) builtin (gameShapes (levelGame li seed)))
     [(li, seed) | li <- [0 .. bombLevel - 1], seed <- [1, 2]]

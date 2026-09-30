@@ -1517,7 +1517,7 @@ P gem [AInt 0,AInt (-1)] Custom "bubble" 1 -> Custom "bubble" 1
 R adjacent [10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
 R end [(PhaseTick,[10,20]),(PhaseSpread,[10,20,30]),(PhaseMove,[10,20,30,40])]
 R swap [10,15,20]
-R names ["gem","line_h","line_v","bomb","rainbow","ice","grass","vine","choco","fog","chain","freeze","curtain","steam","stone","chest","honey","balloon","cookie","cake","magic_hat","maker","snail","safe","flip","surprise","bottle","time_spirit","countdown","jelly","bubble","magic_stone","fuzzball","snow_boss","chameleon"]
+R names ["gem","line_h","line_v","bomb","rainbow","ice","grass","vine","choco","fog","chain","freeze","curtain","steam","stone","chest","honey","balloon","cookie","cake","magic_hat","maker","snail","safe","flip","surprise","bottle","time_spirit","countdown","jelly","bubble","magic_stone","fuzzball","snow_boss","chameleon","magic"]
 R diff [("safe",Just CountSafes,0),("time_spirit",Just CountSpirits,2),("snow_boss",Just (CountNamed "snow_boss"),0)]
 R level ["ufo","belt","portal","carpet","bomb_shapes","rainbow_combos","cookie_drop"]
 A 0 [(3,3)] f8e87b773c8badf4
@@ -1660,3 +1660,5 @@ M 46 1 3213e9f7a41543f
 M 46 2 6986f60c1fc73057
 M 47 1 edb684767087ed76
 M 47 2 8a2d67bc504affde
+M 48 1 c8adfbc314f194a0
+M 48 2 826076e2ee0e8d69

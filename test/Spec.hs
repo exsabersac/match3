@@ -36,6 +36,7 @@ import qualified Spec.Fuzzball
 import qualified Spec.SnowBoss
 import qualified Spec.CookieDrop
 import qualified Spec.Chameleon
+import qualified Spec.MagicGround
 import qualified Spec.RainbowCombos
 
 main :: IO ()
@@ -77,6 +78,7 @@ tests =
         , Spec.SnowBoss.tests
         , Spec.CookieDrop.tests
         , Spec.Chameleon.tests
+        , Spec.MagicGround.tests
         , Spec.RainbowCombos.tests
         , Spec.SourceScan.tests
         ]

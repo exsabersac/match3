@@ -42,6 +42,7 @@ import Match3.Board.Grid (adjacent, inBounds)
 import Match3.Daily (dailyConfig, dailySeed)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Event (Event(..), EventKind(..))
+import Match3.Element.Level (levelRegistryIn)
 import Match3.Element.Registry (Registry)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveFreeSwapWith, resolveHammerWith)
 import Match3.Game.Level (campaignGame, newDailyGame, newGame, newGameAtLevel)
@@ -104,7 +105,9 @@ playWith reg act gs = case act of
     move (gs', out, mt) =
       let fx = moveFx gs gs' out
           ok = out /= NoMatch && out /= InvalidSwap
-      in Played gs' (Just out) mt fx (if ok then traceEventsWith reg mt else []) Nothing ok
+      -- 事件按本步结算用的注册表展开（levelRegistryIn：新玩法 8 魔法地格的扩爆格要算进 EvBlast 的范围；
+      -- 其余关卡它只可能换形状表，而事件展开不读形状表，与用 reg 逐项相同）
+      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelRegistryIn reg (gsLevelElems gs)) mt else []) Nothing ok
     other gs' evs ok = Played gs' Nothing (emptyTrace gs') (MoveFx 0 []) evs Nothing ok
 
 -- | 通用接口实例（内置注册表）。

@@ -8,6 +8,7 @@
 #   CASES   "关卡:种子[:走法] …"（关卡 0 起），默认见下；走法 hint（缺省，按核心提示）或 combo
 #           （先换盘上的「彩虹 × 直线 / 炸弹」再按提示，覆盖第 44 关 rainbow_combos 的变身步；见 Parity.hs 的 pickMove）
 #           或 combo-bomb（同 combo，但先换「彩虹 × 炸弹」）
+#           默认另含第 46 关「掉落口」种子 1 / 28 / 30（后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干）
 #   NODE    默认 ~/.ghc-wasm/nodejs/bin/node
 #   OUT     输出与原生二进制目录，默认 web/.cache/parity
 # 前置：已 make build（需要 web/dist）；原生侧用 stack 的 GHC 9.14.1 编译（首次约 1 分钟，之后增量）。
@@ -27,6 +28,7 @@ case "$MODE" in
          DEF="0:20260929 11:1 12:42 13:1 15:1 27:1 28:1 35:1 38:2026 39:31337 40:1 41:1 42:1 42:2 42:5 43:1:combo 43:2:combo 43:3:combo-bomb" ;;
   *) echo "用法：$0 state|anim [步数]" >&2; exit 2 ;;
 esac
+DEF="$DEF 45:1 45:28 45:30"
 CASES="${CASES:-$DEF}"
 
 [ -f "$HERE/dist/match3-web.wasm" ] || { echo "没有 web/dist/match3-web.wasm，先 make build" >&2; exit 1; }

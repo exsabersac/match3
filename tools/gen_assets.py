@@ -696,6 +696,25 @@ def fuzzball():
     return img
 
 
+def chameleon():
+    """变色龙（新玩法 7）：叠在当前颜色宝石之上的五色描边环（按 C1..C5 顺时针五段，段间留白缝）+ 右下角一小截卷尾。
+    游戏里先画 gem_<颜色> 再画它，并让环缓慢旋转（提示「会换色」）。"""
+    img = new()
+    ring = sub_mask(ellipse_mask((U(0.03), U(0.03), U(0.97), U(0.97))), ellipse_mask((U(0.11), U(0.11), U(0.89), U(0.89))))
+    img = comp(img, fill_layer(dilate(ring, U(0.012) * 2), (40, 30, 60), 0.85))
+    for i, k in enumerate(GEMS):
+        a0, a1 = -90 + i * 72 + 5, -90 + (i + 1) * 72 - 5
+        wedge = mask_new()
+        ImageDraw.Draw(wedge).pieslice((U(-0.1), U(-0.1), U(1.1), U(1.1)), a0, a1, fill=255)
+        img = comp(img, fill_layer(mul_mask(ring, wedge), lighten(GEMS[k]["rgb"], 0.15)))
+    tail = mask_new()
+    ImageDraw.Draw(tail).arc((U(0.74), U(0.74), U(0.94), U(0.94)), 180, 450, fill=255, width=int(U(0.045)))
+    img = comp(img, fill_layer(dilate(tail, U(0.01) * 2), (40, 30, 60), 0.85))
+    img = comp(img, fill_layer(tail, (120, 220, 120)))
+    img = sparkle(img, U(0.2), U(0.16), U(0.07))
+    return img
+
+
 def snow_boss(hurt=False):
     """雪怪 Boss（新玩法 5）：整只画在一张图上（占 2×2 格），游戏里切成四块 snow_boss_<象限>（hurt = 血量过半后的受伤表情）。
     冰蓝雪怪：毛茸茸的白色身体 + 两只冰角 + 浅蓝脸 + 怒眉獠牙，两侧短胳膊；受伤版一只眼打叉、头上贴创可贴、身上裂纹、汗滴。"""
@@ -1659,6 +1678,11 @@ def build_sprites():
     for k in range(4):
         sp["magic_stone_%d" % k] = down(magic_stone(k))
     sp["fuzzball"] = down(fuzzball())
+    sp["chameleon"] = down(chameleon())
+    # 变色龙目标图标（HUD / 地图节点）：黄宝石 + 五色环合成一张
+    cham_icon = sp["gem_c4"].copy()
+    cham_icon.alpha_composite(sp["chameleon"])
+    sp["chameleon_icon"] = cham_icon
     # 雪怪 Boss：整只一张（HUD 目标 / 血条图标）+ 切成 2×2 四块（象限 0 左上 / 1 右上 / 2 左下 / 3 右下），正常与受伤两套
     for tag, hurt in (("", False), ("_hurt", True)):
         whole = snow_boss(hurt)
@@ -1707,7 +1731,8 @@ def build_sprites():
 LEGEND = [
     ("宝石 Gems（颜色 × 形状）", [("gem_" + k, g["zh"], g["en"]) for k, g in GEMS.items()]),
     ("特殊块 Specials", [("@line_h", "横向直线", "Line H"), ("@line_v", "纵向直线", "Line V"), ("@bomb", "炸弹", "Bomb"),
-                        ("rainbow", "彩虹球", "Rainbow"), ("@flip", "双面块", "Flip front/back"), ("@countdown", "倒计时炸弹", "Countdown n")]),
+                        ("rainbow", "彩虹球", "Rainbow"), ("@flip", "双面块", "Flip front/back"), ("@countdown", "倒计时炸弹", "Countdown n"),
+                        ("@chameleon", "变色龙", "Chameleon")]),
     ("宝石覆盖 Overlays", [("@ice_1", "冰 1 层", "Ice 1"), ("@ice_2", "冰 2 层", "Ice 2"), ("@ice_3", "冰 3 层+", "Ice 3+"),
                           ("@grass", "草坪", "Grass"), ("@vine", "藤蔓", "Vine"), ("@choco", "巧克力", "Chocolate"),
                           ("@fog_1", "迷雾 1", "Fog 1"), ("@fog_2", "迷雾 2+", "Fog 2+"), ("@chain_1", "锁链 1", "Chain 1"),
@@ -1751,6 +1776,9 @@ def compose(sp, key):
     elif k == "countdown":
         base.alpha_composite(sp["gem_c2"])
         base.alpha_composite(sp["countdown_3"])
+    elif k == "chameleon":
+        base.alpha_composite(sp["gem_c4"])
+        base.alpha_composite(sp["chameleon"])
     elif k == "badge":
         base.alpha_composite(sp["chest"])
         base.alpha_composite(sp["badge_2"].resize((44, 44), Image.LANCZOS), (S - 46, S - 46))

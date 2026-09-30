@@ -34,12 +34,14 @@ module UI.Cell.Art
   , artMagicStone
   , artFuzzball
   , artSnowBoss
+  , artChameleon
   ) where
 
 import Art
 import Control.Monad (forM_, void, when)
 import Foreign.C.Types (CDouble, CInt)
 import Match3.Core
+import Match3.Element.Builtin (chameleonColor)
 import Match3.View (BossPart (..), bossPart)
 import SDL hiding (Normal)
 import UI.Layout
@@ -290,6 +292,16 @@ artSnowBoss ren art pulse x y cell = case bossPart cell of
       forM_ [0 .. bpEvery bp - 1] $ \i -> do
         rendererDrawColor ren $= if i < bpTurn bp then V4 120 210 255 255 else V4 40 60 110 200
         fillRect ren (Just (rect (x + cellPx - 12 - fromIntegral (bpEvery bp - 1 - i) * 9) (y + cellPx - 11) 6 6))
+  Nothing -> pure ()
+  where
+    Kit {..} = cellKit ren art pulse x y
+
+-- | 贴图版：变色龙（新玩法 7）——当前颜色的宝石贴图（gem_<颜色>）+ 缓慢旋转的五色描边环 chameleon（提示「每步会换色」）。
+artChameleon :: Renderer -> Art -> Int -> CInt -> CInt -> Cell -> IO ()
+artChameleon ren art pulse x y cell = case chameleonColor cell of
+  Just col -> do
+    spr (gemSprite col)
+    void (drawSpriteEx ren art "chameleon" dst (fromIntegral (pulse `mod` 360) :: CDouble) False)
   Nothing -> pure ()
   where
     Kit {..} = cellKit ren art pulse x y

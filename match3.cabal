@@ -172,6 +172,7 @@ test-suite match3-test
       Spec.Builtin.Obstacle
       Spec.Caps
       Spec.Cascade
+      Spec.Chameleon
       Spec.CookieDrop
       Spec.Element
       Spec.ElementClass

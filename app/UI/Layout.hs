@@ -38,6 +38,7 @@ import Data.Word (Word8)
 import Engine.GridUI (GridGeom (..), gridCellAt, gridCellOrigin, gridCells)
 import Foreign.C.Types (CInt)
 import Match3.Core
+import Match3.Element.Builtin (chameleonColor)
 import SDL hiding (Normal)
 import UI.Presentation (easeOutT, elementRGBTable, smoothT)
 
@@ -82,7 +83,9 @@ cellRGB cell = case cell of
   TimeSpirit -> (80, 220, 255)
   Countdown col _ -> colorRGB col
   Gem col _ _ _ -> colorRGB col
-  Custom n _ -> maybe (160, 160, 170) id (lookup n elementRGBTable)
+  Custom n _
+    | Just col <- chameleonColor cell -> colorRGB col -- 变色龙（新玩法 7）：当前颜色
+    | otherwise -> maybe (160, 160, 170) id (lookup n elementRGBTable)
 
 -- | 棋盘在窗口里的网格几何（第 11 刀：像素 ↔ 格子的换算交给通用组件 Engine.GridUI）。
 boardGrid :: GridGeom CInt

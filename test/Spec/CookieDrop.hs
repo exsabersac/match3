@@ -28,7 +28,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "cd_only_level46_has_drops" cd_only_level46_has_drops
+  [ testCase "cd_drop_levels_are_46_and_47" cd_drop_levels_are_46_and_47
   , testCase "cd_refill_drops_cookie_at_drop_cells" cd_refill_drops_cookie_at_drop_cells
   , testCase "cd_refill_same_rng_as_base" cd_refill_same_rng_as_base
   , testCase "cd_level46_start_no_goal_decor" cd_level46_start_no_goal_decor
@@ -77,9 +77,12 @@ greedyPlay gs
 
 -- | 关卡表里只有第 46 关写了 lvlDrops（四个顶行掉落口、饼干、保持 4 块）；开局的关卡级元素只有它回复；
 -- 视图模型 bvDrops 给出掉落口格；GameState 的 Show 不打印这个内置元素。
-cd_only_level46_has_drops :: Assertion
-cd_only_level46_has_drops = do
-  assertEqual "only level 46" [(dropLevel, [DropSpec dropCellsL46 Cookie 4])] [(li, lvlDrops l) | (li, l) <- zip [0 ..] allLevels, not (null (lvlDrops l))]
+cd_drop_levels_are_46_and_47 :: Assertion
+cd_drop_levels_are_46_and_47 = do
+  -- 第 46 关掉饼干；第 47 关（新玩法 7）复用掉落口掉变色龙（按 Custom 名字算同种，见 Spec.Chameleon 的 ch_drop_port_counts_any_color）
+  assertEqual "only levels 46 / 47"
+    [(dropLevel, [DropSpec dropCellsL46 Cookie 4]), (dropLevel + 1, [DropSpec [(0, 3)] (Custom "chameleon" (CustomState 0)) 2])]
+    [(li, lvlDrops l) | (li, l) <- zip [0 ..] allLevels, not (null (lvlDrops l))]
   assertEqual "level 46 drop cells" dropCellsL46 (levelDrops (gsLevelElems (levelGame dropLevel 1)))
   assertEqual "view drop cells" dropCellsL46 (bvDrops (boardView (levelGame dropLevel 1)))
   assertEqual "no drops elsewhere" [] [li | li <- [0 .. dropLevel - 1], not (null (levelDrops (gsLevelElems (levelGame li 1))))]

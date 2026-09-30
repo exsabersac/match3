@@ -1000,8 +1000,8 @@ qc_combo_table_matches_legacy =
        cover 5 (not (null (legacyComboClearSeeds b p1 p2)) && not (legacyIsSpecialCombo b p1 p2)) "kinds match but soft-locked" $
        conjoin
          [ map comboName rules === ["bomb×bomb", "line×line", "line×bomb", "rainbow×line"]
-         , map srOrder (swapRules defaultRegistry) === [10, 20]
-         , map srOrder (elementSwapRules defaultRegistry) === [10]
+         , map srOrder (swapRules defaultRegistry) === [10, 15, 20]
+         , map srOrder (elementSwapRules defaultRegistry) === [10, 15]
          , comboFires rules b p1 p2 === legacyIsSpecialCombo b p1 p2
          , Combos.isSpecialCombo b p1 p2 === legacyIsSpecialCombo b p1 p2
          , conjoin [comboSeedsFor rules bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]

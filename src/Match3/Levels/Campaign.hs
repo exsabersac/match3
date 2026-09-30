@@ -322,7 +322,34 @@ allLevels =
       { lvlPlacements = [Place "cookie" [] cookieDropCells]
       , lvlDrops = [DropSpec cookieDropCells Cookie 4]
       }
+    -- 变色龙（新玩法 7）：变色龙可交换、按当前颜色匹配，每次交换后按 C1 → C2 → … → C5 → C1 换一种颜色
+    -- （会立刻连成三消的颜色顺延跳过）；开局 2 只、颜色取原格宝石；顶行 (0,3) 是掉落口（复用新玩法 6），盘上少于
+    -- 2 只时补进一只 C1 变色龙；变色龙被消除计数，18 步消掉 30 只
+  , (level 46 "变色龙" chameleonMoves (goalCount (CountNamed "chameleon") chameleonGoal))
+      { lvlPlacements = [Place "chameleon" [] chameleonCells]
+      , lvlDrops = [DropSpec chameleonDropCells (mkCustom "chameleon" 0) chameleonKeep]
+      }
   ]
+
+-- | 第 47 关开局的变色龙格。
+chameleonCells :: [Pos]
+chameleonCells = [(3, 1), (5, 6)]
+
+-- | 第 47 关的掉落口格。
+chameleonDropCells :: [Pos]
+chameleonDropCells = [(0, 3)]
+
+-- | 第 47 关盘上保持的变色龙只数。
+chameleonKeep :: Int
+chameleonKeep = 2
+
+-- | 第 47 关的目标只数。
+chameleonGoal :: Int
+chameleonGoal = 30
+
+-- | 第 47 关的步数。
+chameleonMoves :: MovesLeft
+chameleonMoves = 18
 
 -- | 第 46 关的掉落口格。
 cookieDropCells :: [Pos]

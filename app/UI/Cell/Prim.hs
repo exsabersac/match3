@@ -11,6 +11,7 @@ module UI.Cell.Prim
   , primMagicStone
   , primFuzzball
   , primSnowBoss
+  , primChameleon
   , primStone
   , primChest
   , primHoney
@@ -35,6 +36,7 @@ module UI.Cell.Prim
 import Control.Monad (forM_, when)
 import Foreign.C.Types (CInt)
 import Match3.Core
+import Match3.Element.Builtin (chameleonColor)
 import Match3.View (BossPart (..), bossPart)
 import SDL hiding (Normal)
 import UI.Cell.PrimOverlay (primOverlay)
@@ -116,6 +118,25 @@ primSnowBoss ren x y cell flashing = case bossPart cell of
         when (q == 3) $ forM_ [0 .. bpEvery bp - 1] $ \i -> do
           rendererDrawColor ren $= if i < bpTurn bp then V4 120 210 255 255 else V4 60 80 130 255
           box (x + cellPx - 14 - fromIntegral (bpEvery bp - 1 - i) * 9) (y + cellPx - 12) 6 6
+  Nothing -> pure ()
+
+-- | 几何版：变色龙（新玩法 7）——按当前颜色画普通宝石，外圈一道五色描边（四边各分五段，按 C1..C5 循环着色）。
+primChameleon :: Renderer -> CInt -> CInt -> Cell -> Bool -> IO ()
+primChameleon ren x y cell flashing = case chameleonColor cell of
+  Just col -> do
+    primGem ren x y (mkGem col) flashing
+    let seg = (cellPx - 4) `div` 5
+        t = 3 :: CInt
+        box bx by bw bh = fillRect ren (Just (Rectangle (P (V2 bx by)) (V2 bw bh)))
+    forM_ (zip [0 :: Int ..] (take 20 (cycle allColors))) $ \(i, c) -> do
+      let (r, g, b) = colorRGB c
+          k = fromIntegral (i `mod` 5) * seg
+      rendererDrawColor ren $= V4 r g b 255
+      case i `div` 5 of
+        0 -> box (x + 2 + k) (y + 1) seg t
+        1 -> box (x + cellPx - 1 - t) (y + 2 + k) t seg
+        2 -> box (x + cellPx - 2 - seg - k) (y + cellPx - 1 - t) seg t
+        _ -> box (x + 1) (y + cellPx - 2 - seg - k) t seg
   Nothing -> pure ()
 
 -- | 几何版：毛球（新玩法 3）——灰粉色毛团（大方块 + 四角小方块当绒毛）+ 两只白眼黑瞳。

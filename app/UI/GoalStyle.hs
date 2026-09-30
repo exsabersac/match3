@@ -31,7 +31,9 @@ goalIcon g = case goalView g of
     CountSafes -> "safe"
     CountUfo -> "ufo_c3"
     CountCarpets -> "carpet_covered"
-    CountNamed name -> unElementName name
+    CountNamed name
+      | unElementName name == "chameleon" -> "chameleon_icon" -- 变色龙（新玩法 7）：环贴图单独看不出是宝石，用合成图标
+      | otherwise -> unElementName name
     _ -> "icon_multi"
   _ -> "icon_multi"
 

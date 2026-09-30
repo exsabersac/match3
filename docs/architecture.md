@@ -30,7 +30,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
                                             ▼
  Match3.Element（元素框架：Types / Registry / Builtin / Event / Level / Special（第 8 刀规则表解释器）；默认注册表 defaultRegistry）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
- Match3.Levels.Campaign（46 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
+ Match3.Levels.Campaign（47 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
  Match3.Types（门面，再导出 Types.Name / Cell / Overlay / Body / Board / Game；第 6 刀拆分）  Match3.Goal（目标数据，第 5 刀）
    └─ Match3.Counts（计数键与 Counts，第 4 刀） ← Match3.Color（颜色，第 5 刀从 Types 拆出）
  （纯函数机制模块；无 IO）
@@ -65,7 +65,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Types.Board` | `Pos`、`Board = Board (Array (Int,Int) Cell)`（O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard` 等；`Show` 按行列表打印，与旧列表盘输出相同）、`boardSize` | 可变盘（`Board.Grid`） |
 | `Match3.Types.Game` | `Score` / `MovesLeft` / `TargetScore`、`Outcome`、地面层 `Ground`、`GameConfig` / `defaultConfig` | 关卡表 |
 | `Match3.Levels.Level` | 第 6 刀：关卡记录 `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` 与原先分散在按下标 case 的并行表里的 `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`；另有 `lvlRules` 规则开关、新玩法 6 的掉落口 `lvlDrops :: [DropSpec]`）、`level`（不带装饰的关）、`levelConfig`、放置表辅助 `placeEach` / `layersAt` | 放置表的解释（`Game.Level`） |
-| `Match3.Levels.Campaign` | 第 6 刀：46 关 `allLevels`（2026-09-30 起新玩法关卡追加在末尾）（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
+| `Match3.Levels.Campaign` | 第 6 刀：47 关 `allLevels`（2026-09-30 起新玩法关卡追加在末尾）（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
@@ -76,10 +76,10 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则、`specialBlast`、第 8 刀的内置形状规则表 `builtinShapeRules`（特殊合成不再挂在 line_h 上）；新玩法 1 的 L / T 形规则 `ltBombRule` 与插表函数 `withBombShapes`（不在内置表里，由规则开关 `BombShapes` 按关插入） | 障碍与叠层 |
 | `Match3.Element.Builtin.Layer` | 冰层 `Ice` 与 8 种叠层修饰器（草 / 藤 / 巧 / 迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 蒸汽），蔓延规则 | 本体 |
 | `Match3.Element.Builtin.Obstacle` | 打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋；魔法石（新玩法 2）；雪怪 Boss `SnowBoss`（新玩法 5：2×2 四格 `Custom "snow_boss"`，邻格规则 200 扣血、步末 `PhaseMove` 30 召唤雪块，`snowBosses` / `snowBossHp` / `snowBossSpawn` / `decodeBoss`） | 收走 / 按名字计数的元素（`Collectible`） |
-| `Match3.Element.Builtin.Collectible` | 收集与计数类：饼干、时间精灵、气泡 | 削层 / 变形（`Obstacle`） |
+| `Match3.Element.Builtin.Collectible` | 收集与计数类：饼干、时间精灵、气泡；变色龙 `Chameleon`（新玩法 7：`Custom "chameleon" k`，普通棋子原型、按当前颜色匹配；步末 `PhaseMove` 40 换色 `chameleonShift`、彩虹 × 变色龙成对规则 15；`chameleonCell` / `chameleonColor` 给前端用） | 削层 / 变形（`Obstacle`） |
 | `Match3.Element.Builtin.Actor` | 会动或会生成东西的：魔法帽、果汁机、蜗牛（含 `traceSnails`）、染色瓶、倒计时 | 被动障碍（`Obstacle`） |
 | `Match3.Element.Builtin.Ground` | 地面层：果冻 | 占格本体 |
-| `Match3.Element.Builtin.Level` | 关卡级元素：飞碟 `UfoLevel [Ufo]`、皮带 `BeltLevel [Belt]`、传送门 `PortalLevel [(Pos,Pos)]`、地毯 `CarpetLevel [Pos]`、地面层 `GroundLayer Ground`、规则开关 `BombShapes` / `RainbowCombos`、掉落口 `CookieDrop [DropSpec]`（新玩法 6：回复 `Refilling`，把补子策略包一层 `dropRefill`）（第 7 刀：状态在元素值里；按节拍消息回复并交回推进后的自身，开局状态 `levelStart` 取自关卡记录，飞碟 / 地毯的目标补齐也在这里）；`portalTeleport`（第 7 刀前在 `Board.Gravity`） | 一局里有哪些元素（`GameState.gsLevelElems`） |
+| `Match3.Element.Builtin.Level` | 关卡级元素：飞碟 `UfoLevel [Ufo]`、皮带 `BeltLevel [Belt]`、传送门 `PortalLevel [(Pos,Pos)]`、地毯 `CarpetLevel [Pos]`、地面层 `GroundLayer Ground`、规则开关 `BombShapes` / `RainbowCombos`、掉落口 `CookieDrop [DropSpec]`（新玩法 6：回复 `Refilling`，把补子策略包一层 `dropRefill`；新玩法 7 起名额按「同种」数：`Custom` 按名字、其余按相等）（第 7 刀：状态在元素值里；按节拍消息回复并交回推进后的自身，开局状态 `levelStart` 取自关卡记录，飞碟 / 地毯的目标补齐也在这里）；`portalTeleport`（第 7 刀前在 `Board.Gravity`） | 一局里有哪些元素（`GameState.gsLevelElems`） |
 | `Match3.Element.Level` | 第 7 刀（7a）：一局的关卡级元素 `gsLevelElems`——开局 `startLevelsWith`（注册的各种 + 核心元素地面层）、每个节拍参与的元素 `activeLevels`（注册顺序取同名状态，没有则用原型；未注册的不参与，核心元素总参与）、`askLevelsIn`（发消息，第 7 刀 7b 起按参与顺序折叠所有回复者并依次写回推进后的状态）、读写 `levelState` / `putLevel` 与内置读数 `levelUfos` / `levelBelts` / `levelPortals` / `levelCarpetOpen` / `levelGround` / `levelDrops`（新玩法 6：掉落口格）、给 Board 层的钩子 `levelHooksWith`、Game 层的节拍 `beltShiftIn` / `avoidCellsIn` / `wallCellsIn` / `coverIn` / `hitGroundIn` | 连锁顺序（`Board.Cascade`） |
 | `Match3.Element.Builtin.Common` | 跨分组共用的辅助：`deadRule`（邻消打碎并入清除格）、`colorPlace`（按颜色放置） | 只在一组里用的辅助 |
 | `Match3.Element.Special` | 第 8 刀：规则表的解释器（不含具体规则）——形状表 `spawnByShapes`（每条连线取第一条认领它的规则）、落点 `shapeAnchor`、单连线规则的构造器 `runShape`；组合表 `comboMatch`（按表顺序、每条先试 (p1,p2) 再试 (p2,p1)）/ `comboFires`（另要求两端 `specialActivates`）/ `comboSeedsFor` / `comboSwapRule`（次序 `comboOrder` = 20） | 具体规则（`Builtin.Gem` / `Combos`） |
@@ -152,13 +152,13 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `UI.EndStage` | 步末阶段绘制：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌（绘制表 `endStageDrawers` 按 `StageKind` 查；颜色、光效贴图、蔓延生长曲线读表现表） |
 | `UI.BoardArt` | 棋盘贴图绘制与分派（`drawCellAny` / `drawCellArt` / `drawStatic` 等）、回放共用的底盘部件（地毯 / 地面层 / 皮带 / 传送门读 `BoardView`，选中 / 提示 / 闪光读 `appHighlight`）；新玩法 6 的掉落口标记 `drawDropsArt` / `drawDropsAny`（读 `bvDrops`，画在棋子之上） |
 | `UI.BoardPrim` | 棋盘几何降级绘制（`drawGemAt` 查表分派、底盘 / 传送门 / 飞碟 / 皮带 / 掉落口 `drawDropMark` / 蔓延预告 / 粒子；底层与高亮同贴图版读 `BoardView` / `appHighlight`） |
-| `UI.CellTable` | 单格绘制的元素查表：元素名（注册表）→ `CellRenderer{crPrim, crArt, crSprite}`；宝石 5 个名字共用一个渲染器；`Custom` 先查按名字的 `customTable`（段 5：气泡；新玩法 5：雪怪 `snow_boss` 按象限画四分之一身体），查不到走自定义渲染器 |
+| `UI.CellTable` | 单格绘制的元素查表：元素名（注册表）→ `CellRenderer{crPrim, crArt, crSprite}`；宝石 5 个名字共用一个渲染器；`Custom` 先查按名字的 `customTable`（段 5：气泡；新玩法 5：雪怪 `snow_boss` 按象限画四分之一身体；新玩法 7：变色龙 `chameleon` = 当前颜色宝石 + 五色环），查不到走自定义渲染器 |
 | `UI.Ground` | 段 5：地面层的绘制查表（某格的地面层第 11 刀起由 `Match3.View.groundAtView` 取）：名字 → 几何版 / 贴图名(层数)；贴图版画在棋子之下，几何版画在棋子之上（框） |
 | `UI.Cell.Prim` / `UI.Cell.Art` | 每种元素一个几何 / 贴图渲染函数（从原 `drawGemAt` / `drawCellArt` 的大 case 逐字拆出）；`Cell.Art` 另含 `colorKey` / `gemSprite` / `breathe` / 角标 |
 | `UI.Cell.PrimOverlay` | 第 10 刀：几何版宝石覆盖层，每种一个函数（`overlayGrass` / `Vine` / `Choco` / `Fog` / `Chain` / `Freeze` / `Curtain` / `Steam`，层数点共用 `overlayLayerPips`），`primOverlay` 只按构造子分派（`UI.Cell.Prim` 再导出） |
 | `UI.HudArt` / `UI.HudPrim` | HUD、横幅、键位条、暂停帮助、结算面板、弹字的贴图版 / 几何降级版（第 11 刀起 HUD 读数全部来自 `Match3.View`：关卡下标、进度点 `levelDots`、目标、步数上限、道具、右下角 `scoreBadge`；新玩法 5 起 `gvBoss` 为 `Just` 时目标条换成 Boss 血条；得分浮字色、连击贴图名读表现表）；几何版 `drawHud` 只按顺序调用 `UI.HudBlocks` 的区块 |
 | `UI.HudBlocks` | 第 10 刀：几何版 HUD 的区块（`hudFrame` 底板、`hudLevel` 关卡号与进度点、`hudGoal` 目标条、`hudGoalSwatch` 收集色块、`hudMoves` 步数条、`hudBoosters` 道具与工具模式、`hudComboBadge` 连击徽章、`hudStatus` 结局色条；新玩法 5 的 `hudBoss` 血条收 `Maybe BossView`，在 `hudGoal` 之后画；第 11 刀起参数是视图模型：`hudLevel` / `hudMoves` 收 `GameView`、`hudGoal` / `hudGoalSwatch` 收 `GoalInfo`、`hudBoosters` 收 `Boosters`、`hudComboBadge` 多收 `GameView`、`hudStatus` 收 `PlayStatus`）与进度条 `drawMeter`（`UI.HudPrim` 再导出） |
-| `UI.GoalStyle` | 第 5 刀：目标外观的唯一一张表（图标 `goalIcon`、贴图版色调 `goalTint`、几何版 / 地图小点颜色 `goalPip`），按 `goalView` 分派；HUD、选关地图读它（标题 / 状态文字标签 `countTag` / `colorTag` 第 11 刀起在 `Match3.View`） |
+| `UI.GoalStyle` | 第 5 刀：目标外观的唯一一张表（图标 `goalIcon`、贴图版色调 `goalTint`、几何版 / 地图小点颜色 `goalPip`），按 `goalView` 分派（新玩法 7：`CountNamed "chameleon"` 的图标是合成图 `chameleon_icon`）；HUD、选关地图读它（标题 / 状态文字标签 `countTag` / `colorTag` 第 11 刀起在 `Match3.View`） |
 | `UI.TextArt` / `UI.Glyph` | 烘焙文字 / 中文标签贴图的排版；缺字形时的像素字 |
 | `UI.LevelMap` | 选关地图：章节、节点坐标、点击命中、两种绘制 |
 | `ComboFx`（`app/pure`） | 连锁逐轮回放的纯逻辑（步末阶段种类与基础帧数、高亮 / 浮字 / 弹字帧数都查表现表 `UI.Presentation`，按事件种类分派；`StageKind` / 连击等级样式从那里再导出）：阶段机 `cascadeStages`（高亮→消失→下落→落定，以及步末阶段：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌；帧号与加速交给 `Engine.Playback.Player`）、波次视图 `WaveView`（快照 + 本轮效果事件）、时间线常量、连击等级样式、下落映射、浮字曲线；只消费 `MoveTrace` 与效果事件，不绘制 |
@@ -245,7 +245,7 @@ instance Element StoneE where
 | `archetype` | 原型，决定各组能力的缺省值 | — |
 | `color` / `matchColor` | 本体颜色（颜色袋计数）/ 参与匹配的颜色（修饰器可挡住，`modBlocksMatch`） | `Board.Match.groupGemRuns`、`Clear.countColor`、提示 |
 | `blocksSwap` | 本格不能被交换（任一层挡即挡） | `Move` / `Boosters` 校验、`findHint` |
-| `swapRule` | 成对交换规则 `SwapRule{srOrder, srFires 交换前盘, srSeeds 交换后盘}`：交换两端的组合直接给出起手种子；多条按 `srOrder` 取第一条成立的。内置：彩虹取色（rainbow，10）；特殊 × 特殊合成第 8 刀起不再是元素规则，而是注册表的组合表并成的一条（20，见「规则表」） | `Registry.swapOpeningWith`、`Board.Match.findHintWith` |
+| `swapRule` | 成对交换规则 `SwapRule{srOrder, srFires 交换前盘, srSeeds 交换后盘}`：交换两端的组合直接给出起手种子；多条按 `srOrder` 取第一条成立的。内置：彩虹取色（rainbow，10）、彩虹 × 变色龙（chameleon，15，新玩法 7）；特殊 × 特殊合成第 8 刀起不再是元素规则，而是注册表的组合表并成的一条（20，见「规则表」） | `Registry.swapOpeningWith`、`Board.Match.findHintWith` |
 | `hintable` | 普通匹配提示是否试这个格（缺省 True；彩虹 = False，只经成对交换规则给提示） | `Board.Match.findHintWith`（取代原先写死的 `isRainbow`） |
 | `activates` | 特殊块能否点火（自上而下第一个 `Just` 决定，软锁纪律） | `Clear.expandSpecials` |
 | `falls` / `portal` / `drains` | 随重力下落（否则把列分段）/ 可穿传送门 / 到达哪些边时被收走（`[Edge]`；内置饼干 = `[EdgeBottom]`） | `Board.Gravity.drainEdgesMWith` |
@@ -324,7 +324,7 @@ instance Element StoneE where
 |  |  | 190 | fuzzball（新玩法 3：邻格真消除即消灭，本轮已被直接命中的不重复算） |
 |  |  | 200 | snow_boss（新玩法 5：身外一圈的真消除 + 直接命中的 Boss 格各扣 1 血，四格同改；归零四格并入清除格） |
 
-步末规则：countdown（`PhaseTick` 10）、magic_stone（`PhaseTick` 20，新玩法 2：满格转发射中，种子 = 整行 + 整列）；vine 10 / choco 20 / steam 30（`PhaseSpread`）；snail（`PhaseMove` 10）、fuzzball（`PhaseMove` 20，新玩法 3：跳到相邻普通宝石格，记 `EvBelt "fuzzball"`；按盘面散列选格，不耗 `gsGen`）、snow_boss（`PhaseMove` 30，新玩法 5：召唤计数 +1，每 3 次把身外一圈的一颗普通宝石变成 1 层石头，记 `EvTick "snow_boss"`；同样按盘面散列选格）。
+步末规则：countdown（`PhaseTick` 10）、magic_stone（`PhaseTick` 20，新玩法 2：满格转发射中，种子 = 整行 + 整列）；vine 10 / choco 20 / steam 30（`PhaseSpread`）；snail（`PhaseMove` 10）、fuzzball（`PhaseMove` 20，新玩法 3：跳到相邻普通宝石格，记 `EvBelt "fuzzball"`；按盘面散列选格，不耗 `gsGen`）、snow_boss（`PhaseMove` 30，新玩法 5：召唤计数 +1，每 3 次把身外一圈的一颗普通宝石变成 1 层石头，记 `EvTick "snow_boss"`；同样按盘面散列选格）、chameleon（`PhaseMove` 40，新玩法 7：每只按固定顺序换到下一种不会立刻连成三消的颜色，记 `EvTick "chameleon"`；纯按盘面）。
 
 ### 效果事件
 
@@ -439,7 +439,8 @@ data GameView = GameView
    - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：地面层 + `piece [ground …, counts (CountNamed "jelly")]`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` + `blocker [breaks, onAdjacent 170 …, counts (CountNamed "bubble")]`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。新玩法 2 的魔法石（`MagicStone`，在 `Element.Builtin.Obstacle`：`Custom` + `fixed [hit …, colorless, onAdjacent 180 …, atEnd (EndRule PhaseTick 20 …)]`，命中反应随状态变：平时 `Immune`、发射中 `Absorb` 归零）同样只加 instance 与条目；前端在 `UI.CellTable.customTable` 加一行。新玩法 3 的毛球（`Fuzzball`，在 `Element.Builtin.Actor`：`Custom` + `blocker [breaks, onAdjacent 190 …, counts (CountNamed "fuzzball"), atEnd (EndRule PhaseMove 20 …)]`）也一样：步末效果借用 `EvBelt` 的形状（前端按皮带平移播放），`app/pure` 不改。
    - 新玩法 5 的雪怪 Boss（`SnowBoss`，在 `Element.Builtin.Obstacle`）：多格元素用四个固定格表达（`fixed [hit (Absorb 自身), colorless, notHintable, onAdjacent 200 …, countsDiff (CountNamed "snow_boss"), weighs 血量, atEnd (EndRule PhaseMove 30 …)]`），主流程唯一的改动是通用的差计权重（`CountCaps.ccDiffWeight` / `weighs`，`Game.Tally.diffCountsWith` 求加权和；缺省 1 时与原来的个数差相同）
    - 新玩法 6 的饼干掉落口（`CookieDrop`，在 `Element.Builtin.Level`）：关卡级元素回复已有的补子策略查询 `Refilling`（第 8 刀），把策略包一层「掉落口格补收集物」（`dropRefill`，随机数照常消耗）；配置在关卡记录的新字段 `lvlDrops`（缺省 `[]`）。主流程只多一个条件：有掉落口的关卡开局跳过目标补齐（`Game.Level.newGameAtLevelWith`）
-   - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）、补子时生成自定义棋子。
+   - 新玩法 7 的变色龙（`Chameleon`，在 `Element.Builtin.Collectible`）：`Custom` 本体 + `piece [colorIs (colorAt k), keepsOnShuffle, noRecolor, counts (CountNamed "chameleon"), onSwap (SwapRule 15 …), atEnd (EndRule PhaseMove 40 …)]`，主流程不改；第 47 关用新玩法 6 的掉落口（`DropSpec … (Custom "chameleon" 0) 2`）在补子时补进变色龙
+   - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）。（补子时生成自定义棋子已可经掉落口 `lvlDrops` 做到，见新玩法 7。）
 3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 里加一行（关卡级元素加进 `builtinLevelDefs`）；测试 / 扩展元素 = `register (customEntry 原型 (元素 . unCustomState)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevelElement 原型值)`，开局状态写在 `levelStart` 里，开局 / 走子用 `newGameAtLevelWith reg` 与 `*With reg` 入口），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由条目的放置函数落格（`customEntry` 缺省 = `Custom 名字 第一个整数参数`；要别的解析用 `customEntryWith`）。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Presentation.elementRGBTable`（HUD 目标 / 地图 / 几何版 / 步末前沿与碎屑共用）；步末效果的播放、生长曲线与音效见[前端表现表](#前端表现表第-10-刀)的「给新元素加表现和音效」。

@@ -155,17 +155,21 @@ instance LevelElement CookieDrop where
   levelStart lvl _ = CookieDrop (lvlDrops lvl)
 
 -- | 掉落口补子：每个空洞先照原策略补（随机数照常消耗，所以生成器的推进与没有掉落口时相同），
--- 若空洞是某个掉落口格、且此刻盘上（已补的格子算在内）该口的 dropCell 少于 dropKeep 个，就换成 dropCell。
--- 多个掉落口规格取第一个满足的；同一次补子里先补的掉落口先占名额（行优先）。
+-- 若空洞是某个掉落口格、且此刻盘上（已补的格子算在内）与 dropCell 同种的格少于 dropKeep 个，就换成 dropCell。
+-- 「同种」= 同一个 Custom 名字（不看状态值：新玩法 7 的变色龙掉下来是 C1，换过色的仍算同种），内置格按相等
+-- （饼干 = Cookie，与第 46 关原先的逐格相等相同）。多个掉落口规格取第一个满足的；同一次补子里先补的掉落口先占名额（行优先）。
 dropRefill :: [DropSpec] -> RefillPolicy -> RefillPolicy
 dropRefill ds base = RefillPolicy (refillName base ++ "+drop") pick
   where
     pick ctx g =
       let (c, g') = refillCell base ctx g
-          onBoard d = length (filter (== Just (dropCell d)) (toList (rcBoard ctx)))
+          onBoard d = length (filter (maybe False (sameKind (dropCell d))) (toList (rcBoard ctx)))
       in case [d | d <- ds, rcPos ctx `elem` dropCells d, onBoard d < dropKeep d] of
            d : _ -> (dropCell d, g')
            [] -> (c, g')
+    sameKind x y = case (x, y) of
+      (Custom n _, Custom m _) -> n == m
+      _ -> x == y
 
 -- | 传送门的实现（PortalLevel 回复 Settling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由注册表给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard

@@ -50,6 +50,8 @@ executable match3-web
     Match3.Board.Hooks
     Match3.Board.Refill
     Match3.Board.Phase
+    Match3.Board.Wave
+    Match3.Board.Effect
     Match3.Board.Cascade
     Match3.Board.Random
     Match3.Board.Default
@@ -100,6 +102,7 @@ executable match3-web
       base
     , array
     , containers
+    , transformers
     , random ==1.2.1.1
     , ghc-experimental
   ghc-options:

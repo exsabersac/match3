@@ -31,6 +31,7 @@ library:
   source-dirs: src
   dependencies:
   - containers
+  - transformers
   exposed-modules:
   - Engine.Game
   - Engine.Effect
@@ -60,6 +61,8 @@ library:
   - Match3.Board.Hooks
   - Match3.Board.Refill
   - Match3.Board.Phase
+  - Match3.Board.Wave
+  - Match3.Board.Effect
   - Match3.Board.Cascade
   - Match3.Board.Random
   - Match3.Board.Default

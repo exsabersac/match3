@@ -52,6 +52,8 @@ library
       Match3.Board.Hooks
       Match3.Board.Refill
       Match3.Board.Phase
+      Match3.Board.Wave
+      Match3.Board.Effect
       Match3.Board.Cascade
       Match3.Board.Random
       Match3.Board.Default
@@ -107,6 +109,7 @@ library
     , base >=4.7 && <5
     , containers
     , random
+    , transformers
   default-language: Haskell2010
 
 executable match3-sdl
@@ -181,6 +184,7 @@ test-suite match3-test
       Spec.Chameleon
       Spec.Classes
       Spec.CookieDrop
+      Spec.Effects
       Spec.Element
       Spec.ElementClass
       Spec.Engine
@@ -203,6 +207,7 @@ test-suite match3-test
       Spec.SourceScan
       Spec.Specials
       Spec.Support
+      Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
       Spec.Support.Source
       Spec.UIEvents

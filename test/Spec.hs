@@ -40,6 +40,7 @@ import qualified Spec.MagicGround
 import qualified Spec.RainbowCombos
 import qualified Spec.Phase
 import qualified Spec.Classes
+import qualified Spec.Effects
 
 main :: IO ()
 main = defaultMain tests
@@ -84,6 +85,7 @@ tests =
         , Spec.RainbowCombos.tests
         , Spec.Phase.tests
         , Spec.Classes.tests
+        , Spec.Effects.tests
         , Spec.SourceScan.tests
         ]
     )

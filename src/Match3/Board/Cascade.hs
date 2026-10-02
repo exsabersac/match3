@@ -17,6 +17,11 @@
 -- 类型层（Haskell 特性第 1 项）：每一轮的盘面带阶段标签（Match3.Board.Phase）——消除得到 Stage 'Cleared，
 -- 下落得到 Stage 'Fallen，补子回到 Stage 'Full；settleRound 与回放记录 waveOf 只收对应阶段的盘面，
 -- 「没下落就补子」「cwHoles 记成下落后的盘面」之类的错位编译不过。
+-- 效果（Haskell 特性第 3 项，见 docs/haskell-features/03-效果与架构.md）：连锁核心写成只依赖能力类的程序
+-- （cascadeMatchesFromM / cascadeSeedsM / cascadeAfterM / cascadeCountdownsM / stepCascadeAtM，约束 MonadCascade m：
+-- 补子 MonadRefill、关卡级钩子 MonadLevelHooks、发出回放 MonadWaves，见 Match3.Board.Effect）。对外的 @...With@ 入口签名不变，
+-- 用纯解释器 PureCascade 运行（runCascade）；同一个程序换成追踪解释器（runCascadeTraced）就额外得到事件日志。
+-- 第 3 项前生成器 g 与钩子 hooks 在每个函数里手工逐个传递（g → g1 → g2 …），回放在反向累积器里攒好再反转。
 -- 不变量：每轮 = clear → settleRound（settleDrain → refill）→ 整轮吸收 absorbRound（钩子 onAbsorb，内置 = 飞碟；→ 吸收单独一轮），随机数按此顺序消耗；
 -- 计数口径（逐字保持旧实现，由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
@@ -38,15 +43,27 @@ module Match3.Board.Cascade
   , cascadeCountdownsWith
   , cascadeCountdownsTracedWith
   , endHolesWith
-    -- * 回放数据
+    -- * 回放数据（定义在 Match3.Board.Wave）
   , CascadeWave(..)
     -- * 单轮
   , stepCascadeAtWith
+    -- * 连锁程序（第 3 项：只依赖能力类，任选解释器运行；见 Match3.Board.Effect）
+  , cascadeMatchesM
+  , cascadeMatchesFromM
+  , cascadeSeedsM
+  , cascadeAfterM
+  , cascadeCountdownsM
+  , stepCascadeAtM
+  , runCascade
+  , runCascadeTraced
   ) where
 
+import Control.Monad (when)
 import Data.List (nub)
+import Match3.Board.Effect
 import Match3.Board.Hooks (LevelHooks(..), noHooks)
-import Match3.Board.Phase (Phase(..), Stage, clearStage, digHoles, fallStage, fullStage, refillStage, stageGrid)
+import Match3.Board.Phase (Phase(..), Stage, clearStage, digHoles, fallStage, fullStage, stageGrid)
+import Match3.Board.Wave (CascadeWave(..))
 import Match3.Element.Registry (Registry, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
 import Match3.Counts (CounterKey(..), Counts, countsFromList, noCounts, singleCount)
@@ -60,30 +77,6 @@ import Match3.Board.Match
 
 --------------------------------------------------------------------------------
 -- 数据
-
--- | 连锁中的一轮（一次「消除 → 下落 → 补子」）。
-data CascadeWave = CascadeWave
-  { cwBefore  :: Board           -- ^ 本轮消除前的盘面
-  , cwCleared :: [Pos]           -- ^ 本轮被消掉的格（真消除 + 被打碎的障碍）；可能为空（仅沉降）
-  , cwDrained :: [Pos]           -- ^ 沉降途中底行被收走的饼干位
-  , cwHoles   :: MBoard          -- ^ 消除并放下新特殊块之后、下落之前（Nothing = 空洞）
-  , cwAfter   :: Board           -- ^ 重力 / 传送门 / 补子之后
-  , cwScore   :: Score           -- ^ 本轮得分（与结算的波次计分相同）
-  } deriving (Eq)
-
--- | 与派生的 Show 逐字相同，只是 cwHoles 仍按行列表打印（第 3 刀前 MBoard 是 [[Maybe Cell]]；
--- 元素查询快照对 show 的结果取散列，打印形式因此保持不变）。
-instance Show CascadeWave where
-  showsPrec d w =
-    showParen (d >= 11) $
-      showString "CascadeWave {cwBefore = " . showsPrec 0 (cwBefore w)
-        . showString ", cwCleared = " . showsPrec 0 (cwCleared w)
-        . showString ", cwDrained = " . showsPrec 0 (cwDrained w)
-        . showString ", cwHoles = " . showsPrec 0 (mboardRows (cwHoles w))
-        . showString ", cwAfter = " . showsPrec 0 (cwAfter w)
-        . showString ", cwScore = " . showsPrec 0 (cwScore w)
-        . showChar '}'
-
 
 -- | 一段连锁的累计计数（替代旧的 15 元元组；第 4 刀起各元素 / 飞碟的个数统一在 ctCounts）。
 data CascadeTally = CascadeTally
@@ -164,27 +157,50 @@ waveOf before cleared drained holes after =
 -- 给出消除前盘面 before、本轮清除结果 (挖空盘面, 清除数, 清除格) 与波次 w（得分 = scoreForWave w 清除数），
 -- 沉降后按行优先逐个空洞补子（第 8 刀起按补子策略 activeRefill；缺省策略每洞恰好一次 randomColor，随机数顺序与原先相同）。
 -- 阶段按类型走：Cleared --fallStage--> Fallen --refillStage--> Full（调换两步的顺序编译不过）。
-settleRound :: RandomGen g => Registry -> LevelHooks -> g -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> (Round, g)
-settleRound reg hooks g before (holes, n, pos) w =
+--
+-- 第 3 项（效果）：签名只说用到哪两种效果——读钩子（沉降节拍、补子策略）与补子（随机数）；不发出回放
+-- （是否记这一轮由调用方决定，见 'cascadeAfterM'）。第 3 项前是 @RandomGen g => ... -> LevelHooks -> g -> ... -> (Round, g)@，
+-- 生成器由调用方手工传进传出。
+settleRoundM :: (MonadRefill m, MonadLevelHooks m) => Registry -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
+settleRoundM reg before (holes, n, pos) w = do
+  hooks <- currentHooks
   let (fallen, drained) = fallStage reg hooks holes                  -- 消除 → 下落
-      (after, g') = refillStage (activeRefill reg hooks) g fallen    -- 下落 → 补子
-      sites = map fst drained
+  after <- refillHoles (activeRefill reg hooks) fallen               -- 下落 → 补子
+  let sites = map fst drained
       wave = waveOf before pos sites holes after (scoreForWave w n)
-  in (Round wave after n (withDrained reg drained (hitsOn reg (stageGrid before) pos)) sites, g')
+  pure (Round wave after n (withDrained reg drained (hitsOn reg (stageGrid before) pos)) sites)
+
+-- | 一轮并发出它的回放记录（除皮带后 / 步末后的「只沉降」一轮外，每一轮都这样记）。
+roundM :: MonadCascade m => Registry -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
+roundM reg before cr w = do
+  rd <- settleRoundM reg before cr w
+  emitWave (rdWave rd)
+  pure rd
 
 -- | 补子后的整轮吸收（钩子 onAbsorb：关卡级元素回复 Refilled 消息，内置 = 飞碟）。吸到格子时吸收单独成一轮
--- （clearUfoAbsorbed → settleRound，波次 w）；返回 (推进后的钩子, Just (吸收轮, 其中被吸走的格数), 生成器)。
+-- （clearUfoAbsorbed → 一轮，波次 w，已发出回放）；返回 Just (吸收轮, 其中被吸走的格数)。钩子由 absorbHooks 推进。
 -- 第 3 刀前匹配连锁与种子起手各有一份。
-absorbRound :: RandomGen g => Registry -> LevelHooks -> g -> Board -> Int -> (LevelHooks, Maybe (Round, Int), g)
-absorbRound reg hooks g b w =
-  let (absorbed, hooks') = onAbsorb hooks b
-  in if null absorbed
-       then (hooks', Nothing, g)
-       else
-         let bS = fullStage b
-             cr@(_, _, pos) = clearStage (\x -> clearUfoAbsorbedWith reg x absorbed) bS
-             (rd, g') = settleRound reg hooks' g bS cr w
-         in (hooks', Just (rd, length [p | p <- absorbed, p `elem` pos]), g')
+absorbRoundM :: MonadCascade m => Registry -> Board -> Int -> m (Maybe (Round, Int))
+absorbRoundM reg b w = do
+  absorbed <- absorbHooks b
+  if null absorbed
+    then pure Nothing
+    else do
+      let bS = fullStage b
+          cr@(_, _, pos) = clearStage (\x -> clearUfoAbsorbedWith reg x absorbed) bS
+      rd <- roundM reg bS cr w
+      pure (Just (rd, length [p | p <- absorbed, p `elem` pos]))
+
+-- | 用纯解释器运行一段连锁程序，拼成 CascadeRun（各个 @...With@ 入口都经它，签名与第 3 项前相同）。
+runCascade :: LevelHooks -> g -> PureCascade g (Board, CascadeTally) -> CascadeRun g
+runCascade hooks g m = ranToRun (runPureCascade hooks g m)
+
+-- | 用追踪解释器运行一段连锁程序：CascadeRun 与 'runCascade' 逐项相同，另附事件日志。
+runCascadeTraced :: LevelHooks -> g -> TracedCascade g (Board, CascadeTally) -> (CascadeRun g, [CascadeLog])
+runCascadeTraced hooks g m = let (r, logs) = runTracedCascade hooks g m in (ranToRun r, logs)
+
+ranToRun :: Ran g (Board, CascadeTally) -> CascadeRun g
+ranToRun (Ran (b, t) hooks waves g) = CascadeRun b t hooks waves g
 
 --------------------------------------------------------------------------------
 -- 核心：普通匹配连锁
@@ -193,61 +209,71 @@ absorbRound reg hooks g b w =
 cascadeMatchesWith :: RandomGen g => Registry -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
 
--- | cascadeMatchesFrom（指定注册表）。
--- 每轮：clearMatchesDetailed → settleRound → absorbRound（若飞碟吸到格子，吸收单独算下一轮）。没有匹配时最大波次 = startW。
+-- | cascadeMatchesFrom（指定注册表）：纯解释器运行 'cascadeMatchesFromM'。
 cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
-cascadeMatchesFromWith reg startW prefer0 hooks0 g0 b0 =
-  go prefer0 g0 b0 0 0 startW noCounts hooks0 [] []
+cascadeMatchesFromWith reg startW prefer hooks g b = runCascade hooks g (cascadeMatchesFromM reg startW prefer b)
+
+cascadeMatchesM :: MonadCascade m => Registry -> Maybe Pos -> Board -> m (Board, CascadeTally)
+cascadeMatchesM reg = cascadeMatchesFromM reg 0
+
+-- | 普通匹配连锁（程序）。每轮：clearMatchesDetailed → 一轮（沉降 + 补子）→ 整轮吸收（若飞碟吸到格子，吸收单独算下一轮）。
+-- 没有匹配时最大波次 = startW。返回 (终盘, 计数)；回放、钩子、生成器都在效果里。
+-- 第 3 项前的循环带着 g、hooks、wavesRev 三个手工传递的参数（g → g1 → g2、hooks → hooks'），现在只剩计数相关的累积器。
+cascadeMatchesFromM :: MonadCascade m => Registry -> Int -> Maybe Pos -> Board -> m (Board, CascadeTally)
+cascadeMatchesFromM reg startW prefer0 b0 =
+  go prefer0 b0 0 0 startW noCounts []
   where
-    -- clearedRev / wavesRev：反向累积（按块 / 按轮），收尾时再反转
-    go pref g b cells score maxW hits hooks clearedRev wavesRev
+    -- clearedRev：反向累积（按块），收尾时再反转
+    go pref b cells score maxW hits clearedRev
       | not (hasAnyMatchWith reg b) =
-          CascadeRun b (CascadeTally cells score maxW hits (nub (concat (reverse clearedRev)))) hooks (reverse wavesRev) g
-      | otherwise =
+          pure (b, CascadeTally cells score maxW hits (nub (concat (reverse clearedRev))))
+      | otherwise = do
           let wave = maxW + 1
               bS = fullStage b
               cr@(_, n, pos) = clearStage (clearMatchesDetailedWith reg pref) bS
-              (r1, g1) = settleRound reg hooks g bS cr wave
-              b1 = rdAfter r1
+          r1 <- roundM reg bS cr wave
+          let b1 = rdAfter r1
               posD = nub (pos ++ rdSites r1)
               score1 = score + cwScore (rdWave r1)
               hits1 = hits <> rdHits r1 <> colorsOn reg b posD
-              (hooks', absorbed, g2) = absorbRound reg hooks g1 b1 (wave + 1)
-          in case absorbed of
-               Nothing ->
-                 go Nothing g2 b1 (cells + n) score1 wave hits1
-                   hooks' (posD : clearedRev) (rdWave r1 : wavesRev)
-               Just (r2, nAbs) ->
-                 -- 飞碟吸收单独算一轮（波次 wave + 1）
-                 let pos2 = cwCleared (rdWave r2)
-                 in go Nothing g2 (rdAfter r2) (cells + n + rdCells r2) (score1 + cwScore (rdWave r2)) (wave + 1)
-                      (hits1 <> rdHits r2 <> colorsOn reg b1 pos2 <> singleCount CountUfo nAbs)
-                      hooks' (rdSites r2 : pos2 : posD : clearedRev) (rdWave r2 : rdWave r1 : wavesRev)
+          absorbed <- absorbRoundM reg b1 (wave + 1)
+          case absorbed of
+            Nothing ->
+              go Nothing b1 (cells + n) score1 wave hits1 (posD : clearedRev)
+            Just (r2, nAbs) ->
+              -- 飞碟吸收单独算一轮（波次 wave + 1）
+              let pos2 = cwCleared (rdWave r2)
+              in go Nothing (rdAfter r2) (cells + n + rdCells r2) (score1 + cwScore (rdWave r2)) (wave + 1)
+                   (hits1 <> rdHits r2 <> colorsOn reg b1 pos2 <> singleCount CountUfo nAbs)
+                   (rdSites r2 : pos2 : posD : clearedRev)
 
 --------------------------------------------------------------------------------
 -- 核心：种子起手
 
--- | cascadeSeeds（指定注册表）：种子清除一轮（波次 1）→ 整轮吸收（波次 2）→ 普通匹配续连锁。
+-- | cascadeSeeds（指定注册表）：纯解释器运行 'cascadeSeedsM'。
 cascadeSeedsWith :: RandomGen g => Registry -> Maybe Pos -> [Pos] -> LevelHooks -> g -> Board -> CascadeRun g
-cascadeSeedsWith reg prefer seeds hooks0 g b
-  | null seeds = cascadeMatchesWith reg prefer hooks0 g b
-  | otherwise =
+cascadeSeedsWith reg prefer seeds hooks g b = runCascade hooks g (cascadeSeedsM reg prefer seeds b)
+
+-- | 种子起手（程序）：种子清除一轮（波次 1）→ 整轮吸收（波次 2）→ 普通匹配续连锁。
+cascadeSeedsM :: MonadCascade m => Registry -> Maybe Pos -> [Pos] -> Board -> m (Board, CascadeTally)
+cascadeSeedsM reg prefer seeds b
+  | null seeds = cascadeMatchesM reg prefer b
+  | otherwise = do
       let bS = fullStage b
           cr@(_, n, pos) = clearStage (\x -> clearFromSeedsDetailedWith reg prefer x seeds) bS
-          (r0, g1) = settleRound reg hooks0 g bS cr 1
-          b1 = rdAfter r0
-          (hooks1, absorbed, g1') = absorbRound reg hooks0 g1 b1 2
-          (wU, b1', nU, scoreU, hitsU, posU) = case absorbed of
-            Nothing -> ([], b1, 0, 0, noCounts, [])
+      r0 <- roundM reg bS cr 1
+      let b1 = rdAfter r0
+      absorbed <- absorbRoundM reg b1 2
+      let (b1', nU, scoreU, hitsU, posU) = case absorbed of
+            Nothing -> (b1, 0, 0, noCounts, [])
             Just (rU, nAbs) ->
               let pos2 = cwCleared (rdWave rU)
-              in ( [rdWave rU], rdAfter rU, rdCells rU, cwScore (rdWave rU)
+              in ( rdAfter rU, rdCells rU, cwScore (rdWave rU)
                  , rdHits rU <> colorsOn reg b1 pos2 <> singleCount CountUfo nAbs, nub (pos2 ++ rdSites rU) )
           wavesDone = (if n > 0 then 1 else 0) + (if nU > 0 then 1 else 0)
-          -- 续连锁：波次倍数接在起手轮之后
-          rest = cascadeMatchesFromWith reg wavesDone Nothing hooks1 g1' b1'
-          t2r = crTally rest
-          maxW = if ctCells t2r > 0 then ctMaxWave t2r else wavesDone
+      -- 续连锁：波次倍数接在起手轮之后
+      (bRest, t2r) <- cascadeMatchesFromM reg wavesDone Nothing b1'
+      let maxW = if ctCells t2r > 0 then ctMaxWave t2r else wavesDone
           tally =
             CascadeTally
               (n + nU + ctCells t2r)
@@ -255,7 +281,7 @@ cascadeSeedsWith reg prefer seeds hooks0 g b
               maxW
               (rdHits r0 <> colorsOn reg b pos <> hitsU <> ctCounts t2r)
               (nub (pos ++ rdSites r0 ++ posU ++ ctCleared t2r))
-      in CascadeRun (crBoard rest) tally (crHooks rest) (rdWave r0 : wU ++ crWaves rest) (crGen rest)
+      pure (bRest, tally)
 
 --------------------------------------------------------------------------------
 -- 核心：皮带移位之后 / 步末之后的补结算
@@ -275,25 +301,28 @@ endHolesWith reg b = nub (concat [erHoles r b | ph <- [PhaseTick, PhaseSpread, P
 -- 步末入口没有空洞、边上也没有待收格时沉降是恒等、refill 不消耗随机数，结果等于旧的「成消才连锁」：
 -- 内置元素的步末从不留下空洞（38 关 × 多种子扫描确认，见 docs/testing.md），金标准因此不变。
 cascadeAfterWith :: RandomGen g => Registry -> AfterEntry -> LevelHooks -> g -> Board -> CascadeRun g
-cascadeAfterWith reg entry hooks g b = case entry of
+cascadeAfterWith reg entry hooks g b = runCascade hooks g (cascadeAfterM reg entry b)
+
+-- | 皮带后 / 步末后的补结算（程序）。
+cascadeAfterM :: MonadCascade m => Registry -> AfterEntry -> Board -> m (Board, CascadeTally)
+cascadeAfterM reg entry b = case entry of
   AfterBelt
-    | hasAnyMatchWith reg b -> cascadeMatchesWith reg Nothing hooks g b
+    | hasAnyMatchWith reg b -> cascadeMatchesM reg Nothing b
     | otherwise -> settleThenCascade []
   AfterEnd holes -> settleThenCascade holes
   where
-    settleThenCascade holes =
+    settleThenCascade holes = do
       let bS = fullStage b
-          (rd, g1) = settleRound reg hooks g bS (digHoles holes bS, 0, []) 0
-          b1 = rdAfter rd
+      rd <- settleRoundM reg bS (digHoles holes bS, 0, []) 0
+      let b1 = rdAfter rd
           sites = rdSites rd
-          settleWave = [rdWave rd | b1 /= b || not (null sites)]
-      in if hasAnyMatchWith reg b1
-           then
-             let r = cascadeMatchesWith reg Nothing hooks g1 b1
-                 t = crTally r
-             in r { crTally = (addHits (rdHits rd) t) {ctCleared = nub (sites ++ ctCleared t)}
-                  , crWaves = settleWave ++ crWaves r }
-           else CascadeRun b1 (addHits (rdHits rd) zeroTally) {ctCleared = sites} hooks settleWave g1
+      -- 只有沉降的一轮：盘面变了或收走了格才记
+      when (b1 /= b || not (null sites)) (emitWave (rdWave rd))
+      if hasAnyMatchWith reg b1
+        then do
+          (b2, t) <- cascadeMatchesM reg Nothing b1
+          pure (b2, (addHits (rdHits rd) t) {ctCleared = nub (sites ++ ctCleared t)})
+        else pure (b1, (addHits (rdHits rd) zeroTally) {ctCleared = sites})
 
 --------------------------------------------------------------------------------
 -- 核心：倒计时
@@ -307,6 +336,14 @@ cascadeCountdownsWith reg hooks0 g b = snd (cascadeCountdownsTracedWith reg hook
 cascadeCountdownsTracedWith
   :: RandomGen g => Registry -> LevelHooks -> g -> Board -> ([(Board, Board, EndEffect)], CascadeRun g)
 cascadeCountdownsTracedWith reg hooks0 g b =
+  let r = runPureCascade hooks0 g (cascadeCountdownsM reg b)
+      (steps, run) = ranValue r
+  in (steps, ranToRun r {ranValue = run})
+
+-- | 倒计时（程序）：步末规则是纯的盘面变换，只有引爆种子之后的连锁用到效果；没有种子时什么效果也不发生
+-- （= 第 3 项前的 stillRun：盘面、钩子、生成器原样）。
+cascadeCountdownsM :: MonadCascade m => Registry -> Board -> m ([(Board, Board, EndEffect)], (Board, CascadeTally))
+cascadeCountdownsM reg b = do
   let rules = endRules reg PhaseTick
       ctx = EndCtx [] [] (pushableWith reg)
       step (accRev, before) r =
@@ -315,10 +352,11 @@ cascadeCountdownsTracedWith reg hooks0 g b =
       (stepsRev, bTick) = foldl step ([], b) rules
       steps = reverse stepsRev
       seeds = nub (concatMap (\r -> erSeeds r bTick) rules)
-      run
-        | null seeds = stillRun bTick hooks0 g
-        | otherwise = cascadeSeedsWith reg Nothing seeds hooks0 g bTick
-  in (steps, run)
+  run <-
+    if null seeds
+      then pure (bTick, zeroTally)
+      else cascadeSeedsM reg Nothing seeds bTick
+  pure (steps, run)
 
 --------------------------------------------------------------------------------
 -- 单轮
@@ -327,10 +365,16 @@ cascadeCountdownsTracedWith reg hooks0 g b =
 -- 与 cascadeMatchesFromWith 的单轮是同一组调用：clear → settleRound（沉降 + 补子）；
 -- prefer 为第一轮新特殊块的优先生成位。
 stepCascadeAtWith :: RandomGen g => Registry -> Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
-stepCascadeAtWith reg prefer g b
-  | not (hasAnyMatchWith reg b) = Nothing
-  | otherwise =
+stepCascadeAtWith reg prefer g b =
+  let r = runPureCascade noHooks g (stepCascadeAtM reg prefer b)
+  in fmap (\(b', n) -> (b', n, ranGen r)) (ranValue r)
+
+-- | 单轮（程序）：发出这一轮的回放（纯入口 'stepCascadeAtWith' 不返回回放，丢弃）。
+stepCascadeAtM :: MonadCascade m => Registry -> Maybe Pos -> Board -> m (Maybe (Board, Int))
+stepCascadeAtM reg prefer b
+  | not (hasAnyMatchWith reg b) = pure Nothing
+  | otherwise = do
       let bS = fullStage b
           cr@(_, n, _) = clearStage (clearMatchesDetailedWith reg prefer) bS
-          (rd, g') = settleRound reg noHooks g bS cr 1
-      in Just (rdAfter rd, n, g')
+      rd <- roundM reg bS cr 1
+      pure (Just (rdAfter rd, n))

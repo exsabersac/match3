@@ -9,6 +9,9 @@
 -- 生成器只用本模块里的 Gen（格子、可空盘面、战役关卡 + 种子 + 动作选择），不依赖规则实现。
 module Spec.Properties
   ( tests
+    -- * 生成器（Spec.Perf 也用）
+  , genCell
+  , genPlayBoard
   ) where
 
 import Data.Array (bounds)

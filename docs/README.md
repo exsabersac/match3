@@ -16,6 +16,7 @@
 | [haskell-features/02-类型类与抽象.md](haskell-features/02-类型类与抽象.md) | Haskell 特性展示第 2 项：DerivingStrategies / GND（名字 newtype、盘面容器的实例来源）、DefaultSignatures（Int newtype 元素的缺省 `toCell`）、存在类型与 xmonad 风格元素类的整理、盘面 `Grid` 的 Functor / Foldable / Traversable 加 Monoid 统计；行为不变 |
 | [haskell-features/03-效果与架构.md](haskell-features/03-效果与架构.md) | Haskell 特性展示第 3 项：纯核心 + 可替换效果——连锁写成只依赖能力类（补子 / 关卡级钩子 / 发出回放）的程序，纯解释器、追踪解释器（事件日志）、测试里的手写 free monad 三种跑法；与 free / operational 风格对比；行为不变 |
 | [haskell-features/04-惰性与递归模式.md](haskell-features/04-惰性与递归模式.md) | Haskell 特性展示第 4 项：惰性与递归模式——拒绝采样与自动洗牌的有限重试写成惰性无穷流（`Engine.Stream`），回放器与计数表的严格性修正（bang pattern / `foldl'`，附内存实验），测试里手写 `Fix` / `cata` / `ana` / `hylo` 对照回放器；行为不变 |
+| [haskell-features/05-性能与并发.md](haskell-features/05-性能与并发.md) | Haskell 特性展示第 5 项：性能与并发——先剖析再改：匹配扫描先投影成 unboxed 的「匹配码」数组（每格只问一次注册表，提示搜索不再复制盘面），重力在 `runSTArray` 里就地压实，测试里的金标准用 `forkIO` + STM 并行求值、按原顺序拼回；附剖析表与实测数据（含没有收益的尝试）；行为不变 |
 | [refactor-2026-09.md](refactor-2026-09.md) | 2026-09 的 11 刀重构总结：各刀 SHA 与要点、验收方式、行为差异汇总、现在怎样新增元素 / 关卡级元素 / 关卡 / 规则 / 表现 |
 | [backlog.md](backlog.md) | 新玩法待办清单（2026-09-30 解冻后）：现有元素 / 机制盘点，对照开心消消乐的缺口，按收益 / 工作量排序，标注可并行的独立项 |
 | [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |

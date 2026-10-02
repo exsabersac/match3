@@ -6,7 +6,9 @@ module Spec.Golden
   ( tests
   ) where
 
+import Control.Concurrent (getNumCapabilities)
 import qualified Golden
+import Spec.Support.Parallel (forceLines, parallelForce)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -21,8 +23,10 @@ tests =
 golden_behaviour_snapshot :: Assertion
 golden_behaviour_snapshot = do
   expected <- lines <$> readFile "test/golden/golden.txt"
-  let actual = Golden.goldenLines
-      diffs = [ (i, e, a) | (i, e, a) <- zip3 [1 :: Int ..] expected actual, e /= a ]
+  -- 第 5 项：各段（Golden.goldenSections，concat = goldenLines）在所有核上并行求值、按原顺序拼回；比对与之前逐字相同
+  workers <- getNumCapabilities
+  actual <- concat <$> parallelForce workers forceLines Golden.goldenSections
+  let diffs = [ (i, e, a) | (i, e, a) <- zip3 [1 :: Int ..] expected actual, e /= a ]
   case diffs of
     ((i, e, a) : _) ->
       assertFailure ("golden line " ++ show i ++ " differs (" ++ show (length diffs) ++ " lines differ)\nexpected: " ++ take 400 e ++ "\nactual:   " ++ take 400 a)

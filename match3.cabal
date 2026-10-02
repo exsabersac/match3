@@ -200,6 +200,7 @@ test-suite match3-test
       Spec.Levels
       Spec.MagicGround
       Spec.MagicStone
+      Spec.Perf
       Spec.Phase
       Spec.Presentation
       Spec.Properties
@@ -212,6 +213,8 @@ test-suite match3-test
       Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
       Spec.Support.LegacyLazy
+      Spec.Support.LegacyPerf
+      Spec.Support.Parallel
       Spec.Support.Source
       Spec.UIEvents
       Spec.View
@@ -236,6 +239,7 @@ test-suite match3-test
     , directory
     , match3
     , random
+    , stm
     , tasty
     , tasty-hunit
     , tasty-quickcheck

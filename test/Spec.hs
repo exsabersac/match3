@@ -42,6 +42,7 @@ import qualified Spec.Phase
 import qualified Spec.Classes
 import qualified Spec.Effects
 import qualified Spec.Lazy
+import qualified Spec.Perf
 
 main :: IO ()
 main = defaultMain tests
@@ -88,6 +89,7 @@ tests =
         , Spec.Classes.tests
         , Spec.Effects.tests
         , Spec.Lazy.tests
+        , Spec.Perf.tests
         , Spec.SourceScan.tests
         ]
     )

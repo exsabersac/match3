@@ -16,6 +16,7 @@
 -- 重新生成（只在确认行为「应该」变化时，机制刀停期间不应发生）：见 test/golden/regen.sh。
 module Golden
   ( goldenLines
+  , goldenSections
   , main
   ) where
 
@@ -346,28 +347,28 @@ runGame tag gs0 n = (tag ++ " start " ++ pState (startHistory gs0) ++ " board=" 
           in ls ++ maybe [tag ++ " #" ++ pad2 i ++ " end"] (go (i + 1)) next
 
 -- | 前 2344 行覆盖的关卡数：段 5 起关卡表在其后追加（第 39 / 40 关），原有各段只跑前 38 关，
--- 新关卡的行统一追加在文件末尾（seg5Lines / seg6Lines），原有行逐字不变。
+-- 新关卡的行统一追加在文件末尾（seg5Lines / seg6Blocks），原有行逐字不变。
 campaign38 :: Int
 campaign38 = 38
 
 -- | 全部行：38 关 × 种子 {1,2} × 15 步、2 个每日式开局、手工局面、连锁 API、开局，最后是 H4–H6（段 1 追加）。
 goldenLines :: [String]
-goldenLines =
-  concat
-    [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
-    | li <- [0 .. campaign38 - 1]
-    , seed <- [1, 2 :: Int]
-    ]
-    ++ concat
-      [ runGame ("D" ++ show seed) (newDailyGame (GameConfig 20 (goalScore 900)) seed) 10
-      | seed <- [20260929, 20260101 :: Int]
-      ]
-    ++ handmade
-    ++ cascadeLines
-    ++ levelLines
-    ++ handmade2
-    ++ seg5Lines
-    ++ seg6Lines
+goldenLines = concat goldenSections
+
+-- | 金标准按「互不依赖的一段」切开（Haskell 特性第 5 项）：concat 起来就是 goldenLines，逐行顺序不变。
+-- 每段只依赖固定的关卡 / 种子，彼此不共享状态，所以可以按任意顺序、在任意线程上求值
+-- （Spec.Golden 用 Spec.Support.Parallel 并行求值后按原顺序拼回）。第 5 项前 goldenLines 直接是下面各段的 (++)。
+goldenSections :: [[String]]
+goldenSections =
+  [ runGame ("L" ++ pad2 (li + 1) ++ " s" ++ show seed) (levelGame li seed) 15
+  | li <- [0 .. campaign38 - 1]
+  , seed <- [1, 2 :: Int]
+  ]
+    ++ [ runGame ("D" ++ show seed) (newDailyGame (GameConfig 20 (goalScore 900)) seed) 10
+       | seed <- [20260929, 20260101 :: Int]
+       ]
+    ++ [handmade, cascadeLines, levelLines, handmade2, seg5Lines]
+    ++ seg6Blocks
 
 -- | 手工局面（护栏测试用到的几个）：蜗牛撞墙 / 推格、巧克力关无匹配交换、首个 3 连锁。
 handmade :: [String]
@@ -590,8 +591,9 @@ campaign40 = 40
 
 -- | 新玩法关卡（第 41 关起，2026-09-30 解冻后追加）：同段 5 的投影，**每关一整块**依次追加在文件末尾
 -- （先一关的逐步投影再它的开局），再加新关卡时前面的行不动。
-seg6Lines :: [String]
-seg6Lines = concatMap (levelBlock . pure) [campaign40 .. length allLevels - 1]
+-- 第 5 项起按关分块（goldenSections 里每关一段；第 5 项前是 seg6Lines = concatMap (levelBlock . pure) …）。
+seg6Blocks :: [[String]]
+seg6Blocks = map (levelBlock . pure) [campaign40 .. length allLevels - 1]
 
 -- | 一批关卡的逐步投影（种子 1–2 × 15 步）与开局（种子 0 / 5 / 99）。
 levelBlock :: [Int] -> [String]

@@ -142,6 +142,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - match3
+    - stm
     - tasty
     - tasty-hunit
     - tasty-quickcheck

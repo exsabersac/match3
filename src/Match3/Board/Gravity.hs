@@ -20,7 +20,10 @@ module Match3.Board.Gravity
   , settleRefillWith
   ) where
 
-import Data.Array (array, bounds, (!))
+import Control.Monad (forM_, when)
+import Control.Monad.ST (ST)
+import Data.Array (bounds, elems, (!))
+import Data.Array.ST (STArray, newListArray, readArray, runSTArray, writeArray)
 import Data.List (nubBy)
 import Match3.Board.Hooks (LevelHooks(..))
 import Data.Maybe (fromMaybe)
@@ -52,17 +55,38 @@ colGravityWith reg = concatMap packSegment . splitFixed
           holes = length seg - length solids
       in replicate holes Nothing ++ map Just solids
 
--- | applyGravity（指定注册表）。
--- 逐列取出（自上而下）、按列重力、写回；不再转置两次。
+-- | applyGravity（指定注册表）：每列与 colGravityWith 相同（固定格不动、把列切成段，段内实格保持次序落到底、空洞在上）。
+--
+-- 性能（Haskell 特性第 5 项）：在 runSTArray 里复制一份盘面，逐列逐段「双指针」就地压实——读指针自下而上扫，
+-- 遇到实格就写到写指针处，最后把段顶剩下的格写成空洞；不再为每列建列表、切段、拼接、再 array 一遍。
+-- 对外仍是纯函数（ST 的可变数组出不了 runSTArray）。微基准约 2.5 倍，但重力只占规则总耗时的百分之二三，
+-- 整体收益很小（文档 §4 如实给数）。第 5 项前：array bnds [((r, c), v) | c <- cols, (r, v) <- zip rows (colGravityWith reg 列)]。
 applyGravityWith :: Registry -> MBoard -> MBoard
-applyGravityWith reg mb =
+applyGravityWith reg mb = runSTArray $ do
   let bnds@((r0, c0), (r1, c1)) = bounds mb
-      rows = [r0 .. r1]
-  in array bnds
-       [ ((r, c), v)
-       | c <- [c0 .. c1]
-       , (r, v) <- zip rows (colGravityWith reg [mb ! (r', c) | r' <- rows])
-       ]
+  m <- newListArray bnds (elems mb)
+  forM_ [c0 .. c1] $ \c -> do
+    let fixedAt r = maybe False (gravityFixedCellWith reg) (mb ! (r, c))
+        -- 固定格把列 [r0 .. r1] 切成若干段（段内没有固定格）
+        segments lo [] = [(lo, r1)]
+        segments lo (r : rs)
+          | fixedAt r = (lo, r - 1) : segments (r + 1) rs
+          | otherwise = segments lo rs
+    forM_ (segments r0 [r0 .. r1]) (\(lo, hi) -> when (lo <= hi) (compactSegment m c lo hi))
+  pure m
+
+-- | 一段 [lo .. hi]（第 c 列，段内没有固定格）：读指针 r 自下而上，实格写到写指针 w，最后 [lo .. w] 是空洞。
+compactSegment :: forall s. STArray s Pos (Maybe Cell) -> Int -> Int -> Int -> ST s ()
+compactSegment m c lo hi = go hi hi
+  where
+    go :: Int -> Int -> ST s ()
+    go r w
+      | r < lo = forM_ [lo .. w] (\k -> writeArray m (k, c) Nothing)
+      | otherwise = do
+          v <- readArray m (r, c)
+          case v of
+            Just _ -> writeArray m (w, c) v >> go (r - 1) (w - 1)
+            Nothing -> go (r - 1) w
 
 -- | drainBottomCookies（指定注册表）：边缘收集的旧形状（收走个数 + 位置）。
 drainBottomCookiesWith :: Registry -> MBoard -> (MBoard, Int, [Pos])

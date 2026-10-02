@@ -126,6 +126,7 @@ module Match3.Core
   , cellColor
   , cellKind
   , Pos
+  , Grid
   , Board
   , boardFromRows
   , boardRows

@@ -15,6 +15,7 @@ module Match3.Board.Random
   , shufflePlayableSized
   ) where
 
+import Data.Traversable (mapAccumL)
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
@@ -25,16 +26,16 @@ randomBoard :: RandomGen g => g -> (Board, g)
 randomBoard = randomBoardSized boardSize boardSize
 
 -- | 指定行列的整盘随机普通宝石（逐格 randomColor，行优先）。
+--
+-- 第 2 项（Traversable）：先建一张只有形状的 Grid ()（行列与第 2 项前 boardFromRows (chunk cols cells) 完全相同），
+-- 再用 mapAccumL 把生成器当累积器逐格穿过去。Traversable 保证按下标顺序（行主序）每格恰好访问一次、形状不变，
+-- 所以随机数的消耗顺序与原来手写的递归逐个相同（同一种子同一盘面；Spec.Classes 与旧写法逐种子对照）。
 randomBoardSized :: RandomGen g => Int -> Int -> g -> (Board, g)
 randomBoardSized rows cols g0 =
-  let (cells, g') = go (rows * cols) g0
-  in (boardFromRows (chunk cols cells), g')
+  let (g', b) = mapAccumL (\g () -> let (c, g1) = randomColor g in (g1, mkGem c)) g0 shape
+  in (b, g')
   where
-    go 0 g = ([], g)
-    go n g =
-      let (c, g1) = randomColor g
-          (rest, g2) = go (n - 1) g1
-      in (mkGem c : rest, g2)
+    shape = gridFromRows (chunk cols (replicate (rows * cols) ()))
 
 -- | 拒绝采样：直到没有初始三连为止（缺省 8×8）。
 randomStableBoard :: RandomGen g => g -> (Board, g)

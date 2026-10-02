@@ -102,7 +102,10 @@ module Match3.Types
   , cellColor
   , cellKind
   , Pos
+  , Grid
   , Board
+  , gridFromRows
+  , gridRows
   , boardFromRows
   , boardRows
   , boardCells

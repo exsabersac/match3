@@ -1,3 +1,4 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE ExistentialQuantification #-}
 -- | 元素类（xmonad LayoutClass 风格）：一种元素 = 一个类型 + 一个 'Element' instance。
 -- 第 9 刀起类只剩 name / toCell / caps 三个方法：能力按职责分成五组带默认值的记录（'Caps'：匹配与交换 'MatchCaps'、
@@ -15,6 +16,10 @@
 --
 -- 盘面仍以 'Cell' 存储（稳定的编码：金标准、前端、机制模块都按它读写）；'toCell' 把元素值写回格子，
 -- 注册表的构造器负责从格子解码出元素值（见 Match3.Element.Registry）。
+--
+-- 三个装箱类型（'SomeElement' / 'SomeModifier' / 'SomeLevelElement'）与 Match3.Element.Message 的 'SomeMessage'
+-- 是同一个套路：存在类型把「某个实现了类的类型」装进一个统一的类型，Typeable 的 cast 负责安全拆箱与按类型比较
+-- （公共的 'sameTypeEq' / 'showsBoxed'）。与 xmonad 的对照、各方法的组合规则见 docs/haskell-features/02-类型类与抽象.md §1.3。
 module Match3.Element.Class
   ( -- * 元素
     Element(..)
@@ -84,6 +89,7 @@ module Match3.Element.Class
   , sendMessage
   ) where
 
+import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Element.Message (Message, SomeMessage(..), fromMessage)
 import Match3.Levels.Level (Level)
@@ -221,7 +227,15 @@ class (Show e, Eq e, Typeable e) => Element e where
   -- | 元素名：注册表的键，也是关卡放置表、计数键、前端贴图的键。
   name :: e -> ElementName
   -- | 把元素值写回格子（盘面的存储编码）。
+  --
+  -- 缺省实现（DefaultSignatures，Haskell 特性第 2 项）：状态就是一个 Int 的 newtype 元素（毛球、泡泡、变色龙、
+  -- 果冻、魔法地格、魔法石）写成 @Custom (name e) (CustomState n)@，名字只在 'name' 里写一次。
+  -- 缺省带额外约束 Coercible e Int：只有表示与 Int 相同的元素能用它；表示不是 Int 的元素（多字段等）不写 toCell
+  -- 就是编译错误。注意表示是 Int、但写回内置格子构造器的元素（StoneE → Stone n 等）必须自己写 toCell，
+  -- 否则会悄悄用上缺省的 Custom 编码（取舍见文档 §5）。
   toCell :: e -> Cell
+  default toCell :: Coercible e Int => e -> Cell
+  toCell e = Custom (name e) (CustomState (coerce e))
   -- | 元素的能力。
   caps :: e -> Caps
   caps _ = capsOf Piece
@@ -323,12 +337,11 @@ data SomeElement = forall e. Element e => SomeElement e
 -- 类型相同再用该类型的 Eq 比状态。名字是元素值的函数（name :: e -> ElementName），同类型同值必然同名，
 -- 所以这比「名字相同且状态相同」更强：名字相同而类型不同的两个元素仍然不等。
 instance Eq SomeElement where
-  SomeElement a == SomeElement b = maybe False (== b) (cast a)
+  SomeElement a == SomeElement b = sameTypeEq a b
 
 -- | 稳定的显示：元素名 + 状态值的 Show。
 instance Show SomeElement where
-  showsPrec d (SomeElement e) =
-    showParen (d > 10) (showString "SomeElement " . showsPrec 11 (name e) . showChar ' ' . showsPrec 11 e)
+  showsPrec d (SomeElement e) = showsBoxed "SomeElement" (name e) e d
 
 instance Element SomeElement where
   name (SomeElement e) = name e
@@ -338,6 +351,16 @@ instance Element SomeElement where
 -- | 拆箱。
 fromElement :: Element e => SomeElement -> Maybe e
 fromElement (SomeElement e) = cast e
+
+-- | 装箱值的相等（三个装箱类型共用）：两边的具体类型不同即不等（cast 失败），相同再用该类型自己的 Eq。
+-- 类型参数各自独立（a、b 是两个盒子里各自的类型），这正是存在类型拆开后编译器知道的全部信息。
+sameTypeEq :: (Typeable a, Typeable b, Eq b) => a -> b -> Bool
+sameTypeEq a b = maybe False (== b) (cast a)
+
+-- | 装箱值的稳定显示：@标签 名字 值@（优先级 > 10 时加括号；SomeElement / SomeModifier 共用）。
+showsBoxed :: Show v => String -> ElementName -> v -> Int -> ShowS
+showsBoxed tag n v d =
+  showParen (d > 10) (showString tag . showChar ' ' . showsPrec 11 n . showChar ' ' . showsPrec 11 v)
 
 -- | 给元素发一条消息（不关心时原样返回）。
 sendMessage :: Message m => m -> SomeElement -> SomeElement
@@ -384,11 +407,10 @@ class (Show m, Eq m, Typeable m) => Modifier m where
 data SomeModifier = forall m. Modifier m => SomeModifier m
 
 instance Eq SomeModifier where
-  SomeModifier a == SomeModifier b = maybe False (== b) (cast a)
+  SomeModifier a == SomeModifier b = sameTypeEq a b
 
 instance Show SomeModifier where
-  showsPrec d (SomeModifier m) =
-    showParen (d > 10) (showString "SomeModifier " . showsPrec 11 (modName m) . showChar ' ' . showsPrec 11 m)
+  showsPrec d (SomeModifier m) = showsBoxed "SomeModifier" (modName m) m d
 
 -- | 拆箱。
 fromModifier :: Modifier m => SomeModifier -> Maybe m
@@ -492,7 +514,7 @@ class (Typeable l, Eq l, Show l) => LevelElement l where
 data SomeLevelElement = forall l. LevelElement l => SomeLevelElement l
 
 instance Eq SomeLevelElement where
-  SomeLevelElement a == SomeLevelElement b = maybe False (== b) (cast a)
+  SomeLevelElement a == SomeLevelElement b = sameTypeEq a b
 
 instance Show SomeLevelElement where
   showsPrec d (SomeLevelElement l) = showsPrec d l

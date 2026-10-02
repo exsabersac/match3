@@ -94,6 +94,7 @@ import Control.Monad (foldM)
 import Data.Array (Array, accumArray, bounds, inRange, (!))
 import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Monoid (Sum(..))
 import Match3.Board.Grid (getCell, setCell)
 import Match3.Board.Refill (RefillPolicy, defaultRefill)
 import Match3.Element.Class
@@ -424,14 +425,14 @@ counterWith reg = counter . bodyOf reg
 diffCountersWith :: Registry -> [(ElementName, CounterKey, Int)]
 diffCountersWith = regDiff
 
--- | 盘上本体为该元素的格数。
+-- | 盘上本体为该元素的格数（盘面是 Foldable：按格 foldMap 到 'Sum'）。
 countElementWith :: Registry -> ElementName -> Board -> Int
-countElementWith reg n b = length [() | cell <- boardCells b, elementName reg cell == n]
+countElementWith reg n = getSum . foldMap (\cell -> if elementName reg cell == n then Sum 1 else mempty)
 
 -- | 盘上本体为该元素的格按 'diffWeight' 加权的总数（按差计数用）。权重缺省 1，这时与 'countElementWith' 相同；
 -- 新玩法 5 雪怪 Boss 的左上格权重 = 血量，其余格 0。
 weighElementWith :: Registry -> ElementName -> Board -> Int
-weighElementWith reg n b = sum [diffWeight (bodyOf reg cell) | cell <- boardCells b, elementName reg cell == n]
+weighElementWith reg n = getSum . foldMap (\cell -> if elementName reg cell == n then Sum (diffWeight (bodyOf reg cell)) else mempty)
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
 vacatesCarpetWith :: Registry -> Cell -> Bool

@@ -179,6 +179,7 @@ test-suite match3-test
       Spec.Caps
       Spec.Cascade
       Spec.Chameleon
+      Spec.Classes
       Spec.CookieDrop
       Spec.Element
       Spec.ElementClass

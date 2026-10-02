@@ -18,9 +18,9 @@ import Match3.Types
 spawnCountdown :: Board -> Pos -> Color -> Int -> Board
 spawnCountdown b p col n = boardSet b p (mkCountdown col n)
 
--- | Decrement every countdown by 1 (floor at 0).
+-- | Decrement every countdown by 1 (floor at 0). 盘面是 Functor（Grid），逐格变换就是 fmap。
 tickCountdowns :: Board -> Board
-tickCountdowns = mapBoard tickCell
+tickCountdowns = fmap tickCell
   where
     tickCell (Countdown col n) = Countdown col (max 0 (n - 1))
     tickCell x = x

@@ -1,9 +1,20 @@
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | 盘面（第 6 刀从 Match3.Types 拆出）：坐标 Pos、以 (行, 列) 为下标的二维数组 Board 及其读写 / 转换。
+--
+-- Haskell 特性第 2 项（类型类与抽象，见 docs/haskell-features/02-类型类与抽象.md §1.4）：盘面的容器是
+-- 多态的 'Grid' a，'Board' = Grid 'Cell'。Grid 有 Functor / Foldable / Traversable：逐格变换是 fmap，
+-- 逐格统计是 foldMap / length / sum / toList，带状态的逐格生成（随机盘）是 mapAccumL / traverse，
+-- 都按下标顺序（行主序）走、且不改形状（行列数、下标范围）。原来的 mapBoard / boardCells 保留为这些方法的别名。
 --
 -- 依赖：Match3.Types.Cell。不变量：Show 按行列表打印，与旧列表盘输出相同。
 module Match3.Types.Board
   ( Pos
+  , Grid
   , Board
+  , gridFromRows
+  , gridRows
   , boardFromRows
   , boardRows
   , boardCells
@@ -26,67 +37,87 @@ module Match3.Types.Board
   , boardColIndices
   ) where
 
-import Data.Array (Array, assocs, bounds, elems, listArray, (!), (//))
+import Data.Array (Array, assocs, bounds, listArray, (!), (//))
+import Data.Foldable (toList)
 import Match3.Types.Cell (Cell)
 
 type Pos = (Int, Int)
 -- | 盘面：以 (行, 列) 为下标的二维数组（第三刀起；之前是 [[Cell]]，读格要走两次 (!!)）。
 -- 读格 boardAt 为 O(1)；写格 boardSet 复制一次数组（64 格，与原来重建行列表同量级）。
 -- 与行列表互转用 boardFromRows / boardRows（行主序，与旧表示逐格一一对应；Show 仍按行列表打印）。
-newtype Board = Board (Array (Int, Int) Cell)
-  deriving (Eq)
+--
+-- 'Grid' 是盘面的形状（下标范围 + 行主序），格子类型是参数：Board = Grid Cell。实例的来源用 DerivingStrategies 写明：
+--
+-- * Eq / Functor / Foldable 走 newtype 策略：直接复用 Array 的实例（Array 的 length / elem 等都是 O(1) 或按 elems 走）。
+-- * Traversable 只能走 stock 策略：traverse 的结果是 f (t b)，newtype 策略要把 f (Array Pos b) coerce 成 f (Grid b)，
+--   而 f 的参数角色未知（可能是 nominal），GHC 拒绝；stock 派生按构造器结构生成 traverse f (Grid a) = Grid <$> traverse f a。
+newtype Grid a = Grid (Array Pos a)
+  deriving newtype (Eq, Functor, Foldable)
+  deriving stock (Traversable)
 
-instance Show Board where
-  showsPrec d b = showsPrec d (boardRows b)
+-- | 盘面：格子的 Grid。
+type Board = Grid Cell
 
--- | 由行列表建盘（每行等长；空列表 = 0×0 盘）。
-boardFromRows :: [[Cell]] -> Board
-boardFromRows rows =
+-- | 按行列表打印（与第三刀前的 [[Cell]] 盘面输出相同；金标准锁定）。
+instance Show a => Show (Grid a) where
+  showsPrec d g = showsPrec d (gridRows g)
+
+-- | 由行列表建网格（每行等长；空列表 = 0×0）。
+gridFromRows :: [[a]] -> Grid a
+gridFromRows rows =
   let nr = length rows
       nc = case rows of
         [] -> 0
         (r0 : _) -> length r0
   in if any ((/= nc) . length) rows
        then error "boardFromRows: rows of unequal length"
-       else Board (listArray ((0, 0), (nr - 1, nc - 1)) (concat rows))
+       else Grid (listArray ((0, 0), (nr - 1, nc - 1)) (concat rows))
 
 -- | 行列表视图（行主序）。
-boardRows :: Board -> [[Cell]]
-boardRows (Board a) =
+gridRows :: Grid a -> [[a]]
+gridRows (Grid a) =
   let ((r0, c0), (r1, c1)) = bounds a
   in [[a ! (r, c) | c <- [c0 .. c1]] | r <- [r0 .. r1]]
 
--- | 全部格子，行主序。
+-- | 由行列表建盘（每行等长；空列表 = 0×0 盘）。
+boardFromRows :: [[Cell]] -> Board
+boardFromRows = gridFromRows
+
+-- | 行列表视图（行主序）。
+boardRows :: Board -> [[Cell]]
+boardRows = gridRows
+
+-- | 全部格子，行主序（= Foldable 的 toList）。
 boardCells :: Board -> [Cell]
-boardCells (Board a) = elems a
+boardCells = toList
 
 -- | 全部 (坐标, 格子)，行主序。
 boardAssocs :: Board -> [(Pos, Cell)]
-boardAssocs (Board a) = assocs a
+boardAssocs (Grid a) = assocs a
 
 -- | 读一格，O(1)；越界报错（与旧 (!!) 相同）。
 boardAt :: Board -> Pos -> Cell
-boardAt (Board a) p = a ! p
+boardAt (Grid a) p = a ! p
 
 -- | 写一格，返回新盘面。
 boardSet :: Board -> Pos -> Cell -> Board
-boardSet (Board a) p v = Board (a // [(p, v)])
+boardSet (Grid a) p v = Grid (a // [(p, v)])
 
 -- | 一次写多格（后写的覆盖先写的）。
 boardSetMany :: Board -> [(Pos, Cell)] -> Board
-boardSetMany (Board a) kvs = Board (a // kvs)
+boardSetMany (Grid a) kvs = Grid (a // kvs)
 
 -- | 底层二维数组（(行, 列) 下标，行主序）。
 boardArray :: Board -> Array Pos Cell
-boardArray (Board a) = a
+boardArray (Grid a) = a
 
 -- | 由二维数组建盘（与 boardArray 互逆）。
 boardFromArray :: Array Pos Cell -> Board
-boardFromArray = Board
+boardFromArray = Grid
 
--- | 逐格变换。
+-- | 逐格变换（= fmap，保留给旧调用点与 Match3.Core 的 API）。
 mapBoard :: (Cell -> Cell) -> Board -> Board
-mapBoard f (Board a) = Board (fmap f a)
+mapBoard = fmap
 
 -- | 缺省盘面边长（关卡未指定行列时用；旧关卡均为 8×8）。
 boardSize :: Int
@@ -103,7 +134,7 @@ validBoardDim n = n >= minBoardDim && n <= maxBoardDim
 
 -- | 盘面实际行列数（行, 列）；由数组下界推出，可矩形。
 boardDims :: Board -> (Int, Int)
-boardDims (Board a) =
+boardDims (Grid a) =
   let ((r0, c0), (r1, c1)) = bounds a
   in (r1 - r0 + 1, c1 - c0 + 1)
 

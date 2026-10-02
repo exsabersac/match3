@@ -158,7 +158,7 @@ newtype MagicStone = MagicStone Int
 
 instance Element MagicStone where
   name _ = "magic_stone"
-  toCell (MagicStone k) = Custom "magic_stone" (CustomState k)
+  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
   caps (MagicStone k) =
     fixed
       [ hit (if k >= magicStoneFiring then Absorb (SomeElement (MagicStone 0)) else Immune)

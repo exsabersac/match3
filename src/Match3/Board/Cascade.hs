@@ -49,7 +49,7 @@ import Match3.Board.Hooks (LevelHooks(..), noHooks)
 import Match3.Board.Phase (Phase(..), Stage, clearStage, digHoles, fallStage, fullStage, refillStage, stageGrid)
 import Match3.Element.Registry (Registry, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
-import Match3.Counts (CounterKey(..), Counts, bumpCount, countsFromList, noCounts, singleCount)
+import Match3.Counts (CounterKey(..), Counts, countsFromList, noCounts, singleCount)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
 import Match3.Types
 import System.Random (RandomGen)
@@ -114,23 +114,26 @@ stillRun b hooks g = CascadeRun b zeroTally hooks [] g
 
 -- | 沉降时被边缘收走的格按各自的 counter 计数（内置只有饼干 → CountCookies，与旧「底行收饼干计入饼干数」相同）。
 withDrained :: Registry -> [(Pos, Cell)] -> Counts -> Counts
-withDrained reg drained h = foldl (\hh (_, cell) -> bumpHit (counterWith reg cell) hh) h drained
+withDrained reg drained h = h <> foldMap (hitOf . counterWith reg . snd) drained
 
 -- | 把一组计数加进已有计数（皮带后沉降收走的格）。
 addHits :: Counts -> CascadeTally -> CascadeTally
 addHits h t = t {ctCounts = ctCounts t <> h}
 
 -- | 清除格在消除前盘面上的计数（按本体定义的 counter）。
+--
+-- 第 2 项（Monoid）：Counts 是交换幺半群（逐键相加、mempty = 什么都没计），所以「逐格 bump 进累积器」
+-- 就是「每格一份计数，foldMap 合起来」；和第 2 项前的 foldl + bumpCount 结果相同（加法与顺序无关，Counts 不存 0）。
 hitsOn :: Registry -> Board -> [Pos] -> Counts
-hitsOn reg b = foldl (\h p -> bumpHit (counterWith reg (getCell b p)) h) noCounts
+hitsOn reg b = foldMap (hitOf . counterWith reg . getCell b)
 
--- | 一个格子的计数键加 1。保险箱 / 时间精灵的键按前后盘面差计（Game.Tally，元素的 diffCounter），
+-- | 一个格子的计数：计数键加 1。保险箱 / 时间精灵的键按前后盘面差计（Game.Tally，元素的 diffCounter），
 -- 不在清除格里计（与第 4 刀前的 Hits 相同；内置元素没有把这两个键当 counter 的）。
-bumpHit :: Maybe CounterKey -> Counts -> Counts
-bumpHit Nothing h = h
-bumpHit (Just CountSafes) h = h
-bumpHit (Just CountSpirits) h = h
-bumpHit (Just k) h = bumpCount k 1 h
+hitOf :: Maybe CounterKey -> Counts
+hitOf Nothing = mempty
+hitOf (Just CountSafes) = mempty
+hitOf (Just CountSpirits) = mempty
+hitOf (Just k) = singleCount k 1
 
 -- | 一组格在盘面 b 上按颜色计数（CountColor；第 5 刀前是按 allColors 排的颜色袋列表）。
 colorsOn :: Registry -> Board -> [Pos] -> Counts

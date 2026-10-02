@@ -95,7 +95,7 @@ newtype Fuzzball = Fuzzball Int
 
 instance Element Fuzzball where
   name _ = "fuzzball"
-  toCell (Fuzzball k) = Custom "fuzzball" (CustomState k)
+  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
   caps _ = blocker [breaks, onAdjacent 190 fuzzballAdjacent, counts (CountNamed "fuzzball"), atEnd (EndRule PhaseMove 20 fuzzballRun (const []) (const []))]
 
 isFuzzball :: Cell -> Bool

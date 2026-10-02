@@ -28,7 +28,7 @@ newtype Jelly = Jelly Int
 
 instance Element Jelly where
   name _ = "jelly"
-  toCell (Jelly n) = Custom "jelly" (CustomState n)
+  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
   caps _ = piece [ground (\n -> if n > 1 then Just (n - 1) else Nothing), counts (CountNamed "jelly")]
 
 -- | 条目：地面层（关卡的地面层在关卡记录 lvlGround 里，开局时由关卡级元素 GroundLayer 的 levelStart 取进 gsLevelElems（读数 gsGround），不经放置表）。
@@ -50,7 +50,7 @@ magicGroundName = "magic"
 
 instance Element MagicGround where
   name _ = magicGroundName
-  toCell (MagicGround n) = Custom magicGroundName (CustomState n)
+  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
   caps _ = piece [widens magicWiden]
 
 -- | 扩一圈：原范围按原顺序在前，新并进来的格（原范围各格的八邻格、在盘内、不在原范围里）按行优先接在后面。

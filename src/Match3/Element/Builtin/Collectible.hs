@@ -58,7 +58,7 @@ newtype Bubble = Bubble Int
 
 instance Element Bubble where
   name _ = "bubble"
-  toCell (Bubble k) = Custom "bubble" (CustomState k)
+  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
   caps _ = blocker [breaks, onAdjacent 170 bubbleAdjacent, counts (CountNamed "bubble")]
 
 bubbleAdjacent :: AdjCtx -> Board -> AdjOut
@@ -112,7 +112,7 @@ chameleonNext c = colorAt (fromEnum c + 1)
 
 instance Element Chameleon where
   name _ = chameleonName
-  toCell (Chameleon k) = Custom chameleonName (CustomState k)
+  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
   caps (Chameleon k) =
     piece
       [ colorIs (colorAt k)

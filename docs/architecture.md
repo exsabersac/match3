@@ -30,7 +30,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
                                             ▼
  Match3.Element（元素框架：Types / Registry / Builtin / Event / Level / Special（第 8 刀规则表解释器）；默认注册表 defaultRegistry）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
- Match3.Levels.Campaign（48 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
+ Match3.Levels.Campaign（49 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
  Match3.Types（门面，再导出 Types.Name / Cell / Overlay / Body / Board / Game；第 6 刀拆分）  Match3.Goal（目标数据，第 5 刀）
    └─ Match3.Counts（计数键与 Counts，第 4 刀） ← Match3.Color（颜色，第 5 刀从 Types 拆出）
  （纯函数机制模块；无 IO）
@@ -66,7 +66,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Types.Board` | `Pos`、`newtype Grid a = Grid (Array Pos a)` 与 `type Board = Grid Cell`（Haskell 特性第 2 项：`Grid` 有 Functor / Foldable / Traversable，逐格变换 = `fmap`、逐格统计 = `foldMap`、随机盘 = `mapAccumL`；O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard`（= `fmap`）等；`Show` 按行列表打印，与旧列表盘输出相同）、`boardSize` | 可变盘（`Board.Grid`） |
 | `Match3.Types.Game` | `Score` / `MovesLeft` / `TargetScore`、`Outcome`、地面层 `Ground`、`GameConfig` / `defaultConfig` | 关卡表 |
 | `Match3.Levels.Level` | 第 6 刀：关卡记录 `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` 与原先分散在按下标 case 的并行表里的 `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround`；另有 `lvlRules` 规则开关、新玩法 6 的掉落口 `lvlDrops :: [DropSpec]`）、`level`（不带装饰的关）、`levelConfig`、放置表辅助 `placeEach` / `layersAt` | 放置表的解释（`Game.Level`） |
-| `Match3.Levels.Campaign` | 第 6 刀：48 关 `allLevels`（2026-09-30 起新玩法关卡追加在末尾）（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
+| `Match3.Levels.Campaign` | 第 6 刀：49 关 `allLevels`（2026-09-30 起新玩法关卡追加在末尾）（每关一条完整记录）、`lookupLevel :: Int -> Maybe Level`（取代各处的 `allLevels !! i`）、`levelCount`、`clampLevelIndex`、`levelCarpets` | 开局（`Game.Level`） |
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |

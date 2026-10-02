@@ -1,7 +1,7 @@
 # 网页版技术验证（GHC WebAssembly 后端）
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
-在浏览器里用桌面版同一套美术（2x 精灵图集）把 48 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
+在浏览器里用桌面版同一套美术（2x 精灵图集）把 49 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
@@ -32,7 +32,9 @@ web/
 │   ├── art.js            图集绘制：普通 / 着色（离屏缓存）/ 叠加 / 旋转翻转 / 九宫格面板
 │   ├── cells.js          桌面 CellTable 的 JS 移植（每种格子怎么画、地面层、传送带、传送门、飞碟、蔓延预告）
 │   ├── render.js         盘面与动画：交换、逐轮 flash/pop/fall/rest、步末 tick/belt/spread/snail/shuffle、粒子、浮字、震屏
-│   └── hud.js            HUD 面板、目标进度条、消息折行、按钮、结局遮罩（字号随格子缩放）
+│   ├── hud.js            HUD 面板、目标进度条、消息折行、按钮、结局遮罩（字号随格子缩放）
+│   ├── audio.js          音效与 BGM（各自开关，localStorage 键 m3-sfx / m3-bgm；WAV 由 build.sh 从 assets/sfx/ 复制到 dist/sfx/）
+│   └── guide.js          本关特殊格子说明（问号面板，只列这一关出现过的格子）
 └── test/
     ├── parity.sh         批量跑两组一致性对比（make parity / make anim-parity）
     ├── e2e.mjs           无头 Chrome：真实指针交换、7 种视口、动画中途改尺寸、截图 + report.json
@@ -122,11 +124,11 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：173 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 48 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
-1024×1730，WebP 约 486 KB；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
+图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
+1024×1730，WebP 约 488 KB（488,278 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-09-30，web-magic-ground，`make clean` 后的构建）：wasm 原始 4,861,506 B → `-Oz` 2,012,569 B ≈ 2.01 MB（gzip 760,581 B）；
-dist 合计 2,662,591 B ≈ 2.66 MB，逐文件 gzip 合计 1,314,847 B（约 1.31 MB）（WebP 已压缩，gzip 基本无收益）。
+当前体积（2026-10-03，release/hs-features b8d66ad，`make clean` 后全量重建的发布产物）：wasm 原始 5,372,310 B → `-Oz` 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；
+dist 合计 3,043,111 B ≈ 3.04 MB，逐文件 gzip 合计 1,457,558 B（约 1.46 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
@@ -171,7 +173,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
   播放期间锁输入，点击或空格加速（对应 `m3AnimTick(1)`）；
 - 换了不能消：换过去再换回，不扣步；过关 / 通关 / 步数用完时出现结局遮罩；
 - 按钮：‹ / › 切关、重开、提示（高亮核心 `findHint`）、撤销（核心 `Engine.History`，最多 20 步）；
-  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..47&seed=N`（关卡下标 0 起，共 48 关）；
+  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..48&seed=N`（关卡下标 0 起，共 49 关）；
 - HUD「目标 …」显示核心给的中文名（`state.goal.label`，如第 43 关「目标 毛球」），不显示内部名。
 
 ### 自适应布局（layout.js）
@@ -201,8 +203,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-09-30，web-magic-ground）：48 关，`stack test` 389 个用例全过，
-状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 154 项全过，`make android-check` 见 docs/web.md §7。
+下面是各自的底层命令。当前（2026-10-03，release/hs-features b8d66ad）：49 关，`stack test` 429 个用例全过，
+状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 155 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
@@ -240,7 +242,7 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 `cookie-drop-*` 第 46 关「掉落口」（竖屏 / 横屏开局的掉落口标记、掉落口补下饼干的下落段与补完后的盘面）、
 `chameleon-l47-*` 第 47 关「变色龙」（竖屏 / 横屏开局、HUD 目标图标）、`chameleon-crop-{before-generic,after}` 通用画法反证前后、
 `chameleon-shift-{before,mid}` 步末换色段前半 / 后半、`chameleon-l47-lost` 玩到失败的结算层、
-`magic-l48-*` 第 48 关「魔法格」（竖屏 / 横屏开局的魔法地格、`magic-l48-won` 终章通关、`magic-l48-lost` 玩到失败）、
+`magic-l48-*` 第 48 关「魔法格」（竖屏 / 横屏开局的魔法地格、`magic-l48-lost` 玩到失败）、`wide-l49-won` 第 49 关「宽域」终章通关、
 `magic-widen-seed{2,3,4,5}` 扩圈爆炸那一轮的消失段、`level-name-l{01,41,48}` HUD 关名（预渲染文字图 `name_<i>`）。
 另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败
 （`report.json` 的 `fallbacksByLevel` 逐关记录，第 43–48 关另有单独的检查项；地面层表外名字 / 缺贴图记为 `<名字>#地面层`；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`，带颜色 `c` 的 Custom 格（第 47 关变色龙）走通用画法时记为 `<元素名>#通用画法缺底层宝石`，第 45 关雪怪接入前就是这样画成每格一只整图 + 角标 9、原护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。

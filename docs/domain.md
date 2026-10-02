@@ -301,7 +301,7 @@
 
 | 中文 | API | 说明 |
 |------|-----|------|
-| 关卡表 | `allLevels`（48：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」+ 新玩法 1 的第 41 关「爆破」+ 新玩法 2 的第 42 关「魔石」+ 新玩法 3 的第 43 关「毛球」+ 新玩法 4 的第 44 关「魔力鸟」+ 新玩法 5 的第 45 关「雪怪」+ 新玩法 6 的第 46 关「掉落口」+ 新玩法 7 的第 47 关「变色龙」+ 新玩法 8 的第 48 关「魔法格」；`Match3.Levels.Campaign`） | 名称中文；见 README 表；第 48 关是终章（过关为 `Won`；新关追加后，原终章过关由 `Won` 变为 `LevelClear` 进入下一关）；按下标取关用 `lookupLevel`（`Maybe`） |
+| 关卡表 | `allLevels`（49：前 38 关 + 段 5 追加的第 39 关「果冻」、第 40 关「气泡」+ 新玩法 1 的第 41 关「爆破」+ 新玩法 2 的第 42 关「魔石」+ 新玩法 3 的第 43 关「毛球」+ 新玩法 4 的第 44 关「魔力鸟」+ 新玩法 5 的第 45 关「雪怪」+ 新玩法 6 的第 46 关「掉落口」+ 新玩法 7 的第 47 关「变色龙」+ 新玩法 8 的第 48 关「魔法格」+ 矩形盘面的第 49 关「宽域」（6×9）；`Match3.Levels.Campaign`） | 名称中文；见 README 表；第 49 关是终章（过关为 `Won`；新关追加后，原终章过关由 `Won` 变为 `LevelClear` 进入下一关）；按下标取关用 `lookupLevel`（`Maybe`） |
 | 关卡记录 | `Level`（`lvlIndex` / `lvlName` / `lvlMoves` / `lvlGoal` / `lvlPlacements` / `lvlBelts` / `lvlPortals` / `lvlUfos` / `lvlCarpets` / `lvlGround` / `lvlRules`） | 第 6 刀：一关的全部数据（步数、目标、装饰放置表、皮带、传送门、飞碟、地毯、地面层）在同一条记录里；`lvlRules`（新玩法 1）= 本关打开的规则开关名（`bomb_shapes` / `rainbow_combos`），缺省空 |
 | 选关解锁 | `unlockAfterOutcome` | 每日 `Won` **不**抬地图进度 |
 | 每日 | `newDailyGame` / `dailySeed` | 日期种子；10 种目标轮换 |

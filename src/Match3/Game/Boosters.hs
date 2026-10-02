@@ -3,6 +3,8 @@
 --
 -- 依赖：Resolve、State、Trace、Match3.Board.*、Match3.Boosters（十字种子几何）、元素注册表（挡交换 / 锤子免疫 / 成对交换规则 = 彩虹与特殊合成，段 4）。
 -- 不变量：道具不耗步、不推进倒计时、没有皮带 / 蜗牛，步末只有蔓延；锤子对免疫格不扣次数（NoMatch）。
+-- 类型层：锤子 / 十字从原盘起手（Stage 'Full，起手只能是 OpenSeeds），自由交换从交换后的盘起手（Stage 'Swapped），
+-- 由 Game.Resolve 的 StartPhase 检查。
 -- 护栏 trace_boosters_final_equal_result、trace_end_steps_boosters_replay。
 module Match3.Game.Boosters
   ( traceFreeSwap
@@ -20,8 +22,9 @@ module Match3.Game.Boosters
   , resolveCrossClearWith
   ) where
 
-import Match3.Board.Grid (inBounds, swapCells, getCell)
+import Match3.Board.Grid (inBounds, getCell)
 import Match3.Board.Match (hasAnyMatchWith)
+import Match3.Board.Phase (fullStage, stageBoard, swapStage)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Registry (Registry, hitImmuneWith, swapBlockedWith, swapOpeningWith)
 import Match3.Boosters (crossClearSeeds)
@@ -52,7 +55,7 @@ resolveHammerWith reg p gs
   | gsHammers gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | hitImmuneWith reg (getCell (gsBoard gs) p) = (rejectMove gs, NoMatch, emptyTrace gs)
-  | otherwise = resolveMoveWith reg KindHammer (gsBoard gs) (OpenSeeds Nothing [p]) gs
+  | otherwise = resolveMoveWith reg SKindHammer (fullStage (gsBoard gs)) (OpenSeeds Nothing [p]) gs
 
 -- | 自由交换：花一次交换任意两格（不必相邻），成消才结算；起手规则同玩家交换。
 resolveFreeSwap :: Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
@@ -67,10 +70,11 @@ resolveFreeSwapWith reg p1 p2 gs
   | p1 == p2 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
   | pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
-  | otherwise = resolveMoveWith reg KindFreeSwap swapped opening gs
+  | otherwise = resolveMoveWith reg SKindFreeSwap swappedS opening gs
   where
     board0 = gsBoard gs
-    swapped = swapCells board0 p1 p2
+    swappedS = swapStage p1 p2 (fullStage board0)
+    swapped = stageBoard swappedS
     -- 成对交换规则（段 4，同 Move.resolveSwapWith）
     pairRule = swapOpeningWith reg board0 swapped p1 p2
     opening = maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
@@ -85,7 +89,7 @@ resolveCrossClearWith reg p gs
   | Just o <- gsOver gs = (gs, o, emptyTrace gs)
   | gsCrossClears gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | otherwise = resolveMoveWith reg KindCross (gsBoard gs) (OpenSeeds Nothing (crossClearSeeds (gsBoard gs) p)) gs
+  | otherwise = resolveMoveWith reg SKindCross (fullStage (gsBoard gs)) (OpenSeeds Nothing (crossClearSeeds (gsBoard gs) p)) gs
 
 -- | 锤子（结算结果）。
 useHammer :: Pos -> GameState -> (GameState, Outcome)

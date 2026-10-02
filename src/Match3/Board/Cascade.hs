@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 连锁：**单一实现**。每一种连锁起手（普通匹配 / 种子 / 皮带后 / 倒计时）只有一个核心函数，
@@ -13,6 +14,9 @@
 -- （Match3.Board.Hooks；沉降节拍 onSettle、补子后 onAbsorb），推进后的钩子在 CascadeRun 的 crHooks 里。
 --
 -- 依赖：Grid、Match、Clear、Gravity、Hooks、元素注册表（计数键 counter、倒计时 = PhaseTick 步末规则）。
+-- 类型层（Haskell 特性第 1 项）：每一轮的盘面带阶段标签（Match3.Board.Phase）——消除得到 Stage 'Cleared，
+-- 下落得到 Stage 'Fallen，补子回到 Stage 'Full；settleRound 与回放记录 waveOf 只收对应阶段的盘面，
+-- 「没下落就补子」「cwHoles 记成下落后的盘面」之类的错位编译不过。
 -- 不变量：每轮 = clear → settleRound（settleDrain → refill）→ 整轮吸收 absorbRound（钩子 onAbsorb，内置 = 飞碟；→ 吸收单独一轮），随机数按此顺序消耗；
 -- 计数口径（逐字保持旧实现，由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
@@ -42,7 +46,7 @@ module Match3.Board.Cascade
 
 import Data.List (nub)
 import Match3.Board.Hooks (LevelHooks(..), noHooks)
-import Match3.Board.Refill (refillWith)
+import Match3.Board.Phase (Phase(..), Stage, clearStage, digHoles, fallStage, fullStage, refillStage, stageGrid)
 import Match3.Element.Registry (Registry, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
 import Match3.Counts (CounterKey(..), Counts, bumpCount, countsFromList, noCounts, singleCount)
@@ -138,23 +142,32 @@ colorsOn reg b pos = countsFromList [(CountColor col, countColorWith reg b pos c
 -- | 一轮「挖空 → 沉降（重力 / 边缘收集 / 传送门）→ 补子」的结果。
 data Round = Round
   { rdWave  :: CascadeWave  -- ^ 本轮回放（含本轮得分）
+  , rdNext  :: Stage 'Full  -- ^ 补子之后的满盘（下一轮从这里开始；= cwAfter rdWave）
   , rdCells :: Int          -- ^ 清除格数
   , rdHits  :: Counts       -- ^ 清除格在消除前盘面上的计数 + 沉降时被边缘收走的格的计数
   , rdSites :: [Pos]        -- ^ 沉降时被边缘收走的格
   }
 
 rdAfter :: Round -> Board
-rdAfter = cwAfter . rdWave
+rdAfter = stageGrid . rdNext
+
+-- | 由一轮的三个阶段拼出回放记录。cwHoles 必须是「消除后、下落前」的盘面：
+-- 下落后的盘面同样是 MBoard，改动前误传也能编译；现在它是 Stage 'Fallen，传进来编译不过。
+waveOf :: Stage 'Full -> [Pos] -> [Pos] -> Stage 'Cleared -> Stage 'Full -> Score -> CascadeWave
+waveOf before cleared drained holes after =
+  CascadeWave (stageGrid before) cleared drained (stageGrid holes) (stageGrid after)
 
 -- | 所有连锁起手共用的一轮（第 3 刀前在匹配 / 飞碟 / 种子 / 种子后飞碟 / 皮带后 / 步末后 / 单轮里逐行重复 7 份）：
--- 给出消除前盘面 b、本轮清除结果 (挖空盘面, 清除数, 清除格) 与波次 w（得分 = scoreForWave w 清除数），
+-- 给出消除前盘面 before、本轮清除结果 (挖空盘面, 清除数, 清除格) 与波次 w（得分 = scoreForWave w 清除数），
 -- 沉降后按行优先逐个空洞补子（第 8 刀起按补子策略 activeRefill；缺省策略每洞恰好一次 randomColor，随机数顺序与原先相同）。
-settleRound :: RandomGen g => Registry -> LevelHooks -> g -> Board -> (MBoard, Int, [Pos]) -> Int -> (Round, g)
-settleRound reg hooks g b (mb, n, pos) w =
-  let (settled, drained) = settleDrainWith reg hooks mb
+-- 阶段按类型走：Cleared --fallStage--> Fallen --refillStage--> Full（调换两步的顺序编译不过）。
+settleRound :: RandomGen g => Registry -> LevelHooks -> g -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> (Round, g)
+settleRound reg hooks g before (holes, n, pos) w =
+  let (fallen, drained) = fallStage reg hooks holes                  -- 消除 → 下落
+      (after, g') = refillStage (activeRefill reg hooks) g fallen    -- 下落 → 补子
       sites = map fst drained
-      (b', g') = refillWith (activeRefill reg hooks) g settled
-  in (Round (CascadeWave b pos sites mb b' (scoreForWave w n)) n (withDrained reg drained (hitsOn reg b pos)) sites, g')
+      wave = waveOf before pos sites holes after (scoreForWave w n)
+  in (Round wave after n (withDrained reg drained (hitsOn reg (stageGrid before) pos)) sites, g')
 
 -- | 补子后的整轮吸收（钩子 onAbsorb：关卡级元素回复 Refilled 消息，内置 = 飞碟）。吸到格子时吸收单独成一轮
 -- （clearUfoAbsorbed → settleRound，波次 w）；返回 (推进后的钩子, Just (吸收轮, 其中被吸走的格数), 生成器)。
@@ -165,8 +178,9 @@ absorbRound reg hooks g b w =
   in if null absorbed
        then (hooks', Nothing, g)
        else
-         let cr@(_, _, pos) = clearUfoAbsorbedWith reg b absorbed
-             (rd, g') = settleRound reg hooks' g b cr w
+         let bS = fullStage b
+             cr@(_, _, pos) = clearStage (\x -> clearUfoAbsorbedWith reg x absorbed) bS
+             (rd, g') = settleRound reg hooks' g bS cr w
          in (hooks', Just (rd, length [p | p <- absorbed, p `elem` pos]), g')
 
 --------------------------------------------------------------------------------
@@ -188,8 +202,9 @@ cascadeMatchesFromWith reg startW prefer0 hooks0 g0 b0 =
           CascadeRun b (CascadeTally cells score maxW hits (nub (concat (reverse clearedRev)))) hooks (reverse wavesRev) g
       | otherwise =
           let wave = maxW + 1
-              cr@(_, n, pos) = clearMatchesDetailedWith reg pref b
-              (r1, g1) = settleRound reg hooks g b cr wave
+              bS = fullStage b
+              cr@(_, n, pos) = clearStage (clearMatchesDetailedWith reg pref) bS
+              (r1, g1) = settleRound reg hooks g bS cr wave
               b1 = rdAfter r1
               posD = nub (pos ++ rdSites r1)
               score1 = score + cwScore (rdWave r1)
@@ -214,8 +229,9 @@ cascadeSeedsWith :: RandomGen g => Registry -> Maybe Pos -> [Pos] -> LevelHooks 
 cascadeSeedsWith reg prefer seeds hooks0 g b
   | null seeds = cascadeMatchesWith reg prefer hooks0 g b
   | otherwise =
-      let cr@(_, n, pos) = clearFromSeedsDetailedWith reg prefer b seeds
-          (r0, g1) = settleRound reg hooks0 g b cr 1
+      let bS = fullStage b
+          cr@(_, n, pos) = clearStage (\x -> clearFromSeedsDetailedWith reg prefer x seeds) bS
+          (r0, g1) = settleRound reg hooks0 g bS cr 1
           b1 = rdAfter r0
           (hooks1, absorbed, g1') = absorbRound reg hooks0 g1 b1 2
           (wU, b1', nU, scoreU, hitsU, posU) = case absorbed of
@@ -263,8 +279,8 @@ cascadeAfterWith reg entry hooks g b = case entry of
   AfterEnd holes -> settleThenCascade holes
   where
     settleThenCascade holes =
-      let mb = setManyM (toM b) [(p, Nothing) | p <- holes]
-          (rd, g1) = settleRound reg hooks g b (mb, 0, []) 0
+      let bS = fullStage b
+          (rd, g1) = settleRound reg hooks g bS (digHoles holes bS, 0, []) 0
           b1 = rdAfter rd
           sites = rdSites rd
           settleWave = [rdWave rd | b1 /= b || not (null sites)]
@@ -311,6 +327,7 @@ stepCascadeAtWith :: RandomGen g => Registry -> Maybe Pos -> g -> Board -> Maybe
 stepCascadeAtWith reg prefer g b
   | not (hasAnyMatchWith reg b) = Nothing
   | otherwise =
-      let cr@(_, n, _) = clearMatchesDetailedWith reg prefer b
-          (rd, g') = settleRound reg noHooks g b cr 1
+      let bS = fullStage b
+          cr@(_, n, _) = clearStage (clearMatchesDetailedWith reg prefer) bS
+          (rd, g') = settleRound reg noHooks g bS cr 1
       in Just (rdAfter rd, n, g')

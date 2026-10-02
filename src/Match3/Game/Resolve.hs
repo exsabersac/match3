@@ -1,3 +1,9 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+
 -- | 一次操作（玩家交换 / 锤子 / 自由交换 / 十字清除）的**公共结算**：主连锁 → 步末效果 →
 -- 计数与目标 → 结局判定 → 自动洗牌，并由同一次计算产出回放脚本 MoveTrace。
 --
@@ -13,8 +19,16 @@
 --   * 连击数：第一段的最大波次，之后每段有清除时叠加该段的最大波次；
 --   * 交换耗 1 步，道具不耗步但扣对应次数；时间精灵每只 +2 步；
 --   * 只有 MoveApplied（未终局）才调用 ensurePlayable；洗牌前的盘面 / 生成器记在 mtFinal / mtGen。
+--
+-- 类型层（Haskell 特性第 1 项，见 docs/haskell-features/01-类型层.md）：起手盘面带阶段标签（Match3.Board.Phase）。
+-- 'MoveKind' 经 DataKinds 提升到类型层，'StartPhase' 算出每种操作该从哪个阶段起手（交换类 = @'Swapped@，
+-- 锤子 / 十字 = @'Full@），'SMoveKind' 是把它带到值层的单例；'Opening' 是按起手阶段索引的 GADT
+-- （普通匹配 / 变身只能接在交换之后）。于是「锤子拿交换后的盘起手」「道具起手却要求普通匹配」编译不过。
 module Match3.Game.Resolve
   ( MoveKind(..)
+  , SMoveKind(..)
+  , StartPhase
+  , moveKind
   , Opening(..)
   , resolveMove
   , resolveMoveWith
@@ -33,6 +47,7 @@ import Match3.Board.Cascade
   )
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Board.Hooks (LevelHooks(..))
+import Match3.Board.Phase (IsFull, Phase(..), Stage, stageBoard)
 import Match3.Element.Level (coverIn, hitGroundIn, levelHooksWith, levelRegistryIn)
 import Match3.Element.Registry (Registry)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
@@ -45,17 +60,46 @@ import Match3.Game.Tally
 import Match3.Game.Trace
 
 -- | 操作种类：决定步末效果、步数 / 道具次数的扣法。
+-- 开了 DataKinds 后它也是一个种类：@'KindSwap@ 等可以当类型用（见 'StartPhase' / 'SMoveKind'）。
 data MoveKind = KindSwap | KindHammer | KindFreeSwap | KindCross
   deriving (Eq, Show)
 
--- | 主连锁的起手方式。
-data Opening
-  = OpenMatch (Maybe Pos)        -- ^ 普通匹配连锁（prefer = 新特殊块的优先生成位）
-  | OpenSeeds (Maybe Pos) [Pos]  -- ^ 种子起手（彩虹 / 特殊合成 / 锤子 / 十字）
-  | OpenMorph (Maybe Pos) EndEffect [Pos]
-    -- ^ 先变身再种子起手（新玩法 4：关卡级元素回复 Morphing）：变身记成第 0 轮之前的步末效果（esAfterWaves = 0），
-    -- mtStart 仍是交换后的盘面，第一轮从变身后的盘面开始
-  deriving (Eq, Show)
+-- | 每种操作的起手阶段（类型族）：交换类从交换后的盘面起手，锤子 / 十字从静止的原盘起手。
+type family StartPhase (k :: MoveKind) :: Phase where
+  StartPhase 'KindSwap     = 'Swapped
+  StartPhase 'KindFreeSwap = 'Swapped
+  StartPhase 'KindHammer   = 'Full
+  StartPhase 'KindCross    = 'Full
+
+-- | 'MoveKind' 的单例（singleton）：每个类型 @k@ 恰好有一个值。传 @SKindHammer@ 就把
+-- 「这是锤子」同时告诉了值层（'moveKind' 取回 'KindHammer'）和类型层（k ~ 'KindHammer）。
+data SMoveKind (k :: MoveKind) where
+  SKindSwap     :: SMoveKind 'KindSwap
+  SKindHammer   :: SMoveKind 'KindHammer
+  SKindFreeSwap :: SMoveKind 'KindFreeSwap
+  SKindCross    :: SMoveKind 'KindCross
+
+-- | 单例 → 普通值（步末表、扣步数仍按 'MoveKind' 分派，与改动前相同）。
+moveKind :: SMoveKind k -> MoveKind
+moveKind SKindSwap = KindSwap
+moveKind SKindHammer = KindHammer
+moveKind SKindFreeSwap = KindFreeSwap
+moveKind SKindCross = KindCross
+
+-- | 主连锁的起手方式（GADT，按起手盘面的阶段 p 索引）。
+-- 静止盘面上没有现成的三连，所以普通匹配 / 变身只能接在交换之后（@Opening 'Swapped@）；
+-- 种子起手对哪种起手盘都成立（交换出的彩虹 / 特殊合成，或锤子 / 十字的原盘）。
+data Opening (p :: Phase) where
+  -- | 普通匹配连锁（prefer = 新特殊块的优先生成位）
+  OpenMatch :: Maybe Pos -> Opening 'Swapped
+  -- | 种子起手（彩虹 / 特殊合成 / 锤子 / 十字）
+  OpenSeeds :: Maybe Pos -> [Pos] -> Opening p
+  -- | 先变身再种子起手（新玩法 4：关卡级元素回复 Morphing）：变身记成第 0 轮之前的步末效果（esAfterWaves = 0），
+  -- mtStart 仍是交换后的盘面，第一轮从变身后的盘面开始
+  OpenMorph :: Maybe Pos -> EndEffect -> [Pos] -> Opening 'Swapped
+
+deriving instance Eq (Opening p)
+deriving instance Show (Opening p)
 
 -- | 多段连锁的连击数：第一段的最大波次，之后每段有清除时把该段的最大波次叠加上去。
 combineCombo :: [CascadeTally] -> Int
@@ -64,15 +108,23 @@ combineCombo (t0 : ts) = foldl step (ctMaxWave t0) ts
   where
     step c t = max c (if ctCells t > 0 then c + ctMaxWave t else c)
 
--- | 公共结算。start = 第一轮之前的盘面（交换后 / 道具原盘）；调用方已完成全部校验
+-- | 公共结算。start = 第一轮之前的盘面（交换后 / 道具原盘，阶段由操作种类决定：'StartPhase'）；调用方已完成全部校验
 -- （越界、无次数、挡交换、无匹配等拒绝路径不进这里）。返回 (新状态, 结局, 回放脚本)。
-resolveMove :: MoveKind -> Board -> Opening -> GameState -> (GameState, Outcome, MoveTrace)
+resolveMove
+  :: IsFull (StartPhase k)
+  => SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
 resolveMove = resolveMoveWith defaultRegistry
 
 -- | 公共结算（指定注册表）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
-resolveMoveWith :: Registry -> MoveKind -> Board -> Opening -> GameState -> (GameState, Outcome, MoveTrace)
-resolveMoveWith reg0 kind start opening gs =
-  let -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
+-- 三个参数的类型都由同一个 k 决定：操作种类、起手盘面的阶段、起手方式必须彼此吻合。
+-- 约束 IsFull (StartPhase k) 在调用处 k 已知时自动成立（起手阶段只有 'Swapped / 'Full，都是满盘）。
+resolveMoveWith
+  :: IsFull (StartPhase k)
+  => Registry -> SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
+resolveMoveWith reg0 sk startS opening gs =
+  let kind = moveKind sk
+      start = stageBoard startS
+      -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
       reg = levelRegistryIn reg0 (gsLevelElems gs)
       hooks0 = levelHooksWith reg (gsLevelElems gs)
       -- 变身起手（OpenMorph）：第一轮之前先把变身写进盘面，并记一条 esAfterWaves = 0 的步末效果

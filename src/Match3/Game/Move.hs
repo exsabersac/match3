@@ -13,8 +13,9 @@ module Match3.Game.Move
   , trySwapWith
   ) where
 
-import Match3.Board.Grid (inBounds, adjacent, swapCells)
+import Match3.Board.Grid (inBounds, adjacent)
 import Match3.Board.Match (hasAnyMatchWith)
+import Match3.Board.Phase (fullStage, stageBoard, swapStage)
 import Data.Maybe (isNothing)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Level (morphIn)
@@ -39,10 +40,13 @@ resolveSwapWith reg p1 p2 gs
   | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
   | isNothing morph && pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
-  | otherwise = resolveMoveWith reg KindSwap swapped opening gs
+  | otherwise = resolveMoveWith reg SKindSwap swappedS opening gs
   where
     board0 = gsBoard gs
-    swapped = swapCells board0 p1 p2
+    -- 交换：Stage 'Full → Stage 'Swapped（类型层的阶段标签，见 Match3.Board.Phase）；
+    -- 起手方式 opening 的类型因此是 Opening 'Swapped，三种起手（匹配 / 种子 / 变身）都允许
+    swappedS = swapStage p1 p2 (fullStage board0)
+    swapped = stageBoard swappedS
     -- 成对交换规则（段 4：彩虹取色 / 特殊合成经注册表的 swapRule，按 srOrder 取第一条成立的）
     pairRule = swapOpeningWith reg board0 swapped p1 p2
     -- 交换变身（新玩法 4：关卡级元素回复 Morphing，内置 = 规则开关 rainbow_combos）：先变身再按种子起手，

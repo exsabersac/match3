@@ -38,6 +38,7 @@ import qualified Spec.CookieDrop
 import qualified Spec.Chameleon
 import qualified Spec.MagicGround
 import qualified Spec.RainbowCombos
+import qualified Spec.Phase
 
 main :: IO ()
 main = defaultMain tests
@@ -80,6 +81,7 @@ tests =
         , Spec.Chameleon.tests
         , Spec.MagicGround.tests
         , Spec.RainbowCombos.tests
+        , Spec.Phase.tests
         , Spec.SourceScan.tests
         ]
     )

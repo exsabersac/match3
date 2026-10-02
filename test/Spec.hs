@@ -41,6 +41,7 @@ import qualified Spec.RainbowCombos
 import qualified Spec.Phase
 import qualified Spec.Classes
 import qualified Spec.Effects
+import qualified Spec.Lazy
 
 main :: IO ()
 main = defaultMain tests
@@ -86,6 +87,7 @@ tests =
         , Spec.Phase.tests
         , Spec.Classes.tests
         , Spec.Effects.tests
+        , Spec.Lazy.tests
         , Spec.SourceScan.tests
         ]
     )

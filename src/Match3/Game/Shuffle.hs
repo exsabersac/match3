@@ -16,6 +16,9 @@ module Match3.Game.Shuffle
   , shuffleGameWith
   ) where
 
+import Data.List (find)
+import Data.Maybe (fromMaybe)
+import Engine.Stream (headS, iterateS, splitAtS)
 import Match3.Board.Grid (setCell, getCell)
 import Match3.Board.Match (hasValidMoveWith)
 import Match3.Board.Random (shufflePlayableSized)
@@ -58,8 +61,12 @@ ensurePlayableWith :: Registry -> GameState -> GameState
 ensurePlayableWith reg gs
   | Just _ <- gsOver gs = gs { gsShuffled = False }
   | hasValidMoveWith reg (gsBoard gs) = gs { gsShuffled = False }
-  | otherwise = go (24 :: Int) gs
+  | otherwise = fromMaybe (headS rest) (find (hasValidMoveWith reg . gsBoard) checked)
   where
+    -- 第 4 项（惰性）：全部重洗结果是一条无穷流 s1, s2, …（每次从上一次的生成器接着洗）；
+    -- 前 24 次逐个检查、取第一个有可走步的，都没有就用第 25 次（不再检查）。
+    -- 流是惰性的：第 k 次合格时 s(k+1) 以后根本不会洗，生成器与第 4 项前的计数循环 go 24 … go 0 逐次相同。
+    (checked, rest) = splitAtS 24 (iterateS reshuffleOnce (reshuffleOnce gs))
     dims g = boardDims (gsBoard g)
     reshuffle g =
       let (rows, cols) = dims g
@@ -67,13 +74,9 @@ ensurePlayableWith reg gs
           (board0, g') = shufflePlayableSized rows cols (gsGen g)
           board = restoreDecor board0 decor
       in (board, g')
-    go 0 g =
+    reshuffleOnce g =
       let (board, g') = reshuffle g
       in g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
-    go n g =
-      let (board, g') = reshuffle g
-          g2 = g { gsBoard = board, gsGen = g', gsHint = Nothing, gsShuffled = True }
-      in if hasValidMoveWith reg board then g2 else go (n - 1) g2
 
 -- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays /
 -- specials (Line/Bomb/Rainbow) / countdown bombs; keeps UFOs.

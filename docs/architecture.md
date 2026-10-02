@@ -35,7 +35,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
    └─ Match3.Counts（计数键与 Counts，第 4 刀） ← Match3.Color（颜色，第 5 刀从 Types 拆出）
  （纯函数机制模块；无 IO）
 
- Engine.Game / Engine.Effect / Engine.Playback（通用层：不 import 任何 Match3 模块）
+ Engine.Game / Engine.Effect / Engine.Playback / Engine.Stream（通用层：不 import 任何 Match3 模块）
 ```
 
 **依赖方向（硬约束）**
@@ -100,7 +100,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Board.Effect` | Haskell 特性第 3 项（效果与架构，见 [docs/haskell-features/03-效果与架构.md](haskell-features/03-效果与架构.md)）：连锁用到的三种能力 `MonadRefill`（补子 = 唯一的随机数消耗点）/ `MonadLevelHooks`（读钩子、整轮吸收推进钩子）/ `MonadWaves`（发出一轮回放），约束同义词 `MonadCascade`；两个解释器：纯 `PureCascade`（State：生成器、钩子、回放）与追踪 `TracedCascade`（纯解释器外叠 `StateT` 事件日志 `CascadeLog`），运行结果 `Ran` | 注册表、具体元素 |
 | `Match3.Board.Cascade` | 连锁的**单一实现**（效果：核心写成只依赖能力类的程序 `cascadeMatchesFromM` / `cascadeSeedsM` / `cascadeAfterM` / `cascadeCountdownsM` / `stepCascadeAtM`，对外 `...With` 入口签名不变、经纯解释器 `runCascade` 运行，`runCascadeTraced` 另附事件日志；类型层：每轮 `settleRound` 按 `Stage 'Cleared → fallStage → 'Fallen → refillStage → 'Full` 走，回放 `waveOf` 只收 `Stage 'Cleared` 作 `cwHoles`）：`cascadeMatches` / `cascadeMatchesFrom` / `cascadeSeeds` / `cascadeAfterWith`（`AfterBelt` / `AfterEnd 空洞`）/ `cascadeCountdowns` 返回 `CascadeRun`（终盘 + `CascadeTally` 计数记录 + `[CascadeWave]` + 推进后的钩子 `crHooks`（第 7 刀前是飞碟 `crUfos`）+ 生成器；第 7 刀起全部入口只收一个 `LevelHooks`，不再收 `[Ufo]` / 传送门对），调用方直接读字段（第三刀删掉了元组兼容层 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 与 `traceCascade*`）；`stepCascade` 保留为「恰好一轮」的小工具；段 2c 的步末补结算（挖 `erHoles` 空洞 → 边缘收集 + 补子 → 再连锁）与皮带后连锁在第 3 刀合并为 `cascadeAfterWith`；每轮的「沉降 + 补子」只在 `settleRound`、整轮吸收（飞碟）只在 `absorbRound` 各写一次 | 步数 / 目标结算、道具扣次 |
 | `Match3.Board.Default` | 段 2c：不带 `With` 的旧名（`cascadeMatches` / `clearMatches` / `applyGravity` / `findHint` …）= `*With defaultRegistry`；第 7 刀起连锁 / 沉降的旧名也收 `LevelHooks`，`builtinHooks 飞碟 传送门对` 造出内置注册表下的钩子（再导出 `LevelHooks(..)` / `noHooks`）。`Board.{Match,Clear,Gravity,Cascade}` 自身不再 import `Element.Builtin`，只收 `Registry` 参数；主流程一律把 `reg` 往下传，不经本模块 | 规则 |
-| `Match3.Board.Random` | 随机盘、稳定盘、可玩盘、`shufflePlayable` | 保留装饰（见 `Game.Shuffle`） |
+| `Match3.Board.Random` | 随机盘、稳定盘、可玩盘、`shufflePlayable`（拒绝采样 = 惰性无穷抽样流 `Engine.Stream.draws` 上 `findS`，Haskell 特性第 4 项） | 保留装饰（见 `Game.Shuffle`） |
 | `Match3.Game.State` | `GameState`（段 3 起不含撤销历史；第 7 刀起关卡级元素收在 `gsLevelElems :: [SomeLevelElement]`，第 7 刀前的 `gsBelts` / `gsPortals` / `gsUfos` / `gsCarpetOpen` / `gsGround` 改为派生读数，写入用 `setLevelElem` / `setUfos` / `setBelts` / `setPortals` / `setCarpetOpen` / `setGround`；`Show` 仍按旧字段名、旧位置打印，内置之外的元素才追加 `gsLevelExtra`）、`MoveFx` / `moveFx` / `clearMoveFx`（边沿触发）、`applyHint` / `applyHintWith` | 结算、撤销历史（在 `Engine.History`） |
 | `Match3.Game.Tally` | 结算计数辅助：颜色袋、保险箱 / 时间精灵计数（`diffCountsWith` 按步前 / 步后盘面的加权个数差，新玩法 5 起经 `weighElementWith`，权重缺省 1 时即个数差）、地毯腾空格 | 结局判定 |
 | `Match3.Game.Outcome` | 目标满足、`decideOutcome`、`checkOutcome`、选关解锁、地图跳转、失败提示 | 盘面 |
@@ -134,7 +134,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Engine.History` | 段 3：通用撤销历史 `History{histNow, histPast}`、`Undoable a = Act a \| Undo`、`HistoryPolicy{hpLimit, hpRecord, hpSnapshot, hpRestore}`、`withHistory`（给任意 `Game` 套一层撤销；终局后仍可撤销）、`pushHistory` / `replaceNow` / `undoHistory` / `commitStep` | 哪些动作算走步（由游戏的 policy 给出） |
 | `Engine.Effect` | 通用效果事件 `Effect{efBeat, efKind, efSubject, efSpots, efAmount}`、按节拍分组 `beats` | 帧数与样式 |
 | `Engine.GridUI` | 第 11 刀：通用网格 UI 组件（不绑定三消）：网格几何 `GridGeom{ggLeft, ggTop, ggCell, ggRows, ggCols}` 与 `gridCellAt`（像素 → 格）/ `gridCellOrigin`（格 → 像素）/ `gridCells`（行优先）/ `orthoAdjacent`；两步点选 `gridClick :: Maybe c -> c -> Click c`（`ClickSelect` / `ClickDeselect` / `ClickPair`）；拖动松手 `gridDragRelease adj from mTo`；高亮集合 `Highlight{hlSelected, hlHint, hlFlash, hlPinned}` 与 `isSelected` / `isHinted` / `isFlashing` | 什么算合法交换（由游戏传入相邻判定）、绘制 |
-| `Engine.Playback` | 纯播放层：阶段机 `Stages`、播放器 `Player`（帧号 / 加速）、`stepPlayer` / `playerProgress` / `runPlayer`；固定队列 `Cue` / `cueStages` / `effectCues` | 阶段内容（由游戏给出）、SDL |
+| `Engine.Stream` | Haskell 特性第 4 项：没有空构造器的惰性无穷流 `Stream a = a :> Stream a`（`unfoldS` / `iterateS` / `draws` / `headS` / `takeS` / `splitAtS` / `findS`，全是全函数）；拒绝采样（`Board.Random`）与自动洗牌的有限重试（`Game.Shuffle.ensurePlayableWith`）用它 | 采样什么、何时算合格 |
+| `Engine.Playback` | 纯播放层：阶段机 `Stages`、播放器 `Player`（帧号 / 加速）、`stepPlayer` / `playerProgress` / `runPlayer`（第 4 项起帧计数严格、空事件表不入累积器）；固定队列 `Cue` / `cueStages` / `effectCues` | 阶段内容（由游戏给出）、SDL |
 
 ### 前端模块（`app/`）
 

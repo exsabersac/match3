@@ -36,6 +36,7 @@ library:
   - Engine.Game
   - Engine.Effect
   - Engine.Playback
+  - Engine.Stream
   - Engine.History
   - Engine.GridUI
   - Match3.Core

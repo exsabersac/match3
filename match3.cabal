@@ -27,6 +27,7 @@ library
       Engine.Game
       Engine.Effect
       Engine.Playback
+      Engine.Stream
       Engine.History
       Engine.GridUI
       Match3.Core
@@ -195,6 +196,7 @@ test-suite match3-test
       Spec.Gravity
       Spec.GridMatch
       Spec.JellyBubble
+      Spec.Lazy
       Spec.Levels
       Spec.MagicGround
       Spec.MagicStone
@@ -209,6 +211,7 @@ test-suite match3-test
       Spec.Support
       Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
+      Spec.Support.LegacyLazy
       Spec.Support.Source
       Spec.UIEvents
       Spec.View

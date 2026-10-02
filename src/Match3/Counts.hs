@@ -75,8 +75,11 @@ plusCounts :: Counts -> Counts -> Counts
 plusCounts (Counts a) (Counts b) = Counts (M.filter (/= 0) (M.unionWith (+) a b))
 
 -- | 由 (键, 个数) 列表逐项累加（同键相加，0 忽略）。
+-- 第 4 项（严格性）：累积器是 Map，用 foldl'（每步把累积器求值到 WHNF；Data.Map.Strict 的值也是严格的），
+-- 不留「bumpCount (bumpCount … noCounts)」的嵌套 thunk。第 4 项前是 foldl：实测 -O0 和 -O1 都会把整串嵌套 thunk 攒到最后
+-- （500 万项：最大驻留约 412 MB，foldl' 为 44 KB；文档 §4）。本仓库的调用都只有几项，改它是卫生而不是修性能问题；结果逐项相同。
 countsFromList :: [(CounterKey, Int)] -> Counts
-countsFromList = foldl (\c (k, n) -> bumpCount k n c) noCounts
+countsFromList = foldl' (\c (k, n) -> bumpCount k n c) noCounts
 
 -- | 全部非零计数，按键升序。
 countsToList :: Counts -> [(CounterKey, Int)]

@@ -4,6 +4,9 @@
 --
 -- 依赖：Grid（randomColor / chunk）、Match（hasAnyMatch / hasValidMove）。
 -- 不变量：拒绝采样（不满足就用推进后的生成器重来），所以同一种子总得到同一盘面。
+-- 惰性（Haskell 特性第 4 项）：拒绝采样写成「无穷多次抽样的流上取第一个合格的」（Engine.Stream 的 draws / findS）。
+-- 流是惰性的，第 k 次抽样只在前 k−1 次都被拒绝时才求值，生成器的推进与第 4 项前的手写尾递归逐次相同
+-- （Spec.Lazy 与旧写法逐种子对照盘面与生成器）。
 module Match3.Board.Random
   ( randomBoard
   , randomBoardSized
@@ -16,6 +19,7 @@ module Match3.Board.Random
   ) where
 
 import Data.Traversable (mapAccumL)
+import Engine.Stream (draws, findS)
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
@@ -38,22 +42,22 @@ randomBoardSized rows cols g0 =
     shape = gridFromRows (chunk cols (replicate (rows * cols) ()))
 
 -- | 拒绝采样：直到没有初始三连为止（缺省 8×8）。
+--
+-- 第 4 项前：@let (b, g') = randomBoardSized rows cols g in if hasAnyMatch b then randomStableBoardSized rows cols g' else (b, g')@。
+-- 现在「抽样」（randomBoardSized）、「重复抽」（draws）、「挑第一个」（findS）三件事各写一处。
 randomStableBoard :: RandomGen g => g -> (Board, g)
 randomStableBoard = randomStableBoardSized boardSize boardSize
 
 randomStableBoardSized :: RandomGen g => Int -> Int -> g -> (Board, g)
-randomStableBoardSized rows cols g =
-  let (b, g') = randomBoardSized rows cols g
-  in if hasAnyMatch b then randomStableBoardSized rows cols g' else (b, g')
+randomStableBoardSized rows cols = findS (not . hasAnyMatch . fst) . draws (randomBoardSized rows cols)
 
 -- | Stable board with at least one valid move (no initial three-in-a-row; 缺省 8×8).
 randomPlayableBoard :: RandomGen g => g -> (Board, g)
 randomPlayableBoard = randomPlayableBoardSized boardSize boardSize
 
+-- 两层拒绝采样：外层流的每一次「抽样」本身是一整次内层拒绝采样（randomStableBoardSized）。
 randomPlayableBoardSized :: RandomGen g => Int -> Int -> g -> (Board, g)
-randomPlayableBoardSized rows cols g =
-  let (b, g') = randomStableBoardSized rows cols g
-  in if hasValidMove b then (b, g') else randomPlayableBoardSized rows cols g'
+randomPlayableBoardSized rows cols = findS (hasValidMove . fst) . draws (randomStableBoardSized rows cols)
 
 -- | Reshuffle into a playable stable board (ignores previous layout; 缺省 8×8).
 shufflePlayable :: RandomGen g => g -> (Board, g)

@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 -- | 通用的纯播放层（第三刀）：帧节拍、分段推进、加速。和具体游戏无关，不含 SDL。
 --
 -- 一段回放由若干「阶段」组成，阶段本身是游戏自己的类型 st：
@@ -69,11 +71,20 @@ playerProgress sm p =
   in if n <= 0 then 1 else min 1 (fromIntegral (plFrame p) / fromIntegral n)
 
 -- | 一直播到结束：返回总帧数、按顺序触发的全部事件与最终阶段状态（测试 / 离线统计用）。
+--
+-- 严格性（Haskell 特性第 4 项）：第 4 项前有两处随帧数线性增长的堆积——
+--   * 帧计数 n 只在最后返回的元组里用到，没被优化掉时每帧留下一个未求值的 (n + 1)，播 N 帧就是 N 层 thunk 链
+--     （实验里 -O0 会堆，-O1 下 GHC 自己看出来了；bang pattern 让它不再取决于优化器）；
+--   * 累积器 acc 每帧压一个事件表，绝大多数帧是空表——这才是 -O1 下的大头。
+-- 现在 n 逐帧求值、空事件表不入栈（concat 本来就会丢掉它们，结果逐项相同）。
+-- 1000 万帧、10 万个事件的实验（docs/haskell-features/demo/Strictness.hs）：-O1 最大驻留约 244 MB → 5 MB。
+-- 实际回放只有几十到几百帧，这是卫生而不是修线上问题。
 runPlayer :: Int -> Stages st ev -> Player st -> (Int, [ev], st)
 runPlayer fastStep sm = go 0 []
   where
-    go n acc p = case stepPlayer fastStep sm p of
+    go !n acc p = case stepPlayer fastStep sm p of
       Done final -> (n + 1, concat (reverse acc), final)
+      Playing p' [] -> go (n + 1) acc p'
       Playing p' evs -> go (n + 1) (evs : acc) p'
 
 -- | 固定队列里的一个提示：播 cueFrames 帧，进入时触发 cuePayload。

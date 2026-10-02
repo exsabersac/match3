@@ -10,7 +10,7 @@ import Control.Monad (filterM)
 import Data.List (isInfixOf, isPrefixOf, nub)
 import Data.Maybe (isJust, isNothing)
 import Match3.Core
-import Match3.Levels.Level (Level(..), assertLevelDims, checkLevelDims, level)
+import Match3.Levels.Level (assertLevelDims, checkLevelDims)
 import Match3.Element (Arg(..), PlaceError(..), Placement(..), defaultRegistry, placeAllWith, placeWith)
 import Match3.Game.Level (decorateLevel, decorateLevelWith, goalDecorWith)
 import Spec.Support.Source (readCode, sourcesUnderAll, stripStrings)
@@ -176,17 +176,18 @@ board_size_out_of_range_rejected = do
 
 -- | 第 49 关「宽域」为 6×9 矩形盘。
 wide_board_level_is_6x9 :: Assertion
-wide_board_level_is_6x9 = do
-  let Just lvl = lookupLevel 48
-  assertEqual "name" "宽域" (lvlName lvl)
-  assertEqual "rows" 6 (lvlRows lvl)
-  assertEqual "cols" 9 (lvlCols lvl)
-  let gs = newGameAtLevel 48 (levelConfig lvl) 1
-      b = gsBoard gs
-  assertEqual "board rows" 6 (length (boardRows b))
-  assertBool "board cols" (all ((== 9) . length) (boardRows b))
-  assertEqual "dims helper" (6, 9) (boardDims b)
-  assertBool "playable" (hasValidMove b)
+wide_board_level_is_6x9 = case lookupLevel 48 of
+  Nothing -> assertFailure "lookupLevel 48 = Nothing"
+  Just lvl -> do
+    assertEqual "name" "宽域" (lvlName lvl)
+    assertEqual "rows" 6 (lvlRows lvl)
+    assertEqual "cols" 9 (lvlCols lvl)
+    let gs = newGameAtLevel 48 (levelConfig lvl) 1
+        b = gsBoard gs
+    assertEqual "board rows" 6 (length (boardRows b))
+    assertBool "board cols" (all ((== 9) . length) (boardRows b))
+    assertEqual "dims helper" (6, 9) (boardDims b)
+    assertBool "playable" (hasValidMove b)
 
 -- | 既有关卡未改尺寸配置（缺省 8×8）。
 default_levels_stay_8x8 :: Assertion

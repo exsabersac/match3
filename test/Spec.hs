@@ -43,6 +43,8 @@ import qualified Spec.Classes
 import qualified Spec.Effects
 import qualified Spec.Lazy
 import qualified Spec.Perf
+import qualified Spec.Optics
+import qualified Spec.Invariants
 
 main :: IO ()
 main = defaultMain tests
@@ -90,6 +92,8 @@ tests =
         , Spec.Effects.tests
         , Spec.Lazy.tests
         , Spec.Perf.tests
+        , Spec.Optics.tests
+        , Spec.Invariants.tests
         , Spec.SourceScan.tests
         ]
     )

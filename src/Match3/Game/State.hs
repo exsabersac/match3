@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | 对局状态：GameState 及其（部分字段）相等语义、撤销快照、本步特效 MoveFx 的边沿触发、提示与撤销。
 --
@@ -20,6 +21,17 @@ module Match3.Game.State
   , setPortals
   , setCarpetOpen
   , setGround
+    -- * 透镜（Haskell 特性第 6 项：字段与上面五个派生读数 / 写入对的光学视图）
+  , gsBoardL
+  , gsMovesL
+  , gsHammersL
+  , gsFreeSwapsL
+  , gsCrossClearsL
+  , gsUfosL
+  , gsBeltsL
+  , gsPortalsL
+  , gsCarpetOpenL
+  , gsGroundL
   , gsCount
   , gsProgress
   , gsGoalMet
@@ -34,6 +46,7 @@ module Match3.Game.State
   ) where
 
 import Data.Maybe (isJust)
+import Engine.Optics (Lens', lens)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
 import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
@@ -114,6 +127,43 @@ setCarpetOpen = setLevelElem . CarpetLevel
 -- | 第 7 刀前的记录更新 @gs {gsGround = g}@。
 setGround :: Ground -> GameState -> GameState
 setGround = setLevelElem . GroundLayer
+
+-- 透镜（Haskell 特性第 6 项，docs/haskell-features/06-测试与光学.md）。
+--
+-- 字段透镜就是「读字段 + 记录更新」；五个派生读数（gsUfos …）与上面的写入函数（setUfos …）本来就是一对
+-- get / set，包成透镜后可以和盘面、单元格的光学复合（如 gsBoardL . cellAt p . overlay . _Fog）。
+-- 透镜定律（get-put / put-get / put-put）在 test/Spec/Optics.hs 里检查；派生读数的 get-put 只在
+-- 「这种关卡级元素在 gsLevelElems 里恰好一份」时成立（开局总是如此，见 startLevelsWith），测试里同时演示了反例。
+
+gsBoardL :: Lens' GameState Board
+gsBoardL = lens gsBoard (\gs v -> gs {gsBoard = v})
+
+gsMovesL :: Lens' GameState MovesLeft
+gsMovesL = lens gsMoves (\gs v -> gs {gsMoves = v})
+
+gsHammersL :: Lens' GameState Int
+gsHammersL = lens gsHammers (\gs v -> gs {gsHammers = v})
+
+gsFreeSwapsL :: Lens' GameState Int
+gsFreeSwapsL = lens gsFreeSwaps (\gs v -> gs {gsFreeSwaps = v})
+
+gsCrossClearsL :: Lens' GameState Int
+gsCrossClearsL = lens gsCrossClears (\gs v -> gs {gsCrossClears = v})
+
+gsUfosL :: Lens' GameState [Ufo]
+gsUfosL = lens gsUfos (flip setUfos)
+
+gsBeltsL :: Lens' GameState [Belt]
+gsBeltsL = lens gsBelts (flip setBelts)
+
+gsPortalsL :: Lens' GameState [(Pos, Pos)]
+gsPortalsL = lens gsPortals (flip setPortals)
+
+gsCarpetOpenL :: Lens' GameState [Pos]
+gsCarpetOpenL = lens gsCarpetOpen (flip setCarpetOpen)
+
+gsGroundL :: Lens' GameState Ground
+gsGroundL = lens gsGround (flip setGround)
 
 -- | 内置五种关卡级元素之一（Show 按第 7 刀前的字段名打印它们的状态）。
 builtinLevel :: SomeLevelElement -> Bool

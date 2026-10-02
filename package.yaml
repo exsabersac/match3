@@ -37,6 +37,7 @@ library:
   - Engine.Effect
   - Engine.Playback
   - Engine.Stream
+  - Engine.Optics
   - Engine.History
   - Engine.GridUI
   - Match3.Core
@@ -46,6 +47,7 @@ library:
   - Match3.Types.Name
   - Match3.Types.Cell
   - Match3.Types.Overlay
+  - Match3.Types.Optics
   - Match3.Types.Body
   - Match3.Types.Board
   - Match3.Types.Game

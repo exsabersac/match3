@@ -26,6 +26,7 @@ module Match3.Game.Level
   ) where
 
 import Data.Maybe (fromMaybe)
+import Engine.Optics (over)
 import Match3.Board.Random (randomPlayableBoardSized)
 import Match3.Counts (CounterKey(..), noCounts)
 import Match3.Element.Level (startLevelsWith)
@@ -166,4 +167,4 @@ nextLevel gs seed =
         Just (LevelClear _ _) -> carryMovesBonus (gsMoves gs)
         _ -> 0
       gs' = fromMaybe (newGameAtLevel idx defaultConfig seed) (campaignGame idx seed)
-  in gs' { gsMoves = gsMoves gs' + bonus }
+  in over gsMovesL (+ bonus) gs'  -- 第 6 项前：gs' { gsMoves = gsMoves gs' + bonus }

@@ -35,7 +35,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
    └─ Match3.Counts（计数键与 Counts，第 4 刀） ← Match3.Color（颜色，第 5 刀从 Types 拆出）
  （纯函数机制模块；无 IO）
 
- Engine.Game / Engine.Effect / Engine.Playback / Engine.Stream（通用层：不 import 任何 Match3 模块）
+ Engine.Game / Engine.Effect / Engine.Playback / Engine.Stream / Engine.Optics（通用层：不 import 任何 Match3 模块）
 ```
 
 **依赖方向（硬约束）**
@@ -60,7 +60,8 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Types` | 门面（第 6 刀起无实现）：再导出下面六个 `Types.*` 模块、`Match3.Color` 与 `Match3.Goal` 的 API，导出列表与拆分前相同（关卡表移到 `Match3.Levels.*`） | 连锁、交换、IO |
 | `Match3.Types.Name` | 第 6b 刀：`newtype ElementName`（元素名：注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；有 `IsString`）与 `newtype CustomState`（`Custom` 格的状态值）；两者的 `Show` 与底层 `String` / `Int` 相同（Haskell 特性第 2 项起用 `deriving newtype` 派生，不再手写转发），`Cell` / `GameState` 的 `Show` 因此逐字不变 | 名字 → 元素的查表（`Element.Registry`） |
 | `Match3.Types.Cell` | `GemKind` / `CellOverlay` / `CellContents`（含 `Custom ElementName CustomState`，供注册表扩展元素）/ `Cell`，宝石构造与格子取值（`mkGem` / `cellColor` / `cellKind` / `isGem` / `isCustom` …） | 叠层与本体的具体构造器 |
-| `Match3.Types.Overlay` | 叠层（草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）的构造、谓词与层数，`setOverlay` / `clearOverlay` | 叠层的清除与蔓延（`Match3.Grass`） |
+| `Match3.Types.Overlay` | 叠层（草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）的构造、谓词与层数，`setOverlay` / `clearOverlay`（Haskell 特性第 6 项起谓词与层数用 `Match3.Types.Optics` 的光学写，语义不变） | 叠层的清除与蔓延（`Match3.Grass`） |
+| `Match3.Types.Optics` | Haskell 特性第 6 项：盘面与单元格的光学——透镜 `cellAt p :: Lens' Board Cell`、遍历 `cells` / `gemOverlay`（宝石的叠层槽）/ `overlay`（宝石现有的叠层）、棱镜 `_Gem` / `_Fog` / `_Chain` / `_Freeze` / `_Curtain`；可复合成 `cellAt p . overlay . _Fog` | 叠层的规则（`Match3.Grass`） |
 | `Match3.Types.Body` | 本体（石头 / 宝箱 / 蜂蜜 / 气球 / 饼干 / 蛋糕 / 魔法帽 / 果汁机 / 蜗牛 / 保险箱 / 双面 / 彩蛋 / 瓶子 / 精灵 / 倒计时）的构造、谓词与层数 | 本体的反应（`Element.Builtin.*`） |
 | `Match3.Types.Board` | `Pos`、`newtype Grid a = Grid (Array Pos a)` 与 `type Board = Grid Cell`（Haskell 特性第 2 项：`Grid` 有 Functor / Foldable / Traversable，逐格变换 = `fmap`、逐格统计 = `foldMap`、随机盘 = `mapAccumL`；O(1) 读格，`boardFromRows` / `boardRows` / `boardAt` / `boardSet` / `mapBoard`（= `fmap`）等；`Show` 按行列表打印，与旧列表盘输出相同）、`boardSize` | 可变盘（`Board.Grid`） |
 | `Match3.Types.Game` | `Score` / `MovesLeft` / `TargetScore`、`Outcome`、地面层 `Ground`、`GameConfig` / `defaultConfig` | 关卡表 |
@@ -101,7 +102,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Board.Cascade` | 连锁的**单一实现**（效果：核心写成只依赖能力类的程序 `cascadeMatchesFromM` / `cascadeSeedsM` / `cascadeAfterM` / `cascadeCountdownsM` / `stepCascadeAtM`，对外 `...With` 入口签名不变、经纯解释器 `runCascade` 运行，`runCascadeTraced` 另附事件日志；类型层：每轮 `settleRound` 按 `Stage 'Cleared → fallStage → 'Fallen → refillStage → 'Full` 走，回放 `waveOf` 只收 `Stage 'Cleared` 作 `cwHoles`）：`cascadeMatches` / `cascadeMatchesFrom` / `cascadeSeeds` / `cascadeAfterWith`（`AfterBelt` / `AfterEnd 空洞`）/ `cascadeCountdowns` 返回 `CascadeRun`（终盘 + `CascadeTally` 计数记录 + `[CascadeWave]` + 推进后的钩子 `crHooks`（第 7 刀前是飞碟 `crUfos`）+ 生成器；第 7 刀起全部入口只收一个 `LevelHooks`，不再收 `[Ufo]` / 传送门对），调用方直接读字段（第三刀删掉了元组兼容层 `runCascade*` / `resolveCountdowns` / `runPostBeltCascade` 与 `traceCascade*`）；`stepCascade` 保留为「恰好一轮」的小工具；段 2c 的步末补结算（挖 `erHoles` 空洞 → 边缘收集 + 补子 → 再连锁）与皮带后连锁在第 3 刀合并为 `cascadeAfterWith`；每轮的「沉降 + 补子」只在 `settleRound`、整轮吸收（飞碟）只在 `absorbRound` 各写一次 | 步数 / 目标结算、道具扣次 |
 | `Match3.Board.Default` | 段 2c：不带 `With` 的旧名（`cascadeMatches` / `clearMatches` / `applyGravity` / `findHint` …）= `*With defaultRegistry`；第 7 刀起连锁 / 沉降的旧名也收 `LevelHooks`，`builtinHooks 飞碟 传送门对` 造出内置注册表下的钩子（再导出 `LevelHooks(..)` / `noHooks`）。`Board.{Match,Clear,Gravity,Cascade}` 自身不再 import `Element.Builtin`，只收 `Registry` 参数；主流程一律把 `reg` 往下传，不经本模块 | 规则 |
 | `Match3.Board.Random` | 随机盘、稳定盘、可玩盘、`shufflePlayable`（拒绝采样 = 惰性无穷抽样流 `Engine.Stream.draws` 上 `findS`，Haskell 特性第 4 项） | 保留装饰（见 `Game.Shuffle`） |
-| `Match3.Game.State` | `GameState`（段 3 起不含撤销历史；第 7 刀起关卡级元素收在 `gsLevelElems :: [SomeLevelElement]`，第 7 刀前的 `gsBelts` / `gsPortals` / `gsUfos` / `gsCarpetOpen` / `gsGround` 改为派生读数，写入用 `setLevelElem` / `setUfos` / `setBelts` / `setPortals` / `setCarpetOpen` / `setGround`；`Show` 仍按旧字段名、旧位置打印，内置之外的元素才追加 `gsLevelExtra`）、`MoveFx` / `moveFx` / `clearMoveFx`（边沿触发）、`applyHint` / `applyHintWith` | 结算、撤销历史（在 `Engine.History`） |
+| `Match3.Game.State` | `GameState`（段 3 起不含撤销历史；第 7 刀起关卡级元素收在 `gsLevelElems :: [SomeLevelElement]`，第 7 刀前的 `gsBelts` / `gsPortals` / `gsUfos` / `gsCarpetOpen` / `gsGround` 改为派生读数，写入用 `setLevelElem` / `setUfos` / `setBelts` / `setPortals` / `setCarpetOpen` / `setGround`；`Show` 仍按旧字段名、旧位置打印，内置之外的元素才追加 `gsLevelExtra`）、`MoveFx` / `moveFx` / `clearMoveFx`（边沿触发）、`applyHint` / `applyHintWith`；Haskell 特性第 6 项起有字段透镜 `gsBoardL` / `gsMovesL` / `gsHammersL` / `gsFreeSwapsL` / `gsCrossClearsL` 与五个派生读数的透镜 `gsUfosL` 等（`Game.Resolve` 的步数 / 道具次数结算用它们） | 结算、撤销历史（在 `Engine.History`） |
 | `Match3.Game.Tally` | 结算计数辅助：颜色袋、保险箱 / 时间精灵计数（`diffCountsWith` 按步前 / 步后盘面的加权个数差，新玩法 5 起经 `weighElementWith`，权重缺省 1 时即个数差）、地毯腾空格 | 结局判定 |
 | `Match3.Game.Outcome` | 目标满足、`decideOutcome`、`checkOutcome`、选关解锁、地图跳转、失败提示 | 盘面 |
 | `Match3.Game.Shuffle` | 保装饰洗牌 `shuffleGame`、自动洗牌 `ensurePlayable` | 回放（洗牌不在 `mtEnd`） |
@@ -115,7 +116,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Rainbow` | 彩虹判定与清色种子 | 合成几何（见 Combos） |
 | `Match3.Combos` | 特殊×特殊合成：第 8 刀起是内置组合表 `builtinComboRules`（炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线），`isSpecialCombo` / `comboClearSeeds` 是这张表的判定 / 清种子；新玩法 4 的 `rainbowComboMorph`（彩虹 × 直线 / 炸弹的变身格与种子，只经规则开关 `rainbow_combos` 用）；各组合的种类谓词与爆炸几何 `bigBomb` / `fullRowCol` / `lineBombCross` | 普通三消、组合表的解释（`Element.Special`） |
 | `Match3.Ice` | 匹配时削冰层 | overlay（Freeze/Chain…） |
-| `Match3.Grass` | 草/藤/巧/雾/链/冻/帘/蒸汽的清除与蔓延 | 蜗牛爬行 |
+| `Match3.Grass` | 草/藤/巧/雾/链/冻/帘/蒸汽的清除与蔓延（Haskell 特性第 6 项起四种揭层叠层共用 `chipAdjacentLayerExcept`（传棱镜）、三种蔓延叠层共用 `spreadLayer`、两种邻消叠层共用 `clearAdjacentOverlay`；导出与语义不变） | 蜗牛爬行 |
 | `Match3.Carpet` | 地毯覆盖计数（各关的地毯布局第 6 刀起在关卡记录 `lvlCarpets` 里） | 饼干底行收集逻辑（在 `Board.Gravity` / `Game.Tally`） |
 | `Match3.Snail` | 蜗牛一步爬行 / 掉头 | 步末其它效果编排 |
 | `Match3.Ufo` | 飞碟吸色目标与移格 | 棋盘清除（由 `Board.Clear` 掩码后清） |
@@ -135,6 +136,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Engine.Effect` | 通用效果事件 `Effect{efBeat, efKind, efSubject, efSpots, efAmount}`、按节拍分组 `beats` | 帧数与样式 |
 | `Engine.GridUI` | 第 11 刀：通用网格 UI 组件（不绑定三消）：网格几何 `GridGeom{ggLeft, ggTop, ggCell, ggRows, ggCols}` 与 `gridCellAt`（像素 → 格）/ `gridCellOrigin`（格 → 像素）/ `gridCells`（行优先）/ `orthoAdjacent`；两步点选 `gridClick :: Maybe c -> c -> Click c`（`ClickSelect` / `ClickDeselect` / `ClickPair`）；拖动松手 `gridDragRelease adj from mTo`；高亮集合 `Highlight{hlSelected, hlHint, hlFlash, hlPinned}` 与 `isSelected` / `isHinted` / `isFlashing` | 什么算合法交换（由游戏传入相邻判定）、绘制 |
 | `Engine.Stream` | Haskell 特性第 4 项：没有空构造器的惰性无穷流 `Stream a = a :> Stream a`（`unfoldS` / `iterateS` / `draws` / `headS` / `takeS` / `splitAtS` / `findS`，全是全函数）；拒绝采样（`Board.Random`）与自动洗牌的有限重试（`Game.Shuffle.ensurePlayableWith`）用它 | 采样什么、何时算合格 |
+| `Engine.Optics` | Haskell 特性第 6 项：手写 van Laarhoven 光学（只依赖 base）：`Lens` / `Traversal` / `Prism`（最小的 `Choice` profunctor）、`lens` / `prism` / `prism'` / `only` / `ignored` / `_Just`、`view` / `over` / `set` / `preview` / `has` / `toListOf` / `review` 与中缀 `^.` / `%~` / `.~` / `^?` / `^..` / `&`；定律在 `test/Spec/Optics.hs` | 具体游戏的光学（`Match3.Types.Optics`、`Match3.Game.State`） |
 | `Engine.Playback` | 纯播放层：阶段机 `Stages`、播放器 `Player`（帧号 / 加速）、`stepPlayer` / `playerProgress` / `runPlayer`（第 4 项起帧计数严格、空事件表不入累积器）；固定队列 `Cue` / `cueStages` / `effectCues` | 阶段内容（由游戏给出）、SDL |
 
 ### 前端模块（`app/`）

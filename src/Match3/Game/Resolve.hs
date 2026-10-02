@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -37,6 +38,7 @@ module Match3.Game.Resolve
   ) where
 
 import Data.List (nub)
+import Engine.Optics (Traversal', ignored, (%~), (&))
 import qualified Data.List.NonEmpty as NE
 import Match3.Board.Cascade
   ( CascadeRun(..)
@@ -63,6 +65,18 @@ import Match3.Game.Trace
 -- 开了 DataKinds 后它也是一个种类：@'KindSwap@ 等可以当类型用（见 'StartPhase' / 'SMoveKind'）。
 data MoveKind = KindSwap | KindHammer | KindFreeSwap | KindCross
   deriving (Eq, Show)
+
+-- | 一次操作消耗的步数：交换 1 步，道具不耗步（Haskell 特性第 6 项）。
+kindCost :: MoveKind -> Int
+kindCost kind = if kind == KindSwap then 1 else 0
+
+-- | 一次操作消耗的道具次数所在的字段：交换没有（ignored，没有焦点），三种道具各自的次数（Haskell 特性第 6 项）。
+kindCharges :: MoveKind -> Traversal' GameState Int
+kindCharges kind = case kind of
+  KindSwap -> ignored
+  KindHammer -> gsHammersL
+  KindFreeSwap -> gsFreeSwapsL
+  KindCross -> gsCrossClearsL
 
 -- | 每种操作的起手阶段（类型族）：交换类从交换后的盘面起手，锤子 / 十字从静止的原盘起手。
 type family StartPhase (k :: MoveKind) :: Phase where
@@ -172,11 +186,8 @@ resolveMoveWith reg0 sk startS opening gs =
           <> countsFromList [(CountNamed n, k) | (n, k) <- groundCounts]
           <> singleCount CountCarpets carpetHit
       -- 步数与道具次数
-      spend g = case kind of
-        KindSwap -> g {gsMoves = gsMoves gs - 1 + bonusMoves}
-        KindHammer -> g {gsMoves = gsMoves gs + bonusMoves, gsHammers = gsHammers gs - 1}
-        KindFreeSwap -> g {gsMoves = gsMoves gs + bonusMoves, gsFreeSwaps = gsFreeSwaps gs - 1}
-        KindCross -> g {gsMoves = gsMoves gs + bonusMoves, gsCrossClears = gsCrossClears gs - 1}
+      -- （第 6 项：每种操作「花什么」由 kindCost / kindCharges 给出，这里只写一次；第 6 项前是四个分支的记录更新）
+      spend g = g & gsMovesL %~ (\m -> m - kindCost kind + bonusMoves) & kindCharges kind %~ subtract 1
       gs' =
         spend
           gs

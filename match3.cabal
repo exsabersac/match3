@@ -28,6 +28,7 @@ library
       Engine.Effect
       Engine.Playback
       Engine.Stream
+      Engine.Optics
       Engine.History
       Engine.GridUI
       Match3.Core
@@ -37,6 +38,7 @@ library
       Match3.Types.Name
       Match3.Types.Cell
       Match3.Types.Overlay
+      Match3.Types.Optics
       Match3.Types.Body
       Match3.Types.Board
       Match3.Types.Game
@@ -195,11 +197,13 @@ test-suite match3-test
       Spec.Golden
       Spec.Gravity
       Spec.GridMatch
+      Spec.Invariants
       Spec.JellyBubble
       Spec.Lazy
       Spec.Levels
       Spec.MagicGround
       Spec.MagicStone
+      Spec.Optics
       Spec.Perf
       Spec.Phase
       Spec.Presentation
@@ -210,9 +214,11 @@ test-suite match3-test
       Spec.SourceScan
       Spec.Specials
       Spec.Support
+      Spec.Support.Arbitrary
       Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
       Spec.Support.LegacyLazy
+      Spec.Support.LegacyOptics
       Spec.Support.LegacyPerf
       Spec.Support.Parallel
       Spec.Support.Source

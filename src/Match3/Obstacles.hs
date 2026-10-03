@@ -46,7 +46,6 @@ module Match3.Obstacles
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits
   , chipAdjacentTimeSpiritsExcept
-  , withAdjacentStones
   ) where
 
 import Data.List (nub, sort)
@@ -405,9 +404,3 @@ chipAdjacentTimeSpiritsExcept b clearedGems except =
       case at board p of
         TimeSpirit -> (board, nub (p : dead))
         _ -> (board, dead)
-
--- | 种子加上邻消后末层被削掉的石头（只看石头）。清除管线不用它，用的是 chipAdjacentStones。
-withAdjacentStones :: Board -> [Pos] -> [Pos]
-withAdjacentStones b seeds =
-  let (_, dead) = chipAdjacentStones b seeds
-  in nub (seeds ++ dead)

@@ -213,7 +213,7 @@ module Match3.Core
   , gsGoalMet
   , gsCollected
   , gsColorBag
-    -- ** 关卡级元素（第 7 刀：第 7 刀前的五个字段改为派生读数 + 写入函数）
+    -- ** 关卡级元素（派生读数 + 写入函数，状态在 gsLevelElems）
   , gsBelts
   , gsPortals
   , gsUfos
@@ -272,7 +272,6 @@ module Match3.Core
   , crossClearSeeds
   , orthoNeighbors
   , stonesAdjacentTo
-  , withAdjacentStones
   , chipAdjacentStones
   , chipAdjacentChests
   , chestsAdjacentTo
@@ -375,7 +374,6 @@ import Match3.Game.Trace
 import Match3.Obstacles
   ( orthoNeighbors
   , stonesAdjacentTo
-  , withAdjacentStones
   , chipAdjacentStones
   , chipAdjacentChests
   , chestsAdjacentTo

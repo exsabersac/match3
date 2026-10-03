@@ -1,5 +1,5 @@
--- | 关卡记录（第 6 刀：每关的全部静态数据聚在一条记录里）：名字、步数、目标，
--- 以及第 6 刀前分散在 Game.Level / Match3.Carpet 各自按下标 case 的并行表——装饰放置表、皮带、传送门、飞碟、地毯、地面层。
+-- | 关卡记录：每关的全部静态数据聚在一条记录里——名字、步数、目标、装饰放置表、皮带、传送门、飞碟、
+-- 地毯、地面层、规则开关与掉落口。
 --
 -- 依赖：Match3.Types、Match3.Element.Types（放置表）、Match3.Conveyor（Belt）、Match3.Ufo。
 -- 关卡表本身在 Match3.Levels.Campaign；开局如何用这些字段见 Match3.Game.Level.newGameAtLevel。
@@ -38,12 +38,12 @@ data Level = Level
   , lvlName       :: String
   , lvlMoves      :: MovesLeft
   , lvlGoal       :: LevelGoal
-  , lvlPlacements :: [Placement]   -- ^ 装饰放置表（按元素名；应用顺序 = 列表顺序；第 6 刀前的 levelPlacements）
-  , lvlBelts      :: [Belt]        -- ^ 传送带路径（第 6 刀前的 levelBelts）
-  , lvlPortals    :: [(Pos, Pos)]  -- ^ 双向传送门对（第 6 刀前的 levelPortals）
-  , lvlUfos       :: [Ufo]         -- ^ 飞碟初始位置（第 6 刀前的 levelUfos）
-  , lvlCarpets    :: [Pos]         -- ^ 未铺的地毯格（第 6 刀前的 Match3.Carpet.levelCarpets）
-  , lvlGround     :: Ground        -- ^ 地面层（第 6 刀前的 levelGround）
+  , lvlPlacements :: [Placement]   -- ^ 装饰放置表（按元素名；应用顺序 = 列表顺序）
+  , lvlBelts      :: [Belt]        -- ^ 传送带路径
+  , lvlPortals    :: [(Pos, Pos)]  -- ^ 双向传送门对
+  , lvlUfos       :: [Ufo]         -- ^ 飞碟初始位置
+  , lvlCarpets    :: [Pos]         -- ^ 未铺的地毯格
+  , lvlGround     :: Ground        -- ^ 地面层
   , lvlRules      :: [ElementName] -- ^ 本关打开的规则开关（按名字，关卡级元素在 levelStart 里读；如 "bomb_shapes" = L / T 形生成炸弹）
   , lvlDrops      :: [DropSpec]    -- ^ 掉落口（新玩法 6，关卡级元素 CookieDrop 在 levelStart 里读）；空 = 没有掉落口
   , lvlRows       :: Int           -- ^ 盘面行数（缺省 8；允许 minBoardDim..maxBoardDim）
@@ -79,7 +79,7 @@ level i name moves goal =
     }
 
 -- | 校验关卡行列是否在允许范围内；越界返回 Left（加载时拒绝，不静默夹取）。
--- 第 8 项起由 'validateDims' 与 'renderIssue' 给出，文字与之前逐字节相同。
+-- 由 'validateDims' 与 'renderIssue' 给出；只坏行列时与 'checkLevel' 的文字相同（测试 DataBoundary 锁定）。
 checkLevelDims :: Level -> Either String Level
 checkLevelDims l = either (Left . renderAll l) Right (validationToEither (validateDims l *> pure l))
 
@@ -138,7 +138,7 @@ data LevelIssue
   | PlacementOutOfBounds Int ElementName Pos -- ^ 放置表第 i 项的目标格越界
   deriving (Eq, Show)
 
--- | 问题的中文描述。'BadDims' 与第 8 项前 checkLevelDims 的文字逐字节相同。
+-- | 问题的中文描述（'BadDims' 的文字即 'checkLevelDims' 的报错）。
 renderIssue :: Level -> LevelIssue -> String
 renderIssue l issue = case issue of
   BadDims r c ->
@@ -218,7 +218,7 @@ dups mk xs = each (nub [x | (i, x) <- zip [0 :: Int ..] xs, x `elem` take i xs])
 checkLevel :: Level -> Either String Level
 checkLevel l = either (Left . renderAll l) Right (validationToEither (validateLevel l))
 
--- | 加载边界（第 8 项起 lookupLevel 用它）：全部检查通过则原样返回，否则 error，消息列出全部问题。
+-- | 加载边界（lookupLevel 用它）：全部检查通过则原样返回，否则 error，消息列出全部问题。
 assertLevel :: Level -> Level
 assertLevel l = either error id (checkLevel l)
 

@@ -73,7 +73,7 @@
 | `countdown_1..9` | `Countdown c n` | 宝石上叠一个红色倒计时炸弹，中间写剩余步数 |
 | `ufo_c1..c5` | 飞碟 `Ufo` | 对应颜色的飞碟，悬停在格子上方 |
 | `bubble` | 气泡 `Custom "bubble" 1`（段 5） | 透明水泡：蓝青边缘 + 虹彩 + 高光，无颜色徽记，轻微上下浮动。按 Custom 名字经 `UI.CellTable.customTable` 分派（不画层数角标）；几何降级版 `primBubble`：浅蓝方块 + 亮边 + 左上高光 |
-| `snow_boss_0..3` / `snow_boss_hurt_0..3` | 雪怪 Boss `Custom "snow_boss" v`（新玩法 5，2×2） | 冰蓝雪怪：一整只按 2 格（224 px）画好再切成四块，每格画自己的象限（0 左上 / 1 右上 / 2 左下 / 3 右下，读 `Match3.View.bossPart`），拼起来是一只：毛茸茸的雪白身体 + 冰蓝阴影、冰角、两只眼睛（怒眉）与獠牙；血量 ≤ 满血一半时换 `snow_boss_hurt_*`（皱眉 + 裂纹 + 创可贴 + 汗滴）；右下块底部三个小点显示召唤进度（每 3 步召唤一块雪块，雪块就是 1 层石头 `stone_1`）。按 Custom 名字经 `UI.CellTable.customTable` 分派；`snow_boss`（整只缩到一格）只给 HUD 血条当头像。几何降级版 `primSnowBoss`：每格一块浅冰蓝方块，四块之间不留缝、外缘深蓝描边，上两块画白眼红瞳（受伤时左眼变一道横线），下两块画嘴和獠牙，右下块另画召唤进度点 |
+| `snow_boss_0..3` / `snow_boss_hurt_0..3` | 雪怪 Boss `Custom "snow_boss" v`（新玩法 5，2×2） | 冰蓝雪怪：一整只按 2 格（224 px）画好再切成四块，每格画自己的象限（0 左上 / 1 右上 / 2 左下 / 3 右下，读 `UI.CellFace.bossPart`，字段由元素自带），拼起来是一只：毛茸茸的雪白身体 + 冰蓝阴影、冰角、两只眼睛（怒眉）与獠牙；血量 ≤ 满血一半时换 `snow_boss_hurt_*`（皱眉 + 裂纹 + 创可贴 + 汗滴）；右下块底部三个小点显示召唤进度（每 3 步召唤一块雪块，雪块就是 1 层石头 `stone_1`）。按 Custom 名字经 `UI.CellTable.customTable` 分派；`snow_boss`（整只缩到一格）只给 HUD 血条当头像。几何降级版 `primSnowBoss`：每格一块浅冰蓝方块，四块之间不留缝、外缘深蓝描边，上两块画白眼红瞳（受伤时左眼变一道横线），下两块画嘴和獠牙，右下块另画召唤进度点 |
 | `chameleon` / `chameleon_icon` | 变色龙 `Custom "chameleon" k`（新玩法 7，k = 当前颜色下标 0..4） | 底下照常画当前颜色的宝石 `gem_c{k+1}`（颜色读 `Match3.Element.Builtin.chameleonColor`），上面叠 `chameleon`：五色分段环 + 绿色卷尾 + 一点闪光，随 `pulse` 慢慢转动；换色是步末 `EvTick "chameleon"`，按事件类型复用倒计时段 `StTick`（前半段旧颜色、后半段新颜色）。`chameleon_icon` 是 HUD / 地图目标图标（`gem_c4` + 环合成一张）。按 Custom 名字经 `UI.CellTable.customTable` 分派；几何降级版 `primChameleon`：当前颜色的几何宝石 + 20 段五色描边；消除粒子颜色 = 当前颜色（`UI.Layout.cellRGB`） |
 
 ### 地砖（宝石之下）

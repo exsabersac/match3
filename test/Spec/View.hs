@@ -10,11 +10,13 @@ module Spec.View
   ( tests
   ) where
 
-import Data.List (isInfixOf, isPrefixOf, nub)
+import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import Engine.GridUI
 import Match3.Board.Default (findHint)
 import Match3.Core
 import Match3.Daily (dailyConfig)
+import Match3.Element.Builtin (SnowBoss(..), chameleonCell)
+import Match3.Element.Class (toCell)
 import Match3.Game.Move (trySwap)
 import Match3.Game.State (gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress)
 import Match3.Levels.Campaign (levelCarpets)
@@ -38,6 +40,7 @@ tests =
   , testCase "frontends_read_view_model" frontends_read_view_model
   , testCase "frontends_import_core_api" frontends_import_core_api
   , testCase "outcome_lose_hint_no_internal_names" outcome_lose_hint_no_internal_names
+  , testCase "view_cell_extras_from_elements" view_cell_extras_from_elements
   ]
 
 --------------------------------------------------------------------------------
@@ -472,3 +475,21 @@ outcome_lose_hint_no_internal_names = do
   assertEqual "level 47 title segment" "变色龙=6/30" (goalLine (goalInfo (gsGoal (levelGame 46 1)) 6))
   outcome <- readCode "src/Match3/Game/Outcome.hs"
   assertBool "loseHint reads the shared label table" ("countLabel" `mentionsIdent` outcome)
+
+-- | 显示附加字段与目标中文名由元素条目提供（能力记录的显示组）：雪怪 Boss 的 q / hurt / turn / every、变色龙的 c
+-- （网页 JSON 的顺序就是这里的顺序），其余内置格子没有；中文名表 = 六个登记了 labelled 的元素；
+-- View / GoalLabel / 网页 Api / 调色板不再点名这些元素。
+view_cell_extras_from_elements :: Assertion
+view_cell_extras_from_elements = do
+  assertEqual "snow boss (hurt)" [("q", FaceInt 3), ("hurt", FaceBool True), ("turn", FaceInt 2), ("every", FaceInt 3)] (cellExtras (toCell (SnowBoss 20 40 2 3)))
+  assertEqual "snow boss (not hurt)" [("q", FaceInt 0), ("hurt", FaceBool False), ("turn", FaceInt 0), ("every", FaceInt 3)] (cellExtras (toCell (SnowBoss 21 40 0 0)))
+  assertEqual "chameleon" [[("c", FaceColor c)] | c <- allColors] (map (cellExtras . chameleonCell) allColors)
+  assertEqual "other cells have none" [] (concatMap cellExtras [mkGem C1, Stone 2, Countdown C2 3, Custom (ElementName "fuzzball") (CustomState 1), Custom (ElementName "no_such") (CustomState 0)])
+  assertEqual "named goal labels"
+    (sort [("jelly", "果冻"), ("bubble", "气泡"), ("magic_stone", "魔法石"), ("fuzzball", "毛球"), ("snow_boss", "雪怪"), ("chameleon", "变色龙")])
+    (sort namedGoalLabelTable)
+  let files = ["src/Match3/View.hs", "src/Match3/GoalLabel.hs", "src/Match3/Game/Outcome.hs", "web/hs/Match3Web/Api.hs", "app/pure/UI/Palette.hs", "app/pure/UI/CellFace.hs"]
+      names = ["chameleonName", "chameleonColor", "decodeBoss", "snowBossEvery"]
+  srcs <- mapM readCode files
+  assertEqual "no element-specific display code" [] [(f, n) | (f, s) <- zip files srcs, n <- names, mentionsIdent n s]
+

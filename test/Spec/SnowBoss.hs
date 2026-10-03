@@ -39,7 +39,8 @@ import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
 import Match3.Types (goalCount, goalTarget, terminalOf)
-import Match3.View (BossPart(..), BossView(..), bossPart, gameView, gvBoss)
+import Match3.View (BossView(..), gameView, gvBoss)
+import UI.CellFace (BossPart(..), bossPart)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

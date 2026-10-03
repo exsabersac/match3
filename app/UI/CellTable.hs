@@ -22,7 +22,7 @@ import Art (Art)
 import Data.Maybe (fromMaybe)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.View (BossPart (..), bossPart)
+import UI.CellFace (BossPart (..), bossPart)
 import SDL (Renderer)
 import UI.Cell.Art
 import UI.Cell.Prim

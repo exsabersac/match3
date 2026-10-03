@@ -928,7 +928,7 @@ try {
       const P = await openPage(vp, 46, 1);
       await sleep(150);
       const s = await P.st(), hud = await P.page.evaluate(() => window.m3debug.hud), cs = chamCells(s.board);
-      check(`第 47 关开局：关名「变色龙」、两只变色龙、格子 c = v + 1（Api 按核心 chameleonColor 解码）：${vp.name}`,
+      check(`第 47 关开局：关名「变色龙」、两只变色龙、格子 c = v + 1（元素自带的显示字段）：${vp.name}`,
         s.level === 46 && s.name === "变色龙" && cs.length === 2 && cs.every((x) => x.c === x.v + 1), cs);
       check(`第 47 关 HUD「目标 变色龙」、目标图标 chameleon_icon：${vp.name}`,
         s.goal.label === "变色龙" && hud?.goal === "目标 变色龙" && s.goal.icon === "chameleon_icon" && hud?.goalIcon === "chameleon_icon",

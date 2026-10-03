@@ -60,7 +60,7 @@ newtype Bubble = Bubble Int
 instance Element Bubble where
   name _ = "bubble"
   -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps _ = blocker [breaks, onAdjacent 170 bubbleAdjacent, counts (CountNamed "bubble")]
+  caps _ = blocker [breaks, onAdjacent 170 bubbleAdjacent, counts (CountNamed "bubble"), labelled "气泡"]
 
 bubbleAdjacent :: AdjCtx -> Board -> AdjOut
 bubbleAdjacent ctx b =
@@ -122,6 +122,8 @@ instance Element Chameleon where
       , counts (CountNamed "chameleon")
       , onSwap (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds)
       , atEnd (moveRule 40 chameleonRun)
+      , labelled "变色龙"
+      , displays [("c", FaceColor (colorAt k))]  -- 当前颜色（网页格子 JSON 的 "c"，同宝石；前端不自己换算 v）
       ]
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。

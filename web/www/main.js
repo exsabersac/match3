@@ -5,12 +5,12 @@
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
 import { loadArt } from "./art.js";
-import { CELL, PAD, dropMarks, fallbacks, setDims } from "./cells.js";
-import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap } from "./render.js";
+import { CELL, PAD, dropMarks, fallbacks, setDims, setPalette } from "./cells.js";
+import { Fx, SWAP_FRAMES, FALL_FRAMES, drawCascade, drawLightFall, drawStatic, drawSwap, setAnimMeta } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawHud, drawOverlay } from "./hud.js";
 import { drawGuide, guideEntries, noteSpecials } from "./guide.js";
-import { unlock, play, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, startBgm } from "./audio.js";
+import { unlock, play, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, startBgm, setSoundNames } from "./audio.js";
 
 // ---------------------------------------------------------------------------
 // 1. 加载 wasm 与贴图（并行），记录耗时
@@ -36,6 +36,10 @@ function call(name, ...args) {
   if (r && r.ok === false) throw new Error(`${name}: ${r.error}`);
   return r;
 }
+
+// 表现表（颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名）由 wasm 下发一次（m3Meta = UI.WebMeta），不在 JS 里手抄
+const meta = call("m3Meta");
+setPalette(meta); setAnimMeta(meta); setSoundNames(meta.sounds);
 
 // ---------------------------------------------------------------------------
 // 2. 画布与自适应布局：画布铺满视口，后备缓冲 = CSS 尺寸 × dpr（dpr 上限 3）；尺寸变化只重算布局，不动对局与动画
@@ -131,8 +135,8 @@ function startCascade() {
   anim = { kind: "cascade", cas, tk: { p: "start", fr: 0, n: 0, w: 0, k: 0, g: 0, b: 0 }, best: 0 };
 }
 
-// 步末碎屑色（桌面 UI.Presentation.elementRGBTable 里会蔓延的元素那几行，与桌面逐项比对：test/Spec/WebColors.hs）
-const SPREAD_CRUMB_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235] };
+// 步末碎屑色（m3Meta：蔓延元素在 elementRGBTable 的颜色、倒计时火星 = 表现表 EvTick 的 CrumbsAtSources）
+const SPREAD_CRUMB_RGB = meta.spreadCrumbRGB, TICK_CRUMB_RGB = meta.tickCrumbRGB;
 
 function stepCascade() {
   const t0 = performance.now();
@@ -162,7 +166,7 @@ function stepCascade() {
         // 例如第 44 关彩虹组合的变身步 rainbow_line / rainbow_bomb）
         const crumbRGB = ef.type === "spread" && SPREAD_CRUMB_RGB[ef.kind];
         if (crumbRGB) fx.crumbs(crumbRGB, ef.pairs.map((p) => p[1]));
-        if (ef.type === "tick") fx.crumbs([255, 110, 70], ef.cells);
+        if (ef.type === "tick" && TICK_CRUMB_RGB) fx.crumbs(TICK_CRUMB_RGB, ef.cells);
       }
     }
   }

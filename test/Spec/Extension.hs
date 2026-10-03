@@ -16,7 +16,10 @@ import Match3.Core
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, groundEntry, register)
-import Match3.Element.Caps (Element(..), atEnd, blocker, counts, drainsAt, fixed, ground, piece, reshuffles)
+import Match3.Element.Caps (Element(..), atEnd, blocker, counts, displays, drainsAt, fixed, ground, labelled, loseHintIs, piece, reshuffles)
+import Match3.Element.Registry (displayLabelWith, loseHintWith)
+import Match3.Element.Types (FaceValue(..))
+import Match3.View (cellExtras, cellExtrasWith)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Game.Level (newGame)
 import Match3.Game.State (gsCollected, gsCount, gsGround, setGround)
@@ -56,6 +59,7 @@ tests =
   , testCase "ext_refill_policy_level_colors" ext_refill_policy_level_colors
   , testCase "ext_judging_level_element" ext_judging_level_element
   , testCase "judge_default_no_replier" judge_default_no_replier
+  , testCase "ext_element_display_fields" ext_element_display_fields
   ]
 
 -- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
@@ -408,3 +412,29 @@ judge_default_no_replier =
     , let gs = levelGame li 1
     , o <- [MoveApplied 5, Lost 3, Won 7, LevelClear 9 (li + 1)]
     ]
+
+
+-- | 测试专用灯笼（Custom "lantern" k）：显示附加字段、目标中文名与失败提示都只写在元素的 caps 里
+-- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与注册表的 displayLabelWith / loseHintWith 直接取到，
+-- 主流程与前端不用改；没注册时什么都没有。
+newtype Lantern = Lantern Int
+  deriving (Eq, Show)
+
+instance Element Lantern where
+  name _ = "lantern"
+  toCell (Lantern k) = Custom "lantern" (CustomState k)
+  caps (Lantern k) =
+    blocker [counts (CountNamed "lantern"), labelled "灯笼", loseHintIs (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏"), displays [("lit", FaceBool (k > 0)), ("k", FaceInt k)]]
+
+ext_element_display_fields :: Assertion
+ext_element_display_fields = do
+  let reg = register (customEntry (Lantern 0) (Lantern . unCustomState)) defaultRegistry
+      cell k = Custom "lantern" (CustomState k)
+  assertEqual "extras (lit)" [("lit", FaceBool True), ("k", FaceInt 2)] (cellExtrasWith reg (cell 2))
+  assertEqual "extras (dark)" [("lit", FaceBool False), ("k", FaceInt 0)] (cellExtrasWith reg (cell 0))
+  assertEqual "unregistered: none" [] (cellExtras (cell 2))
+  assertEqual "label" (Just "灯笼") (displayLabelWith reg "lantern")
+  assertEqual "lose hint" (Just "点亮灯笼，目标 5 盏") (fmap ($ 5) (loseHintWith reg "lantern"))
+  assertEqual "unregistered: no label" Nothing (displayLabelWith defaultRegistry "lantern")
+  assertEqual "builtin without hint" Nothing (fmap ($ 5) (loseHintWith reg "bubble"))
+

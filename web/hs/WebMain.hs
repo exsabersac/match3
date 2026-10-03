@@ -15,7 +15,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import ComboFx (Cascade)
 import Engine.Playback (Player)
 import Match3Web.Anim (AnimSeed, animStart, animTick)
-import Match3Web.Api (WebGame, apiLevels, apiNew, apiState, apiSwapAnim, apiUndo, jsonString)
+import Match3Web.Api (WebGame, apiLevels, apiMeta, apiNew, apiState, apiSwapAnim, apiUndo, jsonString)
 
 -- | 当前这一局（含撤销历史；Nothing = 还没调用过 m3New）。
 {-# NOINLINE stateRef #-}
@@ -38,6 +38,7 @@ foreign export javascript "m3State sync" jsState :: IO JSString
 foreign export javascript "m3AnimStart sync" jsAnimStart :: IO JSString
 foreign export javascript "m3AnimTick sync" jsAnimTick :: Int -> IO JSString
 foreign export javascript "m3Levels sync" jsLevels :: IO JSString
+foreign export javascript "m3Meta sync" jsMeta :: IO JSString
 
 -- | m3New(level, seed)：开新局并返回 {ok,state}。
 jsNew :: Int -> Int -> IO JSString
@@ -106,6 +107,10 @@ jsState = guarded $ maybe (errJson "no game") apiState <$> readIORef stateRef
 -- | m3Levels()：关卡列表。
 jsLevels :: IO JSString
 jsLevels = guarded (pure apiLevels)
+
+-- | m3Meta()：表现表（颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名；见 Match3Web.Api.apiMeta）。
+jsMeta :: IO JSString
+jsMeta = guarded (pure apiMeta)
 
 -- | sync 导出目前不会把 Haskell 异常传给 JS，这里统一兜底成 {"ok":false,"error":...}。
 guarded :: IO String -> IO JSString

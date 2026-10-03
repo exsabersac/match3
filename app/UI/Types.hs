@@ -35,9 +35,6 @@ import Match3.Core
 import UI.Presentation (SoundName)
 
 -- | 交换补间与轻落各自的帧数（60 fps）。
-swapFrames, fallFrames :: Int
-swapFrames = 10
-fallFrames = 12
 
 -- | 只管表现的动画（规则已经结算完）。每个构造器的数据放在各自的记录里，字段都是全函数
 -- （桌面版与库一样开着 -Wpartial-fields）。

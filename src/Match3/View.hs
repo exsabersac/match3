@@ -16,8 +16,6 @@ module Match3.View
     -- * Boss 血条
   , BossView (..)
   , bossView
-  , BossPart (..)
-  , bossPart
     -- * 规则开关角标
   , RuleBadge (..)
   , ruleBadgeTable
@@ -52,6 +50,9 @@ module Match3.View
     -- * 单格描述
   , CellField (..)
   , cellFace
+  , FaceValue (..)
+  , cellExtras
+  , cellExtrasWith
   , overlayName
   , overlayLayers
   , colorNum
@@ -63,7 +64,9 @@ import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Board.Default (findHint)
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (SnowBoss (..), decodeBoss, snowBossEvery, snowBossHp, snowBossName)
+import Match3.Element.Builtin (defaultRegistry, snowBossHp, snowBossName)
+import Match3.Element.Registry (Registry, faceFieldsWith)
+import Match3.Element.Types (FaceValue (..))
 import Match3.Engine (match3Game)
 import Match3.Game.Outcome (loseHint)
 import Match3.Game.State (GameState(..), gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress, gsUfos)
@@ -175,21 +178,6 @@ bossView :: GameState -> Maybe BossView
 bossView gs = case [t | Quota (MeterCount (CountNamed n)) t <- goalQuotas (gsGoal gs), n == snowBossName] of
   t : _ -> Just (BossView (max 0 (min t (snowBossHp (gsBoard gs)))) t)
   [] -> Nothing
-
--- | 雪怪 Boss 的一格怎么画（新玩法 5）：象限（0 左上 / 1 右上 / 2 左下 / 3 右下，贴图 snow_boss[_hurt]_<象限>）、
--- 是否受伤（血量 ≤ 满血一半，换受伤表情）、召唤计数与周期（右下格画进度小点）。
-data BossPart = BossPart
-  { bpQuad :: Int
-  , bpHurt :: Bool
-  , bpTurn :: Int
-  , bpEvery :: Int
-  }
-  deriving (Eq, Show)
-
-bossPart :: Cell -> Maybe BossPart
-bossPart cell = case cell of
-  Custom n st | n == snowBossName -> let b = decodeBoss st in Just (BossPart (sbQuad b) (sbHp b * 2 <= sbMax b) (sbTurn b) snowBossEvery)
-  _ -> Nothing
 
 -- | 桌面版窗口标题（不含末尾的 "  |  " 与提示消息）。
 titleLine :: GameView -> String
@@ -459,6 +447,16 @@ cellFace cell = case cell of
   where
     n k = ("n", FieldInt k)
     col c = ("c", FieldInt (colorNum c))
+
+-- | 单格的显示附加字段：元素自己提供（能力记录的显示组 vwFace，Match3.Element.Caps.displays），这里不按元素名特判。
+-- 内置：雪怪 Boss 的 q（象限 0–3）/ hurt（血量是否过半）/ turn（召唤计数）/ every（召唤周期），变色龙的 c（当前颜色）。
+-- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；桌面按名字读（app/pure/UI/CellFace.hs）。
+cellExtras :: Cell -> [(String, FaceValue)]
+cellExtras = cellExtrasWith defaultRegistry
+
+-- | 'cellExtras'，用给定的注册表解码（扩展元素）。
+cellExtrasWith :: Registry -> Cell -> [(String, FaceValue)]
+cellExtrasWith = faceFieldsWith
 
 overlayName :: CellOverlay -> String
 overlayName ov = case ov of

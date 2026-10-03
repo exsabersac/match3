@@ -29,7 +29,7 @@ newtype Jelly = Jelly Int
 instance Element Jelly where
   name _ = "jelly"
   -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps _ = piece [ground (\n -> if n > 1 then Just (n - 1) else Nothing), counts (CountNamed "jelly")]
+  caps _ = piece [ground (\n -> if n > 1 then Just (n - 1) else Nothing), counts (CountNamed "jelly"), labelled "果冻"]
 
 -- | 条目：地面层（关卡的地面层在关卡记录 lvlGround 里，开局时由关卡级元素 GroundLayer 的 levelStart 取进 gsLevelElems（读数 gsGround），不经放置表）。
 jellyEntry :: Entry

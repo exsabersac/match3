@@ -3,7 +3,7 @@
 --
 -- 网页版有对应的 JS 副本（web/www/cells.js 的 COLOR_RGB / ELEMENT_RGB / cellRGB、web/www/main.js 的步末碎屑色），
 -- 两边由 test/Spec/WebColors.hs 逐项比对；colorRGB 与 tools/gen_assets.py 的 GEMS 调色板也在那里比对。
--- 依赖：Match3.Core、UI.Presentation。UI.Layout 再导出本模块的全部函数。
+-- 依赖：Match3.Core、UI.CellFace、UI.Presentation。UI.Layout 再导出本模块的全部函数。
 module UI.Palette
   ( colorRGB
   , namedRGB
@@ -11,6 +11,7 @@ module UI.Palette
   ) where
 
 import Match3.Core
+import UI.CellFace (faceColor)
 import UI.Presentation (RGB, elementRGBTable)
 
 -- | 五色的主色（与 tools/gen_assets.py 调色板一致）。
@@ -45,5 +46,5 @@ cellRGB cell = case cell of
   Countdown col _ -> colorRGB col
   Gem col _ _ _ -> colorRGB col
   Custom n _
-    | Just col <- chameleonColor cell -> colorRGB col -- 变色龙：当前颜色
+    | Just col <- faceColor cell -> colorRGB col -- 元素给出的当前颜色（变色龙）
     | otherwise -> maybe (160, 160, 170) id (lookup n elementRGBTable)

@@ -32,6 +32,7 @@ module UI.Presentation
   , presentationRGB
     -- * 音效钩子
   , effectSound
+  , soundNames
     -- * 按元素名细分
   , Curve (..)
   , curveAt
@@ -156,6 +157,10 @@ presentationRGB = fromMaybe defaultSpreadGlow . prColor
 -- | 音效钩子：效果事件 → 音效名（消除 clear、爆炸 special，其余 Nothing）。
 effectSound :: EventKind -> Maybe SoundName
 effectSound = prSound . presentationFor
+
+-- | 全部音效名（素材 sfx/<名字>.wav；bgm 是循环背景音乐，其余是一次性音效）：桌面 UI.Audio 按它加载，网页经 m3Meta 取。
+soundNames :: [SoundName]
+soundNames = ["swap", "clear", "special", "illegal", "win", "lose", "bgm"]
 
 --------------------------------------------------------------------------------
 -- 按元素名细分

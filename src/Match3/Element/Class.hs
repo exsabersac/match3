@@ -2,7 +2,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 -- | 元素类（xmonad LayoutClass 风格）：一种元素 = 一个类型 + 一个 'Element' instance。
 -- 类只有 name / toCell / caps 三个方法：能力按职责分成五组带默认值的记录（'Caps'：匹配与交换 'MatchCaps'、
--- 消除与受击 'HitCaps'、重力与移动 'MoveCaps'、计数与目标 'CountCaps'、步末与变化 'StepCaps'），缺省值由原型
+-- 消除与受击 'HitCaps'、重力与移动 'MoveCaps'、计数与目标 'CountCaps'、步末与变化 'StepCaps'；另有一组只管显示的 'ViewCaps'），缺省值由原型
 -- （'Archetype'：普通棋子 / 障碍 / 固定格）推出，元素只声明自己用到的能力（简写见 Match3.Element.Caps）；
 -- 普通宝石除了名字和写回格子以外全用缺省。各能力的查询是普通函数（color / onHit / counter …）。
 --
@@ -31,12 +31,14 @@ module Match3.Element.Class
   , MoveCaps(..)
   , CountCaps(..)
   , StepCaps(..)
+  , ViewCaps(..)
   , capsOf
   , matchCaps
   , hitCaps
   , moveCaps
   , countCaps
   , stepCaps
+  , viewCaps
   , cellGemColor
     -- * 能力查询
   , archetype
@@ -66,6 +68,9 @@ module Match3.Element.Class
   , groundRule
   , widenRule
   , handleMessage
+  , faceFields
+  , displayLabel
+  , loseHintFor
   , Hit(..)
   , SomeElement(..)
   , fromElement
@@ -97,6 +102,7 @@ import Match3.Element.Types
   , CounterKey
   , Edge
   , EndRule
+  , FaceValue
   , OpenRule
   , SwapRule
   )
@@ -166,7 +172,15 @@ data StepCaps = StepCaps
   , stMessage :: SomeMessage -> Maybe SomeElement  -- ^ 处理一条消息：Nothing = 不关心；Just = 新的元素值
   }
 
--- | 一种元素的全部能力：原型 + 五组能力记录。缺省值由原型推出（'capsOf'），元素只改自己用到的字段
+-- | 显示（可扩展性 P2）：前端要的附加字段、目标中文名、失败提示——元素自己提供，View / 网页 Api / GoalLabel
+-- 不再按元素名特判。只影响显示，不参与任何规则。
+data ViewCaps = ViewCaps
+  { vwFace     :: [(String, FaceValue)]  -- ^ 格子的显示附加字段（按顺序；网页 JSON 追加在 cellFace 字段之后）
+  , vwLabel    :: Maybe String           -- ^ 按元素名计数的目标（CountNamed）的中文名（HUD / 网页 / 失败提示）
+  , vwLoseHint :: Maybe (Int -> String)  -- ^ 该目标的失败提示（参数 = 目标值）；缺省「消除<中文名>，目标 n 个」
+  }
+
+-- | 一种元素的全部能力：原型 + 五组能力记录 + 显示。缺省值由原型推出（'capsOf'），元素只改自己用到的字段
 -- （写法见 Match3.Element.Caps 的 piece / blocker / fixed 与各能力声明）。
 data Caps = Caps
   { capArchetype :: Archetype
@@ -175,6 +189,7 @@ data Caps = Caps
   , capMove      :: MoveCaps
   , capCount     :: CountCaps
   , capStep      :: StepCaps
+  , capView      :: ViewCaps
   }
 
 -- | 宝石格的颜色（'mcColor' 的缺省：只有宝石格有颜色）。
@@ -215,9 +230,12 @@ countCaps = CountCaps {ccCounter = Nothing, ccDiffCounter = Nothing, ccDiffWeigh
 stepCaps :: StepCaps
 stepCaps = StepCaps {stEnd = Nothing, stGround = Nothing, stWiden = Nothing, stMessage = const Nothing}
 
+viewCaps :: ViewCaps
+viewCaps = ViewCaps {vwFace = [], vwLabel = Nothing, vwLoseHint = Nothing}
+
 -- | 按原型的全套缺省能力。
 capsOf :: Archetype -> Caps
-capsOf a = Caps a (matchCaps a) (hitCaps a) (moveCaps a) countCaps stepCaps
+capsOf a = Caps a (matchCaps a) (hitCaps a) (moveCaps a) countCaps stepCaps viewCaps
 
 -- | 元素类（三个方法）：名字、写回格子、能力记录。只有 'name' 和 'toCell' 必须写；
 -- 'caps' 缺省 = 普通棋子（capsOf Piece）。能力可以依赖元素值（石头的层数决定受击结果）。
@@ -328,6 +346,18 @@ widenRule = stWiden . capStep . caps
 -- | 处理一条消息：Nothing = 不关心；Just = 新的元素值。
 handleMessage :: Element e => e -> SomeMessage -> Maybe SomeElement
 handleMessage = stMessage . capStep . caps
+
+-- | 格子的显示附加字段（缺省无）。
+faceFields :: Element e => e -> [(String, FaceValue)]
+faceFields = vwFace . capView . caps
+
+-- | 按元素名计数的目标的中文名（缺省 Nothing）。
+displayLabel :: Element e => e -> Maybe String
+displayLabel = vwLabel . capView . caps
+
+-- | 按元素名计数的目标的失败提示（参数 = 目标值；缺省 Nothing）。
+loseHintFor :: Element e => e -> Maybe (Int -> String)
+loseHintFor = vwLoseHint . capView . caps
 
 -- | 装箱的元素（同 xmonad 的 Layout）。
 data SomeElement = forall e. Element e => SomeElement e

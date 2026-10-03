@@ -16,6 +16,7 @@ module Match3Web.Api
   , apiUndo
   , apiState
   , apiLevels
+  , apiMeta
   , webState
   , encodeState
   , encodeOutcome
@@ -33,6 +34,8 @@ import Match3.View
 import Match3Web.Anim (AnimSeed, seedOf)
 import Match3Web.Json
 import UI.GoalIcon (goalIcon)
+import UI.Presentation (Curve(..), RGB)
+import UI.WebMeta (WebMeta(..), webMeta)
 
 -- ---------------------------------------------------------------------------
 -- 对外接口（被 WebMain 的 JSFFI 导出包装）
@@ -106,6 +109,37 @@ apiLevels =
         ]
     | l <- levelViews
     ]
+
+-- | m3Meta()：网页启动时读一次的表现表（UI.WebMeta：颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名），
+-- 网页不再手抄这些表。
+--   {"colorRGB":{"1":[r,g,b],…},"elementRGB":{名字:[r,g,b]},"colorTags":[标签],"tagRGB":{标签:[r,g,b]},
+--    "fallbackRGB":[r,g,b],"spreadCrumbRGB":{名字:[r,g,b]},"tickCrumbRGB":[r,g,b]|null,"spreadGlow":[r,g,b],
+--    "spreadCurves":{名字:{"curve":"linear"|"easeOut"|"segments","n"?:段数}},"frames":{名字:帧数},"sounds":[名字]}
+apiMeta :: String
+apiMeta =
+  obj
+    [ ("colorRGB", table [(show k, v) | (k, v) <- wmColorRGB m])
+    , ("elementRGB", table (wmElementRGB m))
+    , ("colorTags", arr (map str (wmColorTags m)))
+    , ("tagRGB", table (wmTagRGB m))
+    , ("fallbackRGB", rgb (wmFallbackRGB m))
+    , ("spreadCrumbRGB", table (wmSpreadCrumbRGB m))
+    , ("tickCrumbRGB", maybe "null" rgb (wmTickCrumbRGB m))
+    , ("spreadGlow", rgb (wmSpreadGlow m))
+    , ("spreadCurves", obj [(n, curve c) | (n, c) <- wmSpreadCurves m])
+    , ("frames", obj [(n, int f) | (n, f) <- wmFrames m])
+    , ("sounds", arr (map str (wmSounds m)))
+    ]
+  where
+    m = webMeta
+    table kvs = obj [(k, rgb v) | (k, v) <- kvs]
+    curve c = case c of
+      CurveLinear -> obj [("curve", str "linear")]
+      CurveEaseOut -> obj [("curve", str "easeOut")]
+      CurveSegments n -> obj [("curve", str "segments"), ("n", int n)]
+
+rgb :: RGB -> String
+rgb (r, g, b) = arr [int (fromIntegral r), int (fromIntegral g), int (fromIntegral b)]
 
 -- ---------------------------------------------------------------------------
 -- 状态 / 结果 / 回放脚本
@@ -255,10 +289,9 @@ encodeEvent e =
 --         覆盖物名：grass / vine / choco / fog / chain / freeze / curtain / steam（无层数的为 0）
 --   其他  {"t":<元素>, ...}：stone/chest/honey/cake/safe {"n"}；balloon/bottle {"c"}；cookie / hat / surprise / spirit；
 --         maker {"c","n"}；snail {"dr","dc"}；flip {"c":正面,"b":背面}；countdown {"c","n"}；custom {"name","v"}
---         雪怪 Boss（custom "snow_boss"）另带 Match3.View.bossPart 的解码：{"q":象限 0–3,"hurt":血量是否过半,"turn":召唤计数,"every":召唤周期}，
---         前端不自己拆 v
---         变色龙（custom "chameleon"，v = 颜色下标 0..4）另带 "c"：当前颜色 1..5（同宝石的 "c"），由核心
---         Match3.Element.Builtin.chameleonColor 解码（前端不自己换算 v）
+--         元素自带的显示附加字段（Match3.View.cellExtras，元素 caps 的 displays）按顺序追加在后面，前端不自己拆 v：
+--         雪怪 Boss（custom "snow_boss"）{"q":象限 0–3,"hurt":血量是否过半,"turn":召唤计数,"every":召唤周期}；
+--         变色龙（custom "chameleon"，v = 颜色下标 0..4）{"c":当前颜色 1..5（同宝石的 "c"）}
 --   每格另带 "s"（核心 show 文本，调试 / 未知元素占位用）。渲染层按 t 查表（www/cells.js，对应桌面 UI.CellTable）。
 
 encodeBoard :: Board -> String
@@ -266,12 +299,12 @@ encodeBoard b = arr [arr (map encodeCell row) | row <- boardRows b]
 
 -- | 单格：Match3.View.cellFace 的类型标签与字段，外加 "s"。
 encodeCell :: Cell -> String
-encodeCell cell = obj (("t", str tag) : map field fields ++ boss ++ cham ++ [("s", str (show cell))])
+encodeCell cell = obj (("t", str tag) : map field fields ++ map extra (cellExtras cell) ++ [("s", str (show cell))])
   where
-    cham = maybe [] (\col -> [("c", int (colorNum col))]) (chameleonColor cell)
-    boss = case bossPart cell of
-      Just bp -> [("q", int (bpQuad bp)), ("hurt", bool (bpHurt bp)), ("turn", int (bpTurn bp)), ("every", int (bpEvery bp))]
-      Nothing -> []
+    extra (k, v) = (k, case v of
+      FaceInt i -> int i
+      FaceBool b -> bool b
+      FaceColor c -> int (colorNum c))
     (tag, fields) = cellFace cell
     field (k, v) = (k, case v of
       FieldInt i -> int i

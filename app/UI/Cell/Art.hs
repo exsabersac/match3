@@ -41,7 +41,7 @@ import Art
 import Control.Monad (forM_, void, when)
 import Foreign.C.Types (CDouble, CInt)
 import Match3.Core
-import Match3.View (BossPart (..), bossPart)
+import UI.CellFace (BossPart (..), bossPart)
 import SDL hiding (Normal)
 import UI.Layout
 

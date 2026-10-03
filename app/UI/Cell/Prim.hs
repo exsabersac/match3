@@ -36,7 +36,7 @@ module UI.Cell.Prim
 import Control.Monad (forM_, when)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.View (BossPart (..), bossPart)
+import UI.CellFace (BossPart (..), bossPart)
 import SDL hiding (Normal)
 import UI.Cell.PrimOverlay (primOverlay)
 import UI.Layout

@@ -27,6 +27,7 @@ import System.Environment (getExecutablePath, lookupEnv)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
+import UI.Presentation (soundNames)
 import Unsafe.Coerce (unsafeCoerce)
 
 data Clip = Clip !(V.Vector Int16) !Int
@@ -186,7 +187,7 @@ clamp x = fromIntegral (max (-32767) (min 32767 x))
 loadClips :: IO (Map String (V.Vector Int16))
 loadClips = do
   dirs <- assetDirs
-  let names = ["swap", "clear", "special", "illegal", "win", "lose", "bgm"]
+  let names = soundNames
   ms <- mapM (\n -> findWav dirs n) names
   pure $ M.fromList [(n, v) | (n, Just v) <- zip names ms]
 

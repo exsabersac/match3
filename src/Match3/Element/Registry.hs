@@ -34,6 +34,11 @@ module Match3.Element.Registry
   , elementOf
   , elementName
   , topLayerName
+    -- * 显示（ViewCaps）
+  , faceFieldsWith
+  , displayLabelWith
+  , loseHintWith
+  , displayLabels
     -- * 主流程的查询（钩子）
   , matchColorWith
   , colorOfWith
@@ -284,6 +289,33 @@ registryDefs = regDefs
 -- | 按名字找条目（关卡放置、计数、文档用）。
 lookupElement :: Registry -> ElementName -> Maybe Entry
 lookupElement reg n = listToMaybe [d | d <- regDefs reg, entryName d == n]
+
+--------------------------------------------------------------------------------
+-- 显示（ViewCaps；只给前端 / 文案用，不参与规则）
+
+-- | 本体格子的显示附加字段（元素的 vwFace；未注册的 Custom 名字 = 无）。
+faceFieldsWith :: Registry -> Cell -> [(String, FaceValue)]
+faceFieldsWith reg = faceFields . bodyOf reg
+
+-- | 条目的原型元素值（本体 / 自定义 / 地面层；修饰器没有 'Element' 能力记录 = Nothing）。
+entryElement :: Entry -> Maybe SomeElement
+entryElement d = case entryProto d of
+  PBody e _ -> Just e
+  PCustom e _ -> Just e
+  PGround e -> Just e
+  PMod _ _ -> Nothing
+
+-- | 按元素名计数的目标的中文名（元素的 vwLabel；没登记 = Nothing）。
+displayLabelWith :: Registry -> ElementName -> Maybe String
+displayLabelWith reg n = lookupElement reg n >>= entryElement >>= displayLabel
+
+-- | 按元素名计数的目标的失败提示（元素的 vwLoseHint）。
+loseHintWith :: Registry -> ElementName -> Maybe (Int -> String)
+loseHintWith reg n = lookupElement reg n >>= entryElement >>= loseHintFor
+
+-- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
+displayLabels :: Registry -> [(ElementName, String)]
+displayLabels reg = [(entryName d, l) | d <- regDefs reg, Just e <- [entryElement d], Just l <- [displayLabel e]]
 
 --------------------------------------------------------------------------------
 -- 解码

@@ -3,12 +3,24 @@
 // 只画插值，不算规则：阶段、帧号、轮次由 wasm 里的 ComboFx 阶段机（m3AnimTick）给出，盘面快照来自 m3Swap。
 // 全部坐标为棋盘设计单位（格 56，见 cells.js）。
 import {
-  CELL, PAD, ROWS, COLS, ELEMENT_RGB, boardW, boardH, breathe, cellRGB, clamp, drawBoardBase, drawCell,
-  drawCellScaled, drawDrops, drawUfos, origin, snailPose, spreadTargets,
+  CELL, PAD, ROWS, COLS, boardW, boardH, breathe, cellRGB, clamp, drawBoardBase, drawCell,
+  drawCellScaled, drawDrops, drawUfos, origin, snailPose, spreadGlow, spreadTargets,
 } from "./cells.js";
 
-// 时间线常量（帧，60 fps；UI.Types / ComboFx）
-export const SWAP_FRAMES = 10, FALL_FRAMES = 12, SHAKE_FRAMES = 10, COMBO_POP_LIFE = 54, SCORE_POP_LIFE = 48;
+// 时间线常量（帧，60 fps；ComboFx）与蔓延生长曲线（UI.Presentation.spreadCurves）：由 wasm 下发（m3Meta），启动时 setAnimMeta 填入
+export let SWAP_FRAMES = 0, FALL_FRAMES = 0;
+let SHAKE_FRAMES = 0, COMBO_POP_LIFE = 0, SCORE_POP_LIFE = 0;
+const SPREAD_PROGRESS = {};
+export function setAnimMeta(meta) {
+  ({ swap: SWAP_FRAMES, fall: FALL_FRAMES, shake: SHAKE_FRAMES, comboPop: COMBO_POP_LIFE, scorePop: SCORE_POP_LIFE } = meta.frames);
+  for (const [name, c] of Object.entries(meta.spreadCurves)) SPREAD_PROGRESS[name] = curveFn(c);
+}
+// 生长曲线（t ∈ [0,1] → 露出比例；UI.Presentation.curveAt）：匀速 / 先快后慢 / 分 n 段一节一节伸长（每段内 smoothstep）
+function curveFn(c) {
+  if (c.curve === "easeOut") return easeOutT;
+  if (c.curve === "segments") return (t) => { const u = t * c.n, seg = Math.floor(u); return Math.min(1, (seg + smoothT(u - seg)) / c.n); };
+  return (t) => t;
+}
 
 const smoothT = (x) => { const y = clamp(0, 1, x); return y * y * (3 - 2 * y); };
 const easeOutT = (x) => { const y = clamp(0, 1, x); return 1 - (1 - y) * (1 - y); };
@@ -156,11 +168,6 @@ function stageMoves(cas, s) {
   }
   return out;
 }
-const SPREAD_PROGRESS = {
-  vine: (t) => { const u = t * 4, seg = Math.floor(u); return Math.min(1, (seg + smoothT(u - seg)) / 4); },
-  choco: easeOutT,
-  steam: (t) => t,
-};
 
 function drawEndStage(ctx, art, v, cas, s, t) {
   const before = cas.boards[s.b0], after = cas.boards[s.b1];
@@ -206,7 +213,7 @@ function drawEndStage(ctx, art, v, cas, s, t) {
         ctx.save(); ctx.beginPath(); ctx.rect(...clip); ctx.clip();
         drawCell(ctx, art, v.pulse, x, y, after[q[0]][q[1]]);
         ctx.restore();
-        art.add(ctx, "spark", ...front, ELEMENT_RGB[name] || [255, 255, 255], Math.round(220 * (1 - t) + 30));
+        art.add(ctx, "spark", ...front, spreadGlow(name), Math.round(220 * (1 - t) + 30));
       }
     }
   } else if (s.kind === "snail") {

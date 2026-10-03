@@ -1,92 +1,37 @@
--- | 网页版 JS 颜色表、贴图生成器调色板与 Haskell 调色板 / 表现表的一致性。
+-- | 网页表现表（m3Meta = UI.WebMeta）与贴图生成器调色板的一致性。
 --
--- 读 web/www/cells.js 与 web/www/main.js 的源码，解析出颜色表，与桌面的唯一来源逐项比对：
---   * cells.js 的 COLOR_RGB（五色主色）         ↔ UI.Palette.colorRGB
---   * cells.js 的 ELEMENT_RGB（按元素名取色）     ↔ UI.Presentation.elementRGBTable
---   * cells.js 的 cellRGB（粒子 / 退回画法颜色）  ↔ UI.Palette.cellRGB（每种格子逐个比，格子的 JS 标签取自 Match3.View.cellFace）
---   * main.js 的 SPREAD_CRUMB_RGB（蔓延碎屑色）   ↔ elementRGBTable 里会蔓延的元素（spreadCurves 的名字）
---   * main.js 的倒计时火星色、render.js 的生长前沿缺省光 ↔ 表现表 EvTick 的 CrumbsAtSources / defaultSpreadGlow
---   * tools/gen_assets.py 的 GEMS 调色板（宝石贴图的主色）↔ UI.Palette.colorRGB
--- 解析不到预期的写法时直接失败并说明是哪个文件的哪张表（改了 JS / Python 的写法就同步改这里的解析）。
+-- 网页不再手抄颜色 / 生长曲线 / 帧数 / 音效名：启动时从 wasm 的 m3Meta 读（UI.WebMeta 由 UI.Palette / UI.Presentation /
+-- ComboFx 推出）。这里核对：
+--   * 按网页 cells.js 的取色规则、只用 m3Meta 的表算每种格子的颜色（UI.WebMeta.metaCellRGB）= UI.Palette.cellRGB
+--   * 蔓延碎屑色 / 倒计时火星色 / 生长曲线与表现表一致，每个会蔓延的元素都有碎屑色
+--   * 帧数常量、音效名齐全（表现表里出现的音效名都在 soundNames 里）
+--   * tools/gen_assets.py 的 GEMS 调色板（宝石贴图的主色）↔ UI.Palette.colorRGB（唯一还要解析源码的一张表）
 module Spec.WebColors
   ( tests
   ) where
 
-import Data.Char (isAlphaNum, isDigit, isSpace)
-import Data.List (isInfixOf, isPrefixOf, nub)
+import Data.Char (isDigit, isSpace)
+import Data.List (isPrefixOf, nub)
+import Data.Maybe (mapMaybe)
 import Match3.Core
 import Match3.Element.Event (EventKind (..))
-import Match3.View (CellField (..), cellFace, colorNum)
+import Match3.View (cellFace, colorNum)
 import Test.Tasty
 import Test.Tasty.HUnit
 import UI.Palette (cellRGB, colorRGB)
 import UI.Presentation
+import UI.WebMeta (WebMeta (..), metaCellRGB, webMeta)
 
 tests :: [TestTree]
 tests =
-  [ testCase "web_color_rgb_matches_palette" web_color_rgb_matches_palette
-  , testCase "web_element_rgb_matches_presentation" web_element_rgb_matches_presentation
-  , testCase "web_cell_rgb_matches_palette" web_cell_rgb_matches_palette
-  , testCase "web_spread_crumbs_match_presentation" web_spread_crumbs_match_presentation
-  , testCase "web_end_stage_colors_match_presentation" web_end_stage_colors_match_presentation
+  [ testCase "web_meta_cell_rgb_matches_palette" web_meta_cell_rgb_matches_palette
+  , testCase "web_meta_spread_matches_presentation" web_meta_spread_matches_presentation
+  , testCase "web_meta_frames_and_sounds" web_meta_frames_and_sounds
   , testCase "gen_assets_gem_palette_matches_palette" gen_assets_gem_palette_matches_palette
   ]
 
---------------------------------------------------------------------------------
--- 读 JS
-
-cellsJs, mainJs, renderJs :: FilePath
-cellsJs = "web/www/cells.js"
-mainJs = "web/www/main.js"
-renderJs = "web/www/render.js"
-
--- | 去掉 // 行注释（这几张表所在的行里没有含 // 的字符串）。
-stripLineComments :: String -> String
-stripLineComments = unlines . map cut . lines
-  where
-    cut l = go l
-      where
-        go ('/' : '/' : _) = ""
-        go (c : cs) = c : go cs
-        go [] = []
-
 trim :: String -> String
 trim = dropWhile isSpace . reverse . dropWhile isSpace . reverse
-
--- | 在文件里找 @const 名字 = { … }@，解析成 [(键, (r, g, b))]（键是标识符或数字，值是三元数组）。
-jsRgbObject :: FilePath -> String -> IO [(String, RGB)]
-jsRgbObject file name = do
-  src <- stripLineComments <$> readFile file
-  let marker = "const " ++ name ++ " = {"
-  case breakOn marker src of
-    Nothing -> failWith ("找不到 " ++ marker)
-    Just rest -> case parseEntries (takeWhile (/= '}') rest) of
-      Right es | not (null es) -> pure es
-      Right _ -> failWith (name ++ " 是空表")
-      Left err -> failWith (name ++ "：" ++ err)
-  where
-    failWith msg = assertFailure (file ++ "：" ++ msg) >> pure []
-    parseEntries s = case dropWhile (\c -> isSpace c || c == ',') s of
-      "" -> Right []
-      s1 ->
-        let (key, s2) = span (\c -> isAlphaNum c || c == '_') s1
-        in case dropWhile isSpace s2 of
-             ':' : s3 -> case parseTriple s3 of
-               Just (rgb, s4) | not (null key) -> ((key, rgb) :) <$> parseEntries s4
-               _ -> Left ("键 " ++ show key ++ " 的值不是 [r, g, b]")
-             _ -> Left ("解析不到 键: 值（在 " ++ show (take 30 s1) ++ "）")
-
--- | 解析 @[r, g, b]@（前面可有空白），返回剩余部分。
-parseTriple :: String -> Maybe (RGB, String)
-parseTriple s = case dropWhile isSpace s of
-  '[' : body ->
-    let (inside, rest) = break (== ']') body
-        parts = map trim (splitOn ',' inside)
-    in case parts of
-         [a, b, c] | all (\p -> not (null p) && all isDigit p) parts ->
-           Just ((fromInteger (read a), fromInteger (read b), fromInteger (read c)), drop 1 rest)
-         _ -> Nothing
-  _ -> Nothing
 
 splitOn :: Char -> String -> [String]
 splitOn d s = case break (== d) s of
@@ -103,57 +48,8 @@ breakOn marker = go
           [] -> Nothing
           _ : rest -> go rest
 
--- | cells.js 的 cellRGB 每个 case 返回什么。
-data JsColor
-  = JsFixed RGB      -- ^ 固定颜色 @[r, g, b]@
-  | JsByColor        -- ^ @COLOR_RGB[cell.c] || [200, 200, 200]@：按格子的颜色字段
-  | JsCustom RGB     -- ^ 自定义格：变色龙按当前颜色，其余查 ELEMENT_RGB，查不到用这个缺省
-  deriving (Eq, Show)
-
--- | 解析 cellRGB 的 switch：[(标签, 返回)]，外加 default 的颜色。
-jsCellRGB :: IO ([(String, JsColor)], RGB)
-jsCellRGB = do
-  src <- readFile cellsJs
-  let body = takeWhile (/= "}") (drop 1 (dropWhile (not . ("export function cellRGB(cell) {" `isPrefixOf`)) (lines src)))
-      caseLines = [trim (stripLineComments l) | l <- body, any (`isPrefixOf` trim l) ["case ", "default:"]]
-  assertBool (cellsJs ++ "：找不到 cellRGB 的 switch") (not (null caseLines))
-  parsed <- mapM parseCase caseLines
-  let cases = concat [[(t, r) | t <- ts] | (Just ts, r) <- parsed]
-      defaults = [r | (Nothing, JsFixed r) <- parsed]
-  case defaults of
-    [d] -> pure (cases, d)
-    _ -> assertFailure (cellsJs ++ "：cellRGB 应恰有一个 default: return [r, g, b]") >> pure (cases, (0, 0, 0))
-  where
-    parseCase l = do
-      let (tags, ret) = caseTags l
-      case classify (trim ret) of
-        Just c -> pure (if l `startsWith` "default:" then Nothing else Just tags, c)
-        Nothing -> assertFailure (cellsJs ++ "：cellRGB 里认不出的返回：" ++ l) >> pure (Nothing, JsFixed (0, 0, 0))
-    startsWith l p = p `isPrefixOf` l
-    -- 依次吃掉 case "x": 前缀，剩下 return …;
-    caseTags l = case l of
-      _ | "default:" `isPrefixOf` l -> ([], drop (length "default:") l)
-      _ | "case \"" `isPrefixOf` l ->
-            let (t, rest) = break (== '"') (drop (length "case \"") l)
-                (ts, ret) = caseTags (trim (drop 1 (dropWhile (/= ':') rest)))
-            in (t : ts, ret)
-      _ -> ([], l)
-    classify r0 = do
-      r <- stripSuffix ";" =<< stripPrefix' "return " r0
-      case parseTriple r of
-        Just (rgb, rest) | all isSpace rest -> Just (JsFixed rgb)
-        _
-          | r == "COLOR_RGB[cell.c] || [200, 200, 200]" -> Just JsByColor
-          | "cell.name === \"chameleon\" && cell.c ? COLOR_RGB[cell.c] : ELEMENT_RGB[cell.name] ||" `isPrefixOf` r ->
-              case breakOn "ELEMENT_RGB[cell.name] ||" r >>= parseTriple of
-                Just (d, rest) | all isSpace rest -> Just (JsCustom d)
-                _ -> Nothing
-          | otherwise -> Nothing
-    stripPrefix' p s = if p `isPrefixOf` s then Just (drop (length p) s) else Nothing
-    stripSuffix p s = let n = length s - length p in if n >= 0 && drop n s == p then Just (take n s) else Nothing
-
 --------------------------------------------------------------------------------
--- 比对
+-- m3Meta
 
 showRGB :: RGB -> String
 showRGB (r, g, b) = "[" ++ show r ++ ", " ++ show g ++ ", " ++ show b ++ "]"
@@ -169,96 +65,61 @@ diffTables jsName hsName js hs =
 assertNoDiff :: String -> [String] -> Assertion
 assertNoDiff what ds = assertBool (what ++ " 与 Haskell 不一致：\n  " ++ concatMap (++ "\n  ") ds) (null ds)
 
-web_color_rgb_matches_palette :: Assertion
-web_color_rgb_matches_palette = do
-  js <- jsRgbObject cellsJs "COLOR_RGB"
-  assertNoDiff "cells.js COLOR_RGB"
-    (diffTables "COLOR_RGB" "UI.Palette.colorRGB" js [(show (colorNum c), colorRGB c) | c <- allColors])
-
 elementTable :: [(String, RGB)]
 elementTable = [(unElementName n, rgb) | (n, rgb) <- elementRGBTable]
 
-web_element_rgb_matches_presentation :: Assertion
-web_element_rgb_matches_presentation = do
-  js <- jsRgbObject cellsJs "ELEMENT_RGB"
-  assertNoDiff "cells.js ELEMENT_RGB" (diffTables "ELEMENT_RGB" "UI.Presentation.elementRGBTable" js elementTable)
-
--- | 每种格子各取几个样本（带颜色的取全部五色；自定义格取两边表里出现的每个名字、变色龙的五种颜色、一个未知名字）。
-sampleCells :: [String] -> [Cell]
-sampleCells extraNames =
+-- | 每种格子各取几个样本（带颜色的取全部五色、带层数的取几档；自定义格取颜色表里的每个名字、变色龙的五种颜色、
+-- 雪怪 Boss、一个未知名字）。
+sampleCells :: [Cell]
+sampleCells =
   [Gem c k 0 Nothing | c <- allColors, k <- [Normal, LineH, Bomb]]
-    ++ [Stone 1, Chest 2, Honey 1, Cookie, Cake 3, MagicHat, Snail 0 1, Safe 1, Surprise, TimeSpirit]
+    ++ [Gem C2 Normal 1 (Just Grass)]
+    ++ [Stone n | n <- [1 .. 3]] ++ [Chest n | n <- [1, 2]] ++ [Honey 1, Cookie] ++ [Cake n | n <- [1 .. 4]]
+    ++ [MagicHat, Snail 0 1, Snail 1 0] ++ [Safe n | n <- [1, 2]] ++ [Surprise, TimeSpirit]
     ++ concat [[Balloon c, Maker c 3, Flip c (succColor c), Bottle c, Countdown c 5] | c <- allColors]
-    ++ [Custom (ElementName n) (CustomState 0) | n <- nub (map fst elementTable ++ extraNames ++ ["no_such_element"])]
+    ++ [Custom (ElementName n) (CustomState 0) | n <- nub (map fst elementTable ++ ["snow_boss", "no_such_element"])]
     ++ [Custom (ElementName "chameleon") (CustomState i) | i <- [0 .. 4]]
   where
     succColor c = if c == maxBound then minBound else succ c
 
--- | 按 JS 的写法算一格的颜色（标签与颜色字段取自 cellFace；变色龙的 "c" 由 chameleonColor 给，同 Match3Web.Api）。
-jsColorOf :: ([(String, JsColor)], RGB) -> [(String, RGB)] -> [(String, RGB)] -> Cell -> RGB
-jsColorOf (cases, dflt) colorTable elemTable cell =
-  case lookup tag cases of
-    Just (JsFixed rgb) -> rgb
-    Just JsByColor -> maybe (200, 200, 200) id (cField >>= \c -> lookup (show c) colorTable)
-    Just (JsCustom d) -> case (name, chamC) of
-      (Just "chameleon", Just c) -> maybe d id (lookup (show c) colorTable)
-      (Just n, _) -> maybe d id (lookup n elemTable)
-      _ -> d
-    Nothing -> dflt
-  where
-    (tag, fields) = cellFace cell
-    cField = case lookup "c" fields of
-      Just (FieldInt c) -> Just c
-      _ -> Nothing
-    chamC = colorNum <$> chameleonColor cell
-    name = case lookup "name" fields of
-      Just (FieldText n) -> Just n
-      _ -> Nothing
+web_meta_cell_rgb_matches_palette :: Assertion
+web_meta_cell_rgb_matches_palette = do
+  let m = webMeta
+      knownTags = nub (map (fst . cellFace) sampleCells)
+      metaTags = wmColorTags m ++ map fst (wmTagRGB m)
+  assertEqual "五色主色" [(colorNum c, colorRGB c) | c <- allColors] (wmColorRGB m)
+  assertEqual "元素颜色表" elementTable (wmElementRGB m)
+  -- 表里的每个标签都是真实格子的标签（拼错的标签永远走不到），且一个标签只归一类
+  assertEqual "m3Meta 里有核心不会产生的标签" [] [t | t <- metaTags, t `notElem` knownTags]
+  assertEqual "标签重复" metaTags (nub metaTags)
+  -- 每个内置本体标签都归了类（custom 走自定义规则）
+  assertEqual "m3Meta 没覆盖的格子标签" [] [t | t <- knownTags, t `notElem` ("custom" : metaTags)]
+  let mismatches = [(show cell, js, hs) | cell <- sampleCells, let js = metaCellRGB m cell; hs = cellRGB cell, js /= hs]
+      render (c, js, hs) = c ++ "：m3Meta 规则 = " ++ showRGB js ++ "，UI.Palette.cellRGB = " ++ showRGB hs
+  assertNoDiff "m3Meta 的格子取色" (map render mismatches)
 
-web_cell_rgb_matches_palette :: Assertion
-web_cell_rgb_matches_palette = do
-  fn@(cases, _) <- jsCellRGB
-  colors <- jsRgbObject cellsJs "COLOR_RGB"
-  elems <- jsRgbObject cellsJs "ELEMENT_RGB"
-  let cells = sampleCells (map fst elems)
-      knownTags = nub (map (fst . cellFace) cells)
-  -- JS 的每个 case 标签都要是真实格子的标签（拼错的标签永远走不到）
-  assertEqual "cellRGB 里有核心不会产生的标签" [] [t | (t, _) <- cases, t `notElem` knownTags]
-  let mismatches =
-        [ (show cell, js, hs)
-        | cell <- cells
-        , let js = jsColorOf fn colors elems cell
-              hs = cellRGB cell
-        , js /= hs
-        ]
-      render (c, js, hs) = c ++ "：cells.js cellRGB = " ++ showRGB js ++ "，UI.Palette.cellRGB = " ++ showRGB hs
-  assertNoDiff "cells.js cellRGB" (map render mismatches)
-
-web_spread_crumbs_match_presentation :: Assertion
-web_spread_crumbs_match_presentation = do
-  js <- jsRgbObject mainJs "SPREAD_CRUMB_RGB"
-  let spreading = [unElementName n | (n, _) <- spreadCurves]
+web_meta_spread_matches_presentation :: Assertion
+web_meta_spread_matches_presentation = do
+  let m = webMeta
+      spreading = [unElementName n | (n, _) <- spreadCurves]
       hs = [(n, rgb) | n <- spreading, Just rgb <- [lookup n elementTable]]
   assertEqual "会蔓延的元素都有碎屑色" (length spreading) (length hs)
-  assertNoDiff "main.js SPREAD_CRUMB_RGB" (diffTables "SPREAD_CRUMB_RGB" "elementRGBTable（蔓延元素）" js hs)
+  assertNoDiff "m3Meta spreadCrumbRGB" (diffTables "spreadCrumbRGB" "elementRGBTable（蔓延元素）" (wmSpreadCrumbRGB m) hs)
+  assertEqual "生长曲线" [(unElementName n, c) | (n, c) <- spreadCurves] (wmSpreadCurves m)
+  assertEqual "生长前沿缺省光 = defaultSpreadGlow" defaultSpreadGlow (wmSpreadGlow m)
+  case prCrumbs (presentationFor EvTick) of
+    CrumbsAtSources rgb -> assertEqual "倒计时火星色 = 表现表 EvTick 的 CrumbsAtSources" (Just rgb) (wmTickCrumbRGB m)
+    c -> assertFailure ("表现表 EvTick 的碎屑不再是 CrumbsAtSources：" ++ show c ++ "（网页 main.js 按 tickCrumbRGB 迸火星，要一起改）")
 
-web_end_stage_colors_match_presentation :: Assertion
-web_end_stage_colors_match_presentation = do
-  main' <- stripLineComments <$> readFile mainJs
-  render' <- stripLineComments <$> readFile renderJs
-  -- 倒计时火星：if (ef.type === "tick") fx.crumbs([r, g, b], ef.cells);
-  let tickLine = [l | l <- lines main', "ef.type === \"tick\"" `isInfixOf` l, "fx.crumbs(" `isInfixOf` l]
-  case (tickLine, prCrumbs (presentationFor EvTick)) of
-    ([l], CrumbsAtSources hs) -> case breakOn "fx.crumbs(" l >>= parseTriple of
-      Just (js, _) -> assertEqual "main.js 倒计时火星色 = 表现表 EvTick 的 CrumbsAtSources" hs js
-      Nothing -> assertFailure (mainJs ++ "：倒计时火星色不是 [r, g, b]：" ++ trim l)
-    (ls, c) -> assertFailure (mainJs ++ "：应恰有一行倒计时火星（找到 " ++ show (length ls) ++ " 行）；表现表 EvTick 碎屑 = " ++ show c)
-  -- 生长前沿光：ELEMENT_RGB[name] || [r, g, b]（缺省 = defaultSpreadGlow）
-  case [l | l <- lines render', "ELEMENT_RGB[name] ||" `isInfixOf` l] of
-    [l] -> case breakOn "ELEMENT_RGB[name] ||" l >>= parseTriple of
-      Just (js, _) -> assertEqual "render.js 生长前沿缺省光 = defaultSpreadGlow" defaultSpreadGlow js
-      Nothing -> assertFailure (renderJs ++ "：生长前沿缺省光不是 [r, g, b]：" ++ trim l)
-    ls -> assertFailure (renderJs ++ "：应恰有一处 ELEMENT_RGB[name] || [r, g, b]（找到 " ++ show (length ls) ++ " 处）")
+web_meta_frames_and_sounds :: Assertion
+web_meta_frames_and_sounds = do
+  let m = webMeta
+      frames = wmFrames m
+  assertEqual "帧数常量（网页 render.js / main.js 读这几个键）" ["swap", "fall", "shake", "comboPop", "scorePop"] (map fst frames)
+  assertBool ("帧数都 > 0：" ++ show frames) (all ((> 0) . snd) frames)
+  assertEqual "音效名不重复" (wmSounds m) (nub (wmSounds m))
+  let used = nub (mapMaybe effectSound [minBound .. maxBound])
+  assertEqual "表现表的音效名都在 soundNames 里" [] [s | s <- used, s `notElem` wmSounds m]
 
 --------------------------------------------------------------------------------
 -- 贴图生成器的调色板

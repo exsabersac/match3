@@ -16,8 +16,7 @@ module Match3.Game.Outcome
   ) where
 
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (snowBossName)
-import Match3.GoalLabel (countLabel)
+import Match3.GoalLabel (countLabel, namedLoseHint)
 import Match3.Levels.Campaign (levelCount)
 import Match3.Types
 import Match3.Game.State
@@ -86,7 +85,7 @@ loseHint g = case goalView g of
     CountUfo -> "让飞碟吸走同色宝石，目标 " ++ show n ++ " 个"
     CountCarpets -> "在地毯格上消除宝石以铺地毯，目标 " ++ show n ++ " 格"
     CountNamed name
-      | name == snowBossName -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血"
+      | Just hint <- namedLoseHint name -> hint n  -- 元素条目自带的提示（雪怪：目标 = 血量）
       | otherwise -> "消除" ++ countLabel k ++ "，目标 " ++ show n ++ " 个"
     _ -> generic
   ViewOther _ -> generic

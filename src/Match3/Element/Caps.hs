@@ -9,14 +9,14 @@
 -- >   toCell (StoneE n) = Stone n
 -- >   caps (StoneE n) = blocker [hit (chip n StoneE), onAdjacent 10 (deadRule chipAdjacentStonesExcept), counts CountStones]
 --
--- 能力记录本身（'Caps' 与五组记录）和查询函数在 Match3.Element.Class；这里只是按组排好的字段写入器，
+-- 能力记录本身（'Caps' 与各组记录）和查询函数在 Match3.Element.Class；这里只是按组排好的字段写入器，
 -- 也可以直接用记录更新语法改字段。
 --
 -- Haskell 特性第 9 项（docs/haskell-features/09-规则去重.md）：
 --
 -- * 每个字段一个透镜（组透镜 'matchL' / 'hitL' / … 与字段透镜 'mcColorL' / 'hcOnHitL' / …，Engine.Optics），
 --   字段写入器都是「把某个透镜设成某个值」（'setCap'），第 9 项前是 27 个手写的嵌套记录更新；
---   'withMatch' 等五个按组改字段的写入器 = @over 组透镜@。
+--   'withMatch' 等按组改字段的写入器 = @over 组透镜@。
 -- * 'Cap' 是 @Caps -> Caps@ 的 newtype，'Semigroup' / 'Monoid' 实例经 DerivingVia 取自 @Dual (Endo Caps)@：
 --   @a <> b@ = 先做 a 再做 b，所以一串声明里**后面的覆盖前面的**——第 9 项前 'withCaps' 的 @foldl (\c f -> f c)@
 --   是同一个意思，现在写进了类型（'Endo' 的复合是「先右后左」，'Dual' 把它翻过来）。
@@ -64,18 +64,24 @@ module Match3.Element.Caps
   , ground
   , widens
   , onMessage
+    -- * 显示（ViewCaps）
+  , displays
+  , labelled
+  , loseHintIs
     -- * 按组直接改字段（上面的简写不够用时）
   , withMatch
   , withHit
   , withMove
   , withCount
   , withStep
+  , withView
     -- * 透镜（第 9 项）
   , matchL
   , hitL
   , moveL
   , countL
   , stepL
+  , viewL
   , mcColorL
   , mcBlocksSwapL
   , mcHintableL
@@ -99,6 +105,9 @@ module Match3.Element.Caps
   , stGroundL
   , stWidenL
   , stMessageL
+  , vwFaceL
+  , vwLabelL
+  , vwLoseHintL
     -- * 再导出
   , module Match3.Element.Class
   ) where
@@ -106,7 +115,7 @@ module Match3.Element.Caps
 import Data.Monoid (Dual(..), Endo(..))
 import Engine.Optics (ASetter, Lens', lens, over, set)
 import Match3.Element.Class
-import Match3.Element.Types (AdjCtx, AdjOut, AdjacentRule(..), CounterKey, Edge, EndRule, OpenRule(..), SwapRule)
+import Match3.Element.Types (AdjCtx, AdjOut, AdjacentRule(..), CounterKey, Edge, EndRule, FaceValue, OpenRule(..), SwapRule)
 import Match3.Types
 
 -- | 一条能力声明：改能力记录里的一个（或几个）字段。
@@ -155,6 +164,9 @@ withCount = Cap . over countL
 
 withStep :: (StepCaps -> StepCaps) -> Cap
 withStep = Cap . over stepL
+
+withView :: (ViewCaps -> ViewCaps) -> Cap
+withView = Cap . over viewL
 
 -- | 本体颜色固定为给出的颜色（不看写回的格子）。
 colorIs :: Color -> Cap
@@ -269,8 +281,20 @@ widens f = setCap (stepL . stWidenL) (Just f)
 onMessage :: (SomeMessage -> Maybe SomeElement) -> Cap
 onMessage = setCap (stepL . stMessageL)
 
+-- | 格子的显示附加字段（按顺序；网页格子 JSON 追加在 cellFace 字段之后，桌面按名字读）。
+displays :: [(String, FaceValue)] -> Cap
+displays = setCap (viewL . vwFaceL)
+
+-- | 按元素名计数的目标的中文名（HUD「目标 …」、网页 goal.label、失败提示）。
+labelled :: String -> Cap
+labelled l = setCap (viewL . vwLabelL) (Just l)
+
+-- | 按元素名计数的目标的失败提示（参数 = 目标值）。
+loseHintIs :: (Int -> String) -> Cap
+loseHintIs f = setCap (viewL . vwLoseHintL) (Just f)
+
 --------------------------------------------------------------------------------
--- 透镜（Haskell 特性第 9 项）：五组能力各一个、每组字段各一个（只列写入器用到的字段）。
+-- 透镜（Haskell 特性第 9 项）：各组能力各一个、每组字段各一个（只列写入器用到的字段）。
 
 matchL :: Lens' Caps MatchCaps
 matchL = lens capMatch (\c v -> c {capMatch = v})
@@ -286,6 +310,9 @@ countL = lens capCount (\c v -> c {capCount = v})
 
 stepL :: Lens' Caps StepCaps
 stepL = lens capStep (\c v -> c {capStep = v})
+
+viewL :: Lens' Caps ViewCaps
+viewL = lens capView (\c v -> c {capView = v})
 
 mcColorL :: Lens' MatchCaps (Cell -> Maybe Color)
 mcColorL = lens mcColor (\m v -> m {mcColor = v})
@@ -343,3 +370,12 @@ stWidenL = lens stWiden (\s v -> s {stWiden = v})
 
 stMessageL :: Lens' StepCaps (SomeMessage -> Maybe SomeElement)
 stMessageL = lens stMessage (\s v -> s {stMessage = v})
+
+vwFaceL :: Lens' ViewCaps [(String, FaceValue)]
+vwFaceL = lens vwFace (\s v -> s {vwFace = v})
+
+vwLabelL :: Lens' ViewCaps (Maybe String)
+vwLabelL = lens vwLabel (\s v -> s {vwLabel = v})
+
+vwLoseHintL :: Lens' ViewCaps (Maybe (Int -> String))
+vwLoseHintL = lens vwLoseHint (\s v -> s {vwLoseHint = v})

@@ -146,11 +146,13 @@ executable match3-sdl
       UI.TextArt
       UI.Types
       ComboFx
+      UI.CellFace
       UI.GoalIcon
       UI.MoveText
       UI.Palette
       UI.Presentation
       UI.Sound
+      UI.WebMeta
       Paths_match3
   autogen-modules:
       Paths_match3
@@ -232,11 +234,13 @@ test-suite match3-test
       ElementQueries
       Golden
       ComboFx
+      UI.CellFace
       UI.GoalIcon
       UI.MoveText
       UI.Palette
       UI.Presentation
       UI.Sound
+      UI.WebMeta
       Engine.Effect
       Engine.Game
       Engine.GridUI

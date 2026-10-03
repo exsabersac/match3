@@ -5,19 +5,21 @@
 -- 放在 Match3.Game.* 之下、Match3.View 之上（View 重新导出 countLabel / colorLabel / namedGoalLabelTable，
 -- 并用 'goalViewLabel' 定义 goalLabel，对外 API 不变），这样 Game.Outcome 也能用而不成环。
 --
--- 依赖：Match3.Goal、Match3.Counts、Match3.Color、Match3.Element.Builtin（元素名常量）。
+-- 依赖：Match3.Goal、Match3.Counts、Match3.Color、Match3.Element.Builtin / Registry（中文名与失败提示由元素条目提供）。
 module Match3.GoalLabel
   ( goalViewLabel
   , countLabel
   , colorLabel
   , namedGoalLabelTable
+  , namedLoseHint
   ) where
 
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Match3.Color (Color(..))
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (chameleonName, snowBossName)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Registry (displayLabels, loseHintWith)
 import Match3.Goal (GoalView(..))
 import Match3.Types.Name (ElementName(..))
 
@@ -47,17 +49,15 @@ countLabel k = case k of
   CountColor c -> colorLabel c ++ "色宝石"
   CountNamed name -> fromMaybe (unElementName name) (lookup (unElementName name) namedGoalLabelTable)
 
--- | 按元素名计数的目标（'GoalNamed'）的中文名（键 = 元素名）。新元素做成关卡目标时在这里登记一行
+-- | 按元素名计数的目标（'GoalNamed'）的中文名：[(元素名, 中文名)]，由元素条目提供（能力记录的显示组，
+-- Match3.Element.Caps.labelled；注册顺序）。新元素做成关卡目标时在元素的 caps 里写 labelled "…"
 -- （stack test 的 frontends_read_view_model 与 outcome_lose_hint_no_internal_names 核对全部关卡目标都有中文名）。
 namedGoalLabelTable :: [(String, String)]
-namedGoalLabelTable =
-  [ ("jelly", "果冻")          -- 段 5：双层果冻（第 39 关）
-  , ("bubble", "气泡")         -- 段 5：气泡（第 40 关）
-  , ("magic_stone", "魔法石")  -- 新玩法 2
-  , ("fuzzball", "毛球")       -- 新玩法 3：毛球（第 43 关）
-  , (unElementName snowBossName, "雪怪")  -- 新玩法 5：雪怪 Boss（第 45 关，目标 = 击败 Boss）
-  , (unElementName chameleonName, "变色龙")  -- 新玩法 7：变色龙（第 47 关）
-  ]
+namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultRegistry]
+
+-- | 按元素名计数的目标的专用失败提示（元素条目的 loseHintIs；参数 = 目标值；没有 = Nothing，用通用句式）。
+namedLoseHint :: ElementName -> Maybe (Int -> String)
+namedLoseHint = loseHintWith defaultRegistry
 
 -- | 颜色的中文名（与图例、ui-art.md 的颜色表一致）。
 colorLabel :: Color -> String

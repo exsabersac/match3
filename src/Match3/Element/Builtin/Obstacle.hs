@@ -167,6 +167,7 @@ instance Element MagicStone where
       , colorless
       , onAdjacent 180 magicStoneCharge
       , atEnd (tickRule 20 magicStoneArm magicStoneSeeds)
+      , labelled "魔法石"
       ]
 
 -- | 满格（可发射）的充能数。
@@ -240,6 +241,11 @@ instance Element SnowBoss where
       , countsDiff (CountNamed snowBossName)
       , weighs (if sbQuad b == 0 then sbHp b else 0)
       , atEnd (moveRule 30 snowBossRun)
+      , labelled "雪怪"
+      , loseHintIs (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
+        -- 一格怎么画：象限（0 左上 / 1 右上 / 2 左下 / 3 右下，贴图 snow_boss[_hurt]_<象限>）、是否受伤（血量 ≤ 满血一半）、
+        -- 召唤计数与周期（右下格画进度小点）
+      , displays [("q", FaceInt (sbQuad b)), ("hurt", FaceBool (sbHp b * 2 <= sbMax b)), ("turn", FaceInt (sbTurn b)), ("every", FaceInt snowBossEvery)]
       ]
 
 snowBossName :: ElementName

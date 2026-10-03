@@ -11,7 +11,9 @@
 -- 步末段种类与连击等级样式都来自表现表 UI.Presentation（StageKind / ComboStyle 在那里定义，这里再导出）。
 module ComboFx
   ( -- * 时间线（帧；主循环固定 60 fps 步长，1 帧 ≈ 16.7 ms）
-    waveFlashFrames
+    swapFrames
+  , fallFrames
+  , waveFlashFrames
   , wavePopFrames
   , waveRestFrames
   , fallFramesFor
@@ -81,6 +83,11 @@ waveFlashFrames = prFrames (presentationFor EvClear)
 -- | 被消格缩小消失（≈ 100 ms），同时迸出粒子、弹出本轮得分。
 wavePopFrames :: Int
 wavePopFrames = 6
+
+-- | 交换补间与无连锁时的轻落（帧；桌面 UI.Types 再导出，网页经 m3Meta 取）。
+swapFrames, fallFrames :: Int
+swapFrames = 10
+fallFrames = 12
 
 -- | 落定后的短停顿（≈ 67 ms），让下一轮的高亮与上一轮的下落分得开。
 waveRestFrames :: Int

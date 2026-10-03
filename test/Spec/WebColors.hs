@@ -12,7 +12,7 @@ module Spec.WebColors
   ) where
 
 import Data.Char (isAlphaNum, isDigit, isSpace)
-import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import Data.List (isInfixOf, isPrefixOf, nub)
 import Match3.Core
 import Match3.Element.Builtin (chameleonColor)
 import Match3.Element.Event (EventKind (..))
@@ -30,15 +30,6 @@ tests =
   , testCase "web_spread_crumbs_match_presentation" web_spread_crumbs_match_presentation
   , testCase "web_end_stage_colors_match_presentation" web_end_stage_colors_match_presentation
   ]
-
---------------------------------------------------------------------------------
--- 已知差异（待定，不在这里替哪一边做决定）
-
--- | JS 的 ELEMENT_RGB 比 elementRGBTable 多出的两项：网页按它们给魔法石 / 毛球的粒子与退回画法取色
--- （值 = 桌面几何版 UI.Cell.Prim 的主体色），桌面 cellRGB 查不到、用缺省灰 (160, 160, 170)。
--- 决定改哪一边之后删掉这张表（并改那一边），测试即恢复为严格相等。
-pendingElementDrift :: [(String, RGB)]
-pendingElementDrift = [("magic_stone", (92, 60, 160)), ("fuzzball", (196, 150, 170))]
 
 --------------------------------------------------------------------------------
 -- 读 JS
@@ -189,12 +180,7 @@ elementTable = [(unElementName n, rgb) | (n, rgb) <- elementRGBTable]
 web_element_rgb_matches_presentation :: Assertion
 web_element_rgb_matches_presentation = do
   js <- jsRgbObject cellsJs "ELEMENT_RGB"
-  let isPending (k, v) = (k, v) `elem` pendingElementDrift && k `notElem` map fst elementTable
-  assertNoDiff "cells.js ELEMENT_RGB"
-    (diffTables "ELEMENT_RGB" "UI.Presentation.elementRGBTable" (filter (not . isPending) js) elementTable)
-  -- 已知差异必须仍然原样存在：哪边改了就同步删掉 pendingElementDrift 里的对应项
-  assertEqual "pendingElementDrift 与 cells.js / elementRGBTable 的现状不符（差异已消除或变了，请更新这张表）"
-    pendingElementDrift (filter isPending js)
+  assertNoDiff "cells.js ELEMENT_RGB" (diffTables "ELEMENT_RGB" "UI.Presentation.elementRGBTable" js elementTable)
 
 -- | 每种格子各取几个样本（带颜色的取全部五色；自定义格取两边表里出现的每个名字、变色龙的五种颜色、一个未知名字）。
 sampleCells :: [String] -> [Cell]
@@ -244,10 +230,8 @@ web_cell_rgb_matches_palette = do
               hs = cellRGB cell
         , js /= hs
         ]
-      expected = [(show (Custom (ElementName n) (CustomState 0)), v, (160, 160, 170)) | (n, v) <- pendingElementDrift]
       render (c, js, hs) = c ++ "：cells.js cellRGB = " ++ showRGB js ++ "，UI.Palette.cellRGB = " ++ showRGB hs
-  assertNoDiff "cells.js cellRGB" (map render (filter (`notElem` expected) mismatches))
-  assertEqual "cellRGB 的已知差异（pendingElementDrift）已变，请更新" (sort expected) (sort (filter (`elem` expected) mismatches))
+  assertNoDiff "cells.js cellRGB" (map render mismatches)
 
 web_spread_crumbs_match_presentation :: Assertion
 web_spread_crumbs_match_presentation = do

@@ -13,8 +13,7 @@ export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
 // 颜色表与桌面逐项比对（test/Spec/WebColors.hs，改这里或桌面任一边都要两边一起改）。
 // 五色主色（与 tools/gen_assets.py 调色板、UI.Palette.colorRGB 一致）
 export const COLOR_RGB = { 1: [236, 62, 78], 2: [52, 196, 96], 3: [56, 128, 246], 4: [255, 194, 36], 5: [172, 88, 236] };
-// 按元素名取色（UI.Presentation.elementRGBTable）：生长前沿光 / 自定义格。
-// magic_stone / fuzzball 两项桌面表里没有（桌面这两种格的粒子是缺省灰），是待定的已知差异，见测试里的 pendingElementDrift
+// 按元素名取色（UI.Presentation.elementRGBTable）：生长前沿光 / 自定义格
 export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [92, 60, 160],
   fuzzball: [196, 150, 170] };   // 毛球：同桌面几何版 UI.Cell.Prim.primFuzzball 的灰粉色（降级色 / 消灭时的粒子色）
 

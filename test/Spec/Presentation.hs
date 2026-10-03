@@ -96,13 +96,15 @@ presentation_frames_colors_match_legacy_constants = do
     @?= [CrumbsAtSources (255, 110, 70), NoCrumbs, CrumbsByElement, NoCrumbs, NoCrumbs]
   -- UI.Cascade / UI.HudArt 的贴图名
   (clearSprite, comboPopSprite) @?= ("spark", "zh_combo")
-  -- UI.Layout.elementRGBTable（逐字副本）
+  -- elementRGBTable：前五行是搬来时的逐字副本；magic_stone / fuzzball 是审计第 8 项按网页 ELEMENT_RGB 补上的
   elementRGBTable
     @?= [ ("vine", (110, 220, 90))
         , ("choco", (150, 90, 45))
         , ("steam", (225, 225, 235))
         , ("jelly", (240, 110, 180))
         , ("bubble", (150, 215, 250))
+        , ("magic_stone", (92, 60, 160))
+        , ("fuzzball", (196, 150, 170))
         ]
   -- 缓动（UI.Layout 的旧定义）
   mapM_ (\t -> (smoothT t, easeOutT t) @?= (legacySmoothT t, legacyEaseOutT t)) samples

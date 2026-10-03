@@ -193,7 +193,8 @@ spreadCurveFor :: ElementName -> Curve
 spreadCurveFor n = fromMaybe defaultSpreadCurve (lookup n spreadCurves)
 
 -- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色与碎屑色；
--- 也给名字目标与自定义格取色（果冻 / 气泡，见 UI.Layout.namedRGB / cellRGB，各自有缺省色）。
+-- 也给名字目标与自定义格取色（果冻 / 气泡 / 魔法石 / 毛球，见 UI.Palette.namedRGB / cellRGB，各自有缺省色）。
+-- 魔法石 / 毛球 = 几何版 UI.Cell.Prim 的主体色。网页 web/www/cells.js 的 ELEMENT_RGB 是同一张表（test/Spec/WebColors.hs 比对）。
 elementRGBTable :: [(ElementName, RGB)]
 elementRGBTable =
   [ ("vine", (110, 220, 90))
@@ -201,6 +202,8 @@ elementRGBTable =
   , ("steam", (225, 225, 235))
   , ("jelly", (240, 110, 180))
   , ("bubble", (150, 215, 250))
+  , ("magic_stone", (92, 60, 160))
+  , ("fuzzball", (196, 150, 170))
   ]
 
 -- | 表里没有的元素：生长前沿的柔光为白色（碎屑不迸，见 'CrumbsByElement'）。

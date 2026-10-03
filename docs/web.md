@@ -97,12 +97,18 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 播放期间锁输入（与桌面 `animBusy` 一致），按钮 / 撤销在播完后可用；
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
 - `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
-- **新元素要跟进 `cells.js`**：格子 JSON 由核心 `Match3.View.cellFace` 生成，新元素（包括 `Custom` 自定义元素）合入 main 后网页端
-  不会自动有画法——`cells.js` 的 `primarySprite`（主贴图名）/ `CELL_ART`（画法）/ `ELEMENT_RGB`（降级色）要补，贴图名要在网页图集里
-  （`web/tools/gen_web_atlas.py` 只跳过文字图 `g_*` / `zh_*` 与 `@` 变体；关名文字图 `name_*` 要收）。漏了的格子会走几何降级（色块 + 类型名，
-  如魔法石合入时的「custom」灰块）。回归护栏：`cells.js` 按元素名统计走降级的次数，`m3debug.fallbacks` 暴露；e2e 对**每一关**
-  开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡（见 [testing.md](testing.md#网页版测试make-check)）。
-  例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动；
+- **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成，`Custom` 元素统一是
+  `{t:"custom", name, v}`（雪怪的象限 `q`、变色龙的颜色 `c` 由 `Api` 另加）。
+  - **不用改**：单格、不带颜色、桌面版也没有专门画法（`UI.CellTable.customTable` 里没有它）的 `Custom`——桌面画「贴图名 = 元素名 + 层数角标」，
+    网页 `CELL_ART.custom` 的通用画法一样；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 只跳过文字图
+    `g_*` / `zh_*` 与 `@` 变体；关名文字图 `name_*` 要收）。降级色缺省是灰色。
+  - **要改**：① 新的 `Cell` 构造器（同时改 `cellFace`）；② 桌面在 `customTable` 有专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
+    在 `CUSTOM_ART` / `primarySprite` 补同样的画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，要在 `Api` 补字段、
+    `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时在 `ELEMENT_RGB` 补一项（对应 `UI.Presentation.elementRGBTable`）。
+  - **回归护栏**：漏了画法或贴图的格子会走几何降级（色块 + 类型名，如魔法石合入时的「custom」灰块），③ 类走了通用画法也会记一笔；
+    `cells.js` 按元素名统计，`m3debug.fallbacks` 暴露；e2e 对**每一关**开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡
+    （见 [testing.md](testing.md#网页版测试make-check)）。
+  - 例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动；
   第 43 关毛球 `{t:"custom", name:"fuzzball", v:1}` 画 `fuzzball` 并一直浮动（同桌面 `artFuzzball`：`round(2·sin(pulse/9))` 设计像素，
   振幅相同；呼吸计数桌面 16 ms 一帧、网页 1/60 s 一帧，所以网页周期约 0.94 s、桌面约 0.90 s，与气球 / 精灵 / 气泡同一个公式）。
 - **步末 / 变身动画复用已有段**：毛球跳格是核心的 `EvBelt "fuzzball"`，按皮带段平移播放（与桌面 `drawEndBelt` 相同）；
@@ -305,7 +311,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（31 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、逐关地面层贴图与 HUD 关名 `name_<i>` 的真实绘制、第 48 关魔法地格（贴图位置与像素、4 组扩圈爆炸的真实绘制格数 = EvBlast 格数）、终章（第 47、48 关过关进入下一关，第 49 关「宽域」Won）、音效 / BGM 开关芯片（真实绘制的字形在芯片内、不大于按钮、不压提示行）、逐关失败提示（无「箱子」/ 内部名，碎石关「砸开碎石」）、第 8 / 39–45 / 47 / 48 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-10-03，feat/dist-rebuild（main b93a5d4，Haskell 特性第 9 / 7 / 8 项合入后），`make clean` 后 `make check`）：`stack test` 451 通过；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）；`make android-check` 本次未跑（留给测试跑手；上次 web-magic-ground 时 6 项全过）。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。最近一次完整记录（2026-10-03，`feat/dist-rebuild` @ `96bd2d8`（main b93a5d4，Haskell 特性第 9 / 7 / 8 项合入后），`make clean` 后 `make check`）：`stack test` 451 通过（当时的数目；删除旧副本后现为 447，见上表）；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）；`make android-check` 本次未跑（留给测试跑手；上次 web-magic-ground 时 6 项全过）。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

@@ -9,7 +9,43 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**447** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强） + 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」） + 新玩法 5 新增 7 个（`test/Spec/SnowBoss.hs`：雪怪 Boss） + 新玩法 6 新增 7 个（`test/Spec/CookieDrop.hs`：饼干掉落口） + 新玩法 7 新增 8 个（`test/Spec/Chameleon.hs`：变色龙） + 合 main 9f5504e（目标中文标签）后新增 1 个（`outcome_lose_hint_no_internal_names`） + 新玩法 8 新增 8 个（`test/Spec/MagicGround.hs`：魔法地格） + 关卡矩形盘面（20455d3）新增 3 个（`test/Spec/Levels.hs`：`board_size_out_of_range_rejected`、`wide_board_level_is_6x9`、`default_levels_stay_8x8`） + Haskell 特性第 1–6 项新增 37 个（`Phase` 4、`Classes` 8、`Effects` 3、`Lazy` 5、`Perf` 5、`Optics` 7、`Invariants` 5，见 [haskell-features/](haskell-features/)） + Haskell 特性第 9 项新增 6 个（`RulesDedup`，见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)） + Haskell 特性第 7 项新增 7 个（`GridGeometry`，见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） + Haskell 特性第 8 项新增 9 个（`DataBoundary`，见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） + 选格散列钉值新增 3 个（`BoardSeed`）；删除旧副本 `Spec.Support.Legacy*` 时净减 7 个（`Caps` −2、`GridGeometry` −2、`Perf` −2、`Optics` −2、`DataBoundary` +1，见下文「旧副本对照的去留」）。
+- 期望：**447** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 用例数的来历（累计）：
+  - 起点：262 个（2026-09 重构前）。
+  - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
+    - 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测
+    - 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`）
+    - 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`）
+    - 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`）
+    - 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`）
+    - 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质）
+    - 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`）
+    - 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`）
+    - 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`）
+    - 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`）
+    - 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`）
+    - 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」）
+    - 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」）
+  - 新玩法 1–8 及期间的修补，+61 → 392：
+    - 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」）
+    - 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石）
+    - 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球）
+    - 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强）
+    - 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」）
+    - 新玩法 5 新增 7 个（`test/Spec/SnowBoss.hs`：雪怪 Boss）
+    - 新玩法 6 新增 7 个（`test/Spec/CookieDrop.hs`：饼干掉落口）
+    - 新玩法 7 新增 8 个（`test/Spec/Chameleon.hs`：变色龙）
+    - 合 main 9f5504e（目标中文标签）后新增 1 个（`outcome_lose_hint_no_internal_names`）
+    - 新玩法 8 新增 8 个（`test/Spec/MagicGround.hs`：魔法地格）
+    - 关卡矩形盘面（20455d3）新增 3 个（`test/Spec/Levels.hs`：`board_size_out_of_range_rejected`、`wide_board_level_is_6x9`、`default_levels_stay_8x8`）
+  - Haskell 特性第 1–9 项，+59 → 451：
+    - Haskell 特性第 1–6 项新增 37 个（`Phase` 4、`Classes` 8、`Effects` 3、`Lazy` 5、`Perf` 5、`Optics` 7、`Invariants` 5，见 [haskell-features/](haskell-features/)）
+    - Haskell 特性第 9 项新增 6 个（`RulesDedup`，见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)）
+    - Haskell 特性第 7 项新增 7 个（`GridGeometry`，见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)）
+    - Haskell 特性第 8 项新增 9 个（`DataBoundary`，见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)）
+  - 审计整改（2026-10），→ 447：
+    - 选格散列钉值新增 3 个（`BoardSeed`）
+    - 删除旧副本 `Spec.Support.Legacy*` 时净减 7 个（`Caps` −2、`GridGeometry` −2、`Perf` −2、`Optics` −2、`DataBoundary` +1，见下文「旧副本对照的去留」）
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -59,7 +95,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`；第 5 项起把 `Golden.goldenSections` 各段经 `Spec.Support.Parallel.parallelForce` 多核求值、按原顺序拼回再逐行比对） |
 | `test/Spec/Properties.hs` | 24 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条 + 第 7a 刀关卡级钩子 / 读数 2 条 + 第 7b 刀步末表 / 折叠回复 2 条 + 第 8 刀形状表 / 组合表 / 组合对称 / 补子策略 4 条，见「性质测试」） |
 | `test/Spec/Caps.hs` | 3 | 第 9 刀：能力记录 Caps——三种原型与 `Inert` 的缺省能力（`newSig` 字面量锁定；内置元素的逐项查询与规则输出由元素查询快照守着）、元素类只剩三个方法（源码扫描）、用 Caps 写的扩展元素「荆棘」不改主流程接入（见「能力记录验收」） |
-| `test/Spec/Presentation.hs` | 10 | 第 10 刀：前端表现表 `UI.Presentation` 与音效钩子 `UI.Sound`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效全为 `Nothing`、真实连锁全程无声、源码扫描（散落的表与颜色已收掉、`drawHud` / `primOverlay` 只剩分派） |
+| `test/Spec/Presentation.hs` | 10 | 第 10 刀：前端表现表 `UI.Presentation` 与音效钩子 `UI.Sound`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效名（只有消除 `clear` / 爆炸 `special`，真实连锁里也只出这两种）、源码扫描（散落的表与颜色已收掉、`drawHud` / `primOverlay` 只剩分派） |
 | `test/Spec/BombShapes.hs` | 6 | 新玩法 1：L / T 形出炸弹（规则开关 `bomb_shapes`）——只有第 41 关打开、原有 40 关 / 每日挑战 / 自由开局的形状表等于内置表、插表顺序、L 形交点出炸弹（第 1 关与去掉开关时是空洞）、五连仍出彩虹、带四连的 L 出炸弹不出直线、第 41 关实战会生成炸弹 |
 | `test/Spec/MagicStone.hs` | 6 | 新玩法 2：魔法石——能力（固定 / 挡交换 / 无色 / 洗牌保留 / 平时打不动、发射中命中归零）、邻格充能每轮 1 格且满 3 为止、满格在交换步末发射清整行整列并归零、不满不发射、道具不触发而下一次交换发射、第 42 关布局与实战（魔法石不动、发射过、石头有进度） |
 | `test/Spec/Fuzzball.hs` | 7 | 新玩法 3：毛球——能力（挡交换 / 下落 / 无色 / 洗牌保留 / 命中即灭）、邻格真消除即灭（斜角不算、直接命中不重复）、跳到相邻普通宝石并换位且结果确定、墙 / 避让格 / 非普通宝石 / 已占格不跳、交换步末的 `EvBelt "fuzzball"` 可重放、去掉毛球条目后前 42 关逐步相同（不耗 `gsGen`）、第 43 关布局与实战（跳过格、有消灭计数、能过关） |
@@ -296,7 +332,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ## 元素类验收（阶段 1 原型 → 阶段 2 迁移）
 
-`test/Spec/ElementClass.hs`；框架见 [architecture.md](architecture.md#元素类阶段-1-原型--阶段-2-迁移)。样例元素鸟窝 / 磁铁 / 星星只定义在该模块里。
+`test/Spec/ElementClass.hs`；框架见 [architecture.md](architecture.md#元素类)。样例元素鸟窝 / 磁铁 / 星星只定义在该模块里。
 
 **元素查询快照**（`test/golden/element-queries.txt`，1648 行，生成器 `test/golden/ElementQueries.hs`）：阶段 2 删掉旧记录后，新旧两条路径不能再在同一进程里并排比对，所以在阶段 1（`9ae6a7b`）的代码上先生成快照（用阶段 1 的旧记录注册表生成的结果与之逐字相同，旧快照存档 md5 相同），阶段 2 一字不改地比对。行前缀：`Q` 逐格查询（全部格子组合 × 各 `*With` 查询）、`P` 放置、`R` 规则表 / 条目名 / 个数差计数 / 关卡级元素清单、`A` / `E` / `S` / `O` / `C` / `G` 邻格 / 步末 / 成对交换 / 开启规则、直接命中、地面层在样例盘上的输出、`M` 40 关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列。维护纪律同金标准：内部表示变了只改投影，快照文件不许改。
 
@@ -347,8 +383,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `presentation_spread_curves_match_legacy` | vine / choco / steam / 未知名字 / 空名 × 106 个采样点（含区间外）：`curveAt (spreadCurveFor n) t` 与旧 `spreadProgress`（缺省 `t`）逐位相等 |
 | `presentation_combo_style_matches_legacy` | 连击等级 −1..9 × 相位 0..80、399、4000：`comboStyle` 四个字段与 `styleRGB` 与旧定义（含 `hsv`）相同 |
 | `presentation_extension_defaults` | `defaultPresentation` = 蔓延段 18 帧、无颜色 / 贴图 / 碎屑 / 音效；空表查询全部落到缺省；未知元素名匀速、白光、不迸碎屑；`EvMove`（扩展 `hopper`）→ 蜗牛段 |
-| `effect_sound_defaults_to_nothing` | 每种事件 `effectSound` = `Nothing`、每行 `prSound` = `Nothing`；`playSounds` 是空操作 |
-| `cascade_sounds_silent_on_real_moves` | 第 8 关 7 轮连锁与第 16 关倒计时一步完整回放：阶段事件覆盖 EvClear / EvScore / EvCombo / EvTick，`cascadeSounds` 全为空 |
+| `effect_sound_names_clear_and_special` | `effectSound EvClear` = `"clear"`、`EvBlast` = `"special"`，其余事件与 `defaultPresentation` 都是 `Nothing`；纯模块的 `playSounds` 仍是空操作（桌面真正播放在 `UI.Audio`） |
+| `cascade_sounds_follow_clear_and_special` | 第 8 关 7 轮连锁与第 16 关倒计时一步完整回放：阶段事件覆盖 EvClear / EvScore / EvCombo / EvTick，`cascadeSounds` 只出 `clear` / `special` |
 | `presentation_scattered_cases_removed` | 源码扫描 `app/`：除 `UI.Presentation` 外不再定义 `endStageTable` / `spreadProgress` / `endCrumbTable` / `elementRGBTable` / `comboStyle` / `styleRGB` / `hsv` / `smoothT` / `easeOutT`，也不再出现搬走的颜色字面量与 `"zh_combo"`；`UI.Presentation` 不 import SDL；EndStage / Playback 确实读表 |
 | `draw_hud_and_prim_overlay_are_thin` | `drawHud` ≤ 10 行、依次调用 8 个 `hud*` 区块、自身不画；`primOverlay` ≤ 10 行、分派到 8 个 `overlay*` 函数、自身不画；`UI.Cell.Prim` 不再定义 `primOverlay` |
 

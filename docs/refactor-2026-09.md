@@ -48,12 +48,12 @@
 ## 现在的结构
 
 ```
-src/Engine/          通用层（不 import Match3）：Game（接口）、History（撤销）、Effect、Playback（播放器）、GridUI（网格 UI）
+src/Engine/          通用层（不 import Match3）：Game（接口）、History（撤销）、Effect、Playback（播放器）、Stream（无穷流）、Optics（透镜）、GridUI（网格 UI）
 src/Match3/          三消规则库：Types.* / Counts / Goal / Color / Levels.* / Board.* / Game.* / Element.*
                      Engine（三消 = 通用接口的实现）、View（视图模型）、Core（再导出门面）
 app/Shell/Loop.hs    通用 SDL 外壳
-app/pure/            纯前端（桌面 / 测试 / 网页共用）：ComboFx、UI.Presentation、UI.Sound
-app/UI/              三消插件（SDL）：输入、动作、回放编排、绘制（CellTable / Ground / HudBlocks / GoalStyle 等查表）
+app/pure/            纯前端（桌面 / 测试 / 网页共用）：ComboFx、UI.Presentation、UI.Sound、UI.GoalIcon
+app/UI/              三消插件（SDL）：输入、动作、回放编排、绘制（CellTable / Ground / HudBlocks / GoalStyle 等查表）、音效（Audio）
 web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match3.View）
 ```
 
@@ -67,7 +67,7 @@ web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match
 2. 注册：内置的在 `Element.Builtin.builtinDefs` 末尾加一行；扩展的用 `register (customEntry 原型 解码) defaultRegistry`，再把注册表传给各个 `*With` 入口，或直接用 `match3GameWith reg`。
 3. 放进关卡：在关卡记录的 `lvlPlacements` 里写 `Place "名字" [参数] [坐标]`。
 4. 计数与目标：`counts (CountNamed "名字")` + 目标 `goalCount (CountNamed "名字") n`，HUD、标题、网页自动显示（经 `Match3.View`）。
-5. 表现：贴图名就是元素名；需要专门画法的在 `UI.CellTable.customTable` 加一行；颜色在 `UI.Presentation.elementRGBTable` 加一行。网页端只有出现新的 `Cell` 构造器时，才需要改 `Match3.View.cellFace` 和 `web/www/cells.js`。
+5. 表现：贴图名就是元素名；需要专门画法的在 `UI.CellTable.customTable` 加一行；颜色在 `UI.Presentation.elementRGBTable` 加一行。网页端：单格、不带颜色、桌面也没有专门画法的 `Custom` 不用改 `web/www/cells.js`（通用画法 = 元素名贴图 + 层数角标，重新生成网页图集即可）；新的 `Cell` 构造器、桌面 `customTable` 里有专门画法的元素、占多格或带颜色的元素、要专门降级色的元素才要改 `cells.js`（详见 [web.md §2.3](web.md#23-js-渲染器)；e2e 的逐关降级护栏会报漏掉的）。
 6. 测试：照 `ext_caps_element_plugs_in`（`test/Spec/Caps.hs`）的写法。
 
 详见 [architecture.md § 新增一种元素的步骤](architecture.md#新增一种元素的步骤)。
@@ -91,7 +91,7 @@ web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match
 ### 新增表现
 
 - 效果事件的播放方式、帧数、颜色、贴图、碎屑、音效：改 `app/pure/UI/Presentation.hs` 的 `presentationTable`（按 `EventKind` 一行）；蔓延类元素的节奏和颜色在 `spreadCurves` / `elementRGBTable` 里配。确实需要新的步末段时，才加 `StageKind` 并在 `UI.EndStage.endStageDrawers` 里加绘制函数。
-- 音效：填表项的 `prSound`，接真实音频时只需替换 `UI.Sound.playSounds`。
+- 音效：填表项的 `prSound`（按事件种类），在 `assets/sfx/` 放同名 `.wav` 并加进 `UI.Audio` 的加载表；桌面由 `UI.Audio.cue` 播放。
 - HUD 或网页要显示新读数：在 `Match3.View` 的 `GameView` / `GoalInfo` / `BoardView` 里加字段，桌面和网页都从视图读，不要在前端再从 `GameState` 现算（`frontends_read_view_model` 会扫描）。几何版 HUD 新区块：在 `UI.HudBlocks` 写一个 `hudXxx`，在 `drawHud` 里加一行。
 - 网格交互（其他网格类游戏也能用）：`Engine.GridUI` 提供 `GridGeom` / `gridCellAt` / `gridCellOrigin`、`gridClick`（两步点选）、`gridDragRelease`（拖动松手）、`Highlight`（高亮）。
 

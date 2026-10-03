@@ -122,7 +122,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 ## 6. 结算
 
 - 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeedsWith`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`（按步前 / 步后盘面差计的元素，新玩法 5 起按 `diffWeight` 加权求差：缺省每格 1；雪怪左上格 = 剩余血量、其余 0，所以 `CountNamed "snow_boss"` 的增量 = 本步扣掉的血），按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；第 5 刀起各色清除数也在里面（`CountColor 色`，由各段的 `ctCounts` 带来），`gsColorBag` / `gsCollected` 改为派生读数，目标进度 / 达成由目标数据（`Match3.Goal`）统一从 `gsScore` + `gsCounts` 算，结算不再按目标种类分支。
-- 步数：`gsMoves - 1 + 2 * spiritHit`。
+- 步数与道具次数：`gsMoves - kindCost + 奖励步数`（`kindCost`：交换 1、三种道具 0；道具另扣自己的次数 `kindCharges`）。奖励步数 = 各「按差计数」元素的 `dcBonus` 之和（`Game.Tally.diffCountsWith`，= 本步减少的个数 × 该元素的 `bonusMoves`）；内置只有时间精灵带奖励（每只 +2），所以交换路径就是原来的「−1 + 2 × 被消除的时间精灵数」。
 - `decideOutcome`：目标满足 → 每日则 `Won`，否则战役 `LevelClear` 或终章 `Won`；步数用尽 → `Lost`；否则 `MoveApplied`。
 - `MoveApplied` 时 `ensurePlayable`：无合法手则洗牌并 `restoreDecor`（保留障碍/特殊/叠层等装饰）。
 

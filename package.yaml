@@ -120,7 +120,6 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wno-partial-fields
     dependencies:
     - match3
     - sdl2

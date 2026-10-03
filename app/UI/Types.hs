@@ -10,6 +10,8 @@ module UI.Types
   ( swapFrames
   , fallFrames
   , Anim(..)
+  , SwapAnim(..)
+  , FallAnim(..)
   , Particle(..)
   , ToolMode(..)
   , App(..)
@@ -37,21 +39,28 @@ swapFrames, fallFrames :: Int
 swapFrames = 10
 fallFrames = 12
 
--- | Visual-only animation; rules already applied.
+-- | 只管表现的动画（规则已经结算完）。每个构造器的数据放在各自的记录里，字段都是全函数
+-- （桌面版与库一样开着 -Wpartial-fields）。
 data Anim
   = AnimNone
-  | AnimSwap
-      { asP1 :: Pos
-      , asP2 :: Pos
-      , asBefore :: Board
-      , asFrame :: Int
-      , asNext :: Anim   -- ^ 交换播完之后接着播什么（逐轮连锁 / 轻落）
-      }
-  | AnimFall
-      { afBoard :: Board
-      , afFrame :: Int
-      }
+  | AnimSwap SwapAnim
+  | AnimFall FallAnim
   | AnimCascade CascadePlayer  -- ^ 逐轮回放连锁（通用播放器 + ComboFx 阶段机）
+
+-- | 交换补间：两格从交换前的盘面对调过去。
+data SwapAnim = SwapAnim
+  { asP1 :: Pos
+  , asP2 :: Pos
+  , asBefore :: Board
+  , asFrame :: Int
+  , asNext :: Anim   -- ^ 交换播完之后接着播什么（逐轮连锁 / 轻落）
+  }
+
+-- | 轻落：盘面从上方落进来。
+data FallAnim = FallAnim
+  { afBoard :: Board
+  , afFrame :: Int
+  }
 
 -- | Simple rectangle particle (no textures).
 data Particle = Particle
@@ -76,7 +85,7 @@ data ToolMode
   deriving (Eq, Show)
 
 -- | 整个前端的可变状态（放在 IORef 里）；规则状态只在 appHist（当前局面 + 撤销历史，
--- 由通用层 Engine.History 维护，段 3），其余字段都是表现。
+-- 由通用层 Engine.History 维护），其余字段都是表现。
 data App = App
   { appHist      :: History GameState
   , appSel       :: Maybe Pos
@@ -122,14 +131,14 @@ animBusy app = case appAnim app of
 playingPlayer :: App -> Maybe CascadePlayer
 playingPlayer app = case appAnim app of
   AnimCascade p -> Just p
-  AnimSwap {asNext = AnimCascade p} -> Just p
+  AnimSwap SwapAnim {asNext = AnimCascade p} -> Just p
   _ -> Nothing
 
 -- | 当前（或交换之后）的逐轮回放进度（阶段状态）。
 playingCascade :: App -> Maybe Cascade
 playingCascade = fmap plStage . playingPlayer
 
--- | 本帧棋盘高亮（第 11 刀：通用网格组件 Engine.GridUI.Highlight）：选中格、提示格（gsHint 的两格，
+-- | 本帧棋盘高亮（通用网格组件 Engine.GridUI.Highlight）：选中格、提示格（gsHint 的两格，
 -- 按顺序）、闪光格、自由交换已点的第一格。贴图版与几何版都按它画选中环 / 提示光 / 闪光。
 appHighlight :: App -> Highlight Pos
 appHighlight app =

@@ -61,17 +61,17 @@ tickAnim app
 stepAnim :: App -> App
 stepAnim app = case appAnim app of
   AnimNone -> app
-  a@AnimSwap {asFrame, asNext}
+  AnimSwap s@SwapAnim {asFrame, asNext}
     | asFrame + 1 >= swapFrames -> app {appAnim = asNext}
-    | otherwise -> app {appAnim = a {asFrame = asFrame + 1}}
-  AnimFall {afBoard, afFrame}
+    | otherwise -> app {appAnim = AnimSwap s {asFrame = asFrame + 1}}
+  AnimFall f@FallAnim {afFrame}
     | afFrame + 1 >= fallFrames -> app {appAnim = AnimNone}
-    | otherwise -> app {appAnim = AnimFall afBoard (afFrame + 1)}
+    | otherwise -> app {appAnim = AnimFall f {afFrame = afFrame + 1}}
   AnimCascade p -> case stepPlayback p of
     Playing p' evs -> foldl applyCascadeEvent app {appAnim = AnimCascade p'} evs
     Done c' ->
       app
-        { appAnim = if cShown c' == cFinal c' then AnimNone else AnimFall (cFinal c') 0
+        { appAnim = if cShown c' == cFinal c' then AnimNone else AnimFall (FallAnim (cFinal c') 0)
           -- 连锁播完才亮 HUD 总结（最高连击 ≥ 2）
         , appComboShow = if cBest c' >= 2 then comboSummaryFrames else 0
         , appComboBest = cBest c'
@@ -243,14 +243,14 @@ noMoveFx = MoveFx 0 []
 -- * 有回放脚本（MoveTrace）：交换动画 → 逐轮回放（高亮 → 消失 → 下落补子 → 下一轮），
 --   连击弹字 / 得分浮字 / 震屏 / 粒子都在回放阶段切换时产生；轮次之间与全部落定之后按
 --   mtEnd 播放步末效果（倒计时减一 / 皮带 / 蔓延 / 蜗牛，必要时自动洗牌），HUD 总结在全部播完后才亮。
--- * 兜底（理论上不会发生：结算过却没有轮次）：沿用旧的「闪光 + 粒子 + 轻落」。
+-- * 兜底（理论上不会发生：结算过却没有轮次）：闪光 + 粒子 + 轻落。
 withMovePlayback :: GameState -> GameState -> MoveFx -> MoveTrace -> [Match3Event] -> Maybe (Pos, Pos) -> App -> App
 withMovePlayback before after fx mt evs swapPair app
   | fx == noMoveFx =
       app {appFlash = [], appAnim = AnimNone, appComboShow = 0, appComboBest = 0, appPops = []}
   | null (mtWaves mt) && null (mtEnd mt) =
       let changed = fxCleared fx
-          fall = AnimFall (gsBoard after) 0
+          fall = AnimFall (FallAnim (gsBoard after) 0)
       in app
            { appFlash = [(p, 18) | p <- changed]
            , appAnim = viaSwap fall
@@ -269,12 +269,12 @@ withMovePlayback before after fx mt evs swapPair app
         }
   where
     viaSwap next = case swapPair of
-      Just (p1, p2) -> AnimSwap p1 p2 (gsBoard before) 0 next
+      Just (p1, p2) -> AnimSwap (SwapAnim p1 p2 (gsBoard before) 0 next)
       Nothing -> next
 
 -- | 点击 / 空格加速正在播放的连锁回放（输入本身仍被锁定，不会误触下一步）。
 accelerate :: Anim -> Anim
 accelerate a = case a of
   AnimCascade p -> AnimCascade (acceleratePlayer p)
-  AnimSwap {asNext} -> a {asNext = accelerate asNext}
+  AnimSwap s@SwapAnim {asNext} -> AnimSwap s {asNext = accelerate asNext}
   _ -> a

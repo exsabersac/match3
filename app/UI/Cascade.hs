@@ -35,9 +35,9 @@ import UI.Types
 -- | 按当前动画分派棋盘绘制：交换 / 轻落 / 逐轮回放 / 静止。
 drawBoard :: Renderer -> App -> IO ()
 drawBoard ren app = case appAnim app of
-  AnimSwap { asP1, asP2, asBefore, asFrame } ->
+  AnimSwap SwapAnim { asP1, asP2, asBefore, asFrame } ->
     drawSwap ren app asBefore asP1 asP2 asFrame
-  AnimFall { afBoard, afFrame } ->
+  AnimFall FallAnim { afBoard, afFrame } ->
     drawFall ren app afBoard afFrame
   AnimCascade p ->
     drawCascade ren app p

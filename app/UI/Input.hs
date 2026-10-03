@@ -4,9 +4,9 @@
 -- | 输入处理（三消插件的输入映射）：SDL 事件（键盘 / 鼠标）→ 界面动作。含播放锁定：animBusy 期间交换、道具、撤销、
 -- 洗牌被锁，点击 / 空格 / 回车 / N 变为加速（键位表见 docs/ui-controls.md）。
 --
--- 第三刀：原来约 512 行的 handleEvent 拆成 handleKey / handleMouseUp / handleMouseDown，
--- 每个键、每条鼠标路径各一个函数；规则调用一律经通用接口 gameStep（UI.Actions.stepShell / playMove，实例 Match3.Engine.match3Shell），
--- 结果与原来直接调用 trySwap / use* / applyHint / shuffleGame 逐位相同；撤销由 Engine.History 处理（终局后同样可撤销）。
+-- 入口 handleEvent 分派到 handleKey / handleMouseUp / handleMouseDown，每个键、每条鼠标路径各一个函数；
+-- 规则调用一律经通用接口 gameStep（UI.Actions.stepShell / playMove，实例 Match3.Engine.match3Shell）；
+-- 撤销由 Engine.History 处理（终局后同样可撤销）。
 --
 -- 依赖：UI.Actions、UI.Playback、UI.LevelMap（地图点选）、UI.Env（鼠标坐标换算）、UI.Types、UI.Layout、Match3.Engine、Match3.View（收集进度后缀）、Engine.GridUI（点选 / 拖动判定）。
 module UI.Input
@@ -175,7 +175,7 @@ keyShuffle ref window = do
             , appPops = []
             , appParticles = []
             , appShake = 0
-            , appAnim = AnimFall { afBoard = gsBoard gs, afFrame = 0 }
+            , appAnim = AnimFall FallAnim { afBoard = gsBoard gs, afFrame = 0 }
             }
     commit ref window app'
 
@@ -482,7 +482,7 @@ clickMsg before gs' fx out =
            <> " (N/Space/click)"
        Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal before)) <> " — R/click"
 
--- | 收集类目标的进度后缀（第 11 刀起读 Match3.View.goalBracket）。
+-- | 收集类目标的进度后缀（读 Match3.View.goalBracket）。
 collectMsg :: GameState -> Text
 collectMsg gs' = T.pack (goalBracket (gvGoal (gameView gs')))
 

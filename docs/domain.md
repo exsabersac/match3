@@ -288,6 +288,7 @@
 | 步已应用 | `MoveApplied Score` | 本步得分增量 |
 | 战役过关 | `LevelClear Score Int` | 下一关 0-based 下标 |
 | 通关 / 失败 | `Won` / `Lost` | 每日通关为 `Won`（不推进战役解锁） |
+| 终局 | `gsOver :: Maybe Terminal` = `TWon` / `TLost` / `TLevelClear` | 只存上面三种终局结果（`terminalOf` / `fromTerminal` 与 `Outcome` 互换）；`Nothing` = 还能走 |
 
 ## 道具
 

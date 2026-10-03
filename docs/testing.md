@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**459** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**460** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -43,12 +43,13 @@ stack test
     - Haskell 特性第 9 项新增 6 个（`RulesDedup`，见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)）
     - Haskell 特性第 7 项新增 7 个（`GridGeometry`，见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)）
     - Haskell 特性第 8 项新增 9 个（`DataBoundary`，见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)）
-  - 审计整改（2026-10），→ 459：
+  - 审计整改（2026-10），→ 460：
     - 选格散列钉值新增 3 个（`BoardSeed`）
     - 删除旧副本 `Spec.Support.Legacy*` 时净减 7 个（`Caps` −2、`GridGeometry` −2、`Perf` −2、`Optics` −2、`DataBoundary` +1，见下文「旧副本对照的去留」）→ 447
     - 桌面走步文案移进 `app/pure` 新增 6 个（`MoveText`）→ 453
     - 网页 JS 颜色表与桌面比对新增 5 个（`WebColors`）→ 458
     - 前端 API 护栏新增 1 个（`View`：`frontends_import_core_api`）→ 459
+    - 终局类型 `Terminal` 新增 1 个（`GoalsLevels`：`terminal_outcome_mapping`，见下文「终局类型 Terminal」）→ 460
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -71,7 +72,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：直接 import 所测的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、`Match3.Obstacles` 等）；`Match3.Core` 是前端 API，测试只用它取前端也在用的名字
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 459）：
+- 目录（用例数合计 460）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -85,7 +86,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Builtin/Layer.hs` | 31 | 冰层与叠层（对应 `Element/Builtin/Layer`）：冰、草、藤、巧、迷雾、锁链、冰冻、窗帘、蒸汽、软命中 |
 | `test/Spec/Builtin/Level.hs` | 24 | 关卡级元素（对应 `Element/Builtin/Level`）：皮带、传送门、飞碟、地毯 |
 | `test/Spec/Boosters.hs` | 12 | 道具：锤子 / 自由交换 / 十字 |
-| `test/Spec/GoalsLevels.hs` | 32 | 目标、结局、星级、关卡表、每日、地图与步数结转；`find_match_pair_engine_accepts`（测试辅助 `findMatchPair` 选出的对引擎必须接受） |
+| `test/Spec/GoalsLevels.hs` | 33 | 目标、结局、星级、关卡表、每日、地图与步数结转；`find_match_pair_engine_accepts`（测试辅助 `findMatchPair` 选出的对引擎必须接受）；`terminal_outcome_mapping`（`Terminal` ↔ `Outcome` 的对应） |
 | `test/Spec/Levels.hs` | 12 | 第 6a 刀：关卡记录与关卡表——全部内置关卡与每日挑战（两年每天，覆盖 10 种目标）的放置表都是 `Right`、`placeWith` 的 `UnknownElement` / `PlaceOutOfBounds`、坏放置表的报错带关卡名、`campaignGame` 与 `newGameAtLevel … (levelConfig …)` 相同、越界的重开 / 下一关夹到范围内、`allLevels !!` 源码扫描（src / app / web/hs / test），性质 `qc_lookup_level_in_range` / `qc_clamp_level_index_found`；关卡矩形盘面（20455d3）：盘面尺寸越界（5–10 之外）被拒、第 49 关「宽域」是 6×9、其余关卡仍是 8×8 |
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `Crate` / 条目 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 11 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌；第 7b 刀通用步末效果（跳跳虫）；第 8 刀扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、两种补子策略（关卡级元素「金币雨」、关卡颜色数 `colorsRefill 3`）（样例元素苔藓 / 风筝 / 陷坑 / 浮尘 / 跳跳虫 / 金币雨与样例规则只定义在该模块里） |
@@ -364,7 +365,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `view_fields_match_legacy_reads` | 每个样本：关卡号 / 夹紧下标 / 原下标关名（无此关 `"?"`）、步数上限 `max 步数 印制步数`、分数 / 步数 / 每日、三种道具、连击（经 `gameStatus` = `gsCombo`）、洗牌 / 结局、结局色条分支、目标进度 / 目标值 / kind / text / 名字 / 失败提示、`gsHint` 与 `findHint`、盘面、清除格 / 地面层 / 皮带 / 传送门 / 地毯 / 已铺地毯 / 飞碟、逐格地面层，与旧读法相同 |
+| `view_fields_match_legacy_reads` | 每个样本（终局样本是 `TWon` / `TLevelClear` / `TLost` 三种，`gsOver` 只能存终局值）：关卡号 / 夹紧下标 / 原下标关名（无此关 `"?"`）、步数上限 `max 步数 印制步数`、分数 / 步数 / 每日、三种道具、连击（经 `gameStatus` = `gsCombo`）、洗牌 / 结局、结局色条分支、目标进度 / 目标值 / kind / text / 名字 / 失败提示、`gsHint` 与 `findHint`、盘面、清除格 / 地面层 / 皮带 / 传送门 / 地毯 / 已铺地毯 / 飞碟、逐格地面层，与旧读法相同 |
 | `view_title_and_bracket_match_legacy` | `titleLine` 与旧 `updateTitle` 的标题串（不含 `"  \|  "` 与消息）逐字相同；`goalBracket` 与旧 `collectMsg` 相同（合 main 9f5504e 后两份旧副本的目标标签同步换成 `goalLabel` 的中文名，数字与其余字段不变） |
 | `view_carpet_marks_match_legacy` | 有地毯的关卡（含已铺开的局面）逐格：`carpetAt` 与几何版（带 `not null` 的旧式子）、贴图版旧式子都一致 |
 | `view_level_dots_match_legacy` | 当前关 −1..levelCount+1 × 已解锁 6 种：`levelDots` 共 levelCount 个，与贴图版四档、几何版三档（传 −1）旧分支相同 |
@@ -416,8 +417,16 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `engine_toy_counter_game` | 玩具实现 `test/Toy.hs`（一维计数器，**只 import `Engine.*`**）：种子决定目标；`runActions` 遇到胜局即停（其后动作不执行）；非法 `Inc 9` 被拒、状态不变、没有事件；超出目标 / 步数用完判负；结局后 `gameActions` 为空、`gameStep` 拒绝；`gameStatus`；效果按节拍排成两个提示（6 帧 / 20 帧），通用播放器总帧数 26、只在进入第二个提示时触发其事件，加速后 9 帧，3 帧后进度 0.5；自定义阶段机（倒数 3 → 0）事件与帧数 |
 | `engine_layer_is_game_agnostic` | `src/Engine/` 与 `app/Shell/` 下全部模块（按目录列出）和 `test/Toy.hs` 都不 import `Match3` / `Match3.*`（`importsOf`，依赖方向单向） |
 | `engine_match3_instance_matches_direct_api` | 4 关 × 2 种子：`gameNew` = `newGameAtLevel`；前 3 个候选交换经 `gameStep` 的状态 / 结局 / 事件与 `trySwap` / `traceEvents (traceSwap …)` 逐位相同，`toEffect` 不丢事件、score 效果之和 = 得分增量，`play` 的 `MoveFx` / `Outcome` 与 `moveFx` 相同；经 `match3Shell` 走同一步、历史深度 1，`Undo` 回到走步前快照（清本步特效 / 提示 / 洗牌标记）；锤子 / 十字 = `useHammer` / `useCrossClear`；非相邻交换被拒且无事件；开局撤销（`match3Shell` 无历史）被拒；洗牌 = `shuffleGame` 且只有一个 shuffle 效果；提示 = `applyHint`；`gameStatus` 的 combo = `gsCombo`；只剩 1 步时 `runActions` 在第一步之后停下、终局后没有候选动作且拒绝一切 |
-| `engine_undo_after_terminal_matches_legacy_play` | 段 3：6 个场景（第 1 / 7 / 13 / 28 关判负，第 5 / 21 关把目标改成 1 分后过关），经 `match3Shell` 的 `gameStep` 按 `findHint` 走到终局，再连撤三次：终局后第一次撤销被接受、清掉终局标记；终局态与三次撤销后的状态投影（与 `13094d1` 共有的全部字段 + 历史深度，FNV-1a）及是否被接受，与 `13094d1` 上直接调 `Match3.Engine.play Undo`（当时的 `gsHistory`）逐位相同。期望值由 `13094d1` 上同一段投影程序生成后写进测试 |
+| `engine_undo_after_terminal_matches_legacy_play` | 段 3：6 个场景（第 1 / 7 / 13 / 28 关判负，第 5 / 21 关把目标改成 1 分后过关），经 `match3Shell` 的 `gameStep` 按 `findHint` 走到终局，再连撤三次：终局后第一次撤销被接受、清掉终局标记；终局态与三次撤销后的状态投影（与 `13094d1` 共有的全部字段 + 历史深度，FNV-1a；`gsOver` 经 `fromTerminal` 按 `Outcome` 打印）及是否被接受，与 `13094d1` 上直接调 `Match3.Engine.play Undo`（当时的 `gsHistory`）逐位相同。期望值由 `13094d1` 上同一段投影程序生成后写进测试 |
 | `engine_frontend_steps_only_via_gameStep` | 段 3：递归扫描 `app/` 下全部 `.hs`（去掉注释与字符串），没有标识符 `play` / `playWith` / `undoMove`（含限定名 `M3E.play`）；且前端确有 `gameStep M3E.match3Shell` 调用 |
+
+## 终局类型 Terminal（审计第 7 项）
+
+`gsOver :: Maybe Terminal`（`TWon Score` / `TLost Score` / `TLevelClear Score Int`），每步结果仍是 `Outcome`；`terminalOf` / `fromTerminal` 在两者之间换。对外打印的文本都先换回 `Outcome`：金标准的 `over=`（`pOutcome . fromTerminal`）、`GameState` 的 `Show`（元素查询快照与 `engine_undo_after_terminal_matches_legacy_play` 的指纹对它取散列）、网页 JSON 的 `outcome` / `over`（`encodeOutcome . fromTerminal`），所以 `golden.txt`、`element-queries.txt` 与网页状态 / 动画对拍都逐字不变。
+
+| 用例 | 断言 |
+|------|------|
+| `terminal_outcome_mapping` | `terminalOf` 只对 `Won` / `Lost` / `LevelClear` 给 `Just`，构造器与参数一一对应（`fromTerminal`、`terminalOf . fromTerminal` 来回不丢信息），`InvalidSwap` / `NoMatch` / `MoveApplied` 给 `Nothing`；`GameState` 的 `Show` 里 `gsOver = Just (TWon 1234)` 等仍打印成 `Just (Won 1234)` |
 
 ## 编写约定
 
@@ -427,7 +436,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 459，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 460，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

@@ -50,7 +50,7 @@
 
 ## 1. 交换门禁（`trySwap` 前段）
 
-1. 已有 `gsOver` → 原样返回该结局。
+1. 已有 `gsOver`（`Terminal`）→ 原样返回该结局（`fromTerminal` 换回 `Outcome`）。
 2. 坐标越界或不相邻 → `InvalidSwap`。
 3. `swapBlockedWith reg`（注册表的 `blocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
 4. `swapCells` 后先问关卡级元素的**交换变身**（新玩法 4，消息 `Morphing`，内置只有规则开关 `rainbow_combos` 打开的关卡回复：彩虹 × 直线 / 炸弹）：有回复时同色普通宝石先变成直线 / 炸弹（记一条 `esAfterWaves = 0` 的步末效果 `EvSpread rainbow_line / rainbow_bomb`），再按回复的种子起手，不再看下面的成对规则。没人回复时：若没有成对交换规则成立（段 4：注册表的 `swapRule`，按 `srOrder`：彩虹取色 10 → 特殊合成 20（第 8 刀起 = 注册表组合表 `comboRules` 并成的一条，内置表：炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线，两个方向都试、表里没有的组合不成立）；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。

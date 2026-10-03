@@ -47,7 +47,7 @@
 | 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 已完成（`refactor/desktop-boosters`），测试中 |
 | 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 已完成（`refactor/js-color-parity`），测试中；比对时发现桌面 `elementRGBTable` 缺 `magic_stone` / `fuzzball`（网页有），已按网页补上，两边现在逐项相同 |
 | 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 已完成（`refactor/core-exports`，基于第 8 项），测试中：`Match3.Core` 只留前端用到的 101 个名字，测试与 `Match3.View` 直接 import 子模块；`Match3.Obstacles` 无 except 的包装移到 `test/Spec/Support/Obstacles.hs` |
-| 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 待做 |
+| 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 已完成（`refactor/terminal-type`，基于第 6 项），测试中：`data Terminal = TWon \| TLost \| TLevelClear`，`gsOver` / `gvOver` / 通用接口的结局类型都换成 `Terminal`，每步结果仍是 `Outcome`；金标准、元素查询快照、`GameState` 的 `Show` 与网页 JSON 经 `fromTerminal` 逐字不变；新增 `terminal_outcome_mapping`（460 个） |
 | 9 | 清理「第 N 刀 / 第 N 项前」历史注释 | 随各项顺手做（只清碰到的模块） |
 | 10–12 | `Legacy*` 拆分、`Modifier` 改能力记录、合并 `*Prim` / `*Art` | 10 已并入第 2 项；11、12 按审计建议不做 |
 

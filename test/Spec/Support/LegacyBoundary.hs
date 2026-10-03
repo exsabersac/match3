@@ -6,9 +6,13 @@
 -- Registry.customEntry、Obstacle 的 layersPlace / flip / magic_stone / snow_boss、Actor 的 maker / snail / countdown、
 -- Common.colorPlace、Layer 的 ice / layeredOverlay、Collectible 的 chameleon。按元素名列成一张表，
 -- 只改了写法上的外壳（从 Entry 里拆出来、按名字配对），case 分支本身不动。
+-- 另有 Engine.Effect.beats 的旧版（每组是普通列表）。
 module Spec.Support.LegacyBoundary
   ( legacyPlacers
+  , beats
   ) where
+
+import Engine.Effect (Effect (..))
 
 import Match3.Element.Builtin.Collectible (chameleonCell)
 import Match3.Element.Builtin.Obstacle (MagicStone (..), SnowBoss (..), magicStoneFull)
@@ -78,3 +82,10 @@ layeredOverlay con args cell = case (args, cell) of
 
 customPlace :: ElementName -> [Arg] -> Cell -> Maybe Cell
 customPlace n args _ = Just (Custom n (CustomState (case args of (AInt k : _) -> k; _ -> 1)))
+
+-- | 旧 Engine.Effect.beats：按节拍把相邻的效果分组（保持原顺序）。
+beats :: [Effect] -> [(Int, [Effect])]
+beats [] = []
+beats (e : es) =
+  let (same, rest) = span ((== efBeat e) . efBeat) es
+  in (efBeat e, e : same) : beats rest

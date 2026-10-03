@@ -26,6 +26,7 @@ module Engine.Playback
   , effectCues
   ) where
 
+import Data.Foldable (toList)
 import Engine.Effect (Effect, beats)
 
 -- | 阶段机：长度与后继由具体游戏给出。ev = 进入阶段时的一次性事件（弹字、粒子……）。
@@ -105,4 +106,4 @@ cueStages = Stages len next
 
 -- | 把效果按节拍排成队列：每个节拍一个提示，帧数由 framesFor 按该节拍的效果决定。
 effectCues :: ([Effect] -> Int) -> [Effect] -> [Cue [Effect]]
-effectCues framesFor effs = [Cue (framesFor es) es | (_, es) <- beats effs]
+effectCues framesFor effs = [Cue (framesFor es) es | (_, group) <- beats effs, let es = toList group]

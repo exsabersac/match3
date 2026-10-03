@@ -6,11 +6,17 @@
 --   * efSpots 是涉及的格（没有网格的游戏为空），efAmount 是附带的数值（得分、连击数……）。
 --
 -- 不依赖任何具体游戏。
+--
+-- 第 8 项（数据边界）：'beats' 的每组是 'NonEmpty'——分组本来就不会有空组，类型把这一点写明，
+-- 用的一方不必再处理「空节拍」。
 module Engine.Effect
   ( Effect(..)
   , beats
   , beatsOf
   ) where
+
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 
 -- | 一条通用效果。
 data Effect = Effect
@@ -21,12 +27,9 @@ data Effect = Effect
   , efAmount  :: Int
   } deriving (Eq, Show)
 
--- | 按节拍把相邻的效果分组（保持原顺序）。
-beats :: [Effect] -> [(Int, [Effect])]
-beats [] = []
-beats (e : es) =
-  let (same, rest) = span ((== efBeat e) . efBeat) es
-  in (efBeat e, e : same) : beats rest
+-- | 按节拍把相邻的效果分组（保持原顺序）；每组非空，节拍号 = 组内首个效果的 efBeat。
+beats :: [Effect] -> [(Int, NonEmpty Effect)]
+beats = map (\g -> (efBeat (NE.head g), g)) . NE.groupWith efBeat
 
 -- | 某个节拍的全部效果。
 beatsOf :: Int -> [Effect] -> [Effect]

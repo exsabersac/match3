@@ -6,13 +6,16 @@
 --   一关里同时有多处问题时按固定顺序全部列出；只有行列一处问题时文字与 checkLevelDims 逐字节相同。
 -- * 放置参数解析：'ArgP' 改写后的每个放置函数，在随机参数表 × 随机格上与改写前的手写 case（Spec.Support.LegacyBoundary）逐项相同；
 --   精确匹配 / 前缀匹配 / '<|>' 缺省值的语义用单元测试钉住。
+-- * NonEmpty：'beats' 的每组非空，去掉 NonEmpty 后与旧版逐项相同，拼回去就是原列表。
 module Spec.DataBoundary
   ( tests
   ) where
 
 import Control.Applicative ((<|>))
 import Control.Exception (ErrorCall (..), evaluate, try)
+import Data.Foldable (toList)
 import Data.List (isInfixOf)
+import Engine.Effect (Effect (..), beats)
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (placeWith)
@@ -41,6 +44,7 @@ tests =
   , testProperty "qc_validation_applicative_laws" qc_validation_applicative_laws
   , testProperty "qc_argp_placers_match_legacy" qc_argp_placers_match_legacy
   , testCase "argp_exact_vs_prefix" argp_exact_vs_prefix
+  , testProperty "qc_beats_nonempty_matches_legacy" qc_beats_nonempty_matches_legacy
   ]
 
 --------------------------------------------------------------------------------
@@ -147,3 +151,26 @@ argp_exact_vs_prefix = do
   assertEqual "default does not swallow a color" Nothing (exactArgs (argInt <|> pure 1) [AColor C1])
   assertEqual "sequence" (Just (C2, 5)) (exactArgs ((,) <$> argColor <*> argInt) [AColor C2, AInt 5])
   assertEqual "sequence order matters" Nothing (exactArgs ((,) <$> argColor <*> argInt) [AInt 5, AColor C2])
+
+--------------------------------------------------------------------------------
+-- NonEmpty
+
+-- | 'beats' 与旧版逐项相同（组内容转回列表比较），拼接还原输入，相邻两组的节拍不同。
+qc_beats_nonempty_matches_legacy :: Property
+qc_beats_nonempty_matches_legacy =
+  forAll (listOf genEffect) $ \effs ->
+    let new = beats effs
+        plain = [(k, toList g) | (k, g) <- new]
+        keys = map fst new
+    in conjoin
+         [ counterexample "same as legacy" (plain === Old.beats effs)
+         , counterexample "concat restores input" (concatMap snd plain === effs)
+         , counterexample "key = head beat" (and [k == efBeat e | (k, e : _) <- plain])
+         , counterexample "adjacent beats differ" (and (zipWith (/=) keys (drop 1 keys)))
+         ]
+  where
+    genEffect = do
+      b <- choose (0, 3)
+      a <- choose (0, 9)
+      k <- elements ["clear", "score", "spawn"]
+      pure (Effect b k "x" [] a)

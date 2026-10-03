@@ -19,7 +19,7 @@ module Match3.Game.Shuffle
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Engine.Stream (headS, iterateS, splitAtS)
-import Match3.Board.Grid (setCell, getCell)
+import Match3.Board.Grid (setCell)
 import Match3.Board.Match (hasValidMoveWith)
 import Match3.Board.Random (shufflePlayableSized)
 import Match3.Element.Builtin (defaultRegistry)
@@ -40,12 +40,7 @@ extractDecor = extractDecorWith defaultRegistry
 -- | extractDecor（指定注册表）：保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 keepOnShuffle）。
 -- 只有普通宝石会被洗走；直线 / 炸弹 / 彩虹特殊块与所有障碍原样放回。
 extractDecorWith :: Registry -> Board -> [CellDecor]
-extractDecorWith reg b =
-  [ CellDecor p cell
-  | p <- boardPositions b
-  , let cell = getCell b p
-  , keepOnShuffleWith reg cell
-  ]
+extractDecorWith reg = ifoldMap (\p cell -> [CellDecor p cell | keepOnShuffleWith reg cell])
 
 -- | 把 extractDecor 记下的格写回新盘面的原位置。
 restoreDecor :: Board -> [CellDecor] -> Board

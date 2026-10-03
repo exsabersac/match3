@@ -177,7 +177,7 @@ magicStoneFiring = 4
 
 -- | 盘上魔法石的位置与状态（行优先）。
 magicStones :: Board -> [(Pos, Int)]
-magicStones b = [(p, k) | p <- boardPositions b, Custom "magic_stone" (CustomState k) <- [getCell b p]]
+magicStones = ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (CustomState k) <- [cell]])
 
 -- | 邻格规则：与本轮真消除格正交相邻的每块魔法石充能 1 格（每轮最多 1 格，满 3 为止）。
 -- 本轮被直接命中的魔法石不充能——发射那一轮它被自己的种子命中，所以不会被自己清掉的邻格充能。

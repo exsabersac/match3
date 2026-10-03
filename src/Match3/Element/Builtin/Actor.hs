@@ -122,7 +122,7 @@ fuzzballAdjacent ctx b =
 fuzzballJumps :: [Pos] -> [Pos] -> Board -> ([(Pos, Pos)], Board)
 fuzzballJumps avoid walls b0 = (reverse movesRev, bEnd)
   where
-    balls = [p | p <- boardPositions b0, isFuzzball (getCell b0 p)]
+    balls = positionsWhere isFuzzball b0
     seed = fnv (show b0)
     (movesRev, bEnd, _) = foldl' one ([], b0, []) balls
     one (acc, b, touched) p =

@@ -113,6 +113,10 @@ module Match3.Types
   , readingOrder
   , clockwiseFromRight
   , rightAndDown
+  , ifoldMap
+  , ifoldr
+  , ifoldl'
+  , positionsWhere
   , Grid
   , Board
   , gridFromRows

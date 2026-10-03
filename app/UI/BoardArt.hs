@@ -237,10 +237,8 @@ drawUfosAny ren app = case appArt app of
 spreadTargets :: (Cell -> Bool) -> Board -> [Pos]
 spreadTargets isSource board =
   [ q
-  | (r, c) <- boardPositions board
-  , isSource (getCell board (r, c))
-  , q <- [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
-  , inBounds board q
+  | p <- positionsWhere isSource board
+  , q <- neighborsInBounds upDownLeftRight board p
   , case getCell board q of
       Gem _ _ _ Nothing -> True
       _ -> False

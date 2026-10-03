@@ -52,11 +52,7 @@ rainbowClearSeeds b p1 p2 =
       , isRainbow (at b p)
       ]
     targets = case (c1, c2) of
-      (Gem _ Rainbow _ _, Gem _ Rainbow _ _) ->
-        [ p
-        | p <- boardPositions b
-        , isGem (at b p)
-        ]
+      (Gem _ Rainbow _ _, Gem _ Rainbow _ _) -> positionsWhere isGem b
       (Gem _ Rainbow _ _, Gem col _ _ _) -> colorPositions b col
       (Gem col _ _ _, Gem _ Rainbow _ _) -> colorPositions b col
       (Gem _ Rainbow _ _, Countdown col _) -> colorPositions b col
@@ -66,10 +62,9 @@ rainbowClearSeeds b p1 p2 =
       _ -> []
 
 colorPositions :: Board -> Color -> [Pos]
-colorPositions b col =
-  [ p
-  | p <- boardPositions b
-  , case boardAt b p of
+colorPositions b col = positionsWhere ofColor b
+  where
+    ofColor cell = case cell of
       Gem col' _ _ _ -> col' == col
       Countdown col' _ -> col' == col
       Stone _ -> False
@@ -87,4 +82,3 @@ colorPositions b col =
       TimeSpirit -> False
       Flip col' _ -> col' == col
       Custom _ _ -> False
-  ]

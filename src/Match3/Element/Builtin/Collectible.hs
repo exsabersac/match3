@@ -169,7 +169,7 @@ chameleonRainbowSeeds b p1 p2 = case [(q, col) | q <- [p1, p2], Just col <- [cha
   ((q, col) : _) ->
     nub
       ( rainbowClearSeeds (setCell b q (mkGem col)) p1 p2
-          ++ [p | p <- boardPositions b, chameleonColor (getCell b p) == Just col]
+          ++ positionsWhere ((== Just col) . chameleonColor) b
       )
   [] -> []
 

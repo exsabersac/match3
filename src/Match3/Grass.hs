@@ -70,7 +70,7 @@ ortho = neighborsInBounds upDownLeftRight
 
 -- | 盘面上焦点非空的格（行主序）。
 positionsWith :: Getting Any Cell a -> Board -> [Pos]
-positionsWith o b = [p | p <- boardPositions b, has o (at b p)]
+positionsWith o = positionsWhere (has o)
 
 -- | 宝石上恰好是这种叠层（草 / 藤 / 巧克力 / 蒸汽这类不带参数的叠层）。
 overlayIs :: CellOverlay -> Traversal' Cell ()

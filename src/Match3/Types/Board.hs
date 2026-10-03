@@ -9,9 +9,10 @@
 -- 都按下标顺序（行主序）走、且不改形状（行列数、下标范围）。原来的 mapBoard / boardCells 保留为这些方法的别名。
 --
 -- Haskell 特性第 7 项（网格几何，见 docs/haskell-features/07-网格几何.md）：四个正交方向 'Dir' 与 'stepDir'，
--- 以及把仓库里原有的几种邻格顺序起成名字（'upDownLeftRight' / 'readingOrder' / 'clockwiseFromRight' / 'rightAndDown'）。
+-- 以及把仓库里原有的几种邻格顺序起成名字（'upDownLeftRight' / 'readingOrder' / 'clockwiseFromRight' / 'rightAndDown'）；
+-- 带坐标的折叠 'ifoldMap' / 'ifoldr' / 'ifoldl'' / 'positionsWhere'（补上 Foldable 只给格子、不给坐标的缺口）。
 --
--- 依赖：Match3.Types.Cell。不变量：Show 按行列表打印，与旧列表盘输出相同。
+-- 依赖：Match3.Types.Cell。不变量：Show 按行列表打印，与旧列表盘输出相同；带坐标的折叠与 'boardPositions' 同为行主序。
 module Match3.Types.Board
   ( Pos
     -- * 方向
@@ -49,6 +50,11 @@ module Match3.Types.Board
   , boardPositions
   , boardRowIndices
   , boardColIndices
+    -- * 带坐标的折叠
+  , ifoldMap
+  , ifoldr
+  , ifoldl'
+  , positionsWhere
   ) where
 
 import Data.Array (Array, assocs, bounds, listArray, (!), (//))
@@ -218,3 +224,26 @@ boardColIndices b =
   let ((_, c0), (_, c1)) = bounds (boardArray b)
   in [c0 .. c1]
 
+--------------------------------------------------------------------------------
+-- 带坐标的折叠（第 7 项）
+--
+-- Foldable 只把格子交给回调，不给坐标；很多遍历要的是坐标（「盘上所有蜗牛在哪」），之前写成
+-- @[p | p <- boardPositions b, isSnail (getCell b p)]@——先列坐标、再逐个回到盘面读格。下面几个直接走数组的
+-- (下标, 元素) 列表：顺序与 'boardPositions' 相同（Array 的 assocs 按 range 走，二元组下标的 range 就是行主序）。
+-- 形状照 indexed-traversable 的 FoldableWithIndex（回调先收坐标），但只给 Grid 写、不建类：仓库里只有这一个容器要它。
+
+-- | 带坐标的 foldMap（行主序）。
+ifoldMap :: Monoid m => (Pos -> a -> m) -> Grid a -> m
+ifoldMap f (Grid a) = foldMap (uncurry f) (assocs a)
+
+-- | 带坐标的右折叠（行主序；惰性，可以只取前几个）。
+ifoldr :: (Pos -> a -> b -> b) -> b -> Grid a -> b
+ifoldr f z (Grid a) = foldr (\(p, x) acc -> f p x acc) z (assocs a)
+
+-- | 带坐标的严格左折叠（行主序）。
+ifoldl' :: (b -> Pos -> a -> b) -> b -> Grid a -> b
+ifoldl' f z (Grid a) = foldl' (\acc (p, x) -> f acc p x) z (assocs a)
+
+-- | 格子满足谓词的坐标（行主序）。= @[p | p <- boardPositions b, ok (boardAt b p)]@。
+positionsWhere :: (a -> Bool) -> Grid a -> [Pos]
+positionsWhere ok = ifoldr (\p x ps -> if ok x then p : ps else ps) []

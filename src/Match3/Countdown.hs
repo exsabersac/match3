@@ -27,13 +27,11 @@ tickCountdowns = fmap tickCell
 
 -- | Positions whose countdown has reached 0 (about to explode).
 countdownsAtZero :: Board -> [Pos]
-countdownsAtZero b =
-  [ p
-  | p <- boardPositions b
-  , case boardAt b p of
+countdownsAtZero = positionsWhere atZero
+  where
+    atZero cell = case cell of
       Countdown _ 0 -> True
       _ -> False
-  ]
 
 -- | 3×3 blast centered at a countdown that hit zero (裁到盘内).
 explodeRadius :: Board -> Pos -> [Pos]

@@ -50,11 +50,7 @@ pushable _ = False
 
 snailPositions :: Board -> [Pos]
 snailPositions b =
-  sort
-    [ p
-    | p <- boardPositions b
-    , isSnail (at b p)
-    ]
+  sort (positionsWhere isSnail b)
 
 -- | Crawl one snail at @pos@: push gem ahead, or reverse at wall/blocker.
 stepSnailAt :: Board -> Pos -> Board

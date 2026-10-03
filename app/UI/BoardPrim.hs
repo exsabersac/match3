@@ -132,11 +132,8 @@ drawStaticPrim ren app board yOff = do
 -- | Pulse outline on cells a vine would spread onto next move.
 drawVineSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
 drawVineSpreadHints ren yOff pulse board = do
-  let sources = [p | p <- boardPositions board, hasVine (getCell board p)]
-      neigh (r, c) =
-        filter
-          (inBounds board)
-          [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+  let sources = positionsWhere hasVine board
+      neigh = neighborsInBounds upDownLeftRight board
       targets =
         [ q
         | p <- sources
@@ -158,11 +155,8 @@ drawVineSpreadHints ren yOff pulse board = do
 -- | Draw flying saucer overlay at its cell (飞碟).
 drawChocoSpreadHints :: Renderer -> CInt -> Int -> Board -> IO ()
 drawChocoSpreadHints ren yOff pulse board = do
-  let sources = [p | p <- boardPositions board, hasChoco (getCell board p)]
-      neigh (r, c) =
-        filter
-          (inBounds board)
-          [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+  let sources = positionsWhere hasChoco board
+      neigh = neighborsInBounds upDownLeftRight board
       targets =
         [ q
         | p <- sources

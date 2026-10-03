@@ -39,7 +39,7 @@ import Engine.Effect (Effect(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, HistoryPolicy(..), Undoable, withHistory)
 import Match3.Board.Grid (neighborsInBounds)
-import Match3.Daily (dailyConfig, dailySeed)
+import Match3.Daily (Day, Month, Year, dailyConfig, dailySeed)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Element.Level (levelRegistryIn)
@@ -66,7 +66,7 @@ data Action
 data Setup
   = Campaign Int          -- ^ 战役第 n 关（0 起）
   | CustomLevel GameConfig     -- ^ 任意配置（不带战役装饰）
-  | Daily Int Int Int     -- ^ 每日挑战（年 月 日；种子由日期决定，gameNew 的种子参数不用）
+  | Daily Year Month Day  -- ^ 每日挑战（年 月 日；种子由日期决定，gameNew 的种子参数不用）
   deriving (Eq, Show)
 
 -- | 一个动作的完整结果（三消外壳需要的全部数据）。

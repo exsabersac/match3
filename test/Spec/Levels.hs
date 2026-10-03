@@ -76,7 +76,7 @@ level_placements_all_right = do
 daily_placements_all_right :: Assertion
 daily_placements_all_right = do
   let days = [(y, m, d) | y <- [2026, 2027], m <- [1 .. 12], d <- [1 .. 28]]
-      goals = [cfgGoal (dailyConfig y m d) | (y, m, d) <- days]
+      goals = [cfgGoal (dailyConfig (Year y) (Month m) (Day d)) | (y, m, d) <- days]
       l0 = case lookupLevel 0 of
         Just l -> l
         Nothing -> error "no level 0"

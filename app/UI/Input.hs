@@ -293,7 +293,7 @@ keyDaily :: IORef App -> Window -> IO ()
 keyDaily ref window = do
   -- Daily challenge for a fixed demo date (box clock may vary)
   app <- readIORef ref
-  let y = 2026; m = 9; d = 29
+  let y = Year 2026; m = Month 9; d = Day 29
       lvl = dailyLevel y m d
       gs = newDailyGame (levelConfig lvl) (dailySeed y m d)
   commit ref window (freshLevelUi gs app) { appMsg = "Daily challenge!" }

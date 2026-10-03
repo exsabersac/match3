@@ -4,9 +4,16 @@
 --
 -- 依赖：只有 base（不 import 任何 Match3 模块，测试 engine_layer_is_game_agnostic 扫描）。
 -- 坐标约定：格子坐标是 (行, 列)，行优先；像素坐标是 (x, y)，x 对应列、y 对应行。
+-- 第 7 项（docs/haskell-features/07-网格几何.md）：像素的两个分量各是一个 newtype（'PxX' / 'PxY'），
+-- 格子仍是 (行, 列) 的 Int 二元组。之前 'gridCellAt' 收两个裸的 a、'gridCellOrigin' 回一个 (a, a)，
+-- 把 (行, 列) 当成 (x, y) 传进去、或者 x / y 写反都能编译；现在这几种写法都是类型错误。
 module Engine.GridUI
-  ( -- * 网格几何
-    GridGeom (..)
+  ( -- * 像素坐标
+    PxX (..)
+  , PxY (..)
+  , pxXY
+    -- * 网格几何
+  , GridGeom (..)
   , gridWidth
   , gridHeight
   , gridInside
@@ -25,6 +32,18 @@ module Engine.GridUI
   , isHinted
   , isFlashing
   ) where
+
+-- | 像素横坐标（向右增长；对应列）。
+newtype PxX a = PxX a
+  deriving (Eq, Ord, Show)
+
+-- | 像素纵坐标（向下增长；对应行）。
+newtype PxY a = PxY a
+  deriving (Eq, Ord, Show)
+
+-- | 拆成 (x, y)（交给只认二元组的绘图库时用；顺序固定是先 x 后 y）。
+pxXY :: (PxX a, PxY a) -> (a, a)
+pxXY (PxX x, PxY y) = (x, y)
 
 -- | 一块矩形网格在屏幕上的摆放：左上角像素、单格边长、行列数。
 data GridGeom a = GridGeom
@@ -46,8 +65,8 @@ gridInside :: GridGeom a -> (Int, Int) -> Bool
 gridInside g (r, c) = r >= 0 && c >= 0 && r < ggRows g && c < ggCols g
 
 -- | 像素 → 格子（网格外返回 Nothing）。先减去左上角，越出 [0, 宽/高) 即在外，再按单格边长整除。
-gridCellAt :: Integral a => GridGeom a -> a -> a -> Maybe (Int, Int)
-gridCellAt g px py =
+gridCellAt :: Integral a => GridGeom a -> PxX a -> PxY a -> Maybe (Int, Int)
+gridCellAt g (PxX px) (PxY py) =
   let x = px - ggLeft g
       y = py - ggTop g
   in if x < 0 || y < 0 || x >= gridWidth g || y >= gridHeight g
@@ -57,15 +76,15 @@ gridCellAt g px py =
              r = fromIntegral (y `div` ggCell g)
          in if gridInside g (r, c) then Just (r, c) else Nothing
 
--- | 格子 → 左上角像素。
-gridCellOrigin :: Num a => GridGeom a -> (Int, Int) -> (a, a)
-gridCellOrigin g (r, c) = (ggLeft g + fromIntegral c * ggCell g, ggTop g + fromIntegral r * ggCell g)
+-- | 格子 (行, 列) → 左上角像素 (x, y)：列决定 x、行决定 y。
+gridCellOrigin :: Num a => GridGeom a -> (Int, Int) -> (PxX a, PxY a)
+gridCellOrigin g (r, c) = (PxX (ggLeft g + fromIntegral c * ggCell g), PxY (ggTop g + fromIntegral r * ggCell g))
 
 -- | 全部格子（行优先）。
 gridCells :: GridGeom a -> [(Int, Int)]
 gridCells g = [(r, c) | r <- [0 .. ggRows g - 1], c <- [0 .. ggCols g - 1]]
 
--- | 正交（4 邻接）相邻。
+-- | 正交（4 邻接）相邻。与三消的 Match3.Board.Grid.adjacent 逐对相同（测试对照）；这里不 import Match3，所以各写一份。
 orthoAdjacent :: (Int, Int) -> (Int, Int) -> Bool
 orthoAdjacent (r1, c1) (r2, c2) = abs (r1 - r2) + abs (c1 - c2) == 1
 

@@ -172,7 +172,7 @@ mg_default_no_widening = do
     (\li -> assertEqual ("level " ++ show (li + 1)) [] (widenedCells (levelRegistryIn defaultRegistry (gsLevelElems (levelGame li 1)))))
     [0 .. mgLevel - 1]
   mapM_
-    (\(y, m, d) -> assertEqual ("daily " ++ show (y, m, d)) [] (widenedCells (levelRegistryIn defaultRegistry (gsLevelElems (newDailyGame (dailyConfig y m d) (dailySeed y m d))))))
+    (\(y, m, d) -> assertEqual ("daily " ++ show (y, m, d)) [] (widenedCells (levelRegistryIn defaultRegistry (gsLevelElems (newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d)))))))
     [(2026, 9, 28), (2026, 9, 29), (2026, 9, 30)]
 
 -- | 去掉魔法地格条目的注册表：前 47 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、gsGen 逐项相同
@@ -185,7 +185,7 @@ mg_other_levels_unchanged = do
             Nothing -> gs
             Just (p, q) -> let (gs', _, _) = resolveSwapWith reg p q gs in play reg gs' (n - 1)
       key gs = (gsBoard gs, gsScore gs, gsCounts gs, gsMoves gs, show (gsGen gs))
-      daily (y, m, d) = newDailyGame (dailyConfig y m d) (dailySeed y m d)
+      daily (y, m, d) = newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d))
   assertEqual "older levels have no magic ground" [] [li | li <- [0 .. mgLevel - 1], any ((== "magic") . fst . snd) (lvlGround (levelAt li))]
   mapM_
     (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noMg (levelGame li 3) 6)) (key (play defaultRegistry (levelGame li 3) 6)))

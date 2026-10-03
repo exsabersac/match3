@@ -46,7 +46,7 @@ dropCellsL46 = [(0, 1), (0, 3), (0, 4), (0, 6)]
 
 -- | 某天的每日挑战开局（与前端相同：日期种子 + 当天配置）。
 dailyGame :: (Int, Int, Int) -> GameState
-dailyGame (y, m, d) = newDailyGame (dailyConfig y m d) (dailySeed y m d)
+dailyGame (y, m, d) = newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d))
 
 cookiesOn :: Board -> [Pos]
 cookiesOn b = [p | p <- allPos, getCell b p == Cookie]

@@ -45,7 +45,7 @@ module UI.Layout
 
 import Data.Int (Int32)
 import Data.Word (Word8)
-import Engine.GridUI (GridGeom (..), gridCellAt, gridCellOrigin, gridCells)
+import Engine.GridUI (GridGeom (..), PxX (..), PxY (..), gridCellAt, gridCellOrigin, gridCells, pxXY)
 import Foreign.C.Types (CInt)
 import Match3.Core
 import Match3.Element.Builtin (chameleonColor)
@@ -113,17 +113,18 @@ boardGrid = boardGridFor boardSize boardSize
 
 -- | 逻辑坐标 → 棋盘格（缺省 8×8）；棋盘外返回 Nothing。
 pixelToCell :: Int32 -> Int32 -> Maybe Pos
-pixelToCell mx my = gridCellAt boardGrid (fromIntegral mx) (fromIntegral my)
+pixelToCell mx my = gridCellAt boardGrid (PxX (fromIntegral mx)) (PxY (fromIntegral my))
 
 -- | 按实际行列点选。
 pixelToCellOn :: Int -> Int -> Int32 -> Int32 -> Maybe Pos
-pixelToCellOn rows cols mx my = gridCellAt (boardGridFor rows cols) (fromIntegral mx) (fromIntegral my)
+pixelToCellOn rows cols mx my = gridCellAt (boardGridFor rows cols) (PxX (fromIntegral mx)) (PxY (fromIntegral my))
 
+-- | 格子 → 左上角 (x, y)。第 7 项起 Engine.GridUI 回的是 (PxX, PxY)，在这里拆成 SDL 用的二元组。
 cellOrigin :: Pos -> (CInt, CInt)
-cellOrigin = gridCellOrigin boardGrid
+cellOrigin = pxXY . gridCellOrigin boardGrid
 
 cellOriginOn :: Int -> Int -> Pos -> (CInt, CInt)
-cellOriginOn rows cols = gridCellOrigin (boardGridFor rows cols)
+cellOriginOn rows cols = pxXY . gridCellOrigin (boardGridFor rows cols)
 
 -- | 整数坐标线性插值（t ∈ [0,1]）。
 lerpI :: CInt -> CInt -> Int -> Int -> CInt

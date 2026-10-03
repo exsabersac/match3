@@ -1,7 +1,13 @@
 -- | 每日挑战：YYYY-MM-DD 种子、10 种目标轮换、三星（相对印制步数剩余比例）。
 -- 不生成盘面装饰（由 Game.newDailyGame / ensureGoalDecor）；通关结局由 Game 标为 Won。
+--
+-- 第 7 项：年 / 月 / 日各是一个 newtype（'Year' / 'Month' / 'Day'）。之前三个参数都是 Int，
+-- @dailySeed 2026 9 29@ 写成 @dailySeed 2026 29 9@ 也能编译（种子 20263009，另一局）；现在月和日写反是类型错误。
 module Match3.Daily
-  ( dailySeed
+  ( Year(..)
+  , Month(..)
+  , Day(..)
+  , dailySeed
   , dailyConfig
   , dailyLevel
   , starRating
@@ -11,13 +17,25 @@ import Match3.Counts (CounterKey(..))
 import Match3.Levels.Level (Level, level)
 import Match3.Types
 
--- | Deterministic seed from YYYY-MM-DD (local calendar ints).
-dailySeed :: Int -> Int -> Int -> Int
-dailySeed year month day =
+-- | 公历年（如 2026）。
+newtype Year = Year Int
+  deriving (Eq, Ord, Show)
+
+-- | 月（1–12）。
+newtype Month = Month Int
+  deriving (Eq, Ord, Show)
+
+-- | 当月第几日（1–31）。
+newtype Day = Day Int
+  deriving (Eq, Ord, Show)
+
+-- | 由 YYYY-MM-DD 决定的种子：YYYYMMDD（与第 7 项前的 @year * 10000 + month * 100 + day@ 相同）。
+dailySeed :: Year -> Month -> Day -> Int
+dailySeed (Year year) (Month month) (Day day) =
   year * 10000 + month * 100 + day
 
 -- | Rotate goal flavor by day-of-year-ish hash.
-dailyConfig :: Int -> Int -> Int -> GameConfig
+dailyConfig :: Year -> Month -> Day -> GameConfig
 dailyConfig year month day =
   let s = dailySeed year month day
       flavor = s `mod` 10
@@ -33,7 +51,7 @@ dailyConfig year month day =
        8 -> GameConfig 26 (goalCount CountSafes 4)
        _ -> GameConfig 26 (goalCount CountBalloons 6)
 
-dailyLevel :: Int -> Int -> Int -> Level
+dailyLevel :: Year -> Month -> Day -> Level
 dailyLevel year month day =
   let cfg = dailyConfig year month day
   in level 0 "每日" (cfgMoves cfg) (cfgGoal cfg)

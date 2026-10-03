@@ -310,6 +310,9 @@ module Match3.Core
   , isLineLineCombo
   , isSpecialCombo
   , comboClearSeeds
+  , Year(..)
+  , Month(..)
+  , Day(..)
   , dailySeed
   , dailyConfig
   , dailyLevel
@@ -399,7 +402,7 @@ import Match3.Obstacles
   , spiritsAdjacentTo
   , chipAdjacentTimeSpirits
   )
-import Match3.Daily (dailySeed, dailyConfig, dailyLevel, starRating)
+import Match3.Daily (Day(..), Month(..), Year(..), dailySeed, dailyConfig, dailyLevel, starRating)
 import Match3.Conveyor (Belt, shiftBelt, shiftBelts)
 import Match3.Boosters (hammerClearSeeds, crossClearSeeds)
 import Match3.Countdown

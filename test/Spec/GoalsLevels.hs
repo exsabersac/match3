@@ -327,13 +327,13 @@ goal_clear_stone_counts = do
 
 daily_seed_stable :: Assertion
 daily_seed_stable = do
-  assertEqual "seed" (20260929 :: Int) (dailySeed 2026 9 29)
-  assertEqual "same day same seed" (dailySeed 2026 1 1) (dailySeed 2026 1 1)
-  assertBool "diff day diff seed" (dailySeed 2026 1 1 /= dailySeed 2026 1 2)
-  let lvl = dailyLevel 2026 9 29
+  assertEqual "seed" (20260929 :: Int) (dailySeed (Year 2026) (Month 9) (Day 29))
+  assertEqual "same day same seed" (dailySeed (Year 2026) (Month 1) (Day 1)) (dailySeed (Year 2026) (Month 1) (Day 1))
+  assertBool "diff day diff seed" (dailySeed (Year 2026) (Month 1) (Day 1) /= dailySeed (Year 2026) (Month 1) (Day 2))
+  let lvl = dailyLevel (Year 2026) (Month 9) (Day 29)
   assertEqual "name" "每日" (lvlName lvl)
   assertBool "moves positive" (lvlMoves lvl > 0)
-  let gs = newGameAtLevel 0 (dailyConfig 2026 9 29) (dailySeed 2026 9 29)
+  let gs = newGameAtLevel 0 (dailyConfig (Year 2026) (Month 9) (Day 29)) (dailySeed (Year 2026) (Month 9) (Day 29))
   assertBool "playable daily board" (hasValidMove (gsBoard gs))
   assertBool "stable daily board" (not (hasAnyMatch (gsBoard gs)))
 
@@ -548,7 +548,7 @@ carry_moves_on_next_level = do
 daily_goal_rotates_ten :: Assertion
 daily_goal_rotates_ten = do
   let flavors =
-        [ cfgGoal (dailyConfig 2026 9 d) | d <- [1 .. 20] ]
+        [ cfgGoal (dailyConfig (Year 2026) (Month 9) (Day d)) | d <- [1 .. 20] ]
       kinds = length (nub [ show g | g <- flavors ])
   assertBool ("at least 6 distinct daily goals, got " ++ show kinds) (kinds >= 6)
   -- Sample includes newer flavors

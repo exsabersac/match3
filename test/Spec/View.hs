@@ -44,7 +44,7 @@ playOn k gs = gs : case (gsOver gs, findHint (gsBoard gs)) of
 samples :: [GameState]
 samples =
   concat [playOn 4 (levelGame li seed) | li <- [0 .. levelCount - 1], seed <- [3, 11]]
-    ++ playOn 3 (newDailyGame (dailyConfig 2026 9 30) (dailySeed 2026 9 30))
+    ++ playOn 3 (newDailyGame (dailyConfig (Year 2026) (Month 9) (Day 30)) (dailySeed (Year 2026) (Month 9) (Day 30)))
     ++ [ g0 {gsLevel = levelCount + 2}
        , g0 {gsHammers = 0, gsFreeSwaps = 5, gsCrossClears = 2, gsShuffled = True}
        , g0 {gsOver = Just (Won 1234)}
@@ -313,19 +313,19 @@ boardGeom = GridGeom {ggLeft = 16, ggTop = 16 + 108, ggCell = 56, ggRows = board
 grid_ui_geometry_matches_legacy_layout :: Assertion
 grid_ui_geometry_matches_legacy_layout = do
   sequence_
-    [ assertEqual (show (x, y)) (legacyPixelToCell x y) (gridCellAt boardGeom x y)
+    [ assertEqual (show (x, y)) (legacyPixelToCell x y) (gridCellAt boardGeom (PxX x) (PxY y))
     | x <- [-20 .. 500], y <- [-20, -1, 0, 100, 123, 124, 125, 179, 180, 181, 400, 571, 572, 579, 580, 581, 700]
     ]
   sequence_
-    [ assertEqual (show (x, y)) (legacyPixelToCell x y) (gridCellAt boardGeom x y)
+    [ assertEqual (show (x, y)) (legacyPixelToCell x y) (gridCellAt boardGeom (PxX x) (PxY y))
     | x <- [0, 15, 16, 17, 71, 72, 463, 464, 479, 480, 481], y <- [-20 .. 700]
     ]
   sequence_
     [ do
-        gridCellOrigin boardGeom (r, c) @?= (16 + c * 56, 16 + 108 + r * 56)
-        let (x, y) = gridCellOrigin boardGeom (r, c)
-        gridCellAt boardGeom x y @?= Just (r, c)
-        gridCellAt boardGeom (x + 55) (y + 55) @?= Just (r, c)
+        gridCellOrigin boardGeom (r, c) @?= (PxX (16 + c * 56), PxY (16 + 108 + r * 56))
+        let (x, y) = pxXY (gridCellOrigin boardGeom (r, c))
+        gridCellAt boardGeom (PxX x) (PxY y) @?= Just (r, c)
+        gridCellAt boardGeom (PxX (x + 55)) (PxY (y + 55)) @?= Just (r, c)
     | (r, c) <- allPos'
     ]
   gridCells boardGeom @?= allPos'
@@ -333,8 +333,8 @@ grid_ui_geometry_matches_legacy_layout = do
   -- 非正方网格：行列不混
   let g = GridGeom {ggLeft = 0, ggTop = 0, ggCell = 10, ggRows = 2, ggCols = 3} :: GridGeom Int
   gridCells g @?= [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
-  gridCellAt g 25 15 @?= Just (1, 2)
-  gridCellAt g 15 25 @?= Nothing
+  gridCellAt g (PxX 25) (PxY 15) @?= Just (1, 2)
+  gridCellAt g (PxX 15) (PxY 25) @?= Nothing
   -- 4 邻接与三消的 adjacent 一致
   sequence_ [assertEqual (show (a, b)) (adjacent a b) (orthoAdjacent a b) | a <- allPos', b <- allPos']
 
@@ -410,7 +410,7 @@ frontends_read_view_model = do
   -- （不含英文标识符，即元素名目标都在 namedGoalLabelTable 登记了）；没登记的名字退回元素名本身
   assertBool "web Api encodes goalLabel" ("goalLabel" `mentionsIdent` api)
   let rawIdent = any (\ch -> (ch >= 'a' && ch <= 'z') || ch == '_')
-      dailyGoals = [goalInfo (cfgGoal (dailyConfig 2026 m d)) 0 | m <- [1 .. 12], d <- [1 .. 28]]
+      dailyGoals = [goalInfo (cfgGoal (dailyConfig (Year 2026) (Month m) (Day d))) 0 | m <- [1 .. 12], d <- [1 .. 28]]
   assertEqual "every level goal has a Chinese label" [] [(lvIndex l, goalLabel (lvGoal l)) | l <- levelViews, rawIdent (goalLabel (lvGoal l))]
   assertEqual "every daily goal has a Chinese label" [] [goalLabel g | g <- dailyGoals, rawIdent (goalLabel g)]
   assertEqual "level 43 goal label" "毛球" (goalLabel (gvGoal (gameView (levelGame 42 1))))
@@ -426,7 +426,7 @@ outcome_lose_hint_no_internal_names :: Assertion
 outcome_lose_hint_no_internal_names = do
   let rawIdent = any (\ch -> (ch >= 'a' && ch <= 'z') || ch == '_')
       levelGoals = [(li + 1, lvlGoal l) | (li, l) <- zip [0 :: Int ..] allLevels]
-      dailyGoals = [(m * 100 + d, cfgGoal (dailyConfig 2026 m d)) | m <- [1 .. 12], d <- [1 .. 28]]
+      dailyGoals = [(m * 100 + d, cfgGoal (dailyConfig (Year 2026) (Month m) (Day d))) | m <- [1 .. 12], d <- [1 .. 28]]
       goals = levelGoals ++ dailyGoals
   assertEqual "lose hints" [] [(i, loseHint g) | (i, g) <- goals, rawIdent (loseHint g)]
   assertEqual "view lose hints" [] [(i, giLoseHint (goalInfo g 0)) | (i, g) <- goals, rawIdent (giLoseHint (goalInfo g 0))]

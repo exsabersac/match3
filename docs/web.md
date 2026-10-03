@@ -179,7 +179,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-10-03，fix/web-audio-toggle，`make clean` 后全量重建的发布产物；wasm 与 b8d66ad 逐字节相同）：wasm 原始 5,372,310 B，`-Oz` 后 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；dist 合计 3,045,263 B ≈ 3.05 MB，逐文件 gzip 1,458,287 B（约 1.46 MB）；dist 里除页面脚本外还有 `audio.js`、`guide.js` 与 `sfx/` 下 7 个 WAV（约 196 KB）。图集多了 `magic` 与 48 张关名文字图（WebP 约 +100 KB）。
+体积（2026-10-03，feat/dist-rebuild（main b93a5d4，Haskell 特性第 9 / 7 / 8 项合入后统一重建），`make clean` 后全量重建的发布产物）：wasm 原始 5,422,862 B，`-Oz` 后 2,206,984 B ≈ 2.21 MB（gzip 816,125 B）；dist 合计 3,068,759 B ≈ 3.07 MB，逐文件 gzip 1,465,191 B（约 1.47 MB）；dist 里除页面脚本外还有 `audio.js`、`guide.js` 与 `sfx/` 下 7 个 WAV（约 196 KB）。图集多了 `magic` 与 48 张关名文字图（WebP 约 +100 KB）。
 
 ## 3. 工具链与构建
 
@@ -305,7 +305,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（31 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、逐关地面层贴图与 HUD 关名 `name_<i>` 的真实绘制、第 48 关魔法地格（贴图位置与像素、4 组扩圈爆炸的真实绘制格数 = EvBlast 格数）、终章（第 47、48 关过关进入下一关，第 49 关「宽域」Won）、音效 / BGM 开关芯片（真实绘制的字形在芯片内、不大于按钮、不压提示行）、逐关失败提示（无「箱子」/ 内部名，碎石关「砸开碎石」）、第 8 / 39–45 / 47 / 48 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-10-03，fix/web-audio-toggle（main bee3fd7 + HUD 音效 / BGM 开关修正），`make clean` 后 `make check`）：`stack test` 429 通过；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）；`make android-check` 本次未跑（留给测试跑手；上次 web-magic-ground 时 6 项全过）。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。当前结果（2026-10-03，feat/dist-rebuild（main b93a5d4，Haskell 特性第 9 / 7 / 8 项合入后），`make clean` 后 `make check`）：`stack test` 451 通过；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）；`make android-check` 本次未跑（留给测试跑手；上次 web-magic-ground 时 6 项全过）。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制

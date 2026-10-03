@@ -122,6 +122,8 @@ make size            # 事后单独看体积
 4. 下载并缓存浏览器 WASI 垫片 `@bjorn3/browser_wasi_shim@0.4.2`（MIT/Apache-2.0，约 96 KB）；
 3b. 用 `tools/gen_web_atlas.py`（需 python3 + Pillow）从 `assets/` 生成 `atlas.webp` + `atlas.json` + `background.webp`，
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
+   注意：`atlas.webp` 的 ALPH 块（无损 alpha，`method=6`）换机器重建可能差几十字节（同一 Pillow 12.3.0 / libwebp 1.6.0，疑为 libwebp 按 CPU 指令集走不同实现），
+   解码后 RGBA 逐像素相同、VP8 块与 `background.webp` 逐字节相同；2026-10-03 box 换宿主后重建得 488,226 B（提交版 488,278 B），提交版不必跟着改；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
 图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），

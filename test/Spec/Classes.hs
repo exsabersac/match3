@@ -1,8 +1,8 @@
 -- 本模块有一处故意的类型错误（见「缺省 toCell 的约束」一节）：-fdefer-type-errors 把它推迟到运行时，
 -- 只有调用那个 instance 的 toCell 时才抛出 TypeError（消息正是编译器本来会报的「缺 Coercible」）。
--- 做法同 Spec.Phase；-Wno-deferred-type-errors 保持 0 警告；-fno-defer-out-of-scope-variables 让拼错 / 漏导入的名字
--- 仍是编译错误，其余代码照常完整类型检查。
-{-# OPTIONS_GHC -fdefer-type-errors -fno-defer-out-of-scope-variables -Wno-deferred-type-errors #-}
+-- 做法同 Spec.Phase；-Wno-deferred-type-errors 保持 0 警告；-fno-defer-out-of-scope-variables / -fno-defer-typed-holes
+-- 让拼错 / 漏导入的名字与类型洞仍是编译错误，其余代码照常完整类型检查。
+{-# OPTIONS_GHC -fdefer-type-errors -fno-defer-out-of-scope-variables -fno-defer-typed-holes -Wno-deferred-type-errors #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | 类型类与抽象（Haskell 特性第 2 项，docs/haskell-features/02-类型类与抽象.md）。

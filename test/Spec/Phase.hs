@@ -2,8 +2,10 @@
 -- 本模块故意含有几处类型错误（见下方「非法写法」一节）。-fdefer-type-errors 把它们推迟到运行时：
 -- 模块照常编译，只有求值那几个绑定时才抛出 TypeError（消息正是编译器本来会报的错）。
 -- -Wno-deferred-type-errors 关掉「推迟了一个类型错误」的警告，保持 0 警告；模块里其余代码与平时一样做完整类型检查。
+-- -fdefer-type-errors 默认还会顺带推迟「名字不在作用域」和类型洞（_x），这里用 -fno-defer-out-of-scope-variables /
+-- -fno-defer-typed-holes 关回去：拼错 / 漏导入的名字仍是编译错误，只有真正的类型错误被推迟（同 Spec.Classes）。
 -- 这就是 should-not-typecheck 库的做法，这里不加依赖、手写一遍。
-{-# OPTIONS_GHC -fdefer-type-errors -Wno-deferred-type-errors #-}
+{-# OPTIONS_GHC -fdefer-type-errors -fno-defer-out-of-scope-variables -fno-defer-typed-holes -Wno-deferred-type-errors #-}
 
 -- | 类型层（Haskell 特性第 1 项）：一轮连锁的阶段标签（Match3.Board.Phase）与起手阶段（Match3.Game.Resolve）。
 --

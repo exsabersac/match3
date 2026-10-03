@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**458** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**459** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -43,11 +43,12 @@ stack test
     - Haskell 特性第 9 项新增 6 个（`RulesDedup`，见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)）
     - Haskell 特性第 7 项新增 7 个（`GridGeometry`，见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)）
     - Haskell 特性第 8 项新增 9 个（`DataBoundary`，见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)）
-  - 审计整改（2026-10），→ 458：
+  - 审计整改（2026-10），→ 459：
     - 选格散列钉值新增 3 个（`BoardSeed`）
     - 删除旧副本 `Spec.Support.Legacy*` 时净减 7 个（`Caps` −2、`GridGeometry` −2、`Perf` −2、`Optics` −2、`DataBoundary` +1，见下文「旧副本对照的去留」）→ 447
     - 桌面走步文案移进 `app/pure` 新增 6 个（`MoveText`）→ 453
     - 网页 JS 颜色表与桌面比对新增 5 个（`WebColors`）→ 458
+    - 前端 API 护栏新增 1 个（`View`：`frontends_import_core_api`）→ 459
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -68,9 +69,9 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 - 入口：`test/Spec.hs` 只汇总各功能模块：每个模块导出平铺的 `tests :: [TestTree]`，入口把它们拼进同一个顶层组 `"match3"`，所以 `stack test --ta '--list-tests'` 的完整路径（`match3.<测试名>`）与拆分前（`bf16a49`，单文件 8406 行）逐字相同。
 - 框架：tasty + tasty-hunit + tasty-quickcheck
-- 依赖库 API：主要通过 `Match3.Core`
+- 依赖库 API：直接 import 所测的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、`Match3.Obstacles` 等）；`Match3.Core` 是前端 API，测试只用它取前端也在用的名字
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 458）：
+- 目录（用例数合计 459）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -119,10 +120,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/MoveText.hs` | 6 | 桌面走步提示文案 `UI.MoveText`（`app/pure`，测试直接编译）：拖拽 / 点击交换与锤子 / 十字 / 自由交换在六种结算结果下的整句逐字钉住（窗口标题「  \|  」之后与 HUD 提示行显示的就是它）；点击文案的连击（> 1 才写）/ 收集进度 / 自动洗牌后缀及顺序；`Lost` 的目标提示交换读走步前、道具读走步后的状态；只有自由交换换不掉时保持点选模式；源码扫描：`app/` 其余模块没有这些文案字面量 |
 | `test/Spec/WebColors.hs` | 5 | 网页 JS 颜色表与桌面唯一来源逐项比对（读 `web/www` 源码解析）：`cells.js` 的 `COLOR_RGB` ↔ `UI.Palette.colorRGB`、`ELEMENT_RGB` ↔ `UI.Presentation.elementRGBTable`、`cellRGB` 的 switch ↔ `UI.Palette.cellRGB`（每种格子取样，JS 标签取自 `cellFace`；拼错的标签也报）、`main.js` 的 `SPREAD_CRUMB_RGB` ↔ 会蔓延元素的表色、倒计时火星色 ↔ `EvTick` 的 `CrumbsAtSources`、`render.js` 生长前沿缺省光 ↔ `defaultSpreadGlow`；失败信息逐项写出「JS 值 / Haskell 值」 |
 | `test/Spec/BoardSeed.hs` | 3 | 毛球跳格（第 43 关）与雪怪召唤（第 45 关）共用的选格散列 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`：写死两张固定小盘面的 `show` 字符串与散列值、第 43 / 45 关种子 1 开局盘面的散列值、三个坐标的 `posSeed`、第 43 关开局的 14 次毛球跳格与第 45 关开局的召唤格；性质：散列 = 标准 64 位 FNV-1a（与 `Word64` 参考实现逐值相同）作用于 `show`，`pickBy` = 下标（散列 mod 候选数）。失败信息说明「`Show Cell` / 散列改了会改变毛球 / 雪怪行为」 |
-| `test/Spec/View.hs` | 10 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算） |
+| `test/Spec/View.hs` | 11 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
 | `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）、`digest`（字符串的 64 位 FNV-1a 十六进制摘要，固定例子用它锁定大批结果）等；并重新导出 `Spec.Support.Source` |
 | `test/Spec/Support/Parallel.hs` | — | 确定性并行批量求值 `parallelForce`（`forkIO` + STM：`TVar` 领任务、`TMVar` 结果槽、按原顺序取回、异常按顺序重抛）；`Spec.Golden` 用它并行求值金标准各段 |
+| `test/Spec/Support/Obstacles.hs` | — | `Match3.Obstacles` 邻消函数的无 except 写法（`chipAdjacentStones` = `chipAdjacentStonesExcept … []` 等十个），只给障碍测试用 |
 | `test/Spec/Support/Arbitrary.hs` | — | 自定义 `Arbitrary`：`AnyBoard` / `HoledBoard`（任意行列 1–10 的完整 / 可空盘），`shrink` 先去行列、再逐格简化（`shrinkCell`）；`shrinkBoard` 给 `forAllShrink` 用 |
 | `test/Spec/Support/Source.hs` | — | 源码扫描工具（见「源码扫描约定」） |
 | `test/Toy.hs` | — | 通用接口的玩具实现（只 import `Engine.*`） |
@@ -227,7 +229,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 - `stripComments`：去掉 `--` 行注释（`-->` 这类运算符不算）与可嵌套的 `{- -}` 块注释（含 pragma），字符串 / 字符字面量原样保留、换行保留；`stripStrings` 再清空字面量内容。
 - `importsOf`：只看 import 行，返回模块名（处理 `qualified`、包名导入）；依赖方向类的约束一律用它。
 - `codeIdents` / `mentionsIdent`：去掉注释与字符串后的标识符，限定名按基本名比较（`M3E.play` 算 `play`）。
-- 工具本身由 `support_source_scanner` 覆盖；各扫描测试改造后做过变异检查（往 `Game/Move.hs` 加 `import Match3.Combos`、往 `Board/Cascade.hs` 加代码 `stepUfos`、往 `app/` 加 `"crate"`、往 `Engine/Game.hs` 加 `import Match3.Types`、在 `Board/` / `Game/` 新建含 `defaultRegistry` / `"bubble"` 的模块，对应测试都会失败；只加进注释时不失败）。
+- 工具本身由 `support_source_scanner` 覆盖；各扫描测试改造后做过变异检查（往 `Game/Move.hs` 加 `import Match3.Combos`、往 `Board/Cascade.hs` 加代码 `stepUfos`、往 `app/` 加 `"crate"`、往 `Engine/Game.hs` 加 `import Match3.Types`、在 `Board/` / `Game/` 新建含 `defaultRegistry` / `"bubble"` 的模块、往 `app/pure/UI/MoveText.hs` 加 `import Match3.Obstacles ()`、往 `Match3.Core` 加前端不用的 `swapCells`，对应测试都会失败；只加进注释时不失败）。
 
 ## 逐轮回放护栏
 
@@ -371,6 +373,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
 | `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、第 45 关 =「雪怪」、第 46 关 =「饼干」、没登记的名字目标退回元素名 |
+| `frontends_import_core_api` | 源码扫描：`app/` 与 `web/hs` 从库里只 import `Match3.Core` / `Match3.View` / `Match3.Engine` / `Match3.Element.Event` / `Engine.*`；`Match3.Core` 导出的函数与不带构造的类型都有前端在用（带 `(..)` 的类型不查，前端可能只用构造或字段） |
 | `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、桌面标题目标段 `goalLine`、提示后缀 `goalBracket` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（测试跑手报告第 8 / 41 / 42 / 44 关写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
@@ -424,7 +427,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 458，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 459，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

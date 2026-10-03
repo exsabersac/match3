@@ -17,7 +17,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 └───────────────┬──────────────────────────────┬───────────────┘
                 │ 规则：Match3.Core / Match3.Engine │ 时钟：Engine.Playback
 ┌───────────────▼──────────────────────────────▼───────────────┐
-│ Match3.Engine（三消 = 通用接口的第一个实现）  Match3.Core（再导出）│
+│ Match3.Engine（三消 = 通用接口的第一个实现）  Match3.Core（前端用）│
 └──────────────┬──────────────────────────────┬────────────────┘
                ▼                              ▼
    Match3.Game.*                        Match3.Board.*
@@ -40,9 +40,9 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 **依赖方向（硬约束）**
 
-- 纯核心 / library ← 应用：`match3-sdl` 依赖 `match3` 库；库**不**依赖 SDL。`app/` 里的模块通过 `Match3.Core`（类型与查询）和 `Match3.Engine`（执行动作）使用规则。
+- 纯核心 / library ← 应用：`match3-sdl` 依赖 `match3` 库；库**不**依赖 SDL。前端（`app/` 与 `web/hs`）从库里只 import 前端 API：`Match3.Core`（类型、查询与对局操作）、`Match3.Engine`（执行动作）、`Match3.View`（视图模型）、`Match3.Element.Event`（效果事件）与通用层 `Engine.*`；测试 `frontends_import_core_api` 扫描这一条。
 - 通用层 ← 具体游戏：`Engine.*` 与 `app/Shell/Loop.hs` 不 import 任何 `Match3` 模块；`Match3.Engine` 实现通用接口，三消前端作为插件接入外壳（见[多游戏接口](#多游戏接口)）。测试 `engine_layer_is_game_agnostic` 检查这一方向。
-- `Core` 把各子模块符号汇总导出，便于前端与测试只 import 一处。没有 `Match3.Board` / `Match3.Game` 这样的外观模块：Game 子模块、`Core`、测试直接 import 各子模块。
+- `Match3.Core` 只再导出前端用到的名字（101 个），每个函数都有前端在用（同一测试检查），前端要用新名字时在这里加。库内模块（含 `Match3.View`）与测试直接 import 所在的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、各机制模块），不经 `Core`。没有 `Match3.Board` / `Match3.Game` 这样的外观模块。
 - 子模块之间单向依赖、无环（下文 `A ← B` 表示 B 依赖 A）：Board 内 `Grid ← Match ← Clear`、`Grid ← Gravity`、`Match ← Random`，`Cascade` 依赖 Grid / Match / Clear / Gravity / Effect（第 3 项：`Phase` / `Refill` / `Hooks` / `Wave` ← `Effect` ← `Cascade`，效果层不依赖注册表）；Game 内 `State ← Outcome / Shuffle / Trace`、`Shuffle ← Level`，`Resolve`（公共结算）依赖 State / Tally / Outcome / Shuffle / Trace，`Move` / `Boosters` 只做校验与起手选择、依赖 `Resolve`。Game 子模块直接 import 所需的 Board 子模块。
 - 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types`、`Element.Message` → `Element.Class`（元素类；`SomeElement` / `SomeModifier` 的相等第 6b 刀起按具体类型（`Typeable` 的 `cast`）+ 该类型的 `Eq`，不再比较名字字符串）→ `Element.Registry` → `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过注册表查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
 - 关卡级元素（第 7 刀）：`Element.Class`（`SomeLevelElement`）← `Board.Hooks`（钩子记录 `LevelHooks`，只把元素列表当不透明载荷）← `Board.Gravity` / `Board.Cascade`；`Element.Registry` / `Element.Builtin.Level` / `Board.Hooks` ← `Element.Level`（开局、节拍、造钩子）← `Board.Default`（`builtinHooks`）/ `Game.State` / `Game.Level` / `Game.Resolve`。`Element.Class` 为 `levelStart` 依赖 `Levels.Level`（关卡记录）。
@@ -89,7 +89,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Element.Caps` | 第 9 刀：写元素用的能力声明——`piece` / `blocker` / `fixed :: [Cap] -> Caps`（按原型的缺省能力再依次应用声明）、每项能力一个简写（`colorIs` / `swappable` / `hit` / `breaks` / `onAdjacent` / `teleports` / `counts` / `atEnd` / `onMessage` …，见「元素的能力」）、按组直接改字段的 `withMatch` / `withHit` / `withMove` / `withCount` / `withStep`；再导出 `Element.Class`；Haskell 特性第 9 项起 `Cap` 是 newtype，`Semigroup` / `Monoid` 经 DerivingVia 取自 `Dual (Endo Caps)`（后面的覆盖前面的），字段写入器经透镜（`setCap`），见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md) | 内置本体、测试 / 扩展元素 |
 | `Match3.Element.Message` | 开放消息 `Message` / `SomeMessage` / `fromMessage`；流水线节拍消息（问题与回复同类型，回复者在上面累加：`Refilled`、`Refilling`（第 8 刀，补子策略）、`Shaping`（新玩法 1，本关形状表）、`Morphing`（新玩法 4，交换变身，回复 `Morph`）、`EndTicked`、`Settling`、`Covering`、`GroundHit`，查询 `AvoidCells` / `WallCells`） | 谁回复 |
 | `Match3.Element.Event` | 通用步末效果 `EndEffect { endEffectKind, endEffectElement, endEffectItems }` / `EndItem { eiFrom, eiTo, eiCell, eiBack }`（第 7 刀 7b 取代四个构造器与 `SpreadKind` / `SnailMove`；`Show` 手写成旧构造器文本）、`applyEndEffect` / `endEffectPairs` / `endItemDir` / `spreadPairs`、效果事件 `EventKind` / `Event` | 帧与样式 |
-| `Match3.Core` | 再导出公共 API | 自身几乎无逻辑 |
+| `Match3.Core` | 前端 API：只再导出 `app/` 与 `web/hs` 用到的名字（格子与构造、盘面、关卡与目标、对局操作、回放轨迹、每日挑战） | 规则内部（库内模块与测试直接 import 子模块） |
 | `Match3.Board.Grid` | 坐标边界、读写格（`getCell` = `boardAt`，O(1)）、交换、相邻、可空盘面 `MBoard = Array Pos (Maybe Cell)`（第 3 刀起与 `Board` 同形的二维数组，`atM` / `setM` / `setManyM` 读写、`mboardRows` 转行列表；只在一轮消除 / 沉降内部使用，重力按列取出不再转置）、`randomColor`；第 7 项起 `adjacent = isJust . dirBetween`，界内邻格 `neighborsInBounds 顺序 b p` | 任何规则 |
 | `Match3.Board.Match` | `MatchRun`（第 8 刀起定义在 `Element.Types`，这里再导出）/ `findMatchRuns` / `hasAnyMatch`、`findHint` / `hasValidMove`（第 3 刀起提示只对交换两格所在的行 / 列做局部匹配检查，其余行列用原盘的结果；遍历顺序与返回值不变，性质 `qc_find_hint_local_matches_reference` 与旧实现对照；Haskell 特性第 5 项起扫描先建整盘的 unboxed 匹配码 `matchCodesWith :: UArray Pos Int`，每格只问一次注册表，提示搜索读码时对调两个下标、不再复制盘面，见 [haskell-features/05-性能与并发.md](haskell-features/05-性能与并发.md)） | 修改盘面 |
 | `Match3.Board.Clear` | 一轮消除（匹配 / 种子）、特殊扩展与生成（第 8 刀起 `spawnSpecialsWith reg` 查注册表的形状规则表）、彩蛋、邻格削层与触发、飞碟吸收（吸走 ≠ 引爆）、计分公式 | 沉降、连锁循环 |
@@ -112,7 +112,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Match3.Game.Resolve` | 交换与三种道具的**公共结算** `resolveMove`：主连锁 → 步末（按 `endTableFor` 选的 EndPhase 表执行）→ 计数与目标 → 结局 → 自动洗牌，同时产出 `MoveTrace`。类型层：`StartPhase` / `SMoveKind` / 按阶段索引的 `Opening`（见 [01-类型层.md](haskell-features/01-类型层.md)） | 入口校验（在 `Move` / `Boosters`）、步末各阶段（在 `EndPhase`） |
 | `Match3.Game.Move` | `resolveSwap`（校验 + 起手选择；新玩法 4 起先问关卡级元素的交换变身 `morphIn`，有回复时起手为 `OpenMorph`）及其投影 `trySwap`（= `runMove`）/ `traceSwap` | 道具 |
 | `Match3.Game.Boosters` | `resolveHammer` / `resolveFreeSwap` / `resolveCrossClear` 及其投影 `use*` / `trace*` | 种子几何（见 `Match3.Boosters`） |
-| `Match3.Obstacles` | 石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/瓶子/精灵/魔法帽/果汁机的邻消削层与触发（Haskell 特性第 9 项起五种带层数障碍共用 `chipAdjacentLayeredExcept 棱镜 末层去向`、相邻查询共用 `adjacentWhere`，导出不变） | 连锁循环 |
+| `Match3.Obstacles` | 石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/瓶子/精灵/魔法帽/果汁机的邻消削层与触发（Haskell 特性第 9 项起五种带层数障碍共用 `chipAdjacentLayeredExcept 棱镜 末层去向`、相邻查询共用 `adjacentWhere`）；只导出元素定义与测试用到的 `*Except` / `*By` 版本和几个相邻查询，无 except 的写法在 `test/Spec/Support/Obstacles.hs` | 连锁循环 |
 | `Match3.Rainbow` | 彩虹判定与清色种子 | 合成几何（见 Combos） |
 | `Match3.Combos` | 特殊×特殊合成：第 8 刀起是内置组合表 `builtinComboRules`（炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线），`isSpecialCombo` / `comboClearSeeds` 是这张表的判定 / 清种子；新玩法 4 的 `rainbowComboMorph`（彩虹 × 直线 / 炸弹的变身格与种子，只经规则开关 `rainbow_combos` 用）；各组合的种类谓词与爆炸几何 `bigBomb` / `fullRowCol` / `lineBombCross` | 普通三消、组合表的解释（`Element.Special`） |
 | `Match3.Ice` | 匹配时削冰层 | overlay（Freeze/Chain…） |

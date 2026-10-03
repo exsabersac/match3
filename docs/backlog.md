@@ -45,8 +45,8 @@
 | 3 | 收掉被 pragma 关掉的警告（`Anim` 部分字段、`Spec.Phase` 推迟名字错误）与多余的 `array` 依赖 | 已完成（`refactor/warnings-deps`），测试中 |
 | 4 | 文档脱节（本文件、测试数、`cells.js` 说法、testing.md 长句、模块地图） | 已完成（`docs/refresh`），测试中 |
 | 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 已完成（`refactor/desktop-boosters`），测试中 |
-| 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 进行中（`refactor/js-color-parity`）；比对时发现桌面 `elementRGBTable` 缺 `magic_stone` / `fuzzball`（网页有），已按网页补上，两边现在逐项相同 |
-| 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 待做 |
+| 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 已完成（`refactor/js-color-parity`），测试中；比对时发现桌面 `elementRGBTable` 缺 `magic_stone` / `fuzzball`（网页有），已按网页补上，两边现在逐项相同 |
+| 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 已完成（`refactor/core-exports`，基于第 8 项），测试中：`Match3.Core` 只留前端用到的 101 个名字，测试与 `Match3.View` 直接 import 子模块；`Match3.Obstacles` 无 except 的包装移到 `test/Spec/Support/Obstacles.hs` |
 | 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 待做 |
 | 9 | 清理「第 N 刀 / 第 N 项前」历史注释 | 随各项顺手做（只清碰到的模块） |
 | 10–12 | `Legacy*` 拆分、`Modifier` 改能力记录、合并 `*Prim` / `*Art` | 10 已并入第 2 项；11、12 按审计建议不做 |

@@ -10,7 +10,7 @@ module Match3.Ufo
   ) where
 
 import Data.List (nub, sort)
-import Match3.Board.Grid (inBounds)
+import Match3.Board.Grid (neighborsInBounds)
 import Match3.Types
 
 -- | UFO overlay: sits over a cell and targets one gem color.
@@ -22,9 +22,9 @@ data Ufo = Ufo
 mkUfo :: Pos -> Color -> Ufo
 mkUfo = Ufo
 
+-- | 界内邻格，上 / 下 / 左 / 右（吸附目标之后还会 sort，顺序不影响结果，照原样保留）。
 ortho :: Board -> Pos -> [Pos]
-ortho b (r, c) =
-  filter (inBounds b) [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+ortho = neighborsInBounds upDownLeftRight
 
 at :: Board -> Pos -> Cell
 at = boardAt
@@ -51,15 +51,13 @@ ufoAbsorbTargets :: Board -> Ufo -> [Pos]
 ufoAbsorbTargets b (Ufo cell col) =
   sort [p | p <- ortho b cell, matchesTarget b col p]
 
--- | Relocate one step: prefer first absorbed cell; else cycle right→down→left→up.
+-- | 移一格：优先去吸到的第一格（按坐标排序）；没吸到就按右 → 下 → 左 → 上（'clockwiseFromRight'）取第一个界内邻格。
 moveUfo :: Board -> [Pos] -> Ufo -> Ufo
 moveUfo b absorbed (Ufo pos col) =
   case sort absorbed of
     (p : _) -> Ufo p col
     [] ->
-      let (r, c) = pos
-          cands =
-            filter (inBounds b) [(r, c + 1), (r + 1, c), (r, c - 1), (r - 1, c)]
+      let cands = neighborsInBounds clockwiseFromRight b pos
       in case cands of
            (p : _) -> Ufo p col
            [] -> Ufo pos col

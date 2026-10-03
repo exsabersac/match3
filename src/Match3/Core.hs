@@ -33,6 +33,8 @@ module Match3.Core
   , curtainLayers
   , mkCurtainGem
   , mkSnail
+  , mkSnailFacing
+  , snailFacing
   , isSnail
   , snailDir
   , mkSafe
@@ -126,6 +128,15 @@ module Match3.Core
   , cellColor
   , cellKind
   , Pos
+  , Dir(..)
+  , dirDelta
+  , stepDir
+  , dirBetween
+  , neighborsIn
+  , upDownLeftRight
+  , readingOrder
+  , clockwiseFromRight
+  , rightAndDown
   , Grid
   , Board
   , boardFromRows
@@ -177,6 +188,7 @@ module Match3.Core
   , swapCells
   , inBounds
   , adjacent
+  , neighborsInBounds
   , findMatches
   , findMatchRuns
   , hasAnyMatch
@@ -303,7 +315,7 @@ module Match3.Core
 import Match3.Board.Default (applyPortalTeleports, countColor, expandSpecials, findHint, findMatchRuns, findMatches, hasAnyMatch, hasValidMove, settleBoardPortals, stepCascade)
 import Match3.Board.Cascade (CascadeWave(..))
 import Match3.Board.Clear (scoreForCleared, scoreForWave)
-import Match3.Board.Grid (adjacent, getCell, inBounds, setCell, swapCells)
+import Match3.Board.Grid (adjacent, getCell, inBounds, neighborsInBounds, setCell, swapCells)
 import Match3.Board.Match (MatchRun(..))
 import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, countsFromList, countsToList, namedCounts)

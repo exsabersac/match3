@@ -57,16 +57,16 @@ module Match3.Grass
 import Data.List (nub)
 import Data.Monoid (Any)
 import Engine.Optics
-import Match3.Board.Grid (inBounds)
+import Match3.Board.Grid (neighborsInBounds)
 import Match3.Types
 import Match3.Types.Optics (cellAt, gemOverlay, overlay, _Chain, _Curtain, _Fog, _Freeze)
 
 at :: Board -> Pos -> Cell
 at = boardAt
 
+-- | 界内邻格，上 / 下 / 左 / 右（蔓延目标的先后由它定）。
 ortho :: Board -> Pos -> [Pos]
-ortho b (r, c) =
-  filter (inBounds b) [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+ortho = neighborsInBounds upDownLeftRight
 
 -- | 盘面上焦点非空的格（行主序）。
 positionsWith :: Getting Any Cell a -> Board -> [Pos]

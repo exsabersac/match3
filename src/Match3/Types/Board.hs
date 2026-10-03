@@ -8,9 +8,23 @@
 -- 逐格统计是 foldMap / length / sum / toList，带状态的逐格生成（随机盘）是 mapAccumL / traverse，
 -- 都按下标顺序（行主序）走、且不改形状（行列数、下标范围）。原来的 mapBoard / boardCells 保留为这些方法的别名。
 --
+-- Haskell 特性第 7 项（网格几何，见 docs/haskell-features/07-网格几何.md）：四个正交方向 'Dir' 与 'stepDir'，
+-- 以及把仓库里原有的几种邻格顺序起成名字（'upDownLeftRight' / 'readingOrder' / 'clockwiseFromRight' / 'rightAndDown'）。
+--
 -- 依赖：Match3.Types.Cell。不变量：Show 按行列表打印，与旧列表盘输出相同。
 module Match3.Types.Board
   ( Pos
+    -- * 方向
+  , Dir (..)
+  , dirDelta
+  , stepDir
+  , dirBetween
+  , neighborsIn
+  , upDownLeftRight
+  , readingOrder
+  , clockwiseFromRight
+  , rightAndDown
+    -- * 盘面
   , Grid
   , Board
   , gridFromRows
@@ -39,9 +53,58 @@ module Match3.Types.Board
 
 import Data.Array (Array, assocs, bounds, listArray, (!), (//))
 import Data.Foldable (toList)
+import Data.List (find)
 import Match3.Types.Cell (Cell)
 
+-- | 格子坐标 (行, 列)；行向下增长、列向右增长。
 type Pos = (Int, Int)
+
+--------------------------------------------------------------------------------
+-- 方向（第 7 项）
+
+-- | 四个正交方向。行向下增长，所以 'North'（上）是行 − 1、'West'（左）是列 − 1。
+-- 构造器顺序（也就是 Enum / Bounded / Ord 的顺序）= 上、下、左、右，与 'upDownLeftRight' 相同。
+data Dir = North | South | West | East
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+-- | 方向的 (行增量, 列增量)。
+dirDelta :: Dir -> (Int, Int)
+dirDelta d = case d of
+  North -> (-1, 0)
+  South -> (1, 0)
+  West -> (0, -1)
+  East -> (0, 1)
+
+-- | 朝一个方向走一格（不查边界；越界由调用方用 inBounds 过滤）。
+stepDir :: Dir -> Pos -> Pos
+stepDir d (r, c) = let (dr, dc) = dirDelta d in (r + dr, c + dc)
+
+-- | q 是 p 朝哪个方向走一格到的（不相邻、或是同一格时 Nothing）。
+dirBetween :: Pos -> Pos -> Maybe Dir
+dirBetween p q = find (\d -> stepDir d p == q) [minBound .. maxBound]
+
+-- | 按给定的方向顺序列出邻格（不查边界）。
+neighborsIn :: [Dir] -> Pos -> [Pos]
+neighborsIn ds p = map (`stepDir` p) ds
+
+-- 下面四个是仓库里原有的四种邻格顺序。它们决定「去重后谁在前」「取第一个」这类结果，
+-- 金标准与元素查询快照依赖它们，所以各自起名、各自保留，不统一成一种。
+
+-- | 上、下、左、右：邻消波及（Match3.Obstacles.orthoNeighbors）、叠层蔓延（Match3.Grass）、飞碟吸附（Match3.Ufo）。
+upDownLeftRight :: [Dir]
+upDownLeftRight = [North, South, West, East]
+
+-- | 上、左、右、下：邻格按行主序排好的顺序（蔓延的来源格取第一个，Match3.Element.Event.spreadPairs）。
+readingOrder :: [Dir]
+readingOrder = [North, West, East, South]
+
+-- | 右、下、左、上（顺时针，从右起）：飞碟没吸到东西时的移动候选（Match3.Ufo.moveUfo）。
+clockwiseFromRight :: [Dir]
+clockwiseFromRight = [East, South, West, North]
+
+-- | 右、下：枚举相邻的格对时每对只数一次（提示搜索 Match3.Board.Match、Match3.Engine 的合法动作）。
+rightAndDown :: [Dir]
+rightAndDown = [East, South]
 -- | 盘面：以 (行, 列) 为下标的二维数组（第三刀起；之前是 [[Cell]]，读格要走两次 (!!)）。
 -- 读格 boardAt 为 O(1)；写格 boardSet 复制一次数组（64 格，与原来重建行列表同量级）。
 -- 与行列表互转用 boardFromRows / boardRows（行主序，与旧表示逐格一一对应；Show 仍按行列表打印）。
@@ -154,3 +217,4 @@ boardRowIndices b =
 boardColIndices b =
   let ((_, c0), (_, c1)) = bounds (boardArray b)
   in [c0 .. c1]
+

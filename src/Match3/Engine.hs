@@ -38,7 +38,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Engine.Effect (Effect(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, HistoryPolicy(..), Undoable, withHistory)
-import Match3.Board.Grid (adjacent, inBounds)
+import Match3.Board.Grid (neighborsInBounds)
 import Match3.Daily (dailyConfig, dailySeed)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Event (Event(..), EventKind(..))
@@ -132,11 +132,8 @@ match3GameWith reg =
         [ Swap p q
         | not (isJust (gsOver s))
         , let b = gsBoard s
-        , (r, c) <- boardPositions b
-        , let p = (r, c)
-        , q <- [(r, c + 1), (r + 1, c)]
-        , inBounds b q
-        , adjacent p q
+        , p <- boardPositions b
+        , q <- neighborsInBounds rightAndDown b p
         , pdAccepted (playWith reg (Swap p q) s)
         ]
     , gameStatus = match3Status

@@ -23,7 +23,7 @@ module Match3.Element.Event
   , Event(..)
   ) where
 
-import Match3.Board.Grid (getCell, inBounds, setCell)
+import Match3.Board.Grid (getCell, neighborsInBounds, setCell)
 import Match3.Types
 
 -- | 步末效果（通用形状）：事件类型（EvTick / EvBelt / EvSpread / EvMove …，前端播放表的键）、相关元素名
@@ -100,16 +100,15 @@ endItemDir i = case eiCell i of
   _ -> Nothing
 
 -- | 蔓延的 (来源, 新格)：新格 = 之前无覆盖层、之后带该覆盖层的格；来源取之前盘面上
--- 与新格正交相邻的第一个同类格（按行优先：上、左、右、下），只用于表现层决定「从哪边长出来」。
+-- 与新格正交相邻的第一个同类格（按行优先：上、左、右、下 = 'readingOrder'），只用于表现层决定「从哪边长出来」。
+-- 注意这里的顺序与邻消 / 蔓延的上、下、左、右不同（第 7 项起两种顺序各有名字）。
 spreadPairs :: CellOverlay -> Board -> Board -> [(Pos, Pos)]
 spreadPairs ov before after =
   [ (src, q)
-  | r <- boardRowIndices before
-  , c <- boardColIndices before
-  , let q = (r, c)
+  | q <- boardPositions before
   , cellOverlay (getCell before q) == Nothing
   , cellOverlay (getCell after q) == Just ov
-  , let srcs = [n | n <- [(r - 1, c), (r, c - 1), (r, c + 1), (r + 1, c)], inBounds before n, cellOverlay (getCell before n) == Just ov]
+  , let srcs = [n | n <- neighborsInBounds readingOrder before q, cellOverlay (getCell before n) == Just ov]
   , let src = case srcs of
           (n : _) -> n
           [] -> q

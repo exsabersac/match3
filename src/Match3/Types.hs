@@ -44,6 +44,8 @@ module Match3.Types
   , curtainLayers
   , mkCurtainGem
   , mkSnail
+  , mkSnailFacing
+  , snailFacing
   , isSnail
   , snailDir
   , mkSafe
@@ -102,6 +104,15 @@ module Match3.Types
   , cellColor
   , cellKind
   , Pos
+  , Dir (..)
+  , dirDelta
+  , stepDir
+  , dirBetween
+  , neighborsIn
+  , upDownLeftRight
+  , readingOrder
+  , clockwiseFromRight
+  , rightAndDown
   , Grid
   , Board
   , gridFromRows

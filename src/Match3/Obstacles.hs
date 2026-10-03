@@ -59,6 +59,8 @@ import Match3.Types
   , Cell
   , Color(..)
   , Pos
+  , neighborsIn
+  , upDownLeftRight
   , isStone
   , isChest
   , isHoney
@@ -86,10 +88,9 @@ at = boardAt
 setAt :: Board -> Pos -> Cell -> Board
 setAt = boardSet
 
--- | Up / down / left / right neighbors (may be out of bounds).
+-- | 上 / 下 / 左 / 右的邻格（不查边界）。顺序决定 adjacentWhere 去重后的先后，金标准依赖它（第 7 项起由 'upDownLeftRight' 写明）。
 orthoNeighbors :: Pos -> [Pos]
-orthoNeighbors (r, c) =
-  [(r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]
+orthoNeighbors = neighborsIn upDownLeftRight
 
 
 -- | 与给出位置正交相邻、满足谓词的格（去重；顺序 = 按给出位置、每个位置上 / 下 / 左 / 右）。

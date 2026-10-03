@@ -8,6 +8,8 @@
 -- 依赖：Match3.Color、Match3.Types.Cell、Engine.Optics、Match3.Types.Optics（障碍棱镜）。
 module Match3.Types.Body
   ( mkSnail
+  , mkSnailFacing
+  , snailFacing
   , isSnail
   , snailDir
   , mkStone
@@ -62,6 +64,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (First)
 import Engine.Optics (Getting, AReview, has, preview, review)
 import Match3.Color (Color)
+import Match3.Types.Board (Dir, dirBetween, dirDelta)
 import Match3.Types.Cell
 import Match3.Types.Optics (_Cake, _Chest, _Honey, _Safe, _Stone)
 
@@ -87,6 +90,16 @@ isSnail _ = False
 snailDir :: Cell -> (Int, Int)
 snailDir (Snail dr dc) = (dr, dc)
 snailDir _ = (0, 0)
+
+-- | 朝某个方向的蜗牛（第 7 项：API 层的方向写法）。构造器 @Snail dr dc@ 与它的 Show 不变（金标准按它打印），
+-- @mkSnailFacing East == Snail 0 1@、@mkSnailFacing South == Snail 1 0@。
+mkSnailFacing :: Dir -> Cell
+mkSnailFacing d = let (dr, dc) = dirDelta d in Snail dr dc
+
+-- | 蜗牛的朝向；不是蜗牛、或 (dr, dc) 不是单位正交步（构造器本身允许任意整数）时 Nothing。
+snailFacing :: Cell -> Maybe Dir
+snailFacing (Snail dr dc) = dirBetween (0, 0) (dr, dc)
+snailFacing _ = Nothing
 
 
 

@@ -125,8 +125,7 @@ findHintWith reg b =
       , c <- cols
       , let p1 = (r, c)
       , hintable (getCell b p1)
-      , p2 <- [(r, c + 1), (r + 1, c)]
-      , inBounds b p2
+      , p2 <- neighborsInBounds rightAndDown b p1
       , hintable (getCell b p2)
       , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2)
       , swapMakesMatch p1 p2
@@ -136,8 +135,7 @@ findHintWith reg b =
       | r <- rows
       , c <- cols
       , let p1 = (r, c)
-      , p2 <- [(r, c + 1), (r + 1, c)]
-      , inBounds b p2
+      , p2 <- neighborsInBounds rightAndDown b p1
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
       , srFires rule b p1 p2
       ]

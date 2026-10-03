@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 盘面基础：坐标边界、读写格、交换、相邻判定，以及沉降用的可空盘面 MBoard 与随机颜色。
+-- | 盘面基础：坐标边界、读写格、交换、相邻判定与界内邻格（方向 Dir 在 Match3.Types.Board），以及沉降用的可空盘面 MBoard 与随机颜色。
 --
 -- 依赖：只依赖 Match3.Types（和 random）。是 Board 各子模块的最底层，自身不含任何规则。
 -- 不变量：getCell / setCell 只接受 inBounds 的坐标（调用方保证）；randomColor 每次恰好消耗一次
@@ -12,6 +12,7 @@ module Match3.Board.Grid
   , setCell
   , swapCells
   , adjacent
+  , neighborsInBounds
   , MBoard
   , toM
   , mboardFromRows
@@ -24,6 +25,7 @@ module Match3.Board.Grid
   ) where
 
 import Data.Array (Array, accum, bounds, inRange, listArray, (!))
+import Data.Maybe (isJust)
 import Match3.Types
 import System.Random (RandomGen, randomR)
 
@@ -50,10 +52,14 @@ swapCells b p1 p2 =
       b' = setCell b p1 (getCell b p2)
   in setCell b' p2 a
 
--- | 两格是否上下 / 左右相邻（不含对角）。
+-- | 两格是否上下 / 左右相邻（不含对角）：q 是 p 朝某个方向走一格。
+-- 第 7 项前写成 @(abs (r1 - r2) == 1 && c1 == c2) || (abs (c1 - c2) == 1 && r1 == r2)@，逐对等价（测试对照）。
 adjacent :: Pos -> Pos -> Bool
-adjacent (r1, c1) (r2, c2) =
-  (abs (r1 - r2) == 1 && c1 == c2) || (abs (c1 - c2) == 1 && r1 == r2)
+adjacent p q = isJust (dirBetween p q)
+
+-- | 按给定方向顺序列出界内的邻格（= @filter (inBounds b) . neighborsIn ds@）。
+neighborsInBounds :: [Dir] -> Board -> Pos -> [Pos]
+neighborsInBounds ds b = filter (inBounds b) . neighborsIn ds
 
 -- | 可空盘面（沉降用；Nothing = 空洞）：与 Board 同形的二维数组，(行, 列) 下标、行主序。
 -- 第 3 刀之前是 [[Maybe Cell]]（读格走两次 (!!)，重力要转置两次）。

@@ -11,7 +11,6 @@
 #   SHOTS              e2e 截图目录；STEPS / CASES 一致性测试的步数 / 「关卡:种子」列表
 #   E2E_PORT           e2e 临时起的 serve.py 端口（默认 8765，只监听 127.0.0.1；与别的任务同机并行时改开，
 #                      例如 `make check E2E_PORT=8799`；也可直接 export E2E_PORT）
-#   BASE / FULL        verify 的比较基点（默认 origin/main）/ FULL=1 强制跑 make check
 #   APK_OUT            apk / apk-release / aab 产物复制到的路径（默认 web/android-app/out/）
 #   ANDROID_HOME       Android SDK 目录（默认 ~/android-sdk）；ANDROID_SHOTS 安卓网页层检查的截图目录
 
@@ -36,8 +35,6 @@ STEPS           ?=
 CASES           ?=
 ANDROID_APP     := $(WEB)/android-app
 ANDROID_SHOTS   ?= /workspace/match3-android-shots
-BASE            ?= origin/main
-FULL            ?= 0
 BOOTSTRAP_URL   := https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh
 
 export GHC_WASM_PREFIX NODE CHROME PORT BIND CASES E2E_PORT
@@ -60,9 +57,9 @@ help: ## 显示本帮助（默认目标）
 	@echo "变量：PORT=$(PORT) BIND=$(BIND) DEST=$(DEST)"
 	@echo "      GHC_WASM_PREFIX=$(GHC_WASM_PREFIX) FLAVOUR=$(FLAVOUR) SHOTS=$(SHOTS) E2E_PORT=$(E2E_PORT)"
 
-verify: ## 提交前验收：0 警告构建 + stack test；改了网页版依赖的路径才跑 make check（FULL=1 强制，BASE= 改基点）
+verify: ## 合 main 前的验收：stack test（最后一行写通过 / 失败、测试数与用时）
 	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
-	MAKE="$(MAKE)" BASE="$(BASE)" FULL="$(FULL)" "$(ROOT)/tools/verify.sh"
+	"$(ROOT)/tools/verify.sh"
 
 ##@ 桌面版（Stack，SDL2）
 

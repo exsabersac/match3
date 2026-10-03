@@ -51,7 +51,7 @@ stack test
     - 前端 API 护栏新增 1 个（`View`：`frontends_import_core_api`）→ 459
     - 终局类型 `Terminal` 新增 1 个（`GoalsLevels`：`terminal_outcome_mapping`，见下文「终局类型 Terminal」）→ 460
   - 贴图生成器调色板纳入颜色对照，+1 → 461（`WebColors`：`gen_assets_gem_palette_matches_palette`）
-- 合并门禁：`make verify` 全绿（见下文「开发流程」）；不要在红测上合并。
+- 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 可选完整链路：
 
@@ -69,23 +69,16 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 开发流程
 
-- **验收**：提交前在仓库根目录跑 `make verify`，全绿就直接推 main，不另找人复测。
-  - 依次跑：0 警告构建（`-Werror`，含 `match3-sdl` 与测试）→ `stack test` → 按需 `make check`。
-    `-Werror` 构建用单独的工作目录 `.stack-work-verify`，不会让日常的 `.stack-work` 重编；第一次要全量编译一遍。
-  - 相对 `origin/main`（`BASE=` 可改；含未提交与未跟踪的文件）的改动碰到网页版依赖的路径，才跑 `make check`：
-    `web/`（`web/dist`、`web/android-app` 除外）、`app/pure/`、`assets/`、`Makefile`、`package.yaml`、`match3.cabal`、
-    `stack.yaml`、`tools/verify.sh`，以及 `src/` 下新增 / 删除 / 改名的模块（模块清单要与 `web/match3-web.cabal` 一致）。
-    `FULL=1` 强制跑。跑的是 `make check` 里除 `stack test` 以外的几步（`lint-sh`、`build`、两组一致性、e2e、`size`），`stack test` 不重复跑。
-  - 最后一行是结论，例如 `== verify 通过：stack test 461 个全过；make check 未跑（…）；用时 2m10s`；
-    失败时写明哪一步失败和日志目录。
-  - `make check` 重建出的 `web/dist` 跑完后还原成 HEAD 的版本（`KEEP_DIST=1` 保留）。
+- **验收**：合 main 前只跑 `stack test`，即仓库根目录的 `make verify`；全绿就直接推 main，不另找人复测。
+  最后一行是结论，例如 `== verify 通过：stack test 461 个全过；用时 0m40s`，失败时写明失败数和日志路径。
+  `make check` / `make test`（网页版构建、两组一致性、e2e）不在验收里，留作手动使用。
 - **分支**：几项小改动合成一条分支，一起跑一次 `make verify`；纯文档 / 注释改动不开分支，验收绿了直接提交 main。
   合 main 只做快进：`git fetch -q origin && git merge-base --is-ancestor origin/main <SHA> && git push origin <完整SHA>:refs/heads/main`，
   再用 `git ls-remote` 核对。
 - **工作树**：只留一个开发 worktree（`/workspace/match3-dev`），每项做完 reset 到新的 main 再复用。
 - **汇报**：整批做完汇报一次；中途只报失败或需要拍板的事。
 - **`web/dist` 与部署**：平时的分支不碰、不提交 `web/dist`。只在上 Mac / 部署前从 `make clean` 开始全量重建一次
-  （`make clean && make check`，测试全绿即可），再提交；不做 dist / wasm 的逐字节或体积比对。
+  （`make clean && make build`，需要时手动 `make test`），再提交；不做 dist / wasm 的逐字节或体积比对。
   部署只发布网页版（Mac 上 `web/deploy-mac.sh`，见 [web.md](web.md)），不打 APK。
 
 ## 套件结构

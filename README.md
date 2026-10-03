@@ -24,7 +24,7 @@ stack build && stack exec match3-sdl
 2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / **3** 十字清除 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）
 3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续
 
-无显示器冒烟：`xvfb-run -a stack exec match3-sdl`。`stack test` 不需要显示。提交前跑 `make verify`（0 警告构建 + `stack test`，按需 `make check`；流程见 [`docs/testing.md`](docs/testing.md#开发流程)）。
+无显示器冒烟：`xvfb-run -a stack exec match3-sdl`。`stack test` 不需要显示。合 main 前跑 `make verify`（即 `stack test`；流程见 [`docs/testing.md`](docs/testing.md#开发流程)）。
 
 更细的设计说明见 [`docs/`](docs/README.md)；键位表见 [`docs/ui-controls.md`](docs/ui-controls.md)。itch.io 文案见 [`ITCH.md`](ITCH.md)。
 

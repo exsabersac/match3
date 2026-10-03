@@ -5,4 +5,3 @@ dist-newstyle/
 *.hi
 .ghc.environment.*
 .stack-work-prof/
-.stack-work-verify/

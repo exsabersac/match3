@@ -55,7 +55,7 @@ make build           # 构建到 web/dist
 make serve PORT=9000 # 本地 / 局域网试玩
 make test            # stack test + 状态一致性 + 动画一致性 + e2e
 make check           # CI：lint-sh + 构建 + 全部测试 + 体积
-make verify          # 提交前验收（0 警告构建 + stack test，按需 make check；见 docs/testing.md「开发流程」）
+make verify          # 合 main 前的验收：只跑 stack test（见 docs/testing.md「开发流程」）
 ```
 
 | 目标 | 作用 |
@@ -72,7 +72,7 @@ make verify          # 提交前验收（0 警告构建 + stack test，按需 ma
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子[:走法] …"` 可改，走法 `hint` / `combo` / `combo-bomb` 见 §4） |
 | `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
-| `make verify [FULL=1] [BASE=…]` | 提交前验收：0 警告构建 → `stack test` → 改了网页版依赖的路径才跑 `make check`（`FULL=1` 强制） |
+| `make verify` | 合 main 前的验收：只跑 `stack test` |
 | `make check` | CI 用：`lint-sh` → `build` → `test` → `size` |
 | `make lint-sh` | shell 脚本 / Makefile 检查：`$变量名` 后紧跟中文等非 ASCII 字符即报错（macOS bash 3.2 会读错变量名，须写 `${VAR}`；见 `docs/testing.md`） |
 | `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |

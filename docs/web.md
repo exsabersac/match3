@@ -195,13 +195,13 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 - 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；桌面版现为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
-- 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。`web/dist/` 是可部署的构建产物，已提交进仓库；其他机器部署只需拷贝该目录，不需要工具链。平时的分支不碰 `web/dist`，只在上 Mac / 部署前 `make clean && make check` 全量重建一次再提交（见 [testing.md「开发流程」](testing.md#开发流程)）。
+- 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。`web/dist/` 是可部署的构建产物，已提交进仓库；其他机器部署只需拷贝该目录，不需要工具链。平时的分支不碰 `web/dist`，只在上 Mac / 部署前 `make clean && make build` 全量重建一次再提交（见 [testing.md「开发流程」](testing.md#开发流程)）。
 
 ### 3.1 make 目标
 
 仓库根目录的 `Makefile` 是日常入口，**在仓库根目录运行 `make <目标>`**；`make help` 按分组列出
 （通用 / 桌面版 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境）。桌面版目标只是 Stack 命令的薄包装。
-第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；日常提交前跑 `make verify`（见 [testing.md「开发流程」](testing.md#开发流程)），CI 用 `make check`。
+第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；合 main 前跑 `make verify`（只跑 `stack test`，见 [testing.md「开发流程」](testing.md#开发流程)）；`make check` 留作手动 / CI 用。
 在 box 上从 `make clean` 开始跑 `make check`（完整重编 wasm + 四组测试 + 体积）约 2 分 45 秒。
 
 | 目标 | 作用 |
@@ -218,7 +218,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
-| `make verify [FULL=1] [BASE=…]` | 提交前验收：0 警告构建 → `stack test` → 改了网页版依赖的路径才跑 `make check`（`FULL=1` 强制）；最后一行写通过 / 失败与测试数 |
+| `make verify` | 合 main 前的验收：只跑 `stack test`，最后一行写通过 / 失败、测试数与用时 |
 | `make check` | CI 用：`lint-sh` → `build` → `test` → `size` |
 | `make lint-sh` | shell 脚本 / Makefile 检查：`$变量名` 后紧跟中文等非 ASCII 字符即报错（macOS bash 3.2 会读错变量名，须写 `${VAR}`；见 `docs/testing.md`） |
 | `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |

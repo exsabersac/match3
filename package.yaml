@@ -110,18 +110,36 @@ library:
   - Match3.Element.Message
   - Match3.Element.Level
 
+# 桌面前端的纯模块（不依赖 SDL）：可执行文件经这个内部库用；测试套件直接编译 app/pure 源码（它也直接编译 src，
+# 若经内部库用，内部库里的 Match3.* 类型来自 match3 库、与测试自己编译的 src 不是同一类型）；
+# 网页 web/match3-web.cabal 按源码编其中用到的几个（web/build.sh 检查它们都在这张清单里）。
+internal-libraries:
+  match3-pure:
+    source-dirs: app/pure
+    dependencies:
+    - match3
+    exposed-modules:
+    - ComboFx
+    - UI.CellFace
+    - UI.GoalIcon
+    - UI.MoveText
+    - UI.Palette
+    - UI.Presentation
+    - UI.Sound
+    - UI.WebMeta
+
 executables:
   match3-sdl:
     main:                Main.hs
     source-dirs:
     - app
-    - app/pure
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
     - match3
+    - match3-pure
     - sdl2
     - text
     - containers

@@ -30,6 +30,15 @@ if [ "$want" != "$have" ]; then
   diff <(echo "$want") <(echo "$have") >&2 || true
 fi
 
+# 1b) 网页按源码编的 ../app/pure 模块（ComboFx、UI.*）都要在 package.yaml 的内部库 match3-pure 清单里
+pure_want=$(sed -n '/^internal-libraries:/,/^[a-z]/p' "$ROOT/package.yaml" | sed -n 's/^    - \([A-Z][A-Za-z.]*\)$/\1/p' | sort)
+pure_have=$(sed -n 's/^    \([A-Z][A-Za-z.]*\)$/\1/p' "$HERE/match3-web.cabal" | grep -v '^\(Match3\|Engine\|Match3Web\)\.' | sort)
+pure_extra=$(comm -13 <(echo "$pure_want") <(echo "$pure_have"))
+if [ -n "$pure_extra" ]; then
+  echo "警告：match3-web.cabal 里这些 ../app/pure 模块不在 package.yaml 的内部库 match3-pure 清单里：" >&2
+  echo "$pure_extra" >&2
+fi
+
 # 2) 编译并链接 wasm reactor 模块
 cd "$HERE"
 wasm32-wasi-cabal build exe:match3-web

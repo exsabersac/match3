@@ -39,7 +39,7 @@
 | `3` | `ToolCross` | 再点一格 → `useCrossClear`；再按 `3` 取消 |
 | 先选中格再 `1`/`3` | — | 对该格直接锤/十字（兼容旧快捷） |
 
-锤子对 Maker / Snail / Bottle / MagicHat / Cookie 免疫：不扣次数（规则层 `hammerImmune`）。
+锤子对 Maker / Snail / Bottle / MagicHat / Cookie 免疫：不扣次数（规则层 `hitImmuneWith`）。
 
 ## 其它键
 

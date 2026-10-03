@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**454** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强） + 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」） + 新玩法 5 新增 7 个（`test/Spec/SnowBoss.hs`：雪怪 Boss） + 新玩法 6 新增 7 个（`test/Spec/CookieDrop.hs`：饼干掉落口） + 新玩法 7 新增 8 个（`test/Spec/Chameleon.hs`：变色龙） + 合 main 9f5504e（目标中文标签）后新增 1 个（`outcome_lose_hint_no_internal_names`） + 新玩法 8 新增 8 个（`test/Spec/MagicGround.hs`：魔法地格） + 关卡矩形盘面（20455d3）新增 3 个（`test/Spec/Levels.hs`：`board_size_out_of_range_rejected`、`wide_board_level_is_6x9`、`default_levels_stay_8x8`） + Haskell 特性第 1–6 项新增 37 个（`Phase` 4、`Classes` 8、`Effects` 3、`Lazy` 5、`Perf` 5、`Optics` 7、`Invariants` 5，见 [haskell-features/](haskell-features/)） + Haskell 特性第 9 项新增 6 个（`RulesDedup`，见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)） + Haskell 特性第 7 项新增 7 个（`GridGeometry`，见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） + Haskell 特性第 8 项新增 9 个（`DataBoundary`，见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） + 选格散列钉值新增 3 个（`BoardSeed`）。
+- 期望：**447** 个命名用例通过（Tasty：`testCase` + `testProperty`）：原有 262 个 + 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测 + 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`） + 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`） + 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`） + 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`） + 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质） + 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`） + 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`） + 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`） + 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`） + 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`） + 第 10 刀新增 10 个（`test/Spec/Presentation.hs`：前端表现表与音效钩子，见下文「前端表现表验收」） + 第 11 刀新增 9 个（`test/Spec/View.hs`：视图模型与通用网格组件，见下文「视图模型验收」） + 新玩法 1 新增 6 个（`test/Spec/BombShapes.hs`：L / T 形出炸弹，见下文「新玩法验收」） + 新玩法 2 新增 6 个（`test/Spec/MagicStone.hs`：魔法石） + 新玩法 3 新增 7 个（`test/Spec/Fuzzball.hs`：毛球） + 新玩法 4 新增 7 个（`test/Spec/RainbowCombos.hs`：魔力鸟组合增强） + 测试辅助修正新增 1 个（`find_match_pair_engine_accepts`，见下文「测试辅助 findMatchPair」） + 新玩法 5 新增 7 个（`test/Spec/SnowBoss.hs`：雪怪 Boss） + 新玩法 6 新增 7 个（`test/Spec/CookieDrop.hs`：饼干掉落口） + 新玩法 7 新增 8 个（`test/Spec/Chameleon.hs`：变色龙） + 合 main 9f5504e（目标中文标签）后新增 1 个（`outcome_lose_hint_no_internal_names`） + 新玩法 8 新增 8 个（`test/Spec/MagicGround.hs`：魔法地格） + 关卡矩形盘面（20455d3）新增 3 个（`test/Spec/Levels.hs`：`board_size_out_of_range_rejected`、`wide_board_level_is_6x9`、`default_levels_stay_8x8`） + Haskell 特性第 1–6 项新增 37 个（`Phase` 4、`Classes` 8、`Effects` 3、`Lazy` 5、`Perf` 5、`Optics` 7、`Invariants` 5，见 [haskell-features/](haskell-features/)） + Haskell 特性第 9 项新增 6 个（`RulesDedup`，见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)） + Haskell 特性第 7 项新增 7 个（`GridGeometry`，见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） + Haskell 特性第 8 项新增 9 个（`DataBoundary`，见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） + 选格散列钉值新增 3 个（`BoardSeed`）；删除旧副本 `Spec.Support.Legacy*` 时净减 7 个（`Caps` −2、`GridGeometry` −2、`Perf` −2、`Optics` −2、`DataBoundary` +1，见下文「旧副本对照的去留」）。
 - 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
 
 可选完整链路：
@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：主要通过 `Match3.Core`
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 454）：
+- 目录（用例数合计 447）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -58,7 +58,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`；第 5 项起把 `Golden.goldenSections` 各段经 `Spec.Support.Parallel.parallelForce` 多核求值、按原顺序拼回再逐行比对） |
 | `test/Spec/Properties.hs` | 24 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条 + 第 7a 刀关卡级钩子 / 读数 2 条 + 第 7b 刀步末表 / 折叠回复 2 条 + 第 8 刀形状表 / 组合表 / 组合对称 / 补子策略 4 条，见「性质测试」） |
-| `test/Spec/Caps.hs` | 5 | 第 9 刀：能力记录 Caps——内置元素（含冰 / 叠层组合）逐项查询与规则输出对照第 9 刀前的类（`Spec.Support.LegacyElement`）、缺省能力等价旧缺省方法、元素类只剩三个方法（源码扫描）、用 Caps 写的扩展元素「荆棘」不改主流程接入（见「能力记录验收」） |
+| `test/Spec/Caps.hs` | 3 | 第 9 刀：能力记录 Caps——三种原型与 `Inert` 的缺省能力（`newSig` 字面量锁定；内置元素的逐项查询与规则输出由元素查询快照守着）、元素类只剩三个方法（源码扫描）、用 Caps 写的扩展元素「荆棘」不改主流程接入（见「能力记录验收」） |
 | `test/Spec/Presentation.hs` | 10 | 第 10 刀：前端表现表 `UI.Presentation` 与音效钩子 `UI.Sound`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效全为 `Nothing`、真实连锁全程无声、源码扫描（散落的表与颜色已收掉、`drawHud` / `primOverlay` 只剩分派） |
 | `test/Spec/BombShapes.hs` | 6 | 新玩法 1：L / T 形出炸弹（规则开关 `bomb_shapes`）——只有第 41 关打开、原有 40 关 / 每日挑战 / 自由开局的形状表等于内置表、插表顺序、L 形交点出炸弹（第 1 关与去掉开关时是空洞）、五连仍出彩虹、带四连的 L 出炸弹不出直线、第 41 关实战会生成炸弹 |
 | `test/Spec/MagicStone.hs` | 6 | 新玩法 2：魔法石——能力（固定 / 挡交换 / 无色 / 洗牌保留 / 平时打不动、发射中命中归零）、邻格充能每轮 1 格且满 3 为止、满格在交换步末发射清整行整列并归零、不满不发射、道具不触发而下一次交换发射、第 42 关布局与实战（魔法石不动、发射过、石头有进度） |
@@ -70,26 +70,21 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/MagicGround.hs` | 8 | 新玩法 8：魔法地格（地面层 `"magic"`）——不被消耗、不计数、带扩爆规则；`magicWiden` 几何（直线 → 三行、炸弹 3×3 → 5×5、盘边截断）；本步扩爆格只在第 48 关、只看引爆格；交换 / 锤子实战（`EvBlast` 覆盖格、底行碎石削层，与去掉条目对照）；成对规则的种子不扩、种子里的特效照常按引爆格扩；前 47 关与每日挑战没有扩爆格、逐步相同；第 48 关布局与难度 |
 | `test/Spec/Phase.hs` | 4 | Haskell 特性第 1 项（类型层）：带阶段标签的一轮（消除 → 下落 → 补子）与无标签函数逐盘面 / 逐生成器相同（40 个随机盘）、`swapStage` = `swapCells`、类型化入口 `resolveMove SKindHammer …` = `resolveHammer`；7 个「编译不过」的写法（没下落就补子、下落两次、有空洞再消、有空洞当满盘、交换两次、锤子 + 普通匹配起手、锤子拿交换后的盘起手）在本模块里用 `-fdefer-type-errors` 推迟成运行时 `TypeError`，断言确实抛出且消息点名冲突的阶段（见 [haskell-features/01-类型层.md](haskell-features/01-类型层.md) §4.1） |
 | `test/Spec/Classes.hs` | 8 | Haskell 特性第 2 项（类型类与抽象）：`deriving newtype` 的 `ElementName` / `CustomState` 的 Show / IsString 与底层逐字相同；六个 Int newtype 元素的缺省 `toCell`（DefaultSignatures）与改前手写编码相同、本体经注册表解码回同一值；表示不是 `Int` 的元素不写 `toCell` 是类型错误（`-fdefer-type-errors` 推迟成 `TypeError`，断言消息点名 representation 不匹配）；三个装箱类型按类型相等；`Grid` 的 Functor / Foldable / Traversable 定律、行主序、形状不变；`randomBoardSized`（`mapAccumL`）与改前递归逐种子 / 逐尺寸相同（含生成器状态）；盘面统计（`foldMap Sum`）与改前列表推导相同（全部战役关卡开局盘）；`foldMap` 合计数与改前 `foldl` + `bumpCount` 相同（见 [haskell-features/02-类型类与抽象.md](haskell-features/02-类型类与抽象.md)） |
-| `test/Spec/Effects.hs` | 3 | Haskell 特性第 3 项（效果与架构）：全部战役关卡 × 2 种子 × 3 个盘面（能消的交换 / 同尺寸随机盘 / 开局静止盘）、关卡级元素按该关接上，七个连锁入口（匹配、带起始波次的匹配、种子、空种子、皮带后、步末后带空洞、倒计时）与单轮：对外入口（纯解释器）与改写前的逐字副本 `Spec.Support.LegacyCascade` 逐项相同（终盘、计数、回放、推进后的关卡级元素、生成器 `show`，倒计时另比步末记录）；追踪解释器 = 纯解释器 = 旧写法、日志里的轮次就是回放、补进的格子就是该轮终盘的格子，并确认用例走到了吸收、补子、只沉降三种节拍；手写 free monad 指令树 + 小解释器跑同一个程序也与旧写法相同（见 [haskell-features/03-效果与架构.md](haskell-features/03-效果与架构.md)） |
-| `test/Spec/Lazy.hs` | 5 | Haskell 特性第 4 项（惰性与递归模式）：7 种行列 × 200 种子的无三连 / 可玩盘拒绝采样与旧手写递归逐项相同（盘面与生成器，内外两层重抽都走到）；49 关 × 2 种子 × 3 种盘面（开局 / 斜纹死盘 / 怎么洗都死的石头盘）+ 已终局的自动洗牌与旧计数循环整个 `GameState` 相等（不洗 / 洗到可走 / 用第 25 次三条路都走到）；`Engine.Stream` 真的惰性（`error` 占位）；`runPlayer` = 旧写法 = 手写 hylo = cata . ana（倒数阶段机、提示队列、每关真实连锁回放，正常与加速），hylo 能从无穷回放里惰性取事件；`countsFromList` 与 `foldl` 版相等、`runActions` 吃无穷动作表（见 [haskell-features/04-惰性与递归模式.md](haskell-features/04-惰性与递归模式.md)） |
-| `test/Spec/Perf.hs` | 5 | Haskell 特性第 5 项（性能与并发）：一万多张真实盘面（全部关卡 × 种子 1–3 的开局盘、全部相邻交换、沿提示走 12 手）+ 1000 个随机盘上匹配码版 `findMatchRunsWith` / `hasAnyMatchWith` / `findHintWith` 与旧写法逐项相同、码与逐格 `matchColorWith` 一致；588 个挖空盘 + 1000 个随机盘上 ST 版重力与旧列表版相同（含固定格分段）；`parallelForce` 在 1 / 2 / 3 / 8 / 1000 个工人下与串行逐项相同、空表、按顺序报第一个出错的任务（见 [haskell-features/05-性能与并发.md](haskell-features/05-性能与并发.md)） |
-| `test/Spec/Optics.hs` | 7 | Haskell 特性第 6 项（测试与光学）：透镜三定律（`cellAt`、GameState 的字段与五个派生读数，局中状态）；派生读数的 get-put 只在「元素恰好一份」时成立（`expectFailure` 固定反例）；遍历恒等律 / 合成律（Writer × Maybe）/ `over` 合成；棱镜两条往返律；改写后的 `Match3.Grass` 与 `Match3.Types.Overlay` 和第 6 项前的逐字副本逐项相同（叠层多的任意行列盘，带 shrink）（见 [haskell-features/06-测试与光学.md](haskell-features/06-测试与光学.md)） |
+| `test/Spec/Effects.hs` | 3 | Haskell 特性第 3 项（效果与架构）：全部战役关卡 × 2 种子 × 3 个盘面（能消的交换 / 同尺寸随机盘 / 开局静止盘）、关卡级元素按该关接上，七个连锁入口（匹配、带起始波次的匹配、种子、空种子、皮带后、步末后带空洞、倒计时）与单轮：对外入口（纯解释器）的结果（终盘、计数、回放、推进后的关卡级元素、生成器 `show`，倒计时另含步末记录）按入口折成摘要（`digest`）与写死的字面量比对；追踪解释器 = 纯解释器、日志里的轮次就是回放、补进的格子就是该轮终盘的格子，并确认用例走到了吸收、补子、只沉降三种节拍；手写 free monad 指令树 + 小解释器跑同一个程序也与纯解释器相同（见 [haskell-features/03-效果与架构.md](haskell-features/03-效果与架构.md)） |
+| `test/Spec/Lazy.hs` | 5 | Haskell 特性第 4 项（惰性与递归模式）：7 种行列 × 200 种子的无三连 / 可玩盘拒绝采样的盘面与生成器按尺寸折成摘要锁定（内外两层重抽都走到）；49 关 × 2 种子 × 3 种盘面（开局 / 斜纹死盘 / 怎么洗都死的石头盘）+ 已终局的自动洗牌结果（整个 `GameState`）按盘面种类折成摘要锁定（不洗 / 洗到可走 / 用第 25 次三条路都走到）；`Engine.Stream` 真的惰性（`error` 占位）；`runPlayer` = 手写 hylo = cata . ana（倒数阶段机、提示队列、每关真实连锁回放，正常与加速），hylo 能从无穷回放里惰性取事件；`countsFromList` 与行内 `foldl` + `bumpCount` 相等、`runActions` 吃无穷动作表（见 [haskell-features/04-惰性与递归模式.md](haskell-features/04-惰性与递归模式.md)） |
+| `test/Spec/Perf.hs` | 3 | Haskell 特性第 5 项（性能与并发）：一万多张真实盘面（全部关卡 × 种子 1–3 的开局盘、全部相邻交换、沿提示走 12 手）上匹配码版 `findMatchRunsWith` / `hasAnyMatchWith` / `findHintWith` 的结果折成一个摘要锁定、码与逐格 `matchColorWith` 一致；588 个挖空盘上 ST 版重力的结果折成摘要锁定（含固定格分段）；`parallelForce` 在 1 / 2 / 3 / 8 / 1000 个工人下与串行逐项相同、空表、按顺序报第一个出错的任务（见 [haskell-features/05-性能与并发.md](haskell-features/05-性能与并发.md)） |
+| `test/Spec/Optics.hs` | 5 | Haskell 特性第 6 项（测试与光学）：透镜三定律（`cellAt`、GameState 的字段与五个派生读数，局中状态）；派生读数的 get-put 只在「元素恰好一份」时成立（`expectFailure` 固定反例）；遍历恒等律 / 合成律（Writer × Maybe）/ `over` 合成；棱镜两条往返律（`Match3.Grass` / `Match3.Types.Overlay` 本身的行为由叠层单元测试、金标准与元素查询快照守着）（见 [haskell-features/06-测试与光学.md](haskell-features/06-测试与光学.md)） |
 | `test/Spec/Invariants.hs` | 5 | Haskell 特性第 6 项：规则不变量——交换是对合（自定义 `Arbitrary` 任意行列盘）、重力幂等且不留悬空、重力 + 补子后满盘、被拒操作什么都不改 / 被接受时步数最多少 1 且分数不降；撤销历史对列表模型的状态机测试（玩具计数器，上限 1–4，带 shrink） |
-| `test/Spec/RulesDedup.hs` | 6 | Haskell 特性第 9 项（规则去重）：占格障碍棱镜 `_Stone` … `_Safe` 的往返律与改色遍历 `cellColorT` 的遍历定律；`Match3.Types.Body` 五组构造 / 读数 / 谓词、`Match3.Obstacles` 全部导出（障碍多的任意行列盘，带 shrink）、步末规则折叠（`runPhase` / `traceSpreadsWith` / `runEndRules`）与邻格波及 `runAdjacentWith`、能力声明（`Cap` 的 `Dual (Endo Caps)` 拼接与 35 个写入器）和第 9 项前的逐字副本（`Spec.Support.LegacyObstacles` / `LegacyRules`）逐项相同；步末规则智能构造器（见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)） |
-| `test/Spec/GridGeometry.hs` | 7 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表、带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`，行主序）、改写过的坐标遍历（蜗牛 / 倒计时 / 洗牌保留 / 彩虹 / 毛球 / 变色龙 / 魔法石 / 叠层）、`spreadPairs` / `moveUfo`、像素 newtype 下的 `gridCellAt` / `gridCellOrigin`、每日挑战 `Year` / `Month` / `Day` 与第 7 项前的逐字副本（`Spec.Support.LegacyGeometry`）逐项相同（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
-| `test/Spec/DataBoundary.hs` | 9 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名的放置与第 8 项前的手写 `case`（`Spec.Support.LegacyBoundary`）在随机参数 × 任意格上逐项相同，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组与旧版相同；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、注册表（槽位、解码往返）、`cellFace` 标签、`UI.CellTable` 与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
+| `test/Spec/RulesDedup.hs` | 6 | Haskell 特性第 9 项（规则去重）：占格障碍棱镜 `_Stone` … `_Safe` 的往返律与改色遍历 `cellColorT` 的遍历定律；`Match3.Obstacles` 邻消顺序的固定例子（蜂蜜 / 宝箱 / 保险箱的相邻格与末层位置，含 except）；`runEndRules` = 朴素折叠；能力声明 `Cap` 的 `Dual (Endo Caps)` 拼接（7 个 `capsSig` 固定例子，含 09 §3.5 的冲突反例）与 Monoid 定律；步末规则智能构造器（见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)） |
+| `test/Spec/GridGeometry.hs` | 5 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表与写死的坐标顺序逐格相同；带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`）是行主序；像素 newtype 下的 `gridCellAt` / `gridCellOrigin`（3 种几何的固定例子）；每日挑战 `Year` / `Month` / `Day`（7 个日期的种子与配置写死）（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
+| `test/Spec/DataBoundary.hs` | 10 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名 × 11 组参数 × 2 种格的放置结果写死比对，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组（固定例子含节拍倒序 `[2, 1, 0]`；性质：拼接还原输入、组的节拍号 = 组内首个效果的节拍、相邻组节拍不同）；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、注册表（槽位、解码往返）、`cellFace` 标签、`UI.CellTable` 与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
 | `test/Spec/BoardSeed.hs` | 3 | 毛球跳格（第 43 关）与雪怪召唤（第 45 关）共用的选格散列 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`：写死两张固定小盘面的 `show` 字符串与散列值、第 43 / 45 关种子 1 开局盘面的散列值、三个坐标的 `posSeed`、第 43 关开局的 14 次毛球跳格与第 45 关开局的召唤格；性质：散列 = 标准 64 位 FNV-1a（与 `Word64` 参考实现逐值相同）作用于 `show`，`pickBy` = 下标（散列 mod 候选数）。失败信息说明「`Show Cell` / 散列改了会改变毛球 / 雪怪行为」 |
 | `test/Spec/View.hs` | 10 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
-| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）等；并重新导出 `Spec.Support.Source` |
-| `test/Spec/Support/LegacyCascade.hs` | — | 第 3 项前 `Match3.Board.Cascade` 连锁核心的逐字副本（生成器 / 钩子手工传递），供 `Spec.Effects` 对照 |
-| `test/Spec/Support/LegacyLazy.hs` | — | 第 4 项前四处写法的逐字副本（`Board.Random` 的两个拒绝采样、`Game.Shuffle.ensurePlayableWith` 的计数循环、`Engine.Playback.runPlayer`、`Counts.countsFromList` 的 `foldl`），供 `Spec.Lazy` 对照 |
-| `test/Spec/Support/LegacyPerf.hs` | — | 第 5 项前匹配扫描（`findMatchRunsWith` / `hasAnyMatchWith` / `findHintWith`，含 `groupGemRunsWith` / `lineHasRunWith`）与 `applyGravityWith` 列表版的逐字副本，供 `Spec.Perf` 对照 |
+| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）、`digest`（字符串的 64 位 FNV-1a 十六进制摘要，固定例子用它锁定大批结果）等；并重新导出 `Spec.Support.Source` |
 | `test/Spec/Support/Parallel.hs` | — | 确定性并行批量求值 `parallelForce`（`forkIO` + STM：`TVar` 领任务、`TMVar` 结果槽、按原顺序取回、异常按顺序重抛）；`Spec.Golden` 用它并行求值金标准各段 |
 | `test/Spec/Support/Arbitrary.hs` | — | 自定义 `Arbitrary`：`AnyBoard` / `HoledBoard`（任意行列 1–10 的完整 / 可空盘），`shrink` 先去行列、再逐格简化（`shrinkCell`）；`shrinkBoard` 给 `forAllShrink` 用 |
-| `test/Spec/Support/LegacyOptics.hs` | — | 第 6 项前 `Match3.Grass` 全部函数与 `Match3.Types.Overlay` 读数 / 写入的逐字副本，供 `Spec.Optics` 对照 |
 | `test/Spec/Support/Source.hs` | — | 源码扫描工具（见「源码扫描约定」） |
-| `test/Spec/Support/LegacyElement.hs` | — | 第 9 刀前的 `Element` 类（27 个方法）与 19 个内置本体 instance 的逐字副本（改名 `LElement` / `LSome` / `LHit`，孤儿 instance 挂在 src 的元素类型上），只给 `Spec.Caps` 对照用 |
 | `test/Toy.hs` | — | 通用接口的玩具实现（只 import `Engine.*`） |
 | `test/golden/` | — | 金标准投影 `Golden.hs` 与 `golden.txt`；元素查询快照 `ElementQueries.hs` 与 `element-queries.txt`（元素类迁移） |
 
@@ -117,6 +112,37 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | 元素框架（第二刀 2b） | `element_registry_custom_crate_extensibility`、`element_registry_matches_legacy_predicates`、`trace_events_consistent_with_trace`（见「元素框架验收」） |
 | 特效不重播（爆击/连击） | `failed_swap_resets_combo_feedback`、`invalid_swap_resets_combo_feedback`、`booster_noop_resets_combo_feedback`、`undo_shuffle_reset_combo_feedback`、`move_fx_ignores_already_over` |
 | 稳定性巡航 | 软锁、地毯↔饼干/保险箱、精灵+2、步数携带上限、皮带→蒸汽→蜗牛顺序、吸走≠引爆、每日 Won 不解锁等 |
+
+## 旧副本对照的去留
+
+Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代码的逐字副本 `test/Spec/Support/Legacy{Cascade,Lazy,Perf,Optics,Geometry,Boundary,Obstacles,Rules,Element}.hs`（9 个模块共 2507 行），只给「新写法 = 旧写法」的对照测试用。死代码清理（`refactor/dead-code`）把它们全部删掉了，对照测试按下表处理。删除前先用临时测试在每个输入上确认旧副本与现行实现相等，再把现行实现的输出写成字面量（结果多的用 `Spec.Support.digest` 折成 64 位 FNV-1a 摘要），所以这些固定例子锁定的就是删除时的行为。旧副本可用 `git show 132553b:test/Spec/Support/LegacyX.hs` 取回。固定例子失败时，先判断改动是否有意改变行为：有意的就像金标准一样重新生成字面量，否则修代码。
+
+| 原测试（模块） | 处理 | 理由 |
+|----------------|------|------|
+| `qc_dedup_caps_same_as_legacy`（RulesDedup） | 改为 `dedup_caps_examples_pinned`（7 个 `capsSig` 例子）+ `qc_caps_monoid_laws` | 抓到过拼接方向的变异（09 §3.5：`via Endo Caps` 时原有测试只有它失败）；第 4 个例子就是那个反例（`Blocker` 上 `keepsOnShuffle` 与 `reshuffles` 冲突） |
+| `qc_dedup_obstacles_same_as_legacy`（RulesDedup） | 改为 `dedup_obstacle_orders_pinned` | 邻消顺序与末层逆序 `nub (p : dead)` 的单测覆盖（07 / 09 的变异表都靠它） |
+| `qc_dedup_rule_folds_same_as_legacy`（RulesDedup） | 只留与旧副本无关的一半：`qc_run_end_rules_is_fold` | `runEndRules` = 朴素折叠；各阶段的输出由金标准与回放测试守着 |
+| `qc_default_caps_match_legacy_defaults`（Caps） | 改为 `default_caps_pinned`（8 个 `newSig` 例子） | 缺省能力只有扩展元素用得到（内置元素都显式声明），快照不覆盖 |
+| `qc_argp_placers_match_legacy`（DataBoundary） | 改为 `argp_placers_pinned`（21 个元素名 × 11 组参数 × 2 种格） | 抓到过 `prefixArgs` / `exactArgs` 的变异（08 §3.5）；参数边界值（−2、255、256、300 等）的直接覆盖 |
+| `qc_beats_nonempty_matches_legacy`（DataBoundary） | 改为 `beats_examples_pinned` + `qc_beats_nonempty_groups` | `NE.groupAllWith` 的变异原先只有它抓到（08 §3.5）；固定例子含节拍倒序 `[2, 1, 0]` |
+| `qc_grid_ui_px_same_as_legacy`（GridGeometry） | 改为 `grid_ui_px_pinned`（3 种几何） | 抓到过 `gridCellOrigin` 的 (行, 列) 写反（07 §3.4） |
+| `daily_date_newtypes_same_as_legacy`（GridGeometry） | 改为 `daily_date_pinned`（7 个日期的种子与配置） | 每日种子 / 配置的直接覆盖 |
+| `effects_entries_same_as_legacy`（Effects） | 改为 `effects_entries_pinned`（7 个入口各一个摘要，另有倒计时步末记录与单轮） | 空种子、皮带后、带空洞的步末等入口的逐入口覆盖；末层逆序的变异它也抓到 |
+| `lazy_samplers_same_as_legacy`（Lazy） | 改为 `lazy_samplers_pinned`（按尺寸的摘要，内外两层重抽的断言保留） | 拒绝采样（含生成器状态）在 7 种行列上的直接覆盖 |
+| `lazy_ensure_playable_same_as_legacy`（Lazy） | 改为 `lazy_ensure_playable_pinned`（开局 / 死盘 / 洗不活 / 已终局各一个摘要，三条路的断言保留） | 「24 次都不行用第 25 次」只有它覆盖 |
+| `perf_match_scan_same_as_legacy`（Perf） | 改为 `perf_match_scan_pinned`（18137 张盘一个摘要；码与逐格一致、死盘无提示保留） | 05 §3.5 的匹配码变异；盘面比金标准多得多 |
+| `perf_gravity_same_as_legacy`（Perf） | 改为 `perf_gravity_pinned`（588 张挖空盘一个摘要） | 05 §3.5 的双指针区间变异；固定格分段的挖空盘只有它覆盖 |
+| `grid_dir_basics`（GridGeometry） | 保留，「相邻」改为曼哈顿距离 = 1 | 原先借用旧副本的 `adjacent` |
+| `qc_grid_neighbor_orders_same_as_legacy`（GridGeometry） | 保留为 `qc_grid_neighbor_orders_literal`，与写死的坐标表比 | 07 §3.4 三种邻格顺序变异都靠它 |
+| `effects_traced_same_as_pure`、`effects_free_interpreter_same_as_legacy`（Effects） | 保留（后者改名 `effects_free_interpreter_same_as_pure`），去掉「= 旧写法」那一半 | 追踪解释器 / free monad 与纯解释器的对照不依赖旧副本 |
+| `lazy_run_player_same_as_legacy_and_hylo`、`lazy_counts_and_run_actions`（Lazy） | 保留（前者改名 `lazy_run_player_same_as_hylo`；后者的参照改为行内 `foldl` + `bumpCount`） | hylo / cata . ana 对照与计数参照不依赖旧副本 |
+| `qc_caps_match_legacy_elements`、`qc_caps_rules_match_legacy`（Caps） | 删除 | 与元素查询快照（`ec_queries_match_stage1_snapshot` / `ec_rules_match_stage1_snapshot`）重复 |
+| `qc_dedup_body_readers_same_as_legacy`（RulesDedup） | 删除 | 棱镜往返律 `qc_dedup_cell_optics_laws` + 元素查询快照 |
+| `qc_grid_fold_sites_same_as_legacy`、`qc_grid_spread_ufo_same_as_legacy`（GridGeometry） | 删除 | 行主序性质 `qc_grid_indexed_folds_row_major` + 金标准 + 快照 |
+| `qc_perf_match_scan_random_boards`、`qc_perf_gravity_random_boards`（Perf） | 删除 | 真实盘面的固定例子 + 金标准 |
+| `qc_optics_overlay_readers_same_as_legacy`、`qc_optics_grass_same_as_legacy`（Optics） | 删除 | 叠层单元测试 + 棱镜律 + 金标准 + 快照（06 §3.5 的两个变异各还有多个测试失败） |
+
+删除后做过变异检查（每次改一处、跑整套、再改回）：`Cap` 改成 `via Endo Caps` → `dedup_caps_examples_pinned`（第 4 例）与 `qc_caps_monoid_laws` 失败；`beats` 的 `NE.groupWith` 换成 `NE.groupAllWith` → `beats_examples_pinned` 与 `qc_beats_nonempty_groups` 失败；`chipAdjacentLayeredExcept` 的 `nub (p : dead)` 改成 `dead ++ [p]` → `dedup_obstacle_orders_pinned`、`effects_entries_pinned`、金标准、`ec_play_matches_stage1_snapshot` 失败。
 
 ## 性质测试（第 1 刀）
 
@@ -330,13 +356,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 能力记录验收（第 9 刀）
 
-`test/Spec/Caps.hs`；框架见 [architecture.md](architecture.md#元素的能力caps与调用时机)。对照对象 `test/Spec/Support/LegacyElement.hs` 是第 9 刀前的类与内置 instance 的逐字副本；性质挂固定种子 20260930。
+`test/Spec/Caps.hs`；框架见 [architecture.md](architecture.md#元素的能力caps与调用时机)。原先对照的第 9 刀前类与内置 instance 的逐字副本 `LegacyElement` 已删除（见「旧副本对照的去留」），内置元素的逐项查询与规则输出由元素查询快照守着。
 
 | 用例 | 断言 |
 |------|------|
-| `qc_caps_match_legacy_elements` | 3000 例：任意格（全部内置本体的各种状态、宝石 × 冰 0..3 × 叠层、已注册 / 未注册的 `Custom`）经 `elementOf` / `bodyOf defaultRegistry` 解码后，27 项查询与旧类逐项相同（受击后的新元素递归展开；规则比有无与次序；`handleMessage` 用探针消息） |
-| `qc_caps_rules_match_legacy` | 600 例：邻格规则（`aoBoard` / `aoDead` / `aoSit`）、步末规则（效果、新盘、运行前后的种子与挖空）、成对交换规则（成立与种子）、开启规则在随机盘面 / 随机真消除格 / 直接命中格 / 保护格 / 交换对上的输出与旧实现相同 |
-| `qc_default_caps_match_legacy_defaults` | 1000 例：只写 `caps = capsOf 原型` 的元素与旧写法里只覆盖 `archetype` 的元素（三种原型 × 任意写回格子）逐项相同；惰性占格 `Inert` 同样 |
+| `default_caps_pinned` | 只写 `caps = capsOf 原型` 的元素（`Piece` / `Blocker` / `Fixed` 三种原型与惰性占格 `Inert`，各写回石头 2 层与 C3 宝石）的 `newSig` 与写死的字面量相同（字面量删除旧副本前生成，并与旧类的缺省方法核对过） |
 | `caps_element_class_is_thin` | 源码扫描：`class Element` 只有 `name` / `toCell` / `caps`；`builtinSources` 里 19 个 `instance Element` 只定义这三项 |
 | `ext_caps_element_plugs_in` | 四行 instance 的测试专用元素「荆棘」`caps (Thorn n) = blocker [hit …, counts (CountNamed "thorn")]`，`customEntry` 注册后：挡交换、无色；锤子第 1 下耐久 2→1、第 2 下碎掉并计 `("thorn",1)`；`defaultRegistry` 下是惰性占格 |
 
@@ -360,7 +384,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 454，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 447，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

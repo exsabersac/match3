@@ -213,7 +213,7 @@
 | 掉落 | 补子时（每轮沉降之后、以及步末补结算），掉落口格上的空洞若此刻盘上（本次已补的格子算在内）的 `dropCell` 少于 `dropKeep` 块，就补 `dropCell` 而不是宝石；多个空洞按行优先先补的先占名额；掉落口格没有空洞（那一列没有消除）时不掉 |
 | 确定性 | 每个空洞仍照原补子策略调一次（随机数照常消耗），掉落口只替换结果，所以 `gsGen` 的推进与没有掉落口时完全相同；掉不掉只由盘面决定 |
 | 接入 | 关卡级元素 `CookieDrop [DropSpec]`（`levelStart` 读 `lvlDrops`）回复已有的补子策略查询 `Refilling`，把收到的策略包一层 `dropRefill`；`lvlDrops` 为空时不回复（= 原策略）。去掉注册（`removeLevel "cookie_drop"`）即不掉 |
-| 开局 | 有掉落口的关卡不做目标补齐（`ensureGoalDecor` 原本会按目标数一次铺满饼干），开局只有关卡放置的几块，其余由掉落口补 |
+| 开局 | 有掉落口的关卡不做目标补齐（`goalDecorWith` 原本会按目标数一次铺满饼干），开局只有关卡放置的几块，其余由掉落口补 |
 | 收集 | 原有规则不变：饼干到达底行即被收走、计 `CountCookies`；目标 `goalCount CountCookies n` |
 | 关卡 | 第 46 关「掉落口」：26 步，掉落口在顶行 (0,1) / (0,3) / (0,4) / (0,6)，开局四个掉落口上各一块饼干，盘上少于 4 块时掉，目标收 8 块 |
 | 视图 / 前端 | `Match3.View.BoardView.bvDrops`（掉落口格，读 `Element.Level.levelDrops`）；桌面版在掉落口格上沿画金色漏斗 `cookie_drop`（画在棋子之上，几何版 `drawDropMark` 是金色台阶 + 白色箭头） |

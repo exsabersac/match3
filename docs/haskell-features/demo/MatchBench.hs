@@ -3,9 +3,10 @@
 
 -- | 第 5 项文档 §4 的计时实验：匹配扫描 / 提示搜索 / 重力的新旧写法，以及一个没采用的对照变体（不在任何构建目标里）。
 --
--- 编译运行（仓库根目录；旧写法取自测试里的逐字副本 Spec.Support.LegacyPerf）：
+-- 编译运行（仓库根目录）。旧写法的逐字副本 Spec.Support.LegacyPerf 已从测试里删除，先从提交 132553b 取回到临时目录：
 --
--- > b=$(mktemp -d); stack exec -- ghc -O1 -Wall -package match3 -itest -outputdir "$b" -o "$b/m" docs/haskell-features/demo/MatchBench.hs
+-- > b=$(mktemp -d); mkdir -p "$b/old/Spec/Support"; git show 132553b:test/Spec/Support/LegacyPerf.hs > "$b/old/Spec/Support/LegacyPerf.hs"
+-- > stack exec -- ghc -O1 -Wall -package match3 -i"$b/old" -outputdir "$b" -o "$b/m" docs/haskell-features/demo/MatchBench.hs
 -- > "$b/m"
 --
 -- 盘面：全部关卡 × 种子 1–3 的开局盘，加上每张开局盘的全部相邻交换（多数带现成的匹配），共一万多张；

@@ -3,49 +3,35 @@
 -- | 占格障碍与邻消触发：石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/染色瓶/时间精灵/魔法帽/果汁机。
 -- 一般不可匹配、挡交换；邻消削一层或触发效果。不负责连锁循环本身。
 --
--- Haskell 特性第 9 项（docs/haskell-features/09-规则去重.md）：五种带层数障碍的邻消揭层合成一个
--- 'chipAdjacentLayeredExcept'（障碍种类 = 棱镜参数，保险箱末层变饼干 = 另一个参数），九份「相邻的某种格」合成
--- 'adjacentWhere'，魔法帽 / 染色瓶的改色用遍历 'cellColorT'。结果的列表顺序由金标准与
--- Spec.RulesDedup 的固定例子（dedup_obstacle_orders_pinned）锁定。
+-- 五种带层数障碍的邻消揭层是同一个 'chipAdjacentLayeredExcept'（障碍种类 = 棱镜参数，保险箱末层变饼干 = 另一个参数），
+-- 「相邻的某种格」都是 'adjacentWhere'，魔法帽 / 染色瓶的改色用遍历 'cellColorT'
+-- （docs/haskell-features/09-规则去重.md）。结果的列表顺序由金标准与 Spec.RulesDedup 的固定例子
+-- （dedup_obstacle_orders_pinned）锁定。
+--
+-- except 参数 = 本轮已被直接命中、不再邻消的格。只导出元素定义（Match3.Element.Builtin.*）要用的版本；
+-- 测试用的无 except 写法（except = []）在 test/Spec/Support/Obstacles.hs。
 module Match3.Obstacles
   ( orthoNeighbors
   , adjacentWhere
+    -- * 带层数的占格障碍
   , chipAdjacentLayeredExcept
-  , stonesAdjacentTo
-  , chestsAdjacentTo
-  , honeysAdjacentTo
-  , cakesAdjacentTo
-  , safesAdjacentTo
-  , chipAdjacentStones
   , chipAdjacentStonesExcept
-  , chipAdjacentChests
   , chipAdjacentChestsExcept
-  , chipAdjacentHoney
   , chipAdjacentHoneyExcept
-  , chipAdjacentCakes
   , chipAdjacentCakesExcept
-  , chipAdjacentSafes
   , chipAdjacentSafesExcept
-  , chipAdjacentBalloons
+    -- * 气球 / 时间精灵 / 彩蛋
   , chipAdjacentBalloonsExcept
-  , balloonsAdjacentSameColor
+  , chipAdjacentTimeSpiritsExcept
+  , openSurprises
+    -- * 魔法帽 / 染色瓶 / 果汁机
   , hatsAdjacentTo
-  , triggerAdjacentHats
   , triggerAdjacentHatsExcept
   , triggerAdjacentHatsBy
-  , makersAdjacentSameColor
-  , chargeAdjacentMakers
-  , chargeAdjacentMakersSit
-  , surprisesAdjacentTo
-  , openAdjacentSurprises
-  , openSurprises
-  , bottlesAdjacentTo
-  , triggerAdjacentBottles
   , triggerAdjacentBottlesExcept
   , triggerAdjacentBottlesBy
-  , spiritsAdjacentTo
-  , chipAdjacentTimeSpirits
-  , chipAdjacentTimeSpiritsExcept
+  , makersAdjacentSameColor
+  , chargeAdjacentMakersSit
   ) where
 
 import Data.List (nub, sort)
@@ -60,12 +46,7 @@ import Match3.Types
   , Pos
   , neighborsIn
   , upDownLeftRight
-  , isStone
-  , isChest
-  , isHoney
-  , isCake
   , isMagicHat
-  , isSafe
   , isSurprise
   , isBottle
   , isTimeSpirit
@@ -104,33 +85,9 @@ adjacentWhere ok b cleared =
     , ok (at b p)
     ]
 
--- | Stone positions orthogonally adjacent to any of the given cleared positions.
-stonesAdjacentTo :: Board -> [Pos] -> [Pos]
-stonesAdjacentTo = adjacentWhere isStone
-
--- | Chest positions orthogonally adjacent to cleared positions.
-chestsAdjacentTo :: Board -> [Pos] -> [Pos]
-chestsAdjacentTo = adjacentWhere isChest
-
--- | Honey jar positions orthogonally adjacent to cleared positions.
-honeysAdjacentTo :: Board -> [Pos] -> [Pos]
-honeysAdjacentTo = adjacentWhere isHoney
-
--- | Cake positions orthogonally adjacent to cleared positions.
-cakesAdjacentTo :: Board -> [Pos] -> [Pos]
-cakesAdjacentTo = adjacentWhere isCake
-
--- | Safe / vault positions orthogonally adjacent to cleared positions.
-safesAdjacentTo :: Board -> [Pos] -> [Pos]
-safesAdjacentTo = adjacentWhere isSafe
-
 -- | Magic hat positions orthogonally adjacent to cleared gems.
 hatsAdjacentTo :: Board -> [Pos] -> [Pos]
 hatsAdjacentTo = adjacentWhere isMagicHat
-
--- | 不跳过任何格的版本（except = []）。
-noExcept :: (Board -> [Pos] -> [Pos] -> r) -> Board -> [Pos] -> r
-noExcept f b clearedGems = f b clearedGems []
 
 -- | 带层数占格障碍的邻消（石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱共用，只差棱镜）：
 -- 与 clearedGems 正交相邻、不在 except 里（本轮已被直接命中）的这种障碍各削一层。
@@ -152,41 +109,18 @@ chipAdjacentLayeredExcept layer onLast b clearedGems except =
           | otherwise -> (board & cellAt p . layer .~ n - 1, dead)
         Nothing -> (board, dead)
 
--- | Chip one layer off each adjacent stone.
--- Returns (board with surviving stones decremented, positions whose last layer was chipped).
-chipAdjacentStones :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentStones = noExcept chipAdjacentStonesExcept
-
--- | Like chipAdjacentStones but skips cells in 'except' (already direct-hit this wave).
+-- | 石头 / 宝箱 / 蜂蜜 / 蛋糕：末层原样留着，随本轮清除格移走。保险箱：末层原地变饼干。
 chipAdjacentStonesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentStonesExcept = chipAdjacentLayeredExcept _Stone Nothing
-
--- | Chip one layer off each adjacent treasure chest (宝箱).
-chipAdjacentChests :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentChests = noExcept chipAdjacentChestsExcept
 
 chipAdjacentChestsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentChestsExcept = chipAdjacentLayeredExcept _Chest Nothing
 
--- | Chip one layer off each adjacent honey jar (蜂蜜罐).
-chipAdjacentHoney :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentHoney = noExcept chipAdjacentHoneyExcept
-
 chipAdjacentHoneyExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentHoneyExcept = chipAdjacentLayeredExcept _Honey Nothing
 
--- | Chip one layer off each adjacent cake (蛋糕). Cleared at 0.
-chipAdjacentCakes :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentCakes = noExcept chipAdjacentCakesExcept
-
 chipAdjacentCakesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentCakesExcept = chipAdjacentLayeredExcept _Cake Nothing
-
--- | Chip one layer off each adjacent safe (保险箱).
--- Last layer opens into a Cookie in place (collectible drop); cookie is NOT removed here.
--- Returns (board, positions that fully opened).
-chipAdjacentSafes :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentSafes = noExcept chipAdjacentSafesExcept
 
 chipAdjacentSafesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentSafesExcept = chipAdjacentLayeredExcept _Safe (Just mkCookie)
@@ -205,11 +139,7 @@ balloonsAdjacentSameColor b cleared =
     , balloonColor (at b p) == Just col
     ]
 
--- | Pop balloons adjacent to same-color clears (single hit; no layers).
-chipAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentBalloons = noExcept chipAdjacentBalloonsExcept
-
--- | Like chipAdjacentBalloons but skips cells in 'except' (already direct-hit this wave).
+-- | Pop balloons adjacent to same-color clears (single hit; no layers), skipping cells in 'except'.
 chipAdjacentBalloonsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentBalloonsExcept b clearedGems except =
   let dead = [p | p <- balloonsAdjacentSameColor b clearedGems, p `notElem` except]
@@ -220,11 +150,7 @@ cycleColor c = colorAt (fromEnum c + 1)
 
 -- | Trigger magic hats adjacent to clears: swap colors of two ortho gem neighbors
 -- (deterministic: sorted positions). If only one gem neighbor, cycle its color.
--- Hat itself stays. Neighbors in the cleared set are skipped.
-triggerAdjacentHats :: Board -> [Pos] -> Board
-triggerAdjacentHats = noExcept triggerAdjacentHatsExcept
-
--- | Like triggerAdjacentHats, but also skip recoloring `protected` cells.
+-- Hat itself stays. Neighbors in the cleared set and in `protected` are skipped.
 -- Surprise-opened specials (saved same wave) must sit unchanged — Hat must not
 -- swap/cycle their color before the next move (parity with maker_bomb_survives_wave).
 triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
@@ -272,12 +198,8 @@ makersAdjacentSameColor b cleared =
     ]
 
 -- | Charge juice makers adjacent to same-color clears.
--- Charge 1 -> produce Bomb of maker color in place; n>1 -> decrement.
--- Returns board (makers never enter the clear-hole set).
-chargeAdjacentMakers :: Board -> [Pos] -> Board
-chargeAdjacentMakers b clearedGems = fst (chargeAdjacentMakersSit b clearedGems)
-
--- | Like chargeAdjacentMakers, also returns positions converted to Bomb this wave.
+-- Charge 1 -> produce Bomb of maker color in place; n>1 -> decrement (makers never enter the clear-hole set).
+-- Also returns positions converted to Bomb this wave.
 -- Those Bombs must sit through same-wave Bottle dye (Surprise special parity;
 -- Hat runs before Maker so only Bottle can rewrite a freshly produced Bomb).
 chargeAdjacentMakersSit :: Board -> [Pos] -> (Board, [Pos])
@@ -345,22 +267,12 @@ openSurprises b clearedGems =
               (setAt board p (surpriseSpecial p), explodes, nub (p : saved))
         _ -> (board, explodes, saved)
 
--- | Adjacent-only wrapper (same targets as openSurprises, discards saved list).
-openAdjacentSurprises :: Board -> [Pos] -> (Board, [Pos])
-openAdjacentSurprises b clearedGems =
-  let (b', expl, _) = openSurprises b clearedGems
-  in (b', expl)
-
 -- | Dye bottle positions orthogonally adjacent to cleared gems.
 bottlesAdjacentTo :: Board -> [Pos] -> [Pos]
 bottlesAdjacentTo = adjacentWhere isBottle
 
 -- | Trigger dye bottles: recolor every ortho gem neighbor to the bottle color.
--- Bottle itself stays. Neighbors in the cleared set are skipped.
-triggerAdjacentBottles :: Board -> [Pos] -> Board
-triggerAdjacentBottles = noExcept triggerAdjacentBottlesExcept
-
--- | Like triggerAdjacentBottles, but also skip dyeing `protected` cells.
+-- Bottle itself stays. Neighbors in the cleared set and in `protected` are skipped.
 -- Surprise-opened specials and Maker-produced Bombs sit same-wave; Bottle
 -- must not recolor them (parity with maker_bomb_survives_wave / Surprise sit).
 triggerAdjacentBottlesExcept :: Board -> [Pos] -> [Pos] -> Board
@@ -391,11 +303,7 @@ triggerAdjacentBottlesBy recolorable b cleared protected =
 spiritsAdjacentTo :: Board -> [Pos] -> [Pos]
 spiritsAdjacentTo = adjacentWhere isTimeSpirit
 
--- | Remove adjacent time spirits (时间精灵). Dead positions cleared with the wave.
-chipAdjacentTimeSpirits :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentTimeSpirits = noExcept chipAdjacentTimeSpiritsExcept
-
--- | Like chipAdjacentTimeSpirits but skips cells in 'except' (already direct-hit this wave).
+-- | Remove adjacent time spirits (时间精灵), skipping cells in 'except'. Dead positions cleared with the wave.
 chipAdjacentTimeSpiritsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentTimeSpiritsExcept b clearedGems except =
   foldl hitOne (b, []) [p | p <- spiritsAdjacentTo b clearedGems, p `notElem` except]

@@ -1,23 +1,67 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 冰层与叠层（对应 Element/Builtin/Layer）：冰、草、藤、巧克力、迷雾、锁链、冰冻、窗帘、蒸汽，以及软命中不伤同格叠层。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Builtin.Layer
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches, noHooks)
+import Match3.Board.Default
+  ( cascadeMatches
+  , cascadeSeeds
+  , clearMatches
+  , expandSpecials
+  , findMatches
+  , hasAnyMatch
+  , noHooks
+  )
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard))
 import Match3.Core
-import Match3.Board.Grid (atM)
-import Match3.Element (defaultRegistry)
+import Match3.Board.Grid (setCell)
 import Match3.Element.Registry (swapBlockedWith)
+import Match3.Game.Boosters (useFreeSwap, useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Grass
+  ( chipAdjacentChain
+  , chipAdjacentCurtain
+  , chipAdjacentFog
+  , chipAdjacentFreeze
+  , clearChocoAdjacent
+  , clearOverlaysOn
+  , clearSteamAdjacent
+  , spreadChoco
+  , spreadSteam
+  , spreadVines
+  )
+import Match3.Ice (chipIceOnClear)
+import Match3.Types
+  ( cellColor
+  , cellOverlay
+  , chainLayers
+  , curtainLayers
+  , fogLayers
+  , freezeLayers
+  , goalScore
+  , hasChain
+  , hasCurtain
+  , hasFog
+  , hasFreeze
+  , hasGrass
+  , hasSteam
+  , iceLayers
+  , isBalloon
+  , isFlip
+  , isGem
+  , isMaker
+  , makerCharges
+  )
+import Spec.Support.Obstacles (chargeAdjacentMakers)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "ice_layer_blocks_clear" ice_layer_blocks_clear

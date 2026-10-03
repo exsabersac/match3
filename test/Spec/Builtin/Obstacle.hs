@@ -2,24 +2,80 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 本体障碍（对应 Element/Builtin/Obstacle）：石头、宝箱、蜂蜜、气球、蛋糕、保险箱、双面、彩蛋。
--- （第 1 刀由 Spec.Obstacles.Body / Features 按 Builtin 分组纯搬家而来；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Builtin.Obstacle
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, clearMatches, noHooks, builtinHooks)
+import Match3.Board.Default
+  ( builtinHooks
+  , cascadeMatches
+  , cascadeSeeds
+  , clearMatches
+  , findMatchRuns
+  , findMatches
+  , hasAnyMatch
+  , noHooks
+  , settleBoardPortals
+  , stepCascade
+  )
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts, ctCells))
+import Match3.Board.Match (MatchRun(..))
 import Match3.Core
-import Match3.Board.Grid (atM)
-import Match3.Element (defaultRegistry)
+import Match3.Board.Grid (setCell)
 import Match3.Element.Registry (swapBlockedWith)
+import Match3.Game.Boosters (useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Game.State (gsCount)
+import Match3.Ice (chipIceOnClear)
+import Match3.Obstacles (openSurprises, triggerAdjacentBottlesExcept, triggerAdjacentHatsExcept)
+import Match3.Types
+  ( cakeLayers
+  , cellColor
+  , cellKind
+  , cellOverlay
+  , chestLayers
+  , flipBack
+  , flipFront
+  , goalCount
+  , goalScore
+  , honeyLayers
+  , isBalloon
+  , isCake
+  , isChest
+  , isCookie
+  , isFlip
+  , isGem
+  , isHoney
+  , isSafe
+  , isStone
+  , isSurprise
+  , mkCake
+  , mkChest
+  , mkHoney
+  , mkSafe
+  , mkStone
+  , safeLayers
+  , stoneLayers
+  )
+import Spec.Support.Obstacles
+  ( chipAdjacentBalloons
+  , chipAdjacentCakes
+  , chipAdjacentChests
+  , chipAdjacentHoney
+  , chipAdjacentSafes
+  , chipAdjacentStones
+  , openAdjacentSurprises
+  , triggerAdjacentBottles
+  , triggerAdjacentHats
+  )
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Match3.Counts (noCounts)
+import Match3.Counts (countOf, noCounts)
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "stone_blocks_swap" stone_blocks_swap

@@ -8,12 +8,19 @@ module Spec.JellyBubble
 
 import Control.Monad (forM_)
 import Data.List (isInfixOf)
+import Match3.Board.Default (hasAnyMatch)
+import Match3.Board.Grid (setCell)
 import Match3.Board.Match (findHintWith)
 import Match3.Core
+import Match3.Counts (namedCounts)
 import Match3.Element
 import Engine.Game (Game(..), Step(..))
-import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Boosters (useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (resolveSwapWith, trySwap)
 import qualified Match3.Engine as M3E
+import Match3.Game.State (gsCollected, gsGround, setGround)
+import Match3.Types (goalCount, goalScore)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

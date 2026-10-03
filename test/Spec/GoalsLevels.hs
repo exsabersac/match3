@@ -1,21 +1,47 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 目标、结局与关卡：各类目标计数、胜负判定、星级、战役关卡表、每日挑战、地图选关与步数结转。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.GoalsLevels
   ( tests
   , outcome_moves_or_score
   ) where
 
 import Data.List (nub)
+import Match3.Board.Default (findHint, hasAnyMatch, hasValidMove)
+import Match3.Board.Grid (setCell)
 import Match3.Core
+import Match3.Daily (dailyConfig)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Game.Outcome (unlockAfterClear)
+import Match3.Game.State (gsCarpetOpen, gsCollected, gsCount, gsGoalMet)
+import Match3.Types
+  ( goalCollect
+  , goalColors
+  , goalCount
+  , goalMet
+  , goalProgress
+  , goalScore
+  , goalTarget
+  , isBalloon
+  , isCake
+  , isChest
+  , isCookie
+  , isFlip
+  , isHoney
+  , isMagicHat
+  , isSafe
+  , isStone
+  , mkStone
+  , validBoardDim
+  )
 import Test.Tasty
 import Test.Tasty.HUnit
-import Match3.Counts (noCounts, singleCount)
+import Match3.Counts (countsFromList, noCounts, singleCount)
 import Spec.Support
 import Match3.Levels.Level (DropSpec(..))
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "outcome_moves_or_score" outcome_moves_or_score

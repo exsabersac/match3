@@ -14,9 +14,30 @@ module Spec.GridGeometry
 import Data.List (sort)
 import Engine.GridUI (GridGeom (..), PxX (..), PxY (..), pxXY)
 import qualified Engine.GridUI as NewUI
+import Match3.Board.Grid (inBounds)
 import Match3.Core
+import Match3.Daily (dailyConfig)
 import qualified Match3.Obstacles as NewObs
-import Match3.Types (gridFromRows, gridRows)
+import Match3.Types
+  ( Dir(..)
+  , boardAssocs
+  , clockwiseFromRight
+  , colorAt
+  , dirBetween
+  , dirDelta
+  , gridFromRows
+  , gridRows
+  , ifoldMap
+  , ifoldl'
+  , ifoldr
+  , mkSnailFacing
+  , neighborsIn
+  , numColors
+  , readingOrder
+  , rightAndDown
+  , snailFacing
+  , stepDir
+  )
 import Spec.Properties (genCell, genColor, genGem, genOverlay)
 import Spec.Support.Arbitrary (shrinkBoard)
 import Test.Tasty

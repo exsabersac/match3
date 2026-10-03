@@ -33,9 +33,10 @@ import Data.Foldable (toList)
 import Data.List (isInfixOf, isPrefixOf, nub, sort, tails)
 import Engine.Effect (Effect (..), beats)
 import Match3.Core
-import Match3.Element (defaultRegistry)
-import Match3.Element.Registry (elementName, elementOf, entryName, entrySlot, placeWith, registryDefs, topLayerName)
+import Match3.Element.Registry (elementOf, entryName, entrySlot, placeWith, registryDefs, topLayerName)
 import Match3.Element.Types (Slot (..), cellSlot, overlaySlot)
+import Match3.Types (goalScore)
+import Match3.Ufo (mkUfo)
 import Match3.View (cellFace)
 import Match3.Element.Types (Arg (..), Placement (..), argColor, argInt, exactArgs, prefixArgs)
 import Match3.Levels.Level
@@ -46,6 +47,7 @@ import Match3.Levels.Level
   , checkLevel
   , checkLevelDims
   , failure
+  , level
   , renderIssue
   , validateLevel
   )

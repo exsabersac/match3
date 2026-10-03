@@ -15,13 +15,14 @@ import Control.Exception (ErrorCall(..), evaluate, try)
 import qualified Data.Array as A
 import Data.Array.Unboxed ((!))
 import Data.Maybe (isJust, isNothing)
+import Match3.Board.Default (findHint)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith)
-import Match3.Board.Grid (MBoard, mboardRows, toM)
+import Match3.Board.Grid (MBoard, inBounds, swapCells, toM)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith, matchCodesWith)
 import Match3.Core
-import Match3.Element (defaultRegistry)
 import Match3.Element.Level (levelRegistryIn)
 import Match3.Element.Registry (Registry, matchColorWith)
+import Match3.Game.Move (trySwap)
 import Spec.Support (digest)
 import Spec.Support.Parallel (forceLines, parallelForce)
 import Test.Tasty

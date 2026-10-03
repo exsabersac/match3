@@ -2,24 +2,30 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 前端反馈与效果事件：失败 / 无效 / 道具空操作 / 撤销洗牌清掉连击反馈，MoveFx 与 gsLastCleared，事件与回放一致。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.UIEvents
   ( tests
   ) where
 
 import Data.List (nub, sort)
 import Data.Maybe (isJust)
+import Match3.Board.Default (findHint)
+import Match3.Board.Grid (setCell)
 import Match3.Core
-import Match3.Element (defaultRegistry)
+import Match3.Countdown (spawnCountdown)
 import Match3.Element.Event (EventKind(..), Event(..))
-import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Boosters (useCrossClear, useFreeSwap, useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (resolveSwapWith, trySwap)
+import Match3.Game.Shuffle (shuffleGame)
+import Match3.Game.State (moveFx)
 import Match3.Game.Trace (traceEvents)
 import qualified Match3.Engine as M3E
+import Match3.Types (goalScore, isCountdown)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "last_cleared_skips_belt_snail" last_cleared_skips_belt_snail

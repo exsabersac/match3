@@ -1,426 +1,188 @@
--- | 库门面：再导出 Types、Board.* / Game.* 子模块与各机制模块的稳定公开 API（给前端用）。
--- 自身几乎无业务逻辑；前端与测试应优先 import Match3.Core。
--- 不拥有：SDL、关卡装饰布局细节（在 Game）、连锁波次实现（在 Board）。
+-- | 前端 API：桌面版（app/）与网页版（web/hs）用到的类型、构造函数、查询和对局操作。
+-- 本模块只再导出，不定义任何东西。
+--
+-- 规则内部（障碍邻消、蔓延、连锁各阶段、道具清除范围等）不从这里导出：库内模块和测试直接 import
+-- 所在的子模块（Match3.Types、Match3.Board.*、Match3.Game.*、Match3.Obstacles 等）。
+-- 前端要用新名字时在这里加上；这里的每个名字都必须有前端在用（Spec.SourceScan 的 core_exports_used_by_frontends）。
 module Match3.Core
-  ( Color(..)
+  ( -- * 格子
+    Color(..)
+  , allColors
   , GemKind(..)
   , CellContents(..)
   , Cell
+  , CellOverlay(..)
   , ElementName(..)
   , CustomState(..)
+  , hasVine
+  , hasChoco
+  , chameleonColor
+  , elementName
+  , defaultRegistry
+    -- ** 构造（图例、几何版示意格）
   , mkGem
   , mkIceGem
-  , iceLayers
-  , specialActivates
-  , chipIceOnClear
-  , CellOverlay(..)
   , mkGrassGem
   , mkVineGem
   , mkChocoGem
-  , hasGrass
-  , hasVine
-  , hasChoco
-  , hasFog
-  , fogLayers
   , mkFogGem
-  , hasChain
-  , chainLayers
   , mkChainGem
-  , hasFreeze
-  , freezeLayers
   , mkFreezeGem
-  , hasCurtain
-  , curtainLayers
   , mkCurtainGem
-  , mkSnail
-  , mkSnailFacing
-  , snailFacing
-  , isSnail
-  , snailDir
-  , mkSafe
-  , mkSafeLayers
-  , safeLayers
-  , isSafe
-  , mkFlip
-  , isFlip
-  , flipFront
-  , flipBack
-  , mkSurprise
-  , isSurprise
-  , mkBottle
-  , isBottle
-  , bottleColor
-  , mkTimeSpirit
-  , isTimeSpirit
   , mkSteamGem
-  , hasSteam
-  , cellOverlay
-  , clearOverlaysOn
-  , clearChocoAdjacent
-  , clearSteamAdjacent
-  , chipAdjacentFog
-  , chipAdjacentChain
-  , chipAdjacentFreeze
-  , chipAdjacentCurtain
-  , vinePositions
-  , chocoPositions
-  , chainPositions
-  , freezePositions
-  , curtainPositions
-  , steamPositions
-  , spreadVines
-  , spreadChoco
-  , spreadSteam
-  , coverCarpets
-  , levelCarpets
-  , stepSnails
-  , stepSnailsAvoiding
-  , stepSnailsAvoidingBlocked
-  , stepSnailAt
-  , stepSnailAtBlocked
-  , snailPositions
-  , Ufo(..)
-  , mkUfo
-  , ufoAbsorbTargets
-  , moveUfo
-  , stepUfo
-  , stepUfos
-  , mkStone
+  , mkSnail
+  , mkSafeLayers
+  , mkFlip
+  , mkSurprise
+  , mkBottle
+  , mkTimeSpirit
   , mkStoneLayers
-  , stoneLayers
-  , isStone
-  , mkChest
   , mkChestLayers
-  , chestLayers
-  , isChest
-  , mkHoney
   , mkHoneyLayers
-  , honeyLayers
-  , isHoney
   , mkBalloon
-  , isBalloon
-  , balloonColor
   , mkCookie
-  , isCookie
-  , mkCake
   , mkCakeLayers
-  , cakeLayers
-  , isCake
   , mkMagicHat
-  , isMagicHat
-  , mkMaker
   , mkMakerCharges
-  , makerColor
-  , makerCharges
-  , isMaker
   , mkCountdown
-  , isCountdown
-  , countdownTurns
-  , spawnCountdown
-  , tickCountdowns
-  , countdownsAtZero
-  , explodeRadius
-  , explodeSeedsFor
-  , Belt
-  , shiftBelt
-  , shiftBelts
-  , isGem
-  , cellColor
-  , cellKind
+    -- * 盘面与坐标
   , Pos
-  , Dir(..)
-  , dirDelta
-  , stepDir
-  , dirBetween
-  , neighborsIn
-  , upDownLeftRight
-  , readingOrder
-  , clockwiseFromRight
-  , rightAndDown
-  , ifoldMap
-  , ifoldr
-  , ifoldl'
-  , positionsWhere
-  , Grid
   , Board
   , boardFromRows
   , boardRows
-  , boardCells
-  , boardAssocs
-  , mapBoard
   , boardSize
-  , minBoardDim
-  , maxBoardDim
-  , validBoardDim
   , boardDims
-  , boardNRows
-  , boardNCols
+  , maxBoardDim
   , boardPositions
   , boardRowIndices
   , boardColIndices
-  , numColors
-  , allColors
-  , colorAt
-  , Score
-  , MovesLeft
-  , TargetScore
-  , Outcome(..)
-  , LevelGoal(..)
-  , Meter(..)
-  , Quota(..)
-  , goalScore
-  , goalCollect
-  , goalColors
-  , goalCount
-  , GoalView(..)
-  , goalView
-  , meterValue
-  , goalMet
-  , goalProgress
-  , goalTarget
+  , positionsWhere
+  , upDownLeftRight
+  , getCell
+  , adjacent
+  , neighborsInBounds
+  , gravityFixedCell
+    -- ** 可空盘面（连锁波次里带空洞的盘面）
+  , atM
+  , mboardRows
+    -- * 关卡与目标
   , GameConfig(..)
   , defaultConfig
   , Level(..)
-  , level
+  , levelConfig
   , allLevels
   , lookupLevel
   , levelCount
   , clampLevelIndex
-  , levelConfig
-  , getCell
-  , setCell
-  , swapCells
-  , inBounds
-  , adjacent
-  , neighborsInBounds
-  , findMatches
-  , findMatchRuns
-  , hasAnyMatch
-  , hasValidMove
-  , stepCascade
-  , randomBoard
-  , randomStableBoard
-  , randomPlayableBoard
-  , shufflePlayable
-  , scoreForCleared
-  , scoreForWave
-  , findHint
-  , MatchRun(..)
-  , countColor
+  , LevelGoal(..)
+  , CounterKey(..)
+  , GoalView(..)
+  , goalView
+  , MovesLeft
+  , Outcome(..)
+    -- * 对局
   , GameState(..)
-  , gsCount
-  , gsProgress
-  , gsGoalMet
-  , gsCollected
-  , gsColorBag
-    -- ** 关卡级元素（派生读数 + 写入函数，状态在 gsLevelElems）
-  , gsBelts
-  , gsPortals
+  , MoveFx(..)
+  , Ufo(..)
   , gsUfos
-  , gsCarpetOpen
-  , gsGround
-  , setLevelElem
   , setUfos
   , setBelts
   , setPortals
   , setCarpetOpen
-  , setGround
-  , SomeLevelElement
-  , CounterKey(..)
-  , Counts
-  , countOf
-  , countsFromList
-  , countsToList
-  , namedCounts
-  , colorBag
-  , newGame
   , newGameAtLevel
   , campaignGame
   , newDailyGame
-  , trySwap
-  , MoveFx(..)
-  , moveFx
-  , clearMoveFx
+  , restartLevel
+  , nextLevel
+  , applyHint
+  , loseHint
+  , unlockAfterOutcome
+  , mapClickJump
+    -- * 一步的轨迹（回放用）
   , MoveTrace(..)
+  , emptyTrace
+  , CascadeWave(..)
   , EndStep(..)
   , EndEffect(..)
   , EndItem(..)
-  , applyEndEffect
   , endEffectPairs
   , endItemDir
-  , traceSwap
-  , traceFreeSwap
-  , traceHammer
-  , traceCrossClear
-  , CascadeWave(..)
-  , runMove
-  , restart
-  , restartLevel
-  , checkOutcome
-  , applyHint
-  , nextLevel
-  , ensurePlayable
-  , shuffleGame
-  , useHammer
-  , useFreeSwap
-  , useCrossClear
-  , loseHint
-  , unlockAfterClear
-  , unlockAfterOutcome
-  , mapClickJump
-  , hammerClearSeeds
-  , crossClearSeeds
-  , orthoNeighbors
-  , stonesAdjacentTo
-  , chipAdjacentStones
-  , chipAdjacentChests
-  , chestsAdjacentTo
-  , chipAdjacentHoney
-  , honeysAdjacentTo
-  , chipAdjacentCakes
-  , cakesAdjacentTo
-  , chipAdjacentSafes
-  , safesAdjacentTo
-  , openAdjacentSurprises
-  , openSurprises
-  , surprisesAdjacentTo
-  , triggerAdjacentBottles
-  , triggerAdjacentBottlesExcept
-  , bottlesAdjacentTo
-  , spiritsAdjacentTo
-  , chipAdjacentTimeSpirits
-  , chipAdjacentBalloons
-  , balloonsAdjacentSameColor
-  , hatsAdjacentTo
-  , triggerAdjacentHats
-  , triggerAdjacentHatsExcept
-  , makersAdjacentSameColor
-  , chargeAdjacentMakers
-  , chargeAdjacentMakersSit
-  , applyPortalTeleports
-  , settleBoardPortals
-  , expandSpecials
-  , isRainbow
-  , isRainbowSwap
-  , rainbowClearSeeds
-  , isLineBombCombo
-  , isRainbowLineCombo
-  , isBombBombCombo
-  , isLineLineCombo
-  , isSpecialCombo
-  , comboClearSeeds
+    -- * 每日挑战
   , Year(..)
   , Month(..)
   , Day(..)
   , dailySeed
-  , dailyConfig
   , dailyLevel
   , starRating
   ) where
 
-import Match3.Board.Default (applyPortalTeleports, countColor, expandSpecials, findHint, findMatchRuns, findMatches, hasAnyMatch, hasValidMove, settleBoardPortals, stepCascade)
 import Match3.Board.Cascade (CascadeWave(..))
-import Match3.Board.Clear (scoreForCleared, scoreForWave)
-import Match3.Board.Grid (adjacent, getCell, inBounds, neighborsInBounds, setCell, swapCells)
-import Match3.Board.Match (MatchRun(..))
-import Match3.Board.Random (randomBoard, randomPlayableBoard, randomStableBoard, shufflePlayable)
-import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, countsFromList, countsToList, namedCounts)
-import Match3.Ice (chipIceOnClear)
-import Match3.Grass
-  ( clearOverlaysOn
-  , clearChocoAdjacent
-  , clearSteamAdjacent
-  , chipAdjacentFog
-  , chipAdjacentChain
-  , chipAdjacentFreeze
-  , chipAdjacentCurtain
-  , vinePositions
-  , chocoPositions
-  , chainPositions
-  , freezePositions
-  , curtainPositions
-  , steamPositions
-  , spreadVines
-  , spreadChoco
-  , spreadSteam
-  )
-import Match3.Carpet (coverCarpets)
-import Match3.Levels.Campaign (allLevels, clampLevelIndex, levelCarpets, levelCount, lookupLevel)
-import Match3.Levels.Level (Level(..), level, levelConfig)
-import Match3.Snail
-  ( stepSnails
-  , stepSnailsAvoiding
-  , stepSnailsAvoidingBlocked
-  , stepSnailAt
-  , stepSnailAtBlocked
-  , snailPositions
-  )
-import Match3.Ufo
-  ( Ufo(..)
-  , mkUfo
-  , ufoAbsorbTargets
-  , moveUfo
-  , stepUfo
-  , stepUfos
-  )
-import Match3.Element.Class (SomeLevelElement)
-import Match3.Game.Boosters
-import Match3.Game.Level
-import Match3.Game.Move
-import Match3.Game.Outcome
-import Match3.Game.Shuffle
-import Match3.Game.State
-import Match3.Game.Trace
-import Match3.Obstacles
-  ( orthoNeighbors
-  , stonesAdjacentTo
-  , chipAdjacentStones
-  , chipAdjacentChests
-  , chestsAdjacentTo
-  , chipAdjacentHoney
-  , honeysAdjacentTo
-  , chipAdjacentCakes
-  , cakesAdjacentTo
-  , chipAdjacentSafes
-  , safesAdjacentTo
-  , chipAdjacentBalloons
-  , balloonsAdjacentSameColor
-  , hatsAdjacentTo
-  , triggerAdjacentHats
-  , triggerAdjacentHatsExcept
-  , makersAdjacentSameColor
-  , chargeAdjacentMakers
-  , chargeAdjacentMakersSit
-  , openAdjacentSurprises
-  , openSurprises
-  , surprisesAdjacentTo
-  , triggerAdjacentBottles
-  , triggerAdjacentBottlesExcept
-  , bottlesAdjacentTo
-  , spiritsAdjacentTo
-  , chipAdjacentTimeSpirits
-  )
-import Match3.Daily (Day(..), Month(..), Year(..), dailySeed, dailyConfig, dailyLevel, starRating)
-import Match3.Conveyor (Belt, shiftBelt, shiftBelts)
-import Match3.Boosters (hammerClearSeeds, crossClearSeeds)
-import Match3.Countdown
-  ( spawnCountdown
-  , tickCountdowns
-  , countdownsAtZero
-  , explodeRadius
-  , explodeSeedsFor
-  )
-import Match3.Combos
-  ( isLineBombCombo
-  , isRainbowLineCombo
-  , isBombBombCombo
-  , isLineLineCombo
-  , isSpecialCombo
-  , comboClearSeeds
-  )
-import Match3.Rainbow
-  ( isRainbow
-  , isRainbowSwap
-  , rainbowClearSeeds
-  )
+import Match3.Board.Default (gravityFixedCell)
+import Match3.Board.Grid (adjacent, atM, getCell, mboardRows, neighborsInBounds)
+import Match3.Counts (CounterKey(..))
+import Match3.Daily (Day(..), Month(..), Year(..), dailyLevel, dailySeed, starRating)
+import Match3.Element.Builtin (chameleonColor, defaultRegistry)
+import Match3.Element.Registry (elementName)
+import Match3.Game.Level (campaignGame, newDailyGame, newGameAtLevel, nextLevel, restartLevel)
+import Match3.Game.Outcome (loseHint, mapClickJump, unlockAfterOutcome)
+import Match3.Game.State (GameState(..), MoveFx(..), applyHint, gsUfos, setBelts, setCarpetOpen, setPortals, setUfos)
+import Match3.Game.Trace (EndEffect(..), EndItem(..), EndStep(..), MoveTrace(..), emptyTrace, endEffectPairs, endItemDir)
+import Match3.Levels.Campaign (allLevels, clampLevelIndex, levelCount, lookupLevel)
+import Match3.Levels.Level (Level(..), levelConfig)
 import Match3.Types
+  ( Board
+  , Cell
+  , CellContents(..)
+  , CellOverlay(..)
+  , Color(..)
+  , CustomState(..)
+  , ElementName(..)
+  , GameConfig(..)
+  , GemKind(..)
+  , GoalView(..)
+  , LevelGoal(..)
+  , MovesLeft
+  , Outcome(..)
+  , Pos
+  , allColors
+  , boardColIndices
+  , boardDims
+  , boardFromRows
+  , boardPositions
+  , boardRowIndices
+  , boardRows
+  , boardSize
+  , defaultConfig
+  , goalView
+  , hasChoco
+  , hasVine
+  , maxBoardDim
+  , mkBalloon
+  , mkBottle
+  , mkCakeLayers
+  , mkChainGem
+  , mkChestLayers
+  , mkChocoGem
+  , mkCookie
+  , mkCountdown
+  , mkCurtainGem
+  , mkFlip
+  , mkFogGem
+  , mkFreezeGem
+  , mkGem
+  , mkGrassGem
+  , mkHoneyLayers
+  , mkIceGem
+  , mkMagicHat
+  , mkMakerCharges
+  , mkSafeLayers
+  , mkSnail
+  , mkSteamGem
+  , mkStoneLayers
+  , mkSurprise
+  , mkTimeSpirit
+  , mkVineGem
+  , positionsWhere
+  , upDownLeftRight
+  )
+import Match3.Ufo (Ufo(..))

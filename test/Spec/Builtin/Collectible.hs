@@ -2,23 +2,28 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 收集物（对应 Element/Builtin/Collectible）：饼干、时间精灵（气泡见 Spec.JellyBubble）。
--- （第 1 刀由 Spec.Obstacles.Body / Features 按 Builtin 分组纯搬家而来；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Builtin.Collectible
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeSeeds, noHooks)
+import Match3.Board.Default (cascadeSeeds, findMatches, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
+import Match3.Board.Grid (setCell)
 import Match3.Core
-import Match3.Element (defaultRegistry)
 import Match3.Element.Registry (swapBlockedWith)
+import Match3.Game.Boosters (useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Game.State (gsCount)
+import Match3.Ice (chipIceOnClear)
+import Match3.Types (goalCount, goalScore, isCookie, isTimeSpirit)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Match3.Counts (noCounts)
+import Match3.Counts (countOf, noCounts)
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "cookie_blocks_swap" cookie_blocks_swap

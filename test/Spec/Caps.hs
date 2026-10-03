@@ -11,12 +11,14 @@ module Spec.Caps
 import Data.Char (isAlphaNum, isSpace)
 import Data.List (isPrefixOf, nub)
 import Data.Maybe (isJust)
-import Match3.Core (GameState(..), namedCounts, newGame)
+import Match3.Core (GameState(..))
 import Match3.Board.Grid (getCell, setCell)
+import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Caps (blocker, counts, hit)
 import Match3.Element.Class
 import Match3.Game.Boosters (resolveHammerWith)
+import Match3.Game.Level (newGame)
 import Spec.Support (stableBoard)
 import Spec.Support.Source (builtinSources, readCode)
 import Match3.Types

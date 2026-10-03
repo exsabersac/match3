@@ -8,12 +8,15 @@ module Spec.RainbowCombos
   ) where
 
 import Data.List (isInfixOf)
+import Match3.Board.Grid (swapCells)
 import Match3.Core
 import Match3.Combos (rainbowComboMorph)
-import Match3.Element (defaultRegistry, removeLevel)
+import Match3.Counts (countOf)
+import Match3.Element (removeLevel)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Game.Move (resolveSwapWith)
-import Match3.Game.Trace (traceEvents)
+import Match3.Game.Trace (applyEndEffect, traceEvents)
+import Match3.Types (cellKind)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

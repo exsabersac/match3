@@ -2,24 +2,60 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 关卡级元素（对应 Element/Builtin/Level）：皮带、传送门、飞碟、地毯。
--- （第 1 刀由 Spec.Obstacles.Body / Features 按 Builtin 分组纯搬家而来；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Builtin.Level
   ( tests
   ) where
 
 import Control.Monad (when)
 import Data.List (nub, sort)
-import Match3.Board.Default (cascadeMatches, clearMatches, builtinHooks)
+import Match3.Board.Default
+  ( applyPortalTeleports
+  , builtinHooks
+  , cascadeMatches
+  , clearMatches
+  , expandSpecials
+  , findHint
+  , hasAnyMatch
+  , settleBoardPortals
+  )
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
+import Match3.Board.Random (randomPlayableBoard, randomStableBoard)
+import Match3.Carpet (coverCarpets)
+import Match3.Conveyor (shiftBelt, shiftBelts)
 import Match3.Core
-import Match3.Board.Grid (atM, setM, mboardFromRows)
+import Match3.Board.Grid (mboardFromRows, setCell, setM, swapCells)
+import Match3.Game.Boosters (useCrossClear, useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Game.State (gsBelts, gsCarpetOpen, gsCollected, gsCount, gsGoalMet, gsPortals)
+import Match3.Ice (chipIceOnClear)
+import Match3.Types
+  ( cellColor
+  , flipBack
+  , flipFront
+  , goalCount
+  , goalMet
+  , goalProgress
+  , goalScore
+  , goalTarget
+  , iceLayers
+  , isBottle
+  , isCookie
+  , isFlip
+  , isGem
+  , isMagicHat
+  , isMaker
+  , isSafe
+  , isSnail
+  )
+import Match3.Ufo (mkUfo, stepUfo, ufoAbsorbTargets)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Match3.Counts (noCounts, singleCount)
+import Match3.Counts (countOf, noCounts, singleCount)
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "conveyor_cycle_preserves_cells" conveyor_cycle_preserves_cells

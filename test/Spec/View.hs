@@ -9,12 +9,18 @@ module Spec.View
   ( tests
   ) where
 
-import Data.List (isInfixOf, nub)
+import Data.List (isInfixOf, isPrefixOf, nub)
 import Engine.GridUI
+import Match3.Board.Default (findHint)
 import Match3.Core
+import Match3.Daily (dailyConfig)
+import Match3.Game.Move (trySwap)
+import Match3.Game.State (gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress)
+import Match3.Levels.Campaign (levelCarpets)
+import Match3.Types (goalCount, goalTarget)
 import Match3.View
 import Spec.Support (levelGame)
-import Spec.Support.Source (mentionsIdent, readCode)
+import Spec.Support.Source (importsOf, mentionsIdent, readCode, sourcesUnderAll)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -29,6 +35,7 @@ tests =
   , testCase "grid_ui_geometry_matches_legacy_layout" grid_ui_geometry_matches_legacy_layout
   , testCase "grid_ui_click_drag_highlight" grid_ui_click_drag_highlight
   , testCase "frontends_read_view_model" frontends_read_view_model
+  , testCase "frontends_import_core_api" frontends_import_core_api
   , testCase "outcome_lose_hint_no_internal_names" outcome_lose_hint_no_internal_names
   ]
 
@@ -364,6 +371,26 @@ grid_ui_click_drag_highlight = do
 
 --------------------------------------------------------------------------------
 -- 源码扫描
+
+-- | 前端（app/ 与 web/hs）从库里只 import 前端 API：Match3.Core、视图模型 Match3.View、对局外壳 Match3.Engine、
+-- 效果事件 Match3.Element.Event 与通用层 Engine.*；Match3.Core 导出的函数与不带构造的类型都有前端在用
+-- （带 (..) 的类型前端可能只用构造或字段，不查）。
+frontends_import_core_api :: Assertion
+frontends_import_core_api = do
+  files <- sourcesUnderAll ["app", "web/hs"]
+  assertBool "scan covers app/ and web/hs" (all (`elem` files) ["app/UI/Actions.hs", "app/pure/ComboFx.hs", "web/hs/Match3Web/Api.hs"])
+  srcs <- mapM (\f -> (,) f <$> readCode f) files
+  let frontendApi m = m `elem` ["Match3.Core", "Match3.View", "Match3.Engine", "Match3.Element.Event"] || "Engine." `isPrefixOf` m
+      fromLibrary m = "Match3." `isPrefixOf` m || "Engine." `isPrefixOf` m
+  assertEqual "front ends import only the front-end API" []
+    [(f, m) | (f, s) <- srcs, m <- importsOf s, fromLibrary m, not (frontendApi m)]
+  core <- readCode "src/Match3/Core.hs"
+  let exportLines = takeWhile (not . (") where" `isInfixOf`)) (drop 1 (dropWhile (not . ("module Match3.Core" `isPrefixOf`)) (lines core)))
+      exportItems = [w | l <- exportLines, w : _ <- [words (dropWhile (`elem` " (,") l)]]
+      plainExports = [w | w <- exportItems, '(' `notElem` w]
+  assertBool "Match3.Core export list parsed" (length plainExports > 50)
+  assertEqual "every Match3.Core function / plain type is used by a front end" []
+    [n | n <- plainExports, not (any (mentionsIdent n . snd) srcs)]
 
 frontends_read_view_model :: Assertion
 frontends_read_view_model = do

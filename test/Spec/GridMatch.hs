@@ -2,7 +2,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 盘面与匹配：交换回滚、稳定盘面、三连判定、提示、可玩开局。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.GridMatch
   ( tests
   , inv_move_to_stable
@@ -10,13 +9,31 @@ module Spec.GridMatch
   , match_line_ge3
   ) where
 
+import Match3.Board.Default (findMatches, hasAnyMatch, hasValidMove)
+import Match3.Board.Grid (setCell, swapCells)
+import Match3.Board.Random (randomPlayableBoard)
 import Match3.Core
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Types
+  ( balloonColor
+  , bottleColor
+  , cellColor
+  , cellKind
+  , colorAt
+  , flipBack
+  , flipFront
+  , makerColor
+  , mkMaker
+  , mkStone
+  , numColors
+  )
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "inv_no_match_rollback" inv_no_match_rollback

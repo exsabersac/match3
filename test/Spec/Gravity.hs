@@ -2,23 +2,24 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 重力与补子：下落 + 补子、固定格（不死装饰）不随重力移动。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Gravity
   ( tests
   , gravity_then_refill
   ) where
 
-import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches, noHooks)
+import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches, hasAnyMatch, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Board.Gravity (refill)
 import Match3.Core
-import Match3.Board.Grid (atM)
+import Match3.Board.Grid (setCell)
+import Match3.Counts (countOf)
+import Match3.Types (isBottle, isCookie, isMagicHat, isMaker, isSnail)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "gravity_then_refill" gravity_then_refill

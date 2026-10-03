@@ -1,22 +1,50 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 特殊块与合成：直线 / 炸弹 / 彩虹的生成与引爆、特殊 × 特殊合成、彩虹按交换对象取色、软锁纪律。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Specials
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, clearMatches, noHooks)
+import Match3.Board.Default (cascadeMatches, clearMatches, expandSpecials, findMatches, hasAnyMatch, noHooks)
 import Data.List (sort)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard, crTally), CascadeTally(CascadeTally, ctCells))
+import Match3.Combos
+  ( comboClearSeeds
+  , isBombBombCombo
+  , isLineBombCombo
+  , isLineLineCombo
+  , isRainbowLineCombo
+  , isSpecialCombo
+  )
 import Match3.Core
-import Match3.Board.Grid (atM)
+import Match3.Board.Grid (setCell, swapCells)
+import Match3.Game.Boosters (useFreeSwap, useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Ice (chipIceOnClear)
+import Match3.Rainbow (isRainbow, isRainbowSwap, rainbowClearSeeds)
+import Match3.Types
+  ( cellColor
+  , cellKind
+  , chainLayers
+  , curtainLayers
+  , goalScore
+  , hasChain
+  , hasCurtain
+  , iceLayers
+  , isFlip
+  , isGem
+  , isSafe
+  , isStone
+  , safeLayers
+  , stoneLayers
+  )
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "special_line_from_4" special_line_from_4

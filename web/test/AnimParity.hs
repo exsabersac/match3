@@ -16,10 +16,12 @@ import System.IO (hPutStrLn, stderr)
 import Data.Char (digitToInt)
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
+import Match3.Board.Default (findHint)
+import Match3.Board.Grid (inBounds)
 import Match3.Core
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), play)
-import Match3.Element.Builtin (chameleonColor)
+import Match3.Game.State (gsGround)
 import Match3Web.Anim (animRunPlayer, animStart, animTick)
 import Match3Web.Api (apiNew, apiSwapAnim, webState)
 

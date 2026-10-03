@@ -8,7 +8,7 @@
 -- customTable（段 5：气泡），查不到走自定义渲染器；cellTable 里查不到的名字也退回自定义渲染器（它只画 Custom 格，其它格为空）。
 -- 新增棋盘元素：在 UI.Cell.Prim / UI.Cell.Art 各写一个函数，在这里加一行。
 --
--- 依赖：UI.Cell.Prim、UI.Cell.Art、Art、Match3.Core、Match3.Element.*（元素名）。
+-- 依赖：UI.Cell.Prim、UI.Cell.Art、Art、Match3.Core（含元素名 elementName / defaultRegistry）。
 module UI.CellTable
   ( CellRenderer(..)
   , cellTable
@@ -22,8 +22,6 @@ import Art (Art)
 import Data.Maybe (fromMaybe)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (elementName)
 import Match3.View (BossPart (..), bossPart)
 import SDL (Renderer)
 import UI.Cell.Art

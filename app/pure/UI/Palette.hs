@@ -3,7 +3,7 @@
 --
 -- 网页版有对应的 JS 副本（web/www/cells.js 的 COLOR_RGB / ELEMENT_RGB / cellRGB、web/www/main.js 的步末碎屑色），
 -- 两边由 test/Spec/WebColors.hs 逐项比对。colorRGB 另须与 tools/gen_assets.py 的调色板一致。
--- 依赖：Match3.Core、Match3.Element.Builtin（chameleonColor）、UI.Presentation。UI.Layout 再导出本模块的全部函数。
+-- 依赖：Match3.Core、UI.Presentation。UI.Layout 再导出本模块的全部函数。
 module UI.Palette
   ( colorRGB
   , namedRGB
@@ -11,7 +11,6 @@ module UI.Palette
   ) where
 
 import Match3.Core
-import Match3.Element.Builtin (chameleonColor)
 import UI.Presentation (RGB, elementRGBTable)
 
 -- | 五色的主色（与 tools/gen_assets.py 调色板一致）。

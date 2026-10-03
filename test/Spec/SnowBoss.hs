@@ -12,15 +12,33 @@ module Spec.SnowBoss
 import Data.List (nub, sort)
 import Match3.Core
 import Match3.Board.Match (findHintWith)
+import Match3.Counts (countOf, countsFromList)
 import Match3.Element
-  ( Arg(..), HitResult(..), blocksSwapWith, builtinDefs, builtinLevelDefs, builtinShapeRules, colorOfWith, defaultRegistry
-  , directHitWith, fallsWith, keepOnShuffleWith, runAdjacentWith, snowBossHp, snowBossSpawn, snowBosses, SnowBoss(..), decodeBoss )
+  ( Arg(..)
+  , HitResult(..)
+  , blocksSwapWith
+  , builtinDefs
+  , builtinLevelDefs
+  , builtinShapeRules
+  , colorOfWith
+  , directHitWith
+  , fallsWith
+  , keepOnShuffleWith
+  , runAdjacentWith
+  , snowBossHp
+  , snowBossSpawn
+  , snowBosses
+  , SnowBoss(..)
+  , decodeBoss
+  )
 import Match3.Combos (builtinComboRules)
 import Match3.Element.Class (Element(..), diffCounter, diffWeight)
 import Match3.Element.Event (EventKind(..))
 import Match3.Element.Registry (Registry, countElementWith, entryName, mkRegistry, placeWith, registerLevel, setComboRules, setShapeRules, weighElementWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Trace (applyEndEffect)
+import Match3.Types (goalCount, goalTarget)
 import Match3.View (BossPart(..), BossView(..), bossPart, gameView, gvBoss)
 import Test.Tasty
 import Test.Tasty.HUnit

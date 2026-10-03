@@ -12,15 +12,29 @@ module Spec.MagicGround
 import Match3.Core
 import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Combos (builtinComboRules)
+import Match3.Counts (countOf)
+import Match3.Daily (dailyConfig)
 import Match3.Element
-  ( Jelly(..), MagicGround(..), blastWith, builtinDefs, builtinLevelDefs, builtinShapeRules, defaultRegistry
-  , hitGroundWith, levelRegistryIn, magicGroundName, magicWiden, swapOpeningWith, widenedCells )
+  ( Jelly(..)
+  , MagicGround(..)
+  , blastWith
+  , builtinDefs
+  , builtinLevelDefs
+  , builtinShapeRules
+  , hitGroundWith
+  , levelRegistryIn
+  , magicGroundName
+  , magicWiden
+  , swapOpeningWith
+  , widenedCells
+  )
 import Match3.Element.Class (Element(..), widenRule)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Element.Registry (Registry, entryName, mkRegistry, registerLevel, setComboRules, setShapeRules)
 import Match3.Engine (Action(..), Played(..), playWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.State (gsGround)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

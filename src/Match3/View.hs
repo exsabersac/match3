@@ -4,7 +4,8 @@
 -- 网页版（web/hs/Match3Web/Api.hs 的 JSON）都读这里，不各自从 GameState 现算。
 --
 -- 全部是纯函数、只读。
--- 依赖：Match3.Core、Match3.Engine（连击数经通用接口 gameStatus 取）。
+-- 依赖：Match3.Types、Match3.Game.*、Match3.Levels.*（直接 import 子模块，不经前端门面 Match3.Core）、
+-- Match3.Engine（连击数经通用接口 gameStatus 取）。
 module Match3.View
   ( -- * 整局视图
     GameView (..)
@@ -60,11 +61,35 @@ module Match3.View
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
-import Match3.Core
+import Match3.Board.Default (findHint)
+import Match3.Counts (CounterKey(..))
 import Match3.Element.Builtin (SnowBoss (..), decodeBoss, snowBossEvery, snowBossHp, snowBossName)
 import Match3.Engine (match3Game)
+import Match3.Game.Outcome (loseHint)
+import Match3.Game.State (GameState(..), gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress, gsUfos)
 import Match3.GoalLabel (colorLabel, countLabel, goalViewLabel, namedGoalLabelTable)
 import Match3.Element.Level (levelDrops)
+import Match3.Levels.Campaign (allLevels, levelCarpets, levelCount, lookupLevel)
+import Match3.Levels.Level (Level(..))
+import Match3.Types
+  ( Board
+  , Cell
+  , CellContents(..)
+  , CellOverlay(..)
+  , Color(..)
+  , CustomState(..)
+  , ElementName(..)
+  , GemKind(..)
+  , GoalView(..)
+  , LevelGoal(..)
+  , Meter(..)
+  , Outcome(..)
+  , Pos
+  , Quota(..)
+  , goalTarget
+  , goalView
+  )
+import Match3.Ufo (Ufo(..))
 
 --------------------------------------------------------------------------------
 -- 整局视图

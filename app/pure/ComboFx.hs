@@ -2,13 +2,13 @@
 -- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 UI.Cascade / UI.HudArt / UI.HudPrim），
 -- 也不改规则：回放脚本与效果事件来自通用接口 gameStep 的整步报告（Match3.Engine.match3Shell），结算结果仍以规则层为准。
 --
--- 第三刀：时钟（帧号、加速、进度）交给通用播放层 Engine.Playback——本模块只给出阶段机
+-- 时钟（帧号、加速、进度）在通用播放层 Engine.Playback：本模块只给出阶段机
 -- cascadeStages（每个阶段多长、播完去哪、进入时触发什么）；回放器是 Player Cascade。
 -- 波次级界面（高亮 / 消失 / 粒子 / 得分浮字）读 WaveView 里的效果事件（EvClear 格、EvScore 分），
--- 不再读 CascadeWave 的 cwCleared / cwScore；底图快照（cwBefore / cwHoles / cwAfter）仍取自波次。
+-- 不读 CascadeWave 的 cwCleared / cwScore；底图快照（cwBefore / cwHoles / cwAfter）取自波次。
 --
--- 第 10 刀：本模块移到 app/pure/（纯前端模块，桌面 / 测试 / 网页共用）；帧数（高亮、得分浮字、连击弹字、
--- 各步末段）、步末段种类与连击等级样式都来自表现表 UI.Presentation（StageKind / ComboStyle 在那里定义，这里再导出）。
+-- 纯前端模块（app/pure，桌面 / 测试 / 网页共用）。帧数（高亮、得分浮字、连击弹字、各步末段）、
+-- 步末段种类与连击等级样式都来自表现表 UI.Presentation（StageKind / ComboStyle 在那里定义，这里再导出）。
 module ComboFx
   ( -- * 时间线（帧；主循环固定 60 fps 步长，1 帧 ≈ 16.7 ms）
     waveFlashFrames
@@ -38,7 +38,7 @@ module ComboFx
   , waveViews
   , wvCleared
   , wvScore
-    -- * 步末效果阶段（StageKind 第 10 刀起定义在 UI.Presentation，这里再导出）
+    -- * 步末效果阶段（StageKind 定义在 UI.Presentation，这里再导出）
   , StageKind (..)
   , EndStage (..)
   , stageMoves
@@ -46,7 +46,7 @@ module ComboFx
   , fallTable
   , fallAt
   , holeAt
-    -- * 连击等级样式（第 10 刀起定义在 UI.Presentation，这里再导出）
+    -- * 连击等级样式（定义在 UI.Presentation，这里再导出）
   , ComboStyle (..)
   , comboStyle
   , styleRGB
@@ -61,8 +61,6 @@ module ComboFx
   , clearedAnchor
   ) where
 
-import Match3.Board.Default (gravityFixedCell)
-import Match3.Board.Grid (atM)
 import Data.List (transpose)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE

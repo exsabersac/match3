@@ -22,13 +22,14 @@ module Spec.Effects
 import Control.Monad (ap, liftM)
 import Match3.Board.Cascade
 import Match3.Board.Effect
+import Match3.Board.Grid (swapCells)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Phase (Phase(..), Stage, refillStage)
 import Match3.Board.Random (randomBoardSized)
+import Match3.Element.Class (SomeLevelElement)
 import Match3.Types (boardAt)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Core
-import Match3.Element (defaultRegistry)
 import Match3.Element.Level (levelHooksWith, levelRegistryIn)
 import Match3.Element.Registry (Registry)
 import Spec.Support (digest, findMatchPair)

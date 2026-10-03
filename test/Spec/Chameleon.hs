@@ -14,13 +14,34 @@ import Match3.Board.Grid (setM, toM)
 import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Board.Refill (defaultRefill, refillWith)
 import Match3.Combos (builtinComboRules)
+import Match3.Counts (countOf)
+import Match3.Daily (dailyConfig)
 import Match3.Element
-  ( Arg(..), HitResult(..), blocksSwapWith, builtinDefs, builtinLevelDefs, builtinShapeRules, chameleonCell, chameleonColor
-  , chameleonShift, colorOfWith, counterWith, defaultRegistry, directHitWith, dropRefill, fallsWith, hintableWith
-  , keepOnShuffleWith, placeWith, recolorableWith, swapFiresWith, swapOpeningWith )
+  ( Arg(..)
+  , HitResult(..)
+  , blocksSwapWith
+  , builtinDefs
+  , builtinLevelDefs
+  , builtinShapeRules
+  , chameleonCell
+  , chameleonShift
+  , colorOfWith
+  , counterWith
+  , directHitWith
+  , dropRefill
+  , fallsWith
+  , hintableWith
+  , keepOnShuffleWith
+  , placeWith
+  , recolorableWith
+  , swapFiresWith
+  , swapOpeningWith
+  )
 import Match3.Element.Event (EventKind(..))
 import Match3.Element.Registry (Registry, entryName, mkRegistry, registerLevel, setComboRules, setShapeRules)
+import Match3.Game.Boosters (useHammer)
 import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Trace (applyEndEffect)
 import Match3.Levels.Level (DropSpec(..))
 import Match3.View (BoardView(..), boardView)
 import System.Random (mkStdGen)

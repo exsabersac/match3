@@ -127,7 +127,7 @@ dedup_obstacle_orders_pinned :: Assertion
 dedup_obstacle_orders_pinned = do
   let honeyB = obstacleBoard 6 6 [((2, 2), Honey 2), ((4, 2), Honey 1), ((3, 3), Honey 1)]
       (honeyB', honeyDead) = New.chipAdjacentHoneyExcept honeyB [(3, 2)] []
-  assertEqual "honeysAdjacentTo" [(2, 2), (4, 2), (3, 3)] (New.honeysAdjacentTo honeyB [(3, 2)])
+  assertEqual "adjacentWhere (has _Honey)" [(2, 2), (4, 2), (3, 3)] (New.adjacentWhere (has _Honey) honeyB [(3, 2)])
   assertEqual "chipAdjacentHoneyExcept: last layers" [(3, 3), (4, 2)] honeyDead
   assertEqual "chipAdjacentHoneyExcept: cells" [Honey 1, Honey 1, Honey 1] (map (getCell honeyB') [(2, 2), (4, 2), (3, 3)])
   let chestB = obstacleBoard 4 6 [((2, 4), Chest 1), ((3, 5), Chest 1)]

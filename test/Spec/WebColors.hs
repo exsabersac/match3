@@ -14,7 +14,6 @@ module Spec.WebColors
 import Data.Char (isAlphaNum, isDigit, isSpace)
 import Data.List (isInfixOf, isPrefixOf, nub)
 import Match3.Core
-import Match3.Element.Builtin (chameleonColor)
 import Match3.Element.Event (EventKind (..))
 import Match3.View (CellField (..), cellFace, colorNum)
 import Test.Tasty

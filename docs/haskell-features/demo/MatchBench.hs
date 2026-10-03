@@ -24,10 +24,10 @@ import qualified Data.Array.Unboxed as U
 import Data.List (nub)
 import Data.Maybe (isJust)
 import Match3.Board.Gravity (applyGravityWith)
-import Match3.Board.Grid (toM)
+import Match3.Board.Grid (inBounds, swapCells, toM)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith, matchCodesWith)
 import Match3.Core
-import Match3.Element (defaultRegistry)
+import Match3.Types (boardNCols, boardNRows)
 import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith)
 import qualified Spec.Support.LegacyPerf as Old
 import System.CPUTime (getCPUTime)

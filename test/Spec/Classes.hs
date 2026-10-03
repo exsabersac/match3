@@ -24,12 +24,12 @@ import Data.String (fromString)
 import Data.Traversable (mapAccumL)
 import Match3.Board.Grid (chunk, randomColor)
 import Match3.Core
-import Match3.Counts (bumpCount, noCounts, singleCount)
+import Match3.Counts (Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Board.Random (randomBoardSized)
 import Match3.Element
 import Match3.Element.Builtin.Obstacle (StoneE(..))
 import Match3.Element.Class (Element(..), SomeElement(..), SomeModifier(..), diffWeight, modify)
-import Match3.Types (gridFromRows, gridRows)
+import Match3.Types (Grid, boardCells, gridFromRows, gridRows, minBoardDim)
 import System.Random (StdGen, mkStdGen, randomR)
 import Test.Tasty
 import Test.Tasty.HUnit

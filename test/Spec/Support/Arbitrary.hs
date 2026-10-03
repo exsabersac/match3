@@ -18,7 +18,7 @@ module Spec.Support.Arbitrary
   ) where
 
 import Data.Maybe (isJust)
-import Match3.Board.Grid (MBoard, mboardFromRows, mboardRows)
+import Match3.Board.Grid (MBoard, mboardFromRows)
 import Match3.Core
 import Spec.Properties (genCell, genColor)
 import Test.Tasty.QuickCheck

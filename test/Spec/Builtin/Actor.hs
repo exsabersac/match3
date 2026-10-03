@@ -2,25 +2,64 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 会动或会生成东西的元素（对应 Element/Builtin/Actor）：魔法帽、果汁机、染色瓶、倒计时、蜗牛。
--- （第 1 刀由 Spec.Obstacles.Body / Features 按 Builtin 分组纯搬家而来；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Builtin.Actor
   ( tests
   ) where
 
 import Data.List (nub)
-import Match3.Board.Default (cascadeCountdowns, cascadeMatches, clearMatches, noHooks, builtinHooks, hookLevel)
+import Match3.Board.Clear (scoreForWave)
+import Match3.Board.Default
+  ( applyPortalTeleports
+  , builtinHooks
+  , cascadeCountdowns
+  , cascadeMatches
+  , clearMatches
+  , findMatches
+  , hasAnyMatch
+  , hookLevel
+  , noHooks
+  )
+import Match3.Conveyor (shiftBelts)
+import Match3.Countdown (spawnCountdown, tickCountdowns)
+import Match3.Counts (countOf)
 import Match3.Element.Level (levelUfos)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crHooks, crBoard), CascadeTally(CascadeTally, ctCounts, ctScore, ctMaxWave, ctCells))
 import Match3.Core
-import Match3.Board.Grid (atM, setM, mboardFromRows)
-import Match3.Element (defaultRegistry)
+import Match3.Board.Grid (mboardFromRows, setCell, setM)
 import Match3.Element.Registry (swapBlockedWith)
+import Match3.Game.Boosters (useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Game.State (gsPortals)
+import Match3.Ice (chipIceOnClear)
+import Match3.Obstacles (chargeAdjacentMakersSit, hatsAdjacentTo, makersAdjacentSameColor, triggerAdjacentBottlesExcept)
+import Match3.Snail (stepSnailAt, stepSnails, stepSnailsAvoiding, stepSnailsAvoidingBlocked)
+import Match3.Types
+  ( bottleColor
+  , cellColor
+  , cellKind
+  , countdownTurns
+  , goalScore
+  , isBottle
+  , isCookie
+  , isCountdown
+  , isGem
+  , isMagicHat
+  , isMaker
+  , isSnail
+  , makerCharges
+  , mkMaker
+  , mkStone
+  , snailDir
+  )
+import Match3.Ufo (mkUfo)
+import Spec.Support.Obstacles (chargeAdjacentMakers, triggerAdjacentBottles, triggerAdjacentHats)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "hat_triggered_by_adjacent" hat_triggered_by_adjacent

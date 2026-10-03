@@ -34,18 +34,57 @@ import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
 import Match3.Element.Message (Message, fromMessage)
 import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
+import Match3.Game.Level (newGame)
+import Match3.Game.State
+  ( gsBelts
+  , gsCarpetOpen
+  , gsCollected
+  , gsColorBag
+  , gsCount
+  , gsGoalMet
+  , gsGround
+  , gsPortals
+  , gsProgress
+  , setGround
+  )
 import Match3.Game.Trace (traceSpreadsWith)
+import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
+import Match3.Types
+  ( Meter(..)
+  , Quota(..)
+  , goalCollect
+  , goalColors
+  , goalCount
+  , goalMet
+  , goalProgress
+  , goalScore
+  , goalTarget
+  , meterValue
+  , numColors
+  , specialActivates
+  )
+import Match3.Ufo (mkUfo, stepUfos)
 import System.Random (StdGen)
-import Match3.Board.Default (LevelHooks(..), builtinHooks, cascadeMatches, noHooks)
+import Match3.Board.Default (LevelHooks(..), builtinHooks, cascadeMatches, findMatches, hasAnyMatch, noHooks)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith)
-import Match3.Board.Grid (MBoard, atM, mboardFromRows, randomColor)
+import Match3.Board.Grid (MBoard, mboardFromRows, randomColor, setCell, swapCells)
 import Match3.Board.Gravity (activeRefill, applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Board.Clear (spawnSpecialsWith)
 import qualified Match3.Combos as Combos
 import Control.Monad (filterM)
 import Data.Maybe (listToMaybe)
 import Match3.Core
-import Match3.Counts (bumpCount, noCounts, plusCounts)
+import Match3.Counts
+  ( Counts
+  , bumpCount
+  , colorBag
+  , countOf
+  , countsFromList
+  , countsToList
+  , namedCounts
+  , noCounts
+  , plusCounts
+  )
 import Match3.Element
 import Match3.Element.Class (levelNameOf, toCell)
 import Spec.Support (levelGame)
@@ -54,7 +93,7 @@ import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testProperty "qc_findMatches_ge3" qc_findMatches_ge3

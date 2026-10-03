@@ -5,7 +5,7 @@
 --     "Engine.Game" 的三消外壳实例 match3Shell（= withHistory match3History match3Game），
 --     与桌面版 SDL 外壳（app/UI/Plugin.hs）是同一条路径：前端只调 gameStep，这里只做序列化。
 --   * 每一步的表现数据全部来自 stepReport（Played）：回放脚本 pdTrace、效果事件 pdEvents、Outcome；
---     规则只算一次（不再像 spike 初版那样 traceSwap + trySwap 各算一遍）。
+--     规则只算一次（不分别调 traceSwap 与 trySwap）。
 --   * 输出是手写的最小 JSON（Match3Web.Json，不引入 aeson，减小 wasm 体积与依赖面）。
 --   * 逐轮回放（ComboFx 阶段机）见 Match3Web.Anim；apiSwapAnim 额外返回建立回放所需的 AnimSeed。
 module Match3Web.Api
@@ -26,12 +26,9 @@ module Match3Web.Api
 
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History, Undoable(..), histNow, historyDepth)
-import Match3.Board.Grid (mboardRows)
 import Match3.Core
-import Match3.Element.Builtin (chameleonColor)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
-import Match3.Game.Trace (emptyTrace)
 import Match3.View
 import Match3Web.Anim (AnimSeed, seedOf)
 import Match3Web.Json
@@ -97,7 +94,7 @@ runStep act h =
 apiState :: WebGame -> String
 apiState h = obj [("ok", "true"), ("state", encodeState h)]
 
--- | 关卡列表（序号、中文名、步数、目标描述），给选关界面用（第 11 刀起读 Match3.View.levelViews）。
+-- | 关卡列表（序号、中文名、步数、目标描述），给选关界面用（读 Match3.View.levelViews）。
 apiLevels :: String
 apiLevels =
   arr
@@ -113,7 +110,7 @@ apiLevels =
 -- ---------------------------------------------------------------------------
 -- 状态 / 结果 / 回放脚本
 
--- | 局面 JSON：第 11 刀起全部读视图模型 Match3.View（与桌面 HUD / 标题同一份读数），不再从 GameState 现算。
+-- | 局面 JSON：全部读视图模型 Match3.View（与桌面 HUD / 标题同一份读数），不从 GameState 现算。
 encodeState :: WebGame -> String
 encodeState h =
   obj
@@ -176,8 +173,8 @@ encodeGoal :: GoalInfo -> String
 encodeGoal gi =
   obj $
     [("kind", str (giKind gi)), ("text", str (giText gi)), ("target", int (giTarget gi))]
-      ++ [("name", str (unElementName n)) | Just n <- [giName gi]]   -- 段 5：按元素名计数的目标（jelly / bubble）
-      -- 中文显示名（视图模型 Match3.View.goalLabel，唯一来源）：HUD「目标 …」直接画它，前端不再自带映射表
+      ++ [("name", str (unElementName n)) | Just n <- [giName gi]]   -- 按元素名计数的目标（jelly / bubble 等）
+      -- 中文显示名（视图模型 Match3.View.goalLabel，唯一来源）：HUD「目标 …」直接画它，前端不自带映射表
       ++ [("label", str (goalLabel gi))]
       -- 目标图标贴图名（UI.GoalIcon.goalIcon，app/pure 里与桌面 HUD / 选关地图共用的一张表；如第 47 关 chameleon_icon）
       ++ [("icon", str (goalIcon (giGoal gi)))]
@@ -215,8 +212,8 @@ encodeEnd e =
     ]
 
 -- | 步末效果（结构化）：{type:"tick",cells} / {type:"belt",pairs} / {type:"spread",kind,pairs} / {type:"snail",moves}
---   pairs 为 [[来源],[目标]]。第 7 刀 7b 起 EndEffect 是通用形状（事件类型 + 元素名 + 逐项 EndItem），
---   这里按事件类型编码成与之前逐字节相同的 JSON；其余事件类型编码为 {type:<eventKindTag>,kind:<元素名>,pairs}。
+--   pairs 为 [[来源],[目标]]。EndEffect 是通用形状（事件类型 + 元素名 + 逐项 EndItem），
+--   这里按事件类型编码成上面几种固定形状（网页 JS 与 web/test 的一致性快照依赖它）；其余事件类型编码为 {type:<eventKindTag>,kind:<元素名>,pairs}。
 encodeEndEffect :: EndEffect -> String
 encodeEndEffect eff = case endEffectKind eff of
   EvTick -> obj [("type", str "tick"), ("cells", arr (map (encodePos . eiTo) items))]

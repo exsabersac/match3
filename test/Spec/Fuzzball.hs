@@ -9,13 +9,25 @@ module Spec.Fuzzball
 
 import Match3.Core
 import Match3.Board.Match (findHintWith)
+import Match3.Counts (countOf)
 import Match3.Element
-  ( HitResult(..), blocksSwapWith, builtinDefs, builtinLevelDefs, builtinShapeRules, colorOfWith, defaultRegistry
-  , directHitWith, fallsWith, fuzzballJumps, keepOnShuffleWith, runAdjacentWith )
+  ( HitResult(..)
+  , blocksSwapWith
+  , builtinDefs
+  , builtinLevelDefs
+  , builtinShapeRules
+  , colorOfWith
+  , directHitWith
+  , fallsWith
+  , fuzzballJumps
+  , keepOnShuffleWith
+  , runAdjacentWith
+  )
 import Match3.Combos (builtinComboRules)
 import Match3.Element.Event (EventKind(..))
 import Match3.Element.Registry (Registry, entryName, mkRegistry, registerLevel, setComboRules, setShapeRules)
 import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Trace (applyEndEffect)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

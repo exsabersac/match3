@@ -1,15 +1,24 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 连锁与公共结算：连锁到稳定、连击计分、种子连锁续波、步耗与步末阶段顺序、发布前核心不变量汇总。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Cascade
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, noHooks)
+import Match3.Board.Clear (scoreForWave)
+import Match3.Board.Default (cascadeMatches, cascadeSeeds, hasAnyMatch, noHooks, stepCascade)
 import Data.Maybe (isNothing)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard, crGen), CascadeTally(CascadeTally, ctMaxWave, ctCounts, ctCells, ctScore))
+import Match3.Board.Grid (setCell, swapCells)
+import Match3.Board.Random (randomBoard)
+import Match3.Conveyor (shiftBelts)
 import Match3.Core
+import Match3.Counts (countOf)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Grass (spreadSteam)
+import Match3.Snail (stepSnails)
+import Match3.Types (goalScore, hasSteam, isSnail, isTimeSpirit)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -18,7 +27,7 @@ import Spec.GoalsLevels (outcome_moves_or_score)
 import Spec.Gravity (gravity_then_refill)
 import Spec.GridMatch (inv_move_to_stable, inv_no_match_rollback, match_line_ge3)
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "cascade_until_stable" cascade_until_stable

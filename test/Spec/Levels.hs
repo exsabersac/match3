@@ -9,10 +9,14 @@ import Control.Exception (ErrorCall(..), evaluate, try)
 import Control.Monad (filterM)
 import Data.List (isInfixOf, isPrefixOf, nub)
 import Data.Maybe (isJust, isNothing)
+import Match3.Board.Default (hasValidMove)
+import Match3.Board.Random (randomPlayableBoard)
 import Match3.Core
-import Match3.Levels.Level (assertLevelDims, checkLevelDims)
-import Match3.Element (Arg(..), PlaceError(..), Placement(..), defaultRegistry, placeAllWith, placeWith)
-import Match3.Game.Level (decorateLevel, decorateLevelWith, goalDecorWith)
+import Match3.Daily (dailyConfig)
+import Match3.Levels.Level (assertLevelDims, checkLevelDims, level)
+import Match3.Element (Arg(..), PlaceError(..), Placement(..), placeAllWith, placeWith)
+import Match3.Game.Level (decorateLevel, decorateLevelWith, goalDecorWith, newGame)
+import Match3.Types (goalScore)
 import Spec.Support.Source (readCode, sourcesUnderAll, stripStrings)
 import System.Random (mkStdGen)
 import Test.Tasty
@@ -125,7 +129,7 @@ campaign_game_matches_level_config = do
   assertBool "past the end" (isNothing (campaignGame levelCount 1))
   assertBool "negative" (isNothing (campaignGame (-1) 1))
 
--- | 越界的当前关：重开 / 下一关都夹到关卡表范围内（第 6 刀前 allLevels !! 越界直接崩溃）。
+-- | 越界的当前关：重开 / 下一关都夹到关卡表范围内，不会因越界下标崩溃。
 restart_next_out_of_range_clamped :: Assertion
 restart_next_out_of_range_clamped = do
   let gs = newGame defaultConfig 5

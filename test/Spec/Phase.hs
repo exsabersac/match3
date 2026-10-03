@@ -22,13 +22,14 @@ import Data.List (isInfixOf)
 import Match3.Board.Clear (clearMatchesDetailedWith)
 import Match3.Board.Default (noHooks)
 import Match3.Board.Gravity (settleDrainWith)
-import Match3.Board.Grid (MBoard, mboardRows)
+import Match3.Board.Grid (MBoard, swapCells)
 import Match3.Board.Phase
+import Match3.Board.Random (randomBoard)
 import Match3.Board.Refill (defaultRefill, refillWith)
 import Match3.Core
-import Match3.Element (defaultRegistry)
 import Match3.Game.Boosters (resolveHammer)
 import Match3.Game.Resolve (Opening(..), SMoveKind(..), resolveMove)
+import Match3.Types (Score)
 import Spec.Support (levelGame, stableBoard)
 import System.Random (StdGen, mkStdGen)
 import Test.Tasty

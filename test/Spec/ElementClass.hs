@@ -13,8 +13,10 @@ import Control.Monad (forM_)
 import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (isJust)
 import qualified ElementQueries
+import Match3.Board.Grid (setCell)
 import Match3.Board.Match (findHintWith)
 import Match3.Core
+import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Class
   ( Archetype(..)
@@ -39,8 +41,10 @@ import qualified Match3.Element.Class as C
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Element.Message (Refilled(..))
 import Match3.Game.Boosters (resolveHammerWith)
-import Match3.Game.Level (newGameAtLevelWith)
-import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Level (newGame, newGameAtLevelWith)
+import Match3.Game.Move (resolveSwapWith, trySwap)
+import Match3.Game.State (gsCount)
+import Match3.Types (colorAt, goalCount, goalScore)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

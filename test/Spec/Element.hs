@@ -2,27 +2,57 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 元素注册表：测试专用木箱证明可扩展，内置表与旧谓词逐格一致。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Element
   ( tests
   ) where
 
-import Match3.Board.Default (gravityFixedCell)
 import Data.List (isInfixOf)
 import Data.Maybe (isJust)
+import Match3.Board.Grid (setCell)
 import Match3.Core
-import Match3.Element (defaultRegistry, HitResult(HitAbsorb, HitDestroy), activatesWith, blocksSwapWith, directHitWith, hitImmuneWith, keepOnShuffleWith, lookupElement, matchColorWith, register, registryDefs)
+import Match3.Counts (namedCounts)
+import Match3.Element
+  ( HitResult(HitAbsorb, HitDestroy)
+  , activatesWith
+  , blocksSwapWith
+  , directHitWith
+  , hitImmuneWith
+  , keepOnShuffleWith
+  , lookupElement
+  , matchColorWith
+  , register
+  , registryDefs
+  )
 import Match3.Element.Event (EventKind(..), Event(..))
 import Match3.Element.Registry (swapBlockedWith)
 import Match3.Game.Boosters (resolveHammerWith)
-import Match3.Game.Move (resolveSwapWith, trySwapWith)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (resolveSwapWith, trySwap, trySwapWith)
 import Match3.Game.Shuffle (CellDecor(..), extractDecorWith)
 import Match3.Game.Trace (traceEventsWith)
+import Match3.Types
+  ( hasChain
+  , hasFreeze
+  , isBalloon
+  , isBottle
+  , isCake
+  , isChest
+  , isCookie
+  , isHoney
+  , isMagicHat
+  , isMaker
+  , isSafe
+  , isSnail
+  , isStone
+  , isSurprise
+  , isTimeSpirit
+  , specialActivates
+  )
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "element_registry_custom_crate_extensibility" element_registry_custom_crate_extensibility

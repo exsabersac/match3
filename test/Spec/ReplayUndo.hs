@@ -2,12 +2,13 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- | 回放、撤销与洗牌：回放脚本（trace*）的终盘 / 逐轮 / 步末重放与结算一致，撤销恢复，洗牌保留装饰与目标进度。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.ReplayUndo
   ( tests
   ) where
 
-import Match3.Board.Default (cascadeMatches, cascadeSeeds, builtinHooks, hookLevel)
+import Match3.Board.Default (builtinHooks, cascadeMatches, cascadeSeeds, findHint, hasAnyMatch, hasValidMove, hookLevel)
+import Match3.Board.Random (randomBoard, randomPlayableBoard)
+import Match3.Boosters (crossClearSeeds)
 import Match3.Element.Level (levelUfos)
 import Control.Monad (when)
 import Data.List (nub, sort)
@@ -15,16 +16,33 @@ import Data.Maybe (isJust)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crHooks), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
 import Match3.Element.Event (EventKind(..))
-import Match3.Board.Grid (atM)
-import Match3.Element (defaultRegistry)
+import Match3.Board.Grid (setCell, swapCells)
 import qualified Match3.Engine as M3E
+import Match3.Game.Boosters (traceCrossClear, traceFreeSwap, traceHammer, useCrossClear, useFreeSwap, useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (traceSwap, trySwap)
+import Match3.Game.Shuffle (ensurePlayable, shuffleGame)
+import Match3.Game.State (gsCarpetOpen, gsCollected, gsCount)
+import Match3.Types
+  ( cellColor
+  , cellKind
+  , countdownTurns
+  , goalCount
+  , goalScore
+  , hasCurtain
+  , hasFreeze
+  , isCountdown
+  , isGem
+  , isStone
+  )
+import Match3.Ufo (mkUfo)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Match3.Counts (singleCount)
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "undo_restores" undo_restores

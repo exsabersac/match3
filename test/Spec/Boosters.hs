@@ -1,17 +1,40 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 道具：锤子、自由交换、十字清除的命中 / 免疫 / 扣次数，以及道具不触发的步末阶段。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Boosters
   ( tests
   ) where
 
+import Match3.Board.Grid (setCell)
+import Match3.Boosters (crossClearSeeds)
 import Match3.Core
+import Match3.Countdown (spawnCountdown)
+import Match3.Game.Boosters (useCrossClear, useFreeSwap, useHammer)
+import Match3.Game.Level (newGame)
+import Match3.Game.Move (trySwap)
+import Match3.Game.State (gsCount)
+import Match3.Types
+  ( cellColor
+  , chainLayers
+  , countdownTurns
+  , curtainLayers
+  , goalCount
+  , goalScore
+  , hasChain
+  , hasCurtain
+  , hasGrass
+  , isGem
+  , isMaker
+  , isStone
+  , makerCharges
+  , mkStone
+  , stoneLayers
+  )
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "booster_hammer_clears_cell" booster_hammer_clears_cell

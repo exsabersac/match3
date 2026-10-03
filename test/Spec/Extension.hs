@@ -10,14 +10,19 @@ module Spec.Extension
 
 import Data.List (isPrefixOf)
 import Engine.Game (Game(..), Step(..))
+import Match3.Board.Default (findMatchRuns, hasAnyMatch)
+import Match3.Board.Match (MatchRun(..))
 import Match3.Core
-import Match3.Board.Grid (atM)
-import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, defaultRegistry, groundEntry, register)
+import Match3.Board.Grid (inBounds, setCell, swapCells)
+import Match3.Counts (namedCounts)
+import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, groundEntry, register)
 import Match3.Element.Caps (Element(..), atEnd, blocker, counts, drainsAt, fixed, ground, piece, reshuffles)
 import Match3.Element.Event (Event(..), EventKind(..))
+import Match3.Game.Level (newGame)
+import Match3.Game.State (gsCollected, gsCount, gsGround, setGround)
 import Match3.Game.Trace (traceEventsWith)
 import Match3.Game.Shuffle (shuffleGameWith)
-import Match3.Game.Move (resolveSwapWith)
+import Match3.Game.Move (resolveSwapWith, trySwap)
 import qualified Match3.Engine as M3E
 import Data.List (intersect, nub, sort)
 import Match3.Board.Clear (clearMatchesDetailedWith)
@@ -29,6 +34,7 @@ import Match3.Element
 import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
 import Match3.Element.Message (Refilling(..), fromMessage)
 import qualified Match3.Combos as Combos
+import Match3.Types (goalCount, goalScore)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit

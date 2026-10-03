@@ -1,7 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 多游戏通用接口：玩具实现跑通 step / 结局 / 播放层，通用层源码不依赖三消，三消实例与直接调用一致。
--- （由 test/Spec.hs 按功能拆出；测试名与断言逐字不变，入口 test/Spec.hs 按原名汇总。）
 module Spec.Engine
   ( tests
   ) where
@@ -12,6 +11,13 @@ import Data.List (isPrefixOf)
 import Data.Maybe (isJust)
 import Data.Word (Word64)
 import Engine.History (History(..), Undoable(..), historyDepth, startHistory)
+import Match3.Board.Default (findHint)
+import Match3.Counts (namedCounts)
+import Match3.Game.Boosters (traceHammer, useCrossClear, useHammer)
+import Match3.Game.Move (traceSwap, trySwap)
+import Match3.Game.Shuffle (shuffleGame)
+import Match3.Game.State (clearMoveFx, gsBelts, gsCarpetOpen, gsCollected, gsColorBag, gsCount, gsPortals, moveFx)
+import Match3.Types (goalScore)
 import Numeric (showHex)
 import Spec.Support (levelGame)
 import Spec.Support.Source (importsOf, mentionsIdent, sourcesUnder, sourcesUnderAll)
@@ -25,7 +31,7 @@ import Toy
 import Test.Tasty
 import Test.Tasty.HUnit
 
--- | 本模块的测试（原名，平铺进顶层 "match3" 组，--list-tests 路径与拆分前相同）。
+-- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
   [ testCase "engine_toy_counter_game" engine_toy_counter_game

@@ -221,6 +221,7 @@ test-suite match3-test
       Spec.Specials
       Spec.Support
       Spec.Support.Arbitrary
+      Spec.Support.Obstacles
       Spec.Support.Parallel
       Spec.Support.Source
       Spec.UIEvents

@@ -8,9 +8,18 @@ module Spec.MagicStone
 
 import Match3.Core
 import Match3.Board.Match (findHintWith)
+import Match3.Counts (countOf)
 import Match3.Element
-  ( HitResult(..), blocksSwapWith, colorOfWith, defaultRegistry, directHitWith, fallsWith, keepOnShuffleWith
-  , magicStoneFiring, magicStoneFull, runAdjacentWith )
+  ( HitResult(..)
+  , blocksSwapWith
+  , colorOfWith
+  , directHitWith
+  , fallsWith
+  , keepOnShuffleWith
+  , magicStoneFiring
+  , magicStoneFull
+  , runAdjacentWith
+  )
 import Match3.Element.Event (EventKind(..))
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)

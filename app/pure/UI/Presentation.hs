@@ -58,7 +58,7 @@ module UI.Presentation
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import Match3.Element.Event (EventKind (..))
-import Match3.Types (ElementName)
+import Match3.Core (ElementName)
 
 -- | 颜色（红, 绿, 蓝）。
 type RGB = (Word8, Word8, Word8)

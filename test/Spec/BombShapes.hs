@@ -8,12 +8,24 @@ module Spec.BombShapes
 
 import Data.List (isInfixOf)
 import Data.Maybe (catMaybes)
+import Match3.Board.Default (findMatchRuns)
 import Match3.Core
 import Match3.Board.Clear (clearMatchesDetailedWith)
-import Match3.Board.Grid (mboardRows)
-import Match3.Board.Match (findHintWith)
-import Match3.Element (Registry, ShapeRule(..), builtinShapeRules, defaultRegistry, levelRegistryIn, ltBombRule, removeLevel, setShapeRules, shapeRules, withBombShapes)
+import Match3.Board.Match (MatchRun(..), findHintWith)
+import Match3.Element
+  ( Registry
+  , ShapeRule(..)
+  , builtinShapeRules
+  , levelRegistryIn
+  , ltBombRule
+  , removeLevel
+  , setShapeRules
+  , shapeRules
+  , withBombShapes
+  )
+import Match3.Game.Level (newGame)
 import Match3.Game.Move (resolveSwapWith)
+import Match3.Types (goalScore)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Spec.Support

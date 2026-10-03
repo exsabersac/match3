@@ -17,7 +17,9 @@ import Engine.Optics
 import Match3.Core
 import Match3.Element.Class (levelNameOf)
 import Match3.Game.State (gsBeltsL, gsBoardL, gsCarpetOpenL, gsCrossClearsL, gsFreeSwapsL, gsGroundL, gsHammersL, gsMovesL, gsPortalsL, gsUfosL)
+import Match3.Types (boardCells, cellOverlay, isGem)
 import Match3.Types.Optics
+import Match3.Ufo (mkUfo)
 import Spec.Properties (genColor, genGem, genOverlay, genCell, genPick, genPos, genStart, playPicks, startState)
 import Spec.Support.Arbitrary (AnyBoard(..), genAnyBoard)
 import Engine.Game (Step(..))

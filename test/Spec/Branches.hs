@@ -15,18 +15,25 @@ module Spec.Branches
 import Control.Monad (forM_)
 import Data.List (sort)
 import Data.Maybe (fromMaybe, isJust, isNothing)
+import Match3.Board.Default (hasAnyMatch)
 import Match3.Board.Hooks (LevelHooks(..))
-import Match3.Board.Grid (setM, toM)
+import Match3.Board.Grid (setCell, setM, swapCells, toM)
 import Match3.Board.Match (findHintWith)
+import Match3.Board.Random (randomStableBoard)
+import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
 import Match3.Element.Caps (Element(..), SomeLevelElement(..), blocker, breaks, levelNameOf, noPush, noRecolor, onSwap, opens, piece, pushes, swappable)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
+import Match3.Game.Level (newGame)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Resolve (MoveKind(..), endTableFor)
+import Match3.Game.State (gsBelts, gsCarpetOpen, gsCount)
 import qualified Match3.Snail as Snail
+import Match3.Types (goalScore, isGem, isSnail)
+import Match3.Ufo (mkUfo, stepUfos)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -194,7 +201,7 @@ br_pushable_from_registry = do
   assertBool "default: gem pushed" (isSnail (getCell bG (7, 2)))
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 
--- | 关卡级元素：内置表里四种元素的节拍回复就是原实现（第 7 刀起状态在元素值里，Board 层经钩子 LevelHooks 调用）；
+-- | 关卡级元素：内置表里四种元素各自回复节拍（状态在元素值里，Board 层经钩子 LevelHooks 调用）；
 -- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按注册表的地面层规则命中。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do

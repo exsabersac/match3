@@ -219,15 +219,6 @@ test-suite match3-test
       Spec.Specials
       Spec.Support
       Spec.Support.Arbitrary
-      Spec.Support.LegacyBoundary
-      Spec.Support.LegacyCascade
-      Spec.Support.LegacyElement
-      Spec.Support.LegacyGeometry
-      Spec.Support.LegacyLazy
-      Spec.Support.LegacyObstacles
-      Spec.Support.LegacyOptics
-      Spec.Support.LegacyPerf
-      Spec.Support.LegacyRules
       Spec.Support.Parallel
       Spec.Support.Source
       Spec.UIEvents

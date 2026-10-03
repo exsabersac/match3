@@ -45,7 +45,7 @@ updateTitle window app = do
   windowTitle window $= title
 
 -- | 外壳执行一个动作：只调通用接口 M3E.match3Shell 的 gameStep（撤销历史由 Engine.History 维护）。
-stepShell :: Undoable M3E.Action -> App -> Step (History GameState) Ev.Event Outcome M3E.Played
+stepShell :: Undoable M3E.Action -> App -> Step (History GameState) Ev.Event Terminal M3E.Played
 stepShell act app = gameStep M3E.match3Shell (appHist app) act
 
 -- | 执行一个走步动作（交换 / 道具）：整步报告（stepReport）、Outcome 与新的历史。
@@ -147,7 +147,7 @@ advanceOrMsg ref window = do
   seed <- randomIO
   app <- readIORef ref
   case gsOver (appGame app) of
-    Just (LevelClear _ n) -> do
+    Just (TLevelClear _ n) -> do
       beginLevel
       let gs = nextLevel (appGame app) seed
           -- Stars rate vs printed level moves; carry must not inflate the denominator.
@@ -160,7 +160,7 @@ advanceOrMsg ref window = do
               }
       writeIORef ref app'
       updateTitle window app'
-    Just (Won _) -> case campaignGame 0 seed of
+    Just (TWon _) -> case campaignGame 0 seed of
       -- 通关后从第 1 关重开（关卡表恒非空；空表时不动）
       Just gs -> do
         beginLevel
@@ -168,7 +168,7 @@ advanceOrMsg ref window = do
         writeIORef ref app'
         updateTitle window app'
       Nothing -> pure ()
-    Just (Lost _) -> do
+    Just (TLost _) -> do
       beginLevel
       let gs0 = appGame app
           gs =

@@ -9,7 +9,7 @@
 -- 前端因此不会重播上一步的连击（护栏 failed_swap_resets_combo_feedback 等）。
 module Match3.Game.State
   ( GameState(..)
-    -- * 关卡级元素（第 7 刀：第 7 刀前的五个字段改为派生读数 + 写入函数）
+    -- * 关卡级元素（内置五种的派生读数 + 写入函数）
   , gsBelts
   , gsPortals
   , gsUfos
@@ -58,17 +58,17 @@ import Match3.Conveyor (Belt)
 import Match3.Types
 import System.Random (StdGen)
 
--- | 一局的全部规则状态。前端只读；所有修改都经 trySwap / use* / shuffleGame 等纯函数返回新值；撤销历史不在这里（段 3 起由 Engine.History 持有）。
+-- | 一局的全部规则状态。前端只读；所有修改都经 trySwap / use* / shuffleGame 等纯函数返回新值；撤销历史不在这里（由 Engine.History 持有）。
 data GameState = GameState
   { gsBoard         :: Board
   , gsScore         :: Score
   , gsMoves         :: MovesLeft
   , gsGoal          :: LevelGoal
-  , gsCounts        :: Counts       -- 第 4 刀：按计数键累计（各色清除 CountColor / 石块 / 宝箱 / 蜂蜜罐 / 气球 / 饼干 / 蛋糕 /
+  , gsCounts        :: Counts       -- 按计数键累计（各色清除 CountColor / 石块 / 宝箱 / 蜂蜜罐 / 气球 / 饼干 / 蛋糕 /
                                     -- 保险箱 / 时间精灵 / 飞碟吸收 CountUfo / 地毯覆盖 CountCarpets / 扩展元素 CountNamed 名字），
-                                    -- 读法见 gsCount；第 5 刀起颜色袋也在这里（gsColorBag / gsCollected 改为派生读数）
+                                    -- 读法见 gsCount；颜色袋也在这里（gsColorBag / gsCollected 是派生读数）
   , gsGen           :: StdGen
-  , gsOver          :: Maybe Outcome
+  , gsOver          :: Maybe Terminal  -- 终局（Nothing = 还能走）；只由结算按 terminalOf 写入
   , gsLevel         :: Int
   , gsHint          :: Maybe (Pos, Pos)
   , gsCombo         :: Int   -- last move max cascade wave (0 if none)
@@ -79,28 +79,28 @@ data GameState = GameState
   , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
   , gsDaily         :: Bool   -- True for date-seeded daily challenge (通关≠战役推进)
   , gsLevelElems    :: [SomeLevelElement]
-    -- ^ 第 7 刀：一局的全部关卡级元素（状态在元素值里；内置 = 飞碟 / 皮带 / 传送门 / 地毯 / 地面层，
-    -- 取代第 7 刀前的 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround 五个字段，旧名现在是派生读数）。
+    -- ^ 一局的全部关卡级元素（状态在元素值里；内置 = 飞碟 / 皮带 / 传送门 / 地毯 / 地面层，
+    -- 读数 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround 由它派生）。
     -- 开局见 Match3.Element.Level.startLevelsWith，节拍与写回见同模块。
   }
 
--- | 传送带路径（第 7 刀前的字段；派生读数）。
+-- | 传送带路径（派生读数）。
 gsBelts :: GameState -> [Belt]
 gsBelts = levelBelts . gsLevelElems
 
--- | 双向传送门对（第 7 刀前的字段；派生读数）。
+-- | 双向传送门对（派生读数）。
 gsPortals :: GameState -> [(Pos, Pos)]
 gsPortals = levelPortals . gsLevelElems
 
--- | 飞碟（第 7 刀前的字段；派生读数）。
+-- | 飞碟（派生读数）。
 gsUfos :: GameState -> [Ufo]
 gsUfos = levelUfos . gsLevelElems
 
--- | 未覆盖的地毯格（第 7 刀前的字段；派生读数）。
+-- | 未覆盖的地毯格（派生读数）。
 gsCarpetOpen :: GameState -> [Pos]
 gsCarpetOpen = levelCarpetOpen . gsLevelElems
 
--- | 地面层（第 7 刀前的字段；派生读数；段 2c，元素名 + 层数）。
+-- | 地面层（派生读数；元素名 + 层数）。
 gsGround :: GameState -> Ground
 gsGround = levelGround . gsLevelElems
 
@@ -108,23 +108,23 @@ gsGround = levelGround . gsLevelElems
 setLevelElem :: LevelElement l => l -> GameState -> GameState
 setLevelElem l gs = gs {gsLevelElems = putLevel l (gsLevelElems gs)}
 
--- | 第 7 刀前的记录更新 @gs {gsUfos = us}@。
+-- | 写入飞碟（替换 'UfoLevel'）。
 setUfos :: [Ufo] -> GameState -> GameState
 setUfos = setLevelElem . UfoLevel
 
--- | 第 7 刀前的记录更新 @gs {gsBelts = bs}@。
+-- | 写入传送带（替换 'BeltLevel'）。
 setBelts :: [Belt] -> GameState -> GameState
 setBelts = setLevelElem . BeltLevel
 
--- | 第 7 刀前的记录更新 @gs {gsPortals = ps}@。
+-- | 写入传送门（替换 'PortalLevel'）。
 setPortals :: [(Pos, Pos)] -> GameState -> GameState
 setPortals = setLevelElem . PortalLevel
 
--- | 第 7 刀前的记录更新 @gs {gsCarpetOpen = ps}@。
+-- | 写入未覆盖的地毯格（替换 'CarpetLevel'）。
 setCarpetOpen :: [Pos] -> GameState -> GameState
 setCarpetOpen = setLevelElem . CarpetLevel
 
--- | 第 7 刀前的记录更新 @gs {gsGround = g}@。
+-- | 写入地面层（替换 'GroundLayer'）。
 setGround :: Ground -> GameState -> GameState
 setGround = setLevelElem . GroundLayer
 
@@ -165,7 +165,7 @@ gsCarpetOpenL = lens gsCarpetOpen (flip setCarpetOpen)
 gsGroundL :: Lens' GameState Ground
 gsGroundL = lens gsGround (flip setGround)
 
--- | 内置五种关卡级元素之一（Show 按第 7 刀前的字段名打印它们的状态）。
+-- | 内置关卡级元素之一（Show 按固定字段名打印它们的状态，不进 extras）。
 builtinLevel :: SomeLevelElement -> Bool
 builtinLevel e =
   isJust (fromLevelElement e :: Maybe UfoLevel)
@@ -177,9 +177,10 @@ builtinLevel e =
     || isJust (fromLevelElement e :: Maybe RainbowCombos)
     || isJust (fromLevelElement e :: Maybe CookieDrop)
 
--- | 与第 4 刀前派生的 Show 逐字相同（第 7 刀：皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影，仍按旧字段名、旧位置打印）：各计数仍按旧字段名、旧位置打印（元素查询快照对 show 取散列）。
--- gsElementCounts 打印 namedCounts（按名字升序；旧实现按首次出现，快照里每局至多一个名字）。
--- 没有旧字段的键（CountSpirits、扩展元素借用的其余内置键）不打印，相等判断仍比较全部计数。
+-- | 文本固定的 Show（元素查询快照与测试指纹对 show 取散列，格式不能变）：按派生 Show 的记录格式打印，
+-- 皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影、各计数按固定字段名与位置打印，gsOver 经 'fromTerminal' 按 Outcome 打印。
+-- gsElementCounts 打印 namedCounts（按名字升序；快照里每局至多一个名字，顺序无歧义）。
+-- 没有固定字段名的键（CountSpirits、扩展元素借用的其余内置键）不打印，相等判断仍比较全部计数。
 instance Show GameState where
   showsPrec d gs =
     showParen (d >= 11) $
@@ -198,7 +199,7 @@ instance Show GameState where
         . field "gsCakesCleared" (cnt CountCakes) . sep
         . field "gsSafesOpened" (cnt CountSafes) . sep
         . field "gsGen" (gsGen gs) . sep
-        . field "gsOver" (gsOver gs) . sep
+        . field "gsOver" (fromTerminal <$> gsOver gs) . sep
         . field "gsLevel" (gsLevel gs) . sep
         . field "gsHint" (gsHint gs) . sep
         . field "gsCombo" (gsCombo gs) . sep
@@ -219,7 +220,7 @@ instance Show GameState where
         . extras
         . showChar '}'
     where
-      -- 内置五种之外的关卡级元素（扩展）：有才打印，内置对局与第 7 刀前逐字相同
+      -- 内置之外的关卡级元素（扩展）：有才打印，内置对局不多出文本
       extras = case [e | e <- gsLevelElems gs, not (builtinLevel e)] of
         [] -> id
         es -> sep . field "gsLevelExtra" es
@@ -243,7 +244,7 @@ instance Eq GameState where
       && gsCrossClears a == gsCrossClears b
       && gsLevelElems a == gsLevelElems b
 
--- | 某计数键的累计个数（缺省 0；第 4 刀前是各自的字段，如 gsStonesCleared = gsCount CountStones）。
+-- | 某计数键的累计个数（缺省 0；如石块清除数 = gsCount CountStones）。
 gsCount :: CounterKey -> GameState -> Int
 gsCount k = countOf k . gsCounts
 
@@ -255,12 +256,11 @@ gsProgress gs = goalProgress (gsGoal gs) (gsScore gs) (gsCounts gs)
 gsGoalMet :: GameState -> Bool
 gsGoalMet gs = goalMet (gsGoal gs) (gsScore gs) (gsCounts gs)
 
--- | 第 5 刀前的 gsCollected 字段（派生读数）：不计分数的目标进度——分数目标恒 0，其余等于 gsProgress。
--- 旧字段只在结算时按目标种类更新、开局为 0，数值与此处逐步相同（金标准 col= 锁定）。
+-- | 不计分数的目标进度（派生读数）：分数目标恒 0，其余等于 gsProgress（金标准 col= 锁定）。
 gsCollected :: GameState -> Int
 gsCollected gs = goalProgress (gsGoal gs) 0 (gsCounts gs)
 
--- | 第 5 刀前的 gsColorBag 字段（派生读数）：各色累计清除数，按 allColors 顺序、含 0。
+-- | 各色累计清除数（派生读数），按 allColors 顺序、含 0。
 gsColorBag :: GameState -> [(Color, Int)]
 gsColorBag = colorBag . gsCounts
 
@@ -283,8 +283,8 @@ data MoveFx = MoveFx
 
 -- | 由「操作前状态、操作后状态、结果」决定要不要播特效。
 -- 只有这次调用真正结算了一步（MoveApplied / 本次才产生的 Won / Lost / LevelClear）
--- 才返回 after 的连击与清除格；NoMatch / InvalidSwap / 操作前就已结束（trySwap 原样
--- 返回旧 gsOver）一律返回空，不会重播上一步的爆击特效。
+-- 才返回 after 的连击与清除格；NoMatch / InvalidSwap / 操作前就已结束（trySwap 把已有
+-- 终局换回 Outcome 原样返回）一律返回空，不会重播上一步的爆击特效。
 moveFx :: GameState -> GameState -> Outcome -> MoveFx
 moveFx before after out
   | isJust (gsOver before) = noFx

@@ -94,10 +94,10 @@ tripleMove :: (Pos, Pos)
 tripleMove = ((1, 2), (2, 2))
 
 -- | 结局是否是过关（Won / LevelClear）。
-isWin :: Maybe Outcome -> Bool
+isWin :: Maybe Terminal -> Bool
 isWin o = case o of
-  Just (Won _) -> True
-  Just (LevelClear _ _) -> True
+  Just (TWon _) -> True
+  Just (TLevelClear _ _) -> True
   _ -> False
 
 -- | 战役第 1 关（allLevels 的第一项；关卡表为空时直接报错）。

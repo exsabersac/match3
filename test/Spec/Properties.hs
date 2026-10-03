@@ -301,7 +301,7 @@ pickAction gs (Pick start dir booster which)
     accepted a = stepAccepted (gameStep M3E.match3Game gs a)
 
 -- | 按选择依次走（遇到结局停）；返回动作序列与每一步的结果。
-playPicks :: GameState -> [Pick] -> ([M3E.Action], [Step GameState Event Outcome M3E.Played])
+playPicks :: GameState -> [Pick] -> ([M3E.Action], [Step GameState Event Terminal M3E.Played])
 playPicks _ [] = ([], [])
 playPicks gs (p : ps)
   | isJust (gsOver gs) = ([], [])
@@ -578,10 +578,10 @@ qc_goal_progress_bounded =
                   | otherwise = p <= t
             in p >= 0 && gsGoalMet gs == each && shape
           okOutcome gs = case gsOver gs of
-            Just (Won _) -> gsGoalMet gs
-            Just (LevelClear _ _) -> gsGoalMet gs
-            Just (Lost _) -> not (gsGoalMet gs)
-            _ -> True
+            Just (TWon _) -> gsGoalMet gs
+            Just (TLevelClear _ _) -> gsGoalMet gs
+            Just (TLost _) -> not (gsGoalMet gs)
+            Nothing -> True
       in classify (length (qs s0) > 1) "multi" $
            classify (any gsGoalMet states) "met" $
              counterexample (show [(gsProgress gs, goalTarget (gsGoal gs), gsGoalMet gs) | gs <- states]) $

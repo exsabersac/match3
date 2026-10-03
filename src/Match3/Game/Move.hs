@@ -35,7 +35,7 @@ resolveSwap = resolveSwapWith defaultRegistry
 -- | resolveSwap（指定注册表）：挡交换、成消判定与结算都查这张表。
 resolveSwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveSwapWith reg p1 p2 gs
-  | Just o <- gsOver gs = (gs, o, emptyTrace gs)
+  | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
@@ -47,7 +47,7 @@ resolveSwapWith reg p1 p2 gs
     -- 起手方式 opening 的类型因此是 Opening 'Swapped，三种起手（匹配 / 种子 / 变身）都允许
     swappedS = swapStage p1 p2 (fullStage board0)
     swapped = stageBoard swappedS
-    -- 成对交换规则（段 4：彩虹取色 / 特殊合成经注册表的 swapRule，按 srOrder 取第一条成立的）
+    -- 成对交换规则（彩虹取色 / 特殊合成经注册表的 swapRule，按 srOrder 取第一条成立的）
     pairRule = swapOpeningWith reg board0 swapped p1 p2
     -- 交换变身（新玩法 4：关卡级元素回复 Morphing，内置 = 规则开关 rainbow_combos）：先变身再按种子起手，
     -- 变身记成第 0 轮之前的一条步末效果；没人回复 = 原有起手

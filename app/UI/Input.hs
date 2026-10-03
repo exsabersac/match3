@@ -347,9 +347,9 @@ handleMouseDown ref window me = do
     else do
       -- Click anywhere on overlay advances / retries
       case gsOver (appGame app0) of
-        Just (LevelClear _ _) -> False <$ advanceOrMsg ref window
-        Just (Won _) -> False <$ advanceOrMsg ref window
-        Just (Lost _) -> do
+        Just (TLevelClear _ _) -> False <$ advanceOrMsg ref window
+        Just (TWon _) -> False <$ advanceOrMsg ref window
+        Just (TLost _) -> do
           seed <- randomIO
           app <- readIORef ref
           commit ref window (freshLevelUi (restartSame app seed) app) { appMsg = "Retry!" }

@@ -126,7 +126,7 @@ drawPauseHelp ren app
 -- | 几何降级版 HUD：按区块依次绘制（各区块在 UI.HudBlocks；顺序即层次）。
 drawHud :: Renderer -> App -> IO ()
 drawHud ren app = do
-  let gv = gameView (appGame app)  -- 第 11 刀：各区块读视图模型
+  let gv = gameView (appGame app)  -- 各区块读视图模型
   hudFrame ren
   hudLevel ren gv
   hudGoal ren (gvGoal gv)
@@ -192,7 +192,7 @@ drawOverlayNow ren app = case gsOver (appGame app) of
     let panelH = 120 :: CInt
         panelY = hudH + (boardPx - panelH) `div` 2
     case outcome of
-      LevelClear _ nextIdx -> do
+      TLevelClear _ nextIdx -> do
         rendererDrawColor ren $= V4 40 50 20 240
         fillRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))
         rendererDrawColor ren $= V4 255 220 80 255
@@ -205,7 +205,7 @@ drawOverlayNow ren app = case gsOver (appGame app) of
         drawBannerWord ren 60 (panelY + 70) 3 (V4 200 220 180 255) "NEXT"
         drawNumber ren 180 (panelY + 68) 3 (V4 200 220 180 255) (nextIdx + 1)
         drawKeyChip ren (winW - 100) (panelY + 70) 'N' (V4 140 220 160 255)
-      Won s -> do
+      TWon s -> do
         rendererDrawColor ren $= V4 20 50 30 240
         fillRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))
         rendererDrawColor ren $= V4 80 220 120 255
@@ -214,7 +214,7 @@ drawOverlayNow ren app = case gsOver (appGame app) of
         let stars = starRating (appStartMoves app) (gsMoves (appGame app))
         drawNumber ren 200 (panelY + 22) 3 (V4 255 220 80 255) stars
         drawNumber ren 160 (panelY + 70) 3 (V4 200 255 210 255) s
-      Lost s -> do
+      TLost s -> do
         rendererDrawColor ren $= V4 50 20 20 240
         fillRect ren (Just (Rectangle (P (V2 24 panelY)) (V2 (winW - 48) panelH)))
         rendererDrawColor ren $= V4 220 80 80 255
@@ -222,4 +222,3 @@ drawOverlayNow ren app = case gsOver (appGame app) of
         drawBannerWord ren 100 (panelY + 18) 5 (V4 255 120 120 255) "LOSE"
         drawBannerWord ren 90 (panelY + 70) 3 (V4 255 180 180 255) "RETRY"
         drawNumber ren (winW - 140) (panelY + 68) 3 (V4 255 180 180 255) s
-      _ -> pure ()

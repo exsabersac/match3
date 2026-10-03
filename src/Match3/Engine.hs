@@ -1,16 +1,16 @@
--- | 三消作为通用游戏接口 "Engine.Game" 的第一个实现（第三刀）。
+-- | 三消作为通用游戏接口 "Engine.Game" 的实现。
 --
--- 动作：交换、三种道具（锤子 / 自由交换 / 十字）、提示、手动洗牌；撤销不在这里——段 3 起历史由通用层
--- "Engine.History" 持有（match3Shell = withHistory match3History match3Game），GameState 不再带历史；
+-- 动作：交换、三种道具（锤子 / 自由交换 / 十字）、提示、手动洗牌；撤销不在这里——历史由通用层
+-- "Engine.History" 持有（match3Shell = withHistory match3History match3Game），GameState 不带历史；
 -- 事件：规则层的效果事件 Match3.Element.Event.Event（由回放脚本 traceEventsWith 展开），
--- 经 toEffect 映射成通用 Effect；结局：gsOver（Won / Lost / LevelClear）。
+-- 经 toEffect 映射成通用 Effect；结局类型是 Terminal（gsOver：TWon / TLost / TLevelClear）。
 --
 -- 每个动作只算一次：play 调用 resolveSwap / resolveHammer / … 一次，同时得到结算后的状态、
--- 结局、回放脚本、边沿特效 MoveFx 与效果事件；trySwap / traceSwap 等旧入口是同一计算的投影，
--- 因此经本模块与直接调用旧入口的结果逐位相同（测试 engine_match3_instance_matches_direct_api）。
+-- 结局、回放脚本、边沿特效 MoveFx 与效果事件；trySwap / traceSwap 等直接入口是同一计算的投影，
+-- 因此经本模块与直接调用的结果逐位相同（测试 engine_match3_instance_matches_direct_api）。
 --
--- 整步报告：gameStep 的 stepReport 是本次的 Played（状态 / Outcome / 回放脚本 / MoveFx / 事件 / 提示），
--- 前端只调 match3Shell 的 gameStep 就拿到全部表现数据，不再直接调 play（测试 engine_frontend_steps_only_via_gameStep）。
+-- 整步报告：gameStep 的 stepReport 是本次的 Played（状态 / 本步 Outcome / 回放脚本 / MoveFx / 事件 / 提示），
+-- 前端只调 match3Shell 的 gameStep 就拿到全部表现数据，不直接调 play（测试 engine_frontend_steps_only_via_gameStep）。
 --
 -- 依赖：Engine.*（通用层）、Match3.Game.*、Match3.Element.*。前端的三消插件经本模块执行动作。
 module Match3.Engine
@@ -111,12 +111,12 @@ playWith reg act gs = case act of
     other gs' evs ok = Played gs' Nothing (emptyTrace gs') (MoveFx 0 []) evs Nothing ok
 
 -- | 通用接口实例（内置注册表）。
-match3Game :: Game Setup GameState Action Event Outcome Played
+match3Game :: Game Setup GameState Action Event Terminal Played
 match3Game = match3GameWith defaultRegistry
 
 -- | 通用接口实例（指定注册表）。
 -- 终局后拒绝一切走步 / 洗牌；提示除外（只写 gsHint、不推进对局，与原前端「终局后按 H 仍给提示」一致）。
-match3GameWith :: Registry -> Game Setup GameState Action Event Outcome Played
+match3GameWith :: Registry -> Game Setup GameState Action Event Terminal Played
 match3GameWith reg =
   Game
     { gameName = "match3"
@@ -141,7 +141,7 @@ match3GameWith reg =
     }
   where
     newFrom setup seed = case setup of
-      -- 没有这一关（越界下标）时按默认配置开局（第 6 刀前 allLevels !! li 直接报错）
+      -- 没有这一关（越界下标）时按默认配置开局，不报错
       Campaign li -> fromMaybe (newGameAtLevel li defaultConfig seed) (campaignGame li seed)
       CustomLevel cfg -> newGame cfg seed
       Daily y m d -> newDailyGame (dailyConfig y m d) (dailySeed y m d)
@@ -166,11 +166,11 @@ match3History =
       Shuffle -> False
 
 -- | 外壳用的实例：内置注册表 + 撤销历史。
-match3Shell :: Game Setup (History GameState) (Undoable Action) Event Outcome Played
+match3Shell :: Game Setup (History GameState) (Undoable Action) Event Terminal Played
 match3Shell = match3ShellWith defaultRegistry
 
 -- | 外壳用的实例（指定注册表）。
-match3ShellWith :: Registry -> Game Setup (History GameState) (Undoable Action) Event Outcome Played
+match3ShellWith :: Registry -> Game Setup (History GameState) (Undoable Action) Event Terminal Played
 match3ShellWith reg = withHistory match3History (match3GameWith reg)
 
 -- | 外壳用的具名数值（标题栏 / HUD）。

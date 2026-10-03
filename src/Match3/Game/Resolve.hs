@@ -8,18 +8,18 @@
 -- | 一次操作（玩家交换 / 锤子 / 自由交换 / 十字清除）的**公共结算**：主连锁 → 步末效果 →
 -- 计数与目标 → 结局判定 → 自动洗牌，并由同一次计算产出回放脚本 MoveTrace。
 --
--- 第二刀之前，trySwap 与三种道具各有一份几乎相同的结算代码（计数、目标、结局、洗牌四处重复），
--- 回放 trace* 又各自重算一遍；现在四处入口只负责「校验 + 选择起手方式」，其余全部在这里。
+-- trySwap 与三种道具的入口只负责「校验 + 选择起手方式」，结算与回放脚本全部在这里，只写一次。
 --
--- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、EndPhase（第 7 刀 7b：步末表）、
--- 元素注册表（按差计数、地毯腾空都查注册表）、Element.Level（第 7 刀：
+-- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、EndPhase（步末表）、
+-- 元素注册表（按差计数、地毯腾空都查注册表）、Element.Level（
 -- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经节拍消息）。
--- 不变量（逐字保持旧行为，金标准锁定）：
+-- 不变量（金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
---     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛（第 7 刀 7b 起写成 EndPhase 表，见 endTableFor）；
+--     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛（写成 EndPhase 表，见 endTableFor）；
 --   * 连击数：第一段的最大波次，之后每段有清除时叠加该段的最大波次；
 --   * 交换耗 1 步，道具不耗步但扣对应次数；时间精灵每只 +2 步；
---   * 只有 MoveApplied（未终局）才调用 ensurePlayable；洗牌前的盘面 / 生成器记在 mtFinal / mtGen。
+--   * 只有 MoveApplied（未终局）才调用 ensurePlayable；洗牌前的盘面 / 生成器记在 mtFinal / mtGen；
+--   * 终局结果（Won / Lost / LevelClear）经 terminalOf 写进 gsOver，其余结果不改 gsOver。
 --
 -- 类型层（Haskell 特性第 1 项，见 docs/haskell-features/01-类型层.md）：起手盘面带阶段标签（Match3.Board.Phase）。
 -- 'MoveKind' 经 DataKinds 提升到类型层，'StartPhase' 算出每种操作该从哪个阶段起手（交换类 = @'Swapped@，
@@ -149,7 +149,7 @@ resolveMoveWith reg0 sk startS opening gs =
         OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) startW
         OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) startW
         OpenMorph prefer _ seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) startW
-      -- 步末：按表的顺序执行（第 7 刀 7b）
+      -- 步末：按表的顺序执行
       (segs, ends0, board1, vacateAfter) = runEndTable reg (endTableFor kind) seg0
       ends = preEnds ++ ends0
       finalSeg = NE.last segs
@@ -166,9 +166,9 @@ resolveMoveWith reg0 sk startS opening gs =
       -- 按前后盘面差计数（保险箱开启、时间精灵 +2 步、自定义）
       diffs = diffCountsWith reg (gsBoard gs) board1
       bonusMoves = sum (map dcBonus diffs)
-      -- 地面层节拍（段 2c；第 7 刀起地面层是关卡级元素，发 GroundHit）：逐轮被上方消除命中（每轮每格一次）；
-      -- 段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
-      -- （第 9 项：mapAccumL，累积量 = 关卡级元素、每轮输出 = 去层计数；第 9 项前是 foldl + 前插 + reverse）
+      -- 地面层节拍（地面层是关卡级元素，发 GroundHit）：逐轮被上方消除命中（每轮每格一次）；
+      -- 内置关卡里只有第 39 关（双层果冻）有地面层
+      -- （mapAccumL：累积量 = 关卡级元素、每轮输出 = 去层计数）
       (elemsG, groundCounts) =
         let (es', perWave) =
               mapAccumL
@@ -179,7 +179,7 @@ resolveMoveWith reg0 sk startS opening gs =
       -- 地毯节拍（Covering）
       (carpetHit, elems') =
         coverIn reg (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter) elemsG
-      -- 计数（第 4 刀：统一进 gsCounts；第 5 刀：颜色袋也在 ctCounts 里、目标进度由目标数据派生）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
+      -- 计数（全部进 gsCounts，颜色袋也在 ctCounts 里、目标进度由目标数据派生）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
       counts' =
         gsCounts gs
           <> mconcat (map ctCounts tallies)
@@ -187,7 +187,7 @@ resolveMoveWith reg0 sk startS opening gs =
           <> countsFromList [(CountNamed n, k) | (n, k) <- groundCounts]
           <> singleCount CountCarpets carpetHit
       -- 步数与道具次数
-      -- （第 6 项：每种操作「花什么」由 kindCost / kindCharges 给出，这里只写一次；第 6 项前是四个分支的记录更新）
+      -- （每种操作「花什么」由 kindCost / kindCharges 给出，这里只写一次）
       spend g = g & gsMovesL %~ (\m -> m - kindCost kind + bonusMoves) & kindCharges kind %~ subtract 1
       gs' =
         spend
@@ -203,11 +203,9 @@ resolveMoveWith reg0 sk startS opening gs =
             , gsLevelElems = elems'
             }
       outcome = decideOutcome gs' gained
-      gs'' = case outcome of
-        Won s -> gs' {gsOver = Just (Won s)}
-        Lost s -> gs' {gsOver = Just (Lost s)}
-        LevelClear s n -> gs' {gsOver = Just (LevelClear s n)}
-        _ -> gs'
+      gs'' = case terminalOf outcome of
+        Just t -> gs' {gsOver = Just t}
+        Nothing -> gs'
       -- 未终局时，没有可走步则自动洗牌
       gs''' = case outcome of
         MoveApplied _ -> ensurePlayableWith reg gs''

@@ -1,10 +1,11 @@
--- | 第 11 刀：视图模型 Match3.View 与通用网格组件 Engine.GridUI。
+-- | 视图模型 Match3.View 与通用网格组件 Engine.GridUI。
 --
--- 对照的旧实现是本文件里的字面副本：第 11 刀前 UI.Actions.updateTitle（标题）、UI.Input.collectMsg、
+-- 对照的旧实现是本文件里的字面副本：视图模型之前的 UI.Actions.updateTitle（标题）、UI.Input.collectMsg、
 -- UI.HudArt / UI.HudBlocks（进度点、步数上限、道具、分数徽章、结局色条分支）、UI.BoardPrim / UI.BoardArt
--- （地毯标记）、web/hs/Match3Web/Api.hs（encodeState / encodeGoal / encodeCell / apiLevels 的现算式）、
+-- （地毯标记）、web/hs/Match3Web/Api.hs（encodeState / encodeGoal / encodeCell / apiLevels 的现算式；结局分支读
+-- fromTerminal <$> gsOver，即当时的 Outcome）、
 -- UI.Layout.pixelToCell / cellOrigin / allCells、UI.Input 的点选 / 拖动判定。
--- 另有源码扫描：这些前端不再从 GameState 现算（读视图模型 / 通用网格组件）。
+-- 另有源码扫描：这些前端不从 GameState 现算（读视图模型 / 通用网格组件）。
 module Spec.View
   ( tests
   ) where
@@ -54,10 +55,9 @@ samples =
     ++ playOn 3 (newDailyGame (dailyConfig (Year 2026) (Month 9) (Day 30)) (dailySeed (Year 2026) (Month 9) (Day 30)))
     ++ [ g0 {gsLevel = levelCount + 2}
        , g0 {gsHammers = 0, gsFreeSwaps = 5, gsCrossClears = 2, gsShuffled = True}
-       , g0 {gsOver = Just (Won 1234)}
-       , g0 {gsOver = Just (LevelClear 99 4)}
-       , g0 {gsOver = Just (Lost 7), gsShuffled = True}
-       , g0 {gsOver = Just (MoveApplied 5), gsShuffled = True}
+       , g0 {gsOver = Just (TWon 1234)}
+       , g0 {gsOver = Just (TLevelClear 99 4)}
+       , g0 {gsOver = Just (TLost 7), gsShuffled = True}
        , g0 {gsMoves = 99}
        ]
   where
@@ -69,7 +69,7 @@ samples =
 legacyTitle :: GameState -> String
 legacyTitle gs =
   let levelName = maybe "?" lvlName (lookupLevel (min (gsLevel gs) (levelCount - 1)))
-      status = case gsOver gs of
+      status = case fromTerminal <$> gsOver gs of
         Just (Won s) -> " CLEAR! score=" <> show s
         Just (LevelClear s n) -> " LEVEL UP ->" <> show (n + 1) <> " score=" <> show s
         Just (Lost s) -> " LOSE score=" <> show s
@@ -102,7 +102,7 @@ legacyCollect gs' = case goalView (gsGoal gs') of
 
 -- 几何版结局色条的分支（颜色换成标签）。
 legacyStatusStrip :: GameState -> String
-legacyStatusStrip gs = case gsOver gs of
+legacyStatusStrip gs = case fromTerminal <$> gsOver gs of
   Just (Won _) -> "won"
   Just (LevelClear _ _) -> "clear"
   Just (Lost _) -> "lost"

@@ -45,7 +45,7 @@ resolveHammer = resolveHammerWith defaultRegistry
 -- | resolveHammer（指定注册表）。
 resolveHammerWith :: Registry -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveHammerWith reg p gs
-  | Just o <- gsOver gs = (gs, o, emptyTrace gs)
+  | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsHammers gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | hitImmuneWith reg (getCell (gsBoard gs) p) = (rejectMove gs, NoMatch, emptyTrace gs)
@@ -58,7 +58,7 @@ resolveFreeSwap = resolveFreeSwapWith defaultRegistry
 -- | resolveFreeSwap（指定注册表）。
 resolveFreeSwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveFreeSwapWith reg p1 p2 gs
-  | Just o <- gsOver gs = (gs, o, emptyTrace gs)
+  | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsFreeSwaps gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | p1 == p2 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
@@ -80,7 +80,7 @@ resolveCrossClear = resolveCrossClearWith defaultRegistry
 -- | resolveCrossClear（指定注册表）。
 resolveCrossClearWith :: Registry -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveCrossClearWith reg p gs
-  | Just o <- gsOver gs = (gs, o, emptyTrace gs)
+  | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsCrossClears gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | otherwise = resolveMoveWith reg SKindCross (fullStage (gsBoard gs)) (OpenSeeds Nothing (crossClearSeeds (gsBoard gs) p)) gs

@@ -1,12 +1,12 @@
--- | 领域类型的门面（第 6 刀按职责拆成小模块，这里原名再导出，调用方不用改 import）：
+-- | 领域类型的门面（按职责分成小模块，这里统一再导出）：
 --
 --   * Match3.Color —— 颜色、colorAt；
---   * Match3.Types.Name —— 元素名 ElementName 与自定义状态 CustomState（第 6b 刀 newtype）；
+--   * Match3.Types.Name —— 元素名 ElementName 与自定义状态 CustomState（newtype）；
 --   * Match3.Types.Cell —— 宝石种类、叠层、单元格内容与通用读数；
 --   * Match3.Types.Overlay / Match3.Types.Body —— 叠层 / 各本体的构造与谓词；
 --   * Match3.Types.Board —— 坐标与盘面；
---   * Match3.Types.Game —— 分数 / 步数、结局、地面层、开局配置；
---   * Match3.Goal —— 目标数据（第 5 刀）。
+--   * Match3.Types.Game —— 分数 / 步数、每步结果 Outcome 与终局 Terminal、地面层、开局配置；
+--   * Match3.Goal —— 目标数据。
 --
 -- 关卡记录与关卡表不在这里（它们要引用放置表 / 飞碟 / 皮带，这些模块又依赖本门面）：
 -- 见 Match3.Levels.Level 与 Match3.Levels.Campaign（Match3.Core 一并再导出）。
@@ -148,6 +148,9 @@ module Match3.Types
   , MovesLeft
   , TargetScore
   , Outcome(..)
+  , Terminal(..)
+  , terminalOf
+  , fromTerminal
   , Meter(..)
   , Quota(..)
   , LevelGoal(..)

@@ -55,7 +55,7 @@ import System.Random (StdGen, mkStdGen)
 firstLevel :: Level
 firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
 
--- | 第 li 关（0 基）按该关步数与目标、给定种子开局；没有这一关直接报错（第 6 刀：取代 allLevels !! li）。
+-- | 第 li 关（0 基）按该关步数与目标、给定种子开局；没有这一关直接报错。
 levelGame :: Int -> Int -> GameState
 levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
@@ -189,7 +189,7 @@ pCounters h =
     , "ufoc=" ++ show (gsCount CountUfo gs)
     , "carpet=" ++ show (gsCount CountCarpets gs)
     , "copen=" ++ pPosList (gsCarpetOpen gs)
-    , "over=" ++ maybe "-" pOutcome (gsOver gs)
+    , "over=" ++ maybe "-" (pOutcome . fromTerminal) (gsOver gs)
     , "lv=" ++ show (gsLevel gs)
     , "daily=" ++ show (gsDaily gs)
     , "hint=" ++ pMaybePair (gsHint gs)

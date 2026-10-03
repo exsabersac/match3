@@ -226,7 +226,7 @@ undo_shuffle_reset_combo_feedback = withComboState $ \_ gs1 -> do
 -- moveFx 必须识别为「没有新的一步」，不重播终局前那一步的特效。
 move_fx_ignores_already_over :: Assertion
 move_fx_ignores_already_over = withComboState $ \_ gs1 -> do
-  let gsOverSt = gs1 { gsOver = Just (Won (gsScore gs1)) }
+  let gsOverSt = gs1 { gsOver = Just (TWon (gsScore gs1)) }
   case findHint (gsBoard gsOverSt) of
     Nothing -> assertFailure "need a hint pair"
     Just (p1, p2) -> do

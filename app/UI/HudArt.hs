@@ -41,7 +41,7 @@ import UI.Types
 -- | 贴图版 HUD：关卡徽章、目标与进度条、步数、分数（回放中滚动）、道具次数、连击徽章 / 总结。
 drawHudArt :: Renderer -> Art -> App -> IO ()
 drawHudArt ren art app = do
-  -- 第 11 刀：全部读数来自视图模型 Match3.View（关卡下标已夹紧、步数上限、道具、目标、分数徽章）
+  -- 全部读数来自视图模型 Match3.View（关卡下标已夹紧、步数上限、道具、目标、分数徽章）
   let gv = gameView (appGame app)
       li = gvLevelIndex gv
       white = V4 245 245 255 255
@@ -63,7 +63,7 @@ drawHudArt ren art app = do
         pure (xT + w + 12)
   foldM_ badge (66 + zhW art ("name_" ++ show li) 24 + 10) (ruleBadges gv)
   -- 关卡进度点：已过绿、当前金、未解锁暗
-  -- 间距 6（38 关时与段 5 之前逐像素相同）；关卡更多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
+  -- 间距最多 6；关卡多时收窄，保证最后一个点不钻到道具面板（x = 298）下面
   let dots = levelDots li (appMaxReached app)  -- 每关一个点（levelCount 个）
       dotStep = min 6 (228 `div` max 1 (length dots)) :: Int
   forM_ (zip [0 ..] dots) $ \(i, ld) -> do
@@ -90,7 +90,7 @@ drawHudArt ren art app = do
   -- 目标条
   let gi = gvGoal gv
       goal = giGoal gi
-      prog = giProgress gi  -- 第 5 刀：与窗口标题 / 网页版同一个数（第 5 刀前是本模块的 hudProgress）
+      prog = giProgress gi  -- 与窗口标题 / 网页版同一个数
       targ = giTarget gi
   case gvBoss gv of
     -- 雪怪 Boss（新玩法 5）：目标条换成血条——雪怪头像 + 红色剩余血量（过半后变深红并闪烁），文字 HP 剩余/满血
@@ -273,7 +273,7 @@ drawOverlayArtNow ren art app = case gsOver (appGame app) of
         white = V4 255 255 255 255
     _ <- drawPanel ren art "panel_gold" (rect px0 py0 pw ph) 18
     case outcome of
-      LevelClear s nextIdx -> do
+      TLevelClear s nextIdx -> do
         zhAC ren art "zh_clear" cx (py0 + 12) 38
         drawStars
         -- 得分：图标 + 金色数字
@@ -286,17 +286,16 @@ drawOverlayArtNow ren art app = case gsOver (appGame app) of
         _ <- zhA ren art "zh_next" rowX (py0 + 142) 22
         textA ren art (rowX + w + 6) (py0 + 144) 3 white (show (nextIdx + 1))
         keyChipA ren art (px0 + pw - 40) (py0 + 144) 'N' (V4 140 230 160 255)
-      Won s -> do
+      TWon s -> do
         zhAC ren art "zh_win" cx (py0 + 12) 38
         drawStars
         _ <- drawSprite ren art "icon_score" (rect (cx - 60) (py0 + 120) 32 32)
         textA ren art (cx - 20) (py0 + 124) 4 white (show s)
-      Lost s -> do
+      TLost s -> do
         zhAC ren art "zh_lose" cx (py0 + 12) 38
         _ <- drawSprite ren art "icon_score" (rect (cx - 60) (py0 + 64) 32 32)
         textA ren art (cx - 20) (py0 + 68) 4 white (show s)
         zhAC ren art "zh_retry" cx (py0 + 130) 26
-      _ -> pure ()
 
 -- | 浮字：「连击 xN」放大弹出（等级越高字越大、颜色越暖、x5+ 彩色流转）+ 本轮得分「+N」飘起。
 drawPopsArt :: Renderer -> Art -> App -> IO ()

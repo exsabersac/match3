@@ -80,6 +80,8 @@ module Match3.Core
   , goalView
   , MovesLeft
   , Outcome(..)
+  , Terminal(..)
+  , fromTerminal
     -- * 对局
   , GameState(..)
   , MoveFx(..)
@@ -144,6 +146,7 @@ import Match3.Types
   , MovesLeft
   , Outcome(..)
   , Pos
+  , Terminal(..)
   , allColors
   , boardColIndices
   , boardDims
@@ -153,6 +156,7 @@ import Match3.Types
   , boardRows
   , boardSize
   , defaultConfig
+  , fromTerminal
   , goalView
   , hasChoco
   , hasVine

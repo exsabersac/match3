@@ -38,7 +38,7 @@ import Match3.Element.Registry (Registry, countElementWith, entryName, mkRegistr
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
-import Match3.Types (goalCount, goalTarget)
+import Match3.Types (goalCount, goalTarget, terminalOf)
 import Match3.View (BossPart(..), BossView(..), bossPart, gameView, gvBoss)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -162,7 +162,7 @@ sb_hammer_and_defeat_wins = do
   assertEqual "counted to 40" 40 (countOf (CountNamed "snow_boss") (gsCounts gs2))
   assertEqual "hud bar after hammer" (Just (BossView 39 40)) (gvBoss (gameView gs1))
   assertEqual "hud bar empty after defeat" (Just (BossView 0 40)) (gvBoss (gameView gs2))
-  assertBool "defeat wins" (isWin (Just o2) || isWin (gsOver gs2))
+  assertBool "defeat wins" (isWin (terminalOf o2) || isWin (gsOver gs2))
   assertBool "boss cells cleared in first wave" (all (`elem` concatMap cwCleared (mtWaves mt)) body)
 
 -- | 交换的步末：每步一条 EvTick "snow_boss"（四格计数变化），第 3 步多一格雪块（身外一圈的普通宝石 → 1 层石头）；

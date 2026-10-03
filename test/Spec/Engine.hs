@@ -102,7 +102,7 @@ engine_layer_is_game_agnostic = do
   assertEqual "no Match3 imports in the generic layer" [] bad
 
 -- | 三消实例（Match3.Engine）：经通用接口 step 的结果与直接调用旧入口（trySwap / use* / trace* /
--- shuffleGame / applyHint）逐位相同；撤销（段 3 起在 Engine.History，经 match3Shell）回到走步前的快照；runActions 在结局处停下；候选动作都会被接受；效果映射不丢事件。
+-- shuffleGame / applyHint）逐位相同；撤销（在 Engine.History，经 match3Shell）回到走步前的快照；runActions 在结局处停下；候选动作都会被接受；效果映射不丢事件。
 engine_match3_instance_matches_direct_api :: Assertion
 engine_match3_instance_matches_direct_api = do
   let g = M3E.match3Game
@@ -163,7 +163,7 @@ engine_match3_instance_matches_direct_api = do
     forM_' xs f = mapM_ f xs
 
 --------------------------------------------------------------------------------
--- 段 3：撤销走通用接口（历史在 Engine.History）
+-- 撤销走通用接口（历史在 Engine.History）
 
 -- | 终局后撤销：经 match3Shell 的 gameStep 走到终局再连撤三次，每一步的状态投影与 13094d1 上直接调
 -- Match3.Engine.play（当时的 Undo 动作 + GameState.gsHistory）逐位相同。期望值由 13094d1 上的同一段投影生成
@@ -190,7 +190,7 @@ engine_undo_after_terminal_matches_legacy_play =
           u3 = gameStep g (stepState u2) Undo
           got = (True, legacyProj hT) : [(stepAccepted u, legacyProj (stepState u)) | u <- [u1, u2, u3]]
           tag = show sc
-      assertEqual (tag ++ " terminal outcome") over (gsOver (histNow hT))
+      assertEqual (tag ++ " terminal outcome") over (fromTerminal <$> gsOver (histNow hT))
       assertEqual (tag ++ " undo after terminal accepted") True (stepAccepted u1)
       assertEqual (tag ++ " undo clears outcome") Nothing (gsOver (histNow (stepState u1)))
       assertEqual (tag ++ " matches 13094d1 play") rows got
@@ -204,14 +204,15 @@ engine_undo_after_terminal_matches_legacy_play =
       , ((20,2,3,True), Just (LevelClear 30 21), [(True,"b9020797ba2d56c2"),(True,"3af9cee4e045dd8d"),(False,"3af9cee4e045dd8d"),(False,"3af9cee4e045dd8d")])
       ]
 
--- | 与 13094d1 共有字段的状态投影（FNV-1a 64）；最后一项是历史深度（旧：length gsHistory，新：historyDepth）。
+-- | 与 13094d1 共有字段的状态投影（FNV-1a 64）；最后一项是历史深度（旧：length gsHistory，新：historyDepth）；
+-- gsOver 经 fromTerminal 按 Outcome 打印，与 13094d1 的文本一致。
 legacyProj :: History GameState -> String
 legacyProj h =
   let gs = histNow h
   in fnv (unlines
        [ show (gsBoard gs), show (gsScore gs), show (gsMoves gs), show (gsGoal gs), show (gsCollected gs), show (gsColorBag gs)
        , show (gsCount CountStones gs, gsCount CountChests gs, gsCount CountHoney gs, gsCount CountBalloons gs, gsCount CountCookies gs, gsCount CountCakes gs, gsCount CountSafes gs)
-       , show (gsGen gs), show (gsOver gs), show (gsLevel gs), show (gsHint gs), show (gsCombo gs), show (gsShuffled gs)
+       , show (gsGen gs), show (fromTerminal <$> gsOver gs), show (gsLevel gs), show (gsHint gs), show (gsCombo gs), show (gsShuffled gs)
        , show (gsBelts gs), show (gsPortals gs), show (gsHammers gs, gsFreeSwaps gs, gsCrossClears gs), show (gsUfos gs), show (gsCount CountUfo gs)
        , show (gsCarpetOpen gs), show (gsCount CountCarpets gs), show (gsLastCleared gs), show (gsDaily gs), show (namedCounts (gsCounts gs)), show (historyDepth h) ])
   where

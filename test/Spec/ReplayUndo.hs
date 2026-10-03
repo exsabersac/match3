@@ -192,7 +192,7 @@ undo_restores_carry_moves = do
         Just gsU -> do
           assertEqual "moves restored" (7 :: Int) (gsMoves gsU)
           -- nextLevel carry still caps at 3 from leftover
-          let gsClear = gsU { gsOver = Just (LevelClear 10 1), gsMoves = 7 }
+          let gsClear = gsU { gsOver = Just (TLevelClear 10 1), gsMoves = 7 }
               gsNext = nextLevel gsClear 99
               base = lvlMoves (levelAt 1)
           assertEqual "carry cap 3" (base + 3) (gsMoves gsNext)
@@ -403,7 +403,7 @@ trace_rejected_move_is_empty = withComboState $ \_ gs1 -> do
     Nothing -> assertFailure "need a no-match swap"
     Just (p1, p2) -> assertBool "no-match swap has no waves" (null (mtWaves (traceSwap p1 p2 gs1)))
   assertBool "non-adjacent has no waves" (null (mtWaves (traceSwap (0, 0) (2, 2) gs1)))
-  let gsOverSt = gs1 { gsOver = Just (Won (gsScore gs1)) }
+  let gsOverSt = gs1 { gsOver = Just (TWon (gsScore gs1)) }
   case findHint (gsBoard gsOverSt) of
     Nothing -> assertFailure "need a hint"
     Just (p1, p2) -> assertBool "finished game has no waves" (null (mtWaves (traceSwap p1 p2 gsOverSt)))

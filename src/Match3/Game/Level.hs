@@ -96,7 +96,7 @@ newGameAtLevelWith reg li cfg seed =
       cols = maybe boardSize lvlCols lvl
       (board0, g1) = randomPlayableBoardSized rows cols g0
       decorate l = placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith reg l
-      -- 新玩法 6：有掉落口的关卡不做目标补齐（收集物由掉落口陆续补进场）；没有掉落口（lvlDrops = []）时与原来相同
+      -- 新玩法 6：有掉落口的关卡不做目标补齐（收集物由掉落口陆续补进场）；没有掉落口（lvlDrops = []）时照常补齐
       goalDecor
         | maybe False (not . null . lvlDrops) lvl = id
         | otherwise = placeStatic ("目标 " ++ show (cfgGoal cfg) ++ " 的补齐装饰") . goalDecorWith reg (cfgGoal cfg)
@@ -155,10 +155,10 @@ carryMovesBonus left = min 3 (max 0 left)
 nextLevel :: GameState -> Int -> GameState
 nextLevel gs seed =
   let idx = case gsOver gs of
-        Just (LevelClear _ n) -> n
+        Just (TLevelClear _ n) -> n
         _ -> clampLevelIndex (gsLevel gs + 1)
       bonus = case gsOver gs of
-        Just (LevelClear _ _) -> carryMovesBonus (gsMoves gs)
+        Just (TLevelClear _ _) -> carryMovesBonus (gsMoves gs)
         _ -> 0
       gs' = fromMaybe (newGameAtLevel idx defaultConfig seed) (campaignGame idx seed)
   in over gsMovesL (+ bonus) gs'

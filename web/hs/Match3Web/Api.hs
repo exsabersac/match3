@@ -75,7 +75,7 @@ runStep act h =
       -- 走步的 Outcome 来自报告；撤销 / 终局后被拒没有走步结果，退回当前结局（未结束则 null）
       outcome = case rep >>= pdOutcome of
         Just o -> encodeOutcome o
-        Nothing -> maybe "null" encodeOutcome (stepOutcome st)
+        Nothing -> maybe "null" (encodeOutcome . fromTerminal) (stepOutcome st)
       -- 撤销没有报告：给一个「盘面不动」的空脚本，前端无需特判
       trace = encodeTrace (maybe (emptyTrace gs') pdTrace rep)
   in ( h'
@@ -126,7 +126,7 @@ encodeState h =
     , ("target", int (giTarget goal))
       -- 雪怪 Boss 血条（新玩法 5，视图模型 gvBoss，与桌面 HUD 同一份读数）：{hp: 剩余, max: 满血}；目标不是「击败 Boss」时为 null
     , ("boss", maybe "null" encodeBoss (gvBoss gv))
-    , ("over", maybe "null" encodeOutcome (gvOver gv))
+    , ("over", maybe "null" (encodeOutcome . fromTerminal) (gvOver gv))
     , ("loseHint", str (giLoseHint goal))
     , ("combo", int (gvCombo gv))
     , ("shuffled", bool (gvShuffled gv))

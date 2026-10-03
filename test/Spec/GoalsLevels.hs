@@ -33,6 +33,7 @@ import Match3.Types
   , isSafe
   , isStone
   , mkStone
+  , terminalOf
   , validBoardDim
   )
 import Test.Tasty
@@ -76,6 +77,7 @@ tests =
   , testCase "daily_clear_is_won_not_levelclear" daily_clear_is_won_not_levelclear
   , testCase "daily_won_does_not_unlock_map" daily_won_does_not_unlock_map
   , testCase "find_match_pair_engine_accepts" find_match_pair_engine_accepts
+  , testCase "terminal_outcome_mapping" terminal_outcome_mapping
   ]
 
 -- | 回归（测试辅助 'findMatchPair' 的缺陷）：它选出的对引擎必须接受。逐关（全部战役关卡，含第 43 关毛球）
@@ -102,6 +104,25 @@ find_match_pair_engine_accepts = do
   assertBool
     "naive finder picks a pair the engine rejects on some start (defect is covered)"
     (or [maybe False (rejected gs) (findMatchPairNaive (gsBoard gs)) | (_, gs) <- starts])
+
+-- | 'Terminal' 与 'Outcome' 的对应：terminalOf 只对 Won / Lost / LevelClear 给 Just，
+-- 构造器与参数一一对应、来回换不丢信息；GameState 的 Show 里 gsOver 仍按 Outcome 打印（金标准、指纹依赖这段文本）。
+terminal_outcome_mapping :: Assertion
+terminal_outcome_mapping = do
+  let pairs = [(Won 1234, TWon 1234), (Lost 7, TLost 7), (LevelClear 99 4, TLevelClear 99 4), (LevelClear 0 0, TLevelClear 0 0)]
+  mapM_ (\(o, t) -> do
+           assertEqual ("terminalOf " ++ show o) (Just t) (terminalOf o)
+           assertEqual ("fromTerminal " ++ show t) o (fromTerminal t)
+           assertEqual ("round trip " ++ show t) (Just t) (terminalOf (fromTerminal t)))
+        pairs
+  mapM_ (\o -> assertEqual ("non-terminal " ++ show o) Nothing (terminalOf o)) [InvalidSwap, NoMatch, MoveApplied 0, MoveApplied 5]
+  let g0 = newGame defaultConfig 42
+      shown t = show (g0 {gsOver = t})
+      has needle hay = any (\i -> take (length needle) (drop i hay) == needle) [0 .. length hay - length needle]
+  assertBool "Show: gsOver = Nothing" (has "gsOver = Nothing," (shown Nothing))
+  assertBool "Show: TWon prints as Won" (has "gsOver = Just (Won 1234)," (shown (Just (TWon 1234))))
+  assertBool "Show: TLost prints as Lost" (has "gsOver = Just (Lost 7)," (shown (Just (TLost 7))))
+  assertBool "Show: TLevelClear prints as LevelClear" (has "gsOver = Just (LevelClear 99 4)," (shown (Just (TLevelClear 99 4))))
 
 outcome_moves_or_score :: Assertion
 outcome_moves_or_score = do
@@ -197,7 +218,7 @@ collect_goal_clears_level = do
     LevelClear _ next -> do
       assertEqual "next level" (1 :: Int) next
       assertBool "collected enough" (gsCollected gs1 >= 3)
-      assertBool "gsOver set" (gsOver gs1 == Just out)
+      assertBool "gsOver set" (gsOver gs1 == terminalOf out)
     Won _ -> assertFailure "should LevelClear on non-last level"
     other -> assertFailure ("expected LevelClear, got " ++ show other ++ " collected=" ++ show (gsCollected gs1))
 
@@ -222,7 +243,7 @@ collect_goal_lose_on_moves = do
       assertBool
         ("collected < 99, got " ++ show (gsCollected gs1))
         (gsCollected gs1 < 99)
-      assertBool "gsOver is Lost" (gsOver gs1 == Just out)
+      assertBool "gsOver is Lost" (gsOver gs1 == terminalOf out)
       assertEqual "moves spent" (0 :: Int) (gsMoves gs1)
     other ->
       assertFailure
@@ -556,7 +577,7 @@ carry_moves_on_next_level = do
   let cfg0 = levelConfig (levelAt 0)
       gs0 =
         (newGameAtLevel 0 cfg0 1)
-          { gsOver = Just (LevelClear 100 1)
+          { gsOver = Just (TLevelClear 100 1)
           , gsMoves = 5  -- leftover
           }
       gs1 = nextLevel gs0 99
@@ -565,7 +586,7 @@ carry_moves_on_next_level = do
   assertEqual "carried min(3,left)" (base + 3) (gsMoves gs1)  -- cap 3
   let gs2 =
         (newGameAtLevel 0 cfg0 2)
-          { gsOver = Just (LevelClear 50 1)
+          { gsOver = Just (TLevelClear 50 1)
           , gsMoves = 2
           }
       gs3 = nextLevel gs2 100
@@ -590,7 +611,7 @@ daily_goal_rotates_ten = do
       flavors
 
 
--- | Batch: all campaign levels (38 + 段 5 两关 + 第 41 / 42 / 43 / 44 关) constructible, positive goals/moves,
+-- | Batch: all campaign levels (every entry of allLevels) constructible, positive goals/moves,
 -- board size in bounds, décor enough for obstacle goals, legal move after ensure.
 campaign_levels_batch_ok :: Assertion
 campaign_levels_batch_ok = do
@@ -708,7 +729,7 @@ map_select_no_carry_moves :: Assertion
 map_select_no_carry_moves = do
   let gsPrev =
         (levelGame 0 1)
-          { gsOver = Just (LevelClear 100 1)
+          { gsOver = Just (TLevelClear 100 1)
           , gsMoves = 9
           }
       carried = nextLevel gsPrev 2
@@ -731,7 +752,7 @@ star_rating_vs_carry_base = do
   -- After nextLevel, gsMoves is printed+carry; UI must rate vs printed (Main advanceOrMsg).
   let gsPrev =
         (levelGame 0 1)
-          { gsOver = Just (LevelClear 50 1)
+          { gsOver = Just (TLevelClear 50 1)
           , gsMoves = 5
           }
       gsNext = nextLevel gsPrev 9
@@ -817,7 +838,7 @@ daily_clear_is_won_not_levelclear = do
                Won s -> do
                  assertBool "won score" (s >= 10)
                  case gsOver gs2 of
-                   Just (Won _) -> pure ()
+                   Just (TWon _) -> pure ()
                    other -> assertFailure ("gsOver should be Won, got " ++ show other)
                LevelClear _ n ->
                  assertFailure ("daily must Won even when score already met, got LevelClear " ++ show n)

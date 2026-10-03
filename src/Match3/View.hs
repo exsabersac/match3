@@ -83,7 +83,7 @@ import Match3.Types
   , GoalView(..)
   , LevelGoal(..)
   , Meter(..)
-  , Outcome(..)
+  , Terminal(..)
   , Pos
   , Quota(..)
   , goalTarget
@@ -125,7 +125,7 @@ data GameView = GameView
   , gvBoosters :: Boosters
   , gvCombo :: Int         -- ^ 经通用接口 gameStatus 取的连击数（= gsCombo）
   , gvShuffled :: Bool
-  , gvOver :: Maybe Outcome
+  , gvOver :: Maybe Terminal
   , gvStatus :: PlayStatus
   , gvGoal :: GoalInfo
   , gvBoss :: Maybe BossView  -- ^ 雪怪 Boss 血条（新玩法 5）：目标是「击败 Boss」的关卡才有
@@ -149,10 +149,10 @@ gameView gs =
     , gvShuffled = gsShuffled gs
     , gvOver = gsOver gs
     , gvStatus = case gsOver gs of
-        Just (Won s) -> PlayWon s
-        Just (LevelClear s n) -> PlayCleared s n
-        Just (Lost s) -> PlayLost s
-        _ -> if gsShuffled gs then PlayShuffled else PlayOn
+        Just (TWon s) -> PlayWon s
+        Just (TLevelClear s n) -> PlayCleared s n
+        Just (TLost s) -> PlayLost s
+        Nothing -> if gsShuffled gs then PlayShuffled else PlayOn
     , gvGoal = goalInfo (gsGoal gs) (gsProgress gs)
     , gvBoss = bossView gs
     , gvBoard = boardView gs

@@ -112,7 +112,7 @@ ensureCases =
         , let gs = gs0 {gsBoard = b, gsGen = mkStdGen (97 * li + seed), gsShuffled = False}
         ]
       overCase = case campaignGame 0 1 of
-        Just gs0 -> [("over", defaultRegistry, gs0 {gsBoard = stuckSized 8 8, gsOver = Just (Won 0)})]
+        Just gs0 -> [("over", defaultRegistry, gs0 {gsBoard = stuckSized 8 8, gsOver = Just (TWon 0)})]
         Nothing -> []
   in (levelCases, overCase)
 

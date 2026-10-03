@@ -236,7 +236,7 @@ ec_flat_record_removed = do
   flowFiles <- pipelineSources
   flow <- mapM readFile flowFiles
   assertEqual "main flow does not call level element implementations" [] [(f, w) | (f, s) <- zip flowFiles flow, w <- ["stepUfos", "beltMoves", "coverCarpets"], mentionsIdent w s]
-  assertEqual "36 builtin entries" 36 (length builtinDefs)
+  assertEqual "builtin entries" builtinEntryCount (length builtinDefs)
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map levelNameOf builtinLevelDefs)
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；

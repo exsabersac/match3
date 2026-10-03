@@ -19,7 +19,7 @@ import Match3.Element.Caps (blocker, counts, hit)
 import Match3.Element.Class
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame)
-import Spec.Support (stableBoard)
+import Spec.Support (builtinBodyInstanceCount, stableBoard)
 import Spec.Support.Source (builtinSources, readCode)
 import Match3.Types
 import Test.Tasty
@@ -110,7 +110,7 @@ caps_element_class_is_thin = do
   assertEqual "class methods" ["name", "toCell", "caps"] [m | l <- body, (m, rest) <- [span isIdent (dropWhile isSpace l)], not (null m), "::" `isPrefixOf` dropWhile isSpace rest]
   srcs <- builtinSources
   insts <- concat <$> mapM (fmap instanceMethods . readCode) srcs
-  assertEqual "builtin body instances" 24 (length insts)
+  assertEqual "builtin body instances" builtinBodyInstanceCount (length insts)
   assertEqual "builtin instances only define name / toCell / caps" [] (filter (`notElem` ["name", "toCell", "caps"]) (nub (concat insts)))
   where
     indented l = case l of

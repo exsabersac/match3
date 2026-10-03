@@ -87,6 +87,9 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：直接 import 所测的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、`Match3.Obstacles` 等）；`Match3.Core` 是前端 API，测试只用它取前端也在用的名字
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
+- 测试套件**直接编译 `src/`**（`source-dirs` 含 `src`，不依赖 `match3` 库）：库模块对测试是同一组件里的模块，GHC 只重编真正用到改动内容的测试模块。改一个库模块导出时，`make verify` 从约 50–67 s 降到约 22–27 s；代价是全量构建多编一遍 `src`（约 +15 s）。
+- 内置内容的数量（关卡数、注册表条目数、本体 instance 数）集中在 `test/Spec/Support/Inventory.hs`，加元素 / 加关卡只改那里。
+- 每个用例默认 120 秒超时（`test/Spec.hs` 的 `defaultTimeout`，命令行 `--timeout` 优先），挂起会变成失败而不是卡住。
 - 目录（用例数合计 461）：
 
 | 文件 | 用例数 | 内容 |
@@ -138,11 +141,12 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/BoardSeed.hs` | 3 | 毛球跳格（第 43 关）与雪怪召唤（第 45 关）共用的选格散列 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`：写死两张固定小盘面的 `show` 字符串与散列值、第 43 / 45 关种子 1 开局盘面的散列值、三个坐标的 `posSeed`、第 43 关开局的 14 次毛球跳格与第 45 关开局的召唤格；性质：散列 = 标准 64 位 FNV-1a（与 `Word64` 参考实现逐值相同）作用于 `show`，`pickBy` = 下标（散列 mod 候选数）。失败信息说明「`Show Cell` / 散列改了会改变毛球 / 雪怪行为」 |
 | `test/Spec/View.hs` | 11 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
-| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）、`digest`（字符串的 64 位 FNV-1a 十六进制摘要，固定例子用它锁定大批结果）等；并重新导出 `Spec.Support.Source` |
+| `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith reg` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）、`digest`（字符串的 64 位 FNV-1a 十六进制摘要，固定例子用它锁定大批结果）等；并重新导出 `Spec.Support.Source` 与 `Spec.Support.Inventory` |
 | `test/Spec/Support/Parallel.hs` | — | 确定性并行批量求值 `parallelForce`（`forkIO` + STM：`TVar` 领任务、`TMVar` 结果槽、按原顺序取回、异常按顺序重抛）；`Spec.Golden` 用它并行求值金标准各段 |
 | `test/Spec/Support/Obstacles.hs` | — | `Match3.Obstacles` 邻消函数的无 except 写法（`chipAdjacentStones` = `chipAdjacentStonesExcept … []` 等十个），只给障碍测试用 |
 | `test/Spec/Support/Arbitrary.hs` | — | 自定义 `Arbitrary`：`AnyBoard` / `HoledBoard`（任意行列 1–10 的完整 / 可空盘），`shrink` 先去行列、再逐格简化（`shrinkCell`）；`shrinkBoard` 给 `forAllShrink` 用 |
 | `test/Spec/Support/Source.hs` | — | 源码扫描工具（见「源码扫描约定」） |
+| `test/Spec/Support/Inventory.hs` | — | 内置内容的数量清单（`campaignLevelCount` / `builtinEntryCount` / `builtinBodyInstanceCount`），由 `Spec.Support` 重新导出 |
 | `test/Toy.hs` | — | 通用接口的玩具实现（只 import `Engine.*`） |
 | `test/golden/` | — | 金标准投影 `Golden.hs` 与 `golden.txt`；元素查询快照 `ElementQueries.hs` 与 `element-queries.txt`（元素类迁移） |
 

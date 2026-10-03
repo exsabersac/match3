@@ -3,7 +3,7 @@
 -- 因此 --list-tests 的完整路径（match3.<测试名>）与拆分前逐字相同。
 module Main (main) where
 
-import Test.Tasty (TestTree, defaultMain, testGroup)
+import Test.Tasty (TestTree, Timeout (..), adjustOption, defaultMain, mkTimeout, testGroup)
 import qualified Spec.GridMatch
 import qualified Spec.Gravity
 import qualified Spec.Cascade
@@ -53,7 +53,12 @@ import qualified Spec.MoveText
 import qualified Spec.WebColors
 
 main :: IO ()
-main = defaultMain tests
+main = defaultMain (adjustOption defaultTimeout tests)
+
+-- | 每个用例最多跑 120 秒，超时算失败（防止一次挂起卡住整个 make verify）；命令行给了 --timeout 时以命令行为准。
+defaultTimeout :: Timeout -> Timeout
+defaultTimeout NoTimeout = mkTimeout 120000000
+defaultTimeout t = t
 
 tests :: TestTree
 tests =

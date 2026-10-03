@@ -221,6 +221,7 @@ test-suite match3-test
       Spec.Specials
       Spec.Support
       Spec.Support.Arbitrary
+      Spec.Support.Inventory
       Spec.Support.Obstacles
       Spec.Support.Parallel
       Spec.Support.Source
@@ -236,6 +237,82 @@ test-suite match3-test
       UI.Palette
       UI.Presentation
       UI.Sound
+      Engine.Effect
+      Engine.Game
+      Engine.GridUI
+      Engine.History
+      Engine.Optics
+      Engine.Playback
+      Engine.Stream
+      Match3.Board.Cascade
+      Match3.Board.Clear
+      Match3.Board.Default
+      Match3.Board.Effect
+      Match3.Board.Gravity
+      Match3.Board.Grid
+      Match3.Board.Hooks
+      Match3.Board.Match
+      Match3.Board.Phase
+      Match3.Board.Random
+      Match3.Board.Refill
+      Match3.Board.Wave
+      Match3.Boosters
+      Match3.Carpet
+      Match3.Color
+      Match3.Combos
+      Match3.Conveyor
+      Match3.Core
+      Match3.Countdown
+      Match3.Counts
+      Match3.Daily
+      Match3.Element
+      Match3.Element.Builtin
+      Match3.Element.Builtin.Actor
+      Match3.Element.Builtin.Collectible
+      Match3.Element.Builtin.Common
+      Match3.Element.Builtin.Gem
+      Match3.Element.Builtin.Ground
+      Match3.Element.Builtin.Layer
+      Match3.Element.Builtin.Level
+      Match3.Element.Builtin.Obstacle
+      Match3.Element.Caps
+      Match3.Element.Class
+      Match3.Element.Event
+      Match3.Element.Level
+      Match3.Element.Message
+      Match3.Element.Registry
+      Match3.Element.Special
+      Match3.Element.Types
+      Match3.Engine
+      Match3.Game.Boosters
+      Match3.Game.EndPhase
+      Match3.Game.Level
+      Match3.Game.Move
+      Match3.Game.Outcome
+      Match3.Game.Resolve
+      Match3.Game.Shuffle
+      Match3.Game.State
+      Match3.Game.Tally
+      Match3.Game.Trace
+      Match3.Goal
+      Match3.GoalLabel
+      Match3.Grass
+      Match3.Ice
+      Match3.Levels.Campaign
+      Match3.Levels.Level
+      Match3.Obstacles
+      Match3.Rainbow
+      Match3.Snail
+      Match3.Types
+      Match3.Types.Board
+      Match3.Types.Body
+      Match3.Types.Cell
+      Match3.Types.Game
+      Match3.Types.Name
+      Match3.Types.Optics
+      Match3.Types.Overlay
+      Match3.Ufo
+      Match3.View
       Paths_match3
   autogen-modules:
       Paths_match3
@@ -243,15 +320,17 @@ test-suite match3-test
       test
       test/golden
       app/pure
+      src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
     , directory
-    , match3
     , random
     , stm
     , tasty
     , tasty-hunit
     , tasty-quickcheck
+    , transformers
   default-language: Haskell2010

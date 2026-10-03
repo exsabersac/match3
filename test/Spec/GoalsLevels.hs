@@ -570,7 +570,7 @@ goal_carpet_counts = do
   let gs = levelGame 36 42
   assertEqual "level 36 carpet open" (8 :: Int) (length (gsCarpetOpen gs))
   assertEqual "goal" (goalCount CountCarpets 8) (gsGoal gs)
-  assertEqual "campaign levels" (49 :: Int) (length allLevels)
+  assertEqual "campaign levels" campaignLevelCount (length allLevels)
 
 carry_moves_on_next_level :: Assertion
 carry_moves_on_next_level = do
@@ -615,7 +615,7 @@ daily_goal_rotates_ten = do
 -- board size in bounds, décor enough for obstacle goals, legal move after ensure.
 campaign_levels_batch_ok :: Assertion
 campaign_levels_batch_ok = do
-  assertEqual "49 levels (… + 第 49 关宽域 6×9)" (49 :: Int) (length allLevels)
+  assertEqual "campaign levels" campaignLevelCount (length allLevels)
   let seeds = [42, 99, 7] :: [Int]
   mapM_
     ( \seed ->

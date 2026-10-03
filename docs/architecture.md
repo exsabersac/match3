@@ -188,9 +188,9 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | GHC | **9.14.1**（`stack.yaml`：`system-ghc: true`，用 ghcup 安装） |
 | 库名 | `match3` |
 | 可执行文件 | `match3-sdl` |
-| 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck） |
+| 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck；直接编译 `src/`，不依赖库，见 [testing.md「套件结构」](testing.md#套件结构)） |
 
-库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（`Match3.Counts` 用 `Data.Map.Strict`）与 `transformers`（网页版 `web/match3-web.cabal` 同样列出这几项）。可执行文件（不用 `array`）：`base`、`random`、`sdl2`、`text`、`vector`，以及 GHC 自带的 `directory`、`filepath`（贴图加载）、`bytestring` 与 `containers`。测试组件另用 `array`、`stm`、`tasty` 系列与 `directory`。各组件的依赖都经 `-Wunused-packages` 核对过，没有多余项。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
+库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（`Match3.Counts` 用 `Data.Map.Strict`）与 `transformers`（网页版 `web/match3-web.cabal` 同样列出这几项）。可执行文件（不用 `array`）：`base`、`random`、`sdl2`、`text`、`vector`，以及 GHC 自带的 `directory`、`filepath`（贴图加载）、`bytestring` 与 `containers`。测试组件直接编译 `src/`，所以列出库的依赖（`array`、`containers`、`transformers`、`random`），另用 `stm`、`tasty` 系列与 `directory`。各组件的依赖都经 `-Wunused-packages` 核对过，没有多余项。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
 
 ## 网页版（技术验证）
 

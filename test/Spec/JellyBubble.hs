@@ -136,7 +136,7 @@ jb_bubble_blocks_swap_falls_no_match = do
 -- | 追加在 38 关之后：第 39 关果冻、第 40 关气泡；目标按元素名；前 38 关的名字 / 目标不变（金标准另外逐字锁定）。
 jb_levels_appended :: Assertion
 jb_levels_appended = do
-  assertEqual "49 levels" 49 (length allLevels)
+  assertEqual "campaign levels" campaignLevelCount (length allLevels)
   let l39 = levelAt 38
       l40 = levelAt 39
   assertEqual "L39 goal" (goalCount (CountNamed "jelly") 32) (lvlGoal l39)

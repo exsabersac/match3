@@ -39,6 +39,8 @@ module Spec.Support
   , stepThenUndo
     -- * 固定例子的指纹
   , digest
+    -- * 内置内容的数量清单
+  , module Spec.Support.Inventory
     -- * 源码扫描
   , module Spec.Support.Source
   ) where
@@ -66,6 +68,7 @@ import Engine.History (History(..), Undoable(..), startHistory)
 import Match3.Element.Registry (Registry, swapBlockedWith)
 import qualified Match3.Engine as M3E
 import Test.Tasty.HUnit
+import Spec.Support.Inventory
 import Spec.Support.Source
 
 -- | 棋盘全部格子（行优先）。

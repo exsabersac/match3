@@ -13,8 +13,6 @@ import Match3.Types
 deadRule :: (Board -> [Pos] -> [Pos] -> (Board, [Pos])) -> AdjCtx -> Board -> AdjOut
 deadRule f ctx b = let (b', dead) = f b (acTrue ctx) (acDirect ctx) in AdjOut b' dead []
 
--- | 放置：一个颜色参数（气球 / 染色瓶）。
+-- | 放置：一个颜色参数（气球 / 染色瓶；精确匹配）。
 colorPlace :: (Color -> Cell) -> Placer
-colorPlace con args _ = case args of
-  [AColor c] -> Just (con c)
-  _ -> Nothing
+colorPlace con args _ = con <$> exactArgs argColor args

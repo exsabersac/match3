@@ -4,14 +4,19 @@
 --
 -- * 关卡校验：'Validation' 是 Applicative（定律用 QuickCheck 查），所有失败一次报全；全部关卡与每日关都通过；
 --   一关里同时有多处问题时按固定顺序全部列出；只有行列一处问题时文字与 checkLevelDims 逐字节相同。
+-- * 放置参数解析：'ArgP' 改写后的每个放置函数，在随机参数表 × 随机格上与改写前的手写 case（Spec.Support.LegacyBoundary）逐项相同；
+--   精确匹配 / 前缀匹配 / '<|>' 缺省值的语义用单元测试钉住。
 module Spec.DataBoundary
   ( tests
   ) where
 
+import Control.Applicative ((<|>))
 import Control.Exception (ErrorCall (..), evaluate, try)
 import Data.List (isInfixOf)
 import Match3.Core
-import Match3.Element.Types (Placement (..))
+import Match3.Element (defaultRegistry)
+import Match3.Element.Registry (placeWith)
+import Match3.Element.Types (Arg (..), Placement (..), argColor, argInt, exactArgs, prefixArgs)
 import Match3.Levels.Level
   ( DropSpec (..)
   , LevelIssue (..)
@@ -23,6 +28,8 @@ import Match3.Levels.Level
   , renderIssue
   , validateLevel
   )
+import Spec.Properties (genCell, genColor)
+import qualified Spec.Support.LegacyBoundary as Old
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Failure, Success)
@@ -32,6 +39,8 @@ tests =
   [ testCase "level_validation_all_levels_valid" level_validation_all_levels_valid
   , testCase "level_validation_reports_all_issues" level_validation_reports_all_issues
   , testProperty "qc_validation_applicative_laws" qc_validation_applicative_laws
+  , testProperty "qc_argp_placers_match_legacy" qc_argp_placers_match_legacy
+  , testCase "argp_exact_vs_prefix" argp_exact_vs_prefix
   ]
 
 --------------------------------------------------------------------------------
@@ -105,3 +114,36 @@ qc_validation_applicative_laws =
     genV = oneof [Success <$> arbitrary, Failure <$> listOf1 arbitrary]
     genF :: Gen (Validation [Int] (Int -> Int))
     genF = oneof [(\k -> Success (+ k)) <$> arbitrary, (\k -> Success (* k)) <$> arbitrary, Failure <$> listOf1 arbitrary, pure (failure 7)]
+
+--------------------------------------------------------------------------------
+-- 放置参数解析
+
+-- | 随机参数表（0–3 个，整数含 0 / 1 / 3 / 4 / 255 / 256 等边界）。
+genArgs :: Gen [Arg]
+genArgs = do
+  k <- choose (0, 3)
+  vectorOf k (oneof [AInt <$> oneof [choose (-2, 6), elements [255, 256, 300]], AColor <$> genColor])
+
+-- | 每个改写过的放置函数：在 1×1 盘上经注册表按名字放置（placeWith），与旧手写 case 的结果相同
+-- （旧放置返回 Nothing 时格子不变，与 placeWith 的约定一致）。
+qc_argp_placers_match_legacy :: Property
+qc_argp_placers_match_legacy =
+  withMaxSuccess 300 $ forAll genArgs $ \args -> forAll genCell $ \cell ->
+    let b0 = boardFromRows [[cell]]
+    in conjoin
+         [ counterexample (show (n, args, cell)) $
+             placeWith defaultRegistry n args b0 [(0, 0)] === Right (maybe b0 (setCell b0 (0, 0)) (old args cell))
+         | (n, old) <- Old.legacyPlacers
+         ]
+
+-- | 两种跑法与左偏 '<|>'：精确匹配多一个参数就失败；前缀匹配忽略剩下的；'<|>' 只在这一步失败时用右边。
+argp_exact_vs_prefix :: Assertion
+argp_exact_vs_prefix = do
+  assertEqual "exact: one int" (Just 2) (exactArgs argInt [AInt 2])
+  assertEqual "exact: extra arg fails" Nothing (exactArgs argInt [AInt 2, AInt 3])
+  assertEqual "prefix: extra arg ignored" (Just 2) (prefixArgs argInt [AInt 2, AColor C1])
+  assertEqual "prefix: wrong head fails" Nothing (prefixArgs argInt [AColor C1, AInt 2])
+  assertEqual "default when empty" (Just 1) (exactArgs (argInt <|> pure 1) [])
+  assertEqual "default does not swallow a color" Nothing (exactArgs (argInt <|> pure 1) [AColor C1])
+  assertEqual "sequence" (Just (C2, 5)) (exactArgs ((,) <$> argColor <*> argInt) [AColor C2, AInt 5])
+  assertEqual "sequence order matters" Nothing (exactArgs ((,) <$> argColor <*> argInt) [AInt 5, AColor C2])

@@ -218,6 +218,7 @@ test-suite match3-test
       Spec.Specials
       Spec.Support
       Spec.Support.Arbitrary
+      Spec.Support.LegacyBoundary
       Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
       Spec.Support.LegacyGeometry

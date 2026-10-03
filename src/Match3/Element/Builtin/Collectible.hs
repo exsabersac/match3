@@ -22,6 +22,7 @@ module Match3.Element.Builtin.Collectible
   , chameleonEntry
   ) where
 
+import Control.Applicative ((<|>))
 import Data.List (nub)
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Builtin.Common (deadRule)
@@ -181,8 +182,11 @@ cookieEntry = bodyEntry CookieE (\cell -> case cell of Cookie -> Just CookieE; _
 timeSpiritEntry = bodyEntry TimeSpiritE (\cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing) (\_ _ -> Just TimeSpirit)
 -- 气泡：Custom 本体，放置参数 = 值（缺省 1）。
 bubbleEntry = customEntry (Bubble 1) (Bubble . unCustomState)
--- 变色龙：Custom 本体；放置参数 [AColor c] = 指定颜色，否则取原格宝石的颜色（开局不会凭空连成三消）；原格不是宝石且没给颜色时不放。
-chameleonEntry = customEntryWith (Chameleon 0) (Chameleon . unCustomState) $ \args cell -> case (args, cell) of
-  (AColor c : _, _) -> Just (chameleonCell c)
-  (_, Gem c _ _ _) -> Just (chameleonCell c)
-  _ -> Nothing
+-- 变色龙：Custom 本体；放置参数头一个是颜色 = 指定颜色（前缀匹配，多出的参数忽略），否则取原格宝石的颜色
+-- （开局不会凭空连成三消）；原格不是宝石且没给颜色时不放。
+chameleonEntry = customEntryWith (Chameleon 0) (Chameleon . unCustomState) $ \args cell ->
+  chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
+  where
+    gemColor cell = case cell of
+      Gem c _ _ _ -> Just c
+      _ -> Nothing

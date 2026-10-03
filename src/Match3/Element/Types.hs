@@ -28,6 +28,11 @@ module Match3.Element.Types
   , runEndRules
   , Edge(..)
   , Arg(..)
+  , ArgP(..)
+  , argInt
+  , argColor
+  , exactArgs
+  , prefixArgs
   , Placement(..)
   , SwapRule(..)
   , OpenRule(..)
@@ -40,6 +45,7 @@ module Match3.Element.Types
   , kindSlot
   ) where
 
+import Control.Applicative (Alternative(..))
 import Data.List (mapAccumL)
 import Data.Maybe (catMaybes)
 import Match3.Counts (CounterKey(..))
@@ -158,6 +164,50 @@ data Edge = EdgeBottom | EdgeLeft | EdgeRight | EdgeTop
 -- | 关卡放置参数（层数 / 回合数 / 颜色 / 方向分量）。
 data Arg = AInt Int | AColor Color
   deriving (Eq, Show)
+
+-- | 放置参数的小解析器（Haskell 特性第 8 项，docs/haskell-features/08-数据边界.md）：
+-- 从参数表头部取值，返回值与剩下的参数。Applicative 依次取（@f <$> argColor <*> argInt@）；
+-- Alternative 的 '<|>' 左偏、只在这一步失败时改试右边（@argInt <|> pure 1@ = 「有整数就取，没有就缺省 1」）。
+-- 跑法分两种，每个放置函数选哪种见 08 文档的表：
+--
+-- * 'exactArgs'：必须恰好用完全部参数，多一个也算失败（之前写成 @case args of [AInt n] -> …; _ -> Nothing@ 的那些）；
+-- * 'prefixArgs'：只看头部，后面多出的参数忽略（之前写成 @(AInt k : _) -> …@ 的那些）。
+newtype ArgP a = ArgP {runArgP :: [Arg] -> Maybe (a, [Arg])}
+
+instance Functor ArgP where
+  fmap f (ArgP p) = ArgP (\as -> fmap (\(a, rest) -> (f a, rest)) (p as))
+
+instance Applicative ArgP where
+  pure a = ArgP (\as -> Just (a, as))
+  ArgP pf <*> ArgP pa = ArgP $ \as -> case pf as of
+    Nothing -> Nothing
+    Just (f, rest) -> fmap (\(a, rest') -> (f a, rest')) (pa rest)
+
+instance Alternative ArgP where
+  empty = ArgP (const Nothing)
+  ArgP p <|> ArgP q = ArgP (\as -> maybe (q as) Just (p as))
+
+-- | 取一个整数参数。
+argInt :: ArgP Int
+argInt = ArgP $ \as -> case as of
+  AInt n : rest -> Just (n, rest)
+  _ -> Nothing
+
+-- | 取一个颜色参数。
+argColor :: ArgP Color
+argColor = ArgP $ \as -> case as of
+  AColor c : rest -> Just (c, rest)
+  _ -> Nothing
+
+-- | 精确匹配：解析成功且参数正好用完。
+exactArgs :: ArgP a -> [Arg] -> Maybe a
+exactArgs p as = case runArgP p as of
+  Just (a, []) -> Just a
+  _ -> Nothing
+
+-- | 前缀匹配：解析成功即可，剩下的参数忽略。
+prefixArgs :: ArgP a -> [Arg] -> Maybe a
+prefixArgs p = fmap fst . runArgP p
 
 -- | 关卡放置表的一项：把元素（按名字）以给定参数放到若干格（按列表顺序逐格）。
 data Placement = Place ElementName [Arg] [Pos]

@@ -132,9 +132,10 @@ bodySlot cell = case cell of
   _ -> SlotCell (cellSlot cell)
 
 -- | 自定义本体（格子 = Custom 名字 状态值）：原型值、状态值 → 元素值；放置 = Custom 名字 参数（缺省 1）。
+-- 放置参数按前缀取（'prefixArgs'：头一个是整数就用它，后面多出的参数忽略；头一个不是整数时缺省 1）。
 -- 第 6b 刀：状态值是 CustomState（newtype），解码函数收 CustomState。
 customEntry :: Element e => e -> (CustomState -> e) -> Entry
-customEntry proto mk = customEntryWith proto mk (\args _ -> Just (Custom n (CustomState (case args of (AInt k : _) -> k; _ -> 1))))
+customEntry proto mk = customEntryWith proto mk (\args _ -> Just (Custom n (CustomState (fromMaybe 1 (prefixArgs argInt args)))))
   where
     n = name proto
 

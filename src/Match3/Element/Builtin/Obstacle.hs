@@ -42,6 +42,8 @@ module Match3.Element.Builtin.Obstacle
   , snowBossEntry
   ) where
 
+import Control.Applicative ((<|>))
+import Control.Monad (guard)
 import Data.Bits (xor)
 import Data.Char (ord)
 
@@ -328,12 +330,9 @@ chip n con
   | n <= 1 = Destroy
   | otherwise = Absorb (SomeElement (con (n - 1)))
 
--- | 放置：层数（缺省 1，至少 1）。
+-- | 放置：层数（缺省 1，至少 1）。精确匹配：只接受 @[]@ 或 @[AInt n]@。
 layersPlace :: (Int -> Cell) -> Placer
-layersPlace con args _ = case args of
-  [AInt n] -> Just (con (max 1 n))
-  [] -> Just (con 1)
-  _ -> Nothing
+layersPlace con args _ = con <$> exactArgs (max 1 <$> argInt <|> pure 1) args
 
 --------------------------------------------------------------------------------
 -- 条目（槽位由原型推导 = cellSlot (toCell 原型)）
@@ -345,14 +344,14 @@ honeyEntry = bodyEntry (HoneyE 1) (\cell -> case cell of Honey n -> Just (HoneyE
 balloonEntry = bodyEntry (BalloonE C1) (\cell -> case cell of Balloon c -> Just (BalloonE c); _ -> Nothing) (colorPlace Balloon)
 cakeEntry = bodyEntry (CakeE 1) (\cell -> case cell of Cake n -> Just (CakeE n); _ -> Nothing) (layersPlace Cake)
 safeEntry = bodyEntry (SafeE 1) (\cell -> case cell of Safe n -> Just (SafeE n); _ -> Nothing) (layersPlace Safe)
-flipEntry = bodyEntry (FlipE C1 C2) (\cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing) $ \args _ -> case args of
-  [AColor f, AColor b] -> Just (Flip f b)
-  _ -> Nothing
+flipEntry = bodyEntry (FlipE C1 C2) (\cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing) $ \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
 surpriseEntry = bodyEntry SurpriseEgg (\cell -> case cell of Surprise -> Just SurpriseEgg; _ -> Nothing) (\_ _ -> Just Surprise)
--- 魔法石：Custom 本体，放置参数 = 初始充能（缺省 0，夹到 0–3）。
+-- 魔法石：Custom 本体，放置参数 = 初始充能（缺省 0，夹到 0–3；前缀匹配，多出的参数忽略）。
 magicStoneEntry = customEntryWith (MagicStone 0) (MagicStone . unCustomState) $ \args _ ->
-  Just (toCell (MagicStone (case args of (AInt k : _) -> max 0 (min magicStoneFull k); _ -> 0)))
+  Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
 -- 雪怪 Boss：Custom 本体，放置参数 = [血量（= 满血，1–255）, 象限]（象限 0 左上 / 1 右上 / 2 左下 / 3 右下；关卡表用 Campaign 的 bossAt 一次放四格）。
-snowBossEntry = customEntryWith (SnowBoss 1 1 0 0) decodeBoss $ \args _ -> case args of
-  [AInt hp, AInt q] | hp > 0, hp <= 255, q >= 0, q < 4 -> Just (toCell (SnowBoss hp hp 0 q))
-  _ -> Nothing
+-- 精确匹配两个整数，再检查范围。
+snowBossEntry = customEntryWith (SnowBoss 1 1 0 0) decodeBoss $ \args _ -> do
+  (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
+  guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
+  Just (toCell (SnowBoss hp hp 0 q))

@@ -24,6 +24,7 @@ module Match3.Element.Builtin.Actor
   , fuzzballEntry
   ) where
 
+import Control.Applicative ((<|>))
 import Data.Bits (xor)
 import Data.Char (ord)
 import Match3.Board.Grid (getCell, inBounds, setCell)
@@ -186,18 +187,14 @@ traceSnailsBy canPush avoid walls b0 =
 
 magicHatEntry, makerEntry, snailEntry, bottleEntry, countdownEntry, fuzzballEntry :: Entry
 magicHatEntry = bodyEntry MagicHatE (\cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing) (\_ _ -> Just MagicHat)
-makerEntry = bodyEntry (MakerE C1 3) (\cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing) $ \args _ -> case args of
-  [AColor c, AInt n] -> Just (Maker c (max 1 n))
-  [AColor c] -> Just (Maker c 3)
-  _ -> Nothing
-snailEntry = bodyEntry (SnailE 0 1) (\cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing) $ \args _ -> case args of
-  [AInt dr, AInt dc] -> Just (mkSnail dr dc)
-  _ -> Nothing
+makerEntry = bodyEntry (MakerE C1 3) (\cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing) $ \args _ ->
+  exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
+snailEntry = bodyEntry (SnailE 0 1) (\cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing) $ \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
 bottleEntry = bodyEntry (BottleE C1) (\cell -> case cell of Bottle c -> Just (BottleE c); _ -> Nothing) (colorPlace Bottle)
--- 倒计时：放置参数 = 初值，颜色取自原格（宝石或倒计时）。
-countdownEntry = bodyEntry (CountdownE C1 1) (\cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing) $ \args cell -> case (args, cell) of
-  ([AInt n], Gem col _ _ _) -> Just (mkCountdown col n)
-  ([AInt n], Countdown col _) -> Just (mkCountdown col n)
+-- 倒计时：放置参数 = 初值（精确匹配一个整数），颜色取自原格（宝石或倒计时）。
+countdownEntry = bodyEntry (CountdownE C1 1) (\cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing) $ \args cell -> case cell of
+  Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
+  Countdown col _ -> mkCountdown col <$> exactArgs argInt args
   _ -> Nothing
 -- 毛球：Custom 本体（状态值不用，放置参数缺省 1）。
 fuzzballEntry = customEntry (Fuzzball 1) (Fuzzball . unCustomState)

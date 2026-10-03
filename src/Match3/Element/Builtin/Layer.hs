@@ -173,10 +173,10 @@ overlaySpreadRule order nm ov spread = spreadRule order run
 --------------------------------------------------------------------------------
 -- 条目
 
--- | 冰层：放置参数 = 冰层数（原样）。
+-- | 冰层：放置参数 = 冰层数（原样，精确匹配一个整数）。
 iceEntry :: Entry
-iceEntry = modifierEntry (Ice 1) (\cell -> case cell of Gem _ _ n _ -> Just (Ice n); _ -> Nothing) $ \args cell -> case (args, cell) of
-  ([AInt n], Gem col kind _ ov) -> Just (Gem col kind n ov)
+iceEntry = modifierEntry (Ice 1) (\cell -> case cell of Gem _ _ n _ -> Just (Ice n); _ -> Nothing) $ \args cell -> case cell of
+  Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
   _ -> Nothing
 
 grassEntry, vineEntry, chocoEntry, fogEntry, chainEntry, freezeEntry, curtainEntry, steamEntry :: Entry
@@ -200,8 +200,8 @@ overlay proto ov f = modifierEntry proto (ovDecode f) $ \_ cell -> case cell of
   Gem col kind ice _ -> Just (Gem col kind ice (Just ov))
   _ -> Nothing
 
--- | 带层数的叠层：放置参数 = 层数（原样）。
+-- | 带层数的叠层：放置参数 = 层数（原样，精确匹配一个整数）。
 layeredOverlay :: Modifier m => m -> (CellOverlay -> Maybe m) -> (Int -> CellOverlay) -> Entry
-layeredOverlay proto f con = modifierEntry proto (ovDecode f) $ \args cell -> case (args, cell) of
-  ([AInt n], Gem col kind ice _) -> Just (Gem col kind ice (Just (con n)))
+layeredOverlay proto f con = modifierEntry proto (ovDecode f) $ \args cell -> case cell of
+  Gem col kind ice _ -> (\n -> Gem col kind ice (Just (con n))) <$> exactArgs argInt args
   _ -> Nothing

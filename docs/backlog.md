@@ -1,6 +1,6 @@
 # 现状与待办（2026-10）
 
-> **状态（2026-10-03）**：**玩法冻结**，不再加新玩法、新元素、新关卡。本文件原是 2026-09-30 解冻时的新玩法清单；清单里第 1–7、9 项已经做完（第 41–48 关），其余几项随冻结不做。现在在做的是代码审计后的重构整改（只改结构与文档，行为不变）。
+> **状态（2026-10-03）**：**玩法冻结**，不再加新玩法、新元素、新关卡。本文件原是 2026-09-30 解冻时的新玩法清单；清单里第 1–7、9 项已经做完（第 41–48 关），其余几项随冻结不做。代码审计后的重构整改（只改结构与文档，行为不变）第 1–9 项已做完，P3（第 10–12 项）不做。
 
 ## 1. 现有内容
 
@@ -34,27 +34,29 @@
 
 第 1–9 项已完成并合入（[haskell-features/](haskell-features/) 01–09）；第 10 项已取消。
 
-## 4. 正在做：审计整改（2026-10）
+## 4. 审计整改（2026-10，已完成）
 
 按代码审计报告的顺序逐项做，每项单独一条分支、单独验收（0 警告构建含 `match3-sdl`、`stack test` 全过、`test/golden` 金标准不变）：
 
 | 项 | 内容 | 状态 |
 |----|------|------|
-| 1 | 选格散列 `boardSeed`（`show board` 的 FNV-1a）抽成一份并用测试钉住 | 已完成（`fix/board-seed`），测试中 |
-| 2 | 删掉没人用的兼容包装与导出；删除 `Spec.Support.Legacy*` 旧副本，有价值的对照改成固定例子 | 已完成（`refactor/dead-code`），测试中 |
-| 3 | 收掉被 pragma 关掉的警告（`Anim` 部分字段、`Spec.Phase` 推迟名字错误）与多余的 `array` 依赖 | 已完成（`refactor/warnings-deps`），测试中 |
-| 4 | 文档脱节（本文件、测试数、`cells.js` 说法、testing.md 长句、模块地图） | 已完成（`docs/refresh`），测试中 |
-| 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 已完成（`refactor/desktop-boosters`），测试中 |
-| 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 已完成（`refactor/js-color-parity`），测试中；比对时发现桌面 `elementRGBTable` 缺 `magic_stone` / `fuzzball`（网页有），已按网页补上，两边现在逐项相同 |
-| 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 已完成（`refactor/core-exports`，基于第 8 项），测试中：`Match3.Core` 只留前端用到的 101 个名字，测试与 `Match3.View` 直接 import 子模块；`Match3.Obstacles` 无 except 的包装移到 `test/Spec/Support/Obstacles.hs` |
-| 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 已完成（`refactor/terminal-type`，基于第 6 项），测试中：`data Terminal = TWon \| TLost \| TLevelClear`，`gsOver` / `gvOver` / 通用接口的结局类型都换成 `Terminal`，每步结果仍是 `Outcome`；金标准、元素查询快照、`GameState` 的 `Show` 与网页 JSON 经 `fromTerminal` 逐字不变；新增 `terminal_outcome_mapping`（460 个） |
-| 9 | 清理「第 N 刀 / 第 N 项前」历史注释 | 随各项顺手做（只清碰到的模块） |
-| 10–12 | `Legacy*` 拆分、`Modifier` 改能力记录、合并 `*Prim` / `*Art` | 10 已并入第 2 项；11、12 按审计建议不做 |
+| 1 | 选格散列 `boardSeed`（`show board` 的 FNV-1a）抽成一份并用测试钉住 | 已完成（`fix/board-seed`） |
+| 2 | 删掉没人用的兼容包装与导出；删除 `Spec.Support.Legacy*` 旧副本，有价值的对照改成固定例子 | 已完成（`refactor/dead-code`） |
+| 3 | 收掉被 pragma 关掉的警告（`Anim` 部分字段、`Spec.Phase` 推迟名字错误）与多余的 `array` 依赖 | 已完成（`refactor/warnings-deps`） |
+| 4 | 文档脱节（本文件、测试数、`cells.js` 说法、testing.md 长句、模块地图） | 已完成（`docs/refresh`） |
+| 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 已完成（`refactor/desktop-boosters`） |
+| 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 已完成（`refactor/js-color-parity`）；比对时发现桌面 `elementRGBTable` 缺 `magic_stone` / `fuzzball`（网页有），已按网页补上，两边现在逐项相同 |
+| 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 已完成（`refactor/core-exports`，基于第 8 项）：`Match3.Core` 只留前端用到的 101 个名字，测试与 `Match3.View` 直接 import 子模块；`Match3.Obstacles` 无 except 的包装移到 `test/Spec/Support/Obstacles.hs` |
+| 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 已完成（`refactor/terminal-type`，基于第 6 项）：`data Terminal = TWon \| TLost \| TLevelClear`，`gsOver` / `gvOver` / 通用接口的结局类型都换成 `Terminal`，每步结果仍是 `Outcome`；金标准、元素查询快照、`GameState` 的 `Show` 与网页 JSON 经 `fromTerminal` 逐字不变；新增 `terminal_outcome_mapping`（460 个） |
+| 9 | 清理「第 N 刀 / 第 N 项前」历史注释 | 已完成：随第 1–8 项清理所碰模块，收尾（`chore/audit-wrapup`）补清审计点名的 `Levels/Level.hs`；未碰到的模块里还剩约 110 处（43 个文件），按审计建议以后碰到再清，不单独开大提交 |
+| 10–12 | P3：`Legacy*` 拆分、`Modifier` 改能力记录、合并 `*Prim` / `*Art` | 不做（P3）：10 里的删除旧副本已在第 2 项做掉，10 的拆分与 11、12 按审计建议不做 |
+
+收尾（`chore/audit-wrapup`）：`make clean` 后重建并提交 `web/dist`（`-Oz` 后 wasm 2,212,226 B，`cells.js` / `main.js` 与 `web/www` 一致，图集逐字节不变），文档里的体积与测试数（460）同步。
 
 ## 5. 其他未完成
 
 - **Mac 同步**：把 Mac 上的仓库与网页部署（`web/deploy-mac.sh`）同步到最新 main（拉取后重新 `make build`，或装新的 dist 包）；需要在 Mac 上操作。
-- **APK 体积**：[android.md](android.md) 里的产物大小是 2026-10-03 `fix/web-audio-toggle` 时实测的，`web/dist` 之后重建过（`feat/dist-rebuild`），需要重新 `make build apk` 后更新数字。
+- **APK 体积**：[android.md](android.md) 里的产物大小是 2026-10-03 `fix/web-audio-toggle` 时实测的，`web/dist` 之后重建过（`feat/dist-rebuild`、`chore/audit-wrapup`，当前 wasm 2,212,226 B），需要重新 `make build apk` 后更新数字。
 - **APK 真机 / 模拟器验证**：APK 还没有在模拟器或真机上跑过（[android.md](android.md)）；iOS 壳需要装了 Xcode 的 Mac。
 - **网页版 TODO**：道具与洗牌按钮、每日挑战与选关地图、真机测试、资源文件名带哈希、itch.io 上线、CI 等，见 [web.md §9](web.md#9-todo)。这些是前端接入，不加新玩法。
 - **调色板的第三份副本未受护栏**：`tools/gen_assets.py` 的五色调色板与 `UI.Palette.colorRGB` / `cells.js` 的 `COLOR_RGB` 应一致，但不在 `test/Spec/WebColors.hs` 的比对范围内（改主色时三处要一起改）。

@@ -146,9 +146,9 @@ cmp /tmp/atlas-head.pam /tmp/atlas-new.pam
 图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
 1024×1730，WebP 约 488 KB（488,226 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-10-03，feat/dist-rebuild（main b93a5d4，Haskell 特性第 9 / 7 / 8 项合入后统一重建），`make clean` 后全量重建的发布产物）：wasm 原始 5,422,862 B → `-Oz` 2,206,984 B ≈ 2.21 MB（gzip 816,125 B）；
-dist 合计 3,068,759 B ≈ 3.07 MB，逐文件 gzip 合计 1,465,191 B（约 1.47 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
-元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）；Haskell 特性第 9 / 7 / 8 项合入后，`-Oz` 后的 wasm 比上一版（d4030fb）再增加 23,496 B（gzip +6,904 B），dist 其余文件逐字节不变。
+当前体积（2026-10-03，chore/audit-wrapup（审计整改第 1–8 项之后，基于 fa719fa），`make clean` 后全量重建的发布产物）：wasm 原始 5,442,572 B → `-Oz` 2,212,226 B ≈ 2.21 MB（gzip 817,932 B）；
+dist 合计 3,074,199 B ≈ 3.07 MB，逐文件 gzip 合计 1,467,127 B（约 1.47 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
+审计整改后 `-Oz` 后的 wasm 比上一版（96bd2d8）增加 5,242 B（gzip +1,807 B）；`cells.js` / `main.js` 换成 `web/www` 的现行版本（只差注释），图集与其余文件逐字节不变。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
 （`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5，桌面版为 GHC 9.14.1：lts-24.60 + `compiler: ghc-9.14.1`；两边都只放宽 splitmix 的 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**
@@ -222,7 +222,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-10-03，feat/dist-rebuild，main b93a5d4）：49 关，`stack test` 451 个用例全过，
+下面是各自的底层命令。当前（2026-10-03，chore/audit-wrapup，基于 fa719fa）：49 关，`stack test` 460 个用例全过，
 状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 168 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh

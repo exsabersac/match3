@@ -113,7 +113,7 @@ web/android-app/build-apk.sh sync | release | aab
 → 没有 `android/local.properties` 时按 `ANDROID_HOME` 生成 → `./gradlew assembleDebug`（或 `assembleRelease` / `bundleRelease`）
 → 把产物复制到 `out/`（或 `APK_OUT`）。首次构建要下载 Gradle 与依赖（几分钟），之后增量约 15 秒。
 
-产物大小（box 实测，2026-10-03 fix/web-audio-toggle）：调试版 APK 约 6.2 MB（6,207,832 B），内含未压缩 wasm 2.18 MB（2,183,488 B）；正式版 APK 约 4.6 MB（不含调试信息；上次实测，本次未重测）。
+产物大小（box 实测，2026-10-03 fix/web-audio-toggle）：调试版 APK 约 6.2 MB（6,207,832 B），内含未压缩 wasm 2.18 MB（2,183,488 B，打包时的版本；当前 `web/dist` 的 wasm 是 2,212,226 B，APK 下次构建时一起重测）；正式版 APK 约 4.6 MB（不含调试信息；上次实测，本次未重测）。
 
 用 Android Studio：`make android-sync` 后打开 `web/android-app/android` 目录即可（或 `cd web/android-app && npx cap open android`）。
 

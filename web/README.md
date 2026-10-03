@@ -123,14 +123,14 @@ make size            # 事后单独看体积
 3b. 用 `tools/gen_web_atlas.py`（需 python3 + Pillow）从 `assets/` 生成 `atlas.webp` + `atlas.json` + `background.webp`，
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
    注意：`atlas.webp` 的 ALPH 块（无损 alpha，`method=6`）换机器重建可能差几十字节（同一 Pillow 12.3.0 / libwebp 1.6.0，疑为 libwebp 按 CPU 指令集走不同实现），
-   解码后 RGBA 逐像素相同、VP8 块与 `background.webp` 逐字节相同；2026-10-03 box 换宿主后重建得 488,226 B（提交版 488,278 B），提交版不必跟着改；
+   解码后 RGBA 逐像素相同、VP8 块与 `background.webp` 逐字节相同；2026-10-03 box 换宿主后重建得 488,226 B（原提交版 488,278 B），已改为提交当前 box 重建的版本，使 `make clean` 后重建与提交版逐字节一致；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
 图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
-1024×1730，WebP 约 488 KB（488,278 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
+1024×1730，WebP 约 488 KB（488,226 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-10-03，fix/web-audio-toggle，`make clean` 后全量重建的发布产物；wasm 与 b8d66ad 逐字节相同）：wasm 原始 5,372,310 B → `-Oz` 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；
-dist 合计 3,045,315 B ≈ 3.05 MB，逐文件 gzip 合计 1,458,362 B（约 1.46 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
+dist 合计 3,045,263 B ≈ 3.05 MB，逐文件 gzip 合计 1,458,287 B（约 1.46 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本

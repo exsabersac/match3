@@ -179,7 +179,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 - 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
-体积（2026-10-03，fix/web-audio-toggle，`make clean` 后全量重建的发布产物；wasm 与 b8d66ad 逐字节相同）：wasm 原始 5,372,310 B，`-Oz` 后 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；dist 合计 3,045,315 B ≈ 3.05 MB，逐文件 gzip 1,458,362 B（约 1.46 MB）；dist 里除页面脚本外还有 `audio.js`、`guide.js` 与 `sfx/` 下 7 个 WAV（约 196 KB）。图集多了 `magic` 与 48 张关名文字图（WebP 约 +100 KB）。
+体积（2026-10-03，fix/web-audio-toggle，`make clean` 后全量重建的发布产物；wasm 与 b8d66ad 逐字节相同）：wasm 原始 5,372,310 B，`-Oz` 后 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；dist 合计 3,045,263 B ≈ 3.05 MB，逐文件 gzip 1,458,287 B（约 1.46 MB）；dist 里除页面脚本外还有 `audio.js`、`guide.js` 与 `sfx/` 下 7 个 WAV（约 196 KB）。图集多了 `magic` 与 48 张关名文字图（WebP 约 +100 KB）。
 
 ## 3. 工具链与构建
 

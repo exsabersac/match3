@@ -196,6 +196,7 @@ test-suite match3-test
       Spec.GoalsLevels
       Spec.Golden
       Spec.Gravity
+      Spec.GridGeometry
       Spec.GridMatch
       Spec.Invariants
       Spec.JellyBubble
@@ -218,6 +219,7 @@ test-suite match3-test
       Spec.Support.Arbitrary
       Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
+      Spec.Support.LegacyGeometry
       Spec.Support.LegacyLazy
       Spec.Support.LegacyObstacles
       Spec.Support.LegacyOptics

@@ -46,6 +46,7 @@ import qualified Spec.Perf
 import qualified Spec.Optics
 import qualified Spec.Invariants
 import qualified Spec.RulesDedup
+import qualified Spec.GridGeometry
 
 main :: IO ()
 main = defaultMain tests
@@ -96,6 +97,7 @@ tests =
         , Spec.Optics.tests
         , Spec.Invariants.tests
         , Spec.RulesDedup.tests
+        , Spec.GridGeometry.tests
         , Spec.SourceScan.tests
         ]
     )

@@ -164,7 +164,7 @@ instance Element MagicStone where
       [ hit (if k >= magicStoneFiring then Absorb (SomeElement (MagicStone 0)) else Immune)
       , colorless
       , onAdjacent 180 magicStoneCharge
-      , atEnd (EndRule PhaseTick 20 magicStoneArm magicStoneSeeds (const []))
+      , atEnd (tickRule 20 magicStoneArm magicStoneSeeds)
       ]
 
 -- | 满格（可发射）的充能数。
@@ -237,7 +237,7 @@ instance Element SnowBoss where
       , onAdjacent 200 snowBossDamage
       , countsDiff (CountNamed snowBossName)
       , weighs (if sbQuad b == 0 then sbHp b else 0)
-      , atEnd (EndRule PhaseMove 30 snowBossRun (const []) (const []))
+      , atEnd (moveRule 30 snowBossRun)
       ]
 
 snowBossName :: ElementName

@@ -63,7 +63,7 @@ data SnailE = SnailE Int Int
 instance Element SnailE where
   name _ = "snail"
   toCell (SnailE dr dc) = Snail dr dc
-  caps _ = fixed [atEnd (EndRule PhaseMove 10 snailRun (const []) (const []))]
+  caps _ = fixed [atEnd (moveRule 10 snailRun)]
 
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
 newtype BottleE = BottleE Color
@@ -81,7 +81,7 @@ data CountdownE = CountdownE Color Int
 instance Element CountdownE where
   name _ = "countdown"
   toCell (CountdownE c n) = Countdown c n
-  caps (CountdownE c _) = blocker [colorIs c, swappable, teleports, pushes, recolors, breaks, atEnd (EndRule PhaseTick 10 tickRun explodeSeedsFor (const []))]
+  caps (CountdownE c _) = blocker [colorIs c, swappable, teleports, pushes, recolors, breaks, atEnd (tickRule 10 tickRun explodeSeedsFor)]
 
 -- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，原型 Blocker（挡交换、无色、随重力下落、洗牌原地保留）。
 --
@@ -96,7 +96,7 @@ newtype Fuzzball = Fuzzball Int
 instance Element Fuzzball where
   name _ = "fuzzball"
   -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps _ = blocker [breaks, onAdjacent 190 fuzzballAdjacent, counts (CountNamed "fuzzball"), atEnd (EndRule PhaseMove 20 fuzzballRun (const []) (const []))]
+  caps _ = blocker [breaks, onAdjacent 190 fuzzballAdjacent, counts (CountNamed "fuzzball"), atEnd (moveRule 20 fuzzballRun)]
 
 isFuzzball :: Cell -> Bool
 isFuzzball cell = case cell of

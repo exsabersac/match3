@@ -49,9 +49,9 @@ import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Level (avoidCellsIn, beltShiftIn, levelHooksWith, wallCellsIn)
-import Match3.Element.Registry (Registry, endRules, pushableWith)
-import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
-import Match3.Game.Trace (EndStep(..), traceSpreadsWith)
+import Match3.Element.Registry (Registry, pushableWith)
+import Match3.Element.Types (EndCtx(..), EndPhase(..))
+import Match3.Game.Trace (EndStep(..), runPhaseSteps, traceSpreadsWith)
 import Match3.Types
 import System.Random (StdGen)
 
@@ -150,12 +150,6 @@ vacateStage :: EndStage
 vacateStage = EndStage "vacate" Nothing $ \_ a -> a {eaVacate = Just (eaBoard a)}
 
 -- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
+-- （第 9 项起 = Game.Trace 的 runPhaseSteps，与蔓延共用同一个 runEndRules；第 9 项前这里另有一份 foldl + reverse。）
 runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
-runPhase reg ph ctx k b0 =
-  let (stepsRev, b1) = foldl one ([], b0) (endRules reg ph)
-  in (reverse stepsRev, b1)
-  where
-    -- 反向累积，收尾再反转
-    one (accRev, before) rule =
-      let (eff, after) = erRun rule ctx before
-      in ([EndStep k before after e | Just e <- [eff]] ++ accRev, after)
+runPhase = runPhaseSteps

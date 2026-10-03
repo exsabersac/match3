@@ -24,6 +24,7 @@ module Match3.Game.Trace
   , spreadPairs
   , traceSpreads
   , traceSpreadsWith
+  , runPhaseSteps
   , traceSnails
   , beltMoves
   , emptyTrace
@@ -42,7 +43,7 @@ import Data.List (groupBy, nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)
 import Match3.Element.Event
 import Match3.Element.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName, pushableWith)
-import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
+import Match3.Element.Types (EndCtx(..), EndPhase(..), runEndRules)
 import Match3.Types
 import Match3.Game.State
 import System.Random (StdGen)
@@ -88,14 +89,14 @@ traceSpreads = traceSpreadsWith defaultRegistry
 -- | traceSpreads（指定注册表）：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
 -- 每条规则产出的效果记成一个 EndStep（esAfterWaves = k）。
 traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
-traceSpreadsWith reg k b0 =
-  let (stepsRev, b1) = foldl one ([], b0) (endRules reg PhaseSpread)
-  in (reverse stepsRev, b1)
-  where
-    -- 反向累积，收尾再反转
-    one (accRev, before) rule =
-      let (eff, after) = erRun rule (EndCtx [] [] (pushableWith reg)) before
-      in ([EndStep k before after e | Just e <- [eff]] ++ accRev, after)
+traceSpreadsWith reg = runPhaseSteps reg PhaseSpread (EndCtx [] [] (pushableWith reg))
+
+-- | 依次跑某阶段的步末规则（'runEndRules'），每条非空效果记成插入点 k 的一个 EndStep：返回 (步末记录, 终盘)。
+-- 蔓延（这里）与会走的元素（Match3.Game.EndPhase.runPhase）共用；第 9 项前两处各有一份 foldl + 前插 + reverse。
+runPhaseSteps :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
+runPhaseSteps reg ph ctx k b0 =
+  let (recs, b1) = runEndRules ctx (endRules reg ph) b0
+  in ([EndStep k before after e | (before, after, e) <- recs], b1)
 
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。
 emptyTrace :: GameState -> MoveTrace

@@ -82,7 +82,7 @@ instance Modifier VineL where
   modName _ = "vine"
   modApply _ = putOverlay Vine
   modStripOnClear _ = True
-  modEnd _ = Just (spreadRule 10 "vine" Vine spreadVines)
+  modEnd _ = Just (overlaySpreadRule 10 "vine" Vine spreadVines)
 
 -- | 巧克力：真消除时随格清掉；邻格真消除清掉它；步末蔓延。
 data ChocoL = ChocoL
@@ -93,7 +93,7 @@ instance Modifier ChocoL where
   modApply _ = putOverlay Choco
   modStripOnClear _ = True
   modAdjacent _ = Just (AdjacentRule 150 (\ctx b -> AdjOut (clearChocoAdjacent b (acTrue ctx)) [] []))
-  modEnd _ = Just (spreadRule 20 "choco" Choco spreadChoco)
+  modEnd _ = Just (overlaySpreadRule 20 "choco" Choco spreadChoco)
 
 -- | 迷雾：挡匹配，邻消揭一层。
 newtype FogL = FogL Int
@@ -149,7 +149,7 @@ instance Modifier SteamL where
   modApply _ = putOverlay Steam
   modBlocksMatch _ = True
   modAdjacent _ = Just (AdjacentRule 160 (\ctx b -> AdjOut (clearSteamAdjacent b (acTrue ctx)) [] []))
-  modEnd _ = Just (spreadRule 30 "steam" Steam spreadSteam)
+  modEnd _ = Just (overlaySpreadRule 30 "steam" Steam spreadSteam)
 
 -- | 直接命中揭一层（锁链 / 窗帘）：宝石留下，不消除。
 peel :: Int -> (Int -> m) -> ModHit m
@@ -162,8 +162,8 @@ layerChip :: Int -> (Board -> [Pos] -> [Pos] -> (Board, Int)) -> AdjacentRule
 layerChip order f = AdjacentRule order (\ctx b -> AdjOut (fst (f b (acTrue ctx) (acDirect ctx))) [] [])
 
 -- | 蔓延：每只幸存的叠层向正交相邻的裸宝石长一格；记录 (来源, 新格)。
-spreadRule :: Int -> ElementName -> CellOverlay -> (Board -> Board) -> EndRule
-spreadRule order nm ov spread = EndRule PhaseSpread order run (const []) (const [])
+overlaySpreadRule :: Int -> ElementName -> CellOverlay -> (Board -> Board) -> EndRule
+overlaySpreadRule order nm ov spread = spreadRule order run
   where
     run _ b =
       let b' = spread b

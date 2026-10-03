@@ -120,7 +120,7 @@ instance Element Chameleon where
       , noRecolor
       , counts (CountNamed "chameleon")
       , onSwap (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds)
-      , atEnd (EndRule PhaseMove 40 chameleonRun (const []) (const []))
+      , atEnd (moveRule 40 chameleonRun)
       ]
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。

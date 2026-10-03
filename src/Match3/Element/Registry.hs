@@ -92,7 +92,7 @@ module Match3.Element.Registry
 
 import Control.Monad (foldM)
 import Data.Array (Array, accumArray, bounds, inRange, (!))
-import Data.List (nub, sortOn)
+import Data.List (mapAccumL, nub, sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid (Sum(..))
 import Match3.Board.Grid (getCell, setCell)
@@ -407,15 +407,16 @@ adjacentRules = regAdjacent
 -- 每条规则的 acProtect = 起始保护格 ++ 之前各规则的 aoSit。
 runAdjacentWith :: Registry -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
 runAdjacentWith reg trueClears direct protect0 b0 =
-  let (b', deadRev, sitsRev, _) = foldl one (b0, [], [], nub protect0) (regAdjacent reg)
-  in (b', concat (reverse deadRev), concat (reverse sitsRev))
+  let ((b', _), outs) = mapAccumL one (b0, nub protect0) (regAdjacent reg)
+  in (b', concatMap fst outs, concatMap snd outs)
   where
-    -- 打碎格 / 坐住格按规则反向累积，收尾再反转拼接；保护格 = nub (起始保护格 ++ 之前的坐住格)，
-    -- 增量维护（nub (xs ++ ys) = nub xs ++ [y | y <- nub ys, y `notElem` xs]）
-    one (board, deadRev, sitsRev, protect) rule =
+    -- 第 9 项：mapAccumL 把「穿过各规则的状态」（盘面, 保护格）和「每条规则的输出」（打碎格, 坐住格）分开；
+    -- 第 9 项前是四元组 foldl + 两个前插列表 + reverse（按规则顺序拼接，结果相同）。
+    -- 保护格 = nub (起始保护格 ++ 之前的坐住格)，增量维护（nub (xs ++ ys) = nub xs ++ [y | y <- nub ys, y `notElem` xs]）
+    one (board, protect) rule =
       let out = arRun rule (AdjCtx trueClears direct protect (recolorableWith reg)) board
           new = aoSit out
-      in (aoBoard out, aoDead out : deadRev, new : sitsRev, protect ++ [p | p <- nub new, p `notElem` protect])
+      in ((aoBoard out, protect ++ [p | p <- nub new, p `notElem` protect]), (aoDead out, new))
 
 -- | 本体进入清除格时的计数键。
 counterWith :: Registry -> Cell -> Maybe CounterKey

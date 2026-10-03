@@ -67,7 +67,7 @@ import Match3.Board.Wave (CascadeWave(..))
 import Match3.Element.Registry (Registry, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
 import Match3.Counts (CounterKey(..), Counts, countsFromList, noCounts, singleCount)
-import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..))
+import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..), runEndRules)
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Clear
@@ -345,12 +345,8 @@ cascadeCountdownsTracedWith reg hooks0 g b =
 cascadeCountdownsM :: MonadCascade m => Registry -> Board -> m ([(Board, Board, EndEffect)], (Board, CascadeTally))
 cascadeCountdownsM reg b = do
   let rules = endRules reg PhaseTick
-      ctx = EndCtx [] [] (pushableWith reg)
-      step (accRev, before) r =
-        let (eff, after) = erRun r ctx before
-        in ([(before, after, e) | Just e <- [eff]] ++ accRev, after)
-      (stepsRev, bTick) = foldl step ([], b) rules
-      steps = reverse stepsRev
+      -- 第 9 项：规则依次执行、收集非空效果 = runEndRules（第 9 项前这里是一份 foldl + reverse）
+      (steps, bTick) = runEndRules (EndCtx [] [] (pushableWith reg)) rules b
       seeds = nub (concatMap (\r -> erSeeds r bTick) rules)
   run <-
     if null seeds

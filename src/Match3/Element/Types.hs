@@ -21,6 +21,11 @@ module Match3.Element.Types
   , EndPhase(..)
   , EndCtx(..)
   , EndRule(..)
+  , EndRun
+  , tickRule
+  , spreadRule
+  , moveRule
+  , runEndRules
   , Edge(..)
   , Arg(..)
   , Placement(..)
@@ -35,6 +40,8 @@ module Match3.Element.Types
   , kindSlot
   ) where
 
+import Data.List (mapAccumL)
+import Data.Maybe (catMaybes)
 import Match3.Counts (CounterKey(..))
 import Match3.Element.Event (EndEffect)
 import Match3.Types
@@ -100,10 +107,48 @@ data EndCtx = EndCtx
 data EndRule = EndRule
   { erPhase :: EndPhase
   , erOrder :: Int
-  , erRun   :: EndCtx -> Board -> (Maybe EndEffect, Board)
+  , erRun   :: EndRun
   , erSeeds :: Board -> [Pos]
   , erHoles :: Board -> [Pos]
   }
+
+-- | 一条步末规则的执行：（要记录的步末效果（Nothing = 不记），新盘面）。
+type EndRun = EndCtx -> Board -> (Maybe EndEffect, Board)
+
+-- 按阶段的智能构造器（Haskell 特性第 9 项，docs/haskell-features/09-规则去重.md）。
+-- 第 9 项前七条内置步末规则都写成 @EndRule 阶段 次序 run (const []) (const [])@：erSeeds 只在 PhaseTick 之后被读
+-- （Board.Cascade 的倒计时），erHoles 内置规则全是 const []。三个构造器把「这个阶段有哪些槽」写进参数表——
+-- 只有 'tickRule' 收种子；需要声明空洞的扩展规则（测试里的陷坑）仍然直接用 'EndRule' 记录。
+
+-- | 倒计时阶段（PhaseTick）：跑完之后在新盘面上取引爆种子。
+tickRule :: Int -> EndRun -> (Board -> [Pos]) -> EndRule
+tickRule order run seeds = EndRule PhaseTick order run seeds noCells
+
+-- | 蔓延阶段（PhaseSpread，道具之后也跑）。
+spreadRule :: Int -> EndRun -> EndRule
+spreadRule order run = EndRule PhaseSpread order run noCells noCells
+
+-- | 会走的元素（PhaseMove）。
+moveRule :: Int -> EndRun -> EndRule
+moveRule order run = EndRule PhaseMove order run noCells noCells
+
+noCells :: Board -> [Pos]
+noCells = const []
+
+-- | 依次执行一串步末规则（Haskell 特性第 9 项）：盘面从一条规则穿到下一条，收集非空效果。
+-- 返回（[(规则前盘面, 规则后盘面, 效果)]（按规则顺序，空效果不记）, 终盘）。
+--
+-- 第 9 项前倒计时（Board.Cascade）、蔓延（Game.Trace）、会走的元素（Game.EndPhase）各写一份
+-- @foldl step ([], b) rules@ + 前插 + @reverse@；这里是 'mapAccumL'：累积量 = 当前盘面，每条规则的输出 = 可能的一条记录
+-- （同第 2 项 randomBoardSized 的写法）。顺序与旧写法逐项相同（旧写法前插再整体反转 = 按规则顺序）。
+runEndRules :: EndCtx -> [EndRule] -> Board -> ([(Board, Board, EndEffect)], Board)
+runEndRules ctx rules b0 =
+  let (b1, recs) = mapAccumL one b0 rules
+  in (catMaybes recs, b1)
+  where
+    one before rule =
+      let (eff, after) = erRun rule ctx before
+      in (after, fmap (\e -> (before, after, e)) eff)
 
 -- | 边缘收集的方向（段 2c）：本体位于这条边上的格子在沉降时被收走。
 -- 收集顺序固定为 底 → 左 → 右 → 上，每条边内按行 / 列升序（只有底边时与旧「底行收饼干」逐位相同）。

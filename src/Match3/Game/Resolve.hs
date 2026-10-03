@@ -37,7 +37,7 @@ module Match3.Game.Resolve
   , combineCombo
   ) where
 
-import Data.List (nub)
+import Data.List (mapAccumL, nub)
 import Engine.Optics (Traversal', ignored, (%~), (&))
 import qualified Data.List.NonEmpty as NE
 import Match3.Board.Cascade
@@ -168,13 +168,14 @@ resolveMoveWith reg0 sk startS opening gs =
       bonusMoves = sum (map dcBonus diffs)
       -- 地面层节拍（段 2c；第 7 刀起地面层是关卡级元素，发 GroundHit）：逐轮被上方消除命中（每轮每格一次）；
       -- 段 5 起第 39 关（双层果冻）用到，其余内置关卡地面层为空
+      -- （第 9 项：mapAccumL，累积量 = 关卡级元素、每轮输出 = 去层计数；第 9 项前是 foldl + 前插 + reverse）
       (elemsG, groundCounts) =
-        let (es', countsRev) =
-              foldl
-                (\(es, accRev) w -> let (cs, es1) = hitGroundIn reg (nub (cwCleared w ++ cwDrained w)) es in (es1, cs : accRev))
-                (elemsC, [])
+        let (es', perWave) =
+              mapAccumL
+                (\es w -> let (cs, es1) = hitGroundIn reg (nub (cwCleared w ++ cwDrained w)) es in (es1, cs))
+                elemsC
                 (concatMap crWaves (NE.toList segs))
-        in (es', concat (reverse countsRev))
+        in (es', concat perWave)
       -- 地毯节拍（Covering）
       (carpetHit, elems') =
         coverIn reg (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter) elemsG

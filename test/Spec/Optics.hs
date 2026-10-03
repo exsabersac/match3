@@ -5,7 +5,7 @@
 --
 -- * 定律：透镜 get-put / put-get / put-put（盘面一格、GameState 的字段与派生读数）、遍历的恒等与合成律、
 --   棱镜的两条往返律；派生读数的 get-put 只在「这种关卡级元素恰好一份」时成立，反例用 expectFailure 固定下来；
--- * 对照：改写后的 Match3.Grass / Match3.Types.Overlay 与第 6 项前的逐字副本（Spec.Support.LegacyOptics）逐项相同。
+-- * Match3.Grass / Match3.Types.Overlay 的行为由 9 个叠层单元测试、元素查询快照与金标准锁定。
 module Spec.Optics
   ( tests
   ) where
@@ -17,12 +17,9 @@ import Engine.Optics
 import Match3.Core
 import Match3.Element.Class (levelNameOf)
 import Match3.Game.State (gsBeltsL, gsBoardL, gsCarpetOpenL, gsCrossClearsL, gsFreeSwapsL, gsGroundL, gsHammersL, gsMovesL, gsPortalsL, gsUfosL)
-import qualified Match3.Grass as New
-import qualified Match3.Types.Overlay as NewO
 import Match3.Types.Optics
 import Spec.Properties (genColor, genGem, genOverlay, genCell, genPick, genPos, genStart, playPicks, startState)
-import Spec.Support.Arbitrary (AnyBoard(..), genAnyBoard, shrinkBoard)
-import qualified Spec.Support.LegacyOptics as Old
+import Spec.Support.Arbitrary (AnyBoard(..), genAnyBoard)
 import Engine.Game (Step(..))
 import Test.Tasty
 import Test.Tasty.QuickCheck
@@ -34,8 +31,6 @@ tests =
   , testProperty "qc_optics_level_field_get_put_needs_invariant" qc_optics_level_field_get_put_needs_invariant
   , testProperty "qc_optics_traversal_laws" qc_optics_traversal_laws
   , testProperty "qc_optics_prism_laws" qc_optics_prism_laws
-  , testProperty "qc_optics_overlay_readers_same_as_legacy" qc_optics_overlay_readers_same_as_legacy
-  , testProperty "qc_optics_grass_same_as_legacy" qc_optics_grass_same_as_legacy
   ]
 
 --------------------------------------------------------------------------------
@@ -172,53 +167,3 @@ qc_optics_prism_laws =
               , prismLaws "_Just" _Just o (cellOverlay cell)
               , maybe (property False) (\g -> prismLaws "_Gem" _Gem g cell) (preview _Gem gem)
               ]
-
---------------------------------------------------------------------------------
--- 与第 6 项前的逐字副本对照
-
-qc_optics_overlay_readers_same_as_legacy :: Property
-qc_optics_overlay_readers_same_as_legacy =
-  forAll genCell $ \cell ->
-    forAll (frequency [(1, pure Nothing), (3, Just <$> genOverlay)]) $ \o ->
-      conjoin
-        [ map ($ cell) [NewO.hasGrass, NewO.hasVine, NewO.hasChoco, NewO.hasFog, NewO.hasChain, NewO.hasFreeze, NewO.hasCurtain, NewO.hasSteam]
-            === map ($ cell) [Old.hasGrass, Old.hasVine, Old.hasChoco, Old.hasFog, Old.hasChain, Old.hasFreeze, Old.hasCurtain, Old.hasSteam]
-        , map ($ cell) [NewO.fogLayers, NewO.chainLayers, NewO.freezeLayers, NewO.curtainLayers]
-            === map ($ cell) [Old.fogLayers, Old.chainLayers, Old.freezeLayers, Old.curtainLayers]
-        , NewO.clearOverlay cell === Old.clearOverlay cell
-        , NewO.setOverlay o cell === Old.setOverlay o cell
-        ]
-
--- | 叠层多的盘面：多数格是带叠层的宝石，其余是裸宝石与任意格。
-genOverlayBoard :: Gen Board
-genOverlayBoard = do
-  r <- choose (1, 10)
-  c <- choose (1, 10)
-  let overlaid = (\col o -> Gem col Normal 0 (Just o)) <$> genColor <*> genOverlay
-  boardFromRows <$> vectorOf r (vectorOf c (frequency [(4, overlaid), (2, mkGem <$> genColor), (1, genGem), (1, genCell)]))
-
-qc_optics_grass_same_as_legacy :: Property
-qc_optics_grass_same_as_legacy =
-  forAllShrink genOverlayBoard shrinkBoard $ \b ->
-    forAll (sublistOf (boardPositions b)) $ \seeds ->
-      forAll (sublistOf (boardPositions b)) $ \except ->
-        let chips =
-              [ ("fog", New.chipAdjacentFogExcept, Old.chipAdjacentFogExcept, New.chipAdjacentFog, Old.chipAdjacentFog)
-              , ("chain", New.chipAdjacentChainExcept, Old.chipAdjacentChainExcept, New.chipAdjacentChain, Old.chipAdjacentChain)
-              , ("freeze", New.chipAdjacentFreezeExcept, Old.chipAdjacentFreezeExcept, New.chipAdjacentFreeze, Old.chipAdjacentFreeze)
-              , ("curtain", New.chipAdjacentCurtainExcept, Old.chipAdjacentCurtainExcept, New.chipAdjacentCurtain, Old.chipAdjacentCurtain)
-              ]
-            peeled = or [snd (new b seeds except) > 0 | (_, new, _, _, _) <- chips]
-        in classify peeled "some layer fully peeled" $
-             classify (New.spreadVines b /= b || New.spreadChoco b /= b || New.spreadSteam b /= b) "something spread" $
-               conjoin $
-                 [ counterexample n (new b seeds except === old b seeds except .&&. new1 b seeds === old1 b seeds)
-                 | (n, new, old, new1, old1) <- chips
-                 ]
-                   ++ [ New.clearOverlaysOn b seeds === Old.clearOverlaysOn b seeds
-                      , New.clearChocoAdjacent b seeds === Old.clearChocoAdjacent b seeds
-                      , New.clearSteamAdjacent b seeds === Old.clearSteamAdjacent b seeds
-                      , map ($ b) [New.vinePositions, New.chocoPositions, New.fogPositions, New.chainPositions, New.freezePositions, New.curtainPositions, New.steamPositions]
-                          === map ($ b) [Old.vinePositions, Old.chocoPositions, Old.fogPositions, Old.chainPositions, Old.freezePositions, Old.curtainPositions, Old.steamPositions]
-                      , map ($ b) [New.spreadVines, New.spreadChoco, New.spreadSteam] === map ($ b) [Old.spreadVines, Old.spreadChoco, Old.spreadSteam]
-                      ]

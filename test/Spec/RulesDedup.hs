@@ -3,13 +3,14 @@
 
 -- | Haskell 特性第 9 项：规则去重（docs/haskell-features/09-规则去重.md）。
 --
--- 每处去重都和改写前的逐字副本对照（Spec.Support.LegacyObstacles / Spec.Support.LegacyRules）：
---
--- * 占格障碍：五种带层数障碍的邻消揭层 → 一个 chipAdjacentLayeredExcept（棱镜参数），九份「相邻的某种格」→ adjacentWhere，
---   改色 recolorCell → 遍历 cellColorT；Match3.Types.Body 的五组构造 / 读数 / 谓词 → 棱镜派生；
--- * 规则折叠：步末规则的 foldl + reverse（蔓延 / 会走的元素）、邻格波及的四元组 foldl → runEndRules / mapAccumL；
--- * 能力声明：Cap 是带 Dual (Endo Caps) 幺半群的 newtype、字段写入器经透镜——与旧的 Caps -> Caps 与 foldl 逐项相同；
+-- * 光学定律：五个占格障碍棱镜的往返律、改色遍历 cellColorT 的遍历定律；
+-- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（chipAdjacentLayeredExcept）的结果顺序写成固定例子；
+-- * 规则折叠：runEndRules = 逐条 erRun 再丢掉空效果；
+-- * 能力声明：Cap 是带 Dual (Endo Caps) 幺半群的 newtype——一组固定例子的能力记录写死（拼接方向），
+--   幺半群律与「后面的覆盖前面的」用 QuickCheck 查；
 -- * 阶段智能构造器 tickRule / spreadRule / moveRule。
+--
+-- 固定例子的期望值由现实现生成，生成时与删除前的逐字旧副本核对过。
 module Spec.RulesDedup
   ( tests
   ) where
@@ -17,22 +18,18 @@ module Spec.RulesDedup
 import Data.Functor.Identity (Identity(..))
 import Data.Maybe (isJust)
 import Engine.Optics
-import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, boardPositions)
+import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, boardPositions, getCell)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Caps (Cap(..), applyCap, setCap)
 import qualified Match3.Element.Caps as N
 import Match3.Element.Class
-import Match3.Element.Registry (endRules, pushableWith, runAdjacentWith)
+import Match3.Element.Registry (endRules, pushableWith)
 import Match3.Element.Types
-import qualified Match3.Game.EndPhase as NewE
-import qualified Match3.Game.Trace as NewT
 import qualified Match3.Obstacles as New
 import qualified Match3.Types as NewB
 import Match3.Types.Optics (cellColorT, _Cake, _Chest, _Honey, _Safe, _Stone)
 import Spec.Properties (genCell, genColor, genGem)
 import Spec.Support.Arbitrary (shrinkBoard)
-import qualified Spec.Support.LegacyObstacles as Old
-import qualified Spec.Support.LegacyRules as L
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Fixed)
@@ -40,10 +37,10 @@ import Test.Tasty.QuickCheck hiding (Fixed)
 tests :: [TestTree]
 tests =
   [ testProperty "qc_dedup_cell_optics_laws" qc_dedup_cell_optics_laws
-  , testProperty "qc_dedup_body_readers_same_as_legacy" qc_dedup_body_readers_same_as_legacy
-  , testProperty "qc_dedup_obstacles_same_as_legacy" (withMaxSuccess 500 qc_dedup_obstacles_same_as_legacy)
-  , testProperty "qc_dedup_rule_folds_same_as_legacy" (withMaxSuccess 300 qc_dedup_rule_folds_same_as_legacy)
-  , testProperty "qc_dedup_caps_same_as_legacy" (withMaxSuccess 500 qc_dedup_caps_same_as_legacy)
+  , testCase "dedup_obstacle_orders_pinned" dedup_obstacle_orders_pinned
+  , testProperty "qc_run_end_rules_is_fold" (withMaxSuccess 300 qc_run_end_rules_is_fold)
+  , testCase "dedup_caps_examples_pinned" dedup_caps_examples_pinned
+  , testProperty "qc_caps_monoid_laws" (withMaxSuccess 500 qc_caps_monoid_laws)
   , testCase "end_rule_smart_constructors" end_rule_smart_constructors
   ]
 
@@ -70,13 +67,6 @@ genObstacleCell =
     , (1, Countdown <$> genColor <*> choose (1, 3))
     , (1, Flip <$> genColor <*> genColor)
     ]
-
--- | 任意行列（1–8）的障碍盘。
-genObstacleBoard :: Gen Board
-genObstacleBoard = do
-  r <- choose (1, 8)
-  c <- choose (1, 8)
-  boardFromRows <$> vectorOf r (vectorOf c genObstacleCell)
 
 -- | 盘内的若干格（可重复，测 nub 的顺序）。
 genSomePos :: Board -> Gen [Pos]
@@ -119,109 +109,51 @@ prismLaws nm p cell n =
       ]
 
 --------------------------------------------------------------------------------
--- 与旧写法对照：读数
+-- 占格障碍：顺序的固定例子
 
--- | Match3.Types.Body 的五组 mkXLayers / xLayers / isX、Match3.Types.Cell 的 cellColor、改色（旧 recolorCell = set cellColorT）。
-qc_dedup_body_readers_same_as_legacy :: Property
-qc_dedup_body_readers_same_as_legacy =
-  forAll genLayeredCell $ \cell -> forAll (choose (-2, 5)) $ \n -> forAll genColor $ \col ->
-    counterexample (show cell) $
-      conjoin
-        [ counterexample "mkXLayers" ([NewB.mkStoneLayers n, NewB.mkChestLayers n, NewB.mkHoneyLayers n, NewB.mkCakeLayers n, NewB.mkSafeLayers n] === [Old.mkStoneLayers n, Old.mkChestLayers n, Old.mkHoneyLayers n, Old.mkCakeLayers n, Old.mkSafeLayers n])
-        , counterexample "xLayers" ([NewB.stoneLayers cell, NewB.chestLayers cell, NewB.honeyLayers cell, NewB.cakeLayers cell, NewB.safeLayers cell] === [Old.stoneLayers cell, Old.chestLayers cell, Old.honeyLayers cell, Old.cakeLayers cell, Old.safeLayers cell])
-        , counterexample "isX" ([NewB.isStone cell, NewB.isChest cell, NewB.isHoney cell, NewB.isCake cell, NewB.isSafe cell] === [Old.isStone cell, Old.isChest cell, Old.isHoney cell, Old.isCake cell, Old.isSafe cell])
-        , counterexample "cellColor" (NewB.cellColor cell === Old.cellColor cell)
-        , counterexample "recolor" (set cellColorT col cell === Old.recolorCell cell col)
-        ]
+-- | 无匹配意义的宝石底（只为填满盘面），extra 覆盖指定格。
+obstacleBoard :: Int -> Int -> [(Pos, Cell)] -> Board
+obstacleBoard rows cols extra =
+  boardFromRows [[maybe (Gem (toEnum ((r + 2 * c) `mod` 5)) Normal 0 Nothing) id (lookup (r, c) extra) | c <- [0 .. cols - 1]] | r <- [0 .. rows - 1]]
 
---------------------------------------------------------------------------------
--- 与旧写法对照：占格障碍
-
--- | Match3.Obstacles 的全部导出（邻消揭层 ×5 及其无 except 版、相邻查询 ×9、魔法帽 / 染色瓶改色、果汁机、彩蛋、时间精灵、
--- withAdjacentStones）与第 9 项前逐项相同：结果盘面与位置列表（含顺序）。改色谓词取 isGem（内置）与「全都可改色」两种。
-qc_dedup_obstacles_same_as_legacy :: Property
-qc_dedup_obstacles_same_as_legacy =
-  forAllShrink genObstacleBoard shrinkBoard $ \b ->
-    forAll (genSomePos b) $ \seeds ->
-      forAll (genSomePos b) $ \except ->
-        let chips =
-              [ ("stones", New.chipAdjacentStonesExcept, Old.chipAdjacentStonesExcept, New.chipAdjacentStones, Old.chipAdjacentStones)
-              , ("chests", New.chipAdjacentChestsExcept, Old.chipAdjacentChestsExcept, New.chipAdjacentChests, Old.chipAdjacentChests)
-              , ("honey", New.chipAdjacentHoneyExcept, Old.chipAdjacentHoneyExcept, New.chipAdjacentHoney, Old.chipAdjacentHoney)
-              , ("cakes", New.chipAdjacentCakesExcept, Old.chipAdjacentCakesExcept, New.chipAdjacentCakes, Old.chipAdjacentCakes)
-              , ("safes", New.chipAdjacentSafesExcept, Old.chipAdjacentSafesExcept, New.chipAdjacentSafes, Old.chipAdjacentSafes)
-              , ("balloons", New.chipAdjacentBalloonsExcept, Old.chipAdjacentBalloonsExcept, New.chipAdjacentBalloons, Old.chipAdjacentBalloons)
-              , ("spirits", New.chipAdjacentTimeSpiritsExcept, Old.chipAdjacentTimeSpiritsExcept, New.chipAdjacentTimeSpirits, Old.chipAdjacentTimeSpirits)
-              ]
-            adjs =
-              [ ("stonesAdjacentTo", New.stonesAdjacentTo, Old.stonesAdjacentTo)
-              , ("chestsAdjacentTo", New.chestsAdjacentTo, Old.chestsAdjacentTo)
-              , ("honeysAdjacentTo", New.honeysAdjacentTo, Old.honeysAdjacentTo)
-              , ("cakesAdjacentTo", New.cakesAdjacentTo, Old.cakesAdjacentTo)
-              , ("safesAdjacentTo", New.safesAdjacentTo, Old.safesAdjacentTo)
-              , ("hatsAdjacentTo", New.hatsAdjacentTo, Old.hatsAdjacentTo)
-              , ("surprisesAdjacentTo", New.surprisesAdjacentTo, Old.surprisesAdjacentTo)
-              , ("bottlesAdjacentTo", New.bottlesAdjacentTo, Old.bottlesAdjacentTo)
-              , ("spiritsAdjacentTo", New.spiritsAdjacentTo, Old.spiritsAdjacentTo)
-              , ("balloonsAdjacentSameColor", New.balloonsAdjacentSameColor, Old.balloonsAdjacentSameColor)
-              , ("makersAdjacentSameColor", New.makersAdjacentSameColor, Old.makersAdjacentSameColor)
-              , ("withAdjacentStones", New.withAdjacentStones, Old.withAdjacentStones)
-              ]
-            preds = [("isGem", NewB.isGem, Old.isGem), ("any", const True, const True)]
-            peeled = or [length (snd (f b seeds except)) > 0 | (_, f, _, _, _) <- take 5 chips]
-            chipped = or [fst (f b seeds except) /= b | (_, f, _, _, _) <- take 5 chips]
-            hatHit = not (null (New.hatsAdjacentTo b seeds))
-        in classify peeled "some last layer chipped" $
-             classify chipped "some layer decremented" $
-               classify hatHit "hat triggered" $
-                 conjoin
-                   ( [ counterexample nm (conjoin [f b seeds except === g b seeds except, f0 b seeds === g0 b seeds])
-                     | (nm, f, g, f0, g0) <- chips
-                     ]
-                       ++ [counterexample nm (f b seeds === g b seeds) | (nm, f, g) <- adjs]
-                       ++ concat
-                         [ [ counterexample ("hats/" ++ pn) (New.triggerAdjacentHatsBy np b seeds except === Old.triggerAdjacentHatsBy op b seeds except)
-                           , counterexample ("bottles/" ++ pn) (New.triggerAdjacentBottlesBy np b seeds except === Old.triggerAdjacentBottlesBy op b seeds except)
-                           ]
-                         | (pn, np, op) <- preds
-                         ]
-                       ++ [ counterexample "triggerAdjacentHats" (New.triggerAdjacentHats b seeds === Old.triggerAdjacentHats b seeds)
-                          , counterexample "triggerAdjacentBottles" (New.triggerAdjacentBottles b seeds === Old.triggerAdjacentBottles b seeds)
-                          , counterexample "chargeAdjacentMakersSit" (New.chargeAdjacentMakersSit b seeds === Old.chargeAdjacentMakersSit b seeds)
-                          , counterexample "openSurprises" (New.openSurprises b seeds === Old.openSurprises b seeds)
-                          , counterexample "adjacentWhere isStone" (New.adjacentWhere NewB.isStone b seeds === Old.stonesAdjacentTo b seeds)
-                          , counterexample "chipAdjacentLayeredExcept _Safe (Just Cookie)" (New.chipAdjacentLayeredExcept _Safe (Just Cookie) b seeds except === Old.chipAdjacentSafesExcept b seeds except)
-                          ]
-                   )
+-- | 相邻查询与邻消削层的结果顺序写死（金标准依赖这些顺序）。
+--
+-- * 蜂蜜：清除 (3,2)，上 (2,2) 两层、下 (4,2) 与右 (3,3) 各一层——'adjacentWhere' 按上 / 下 / 左 / 右给出
+--   @[(2,2),(4,2),(3,3)]@；末层位置前插，得到 @[(3,3),(4,2)]@（docs/haskell-features/07 §3.4 的反例盘）。
+-- * 宝箱：4×6 盘只有 (2,4)、(3,5) 两格 @Chest 1@，清除 (2,5)：末层位置 @[(2,4),(3,5)]@；
+--   except 里有 (3,5) 时只削 (2,4)（docs/haskell-features/09 §3.5 的反例盘）。
+-- * 保险箱：末层原地变饼干，两层的减一层。
+dedup_obstacle_orders_pinned :: Assertion
+dedup_obstacle_orders_pinned = do
+  let honeyB = obstacleBoard 6 6 [((2, 2), Honey 2), ((4, 2), Honey 1), ((3, 3), Honey 1)]
+      (honeyB', honeyDead) = New.chipAdjacentHoneyExcept honeyB [(3, 2)] []
+  assertEqual "honeysAdjacentTo" [(2, 2), (4, 2), (3, 3)] (New.honeysAdjacentTo honeyB [(3, 2)])
+  assertEqual "chipAdjacentHoneyExcept: last layers" [(3, 3), (4, 2)] honeyDead
+  assertEqual "chipAdjacentHoneyExcept: cells" [Honey 1, Honey 1, Honey 1] (map (getCell honeyB') [(2, 2), (4, 2), (3, 3)])
+  let chestB = obstacleBoard 4 6 [((2, 4), Chest 1), ((3, 5), Chest 1)]
+  assertEqual "chipAdjacentChestsExcept" [(2, 4), (3, 5)] (snd (New.chipAdjacentChestsExcept chestB [(2, 5)] []))
+  assertEqual "chipAdjacentChestsExcept (except)" [(2, 4)] (snd (New.chipAdjacentChestsExcept chestB [(2, 5)] [(3, 5)]))
+  let safeB = obstacleBoard 3 3 [((0, 1), Safe 1), ((1, 0), Safe 2)]
+      (safeB', safeDead) = New.chipAdjacentSafesExcept safeB [(0, 0)] []
+  assertEqual "chipAdjacentSafesExcept: last layers" [(0, 1)] safeDead
+  assertEqual "chipAdjacentSafesExcept: cells" [Cookie, Safe 1] (map (getCell safeB') [(0, 1), (1, 0)])
 
 --------------------------------------------------------------------------------
--- 与旧写法对照：规则折叠
+-- 规则折叠
 
--- | 步末规则：EndPhase.runPhase（三个阶段、任意上下文）与 Trace.traceSpreadsWith 与旧的 foldl + reverse 相同；
--- runEndRules 跑任意一串真实步末规则（三个阶段的规则任取、任意顺序、可重复）等于逐条 erRun 再丢掉空效果；
--- 邻格波及 runAdjacentWith（mapAccumL）与旧的四元组 foldl 相同。
-qc_dedup_rule_folds_same_as_legacy :: Property
-qc_dedup_rule_folds_same_as_legacy =
+-- | runEndRules 跑任意一串真实步末规则（三个阶段的规则任取、任意顺序、可重复）= 逐条 erRun 再丢掉空效果
+-- （记录按规则顺序，盘面从一条规则穿到下一条）。
+qc_run_end_rules_is_fold :: Property
+qc_run_end_rules_is_fold =
   forAllShrink genRuleBoard shrinkBoard $ \b ->
-    forAll (genSomePos b) $ \avoid -> forAll (genSomePos b) $ \walls -> forAll (choose (0, 5)) $ \k ->
-      forAll (genSomePos b) $ \tru -> forAll (genSomePos b) $ \direct -> forAll (genSomePos b) $ \protect ->
-        forAll (listOf (choose (0, length allRules - 1))) $ \ixs ->
-          let reg = defaultRegistry
-              picked = map (allRules !!) ixs  -- 按下标挑（EndRule 没有 Show）
-              ctx = EndCtx avoid walls (pushableWith reg)
-              phases = [PhaseTick, PhaseSpread, PhaseMove]
-              (recs, bEnd) = runEndRules ctx picked b
-              naive = foldl (\(acc, bd) r -> let (e, bd') = erRun r ctx bd in (acc ++ [(bd, bd', x) | Just x <- [e]], bd')) ([], b) picked
-              anyEffect = or [not (null (fst (NewE.runPhase reg ph ctx k b))) | ph <- phases]
-          in classify anyEffect "some end effect" $
-               classify (not (null recs)) "runEndRules recorded" $
-                 conjoin
-                   ( [counterexample ("runPhase " ++ show ph) (NewE.runPhase reg ph ctx k b === L.runPhase reg ph ctx k b) | ph <- phases]
-                       ++ [ counterexample "traceSpreadsWith" (NewT.traceSpreadsWith reg k b === L.traceSpreadsWith reg k b)
-                          , counterexample "runEndRules" ((recs, bEnd) === naive)
-                          , counterexample "runAdjacentWith" (runAdjacentWith reg tru direct protect b === L.runAdjacentWith reg tru direct protect b)
-                          ]
-                   )
+    forAll (genSomePos b) $ \avoid -> forAll (genSomePos b) $ \walls ->
+      forAll (listOf (choose (0, length allRules - 1))) $ \ixs ->
+        let reg = defaultRegistry
+            picked = map (allRules !!) ixs  -- 按下标挑（EndRule 没有 Show）
+            ctx = EndCtx avoid walls (pushableWith reg)
+            (recs, bEnd) = runEndRules ctx picked b
+            naive = foldl (\(acc, bd) r -> let (e, bd') = erRun r ctx bd in (acc ++ [(bd, bd', x) | Just x <- [e]], bd')) ([], b) picked
+        in classify (not (null recs)) "runEndRules recorded" ((recs, bEnd) === naive)
   where
     allRules = concat [endRules defaultRegistry ph | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
     -- 步末规则要有东西可做：蜗牛 / 倒计时 / 藤 / 巧克力 / 蒸汽 / 毛球等都在 genCell 里
@@ -231,7 +163,7 @@ qc_dedup_rule_folds_same_as_legacy =
       boardFromRows <$> vectorOf r (vectorOf c (frequency [(3, genCell), (1, genObstacleCell), (1, Countdown <$> genColor <*> choose (1, 2))]))
 
 --------------------------------------------------------------------------------
--- 与旧写法对照：能力声明
+-- 能力声明
 
 -- | 能力记录的可观察部分（函数字段在探针上取值）。
 capsSig :: Caps -> [String]
@@ -260,60 +192,97 @@ data Probe = Probe
 
 instance Message Probe
 
--- | 每个能力声明（新：透镜写入、旧：记录更新），参数各取一个能看出差别的值。
-capPairs :: [(String, Cap, L.LCap)]
-capPairs =
-  [ ("colorIs", N.colorIs C4, L.colorIs C4), ("colorless", N.colorless, L.colorless)
-  , ("swappable", N.swappable, L.swappable), ("notHintable", N.notHintable, L.notHintable)
-  , ("onSwap", N.onSwap swapR, L.onSwap swapR)
-  , ("hit Destroy", N.hit Destroy, L.hit Destroy), ("breaks", N.breaks, L.breaks), ("noFire", N.noFire, L.noFire)
-  , ("explodes", N.explodes (\_ p -> [p]), L.explodes (\_ p -> [p]))
-  , ("onAdjacent", N.onAdjacent 77 (\_ bd -> AdjOut bd [] []), L.onAdjacent 77 (\_ bd -> AdjOut bd [] []))
-  , ("opens", N.opens (\bd _ -> (bd, [], [])), L.opens (\bd _ -> (bd, [], [])))
-  , ("teleports", N.teleports, L.teleports), ("drainsAt", N.drainsAt [EdgeBottom, EdgeLeft], L.drainsAt [EdgeBottom, EdgeLeft])
-  , ("keepsOnShuffle", N.keepsOnShuffle, L.keepsOnShuffle), ("recolors", N.recolors, L.recolors), ("pushes", N.pushes, L.pushes)
-  , ("reshuffles", N.reshuffles, L.reshuffles), ("noRecolor", N.noRecolor, L.noRecolor), ("noPush", N.noPush, L.noPush)
-  , ("counts", N.counts CountStones, L.counts CountStones), ("countsDiff", N.countsDiff CountCookies, L.countsDiff CountCookies)
-  , ("weighs", N.weighs 5, L.weighs 5), ("bonus", N.bonus 2, L.bonus 2), ("vacates", N.vacates, L.vacates)
-  , ("atEnd", N.atEnd (moveRule 33 (\_ bd -> (Nothing, bd))), L.atEnd (EndRule PhaseMove 33 (\_ bd -> (Nothing, bd)) (const []) (const [])))
-  , ("ground", N.ground (\x -> if x > 1 then Just (x - 1) else Nothing), L.ground (\x -> if x > 1 then Just (x - 1) else Nothing))
-  , ("widens", N.widens (\_ ps -> ps ++ ps), L.widens (\_ ps -> ps ++ ps))
-  , ("onMessage", N.onMessage answer, L.onMessage answer)
-  , ("withMatch", N.withMatch (\x -> x {mcBlocksMatch = True}), L.withMatch (\x -> x {mcBlocksMatch = True}))
-  , ("withHit", N.withHit (\x -> x {hcStrip = True}), L.withHit (\x -> x {hcStrip = True}))
-  , ("withMove", N.withMove (\x -> x {mvFalls = False}), L.withMove (\x -> x {mvFalls = False}))
-  , ("withCount", N.withCount (\x -> x {ccBonusMoves = ccBonusMoves x + 3}), L.withCount (\x -> x {ccBonusMoves = ccBonusMoves x + 3}))
-  , ("withStep", N.withStep (\x -> x {stGround = Nothing}), L.withStep (\x -> x {stGround = Nothing}))
-  , ("set blocksSwap True", setCap (N.matchL . N.mcBlocksSwapL) True, \c -> c {capMatch = (capMatch c) {mcBlocksSwap = True}})
-  , ("set weight 0", setCap (N.countL . N.ccDiffWeightL) 0, \c -> c {capCount = (capCount c) {ccDiffWeight = 0}})
+-- | 每个能力声明，参数各取一个能看出差别的值。
+capList :: [(String, Cap)]
+capList =
+  [ ("colorIs", N.colorIs C4), ("colorless", N.colorless)
+  , ("swappable", N.swappable), ("notHintable", N.notHintable)
+  , ("onSwap", N.onSwap swapR)
+  , ("hit Destroy", N.hit Destroy), ("breaks", N.breaks), ("noFire", N.noFire)
+  , ("explodes", N.explodes (\_ p -> [p]))
+  , ("onAdjacent", N.onAdjacent 77 (\_ bd -> AdjOut bd [] []))
+  , ("opens", N.opens (\bd _ -> (bd, [], [])))
+  , ("teleports", N.teleports), ("drainsAt", N.drainsAt [EdgeBottom, EdgeLeft])
+  , ("keepsOnShuffle", N.keepsOnShuffle), ("recolors", N.recolors), ("pushes", N.pushes)
+  , ("reshuffles", N.reshuffles), ("noRecolor", N.noRecolor), ("noPush", N.noPush)
+  , ("counts", N.counts CountStones), ("countsDiff", N.countsDiff CountCookies)
+  , ("weighs", N.weighs 5), ("bonus", N.bonus 2), ("vacates", N.vacates)
+  , ("atEnd", N.atEnd (moveRule 33 (\_ bd -> (Nothing, bd))))
+  , ("ground", N.ground (\x -> if x > 1 then Just (x - 1) else Nothing))
+  , ("widens", N.widens (\_ ps -> ps ++ ps))
+  , ("onMessage", N.onMessage answer)
+  , ("withMatch", N.withMatch (\x -> x {mcBlocksMatch = True}))
+  , ("withHit", N.withHit (\x -> x {hcStrip = True}))
+  , ("withMove", N.withMove (\x -> x {mvFalls = False}))
+  , ("withCount", N.withCount (\x -> x {ccBonusMoves = ccBonusMoves x + 3}))
+  , ("withStep", N.withStep (\x -> x {stGround = Nothing}))
+  , ("set blocksSwap True", setCap (N.matchL . N.mcBlocksSwapL) True)
+  , ("set weight 0", setCap (N.countL . N.ccDiffWeightL) 0)
   ]
   where
     swapR = SwapRule 42 (\_ _ _ -> True) (\_ p _ -> [p])
-    -- 只回复探针：回复的元素值（Show）能看出新旧是否装进了同一个函数
+    -- 只回复探针：回复的元素值（Show）能看出装进的是不是这个函数
     answer msg = case fromMessage msg of
       Just Probe -> Just (SomeElement (Inert "probe" (Stone 2)))
       Nothing -> Nothing
 
+-- | 按名字取声明（只用于下面的固定例子）。
+capNamed :: String -> Cap
+capNamed nm = maybe (error ("capNamed: " ++ nm)) id (lookup nm capList)
+
+-- | 固定例子：(说明, 原型, 一串声明的名字)。
+capExamples :: [(String, Archetype, [String])]
+capExamples =
+  [ ("piece 缺省", Piece, [])
+  , ("blocker 缺省", Blocker, [])
+  , ("fixed 缺省", Fixed, [])
+  , ("blocker：keepsOnShuffle 与 reshuffles 冲突（09 §3.5 的反例）", Blocker, ["colorless", "notHintable", "keepsOnShuffle", "atEnd", "reshuffles", "vacates"])
+  , ("piece：冲突与累加", Piece, ["swappable", "set blocksSwap True", "weighs", "set weight 0", "withCount", "withCount", "noPush", "pushes", "colorIs", "colorless"])
+  , ("fixed：全部声明", Fixed, map fst capList)
+  , ("piece：全部声明（倒序）", Piece, reverse (map fst capList))
+  ]
+
+-- | 固定例子的能力记录（capsSig）写死：withCaps 按声明顺序拼接、后面的覆盖前面的。
+-- 'Cap' 的实例写成 @via Endo Caps@（去掉 Dual，拼接方向反过来）时第 4 个例子就不同：keepsOnShuffle 胜出。
+dedup_caps_examples_pinned :: Assertion
+dedup_caps_examples_pinned = do
+  assertEqual "example count" (length capExamples) (length pinnedCapsSigs)
+  sequence_
+    [ sequence_ [assertEqual (nm ++ " / field " ++ show i) e a | (i, e, a) <- zip3 [0 :: Int ..] expected actual]
+        >> assertEqual (nm ++ " / length") (length expected) (length actual)
+    | ((nm, a0, names), expected) <- zip capExamples pinnedCapsSigs
+    , let actual = capsSig (N.withCaps a0 (map capNamed names))
+    ]
+
+-- | capExamples 各例的 capsSig（由现实现生成，生成时与删除前的逐字旧副本核对过）。
+pinnedCapsSigs :: [[String]]
+pinnedCapsSigs =
+  [ ["Piece","[Just C2,Nothing,Nothing]","False","False","True","Nothing","Just True","Destroy","Nothing","False","Nothing","False","True","True","[]","False","True","True","Nothing","Nothing","1","0","False","Nothing","Nothing","Nothing","Nothing"]
+  , ["Blocker","[Just C2,Nothing,Nothing]","False","True","True","Nothing","Just False","Immune","Nothing","False","Nothing","False","True","False","[]","True","False","False","Nothing","Nothing","1","0","False","Nothing","Nothing","Nothing","Nothing"]
+  , ["Fixed","[Just C2,Nothing,Nothing]","False","True","True","Nothing","Just False","Immune","Nothing","False","Nothing","False","False","False","[]","True","False","False","Nothing","Nothing","1","0","False","Nothing","Nothing","Nothing","Nothing"]
+  , ["Blocker","[Nothing,Nothing,Nothing]","False","True","False","Nothing","Just False","Immune","Nothing","False","Nothing","False","True","False","[]","False","False","False","Nothing","Nothing","1","0","True","Just (PhaseMove,33,[],[])","Nothing","Nothing","Nothing"]
+  , ["Piece","[Nothing,Nothing,Nothing]","False","True","True","Nothing","Just True","Destroy","Nothing","False","Nothing","False","True","True","[]","False","True","True","Nothing","Nothing","0","6","False","Nothing","Nothing","Nothing","Nothing"]
+  , ["Fixed","[Nothing,Nothing,Nothing]","True","True","False","Just 42","Just False","Destroy","Just [(1,1)]","True","Just 77","True","False","True","[EdgeBottom,EdgeLeft]","False","False","False","Just CountStones","Just CountCookies","0","5","True","Just (PhaseMove,33,[],[])","Nothing","Just [(0,0),(0,0)]","Just (SomeElement \"probe\" (Inert \"probe\" (Stone 2)))"]
+  , ["Piece","[Just C4,Just C4,Just C4]","True","False","False","Just 42","Just False","Destroy","Just [(1,1)]","True","Just 77","True","False","True","[EdgeBottom,EdgeLeft]","True","True","True","Just CountStones","Just CountCookies","5","2","True","Just (PhaseMove,33,[],[])","Just [Nothing,Nothing,Just 1,Just 2]","Just [(0,0),(0,0)]","Just (SomeElement \"probe\" (Inert \"probe\" (Stone 2)))"]
+  ]
+
 -- | 任意原型 × 任意一串声明（可重复、互相冲突，如 swappable 与「挡交换」、weighs 5 与 weight 0、累加的 withCount）：
--- 新的 withCaps（mconcat，Dual (Endo Caps)）与旧的 foldl 逐项相同；幺半群律（结合、单位元）在观察上成立；
--- 「后面的覆盖前面的」：applyCap (a <> b) = applyCap b . applyCap a。
-qc_dedup_caps_same_as_legacy :: Property
-qc_dedup_caps_same_as_legacy =
+-- withCaps = applyCap (mconcat 声明) (capsOf 原型)，piece / blocker / fixed = 对应原型的 withCaps；
+-- 幺半群律（结合、单位元）在观察上成立；「后面的覆盖前面的」：applyCap (a <> b) = applyCap b . applyCap a。
+qc_caps_monoid_laws :: Property
+qc_caps_monoid_laws =
   forAll (elements [Piece, Blocker, Fixed]) $ \a ->
-    forAll (listOf (choose (0, length capPairs - 1))) $ \ixs ->
-      forAll (choose (0, length capPairs - 1)) $ \i -> forAll (choose (0, length capPairs - 1)) $ \j ->
-        let picked = map (capPairs !!) ixs
-            (_, ci, _) = capPairs !! i
-            (_, cj, _) = capPairs !! j
-            ncs = [c | (_, c, _) <- picked]
-            ocs = [o | (_, _, o) <- picked]
+    forAll (listOf (choose (0, length capList - 1))) $ \ixs ->
+      forAll (choose (0, length capList - 1)) $ \i -> forAll (choose (0, length capList - 1)) $ \j ->
+        let ncs = map (snd . (capList !!)) ixs
+            ci = snd (capList !! i)
+            cj = snd (capList !! j)
             base = capsOf a
             sig = capsSig
-        in counterexample (show (a, [nm | (nm, _, _) <- picked])) $
+        in counterexample (show (a, map (fst . (capList !!)) ixs)) $
              conjoin
-               [ counterexample "withCaps" (sig (N.withCaps a ncs) === sig (L.withCaps a ocs))
-               , counterexample "piece / blocker / fixed" (map sig [N.piece ncs, N.blocker ncs, N.fixed ncs] === map sig [L.piece ocs, L.blocker ocs, L.fixed ocs])
-               , counterexample "each writer" (conjoin [counterexample nm (sig (applyCap c base) === sig (o base)) | (nm, c, o) <- picked])
+               [ counterexample "withCaps" (sig (N.withCaps a ncs) === sig (applyCap (mconcat ncs) base))
+               , counterexample "piece / blocker / fixed" (map sig [N.piece ncs, N.blocker ncs, N.fixed ncs] === map sig [N.withCaps Piece ncs, N.withCaps Blocker ncs, N.withCaps Fixed ncs])
                , counterexample "later overrides earlier" (sig (applyCap (ci <> cj) base) === sig (applyCap cj (applyCap ci base)))
                , counterexample "associativity" (sig (applyCap ((ci <> cj) <> mconcat ncs) base) === sig (applyCap (ci <> (cj <> mconcat ncs)) base))
                , counterexample "identity" (map sig [applyCap (mempty <> ci) base, applyCap (ci <> mempty) base] === map sig [applyCap ci base, applyCap ci base])

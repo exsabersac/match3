@@ -406,8 +406,7 @@ chipAdjacentTimeSpiritsExcept b clearedGems except =
         TimeSpirit -> (board, nub (p : dead))
         _ -> (board, dead)
 
--- | Legacy helper: positions that should be removed (last-layer stones only).
--- Prefer chipAdjacentStones in clear pipeline.
+-- | 种子加上邻消后末层被削掉的石头（只看石头）。清除管线不用它，用的是 chipAdjacentStones。
 withAdjacentStones :: Board -> [Pos] -> [Pos]
 withAdjacentStones b seeds =
   let (_, dead) = chipAdjacentStones b seeds

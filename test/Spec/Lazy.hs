@@ -2,14 +2,14 @@
 
 -- | 惰性与递归模式（Haskell 特性第 4 项，docs/haskell-features/04-惰性与递归模式.md）：
 --
--- * 拒绝采样改成「无穷抽样流上取第一个合格的」（Engine.Stream）之后，盘面与推进后的生成器
---   与第 4 项前的手写尾递归（Spec.Support.LegacyLazy，逐字副本）逐种子相同；
--- * 自动洗牌的有限重试（splitAtS 24 + find + 兜底第 25 次）与旧的计数循环逐项相同（整个 GameState，含生成器），
---   含「24 次都不合格、用第 25 次」的兜底分支；
+-- * 拒绝采样（「无穷抽样流上取第一个合格的」，Engine.Stream）的盘面与推进后的生成器写死成指纹（每种行列一个）；
+-- * 自动洗牌的有限重试（splitAtS 24 + find + 兜底第 25 次）的结果（整个 GameState，含生成器）写死成指纹，
+--   并确认三条路（不洗 / 洗到可走盘 / 24 次都不合格用第 25 次）都走到；
+--   （两组指纹生成时与删除前的手写尾递归 / 计数循环副本逐种子核对过）
 -- * 流是真的惰性：被拒绝之后的元素、合格之后的元素都不会被求值（用 error 占位证明）；
--- * runPlayer 加了 bang pattern、不再压空事件表之后，帧数 / 事件 / 终态与旧写法相同；
---   再手写 Fix / cata / ana / hylo，证明「展开成帧、折叠出结果」的 hylo 也得到同一结果，并且能惰性地流出无穷回放的事件；
--- * countsFromList 由 foldl 改 foldl' 结果相同；runActions 本来就是余递归的，能吃无穷动作表。
+-- * runPlayer 的帧数 / 事件 / 终态与手写 Fix / cata / ana / hylo 相同（「展开成帧、折叠出结果」），
+--   hylo 还能惰性地流出无穷回放的事件；
+-- * countsFromList 等于逐个 bumpCount 的左折叠；runActions 是余递归的，能吃无穷动作表。
 module Spec.Lazy
   ( tests
   ) where
@@ -22,14 +22,15 @@ import Engine.Playback (Cue(..), Player, Stages(..), Tick(..), acceleratePlayer,
 import Engine.Stream
 import Match3.Board.Random (randomBoardSized, randomPlayableBoardSized, randomStableBoardSized)
 import Match3.Core
+import Match3.Counts (bumpCount, noCounts)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Level (levelRegistryIn)
+import Match3.Element.Registry (Registry)
 import Match3.Board.Match (hasValidMoveWith)
 import Match3.Game.Move (resolveSwap)
 import Match3.Game.Shuffle (ensurePlayableWith)
 import Match3.Game.Trace (traceEvents)
-import qualified Spec.Support.LegacyLazy as Old
-import Spec.Support (findMatchPair)
+import Spec.Support (digest, findMatchPair)
 import System.Random (mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -37,10 +38,10 @@ import Toy
 
 tests :: [TestTree]
 tests =
-  [ testCase "lazy_samplers_same_as_legacy" lazy_samplers_same_as_legacy
-  , testCase "lazy_ensure_playable_same_as_legacy" lazy_ensure_playable_same_as_legacy
+  [ testCase "lazy_samplers_pinned" lazy_samplers_pinned
+  , testCase "lazy_ensure_playable_pinned" lazy_ensure_playable_pinned
   , testCase "lazy_stream_is_lazy" lazy_stream_is_lazy
-  , testCase "lazy_run_player_same_as_legacy_and_hylo" lazy_run_player_same_as_legacy_and_hylo
+  , testCase "lazy_run_player_same_as_hylo" lazy_run_player_same_as_hylo
   , testCase "lazy_counts_and_run_actions" lazy_counts_and_run_actions
   ]
 
@@ -52,23 +53,18 @@ tests =
 sizes :: [(Int, Int)]
 sizes = [(8, 8), (9, 9), (7, 7), (6, 8), (9, 7), (3, 4), (4, 3)]
 
-lazy_samplers_same_as_legacy :: Assertion
-lazy_samplers_same_as_legacy = do
+-- | 某种行列、种子 0–199 上两个采样器的结果（盘面 + 推进后的生成器的 show）的指纹：(无三连盘, 可玩盘)。
+samplerDigests :: (Int, Int) -> (String, String)
+samplerDigests (r, c) =
+  ( digest (concat [show (b, show g) | seed <- [0 .. 199 :: Int], let (b, g) = randomStableBoardSized r c (mkStdGen seed)])
+  , digest (concat [show (b, show g) | seed <- [0 .. 199 :: Int], let (b, g) = randomPlayableBoardSized r c (mkStdGen seed)])
+  )
+
+lazy_samplers_pinned :: Assertion
+lazy_samplers_pinned = do
   let cases = [(rc, seed) | rc <- sizes, seed <- [0 .. 199 :: Int]]
-  mapM_
-    ( \((r, c), seed) -> do
-        let g = mkStdGen seed
-            lbl = show (r, c) ++ " seed " ++ show seed
-            (bS, gS) = randomStableBoardSized r c g
-            (bS', gS') = Old.oldRandomStableBoardSized r c g
-            (bP, gP) = randomPlayableBoardSized r c g
-            (bP', gP') = Old.oldRandomPlayableBoardSized r c g
-        assertEqual ("stable board " ++ lbl) bS' bS
-        assertEqual ("stable gen " ++ lbl) (show gS') (show gS)
-        assertEqual ("playable board " ++ lbl) bP' bP
-        assertEqual ("playable gen " ++ lbl) (show gP') (show gP)
-    )
-    cases
+  assertEqual "sizes" (map fst pinnedSamplers) sizes
+  sequence_ [assertEqual ("samplers " ++ show rc) d (samplerDigests rc) | (rc, d) <- pinnedSamplers]
   -- 用例确实走到了「拒绝后重抽」：多数种子第一抽就带三连
   let rejected = [() | ((r, c), seed) <- cases, hasAnyMatch (fst (randomBoardSized r c (mkStdGen seed)))]
   assertBool ("stable sampler rejected at least once in most cases: " ++ show (length rejected)) (2 * length rejected > length cases)
@@ -80,6 +76,18 @@ lazy_samplers_same_as_legacy = do
 --------------------------------------------------------------------------------
 -- 自动洗牌
 
+-- | lazy_samplers_pinned 的期望（由现实现生成，生成时与删除前的手写尾递归副本逐种子核对过）。
+pinnedSamplers :: [((Int, Int), (String, String))]
+pinnedSamplers =
+  [ ((8,8),("ba89a9d21cd5fba1","ba89a9d21cd5fba1"))
+  , ((9,9),("01084f86157c450d","01084f86157c450d"))
+  , ((7,7),("17722281fcbdae11","17722281fcbdae11"))
+  , ((6,8),("1d21579705431235","1d21579705431235"))
+  , ((9,7),("f2f6a41d433e92a2","f2f6a41d433e92a2"))
+  , ((3,4),("96caa4f5242e89a2","2b575e0fd6c4abad"))
+  , ((4,3),("87eea4d6198a9baa","ca971ceb8c570e53"))
+  ]
+
 -- | 指定行列、没有可走步也没有三连的 5 色斜纹盘（与 Spec.Support.stuckNoMoveBoard 同一图案）。
 stuckSized :: Int -> Int -> Board
 stuckSized rows cols = boardFromRows [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. cols - 1]] | r <- [0 .. rows - 1]]
@@ -89,8 +97,9 @@ hopeless :: Int -> Int -> Board
 hopeless rows cols =
   boardFromRows [[if even r && even c then mkGem (toEnum ((r + c) `mod` 5)) else mkStone | c <- [0 .. cols - 1]] | r <- [0 .. rows - 1]]
 
-lazy_ensure_playable_same_as_legacy :: Assertion
-lazy_ensure_playable_same_as_legacy = do
+-- | 自动洗牌的用例：49 关 × 2 种子 × (开局盘 / 斜纹死盘 / 怎么洗都死的盘)，外加已终局的一局。
+ensureCases :: ([(String, Registry, GameState)], [(String, Registry, GameState)])
+ensureCases =
   let levelCases =
         [ (concat ["L", show li, " seed ", show seed, " ", tag], reg, gs)
         | li <- [0 .. levelCount - 1]
@@ -104,10 +113,31 @@ lazy_ensure_playable_same_as_legacy = do
       overCase = case campaignGame 0 1 of
         Just gs0 -> [("over", defaultRegistry, gs0 {gsBoard = stuckSized 8 8, gsOver = Just (Won 0)})]
         Nothing -> []
-      allCases = levelCases ++ overCase
-  mapM_
-    (\(lbl, reg, gs) -> assertEqual lbl (Old.oldEnsurePlayableWith reg gs) (ensurePlayableWith reg gs))
-    allCases
+  in (levelCases, overCase)
+
+-- | lazy_ensure_playable_pinned 的期望（由现实现生成，生成时与删除前的计数循环副本逐局核对过）。
+pinnedEnsure :: [(String, String)]
+pinnedEnsure =
+  [ ("start","cdac0e9faabce7e5")
+  , ("stuck","7c9312e4addf7d77")
+  , ("hopeless","882fe5358c410590")
+  , ("over","ae5431faa35dc99f")
+  ]
+
+-- | 按盘面种类（start / stuck / hopeless / over）分组的自动洗牌结果（整个 GameState 的 show）的指纹。
+ensureDigests :: [(String, String)]
+ensureDigests =
+  [ (tag, digest (concat [show (ensurePlayableWith reg gs) | (lbl, reg, gs) <- levelCases ++ overCase, lastWord lbl == tag]))
+  | tag <- ["start", "stuck", "hopeless", "over"]
+  ]
+  where
+    (levelCases, overCase) = ensureCases
+    lastWord = reverse . takeWhile (/= ' ') . reverse
+
+lazy_ensure_playable_pinned :: Assertion
+lazy_ensure_playable_pinned = do
+  let (levelCases, _) = ensureCases
+  assertEqual "ensurePlayable digests" pinnedEnsure ensureDigests
   -- 三条路都走到：原盘可走（不洗）、重洗后找到可走盘、24 次都不合格用第 25 次
   let outcomes = [(gsShuffled r, hasValidMoveWith reg (gsBoard r)) | (_, reg, gs) <- levelCases, let r = ensurePlayableWith reg gs]
   assertBool "some boards kept" ((False, True) `elem` outcomes)
@@ -170,17 +200,16 @@ hyloPlayer fs sm = hylo tickAlg (tickCoalg fs sm)
 cataAnaPlayer :: Int -> Stages st ev -> Player st -> (Int, [ev], st)
 cataAnaPlayer fs sm = cata tickAlg . ana (tickCoalg fs sm)
 
--- | 四种跑法（现在的 runPlayer、旧写法、hylo、cata . ana）逐项相同：帧数、事件序列、终态（事件与终态经投影比较）。
+-- | 三种跑法（runPlayer、hylo、cata . ana）逐项相同：帧数、事件序列、终态（事件与终态经投影比较）。
 samePlays :: (Eq v, Show v, Eq s, Show s) => String -> (st -> s) -> (ev -> v) -> Int -> Stages st ev -> Player st -> Assertion
 samePlays lbl fin ev fs sm p = do
   let view (n, evs, st) = (n, map ev evs, fin st)
       new = view (runPlayer fs sm p)
-  assertEqual (lbl ++ ": legacy") (view (Old.oldRunPlayer fs sm p)) new
   assertEqual (lbl ++ ": hylo") (view (hyloPlayer fs sm p)) new
   assertEqual (lbl ++ ": cata . ana") (view (cataAnaPlayer fs sm p)) new
 
-lazy_run_player_same_as_legacy_and_hylo :: Assertion
-lazy_run_player_same_as_legacy_and_hylo = do
+lazy_run_player_same_as_hylo :: Assertion
+lazy_run_player_same_as_hylo = do
   -- 自定义阶段机：倒数 n → 0，每段 len 帧，进入时报出段号
   let countdown len = Stages (const len) (\n -> if n <= 0 then Left n else Right (n - 1, [n - 1]))
   mapM_
@@ -212,7 +241,7 @@ lazy_run_player_same_as_legacy_and_hylo = do
         samePlays ("level fast " ++ show li) cascadeView eventView fastStep cascadeStages (acceleratePlayer (newPlayer c))
     )
     real
-  -- 惰性：永不结束的阶段机（每帧一段、进入时报段号）。runPlayer / 旧写法都要播完才返回，
+  -- 惰性：永不结束的阶段机（每帧一段、进入时报段号）。runPlayer 要播完才返回，
   -- hylo 加惰性代数则能边播边交出事件：取前 5 个事件只展开 5 帧。
   let forever = Stages (const 1) (\n -> Right (n + 1, [n + 1 :: Int]))
       (_, evsForever, _) = hyloPlayer 1 forever (newPlayer (0 :: Int))
@@ -236,7 +265,7 @@ lazy_counts_and_run_actions = do
         [ [(keys !! (i `mod` length keys), (i * 7 + seed) `mod` 5 - 2) | i <- [seed .. seed + len]]
         | seed <- [0 .. 40], len <- [0, 1, 5, 30, 200]
         ]
-  mapM_ (\xs -> assertEqual (show (take 3 xs)) (Old.oldCountsFromList xs) (countsFromList xs)) lists
+  mapM_ (\xs -> assertEqual (show (take 3 xs)) (foldl (\c (k, n) -> bumpCount k n c) noCounts xs) (countsFromList xs)) lists
   -- runActions 是余递归的（每一步先交出 Step，再递归）：无穷动作表也只跑到结局为止
   let s0 = gameNew toyGame 4 7
   length (runActions toyGame s0 (repeat Reset)) @?= 5

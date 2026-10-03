@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（原 test/Spec.hs 的非测试顶层定义，逐字搬运），
--- 以及第 1 刀从各模块收拢的重复助手（tripleBoard / tripleMove / allPos / isWin / firstWave / firstLevel …）。
+-- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（tripleBoard / tripleMove / allPos / isWin / firstWave / firstLevel …），
+-- 以及固定例子测试用的指纹 'digest'。
 -- 源码扫描工具在 "Spec.Support.Source"，这里一并导出。
 module Spec.Support
   ( -- * 通用局面与查询
@@ -37,11 +37,17 @@ module Spec.Support
   , moveApplied
   , cratesOn
   , stepThenUndo
+    -- * 固定例子的指纹
+  , digest
     -- * 源码扫描
   , module Spec.Support.Source
   ) where
 
 import Control.Monad (foldM)
+import Data.Bits (xor)
+import Data.Char (ord)
+import Data.Word (Word64)
+import Numeric (showHex)
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
@@ -93,7 +99,7 @@ isWin o = case o of
 firstLevel :: HasCallStack => Level
 firstLevel = levelAt 0
 
--- | 第 li 关（0 基）的关卡记录；没有这一关直接报错（第 6 刀：测试里取代 allLevels !! li）。
+-- | 第 li 关（0 基）的关卡记录；没有这一关直接报错。
 levelAt :: HasCallStack => Int -> Level
 levelAt li = fromMaybe (error ("levelAt: no level " ++ show li)) (lookupLevel li)
 
@@ -319,7 +325,7 @@ checkEffectDetail tag e = case endEffectKind eff of
       _ -> Nothing
 
 --------------------------------------------------------------------------------
--- 第二刀 2b：元素框架
+-- 元素框架
 
 -- | 测试专用元素「木箱」（只在测试里定义，主流程源码里没有它）：Custom "crate" n，n = 剩余耐久。
 -- 定义：固定格（挡交换、不随重力下落）、被邻格真消除波及一次耐久 -1、耐久 1 时再被波及就碎
@@ -363,7 +369,7 @@ moveApplied o = o /= NoMatch && o /= InvalidSwap
 cratesOn :: Board -> [(Pos, Cell)]
 cratesOn b = [(p, cell) | p <- allPos, let cell = getCell b p, isCustom cell]
 
--- | 段 3：撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith reg 执行一个动作，
+-- | 撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith reg 执行一个动作，
 -- 再执行 Undo，返回撤销后的状态；走步或撤销被拒时 Nothing。
 stepThenUndo :: Registry -> GameState -> M3E.Action -> Maybe GameState
 stepThenUndo reg gs act =
@@ -371,3 +377,14 @@ stepThenUndo reg gs act =
       s1 = gameStep g (startHistory gs) (Act act)
       s2 = gameStep g (stepState s1) Undo
   in if stepAccepted s1 && stepAccepted s2 then Just (histNow (stepState s2)) else Nothing
+
+--------------------------------------------------------------------------------
+-- 固定例子的指纹
+
+-- | 长输出的指纹（FNV-1a 64 位，按 Char 码点逐个折叠，16 位十六进制）。固定例子测试用它把成百上千个结果
+-- （盘面、回放、生成器的 show）写成一个字面量：结果有任何一个字符不同，指纹就不同。
+digest :: String -> String
+digest s = let h = foldl step 14695981039346656037 s in replicate (16 - length (showHex h "")) '0' ++ showHex h ""
+  where
+    step :: Word64 -> Char -> Word64
+    step acc ch = (acc `xor` fromIntegral (ord ch)) * 1099511628211

@@ -1,12 +1,10 @@
 -- | 性能与并发（Haskell 特性第 5 项，docs/haskell-features/05-性能与并发.md）：
 --
--- * 匹配扫描改成「先算整盘匹配码（unboxed UArray），再在码上扫」、提示搜索改成「STUArray 上就地换过去查再换回来」之后，
---   findMatchRunsWith / hasAnyMatchWith / findHintWith 与第 5 项前的逐格查注册表写法（Spec.Support.LegacyPerf，逐字副本）
---   逐项相同：全部关卡开局盘及其每一种相邻交换、沿提示走 12 手途经的盘面（按关接上本关注册表），外加随机盘面
---   （任意格、任意行列 1–10）；
--- * 匹配码与 matchColorWith 逐格一致；
--- * 重力改成 STArray 上逐段双指针压实之后，与旧的「逐列取列表、colGravityWith、array 写回」逐格相同：
---   全部关卡开局盘按若干图案挖空（按关接上本关注册表，含不下落的固定格），外加随机可空盘面；
+-- * 匹配扫描（先算整盘匹配码 unboxed UArray，再在码上扫）与提示搜索（STUArray 上就地换过去查再换回来）：
+--   findMatchRunsWith / hasAnyMatchWith / findHintWith 在全部关卡开局盘及其每一种相邻交换、沿提示走 12 手途经的盘面
+--   （按关接上本关注册表）上的结果写死成指纹；匹配码与 matchColorWith 逐格一致；
+-- * 重力（STArray 上逐段双指针压实）：全部关卡开局盘按若干图案挖空（含不下落的固定格）后的结果写死成指纹；
+--   （两个指纹生成时与删除前的逐格查注册表写法 / 列表版重力副本逐盘核对过）
 -- * 并行批量求值（Spec.Support.Parallel，STM 领任务 + 每任务一个结果槽）与串行 map 逐项相同、顺序不变，
 --   任意工人数（含多于任务数）、空任务表、任务出错时报第一个出错的任务。
 module Spec.Perf
@@ -18,34 +16,31 @@ import qualified Data.Array as A
 import Data.Array.Unboxed ((!))
 import Data.Maybe (isJust, isNothing)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith)
-import Match3.Board.Grid (mboardFromRows, mboardRows, toM)
+import Match3.Board.Grid (MBoard, mboardRows, toM)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith, matchCodesWith)
 import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Level (levelRegistryIn)
 import Match3.Element.Registry (Registry, matchColorWith)
-import qualified Spec.Support.LegacyPerf as Old
-import Spec.Properties (genCell, genPlayBoard)
+import Spec.Support (digest)
 import Spec.Support.Parallel (forceLines, parallelForce)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
 
 tests :: [TestTree]
 tests =
-  [ testCase "perf_match_scan_same_as_legacy" perf_match_scan_same_as_legacy
-  , testProperty "qc_perf_match_scan_random_boards" qc_perf_match_scan_random_boards
-  , testCase "perf_gravity_same_as_legacy" perf_gravity_same_as_legacy
-  , testProperty "qc_perf_gravity_random_boards" qc_perf_gravity_random_boards
+  [ testCase "perf_match_scan_pinned" perf_match_scan_pinned
+  , testCase "perf_gravity_pinned" perf_gravity_pinned
   , testCase "perf_parallel_force_same_as_serial" perf_parallel_force_same_as_serial
   ]
 
--- | 三个查询与旧写法相同，匹配码与 matchColorWith 一致。返回 (有匹配?, 有提示?)，供覆盖断言用。
+-- | 三个查询的结果（写进指纹）。
+scanResult :: Registry -> Board -> String
+scanResult reg b = show (findMatchRunsWith reg b, hasAnyMatchWith reg b, findHintWith reg b)
+
+-- | 匹配码与 matchColorWith 逐格一致。返回 (有匹配?, 有提示?)，供覆盖断言用。
 sameScan :: String -> Registry -> Board -> IO (Bool, Bool)
 sameScan lbl reg b = do
-  assertEqual (lbl ++ ": runs") (Old.oldFindMatchRunsWith reg b) (findMatchRunsWith reg b)
-  assertEqual (lbl ++ ": any") (Old.oldHasAnyMatchWith reg b) (hasAnyMatchWith reg b)
-  assertEqual (lbl ++ ": hint") (Old.oldFindHintWith reg b) (findHintWith reg b)
   let codes = matchCodesWith reg b
   assertBool (lbl ++ ": codes")
     (and [codes ! p == maybe (-1) fromEnum (matchColorWith reg (getCell b p)) | p <- boardPositions b])
@@ -54,8 +49,9 @@ sameScan lbl reg b = do
 adjacentSwaps :: Board -> [(Pos, Pos)]
 adjacentSwaps b = [(p, q) | p@(r, c) <- boardPositions b, q <- [(r, c + 1), (r + 1, c)], inBounds b q]
 
-perf_match_scan_same_as_legacy :: Assertion
-perf_match_scan_same_as_legacy = do
+-- | 扫描用例：全部关卡 × 种子 1–3 的开局盘的每一种相邻交换、沿提示走 12 手途经的盘面，外加两张死盘。
+scanCases :: [(String, Registry, Board)]
+scanCases =
   let levelCases =
         [ (li, seed, reg, gs0)
         | li <- [0 .. levelCount - 1]
@@ -78,39 +74,30 @@ perf_match_scan_same_as_legacy = do
       walk gs = gs : case (gsOver gs, findHint (gsBoard gs)) of
         (Nothing, Just (p, q)) -> let (gs', _) = trySwap p q gs in if gs' == gs then [] else walk gs'
         _ -> []
-  results <- mapM (\(lbl, reg, b) -> sameScan lbl reg b) (swapped ++ played)
+      -- 没有可走步的盘（提示为 Nothing）：两份死盘图案
+      stuck = boardFromRows [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. 7]] | r <- [0 .. 7 :: Int]]
+      tiny = boardFromRows [[mkGem C1, mkGem C2], [mkGem C2, mkGem C1]]
+  in swapped ++ played ++ [("stuck", defaultRegistry, stuck), ("tiny", defaultRegistry, tiny)]
+
+perf_match_scan_pinned :: Assertion
+perf_match_scan_pinned = do
+  let (levelBoards, deadBoards) = splitAt (length scanCases - 2) scanCases
+  assertEqual "scan digest" pinnedScan (length scanCases, digest (concatMap (\(_, reg, b) -> scanResult reg b) scanCases))
+  results <- mapM (\(lbl, reg, b) -> sameScan lbl reg b) levelBoards
   assertBool ("many boards: " ++ show (length results)) (length results > 10000)
   assertBool "some boards have matches" (any fst results)
   assertBool "some boards have none" (any (not . fst) results)
   assertBool "some boards have a hint" (any snd results)
-  -- 没有可走步的盘（提示为 Nothing）：两份死盘图案
-  let stuck = boardFromRows [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. 7]] | r <- [0 .. 7 :: Int]]
-      tiny = boardFromRows [[mkGem C1, mkGem C2], [mkGem C2, mkGem C1]]
-  (_, h1) <- sameScan "stuck" defaultRegistry stuck
-  (_, h2) <- sameScan "tiny" defaultRegistry tiny
-  assertBool "stuck boards have no hint" (not h1 && not h2 && isNothing (findHintWith defaultRegistry stuck))
+  deads <- mapM (\(lbl, reg, b) -> sameScan lbl reg b) deadBoards
+  assertBool "stuck boards have no hint" (not (any snd deads) && all (\(_, reg, b) -> isNothing (findHintWith reg b)) deadBoards)
 
-qc_perf_match_scan_random_boards :: Property
-qc_perf_match_scan_random_boards =
-  withMaxSuccess 1000 $ forAll genBoard $ \b ->
-    let reg = defaultRegistry
-    in counterexample (show b) $
-         findMatchRunsWith reg b === Old.oldFindMatchRunsWith reg b
-           .&&. hasAnyMatchWith reg b === Old.oldHasAnyMatchWith reg b
-           .&&. findHintWith reg b === Old.oldFindHintWith reg b
-  where
-    genBoard =
-      oneof
-        [ genPlayBoard
-        , do
-            r <- choose (1, 10)
-            c <- choose (1, 10)
-            boardFromRows <$> vectorOf r (vectorOf c (frequency [(6, mkGem <$> elements [C1, C2, C3]), (1, genCell)]))
-        ]
+-- | perf_match_scan_pinned 的期望：(盘数, 指纹)（由现实现生成，生成时与删除前的逐格查注册表写法副本逐盘核对过）。
+pinnedScan :: (Int, String)
+pinnedScan = (18137, "b1ca0608fe66790c")
 
-perf_gravity_same_as_legacy :: Assertion
-perf_gravity_same_as_legacy = do
-  let cases =
+-- | 重力用例：49 关 × 2 种子 × 6 种挖空图案（按关接上本关注册表）。
+gravityCases :: [(String, Registry, MBoard)]
+gravityCases =
         [ (concat ["L", show li, " s", show seed, " hole ", show k], reg, holed)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2 :: Int]
@@ -120,22 +107,20 @@ perf_gravity_same_as_legacy = do
         , k <- [1 .. 6 :: Int]
         , let holed = toM b A.// [(p, Nothing) | p@(r, c) <- boardPositions b, (r * 7 + c * 3 + k) `mod` (k + 1) == 0]
         ]
-  mapM_ (\(lbl, reg, mb) -> assertEqual lbl (Old.oldApplyGravityWith reg mb) (applyGravityWith reg mb)) cases
+
+perf_gravity_pinned :: Assertion
+perf_gravity_pinned = do
+  let cases = gravityCases
+  assertEqual "gravity digest" pinnedGravity (length cases, digest (concat [show (mboardRows (applyGravityWith reg mb)) | (_, reg, mb) <- cases]))
   -- 用例里确实有固定格把列切成多段、也确实有格子落下
   let fixedCells = [() | (_, reg, mb) <- cases, Just cell <- A.elems mb, gravityFixedCellWith reg cell]
       moved = [() | (_, reg, mb) <- cases, applyGravityWith reg mb /= mb]
   assertBool ("fixed cells present: " ++ show (length fixedCells)) (length fixedCells > 100)
   assertBool "gravity moved cells" (length moved > 100)
 
-qc_perf_gravity_random_boards :: Property
-qc_perf_gravity_random_boards =
-  withMaxSuccess 1000 $ forAll genHoled $ \mb ->
-    counterexample (show (mboardRows mb)) (applyGravityWith defaultRegistry mb === Old.oldApplyGravityWith defaultRegistry mb)
-  where
-    genHoled = do
-      r <- choose (1, 10)
-      c <- choose (1, 10)
-      mboardFromRows <$> vectorOf r (vectorOf c (frequency [(3, Just <$> genCell), (2, pure Nothing)]))
+-- | perf_gravity_pinned 的期望：(盘数, 指纹)（由现实现生成，生成时与删除前的列表版重力副本逐盘核对过）。
+pinnedGravity :: (Int, String)
+pinnedGravity = (588, "b8ac0687678a7959")
 
 perf_parallel_force_same_as_serial :: Assertion
 perf_parallel_force_same_as_serial = do

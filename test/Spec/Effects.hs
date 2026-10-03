@@ -7,10 +7,10 @@
 -- | 效果与架构（Haskell 特性第 3 项，docs/haskell-features/03-效果与架构.md）：连锁核心改写成只依赖能力类的程序
 -- （Match3.Board.Cascade 的 *M 函数，能力见 Match3.Board.Effect）之后，
 --
--- * 对外入口（纯解释器）与第 3 项前手工传递生成器 / 钩子的写法（Spec.Support.LegacyCascade，逐字副本）逐项相同：
---   终盘、计数、回放轮次、推进后的关卡级元素、推进后的生成器；倒计时另比步末记录；
+-- * 对外入口（纯解释器）的结果写死成指纹：终盘、计数、回放轮次、推进后的关卡级元素、推进后的生成器（show），
+--   每个入口一个；倒计时另有步末记录、单轮另有一个指纹（生成时与删除前的逐字旧副本核对过）；
 -- * 追踪解释器的结果与纯解释器相同，事件日志与回放 / 盘面自洽（日志里的轮次就是回放，补进的格子就是下一轮回放的终盘格子）；
--- * 第三种解释器：同一个程序解释成手写的 free monad 指令树，再用一个小解释器跑，结果仍与旧写法相同。
+-- * 第三种解释器：同一个程序解释成手写的 free monad 指令树，再用一个小解释器跑，结果与纯解释器相同。
 --
 -- 用例：全部战役关卡 × 2 个种子 × 3 个盘面（开局盘做一手能消的交换 / 同尺寸随机盘 / 开局静止盘），
 -- 关卡级元素（飞碟、传送门、补子策略……）按该关接上；入口覆盖匹配连锁、带起始波次的匹配连锁、种子起手（含空种子）、
@@ -31,17 +31,16 @@ import Match3.Core
 import Match3.Element (defaultRegistry)
 import Match3.Element.Level (levelHooksWith, levelRegistryIn)
 import Match3.Element.Registry (Registry)
-import qualified Spec.Support.LegacyCascade as Old
-import Spec.Support (findMatchPair)
+import Spec.Support (digest, findMatchPair)
 import System.Random (RandomGen, StdGen, mkStdGen)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 tests :: [TestTree]
 tests =
-  [ testCase "effects_entries_same_as_legacy" effects_entries_same_as_legacy
+  [ testCase "effects_entries_pinned" effects_entries_pinned
   , testCase "effects_traced_same_as_pure" effects_traced_same_as_pure
-  , testCase "effects_free_interpreter_same_as_legacy" effects_free_interpreter_same_as_legacy
+  , testCase "effects_free_interpreter_same_as_pure" effects_free_interpreter_same_as_pure
   ]
 
 --------------------------------------------------------------------------------
@@ -69,16 +68,16 @@ cases =
 -- | 一个连锁程序：对任何满足 MonadCascade 的 monad 都成立（所以能交给三种解释器）。
 newtype Prog = Prog (forall m. MonadCascade m => m (Board, CascadeTally))
 
--- | 每个用例上的入口：(名字, 旧写法的结果, 对外入口的结果, 程序)。
-entries :: Case -> [(String, CascadeRun StdGen, CascadeRun StdGen, Prog)]
+-- | 每个用例上的入口：(名字, 对外入口的结果, 程序)。
+entries :: Case -> [(String, CascadeRun StdGen, Prog)]
 entries (Case _ reg hooks b g) =
-  [ ("matches", Old.cascadeMatchesWith reg Nothing hooks g b, cascadeMatchesWith reg Nothing hooks g b, Prog (cascadeMatchesM reg Nothing b))
-  , ("matchesFrom 2", Old.cascadeMatchesFromWith reg 2 (Just (1, 1)) hooks g b, cascadeMatchesFromWith reg 2 (Just (1, 1)) hooks g b, Prog (cascadeMatchesFromM reg 2 (Just (1, 1)) b))
-  , ("seeds", Old.cascadeSeedsWith reg Nothing seeds hooks g b, cascadeSeedsWith reg Nothing seeds hooks g b, Prog (cascadeSeedsM reg Nothing seeds b))
-  , ("seeds []", Old.cascadeSeedsWith reg Nothing [] hooks g b, cascadeSeedsWith reg Nothing [] hooks g b, Prog (cascadeSeedsM reg Nothing [] b))
-  , ("after belt", Old.cascadeAfterWith reg AfterBelt hooks g b, cascadeAfterWith reg AfterBelt hooks g b, Prog (cascadeAfterM reg AfterBelt b))
-  , ("after end", Old.cascadeAfterWith reg (AfterEnd holes) hooks g b, cascadeAfterWith reg (AfterEnd holes) hooks g b, Prog (cascadeAfterM reg (AfterEnd holes) b))
-  , ("countdowns", Old.cascadeCountdownsWith reg hooks g b, cascadeCountdownsWith reg hooks g b, Prog (snd <$> cascadeCountdownsM reg b))
+  [ ("matches", cascadeMatchesWith reg Nothing hooks g b, Prog (cascadeMatchesM reg Nothing b))
+  , ("matchesFrom 2", cascadeMatchesFromWith reg 2 (Just (1, 1)) hooks g b, Prog (cascadeMatchesFromM reg 2 (Just (1, 1)) b))
+  , ("seeds", cascadeSeedsWith reg Nothing seeds hooks g b, Prog (cascadeSeedsM reg Nothing seeds b))
+  , ("seeds []", cascadeSeedsWith reg Nothing [] hooks g b, Prog (cascadeSeedsM reg Nothing [] b))
+  , ("after belt", cascadeAfterWith reg AfterBelt hooks g b, Prog (cascadeAfterM reg AfterBelt b))
+  , ("after end", cascadeAfterWith reg (AfterEnd holes) hooks g b, Prog (cascadeAfterM reg (AfterEnd holes) b))
+  , ("countdowns", cascadeCountdownsWith reg hooks g b, Prog (snd <$> cascadeCountdownsM reg b))
   ]
   where
     (nr, nc) = boardDims b
@@ -92,22 +91,41 @@ view :: CascadeRun StdGen -> RunView
 view r = (crBoard r, crTally r, crWaves r, hookLevel (crHooks r), show (crGen r))
 
 --------------------------------------------------------------------------------
--- 1. 对外入口 = 旧写法
+-- 1. 对外入口的固定结果
 
-effects_entries_same_as_legacy :: Assertion
-effects_entries_same_as_legacy = do
+-- | 每个入口在全部用例上的结果（view 的 show，按用例顺序拼接）的指纹。
+entryDigest :: String -> String
+entryDigest name = digest (concat [show (view run) | c <- cases, (n, run, _) <- entries c, n == name])
+
+-- | 倒计时的步末记录、单轮（stepCascadeAtWith，落点 (1,1)）在全部用例上的指纹。
+countdownStepsDigest, singleRoundDigest :: String
+countdownStepsDigest = digest (concat [show (fst (cascadeCountdownsTracedWith reg hooks g b)) | Case _ reg hooks b g <- cases])
+singleRoundDigest =
+  digest (concat [show (fmap (\(b', n, g') -> (b', n, show g')) (stepCascadeAtWith reg (Just (1, 1)) g b)) | Case _ reg _ b g <- cases])
+
+effects_entries_pinned :: Assertion
+effects_entries_pinned = do
   assertBool "enough cases" (length cases > 100)
-  mapM_ one cases
-  where
-    one c@(Case tag reg hooks b g) = do
-      sequence_ [assertEqual (tag ++ " / " ++ name) (view old) (view new) | (name, old, new, _) <- entries c]
-      -- 倒计时：步末记录也相同
-      let (stepsOld, _) = Old.cascadeCountdownsTracedWith reg hooks g b
-          (stepsNew, _) = cascadeCountdownsTracedWith reg hooks g b
-      assertBool (tag ++ " / countdown steps") (stepsOld == stepsNew)
-      -- 单轮
-      let single = fmap (\(b', n, g') -> (b', n, show g'))
-      assertEqual (tag ++ " / single round") (single (Old.stepCascadeAtWith reg (Just (1, 1)) g b)) (single (stepCascadeAtWith reg (Just (1, 1)) g b))
+  sequence_ [assertEqual ("entry " ++ name) d (entryDigest name) | (name, d) <- pinnedEntryDigests]
+  assertEqual "entries covered" [n | c <- take 1 cases, (n, _, _) <- entries c] (map fst pinnedEntryDigests)
+  assertEqual "countdown steps" pinnedCountdownSteps countdownStepsDigest
+  assertEqual "single round" pinnedSingleRound singleRoundDigest
+
+-- | 各入口的指纹（由现实现生成，生成时与删除前的逐字旧副本核对过：每个用例、每个入口逐项相等）。
+pinnedEntryDigests :: [(String, String)]
+pinnedEntryDigests =
+  [ ("matches","994bfd325ed1da19")
+  , ("matchesFrom 2","56aec5b0ec0d7d31")
+  , ("seeds","025712d5d8a2c5a2")
+  , ("seeds []","994bfd325ed1da19")
+  , ("after belt","994bfd325ed1da19")
+  , ("after end","38357190d3143a4e")
+  , ("countdowns","16ae5a7e85fe0768")
+  ]
+
+pinnedCountdownSteps, pinnedSingleRound :: String
+pinnedCountdownSteps = "bac34069ae0eb23a"
+pinnedSingleRound = "5efc0aa1fd0a8019"
 
 --------------------------------------------------------------------------------
 -- 2. 追踪解释器
@@ -125,7 +143,6 @@ effects_traced_same_as_pure = do
         [ do
             let (run, logs) = runCascadeTraced hooks g prog
             assertEqual (tag ++ " / " ++ name ++ ": traced = pure") (view (runCascade hooks g prog)) (view run)
-            assertEqual (tag ++ " / " ++ name ++ ": traced = legacy") (view old) (view run)
             assertEqual (tag ++ " / " ++ name ++ ": logged waves") (crWaves run) [w | LogWave w <- logs]
             -- 补子日志紧跟着的那一轮回放：补进的格子就是这一轮终盘上的格子，且恰好是下落后的空洞
             sequence_
@@ -137,7 +154,7 @@ effects_traced_same_as_pure = do
               , length [() | LogRefill fs <- logs, not (null fs)]
               , length [() | (LogRefill _, next) <- zip logs (drop 1 logs ++ [LogAbsorb []]), not (isWave next)]
               )
-        | (name, old, _, Prog prog) <- entries c
+        | (name, _, Prog prog) <- entries c
         ]
     isWave e = case e of
       LogWave _ -> True
@@ -182,7 +199,7 @@ instance MonadLevelHooks (Free CascadeF) where
 instance MonadWaves (Free CascadeF) where
   emitWave w = liftF (EmitF w ())
 
--- | 指令树的解释器：逐条执行，生成器与钩子显式传递（这正是第 3 项前连锁代码手写的样子，现在只写这一处）。
+-- | 指令树的解释器：逐条执行，生成器与钩子显式传递（这一处就是全部的手工传递）。
 interpret :: RandomGen g => LevelHooks -> g -> Free CascadeF a -> (a, LevelHooks, [CascadeWave], g)
 interpret hooks g prog = case prog of
   Done a -> (a, hooks, [], g)
@@ -191,11 +208,11 @@ interpret hooks g prog = case prog of
   Step (AbsorbF b k) -> let (ps, hooks') = onAbsorb hooks b in interpret hooks' g (k ps)
   Step (EmitF w next) -> let (a, h, ws, g') = interpret hooks g next in (a, h, w : ws, g')
 
-effects_free_interpreter_same_as_legacy :: Assertion
-effects_free_interpreter_same_as_legacy =
+effects_free_interpreter_same_as_pure :: Assertion
+effects_free_interpreter_same_as_pure =
   sequence_
-    [ assertEqual (tag ++ " / " ++ name ++ ": free") (view old) (view (CascadeRun b' t h ws g'))
+    [ assertEqual (tag ++ " / " ++ name ++ ": free") (view new) (view (CascadeRun b' t h ws g'))
     | c@(Case tag _ hooks _ g) <- cases
-    , (name, old, _, Prog prog) <- entries c
+    , (name, new, Prog prog) <- entries c
     , let ((b', t), h, ws, g') = interpret hooks g prog
     ]

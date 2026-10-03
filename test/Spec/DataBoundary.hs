@@ -12,19 +12,20 @@
 --
 -- * 关卡校验：'Validation' 是 Applicative（定律用 QuickCheck 查），所有失败一次报全；全部关卡与每日关都通过；
 --   一关里同时有多处问题时按固定顺序全部列出；只有行列一处问题时文字与 checkLevelDims 逐字节相同。
--- * 放置参数解析：'ArgP' 改写后的每个放置函数，在随机参数表 × 随机格上与改写前的手写 case（Spec.Support.LegacyBoundary）逐项相同；
---   精确匹配 / 前缀匹配 / '<|>' 缺省值的语义用单元测试钉住。
--- * NonEmpty：'beats' 的每组非空，去掉 NonEmpty 后与旧版逐项相同，拼回去就是原列表。
+-- * 放置参数解析：每个用 'ArgP' 写的放置函数在一张参数表 × 两种原格上的结果写死（期望值由现实现生成，
+--   生成时与删除前的手写 case 副本核对过）；精确匹配 / 前缀匹配 / '<|>' 缺省值的语义用单元测试钉住。
+-- * NonEmpty：'beats' 的分组写成固定例子（只合并相邻的同节拍效果），每组非空、拼回去就是原列表。
 -- * Generic 覆盖：用 GHC.Generics 的 'conName' 列出 Color / GemKind / CellOverlay / CellContents / Outcome 的全部构造器
 --   （'Constructors' 类的默认实现 + DeriveAnyClass 一行一个实例），检查测试生成器 genCell 覆盖每个构造器、
 --   每个构造器在注册表 / cellFace / 桌面 UI.CellTable / 网页 encodeOutcome 都有对应项，且解码往返。
---   新增构造器而忘了这些地方之一，这组测试就失败（以前只有编译器的不完全匹配警告，表和生成器不报）。
+--   新增构造器而忘了这些地方之一，这组测试就失败（编译器的不完全匹配警告只管 case，表和生成器它不报）。
 module Spec.DataBoundary
   ( tests
   ) where
 
 import Control.Applicative ((<|>))
 import Data.Proxy (Proxy (..))
+import Data.String (fromString)
 import GHC.Generics
 import Match3.Element.Class (toCell)
 import Control.Exception (ErrorCall (..), evaluate, try)
@@ -49,7 +50,6 @@ import Match3.Levels.Level
   , validateLevel
   )
 import Spec.Properties (genCell, genColor, genOverlay)
-import qualified Spec.Support.LegacyBoundary as Old
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck hiding (Failure, Success)
@@ -59,9 +59,10 @@ tests =
   [ testCase "level_validation_all_levels_valid" level_validation_all_levels_valid
   , testCase "level_validation_reports_all_issues" level_validation_reports_all_issues
   , testProperty "qc_validation_applicative_laws" qc_validation_applicative_laws
-  , testProperty "qc_argp_placers_match_legacy" qc_argp_placers_match_legacy
+  , testCase "argp_placers_pinned" argp_placers_pinned
   , testCase "argp_exact_vs_prefix" argp_exact_vs_prefix
-  , testProperty "qc_beats_nonempty_matches_legacy" qc_beats_nonempty_matches_legacy
+  , testCase "beats_examples_pinned" beats_examples_pinned
+  , testProperty "qc_beats_nonempty_groups" qc_beats_nonempty_groups
   , testCase "generic_constructor_lists" generic_constructor_lists
   , testCase "generic_generators_cover_constructors" generic_generators_cover_constructors
   , testCase "generic_every_constructor_has_registry_face_and_ui" generic_every_constructor_has_registry_face_and_ui
@@ -142,23 +143,56 @@ qc_validation_applicative_laws =
 --------------------------------------------------------------------------------
 -- 放置参数解析
 
--- | 随机参数表（0–3 个，整数含 0 / 1 / 3 / 4 / 255 / 256 等边界）。
-genArgs :: Gen [Arg]
-genArgs = do
-  k <- choose (0, 3)
-  vectorOf k (oneof [AInt <$> oneof [choose (-2, 6), elements [255, 256, 300]], AColor <$> genColor])
+-- | 放置参数表的固定例子：0–3 个参数，整数含 0 / 1 / 3 / -1 / 256 等边界，颜色在前 / 在后，多余参数。
+argpArgs :: [[Arg]]
+argpArgs =
+  [ [], [AInt 0], [AInt 1], [AInt 3], [AInt (-1)], [AInt 256], [AColor C3]
+  , [AColor C3, AInt 2], [AInt 2, AColor C4], [AInt 256, AColor C4, AColor C3], [AInt 0, AInt (-1)]
+  ]
 
--- | 每个改写过的放置函数：在 1×1 盘上经注册表按名字放置（placeWith），与旧手写 case 的结果相同
--- （旧放置返回 Nothing 时格子不变，与 placeWith 的约定一致）。
-qc_argp_placers_match_legacy :: Property
-qc_argp_placers_match_legacy =
-  withMaxSuccess 300 $ forAll genArgs $ \args -> forAll genCell $ \cell ->
-    let b0 = boardFromRows [[cell]]
-    in conjoin
-         [ counterexample (show (n, args, cell)) $
-             placeWith defaultRegistry n args b0 [(0, 0)] === Right (maybe b0 (setCell b0 (0, 0)) (old args cell))
-         | (n, old) <- Old.legacyPlacers
-         ]
+-- | 写放置的原格：普通宝石（冰 / 叠层的放置要看它）与倒计时（倒计时的放置要看原格）。
+argpCells :: [Cell]
+argpCells = [Gem C2 Normal 0 Nothing, Countdown C4 2]
+
+-- | 每个用 'ArgP' 写的放置函数：在 1×1 盘上经注册表按名字放置（placeWith），结果格写死
+-- （argpCells × argpArgs，按格在外、参数在内的顺序；放置不认参数时格子不变）。
+argp_placers_pinned :: Assertion
+argp_placers_pinned = do
+  assertEqual "placer count" 21 (length pinnedPlacements)
+  sequence_
+    [ do
+        assertEqual (n ++ " / count") (length expected) (length actual)
+        sequence_ [assertEqual (show (n, args, cell)) e a | ((cell, args), e, a) <- zip3 inputs expected actual]
+    | (n, expected) <- pinnedPlacements
+    , let inputs = [(cell, args) | cell <- argpCells, args <- argpArgs]
+          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultRegistry (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
+    ]
+
+-- | argp_placers_pinned 的期望（由现实现生成，生成时与删除前的手写 case 副本核对过）。
+pinnedPlacements :: [(String, [Cell])]
+pinnedPlacements =
+  [ ("stone",[Stone 1,Stone 1,Stone 1,Stone 3,Stone 1,Stone 256,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Stone 1,Stone 1,Stone 1,Stone 3,Stone 1,Stone 256,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("chest",[Chest 1,Chest 1,Chest 1,Chest 3,Chest 1,Chest 256,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Chest 1,Chest 1,Chest 1,Chest 3,Chest 1,Chest 256,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("honey",[Honey 1,Honey 1,Honey 1,Honey 3,Honey 1,Honey 256,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Honey 1,Honey 1,Honey 1,Honey 3,Honey 1,Honey 256,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("cake",[Cake 1,Cake 1,Cake 1,Cake 3,Cake 1,Cake 256,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Cake 1,Cake 1,Cake 1,Cake 3,Cake 1,Cake 256,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("safe",[Safe 1,Safe 1,Safe 1,Safe 3,Safe 1,Safe 256,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Safe 1,Safe 1,Safe 1,Safe 3,Safe 1,Safe 256,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("balloon",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Balloon C3,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Balloon C3,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("bottle",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Bottle C3,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Bottle C3,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("flip",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("magic_stone",[Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 1),Custom "magic_stone" (CustomState 3),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 3),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 2),Custom "magic_stone" (CustomState 3),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 1),Custom "magic_stone" (CustomState 3),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 3),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 0),Custom "magic_stone" (CustomState 2),Custom "magic_stone" (CustomState 3),Custom "magic_stone" (CustomState 0)])
+  , ("snow_boss",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("maker",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Maker C3 3,Maker C3 2,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Maker C3 3,Maker C3 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("snail",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Snail 0 (-1),Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Snail 0 (-1)])
+  , ("countdown",[Gem C2 Normal 0 Nothing,Countdown C2 1,Countdown C2 1,Countdown C2 3,Countdown C2 1,Countdown C2 256,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 1,Countdown C4 1,Countdown C4 3,Countdown C4 1,Countdown C4 256,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("ice",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 1 Nothing,Gem C2 Normal 3 Nothing,Gem C2 Normal (-1) Nothing,Gem C2 Normal 256 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("fog",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 (Just (Fog 0)),Gem C2 Normal 0 (Just (Fog 1)),Gem C2 Normal 0 (Just (Fog 3)),Gem C2 Normal 0 (Just (Fog (-1))),Gem C2 Normal 0 (Just (Fog 256)),Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("chain",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 (Just (Chain 0)),Gem C2 Normal 0 (Just (Chain 1)),Gem C2 Normal 0 (Just (Chain 3)),Gem C2 Normal 0 (Just (Chain (-1))),Gem C2 Normal 0 (Just (Chain 256)),Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("freeze",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 (Just (Freeze 0)),Gem C2 Normal 0 (Just (Freeze 1)),Gem C2 Normal 0 (Just (Freeze 3)),Gem C2 Normal 0 (Just (Freeze (-1))),Gem C2 Normal 0 (Just (Freeze 256)),Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("curtain",[Gem C2 Normal 0 Nothing,Gem C2 Normal 0 (Just (Curtain 0)),Gem C2 Normal 0 (Just (Curtain 1)),Gem C2 Normal 0 (Just (Curtain 3)),Gem C2 Normal 0 (Just (Curtain (-1))),Gem C2 Normal 0 (Just (Curtain 256)),Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Gem C2 Normal 0 Nothing,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  , ("bubble",[Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 0),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 3),Custom "bubble" (CustomState (-1)),Custom "bubble" (CustomState 256),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 2),Custom "bubble" (CustomState 256),Custom "bubble" (CustomState 0),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 0),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 3),Custom "bubble" (CustomState (-1)),Custom "bubble" (CustomState 256),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 1),Custom "bubble" (CustomState 2),Custom "bubble" (CustomState 256),Custom "bubble" (CustomState 0)])
+  , ("fuzzball",[Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 0),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 3),Custom "fuzzball" (CustomState (-1)),Custom "fuzzball" (CustomState 256),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 2),Custom "fuzzball" (CustomState 256),Custom "fuzzball" (CustomState 0),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 0),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 3),Custom "fuzzball" (CustomState (-1)),Custom "fuzzball" (CustomState 256),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 1),Custom "fuzzball" (CustomState 2),Custom "fuzzball" (CustomState 256),Custom "fuzzball" (CustomState 0)])
+  , ("chameleon",[Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 2),Custom "chameleon" (CustomState 2),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Custom "chameleon" (CustomState 1),Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Countdown C4 2,Custom "chameleon" (CustomState 2),Custom "chameleon" (CustomState 2),Countdown C4 2,Countdown C4 2,Countdown C4 2])
+  ]
 
 -- | 两种跑法与左偏 '<|>'：精确匹配多一个参数就失败；前缀匹配忽略剩下的；'<|>' 只在这一步失败时用右边。
 argp_exact_vs_prefix :: Assertion
@@ -175,16 +209,25 @@ argp_exact_vs_prefix = do
 --------------------------------------------------------------------------------
 -- NonEmpty
 
--- | 'beats' 与旧版逐项相同（组内容转回列表比较），拼接还原输入，相邻两组的节拍不同。
-qc_beats_nonempty_matches_legacy :: Property
-qc_beats_nonempty_matches_legacy =
+-- | 'beats' 的分组写死：只合并相邻的同节拍效果，不排序（换成 @NE.groupAllWith@ 时第一个例子就变成 @[0, 1, 2]@）。
+beats_examples_pinned :: Assertion
+beats_examples_pinned = do
+  let eff b a = Effect b "clear" "x" [] a
+      groups es = [(k, map efAmount (toList g)) | (k, g) <- beats es]
+  assertEqual "descending beats" [(2, [0]), (1, [1]), (0, [2])] (groups [eff 2 0, eff 1 1, eff 0 2])
+  assertEqual "runs of beats" [(0, [0, 1]), (1, [2, 3, 4]), (3, [5])] (groups [eff 0 0, eff 0 1, eff 1 2, eff 1 3, eff 1 4, eff 3 5])
+  assertEqual "beat comes back later" [(1, [0, 1]), (0, [2]), (1, [3])] (groups [eff 1 0, eff 1 1, eff 0 2, eff 1 3])
+  assertEqual "empty" [] (groups [])
+
+-- | 'beats' 的每组非空：拼接还原输入，组的节拍 = 组内首个效果的节拍，相邻两组的节拍不同。
+qc_beats_nonempty_groups :: Property
+qc_beats_nonempty_groups =
   forAll (listOf genEffect) $ \effs ->
     let new = beats effs
         plain = [(k, toList g) | (k, g) <- new]
         keys = map fst new
     in conjoin
-         [ counterexample "same as legacy" (plain === Old.beats effs)
-         , counterexample "concat restores input" (concatMap snd plain === effs)
+         [ counterexample "concat restores input" (concatMap snd plain === effs)
          , counterexample "key = head beat" (and [k == efBeat e | (k, e : _) <- plain])
          , counterexample "adjacent beats differ" (and (zipWith (/=) keys (drop 1 keys)))
          ]

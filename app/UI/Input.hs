@@ -8,7 +8,7 @@
 -- 规则调用一律经通用接口 gameStep（UI.Actions.stepShell / playMove，实例 Match3.Engine.match3Shell）；
 -- 撤销由 Engine.History 处理（终局后同样可撤销）。
 --
--- 依赖：UI.Actions、UI.Playback、UI.LevelMap（地图点选）、UI.Env（鼠标坐标换算）、UI.Types、UI.Layout、Match3.Engine、Match3.View（收集进度后缀）、Engine.GridUI（点选 / 拖动判定）。
+-- 依赖：UI.Actions、UI.Playback、UI.LevelMap（地图点选）、UI.Env（鼠标坐标换算）、UI.Types、UI.Layout、Match3.Engine、UI.MoveText（走步文案）、Engine.GridUI（点选 / 拖动判定）。
 module UI.Input
   ( foldEvents
   , handleEvent
@@ -24,7 +24,6 @@ import Data.Maybe (isJust)
 import Engine.Game (Step (..))
 import Engine.History (Undoable (..), histNow)
 import qualified Data.Text as T
-import Data.Text (Text)
 import Match3.Core
 import qualified Match3.Engine as M3E
 import SDL hiding (Normal)
@@ -33,9 +32,9 @@ import UI.Actions
 import UI.Audio (beginLevel, toggleBgm, toggleSfx)
 import UI.Env
 import Engine.GridUI (Click (..), gridClick, gridDragRelease)
-import Match3.View (GameView (..), gameView, goalBracket)
 import UI.Layout
 import UI.LevelMap
+import UI.MoveText (MoveUi (..), moveMsg)
 import UI.Types
 
 -- | 处理本帧所有事件；先把鼠标坐标换算为逻辑坐标。返回是否退出。
@@ -217,7 +216,7 @@ keyHammer ref window = do
       ToolHammer -> commit ref window app { appTool = ToolNone, appMsg = "Hammer cancelled" }
       _ ->
         case appSel app of
-          Just pos | gsHammers (appGame app) > 0 -> () <$ applyHammer ref window app pos
+          Just pos | gsHammers (appGame app) > 0 -> applyBooster ref window app (BoostHammer pos)
           _ ->
             commit ref window
               app
@@ -264,7 +263,7 @@ keyCross ref window = do
       ToolCross -> commit ref window app { appTool = ToolNone, appMsg = "Cross cancelled" }
       _ ->
         case appSel app of
-          Just pos | gsCrossClears (appGame app) > 0 -> () <$ applyCrossClear ref window app pos
+          Just pos | gsCrossClears (appGame app) > 0 -> applyBooster ref window app (BoostCross pos)
           _ ->
             commit ref window
               app
@@ -322,7 +321,7 @@ handleMouseUp ref window me = do
         case gridDragRelease adjacent p1 (pixelToCellOn nr nc mx my) of
           Just (_, p2) -> do
             app <- readIORef ref
-            commit ref window (swapTo dragMsg app p1 p2)
+            commit ref window (swapTo UiDrag app p1 p2)
             pure False
           Nothing -> do
             writeIORef ref app0 { appDragFrom = Nothing }
@@ -392,10 +391,10 @@ cellClick ref window pos = do
   case appTool app of
     ToolHammer
       | gsHammers (appGame app) <= 0 -> commit ref window app { appTool = ToolNone, appMsg = "No hammers left" }
-      | otherwise -> () <$ applyHammer ref window app pos
+      | otherwise -> applyBooster ref window app (BoostHammer pos)
     ToolCross
       | gsCrossClears (appGame app) <= 0 -> commit ref window app { appTool = ToolNone, appMsg = "No cross-clears left" }
-      | otherwise -> () <$ applyCrossClear ref window app pos
+      | otherwise -> applyBooster ref window app (BoostCross pos)
     -- 两步点选（Engine.GridUI.gridClick）：自由交换的第一格记在工具模式里，普通模式记在 appSel
     ToolFreeSwap first -> case gridClick first pos of
       ClickSelect p ->
@@ -412,79 +411,34 @@ cellClick ref window pos = do
             , appSel = Nothing
             , appMsg = "Free-swap: pick first cell again"
             }
-      ClickPair p1 p2 -> applyFreeSwap ref window app p1 p2
+      ClickPair p1 p2 -> applyBooster ref window app (BoostFreeSwap p1 p2)
     ToolNone ->
       case gridClick (appSel app) pos of
         ClickSelect p -> commit ref window app { appSel = Just p, appDragFrom = Just p, appMsg = "Selected; click/drag adjacent" }
         ClickDeselect -> commit ref window app { appSel = Nothing, appMsg = "Deselected" }
-        ClickPair p1 p2 -> commit ref window (swapTo clickMsg app p1 p2)
+        ClickPair p1 p2 -> commit ref window (swapTo UiClick app p1 p2)
 
 --------------------------------------------------------------------------------
 -- 交换
 
--- | 交换 p1 ↔ p2：经 Match3.Engine 结算一次，按提示文案函数写消息，编排回放并记录解锁。
--- 无匹配回滚 / 非相邻：fx 为空，不闪光、不播连击（修复重播上一步爆击特效）。
-swapTo :: (GameState -> GameState -> MoveFx -> Outcome -> Text) -> App -> Pos -> Pos -> App
-swapTo msgOf app p1 p2 =
+-- | 交换 p1 ↔ p2：经 Match3.Engine 结算一次，按界面路径（拖拽 / 点击）查 UI.MoveText 写提示，编排回放并记录解锁。
+-- 无匹配回滚 / 非相邻：fx 为空，不闪光、不播连击。
+swapTo :: MoveUi -> App -> Pos -> Pos -> App
+swapTo ui app p1 p2 =
   let before = appGame app
       (pd, out, h') = playMove (M3E.Swap p1 p2) app
-      gs' = M3E.pdState pd
-      -- Combo SFX placeholder: when audio lands, play a rising
-      -- pitched blip on each EvHighlight k >= 2 (cascade wave cheer).
   in withUnlock
        ( playbackOf before pd (Just (p1, p2))
            app
              { appHist = h'
              , appSel = Nothing
              , appDragFrom = Nothing
-             , appMsg = msgOf before gs' (M3E.pdFx pd) out
+             , appMsg = T.pack (moveMsg ui before (M3E.pdState pd) (M3E.pdFx pd) out)
              , appTipFrames = 0
              , appSounds = hear out ++ appSounds app
              }
        )
        out
-
--- | 拖拽交换的提示文案。
-dragMsg :: GameState -> GameState -> MoveFx -> Outcome -> Text
-dragMsg before _ _ out = case out of
-  NoMatch -> "No match; rolled back"
-  InvalidSwap -> "Need adjacent"
-  MoveApplied s -> "Drag +" <> T.pack (show s)
-  Won s -> "YOU WIN score=" <> T.pack (show s)
-  LevelClear _ n -> "Level clear -> L" <> T.pack (show (n + 1))
-  Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal before))
-
--- | 点击交换的提示文案（含连击 / 收集进度 / 自动洗牌）。
-clickMsg :: GameState -> GameState -> MoveFx -> Outcome -> Text
-clickMsg before gs' fx out =
-  let shuffledMsg =
-        if gsShuffled gs' then " (auto-shuffled)" else ""
-      comboMsg =
-        if fxCombo fx > 1
-          then " combo x" <> T.pack (show (fxCombo fx))
-          else ""
-  in case out of
-       InvalidSwap -> "Need 4-neighbor adjacent"
-       NoMatch -> "No match; rolled back"
-       MoveApplied s ->
-         "Cleared +"
-           <> T.pack (show s)
-           <> comboMsg
-           <> collectMsg gs'
-           <> T.pack shuffledMsg
-       Won s -> "YOU WIN score=" <> T.pack (show s) <> " — N/click"
-       LevelClear s n ->
-         "Level clear +"
-           <> T.pack (show s)
-           <> comboMsg
-           <> " -> L"
-           <> T.pack (show (n + 1))
-           <> " (N/Space/click)"
-       Lost s -> "Out of moves score=" <> T.pack (show s) <> " — " <> T.pack (loseHint (gsGoal before)) <> " — R/click"
-
--- | 收集类目标的进度后缀（读 Match3.View.goalBracket）。
-collectMsg :: GameState -> Text
-collectMsg gs' = T.pack (goalBracket (gvGoal (gameView gs')))
 
 -- | 交换结果要播的音效（表现层；规则不发声）。非法与换不掉都用 illegal。
 hear :: Outcome -> [String]

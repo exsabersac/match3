@@ -78,7 +78,7 @@ stepAnim app = case appAnim app of
         }
 
 -- | 回放阶段切换时的一次性表现：高亮时弹「连击 xN」，消失时出粒子 / 得分浮字 / 震屏，步末段出碎屑火花；
--- 同时把表现表里配置的音效名排进 appSounds（内置表全为空）。
+-- 同时把表现表里配置的音效名排进 appSounds（内置：消除 clear、爆炸 special）。
 applyCascadeEvent :: App -> CascadeEvent -> App
 applyCascadeEvent app0 ev = case ev of
   EvHighlight k v

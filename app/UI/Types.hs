@@ -110,7 +110,7 @@ data App = App
   , appArt       :: Maybe Art  -- 贴图集；Nothing 时回退到矩形绘制
   , appScale     :: Float  -- 渲染倍率：物理像素 / 逻辑像素（Retina = 2）；0 表示尚未同步
   , appMouseScale :: Float -- 鼠标倍率：窗口坐标 / 逻辑像素（macOS Retina = 1；MATCH3_SCALE=N 时 = N）
-  , appSounds    :: [SoundName] -- ^ 音效钩子队列：本帧待播的音效名（UI.Sound；内置表全为空，永远是 []）
+  , appSounds    :: [SoundName] -- ^ 音效队列：本帧待播的音效名，UI.Plugin 每帧交给 UI.Audio.cue 后清空
   }
 
 -- | 标题栏 / 键位条的默认提示。

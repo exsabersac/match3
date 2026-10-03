@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | 第 10 刀：效果事件 → 前端表现的一张表（纯数据，不含 SDL）。
+-- | 效果事件 → 前端表现的一张表（纯数据，不含 SDL）。
 --
 -- 规则层的每种效果事件（Match3.Element.Event.EventKind）在这里查到一条 'Presentation'：表现方式（轮内的
 -- 高亮消失 / 得分浮字 / 连击弹字，或步末的某个表现段 'StageKind'）、基础帧数、主色、贴图名、步末碎屑、音效名。
@@ -11,7 +11,7 @@
 -- （'spreadCurves' 生长曲线、'elementRGBTable' 颜色）里没有的名字用明确的缺省（'defaultSpreadCurve' /
 -- 'defaultSpreadGlow'，不迸碎屑）。整张表里查不到的种类用 'defaultPresentation'（蔓延段、18 帧）。
 --
--- 音效：'effectSound' 是预留的钩子，内置全部为 Nothing（无声）；前端不引入音频依赖，也不播放（见 UI.Sound）。
+-- 音效：'effectSound' 查表项的音效名（内置：消除 clear、爆炸 special，其余无声）；本模块不播放，桌面播放在 UI.Audio（见 UI.Sound）。
 module UI.Presentation
   ( -- * 表
     RGB
@@ -66,7 +66,7 @@ type RGB = (Word8, Word8, Word8)
 -- | 贴图名（assets/ 里的文件名，不含扩展名）。
 type SpriteName = String
 
--- | 音效名（预留；前端目前不播放）。
+-- | 音效名（桌面 UI.Audio 按名字播放 assets/sfx/<名字>.wav）。
 type SoundName = String
 
 -- | 步末阶段的种类（同一时刻连续的藤 / 巧 / 蒸汽合并为一个 StSpread 同时播放）。
@@ -121,7 +121,7 @@ presentationTable =
   , (EvShuffle, (look (LookStage StShuffle) 22) {prColor = Just (200, 150, 255), prSprite = Just "spark"})
   ]
 
--- | 表里没有的事件种类：按蔓延段、18 帧播放（第 10 刀前 stageKindFor / endStageBase 的缺省）。
+-- | 表里没有的事件种类：按蔓延段、18 帧播放。
 defaultPresentation :: Presentation
 defaultPresentation = look (LookStage StSpread) 18
 
@@ -193,7 +193,7 @@ spreadCurveFor :: ElementName -> Curve
 spreadCurveFor n = fromMaybe defaultSpreadCurve (lookup n spreadCurves)
 
 -- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色与碎屑色；
--- 段 5 起也给名字目标与自定义格取色（果冻 / 气泡，见 UI.Layout.namedRGB / cellRGB，各自有缺省色）。
+-- 也给名字目标与自定义格取色（果冻 / 气泡，见 UI.Layout.namedRGB / cellRGB，各自有缺省色）。
 elementRGBTable :: [(ElementName, RGB)]
 elementRGBTable =
   [ ("vine", (110, 220, 90))
@@ -234,7 +234,7 @@ comboPopSprite :: SpriteName
 comboPopSprite = fromMaybe "zh_combo" (prSprite (presentationFor EvCombo))
 
 --------------------------------------------------------------------------------
--- 连击等级样式（第 10 刀前在 ComboFx，ComboFx 仍再导出）
+-- 连击等级样式（ComboFx 再导出）
 
 -- | 等级越高：字越大、颜色越暖越亮、震屏略大（克制：最多 5 px）。
 data ComboStyle = ComboStyle
@@ -277,7 +277,7 @@ hsv h s v =
   in (to8 r1, to8 g1, to8 b1)
 
 --------------------------------------------------------------------------------
--- 缓动（第 10 刀前在 UI.Layout，UI.Layout 仍再导出）
+-- 缓动（UI.Layout 再导出）
 
 -- | smoothstep 缓动（两端慢）。
 smoothT :: Double -> Double

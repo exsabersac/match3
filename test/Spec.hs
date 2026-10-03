@@ -49,6 +49,7 @@ import qualified Spec.RulesDedup
 import qualified Spec.GridGeometry
 import qualified Spec.DataBoundary
 import qualified Spec.BoardSeed
+import qualified Spec.MoveText
 
 main :: IO ()
 main = defaultMain tests
@@ -102,6 +103,7 @@ tests =
         , Spec.GridGeometry.tests
         , Spec.DataBoundary.tests
         , Spec.BoardSeed.tests
+        , Spec.MoveText.tests
         , Spec.SourceScan.tests
         ]
     )

@@ -147,6 +147,7 @@ executable match3-sdl
       UI.Types
       ComboFx
       UI.GoalIcon
+      UI.MoveText
       UI.Presentation
       UI.Sound
       Paths_match3
@@ -205,6 +206,7 @@ test-suite match3-test
       Spec.Levels
       Spec.MagicGround
       Spec.MagicStone
+      Spec.MoveText
       Spec.Optics
       Spec.Perf
       Spec.Phase
@@ -227,6 +229,7 @@ test-suite match3-test
       Golden
       ComboFx
       UI.GoalIcon
+      UI.MoveText
       UI.Presentation
       UI.Sound
       Paths_match3

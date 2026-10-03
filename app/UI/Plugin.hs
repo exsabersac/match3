@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | 三消插件（第三刀）：把三消的界面接到通用外壳 Shell.Loop 上。
+-- | 三消插件：把三消的界面接到通用外壳 Shell.Loop 上。
 --
 -- 世界状态是 IORef App；各钩子：
 --   * 初始化：加载贴图、建立初始 App（开局提示 / 展示模式）、写窗口标题；
 --   * 帧首：同步渲染倍率（UI.Env.syncScale）；
 --   * 事件：输入映射 UI.Input.foldEvents（规则经通用接口 gameStep：Match3.Engine.match3Shell，撤销在 Engine.History）；
---   * 推进：UI.Playback.tickAnim（逐轮回放用通用播放器 Engine.Playback），随后把排队的音效交给 UI.Sound（当前空操作）；
+--   * 推进：UI.Playback.tickAnim（逐轮回放用通用播放器 Engine.Playback），随后把排队的音效交给 UI.Audio 播放；
 --   * 绘制：UI.Draw.draw。
 module UI.Plugin
   ( Match3Opts(..)
@@ -103,8 +103,8 @@ initialApp o art =
        , appSounds = []
        }
 
--- | 音效钩子：把本帧排队的音效名交给 UI.Sound.playSounds（当前为空操作）并清空队列。
--- 内置表现表的音效全为 Nothing，队列恒为空，这里什么也不做。
+-- | 把本帧排队的音效名（回放阶段的 clear / special 与交换结果的 swap / illegal / win / lose）交给
+-- UI.Audio.cue 播放并清空队列；队列为空时什么也不做。
 drainSounds :: IORef App -> IO ()
 drainSounds ref = do
   a <- readIORef ref

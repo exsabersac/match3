@@ -1,4 +1,4 @@
--- | 网页版 JS 颜色表与 Haskell 调色板 / 表现表的一致性（审计第 8 项）。
+-- | 网页版 JS 颜色表、贴图生成器调色板与 Haskell 调色板 / 表现表的一致性。
 --
 -- 读 web/www/cells.js 与 web/www/main.js 的源码，解析出颜色表，与桌面的唯一来源逐项比对：
 --   * cells.js 的 COLOR_RGB（五色主色）         ↔ UI.Palette.colorRGB
@@ -6,7 +6,8 @@
 --   * cells.js 的 cellRGB（粒子 / 退回画法颜色）  ↔ UI.Palette.cellRGB（每种格子逐个比，格子的 JS 标签取自 Match3.View.cellFace）
 --   * main.js 的 SPREAD_CRUMB_RGB（蔓延碎屑色）   ↔ elementRGBTable 里会蔓延的元素（spreadCurves 的名字）
 --   * main.js 的倒计时火星色、render.js 的生长前沿缺省光 ↔ 表现表 EvTick 的 CrumbsAtSources / defaultSpreadGlow
--- 解析不到预期的写法时直接失败并说明是哪个文件的哪张表（改了 JS 的写法就同步改这里的解析）。
+--   * tools/gen_assets.py 的 GEMS 调色板（宝石贴图的主色）↔ UI.Palette.colorRGB
+-- 解析不到预期的写法时直接失败并说明是哪个文件的哪张表（改了 JS / Python 的写法就同步改这里的解析）。
 module Spec.WebColors
   ( tests
   ) where
@@ -28,6 +29,7 @@ tests =
   , testCase "web_cell_rgb_matches_palette" web_cell_rgb_matches_palette
   , testCase "web_spread_crumbs_match_presentation" web_spread_crumbs_match_presentation
   , testCase "web_end_stage_colors_match_presentation" web_end_stage_colors_match_presentation
+  , testCase "gen_assets_gem_palette_matches_palette" gen_assets_gem_palette_matches_palette
   ]
 
 --------------------------------------------------------------------------------
@@ -257,3 +259,39 @@ web_end_stage_colors_match_presentation = do
       Just (js, _) -> assertEqual "render.js 生长前沿缺省光 = defaultSpreadGlow" defaultSpreadGlow js
       Nothing -> assertFailure (renderJs ++ "：生长前沿缺省光不是 [r, g, b]：" ++ trim l)
     ls -> assertFailure (renderJs ++ "：应恰有一处 ELEMENT_RGB[name] || [r, g, b]（找到 " ++ show (length ls) ++ " 处）")
+
+--------------------------------------------------------------------------------
+-- 贴图生成器的调色板
+
+genAssetsPy :: FilePath
+genAssetsPy = "tools/gen_assets.py"
+
+-- | 解析 gen_assets.py 的 @GEMS = { "c1": dict(rgb=(r, g, b), …), … }@：[(颜色编号, rgb)]。
+pyGemPalette :: IO [(String, RGB)]
+pyGemPalette = do
+  src <- readFile genAssetsPy
+  let block = takeWhile ((/= "}") . trim) (drop 1 (dropWhile ((/= "GEMS = {") . trim) (lines src)))
+      entry l = case trim l of
+        '"' : 'c' : rest ->
+          let (num, tl) = span isDigit rest
+          in case breakOn "rgb=(" tl of
+               Just r | not (null num) ->
+                 case map trim (splitOn ',' (takeWhile (/= ')') r)) of
+                   ps@[a, b, c] | all (\p -> not (null p) && all isDigit p) ps ->
+                     Just ('c' : num, (fromInteger (read a), fromInteger (read b), fromInteger (read c)))
+                   _ -> Nothing
+               _ -> Nothing
+        _ -> Nothing
+      parsed = [(l, entry l) | l <- block, not (all isSpace l)]
+  assertBool (genAssetsPy ++ "：找不到 GEMS = { … }") (not (null parsed))
+  case [l | (l, Nothing) <- parsed] of
+    [] -> pure ()
+    bad -> assertFailure (genAssetsPy ++ "：GEMS 里认不出的行：" ++ unlines bad)
+  pure [e | (_, Just e) <- parsed]
+
+-- | 宝石贴图的主色（gen_assets.py 的 GEMS）与 UI.Palette.colorRGB 逐项相同（cells.js 的 COLOR_RGB 由上面的用例比对）。
+gen_assets_gem_palette_matches_palette :: Assertion
+gen_assets_gem_palette_matches_palette = do
+  py <- pyGemPalette
+  assertNoDiff "tools/gen_assets.py GEMS"
+    (diffTables "GEMS" "UI.Palette.colorRGB" py [('c' : show (colorNum c), colorRGB c) | c <- allColors])

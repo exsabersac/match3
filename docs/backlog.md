@@ -57,4 +57,3 @@
 
 - **Mac 同步**：把 Mac 上的仓库与网页部署（`web/deploy-mac.sh`）同步到最新 main（拉取后重新 `make build`，或装新的 dist 包）；需要在 Mac 上操作。
 - **网页版 TODO**：道具与洗牌按钮、每日挑战与选关地图、真机测试、资源文件名带哈希、itch.io 上线、CI 等，见 [web.md §9](web.md#9-todo)。这些是前端接入，不加新玩法。
-- **调色板的第三份副本未受护栏**：`tools/gen_assets.py` 的五色调色板与 `UI.Palette.colorRGB` / `cells.js` 的 `COLOR_RGB` 应一致，但不在 `test/Spec/WebColors.hs` 的比对范围内（改主色时三处要一起改）。

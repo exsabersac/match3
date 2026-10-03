@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**460** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**461** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -50,6 +50,7 @@ stack test
     - 网页 JS 颜色表与桌面比对新增 5 个（`WebColors`）→ 458
     - 前端 API 护栏新增 1 个（`View`：`frontends_import_core_api`）→ 459
     - 终局类型 `Terminal` 新增 1 个（`GoalsLevels`：`terminal_outcome_mapping`，见下文「终局类型 Terminal」）→ 460
+  - 贴图生成器调色板纳入颜色对照，+1 → 461（`WebColors`：`gen_assets_gem_palette_matches_palette`）
 - 合并门禁：`make verify` 全绿（见下文「开发流程」）；不要在红测上合并。
 
 可选完整链路：
@@ -75,7 +76,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
     `web/`（`web/dist`、`web/android-app` 除外）、`app/pure/`、`assets/`、`Makefile`、`package.yaml`、`match3.cabal`、
     `stack.yaml`、`tools/verify.sh`，以及 `src/` 下新增 / 删除 / 改名的模块（模块清单要与 `web/match3-web.cabal` 一致）。
     `FULL=1` 强制跑。跑的是 `make check` 里除 `stack test` 以外的几步（`lint-sh`、`build`、两组一致性、e2e、`size`），`stack test` 不重复跑。
-  - 最后一行是结论，例如 `== verify 通过：stack test 460 个全过；make check 未跑（…）；用时 2m10s`；
+  - 最后一行是结论，例如 `== verify 通过：stack test 461 个全过；make check 未跑（…）；用时 2m10s`；
     失败时写明哪一步失败和日志目录。
   - `make check` 重建出的 `web/dist` 跑完后还原成 HEAD 的版本（`KEEP_DIST=1` 保留）。
 - **分支**：几项小改动合成一条分支，一起跑一次 `make verify`；纯文档 / 注释改动不开分支，验收绿了直接提交 main。
@@ -93,7 +94,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 框架：tasty + tasty-hunit + tasty-quickcheck
 - 依赖库 API：直接 import 所测的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、`Match3.Obstacles` 等）；`Match3.Core` 是前端 API，测试只用它取前端也在用的名字
 - 模块由 hpack 按 `source-dirs: test` 自动发现（`match3.cabal` 头部仍写 hpack 0.38.1）；新测试放进对应功能模块，并加进该模块的 `tests` 列表。
-- 目录（用例数合计 460）：
+- 目录（用例数合计 461）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -140,7 +141,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/GridGeometry.hs` | 5 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表与写死的坐标顺序逐格相同；带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`）是行主序；像素 newtype 下的 `gridCellAt` / `gridCellOrigin`（3 种几何的固定例子）；每日挑战 `Year` / `Month` / `Day`（7 个日期的种子与配置写死）（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
 | `test/Spec/DataBoundary.hs` | 10 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名 × 11 组参数 × 2 种格的放置结果写死比对，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组（固定例子含节拍倒序 `[2, 1, 0]`；性质：拼接还原输入、组的节拍号 = 组内首个效果的节拍、相邻组节拍不同）；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、注册表（槽位、解码往返）、`cellFace` 标签、`UI.CellTable` 与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
 | `test/Spec/MoveText.hs` | 6 | 桌面走步提示文案 `UI.MoveText`（`app/pure`，测试直接编译）：拖拽 / 点击交换与锤子 / 十字 / 自由交换在六种结算结果下的整句逐字钉住（窗口标题「  \|  」之后与 HUD 提示行显示的就是它）；点击文案的连击（> 1 才写）/ 收集进度 / 自动洗牌后缀及顺序；`Lost` 的目标提示交换读走步前、道具读走步后的状态；只有自由交换换不掉时保持点选模式；源码扫描：`app/` 其余模块没有这些文案字面量 |
-| `test/Spec/WebColors.hs` | 5 | 网页 JS 颜色表与桌面唯一来源逐项比对（读 `web/www` 源码解析）：`cells.js` 的 `COLOR_RGB` ↔ `UI.Palette.colorRGB`、`ELEMENT_RGB` ↔ `UI.Presentation.elementRGBTable`、`cellRGB` 的 switch ↔ `UI.Palette.cellRGB`（每种格子取样，JS 标签取自 `cellFace`；拼错的标签也报）、`main.js` 的 `SPREAD_CRUMB_RGB` ↔ 会蔓延元素的表色、倒计时火星色 ↔ `EvTick` 的 `CrumbsAtSources`、`render.js` 生长前沿缺省光 ↔ `defaultSpreadGlow`；失败信息逐项写出「JS 值 / Haskell 值」 |
+| `test/Spec/WebColors.hs` | 6 | 网页 JS 颜色表、贴图生成器调色板与桌面唯一来源逐项比对（读 `web/www` 与 `tools/gen_assets.py` 源码解析；`gen_assets.py` 的 `GEMS` ↔ `UI.Palette.colorRGB`）：`cells.js` 的 `COLOR_RGB` ↔ `UI.Palette.colorRGB`、`ELEMENT_RGB` ↔ `UI.Presentation.elementRGBTable`、`cellRGB` 的 switch ↔ `UI.Palette.cellRGB`（每种格子取样，JS 标签取自 `cellFace`；拼错的标签也报）、`main.js` 的 `SPREAD_CRUMB_RGB` ↔ 会蔓延元素的表色、倒计时火星色 ↔ `EvTick` 的 `CrumbsAtSources`、`render.js` 生长前沿缺省光 ↔ `defaultSpreadGlow`；失败信息逐项写出「JS 值 / Haskell 值」 |
 | `test/Spec/BoardSeed.hs` | 3 | 毛球跳格（第 43 关）与雪怪召唤（第 45 关）共用的选格散列 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`：写死两张固定小盘面的 `show` 字符串与散列值、第 43 / 45 关种子 1 开局盘面的散列值、三个坐标的 `posSeed`、第 43 关开局的 14 次毛球跳格与第 45 关开局的召唤格；性质：散列 = 标准 64 位 FNV-1a（与 `Word64` 参考实现逐值相同）作用于 `show`，`pickBy` = 下标（散列 mod 候选数）。失败信息说明「`Show Cell` / 散列改了会改变毛球 / 雪怪行为」 |
 | `test/Spec/View.hs` | 11 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
@@ -284,7 +285,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
   - `H4-spread`：第 28 关（皮带 + 传送门 + 地毯 + 飞碟）再放藤 / 巧 / 蒸汽、两只蜗牛、将归零的倒计时和两块饼干——步末全部阶段（倒计时 → 皮带 → 蔓延 → 蜗牛 → 再连锁）同盘出现，蔓延源紧贴本步消除留下的空洞；局面第 4 步后连自动洗牌也救不回（`shuffle` 行连续出现），一并锁住。选它是因为 2c 的「步末之后补结算」就改在这里。
   - `H5-layers`：第 37 关地毯上，冰（1–3 层）与锁链 / 草 / 迷雾 / 冰冻 / 窗帘 / 藤 / 巧 / 蒸汽同格，含直线 / 炸弹压叠层——「多种叠层同格」由注册表自上而下逐层询问，是第二刀元素框架最容易走偏的地方。
   - `H6-shuffle`：经 `match3GameWith h6Reg`（内置表 + 一个不在盘上的测试探针元素）的 `Shuffle` / `Swap` 动作逐步「手动洗牌 → 交换」，再记一个斜纹死局的自动洗牌 `ensurePlayableWith h6Reg` 与手动洗牌——锁住「自定义注册表下的洗牌」，2c 修 `playWith` 洗牌分支时它必须不变。
-  - 生成与比对：`13094d1` 上用当前 `Golden.hs`、`31275da`（2b 之前）上用 `4fbcefc` 版 `Golden.hs` 加同一段 H4–H6（旧侧没有注册表，H6 直接调 `shuffleGame` / `trySwap` / `ensurePlayable`；文件存档在 `tools/golden/Golden-4fbcefc-h456.hs`，不参与编译），两边 2344 行逐字全等后才追加入库。
+  - 生成与比对：`13094d1` 上用当前 `Golden.hs`、`31275da`（2b 之前）上用 `4fbcefc` 版 `Golden.hs` 加同一段 H4–H6（旧侧没有注册表，H6 直接调 `shuffleGame` / `trySwap` / `ensurePlayable`），两边 2344 行逐字全等后才追加入库。
 - **行首**：`L05 s2 #07` = 第 5 关、种子 2、第 7 步；`H1-snail`、`C03/1`、`S07/2`、`G12 s5` 等为其他用例。
 - **投影**：格子短码（如 `2hi1+K2` = 颜色 2、横向直线、1 层冰、2 层锁链）、具名计数、`StdGen` 的 `show`；盘面与回放脚本（`mtWaves` / `mtEnd` 投影文本）用手写 FNV-1a 64 压缩。不对内部类型直接 `show`。
 - **取数路径**：入库时（`4fbcefc`）取数只经过门面 `Match3.Board` / `Match3.Game`，同一份代码在 `3bd26d8` 与 `5eef3e3` 上原样编译、输出全等（md5 `b792e77a…`）。第三刀删掉了这两个门面和元组兼容层，`Golden.hs` 改为直接 import `Match3.Board.*` / `Match3.Game.*` 子模块、从 `CascadeRun` 记录取连锁字段，盘面经 `boardRows` 投影——**它今后不能在 `51b1cfa` 及更早的提交上编译**；要和旧提交比对，把 `4fbcefc` 版的 `Golden.hs` 拿到旧提交上跑（输出与 `golden.txt` 逐字相同）。
@@ -457,7 +458,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 460，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 461，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

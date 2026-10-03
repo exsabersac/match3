@@ -44,6 +44,7 @@ PAGE_W, PAGE_H = 1024, 2048   # 单页图集上限（兼顾老 GPU 的 2048 纹�
 
 # ---------------------------------------------------------------- 调色板
 # 颜色 × 形状双编码：色弱玩家也能靠轮廓区分
+# rgb 以 UI.Palette.colorRGB 为准（stack test 的 gen_assets_gem_palette_matches_palette 逐项比对，保持这种写法）
 GEMS = {
     "c1": dict(rgb=(236, 62, 78), shape="circle", zh="红·圆", en="Red / Circle"),
     "c2": dict(rgb=(52, 196, 96), shape="square", zh="绿·方", en="Green / Square"),

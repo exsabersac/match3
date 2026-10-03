@@ -2,7 +2,7 @@
 -- 元素名的颜色表本身是 UI.Presentation.elementRGBTable；这里只按格子 / 名字查它。
 --
 -- 网页版有对应的 JS 副本（web/www/cells.js 的 COLOR_RGB / ELEMENT_RGB / cellRGB、web/www/main.js 的步末碎屑色），
--- 两边由 test/Spec/WebColors.hs 逐项比对。colorRGB 另须与 tools/gen_assets.py 的调色板一致。
+-- 两边由 test/Spec/WebColors.hs 逐项比对；colorRGB 与 tools/gen_assets.py 的 GEMS 调色板也在那里比对。
 -- 依赖：Match3.Core、UI.Presentation。UI.Layout 再导出本模块的全部函数。
 module UI.Palette
   ( colorRGB

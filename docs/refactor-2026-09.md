@@ -52,7 +52,7 @@ src/Engine/          通用层（不 import Match3）：Game（接口）、Histo
 src/Match3/          三消规则库：Types.* / Counts / Goal / Color / Levels.* / Board.* / Game.* / Element.*
                      Engine（三消 = 通用接口的实现）、View（视图模型）、Core（再导出门面）
 app/Shell/Loop.hs    通用 SDL 外壳
-app/pure/            纯前端（桌面 / 测试 / 网页共用）：ComboFx、UI.Presentation、UI.Sound、UI.GoalIcon、UI.MoveText
+app/pure/            纯前端（桌面 / 测试 / 网页共用）：ComboFx、UI.Presentation、UI.Sound、UI.GoalIcon、UI.MoveText、UI.Palette
 app/UI/              三消插件（SDL）：输入、动作、回放编排、绘制（CellTable / Ground / HudBlocks / GoalStyle 等查表）、音效（Audio）
 web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match3.View）
 ```

@@ -44,8 +44,8 @@
 | 2 | 删掉没人用的兼容包装与导出；删除 `Spec.Support.Legacy*` 旧副本，有价值的对照改成固定例子 | 已完成（`refactor/dead-code`），测试中 |
 | 3 | 收掉被 pragma 关掉的警告（`Anim` 部分字段、`Spec.Phase` 推迟名字错误）与多余的 `array` 依赖 | 已完成（`refactor/warnings-deps`），测试中 |
 | 4 | 文档脱节（本文件、测试数、`cells.js` 说法、testing.md 长句、模块地图） | 已完成（`docs/refresh`），测试中 |
-| 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 进行中（`refactor/desktop-boosters`） |
-| 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 待做 |
+| 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 已完成（`refactor/desktop-boosters`），测试中 |
+| 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 进行中（`refactor/js-color-parity`）；发现一处待定差异，见下文 |
 | 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 待做 |
 | 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 待做 |
 | 9 | 清理「第 N 刀 / 第 N 项前」历史注释 | 随各项顺手做（只清碰到的模块） |
@@ -57,3 +57,4 @@
 - **APK 体积**：[android.md](android.md) 里的产物大小是 2026-10-03 `fix/web-audio-toggle` 时实测的，`web/dist` 之后重建过（`feat/dist-rebuild`），需要重新 `make build apk` 后更新数字。
 - **APK 真机 / 模拟器验证**：APK 还没有在模拟器或真机上跑过（[android.md](android.md)）；iOS 壳需要装了 Xcode 的 Mac。
 - **网页版 TODO**：道具与洗牌按钮、每日挑战与选关地图、真机测试、资源文件名带哈希、itch.io 上线、CI 等，见 [web.md §9](web.md#9-todo)。这些是前端接入，不加新玩法。
+- **待定：魔法石 / 毛球的粒子色（审计第 8 项发现）**：网页 `cells.js` 的 `ELEMENT_RGB` 有 `magic_stone` (92, 60, 160) 与 `fuzzball` (196, 150, 170)（= 桌面几何版 `UI.Cell.Prim` 的主体色），桌面 `UI.Presentation.elementRGBTable` 没有这两项，所以桌面消除这两种格时的粒子是缺省灰 (160, 160, 170)，网页是紫 / 灰粉。二选一：桌面表补这两项（桌面粒子色与名字目标小点颜色会变，规则与金标准不变），或网页删掉这两项。决定后删掉 `test/Spec/WebColors.hs` 的 `pendingElementDrift`。

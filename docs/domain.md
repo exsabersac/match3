@@ -193,7 +193,7 @@
 | 回放 | 每次交换的步末记一条 `EvTick "snow_boss"`：四格的新计数（召唤时还有雪块格），`applyEndEffect` 可重放 |
 | 放置 | `Place "snow_boss" [AInt 血量 (1–255), AInt 象限] 格`；关卡里用 `bossAt (行, 列) 血量` 一次铺四格 |
 | 关卡 | 第 45 关「雪怪」：24 步，Boss 左上角在 (2,3)（占 (2,3)–(3,4)），40 血，目标击败 Boss |
-| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；`bossPart :: Cell -> Maybe BossPart`（象限、是否过半受伤、召唤计数 / 周期） |
+| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素 caps 的 `displays`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；桌面经 `UI.CellFace.bossPart` 读） |
 | 前端 | 贴图 `snow_boss_0..3`（整只冰蓝雪怪切成四块）/ `snow_boss_hurt_0..3`（血量 ≤ 一半时的受伤表情），右下块上三个召唤进度点；HUD 目标条换成红色血条 + `snow_boss` 头像 +「HP 剩余/满血」，过半后深红闪烁；几何版为冰蓝 2×2 方块 + 眼睛 + 同样的血条 |
 
 取舍说明：
@@ -323,7 +323,7 @@
 | 步末效果 | `EndEffect { endEffectKind, endEffectElement, endEffectItems }`（第 7 刀 7b 起的通用形状） | 事件类型 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` + 元素名 countdown / belt / vine·choco·steam / snail；`applyEndEffect` 逐项重放回盘面 |
 | 步末一项 | `EndItem { eiFrom, eiTo, eiCell, eiBack }` | 目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它；蜗牛 `eiFrom == eiTo` 表示碰壁掉头，新朝向 = `endItemDir` |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance；第 9 刀起类只有 `name` / `toCell` / `caps`）、能力记录 `Caps`（五组：匹配与交换 `MatchCaps` / 消除与受击 `HitCaps` / 重力与移动 `MoveCaps` / 计数与目标 `CountCaps` / 步末与变化 `StepCaps`，带按原型的缺省值，元素用 `Match3.Element.Caps` 的简写只声明用到的几项）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
+| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance；第 9 刀起类只有 `name` / `toCell` / `caps`）、能力记录 `Caps`（五组：匹配与交换 `MatchCaps` / 消除与受击 `HitCaps` / 重力与移动 `MoveCaps` / 计数与目标 `CountCaps` / 步末与变化 `StepCaps`，外加只管显示的 `ViewCaps`，带按原型的缺省值，元素用 `Match3.Element.Caps` 的简写只声明用到的几项）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
 | 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
 | 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
 | 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消；L / T 形 → 炸弹（`ltBombRule`）只在规则开关 `bomb_shapes` 打开的关卡插入（见下文「L / T 形出炸弹」） |

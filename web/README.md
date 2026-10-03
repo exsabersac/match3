@@ -20,7 +20,7 @@ web/
 │   ├── Match3Web/Api.hs  纯接口层：经 Match3.Engine.match3Shell 的 gameStep 执行，Step / Played → JSON（无 JSFFI，原生 GHC 也能编）
 │   ├── Match3Web/Anim.hs 动画接口：Played → ComboFx 播放器（与桌面 withMovePlayback 同条件），逐帧 JSON
 │   ├── Match3Web/Json.hs 极简 JSON 拼接（只输出整数，保证原生与 wasm 逐字节一致）
-│   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels / m3AnimStart / m3AnimTick
+│   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels / m3Meta / m3AnimStart / m3AnimTick
 ├── tools/
 │   ├── gen_web_atlas.py  由 assets/ 打网页图集（只读 assets/，不改 tools/gen_assets.py）
 │   ├── doctor.sh         环境自检（make doctor）
@@ -252,7 +252,7 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 
 ## 5. 网页端与核心的接口
 
-wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync"`），都返回 JSON 字符串：
+wasm 导出 8 个 **同步** JSFFI 函数（`foreign export javascript "... sync"`），都返回 JSON 字符串：
 
 | 导出 | 参数 | 返回 |
 | --- | --- | --- |
@@ -261,12 +261,13 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 | `m3Undo()` | – | 同 `m3Swap`（`trace` 为空脚本、`events` 为空；没有历史时 `accepted:false`） |
 | `m3State()` | – | `{ok, state}` |
 | `m3Levels()` | – | 关卡列表 `[{index,name,moves,goal}]` |
+| `m3Meta()` | – | 表现表（`UI.WebMeta`，`main.js` 启动时读一次，JS 不手抄）：`{colorRGB,elementRGB,colorTags,tagRGB,fallbackRGB,spreadCrumbRGB,tickCrumbRGB,spreadGlow,spreadCurves,frames,sounds}` |
 | `m3AnimStart()` | – | 为上一次被接受的 `m3Swap` 建动画播放器：`{ok,anim:true,boards,base,fall}`；不需要播放时 `{ok,anim:false}` |
 | `m3AnimTick(fast)` | 0 / 1（1 = 加速） | 推进一帧（60 fps 固定步长）：播放中 `{p,fr,n,w,k,g,b[,s][,ev]}`，播完 `{done:true,b,best,g,fall}` |
 
 - `state`：`level/name/rules/score/moves/goal/progress/target/boss/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
   （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal = {kind,text,target[,name],label}`：`goal.name` 为 `GoalNamed` 的元素名，
-  `goal.label` 为中文显示名（视图模型 `Match3.View.goalLabel`：分数 / 收集红色宝石 / 多色收集（红 / 蓝）/ 碎石 / 毛球 …，名字目标查 `namedGoalLabelTable`，
+  `goal.label` 为中文显示名（视图模型 `Match3.View.goalLabel`：分数 / 收集红色宝石 / 多色收集（红 / 蓝）/ 碎石 / 毛球 …，名字目标查 `namedGoalLabelTable`（由元素 caps 的 `labelled` 推出），
   没登记的名字退回元素名），HUD「目标 …」直接画它，`m3Levels` 的 `goal` 同样带 `label`；
   `boss` = 雪怪 Boss 血条 `{hp,max}`（视图模型 `gvBoss`，目标不是「击败 Boss」时为 `null`），`hud.js` 用它把目标条换成血条）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
@@ -290,7 +291,7 @@ wasm 导出 7 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 - `board`：行 × 列（每关不同），结构化编码，每格都带 `"s"`（核心 show 文本）：
   宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名|null,"n":覆盖层数}`；
   其他 `t` ∈ `stone/chest/honey/balloon/cookie/cake/hat/maker/snail(dr,dc)/safe/flip(c,b)/surprise/bottle/spirit/countdown/custom(name,v)`，
-  各带自己的字段；雪怪格（`custom` `snow_boss`）另带 `q/hurt/turn/every`（`Match3.View.bossPart` 的解码：象限、血量是否过半、召唤计数、周期）；
+  各带自己的字段；`custom` 格后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素 caps 的 `displays`）：雪怪 `q/hurt/turn/every`（象限、血量是否过半、召唤计数、周期）、变色龙 `c`（当前颜色）；
   前端 `cells.js` 按 `t` 取精灵（`custom` 先按名字查 `CUSTOM_ART`）。
 
 ### 动画接口

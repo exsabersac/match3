@@ -210,9 +210,10 @@ app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw
               （HudBlocks = 第 10 刀从 drawHud 拆出的几何版 HUD 各区块）
 app/UI/Cell/  Prim Art PrimOverlay（每种元素一个几何 / 贴图渲染函数，经 CellTable 查表；PrimOverlay = 几何版覆盖层）
 app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
-app/pure/     不依赖 SDL 的纯前端模块（桌面、测试、网页共用）：ComboFx（连锁逐轮回放 / 步末动画的纯阶段机与时间线）、
+app/pure/     不依赖 SDL 的纯前端模块，内部库 match3-pure（桌面经内部库、测试与网页按源码编）：ComboFx（连锁逐轮回放 / 步末动画的纯阶段机与时间线）、
               UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/Sound（回放事件 → 音效名）、UI/GoalIcon（目标 → 图标贴图名，网页共用）、
-              UI/MoveText（走步结果 → 桌面提示文案）、UI/Palette（调色板：五色 / 格子颜色）
+              UI/MoveText（走步结果 → 桌面提示文案）、UI/Palette（调色板：五色 / 格子颜色）、
+              UI/CellFace（读元素自带的显示字段）、UI/WebMeta（网页启动时经 m3Meta 读的表现表）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
 test/Spec.hs  测试入口（只汇总；464 命名用例）

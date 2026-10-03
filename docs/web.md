@@ -72,6 +72,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3Swap(r1,c1,r2,c2)` | 交换一步：`{accepted, outcome, trace, events, state}` |
 | `m3Undo()` | 撤销（核心 `Engine.History`，最多 20 步） |
 | `m3State()` / `m3Levels()` | 当前状态 / 49 关列表 |
+| `m3Meta()` | 表现表（颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名；`UI.WebMeta`），启动时读一次 |
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
 
@@ -98,17 +99,17 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
 - `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
 - **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成，`Custom` 元素统一是
-  `{t:"custom", name, v}`（雪怪的象限 `q`、变色龙的颜色 `c` 由 `Api` 另加）。
+  `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素 caps 里的 `displays`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
   - **不用改**：单格、不带颜色、桌面版也没有专门画法（`UI.CellTable.customTable` 里没有它）的 `Custom`——桌面画「贴图名 = 元素名 + 层数角标」，
     网页 `CELL_ART.custom` 的通用画法一样；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 只跳过文字图
     `g_*` / `zh_*` 与 `@` 变体；关名文字图 `name_*` 要收）。降级色缺省是灰色。
   - **要改**：① 新的 `Cell` 构造器（同时改 `cellFace`）；② 桌面在 `customTable` 有专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
-    在 `CUSTOM_ART` / `primarySprite` 补同样的画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，要在 `Api` 补字段、
-    `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时在 `ELEMENT_RGB` 补一项，并在 `UI.Presentation.elementRGBTable` 补同一项（两边由 `test/Spec/WebColors.hs` 逐项比对）。
+    在 `CUSTOM_ART` / `primarySprite` 补同样的画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 caps 里用 `displays` 给出字段（`Api` 不用改）、
+    `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时只在 `UI.Presentation.elementRGBTable` 补一项（网页经 `m3Meta` 读同一张表）。
   - **回归护栏**：漏了画法或贴图的格子会走几何降级（色块 + 类型名，如魔法石合入时的「custom」灰块），③ 类走了通用画法也会记一笔；
     `cells.js` 按元素名统计，`m3debug.fallbacks` 暴露；e2e 对**每一关**开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡
-    （见 [testing.md](testing.md#网页版测试make-check)）；颜色表（`COLOR_RGB` / `ELEMENT_RGB` / `cellRGB` 与 `main.js` 的步末碎屑色）
-    由 `stack test` 的 `WebColors` 与桌面逐项比对。
+    （见 [testing.md](testing.md#网页版测试make-check)）；颜色表、格子取色规则、步末碎屑色、生长曲线、帧数、音效名
+    都由 wasm 的 `m3Meta`（`UI.WebMeta`）启动时下发，JS 不手抄；`stack test` 的 `WebColors` 按 `cells.js` 的取色规则逐格核对它 = 桌面 `UI.Palette.cellRGB`。
   - 例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动；
   第 43 关毛球 `{t:"custom", name:"fuzzball", v:1}` 画 `fuzzball` 并一直浮动（同桌面 `artFuzzball`：`round(2·sin(pulse/9))` 设计像素，
   振幅相同；呼吸计数桌面 16 ms 一帧、网页 1/60 s 一帧，所以网页周期约 0.94 s、桌面约 0.90 s，与气球 / 精灵 / 气泡同一个公式）。
@@ -117,9 +118,9 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   ComboFx 在第一轮之前插入蔓延段，`render.js` 按桌面 `drawEndSpread` 逐分支画：来源（彩虹格）与目标不相邻 → 变身后的直线 / 炸弹从格子中心的方块匀速长满，
   前沿白光、不迸碎屑（名字不在生长曲线 / 颜色表里，同桌面缺省）；目标恰好与彩虹差一行或一列（`dc = ±1` 或 `dr = ±1`）时桌面按方向擦出，网页相同。
 - **HUD 目标标签**：`state.goal.label`（视图模型 `Match3.View.goalLabel`，唯一来源），`main.js` 不再有「目标种类 → 中文」映射表；
-  新元素做成关卡目标时在 `namedGoalLabelTable`（合 main 9f5504e 后定义在 `Match3.GoalLabel`，`Match3.View` 重新导出）登记（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
-- 第 45 关雪怪 Boss（2×2）`{t:"custom", name:"snow_boss", v, q, hurt, turn, every}`——`q/hurt/turn/every` 由 Api 按
-  `Match3.View.bossPart` 解码（前端不拆 v）；`cells.js` 的 `CUSTOM_ART`（同桌面 `customTable`）按象限画 `snow_boss_<q>`、
+  新元素做成关卡目标时在元素的 caps 里写 `labelled "中文名"`（`namedGoalLabelTable` 由元素条目推出，定义在 `Match3.GoalLabel`，`Match3.View` 重新导出）（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
+- 第 45 关雪怪 Boss（2×2）`{t:"custom", name:"snow_boss", v, q, hurt, turn, every}`——`q/hurt/turn/every` 是元素自带的显示字段
+  （`Match3.View.cellExtras`，前端不拆 v）；`cells.js` 的 `CUSTOM_ART`（同桌面 `customTable`）按象限画 `snow_boss_<q>`、
   血量过半画 `snow_boss_hurt_<q>`，右下格画召唤进度小点（同 `artSnowBoss`）；四块拼接处源矩形内收 1 像素 + 目标对齐整像素，
   避免缩放采样露出十字细缝。HUD：`state.boss`（`gvBoss`）非空时 `hud.js` 把目标条换成血条（`snow_boss` 头像 + 目标标签「目标 雪怪」（`goal.label`）+「HP 剩余/满血」，
   红条过半后深红呼吸闪烁，同桌面 `HudArt`）。扣血 / 击败 / 召唤没有专门动画，与桌面相同走通用的逐轮高亮 / 消失与步末 tick 红光。
@@ -132,7 +133,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   画 `cookie_drop`，不随下落偏移；画的时机也同桌面（静止盘 / 高亮段 / 轻落 / 皮带 / 蜗牛段画，消失 / 下落段不画；唯一不同是交换补间里也画，
   桌面 `drawSwap` 不画，见 §8.1）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
 - 第 47 关变色龙 `{t:"custom", name:"chameleon", v:0..4, c:1..5}`——v 是核心的颜色下标（0..4 = C1 红 / C2 绿 / C3 蓝 / C4 黄 / C5 紫），
-  `c` 由 Api 按核心 `Match3.Element.Builtin.chameleonColor` 解码（同宝石的 `c`，前端不换算 v）。`cells.js` 的 `drawChameleon`
+  `c` 是元素自带的显示字段（`Match3.View.cellExtras`，同宝石的 `c`，前端不换算 v）。`cells.js` 的 `drawChameleon`
   同桌面 `UI.Cell.Art.artChameleon`：先画当前颜色的宝石 `gem_c<c>`，再叠一张缓慢旋转的五色描边环 `chameleon`（角度 = 呼吸计数 mod 360 度）；
   `primarySprite` = `gem_c<c>`、降级色 / 消除碎屑色 = 当前颜色（同桌面 `cellRGB`）。带颜色 `c` 的 Custom 格若走到通用的「元素名贴图 + 角标」
   画法（接入前就是这样：只有环、没有底下的宝石），按 `<元素名>#通用画法缺底层宝石` 计进 `fallbacks`，逐关护栏随之失败。

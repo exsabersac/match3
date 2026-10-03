@@ -195,13 +195,13 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 - 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；桌面版现为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
-- 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。`web/dist/` 是可部署的构建产物，已提交进仓库；其他机器部署只需拷贝该目录，不需要工具链。
+- 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。`web/dist/` 是可部署的构建产物，已提交进仓库；其他机器部署只需拷贝该目录，不需要工具链。平时的分支不碰 `web/dist`，只在上 Mac / 部署前 `make clean && make check` 全量重建一次再提交（见 [testing.md「开发流程」](testing.md#开发流程)）。
 
 ### 3.1 make 目标
 
 仓库根目录的 `Makefile` 是日常入口，**在仓库根目录运行 `make <目标>`**；`make help` 按分组列出
 （通用 / 桌面版 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境）。桌面版目标只是 Stack 命令的薄包装。
-第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；CI 用 `make check`。
+第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；日常提交前跑 `make verify`（见 [testing.md「开发流程」](testing.md#开发流程)），CI 用 `make check`。
 在 box 上从 `make clean` 开始跑 `make check`（完整重编 wasm + 四组测试 + 体积）约 2 分 45 秒。
 
 | 目标 | 作用 |
@@ -218,6 +218,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
+| `make verify [FULL=1] [BASE=…]` | 提交前验收：0 警告构建 → `stack test` → 改了网页版依赖的路径才跑 `make check`（`FULL=1` 强制）；最后一行写通过 / 失败与测试数 |
 | `make check` | CI 用：`lint-sh` → `build` → `test` → `size` |
 | `make lint-sh` | shell 脚本 / Makefile 检查：`$变量名` 后紧跟中文等非 ASCII 字符即报错（macOS bash 3.2 会读错变量名，须写 `${VAR}`；见 `docs/testing.md`） |
 | `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |
@@ -295,7 +296,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 ### 5.3 安卓应用（Capacitor）
 
 同一份 `web/dist` 可以用 Capacitor 包成 Android 应用（WebView 离线加载，`.wasm` 由 Capacitor 本地服务器按
-`application/wasm` 提供）：`make build apk` 产出调试版 APK。前置、签名、AAB、装机方法与已知限制见 [`android.md`](android.md)。
+`application/wasm` 提供）：`make build apk` 产出调试版 APK。前置、签名、AAB、装机方法与已知限制见 [`android.md`](android.md)。部署流程只发布网页版，不例行打 APK。
 
 ## 6. 调试要点
 
@@ -312,7 +313,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（31 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、逐关地面层贴图与 HUD 关名 `name_<i>` 的真实绘制、第 48 关魔法地格（贴图位置与像素、4 组扩圈爆炸的真实绘制格数 = EvBlast 格数）、终章（第 47、48 关过关进入下一关，第 49 关「宽域」Won）、音效 / BGM 开关芯片（真实绘制的字形在芯片内、不大于按钮、不压提示行）、逐关失败提示（无「箱子」/ 内部名，碎石关「砸开碎石」）、第 8 / 39–45 / 47 / 48 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
-`make test` 依次跑这四组；底层命令见 `web/README.md` §4。最近一次完整记录（2026-10-03，`chore/audit-wrapup`（审计整改第 1–8 项之后，基于 `fa719fa`），`make clean` 后重建 `web/dist` 再 `make check`）：`stack test` 460 通过；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）；`make android-check` 本次未跑（留给测试跑手；上次 web-magic-ground 时 6 项全过）。
+`make test` 依次跑这四组；底层命令见 `web/README.md` §4。最近一次完整记录（2026-10-03，`chore/audit-wrapup`（审计整改第 1–8 项之后，基于 `fa719fa`），`make clean` 后重建 `web/dist` 再 `make check`）：`stack test` 460 通过；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制
@@ -327,7 +328,7 @@ e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-b
 ### 8.1 已知差异（与桌面版，已确认接受）
 
 - **第 45 关雪怪血条的读数时机**：动画播放期间，网页 HUD 的雪怪血条显示**本步之前**的 HP（与网页目标条的进度一致，`main.js` 的 `hudInfo`
-  在 `anim` 非空时读 `state.boss`），桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（测试跑手已用 4 个种子 × 24 步核对）。
+  在 `anim` 非空时读 `state.boss`），桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（已用 4 个种子 × 24 步核对）。
 - **第 46 关掉落口标记在交换补间里也画**：网页的交换补间走 `drawCellsExcept`，顺带画了 `cookie_drop`，桌面 `drawSwap` 不画；
   标记是不动的装饰、不影响状态，补间中与补间结束后的标记格都等于核心 `bvDrops`、坐标同桌面 `drawDropsArt`（`cellOrigin`、上移 6）——
   e2e 3g 用 `m3debug.dropMarks` 核对（「第 46 关交换补间中 / 补间结束后：掉落口标记格 = state.drops…」两项）。消失 / 下落段两边都不画。

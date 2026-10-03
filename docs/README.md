@@ -8,7 +8,7 @@
 | [architecture.md § 多游戏接口](architecture.md#多游戏接口) | 通用层 / 三消实现 / SDL 外壳的分层图、`Game` / `Step` / `Effect` / `Stages` / `Player` / `Plugin` 字段说明、record-of-functions 的取舍与种子约定、三消动作映射、接入新游戏的步骤清单 |
 | [domain.md](domain.md) | 领域词汇中英对照（与 `Types` / `GameState` 对齐），含[回放与表现](domain.md#回放与表现)词条 |
 | [rules-pipeline.md](rules-pipeline.md) | `trySwap` / 稳定化 / 连锁波次流水线（据实描述代码）；[与前端的边界](rules-pipeline.md#8-与前端的边界)：`MoveFx`、`MoveTrace`、`mtEnd` |
-| [testing.md](testing.md) | 如何跑测、覆盖面、合并门禁（含截图 AE=0 比对）；[逐轮回放护栏](testing.md#逐轮回放护栏)（`trace_*` / `trace_end_*`、比对底线、洗牌步缺口）；[行为金标准](testing.md#行为金标准golden)；[多游戏接口验收](testing.md#多游戏接口验收第三刀) |
+| [testing.md](testing.md) | 如何跑测、[开发流程](testing.md#开发流程)（`make verify`、合 main、`web/dist` 只在部署前重建）、覆盖面、合并门禁（含截图 AE=0 比对）；[逐轮回放护栏](testing.md#逐轮回放护栏)（`trace_*` / `trace_end_*`、比对底线、洗牌步缺口）；[行为金标准](testing.md#行为金标准golden)；[多游戏接口验收](testing.md#多游戏接口验收第三刀) |
 | [ui-controls.md](ui-controls.md) | SDL 键位与道具点选流（前端 `app/UI/Input.hs` / `Actions.hs`）；回放加速键与[播放锁定](ui-controls.md#播放锁定animbusy) |
 | [web.md](web.md) | 网页版（GHC wasm 技术验证）：wasm 核心与导出接口、ComboFx 进 wasm、JS 渲染器、自适应布局、资源管线、构建 / 本地与局域网运行 / Mac 与 itch.io 部署、一致性测试与 e2e、已知限制与 TODO |
 | [android.md](android.md) | 安卓版：Capacitor WebView 包装网页版、前置（JDK / SDK / Node）、`make apk` / `apk-release` / `aab`、装机、签名与 Google Play、验证、已知限制、iOS 说明 |
@@ -22,7 +22,7 @@
 | [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md) | Haskell 特性展示第 8 项：数据边界——关卡数据的 Applicative 校验（手写 `Validation`，只有 Applicative、不能是合法的 Monad，皮带 / 传送门 / 飞碟 / 地毯 / 地面层 / 掉落口 / 放置表的 `LevelIssue` 一次报全，只收现有关卡都满足的不变量）；放置参数的 Applicative / Alternative 解析器 `ArgP`（精确匹配 `exactArgs` 与前缀匹配 `prefixArgs` 分开，12 个放置函数逐个保持原语义）；测试里用 `GHC.Generics` 的 `conName` + DeriveAnyClass 列出全部构造器，检查生成器 / 注册表 / `cellFace` / 桌面绘制表 / 网页结局编码的覆盖；`beats` 的分组改为 `NonEmpty`（`Belt` 因 `Show` 进金标准而不改）；与旧代码逐字副本的 QuickCheck 对照与变异检查；行为不变 |
 | [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md) | Haskell 特性展示第 9 项：规则去重——占格障碍的五份邻消揭层合成一个（棱镜 `_Stone` … 作参数，保险箱末层变饼干是另一个参数）、改色是遍历 `cellColorT`；步末规则的三份 `foldl` + `reverse` 与邻格波及的四元组折叠改为 `mapAccumL`（`runEndRules`）；能力声明 `Cap` 的拼接顺序由 `Dual (Endo Caps)`（DerivingVia）给出、字段写入器经透镜；步末规则按阶段的智能构造器；与旧代码逐字副本的 QuickCheck 对照与变异检查；行为不变 |
 | [refactor-2026-09.md](refactor-2026-09.md) | 2026-09 的 11 刀重构总结：各刀 SHA 与要点、验收方式、行为差异汇总、现在怎样新增元素 / 关卡级元素 / 关卡 / 规则 / 表现 |
-| [backlog.md](backlog.md) | 现状与待办（2026-10，玩法冻结）：现有关卡 / 元素盘点、2026-09-30 新玩法清单的结果、审计整改进度、其余未完成事项（Mac 同步、APK 体积与真机验证、网页版 TODO） |
+| [backlog.md](backlog.md) | 现状与待办（2026-10，玩法冻结）：现有关卡 / 元素盘点、2026-09-30 新玩法清单的结果、审计整改进度、其余未完成事项（Mac 同步、网页版 TODO） |
 | [ui-art.md](ui-art.md) | 美术风格、颜色→形状对照、障碍图例、贴图生成与加载降级 |
 | [ui-art.md § 连击表现](ui-art.md#连击表现逐轮回放) | 连锁逐轮回放时间线、[步末阶段（PhEnd）](ui-art.md#步末阶段phend)、[连击等级样式](ui-art.md#连击等级样式combostyle)、截图与复现 seed |
 

@@ -10,7 +10,7 @@
 ```
 web/
 ├── build.sh              构建脚本（→ web/dist/），--serve 构建后用 serve.py 起服务器
-├── dist/                 可部署构建产物（已提交；html/js/wasm/图集），拷贝即可部署
+├── dist/                 可部署构建产物（已提交；只在部署前全量重建；html/js/wasm/图集），拷贝即可部署
 ├── serve.py              本地静态服务器（Python 3 标准库；正确 MIME、开发期 no-cache、打印局域网地址）
 ├── serve.sh              serve.py 的薄包装
 ├── deploy-mac.sh         打包 dist 并在 macOS 上安装 / 前台运行 / launchd 常驻 / 状态检查
@@ -55,6 +55,7 @@ make build           # 构建到 web/dist
 make serve PORT=9000 # 本地 / 局域网试玩
 make test            # stack test + 状态一致性 + 动画一致性 + e2e
 make check           # CI：lint-sh + 构建 + 全部测试 + 体积
+make verify          # 提交前验收（0 警告构建 + stack test，按需 make check；见 docs/testing.md「开发流程」）
 ```
 
 | 目标 | 作用 |
@@ -67,10 +68,11 @@ make check           # CI：lint-sh + 构建 + 全部测试 + 体积
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 372 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心 460 个，桌面版与网页版共用） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子[:走法] …"` 可改，走法 `hint` / `combo` / `combo-bomb` 见 §4） |
 | `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
+| `make verify [FULL=1] [BASE=…]` | 提交前验收：0 警告构建 → `stack test` → 改了网页版依赖的路径才跑 `make check`（`FULL=1` 强制） |
 | `make check` | CI 用：`lint-sh` → `build` → `test` → `size` |
 | `make lint-sh` | shell 脚本 / Makefile 检查：`$变量名` 后紧跟中文等非 ASCII 字符即报错（macOS bash 3.2 会读错变量名，须写 `${VAR}`；见 `docs/testing.md`） |
 | `make size` | wasm 原始 / `-Oz` 后、dist 各文件与合计，原始与 gzip -9 |
@@ -122,26 +124,7 @@ make size            # 事后单独看体积
 4. 下载并缓存浏览器 WASI 垫片 `@bjorn3/browser_wasi_shim@0.4.2`（MIT/Apache-2.0，约 96 KB）；
 3b. 用 `tools/gen_web_atlas.py`（需 python3 + Pillow）从 `assets/` 生成 `atlas.webp` + `atlas.json` + `background.webp`，
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
-   注意：`atlas.webp` 的 ALPH 块（无损 alpha，`method=6`）换机器重建可能差几十字节（同一 Pillow 12.3.0 / libwebp 1.6.0，疑为 libwebp 按 CPU 指令集走不同实现），
-   解码后 RGBA 逐像素相同；因此 dist 可复现性对它只比解码像素（见本节末「dist 可复现性比对」）。
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
-
-dist 可复现性比对（发布前、测试跑手自检用）：`make clean && make build` 后，`atlas.webp` 只比**解码像素**，dist 其他文件仍**逐字节**比。
-需要 `dwebp`（`sudo apt-get install -y webp`）：
-
-```sh
-make clean && make build
-# 1) 除 atlas.webp 外 dist 逐字节一致：输出必须为空（含新增 / 删除文件）
-git status --porcelain -- web/dist ':(exclude)web/dist/atlas.webp'
-# 2) atlas.webp 只比解码像素：转 PAM（RGBA）后 cmp，必须无输出、退出码 0
-git show HEAD:web/dist/atlas.webp > /tmp/atlas-head.webp
-dwebp -quiet -pam /tmp/atlas-head.webp -o /tmp/atlas-head.pam
-dwebp -quiet -pam web/dist/atlas.webp  -o /tmp/atlas-new.pam
-cmp /tmp/atlas-head.pam /tmp/atlas-new.pam
-```
-
-两步都过即算可复现；若只有 `atlas.webp` 字节不同而像素相同，不必提交，`git checkout -- web/dist/atlas.webp` 还原即可。
-（2026-10-03 box 换宿主后重建得 488,226 B，原提交版 488,278 B，像素相同；当时已提交新版本，即现在的 488,226 B。）
 
 图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
 1024×1730，WebP 约 488 KB（488,226 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
@@ -223,7 +206,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
 下面是各自的底层命令。当前（2026-10-03，chore/audit-wrapup，基于 fa719fa）：49 关，`stack test` 460 个用例全过，
-状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 168 项全过，`make android-check` 见 docs/web.md §7。
+状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 168 项全过。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json

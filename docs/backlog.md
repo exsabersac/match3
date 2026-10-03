@@ -9,7 +9,7 @@
 - **元素**：36 个内置条目（`Element.Builtin.builtinDefs`）：宝石与 4 种特效（`gem` / `line_h` / `line_v` / `bomb` / `rainbow`）、冰层、8 种叠层（草、藤蔓、巧克力、迷雾、锁链、冰冻、窗帘、蒸汽）、地面层（果冻、魔法地格），以及石头、宝箱、蜂蜜、气球、饼干、蛋糕、魔法帽、果汁机、蜗牛、保险箱、双面块、彩蛋、染色瓶、时间精灵、倒计时炸弹、气泡、魔法石、毛球、雪怪 Boss、变色龙等占格本体。
 - **关卡级元素**：飞碟、皮带、传送门、地毯、L / T 炸弹开关、魔力鸟组合开关、饼干掉落口（`builtinLevelDefs`），另有核心地面层。
 - **其他**：锤子 / 自由交换 / 十字三种道具；每日挑战 10 种目标轮换；桌面音效与 BGM（K / B 开关）。
-- **前端**：桌面 SDL 版；网页版（GHC wasm，只接了交换、撤销、提示、切关、重开，见 [web.md §8–9](web.md#8-已知限制)）；安卓 APK（Capacitor 套网页版，见 [android.md](android.md)）。
+- **前端**：桌面 SDL 版；网页版（GHC wasm，只接了交换、撤销、提示、切关、重开，见 [web.md §8–9](web.md#8-已知限制)）；安卓 APK（Capacitor 套网页版，见 [android.md](android.md)；代码保留，流程里不再例行打包）。
 
 ## 2. 2026-09-30 新玩法清单的结果
 
@@ -36,7 +36,7 @@
 
 ## 4. 审计整改（2026-10，已完成）
 
-按代码审计报告的顺序逐项做，每项单独一条分支、单独验收（0 警告构建含 `match3-sdl`、`stack test` 全过、`test/golden` 金标准不变）：
+按代码审计报告的顺序逐项做完，每项都验收过（0 警告构建含 `match3-sdl`、`stack test` 全过、`test/golden` 金标准不变）：
 
 | 项 | 内容 | 状态 |
 |----|------|------|
@@ -56,7 +56,5 @@
 ## 5. 其他未完成
 
 - **Mac 同步**：把 Mac 上的仓库与网页部署（`web/deploy-mac.sh`）同步到最新 main（拉取后重新 `make build`，或装新的 dist 包）；需要在 Mac 上操作。
-- **APK 体积**：[android.md](android.md) 里的产物大小是 2026-10-03 `fix/web-audio-toggle` 时实测的，`web/dist` 之后重建过（`feat/dist-rebuild`、`chore/audit-wrapup`，当前 wasm 2,212,226 B），需要重新 `make build apk` 后更新数字。
-- **APK 真机 / 模拟器验证**：APK 还没有在模拟器或真机上跑过（[android.md](android.md)）；iOS 壳需要装了 Xcode 的 Mac。
 - **网页版 TODO**：道具与洗牌按钮、每日挑战与选关地图、真机测试、资源文件名带哈希、itch.io 上线、CI 等，见 [web.md §9](web.md#9-todo)。这些是前端接入，不加新玩法。
 - **调色板的第三份副本未受护栏**：`tools/gen_assets.py` 的五色调色板与 `UI.Palette.colorRGB` / `cells.js` 的 `COLOR_RGB` 应一致，但不在 `test/Spec/WebColors.hs` 的比对范围内（改主色时三处要一起改）。

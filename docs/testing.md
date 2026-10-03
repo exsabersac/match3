@@ -50,7 +50,7 @@ stack test
     - 网页 JS 颜色表与桌面比对新增 5 个（`WebColors`）→ 458
     - 前端 API 护栏新增 1 个（`View`：`frontends_import_core_api`）→ 459
     - 终局类型 `Terminal` 新增 1 个（`GoalsLevels`：`terminal_outcome_mapping`，见下文「终局类型 Terminal」）→ 460
-- 合并门禁：上述 `stack test` 全绿即可合入；不要在红测上合并。
+- 合并门禁：`make verify` 全绿（见下文「开发流程」）；不要在红测上合并。
 
 可选完整链路：
 
@@ -65,6 +65,27 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 ```
 
 若 Stack 镜像/签名异常，优先使用 `stack.yaml` 中 `system-ghc: true` 与本机 ghcup 装好的 GHC 9.14.1；Hackage 镜像报 root.json 签名不足时改用官方 Hackage 源（去掉全局配置里的 `package-index` 镜像设置）。
+
+## 开发流程
+
+- **验收**：提交前在仓库根目录跑 `make verify`，全绿就直接推 main，不另找人复测。
+  - 依次跑：0 警告构建（`-Werror`，含 `match3-sdl` 与测试）→ `stack test` → 按需 `make check`。
+    `-Werror` 构建用单独的工作目录 `.stack-work-verify`，不会让日常的 `.stack-work` 重编；第一次要全量编译一遍。
+  - 相对 `origin/main`（`BASE=` 可改；含未提交与未跟踪的文件）的改动碰到网页版依赖的路径，才跑 `make check`：
+    `web/`（`web/dist`、`web/android-app` 除外）、`app/pure/`、`assets/`、`Makefile`、`package.yaml`、`match3.cabal`、
+    `stack.yaml`、`tools/verify.sh`，以及 `src/` 下新增 / 删除 / 改名的模块（模块清单要与 `web/match3-web.cabal` 一致）。
+    `FULL=1` 强制跑。跑的是 `make check` 里除 `stack test` 以外的几步（`lint-sh`、`build`、两组一致性、e2e、`size`），`stack test` 不重复跑。
+  - 最后一行是结论，例如 `== verify 通过：stack test 460 个全过；make check 未跑（…）；用时 2m10s`；
+    失败时写明哪一步失败和日志目录。
+  - `make check` 重建出的 `web/dist` 跑完后还原成 HEAD 的版本（`KEEP_DIST=1` 保留）。
+- **分支**：几项小改动合成一条分支，一起跑一次 `make verify`；纯文档 / 注释改动不开分支，验收绿了直接提交 main。
+  合 main 只做快进：`git fetch -q origin && git merge-base --is-ancestor origin/main <SHA> && git push origin <完整SHA>:refs/heads/main`，
+  再用 `git ls-remote` 核对。
+- **工作树**：只留一个开发 worktree（`/workspace/match3-dev`），每项做完 reset 到新的 main 再复用。
+- **汇报**：整批做完汇报一次；中途只报失败或需要拍板的事。
+- **`web/dist` 与部署**：平时的分支不碰、不提交 `web/dist`。只在上 Mac / 部署前从 `make clean` 开始全量重建一次
+  （`make clean && make check`，测试全绿即可），再提交；不做 dist / wasm 的逐字节或体积比对。
+  部署只发布网页版（Mac 上 `web/deploy-mac.sh`，见 [web.md](web.md)），不打 APK。
 
 ## 套件结构
 
@@ -375,7 +396,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
 | `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、第 45 关 =「雪怪」、第 46 关 =「饼干」、没登记的名字目标退回元素名 |
 | `frontends_import_core_api` | 源码扫描：`app/` 与 `web/hs` 从库里只 import `Match3.Core` / `Match3.View` / `Match3.Engine` / `Match3.Element.Event` / `Engine.*`；`Match3.Core` 导出的函数与不带构造的类型都有前端在用（带 `(..)` 的类型不查，前端可能只用构造或字段） |
-| `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、桌面标题目标段 `goalLine`、提示后缀 `goalBracket` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（测试跑手报告第 8 / 41 / 42 / 44 关写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
+| `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、桌面标题目标段 `goalLine`、提示后缀 `goalBracket` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（第 8 / 41 / 42 / 44 关曾写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
@@ -457,7 +478,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
   `combo`（盘上有「彩虹 × 直线 / 炸弹」相邻且都无冰无叠层时先换它，行优先、先右后下）、`combo-bomb`（同上但先换「彩虹 × 炸弹」）、`cham-rainbow`（先换「彩虹 × 变色龙」，同样行优先、先右后下；种子 140 在第 5 步（0 起）换 (1,2) 彩虹 × (1,3) 变色龙，第一轮清掉彩虹、变色龙与 15 颗同色宝石，即成对交换规则 15）、`fix-RCRC-RCRC-…`（按写死的交换走：第 k 步换第 k 对，每对 4 个数字 r1 c1 r2 c2，用完后按提示）；
   提示不会主动选彩虹组合，第 44 关的变身步（`rainbow_line` / `rainbow_bomb`）靠后两种走法覆盖，`parity.sh` 会检查这些用例真的走到了变身步
   （状态 JSON 里有 `"kind":"rainbow_…"`、动画帧里有蔓延段；`cham-rainbow` 查两侧 stderr 都有「走法 cham-rainbow：第 k 步换彩虹 × 变色龙」）。
-  第 48 关 4 组 `fix` 用例是测试跑手原生穷举（≤ 3 步）找到的「特效在魔法地格上引爆」走法，第 3 步（stderr 记为第 2 步，0 起）扩爆：
+  第 48 关 4 组 `fix` 用例是原生穷举（≤ 3 步）找到的「特效在魔法地格上引爆」走法，第 3 步（stderr 记为第 2 步，0 起）扩爆：
   种子 2 `fix-3536-4445-4252` 炸弹@(5,3) 25 格 5 行 5 列；种子 3 `fix-0414-4445-5262` 横线@(6,2) 24 格 3 行 8 列；
   种子 4 `fix-1415-5455-5455` 横线@(5,4) 24 格 3 行 8 列；种子 5 `fix-1516-2434-4243` 横线@(5,3) 24 格 3 行 8 列。原生侧 `magicBlasts` 用
   `Match3.Engine.play` 的 `EvBlast`、node 侧用接口 JSON 的 `events`，按「来源在魔法地格上」各记一行「走法 fix：第 k 步魔法地格扩爆 元素@(r,c) N 格 R 行 C 列」；
@@ -517,7 +538,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
   第 47 关 `LevelClear`「过关！… 进入第 48 关」，第 48 关 `LevelClear`「过关！… 进入第 49 关」，第 49 关「宽域」（最后一关）`Won`「通关！」（`wide-l49-won.png`）。
 - **玩到失败（第 8 / 39 / 40 / 41 / 42 / 43 / 44 / 45 / 47 / 48 关，种子 7，按提示过了关就换种子 8–11）**：按提示走满步数，状态 Lost、结算层标题「步数用完了」、副标题含 `state.loseHint`
   且不含 `[a-z_]` 与「箱子」（读 `m3debug.overlay`，即真正画出的文字），碎石目标关（8 / 41 / 42 / 44 / 48）副标题 =「用邻消或特效砸开碎石，目标 n 个。可「撤销」或「重开」」；截 `chameleon-l47-lost.png` / `magic-l48-lost.png`。
-- **反证（测试跑手复核用，不进 `make check`）**：临时副本里改 `dist/cells.js` 跑完整 e2e，必须失败——掉落口画到 x+4（`dropMarks` 不变）
+- **反证（手动复核用，不进 `make check`）**：临时副本里改 `dist/cells.js` 跑完整 e2e，必须失败——掉落口画到 x+4（`dropMarks` 不变）
   → 8 项真实绘制掉落口检查失败；变色龙底层宝石画成 `gem_c<(c mod 5)+1>` → 6 项变色龙检查失败；先画环再画宝石（宝石名字对，只是顺序反了：环 seq 178 < 宝石 seq 179）→ 同样 6 项变色龙检查失败。三份副本都是整套 e2e 退出码 1、其余项照常通过。
   魔法地格 / 关名（web-magic-ground，149 项的版本，副本端口 8832–8835）：删掉 `cells.js` GROUND 表的 `magic` 行 → 13 项失败（逐关地面层真实绘制、
   逐关与第 48 关 `fallbacks`（`magic#地面层`）、第 48 关两个视口的贴图 / 像素 / 降级、4 组扩爆的降级）；`magic` 不画贴图、直接画淡灰框（不计 `fallbacks`，即适配前的样子）

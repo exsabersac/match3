@@ -210,6 +210,7 @@ test-suite match3-test
       Spec.Properties
       Spec.RainbowCombos
       Spec.ReplayUndo
+      Spec.RulesDedup
       Spec.SnowBoss
       Spec.SourceScan
       Spec.Specials
@@ -218,8 +219,10 @@ test-suite match3-test
       Spec.Support.LegacyCascade
       Spec.Support.LegacyElement
       Spec.Support.LegacyLazy
+      Spec.Support.LegacyObstacles
       Spec.Support.LegacyOptics
       Spec.Support.LegacyPerf
+      Spec.Support.LegacyRules
       Spec.Support.Parallel
       Spec.Support.Source
       Spec.UIEvents

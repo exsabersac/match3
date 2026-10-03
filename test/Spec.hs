@@ -45,6 +45,7 @@ import qualified Spec.Lazy
 import qualified Spec.Perf
 import qualified Spec.Optics
 import qualified Spec.Invariants
+import qualified Spec.RulesDedup
 
 main :: IO ()
 main = defaultMain tests
@@ -94,6 +95,7 @@ tests =
         , Spec.Perf.tests
         , Spec.Optics.tests
         , Spec.Invariants.tests
+        , Spec.RulesDedup.tests
         , Spec.SourceScan.tests
         ]
     )

@@ -43,8 +43,8 @@
 | 1 | 选格散列 `boardSeed`（`show board` 的 FNV-1a）抽成一份并用测试钉住 | 已完成（`fix/board-seed`），测试中 |
 | 2 | 删掉没人用的兼容包装与导出；删除 `Spec.Support.Legacy*` 旧副本，有价值的对照改成固定例子 | 已完成（`refactor/dead-code`），测试中 |
 | 3 | 收掉被 pragma 关掉的警告（`Anim` 部分字段、`Spec.Phase` 推迟名字错误）与多余的 `array` 依赖 | 已完成（`refactor/warnings-deps`），测试中 |
-| 4 | 文档脱节（本文件、测试数、`cells.js` 说法、testing.md 长句、模块地图） | 进行中（`docs/refresh`） |
-| 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 待做 |
+| 4 | 文档脱节（本文件、测试数、`cells.js` 说法、testing.md 长句、模块地图） | 已完成（`docs/refresh`），测试中 |
+| 5 | 桌面道具动作去重，文案表移进 `app/pure` 并加测试 | 进行中（`refactor/desktop-boosters`） |
 | 8 | JS 颜色 / 蔓延表与 Haskell 表现表的一致性护栏 | 待做 |
 | 6 | 拆分 `Match3.Core`：前端 API 与测试入口分开 | 待做 |
 | 7 | 终局类型 `Terminal`（`gsOver :: Maybe Terminal`） | 待做 |

@@ -141,7 +141,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 ### 前端模块（`app/`）
 
-第 10 刀起 `app/pure/` 放**不依赖 SDL 的纯前端模块**（`ComboFx`、`UI.Presentation`、`UI.Sound`、`UI.GoalIcon`）：可执行文件、测试套件（`package.yaml` 的 test `source-dirs` 含 `app/pure`）与网页版（`web/match3-web.cabal` 的 `hs-source-dirs` 含 `../app/pure`）共用同一份源码；其余 `app/` 模块只进可执行文件。
+`app/pure/` 放**不依赖 SDL 的纯前端模块**（`ComboFx`、`UI.Presentation`、`UI.Sound`、`UI.GoalIcon`、`UI.MoveText`）：可执行文件、测试套件（`package.yaml` 的 test `source-dirs` 含 `app/pure`）与网页版（`web/match3-web.cabal` 的 `hs-source-dirs` 含 `../app/pure`，`other-modules` 只列网页用到的）共用同一份源码；其余 `app/` 模块只进可执行文件。
 
 | 模块 | 职责 |
 |------|------|
@@ -152,7 +152,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `UI.Layout` | 逻辑像素布局常量、格子坐标换算（第 11 刀起 `boardGrid :: GridGeom CInt`，`pixelToCell` / `cellOrigin` / `allCells` 签名不变、经 `Engine.GridUI` 算）、矩形 / 插值工具、调色板（`elementRGBTable` / `smoothT` / `easeOutT` 第 10 刀起定义在 `UI.Presentation`，这里再导出）；第 7 项起在这里包 / 拆 `PxX` / `PxY`，签名仍不变 |
 | `UI.Env` | 环境变量（`MATCH3_LEVEL` / `SEED` / `SCALE` / `SHOWCASE`）、展示盘、高分屏倍率与鼠标坐标换算 |
 | `UI.Input` | 输入映射：`handleEvent` 分派到 `handleKey`（每键一个函数）/ `handleMouseUp`（拖拽交换）/ `handleMouseDown`（地图 / 加速 / 结束浮层 / 点格）；点选与拖动判定经 `Engine.GridUI.gridClick` / `gridDragRelease`；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell`，实例 `Match3.Engine.match3Shell`；撤销是 `Undo`，由 `Engine.History` 处理）；播放锁定（见 [ui-controls.md](ui-controls.md#播放锁定animbusy)） |
-| `UI.Actions` | 标题栏（第 11 刀起 = `Match3.View.titleLine` + 提示消息）、`stepShell`（外壳执行动作的唯一入口：`gameStep M3E.match3Shell`）、`playMove` / `playbackOf`（一次 `gameStep` 的整步报告 → 表现编排）、关卡重置、三种道具执行、回放加速、过关前进 / 重试 |
+| `UI.Actions` | 标题栏（= `Match3.View.titleLine` + `"  \|  "` + 提示消息）、`stepShell`（外壳执行动作的唯一入口：`gameStep M3E.match3Shell`）、`playMove` / `playbackOf`（一次 `gameStep` 的整步报告 → 表现编排）、关卡重置、三种道具共用的 `applyBooster`（`Booster` = 锤子 / 十字 / 自由交换；文案与之后的点选模式查 `UI.MoveText`）、回放加速、过关前进 / 重试 |
 | `UI.Playback` | 纯函数：每帧推进动画；按本次 `MoveFx` / `MoveTrace` 编排回放，阶段事件产生弹字 / 浮字 / 震屏 / 粒子；步末碎屑按表现表的 `prCrumbs` 解释（`endCrumbs`）；音效名排进 `appSounds` |
 | `UI.Draw` | 一帧的层次与贴图 / 几何分派 |
 | `UI.Cascade` | 静止盘、交换补间、轻落、逐轮回放（高亮 / 消失 / 下落）、震屏视口 |
@@ -171,11 +171,12 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `ComboFx`（`app/pure`） | 连锁逐轮回放的纯逻辑（步末阶段种类与基础帧数、高亮 / 浮字 / 弹字帧数都查表现表 `UI.Presentation`，按事件种类分派；`StageKind` / 连击等级样式从那里再导出）：阶段机 `cascadeStages`（高亮→消失→下落→落定，以及步末阶段：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌；帧号与加速交给 `Engine.Playback.Player`）、波次视图 `WaveView`（快照 + 本轮效果事件）、时间线常量、连击等级样式、下落映射、浮字曲线；只消费 `MoveTrace` 与效果事件，不绘制 |
 | `UI.Presentation`（`app/pure`） | 第 10 刀：效果事件 → 前端表现的唯一一张表 `presentationTable`（表现方式、帧数、主色、贴图、步末碎屑、音效名），按元素名细分的生长曲线 `spreadCurves` 与颜色 `elementRGBTable`、缺省表现、连击等级样式、缓动；纯数据，不 import SDL，见[前端表现表](#前端表现表第-10-刀) |
 | `UI.Sound`（`app/pure`） | 音效名的纯部分：`cascadeEventKinds`（回放阶段事件 → 效果种类）、`cascadeSounds`（查表现表的 `effectSound`）；`playSounds` 是留给网页等其他前端的空操作，桌面版不用它（真正播放在 `UI.Audio`） |
+| `UI.MoveText`（`app/pure`） | 桌面走步提示文案：`moveMsg`（界面路径 `MoveUi` = 拖拽 / 点击 / 锤子 / 十字 / 自由交换 × 结算结果 `Outcome` → 一句话，写进 `appMsg`）、`keepsTool`（只有自由交换换不掉时保持点选模式）；`UI.Actions` / `UI.Input` 调用，文案由 `test/Spec/MoveText.hs` 逐字钉住；网页不编译它 |
 | `UI.GoalIcon`（`app/pure`） | 关卡目标 → 图标贴图名 `goalIcon` 的唯一一张表（按 `goalView` 分派，复用棋子贴图）；桌面贴图版 HUD / 选关地图（经 `UI.GoalStyle` 再导出）与网页版（`Match3Web.Api` 编进 `state.goal.icon`）共用 |
 | `UI.Audio` | 桌面音效与 BGM（SDL 音频，素材 `assets/sfx/*.wav`）：`start` 加载并开设备、`cue` 播放一组音效名（`UI.Plugin` 每帧把 `appSounds` 队列交给它；`win` / `lose` 同时停 BGM）、`beginLevel` 进关重新循环 BGM、`toggleSfx` / `toggleBgm`（K / B 键，偏好写在 `~/.config/match3/{sfx,bgm}`）、`sfxEnabled` / `bgmEnabled`（HUD 开关芯片读）；缺设备或缺文件时静默 |
 | `Art` | 贴图图集（BMP + 索引）加载、路径查找、九宫格面板、染色/加色绘制；缺资源时各绘制模块退回几何版 |
 
-前端依赖同样单向无环：纯模块 `UI.Presentation ← ComboFx ← UI.Sound` 在最底层（只依赖核心库），其上 `UI.Types` / `UI.Layout`；`UI.HudBlocks ← UI.HudPrim`、`UI.Cell.PrimOverlay ← UI.Cell.Prim`；`UI.Glyph ← UI.TextArt ← UI.HudArt`，`UI.GoalStyle ← UI.HudArt / UI.HudBlocks / UI.LevelMap`；核心库的 `Match3.View` 与 `Engine.GridUI` 被 HUD / 棋盘 / 标题 / 输入 / `UI.Layout` / `UI.Types` 读，`UI.Cell.Prim / UI.Cell.Art ← UI.CellTable ← UI.BoardPrim ← UI.BoardArt ← UI.EndStage ← UI.Cascade ← UI.Draw`，`UI.Playback ← UI.Actions ← UI.Input ← UI.Plugin ← Main`，`Shell.Loop ← UI.Plugin`（`A ← B` 表示 B 依赖 A）。
+前端依赖同样单向无环：纯模块 `UI.Presentation ← ComboFx ← UI.Sound` 与 `UI.MoveText` 在最底层（只依赖核心库），其上 `UI.Types` / `UI.Layout`；`UI.HudBlocks ← UI.HudPrim`、`UI.Cell.PrimOverlay ← UI.Cell.Prim`；`UI.Glyph ← UI.TextArt ← UI.HudArt`，`UI.GoalStyle ← UI.HudArt / UI.HudBlocks / UI.LevelMap`；核心库的 `Match3.View` 与 `Engine.GridUI` 被 HUD / 棋盘 / 标题 / 输入 / `UI.Layout` / `UI.Types` 读，`UI.Cell.Prim / UI.Cell.Art ← UI.CellTable ← UI.BoardPrim ← UI.BoardArt ← UI.EndStage ← UI.Cascade ← UI.Draw`，`UI.Playback ← UI.Actions ← UI.Input ← UI.Plugin ← Main`，`Shell.Loop ← UI.Plugin`（`A ← B` 表示 B 依赖 A）。
 
 ## 构建工具链
 

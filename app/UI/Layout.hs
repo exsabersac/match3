@@ -2,11 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | 布局常量与几何：逻辑像素尺寸（格 56 px、边距、HUD 高度、窗口大小）、格子坐标换算、
--- 矩形与插值小工具、调色板（宝石颜色 / 叠层蔓延色）、浮字左边界。
+-- 矩形与插值小工具、浮字左边界；再导出调色板（UI.Palette）。
 --
--- 依赖：只依赖 Match3.Core、Engine.GridUI（第 11 刀：像素 ↔ 格经通用网格几何 boardGrid）与 SDL 类型。所有绘制与点选都以这里的逻辑坐标为准，
+-- 依赖：只依赖 Match3.Core、Engine.GridUI（像素 ↔ 格经通用网格几何 boardGrid）、UI.Palette / UI.Presentation 与 SDL 类型。所有绘制与点选都以这里的逻辑坐标为准，
 -- 物理像素倍率由 UI.Env.syncScale 交给 SDL 缩放。
--- 同步：colorRGB 必须与 tools/gen_assets.py 的调色板一致。
 module UI.Layout
   ( cellPx
   , padPx
@@ -16,10 +15,10 @@ module UI.Layout
   , boardHPx
   , winW
   , winH
-  , colorRGB
-  , elementRGBTable -- 再导出自 UI.Presentation（第 10 刀起元素色在表现表模块）
-  , namedRGB
-  , cellRGB
+  , colorRGB -- 再导出自 UI.Palette（调色板，测试与网页 JS 副本比对）
+  , elementRGBTable -- 再导出自 UI.Presentation
+  , namedRGB -- 再导出自 UI.Palette
+  , cellRGB -- 再导出自 UI.Palette
   , boardGrid
   , boardGridFor
   , pixelToCell
@@ -44,12 +43,11 @@ module UI.Layout
   ) where
 
 import Data.Int (Int32)
-import Data.Word (Word8)
 import Engine.GridUI (GridGeom (..), PxX (..), PxY (..), gridCellAt, gridCellOrigin, gridCells, pxXY)
 import Foreign.C.Types (CInt)
 import Match3.Core
-import Match3.Element.Builtin (chameleonColor)
 import SDL hiding (Normal)
+import UI.Palette (cellRGB, colorRGB, namedRGB)
 import UI.Presentation (easeOutT, elementRGBTable, smoothT)
 
 -- | 逻辑像素布局：格 56、边距 16、HUD 高 108；窗口按允许的最大盘面（maxBoardDim）留足空间，不假设正方形棋盘。
@@ -67,42 +65,6 @@ boardWPx, boardHPx :: Int -> CInt
 boardWPx cols = cellPx * fromIntegral cols
 boardHPx rows = cellPx * fromIntegral rows
 
--- | 五色的主色（与 tools/gen_assets.py 调色板一致）。
-colorRGB :: Color -> (Word8, Word8, Word8)
-colorRGB C1 = (236, 62, 78)   -- 红·圆（与 tools/gen_assets.py 调色板一致）
-colorRGB C2 = (52, 196, 96)   -- 绿·方
-colorRGB C3 = (56, 128, 246)  -- 蓝·菱
-colorRGB C4 = (255, 194, 36)  -- 黄·星
-colorRGB C5 = (172, 88, 236)  -- 紫·三角
-
-
--- | 名字目标（goalCount (CountNamed …)） / 自定义元素按名字取色；表里没有的名字为灰蓝。
-namedRGB :: ElementName -> (Word8, Word8, Word8)
-namedRGB n = maybe (200, 200, 220) id (lookup n elementRGBTable)
-
--- | 格子对应的粒子 / 退回画法颜色。
-cellRGB :: Cell -> (Word8, Word8, Word8)
-cellRGB cell = case cell of
-  Stone _ -> (120, 120, 130)
-  Chest _ -> (220, 170, 60)
-  Honey _ -> (240, 180, 40)
-  Balloon col -> colorRGB col
-  Cookie -> (210, 160, 90)
-  Cake _ -> (255, 140, 180)
-  MagicHat -> (140, 90, 200)
-  Maker col _ -> colorRGB col
-  Snail _ _ -> (90, 160, 70)
-  Safe _ -> (180, 150, 40)
-  Flip f _ -> colorRGB f
-  Surprise -> (255, 100, 160)
-  Bottle col -> colorRGB col
-  TimeSpirit -> (80, 220, 255)
-  Countdown col _ -> colorRGB col
-  Gem col _ _ _ -> colorRGB col
-  Custom n _
-    | Just col <- chameleonColor cell -> colorRGB col -- 变色龙（新玩法 7）：当前颜色
-    | otherwise -> maybe (160, 160, 170) id (lookup n elementRGBTable)
-
 -- | 按行列数的棋盘网格几何（可不正方形）。
 boardGridFor :: Int -> Int -> GridGeom CInt
 boardGridFor rows cols = GridGeom {ggLeft = padPx, ggTop = padPx + hudH, ggCell = cellPx, ggRows = rows, ggCols = cols}
@@ -119,7 +81,7 @@ pixelToCell mx my = gridCellAt boardGrid (PxX (fromIntegral mx)) (PxY (fromInteg
 pixelToCellOn :: Int -> Int -> Int32 -> Int32 -> Maybe Pos
 pixelToCellOn rows cols mx my = gridCellAt (boardGridFor rows cols) (PxX (fromIntegral mx)) (PxY (fromIntegral my))
 
--- | 格子 → 左上角 (x, y)。第 7 项起 Engine.GridUI 回的是 (PxX, PxY)，在这里拆成 SDL 用的二元组。
+-- | 格子 → 左上角 (x, y)。Engine.GridUI 回的是 (PxX, PxY)，在这里拆成 SDL 用的二元组。
 cellOrigin :: Pos -> (CInt, CInt)
 cellOrigin = pxXY . gridCellOrigin boardGrid
 

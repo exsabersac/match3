@@ -1,6 +1,6 @@
 // 网页外壳：加载 wasm 与贴图集、自适应布局、固定步长的帧循环、输入（点选 / 拖划）与 HUD。
 // 规则全在 Haskell 核心（m3New / m3Swap / m3Undo / m3State / m3Levels，经 Engine.Game 的 match3Shell）；
-// 逐轮回放的时间线也在 wasm 里（m3AnimStart / m3AnimTick，桌面 app/ComboFx.hs 的阶段机），
+// 逐轮回放的时间线也在 wasm 里（m3AnimStart / m3AnimTick，桌面 app/pure/ComboFx.hs 的阶段机），
 // JS 每帧推进一次、按返回的阶段 / 帧号插值绘制（render.js），不做任何规则或时间线判断。
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
@@ -131,7 +131,7 @@ function startCascade() {
   anim = { kind: "cascade", cas, tk: { p: "start", fr: 0, n: 0, w: 0, k: 0, g: 0, b: 0 }, best: 0 };
 }
 
-// 步末碎屑色（桌面 UI.Presentation.elementRGBTable 里会出现在蔓延步末的几行）
+// 步末碎屑色（桌面 UI.Presentation.elementRGBTable 里会蔓延的元素那几行，与桌面逐项比对：test/Spec/WebColors.hs）
 const SPREAD_CRUMB_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235] };
 
 function stepCascade() {

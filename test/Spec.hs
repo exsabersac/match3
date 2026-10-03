@@ -50,6 +50,7 @@ import qualified Spec.GridGeometry
 import qualified Spec.DataBoundary
 import qualified Spec.BoardSeed
 import qualified Spec.MoveText
+import qualified Spec.WebColors
 
 main :: IO ()
 main = defaultMain tests
@@ -104,6 +105,7 @@ tests =
         , Spec.DataBoundary.tests
         , Spec.BoardSeed.tests
         , Spec.MoveText.tests
+        , Spec.WebColors.tests
         , Spec.SourceScan.tests
         ]
     )

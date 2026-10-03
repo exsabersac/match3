@@ -4,15 +4,17 @@
 
 // 坐标约定：棋盘层一律用「设计单位」——格 = 56、棋盘外框留白 PAD = 16（与桌面逻辑像素相同），
 // 由 layout.js 的变换把设计单位映射到屏幕（按可用空间算出的格子大小 × devicePixelRatio）。
-// 行列数按关卡盘面设置（setDims）；当前 40 关都是 8×8，但绘制不假设正方形。
+// 行列数按关卡盘面设置（setDims）；当前 49 关里前 48 关是 8×8，第 49 关「宽域」是 6 行 × 9 列，绘制不假设正方形。
 export const CELL = 56, PAD = 16;
 export let ROWS = 8, COLS = 8;
 export function setDims(rows, cols) { ROWS = rows; COLS = cols; }
 export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
 
-// 五色主色（与 tools/gen_assets.py 调色板、UI.Layout.colorRGB 一致）
+// 颜色表与桌面逐项比对（test/Spec/WebColors.hs，改这里或桌面任一边都要两边一起改）。
+// 五色主色（与 tools/gen_assets.py 调色板、UI.Palette.colorRGB 一致）
 export const COLOR_RGB = { 1: [236, 62, 78], 2: [52, 196, 96], 3: [56, 128, 246], 4: [255, 194, 36], 5: [172, 88, 236] };
-// 按元素名取色（UI.Layout.elementRGBTable）：蔓延碎屑 / 生长前沿光 / 自定义格
+// 按元素名取色（UI.Presentation.elementRGBTable）：生长前沿光 / 自定义格。
+// magic_stone / fuzzball 两项桌面表里没有（桌面这两种格的粒子是缺省灰），是待定的已知差异，见测试里的 pendingElementDrift
 export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [92, 60, 160],
   fuzzball: [196, 150, 170] };   // 毛球：同桌面几何版 UI.Cell.Prim.primFuzzball 的灰粉色（降级色 / 消灭时的粒子色）
 
@@ -21,7 +23,7 @@ export const breathe = (pulse, period) => 0.5 + 0.5 * Math.sin((pulse * 2 * Math
 export const origin = ([r, c]) => [PAD + c * CELL, PAD + r * CELL];
 const gemSprite = (c) => `gem_c${c}`;
 
-// 粒子 / 退回画法颜色（UI.Layout.cellRGB）
+// 粒子 / 退回画法颜色（UI.Palette.cellRGB）
 export function cellRGB(cell) {
   if (!cell) return [160, 160, 170];
   switch (cell.t) {
@@ -125,7 +127,7 @@ const CELL_ART = {
   spirit(ctx, art, p, x, y) { art.draw(ctx, "time_spirit", x, y + bobY(p), CELL, CELL); },
   countdown(ctx, art, p, x, y, c) { art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL); art.draw(ctx, `countdown_${clamp(1, 9, c.n)}`, x, y, CELL, CELL); },
   custom(ctx, art, p, x, y, c) {
-    // 段 5 的气泡有专门画法（轻微浮动、无角标）；其它自定义元素：贴图名 = 元素名 + 层数角标
+    // 气泡有专门画法（轻微浮动、无角标）；其它自定义元素：贴图名 = 元素名 + 层数角标
     if (c.name === "bubble") art.draw(ctx, "bubble", x, y + bobY(p), CELL, CELL);
     // 新玩法 2 魔法石：按充能 v 画 magic_stone_0..3（满 3 格时浮动），同桌面 UI.Cell.Art.artMagicStone；不画层数角标
     else if (c.name === "magic_stone") {

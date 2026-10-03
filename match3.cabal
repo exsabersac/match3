@@ -148,6 +148,7 @@ executable match3-sdl
       ComboFx
       UI.GoalIcon
       UI.MoveText
+      UI.Palette
       UI.Presentation
       UI.Sound
       Paths_match3
@@ -224,12 +225,14 @@ test-suite match3-test
       Spec.Support.Source
       Spec.UIEvents
       Spec.View
+      Spec.WebColors
       Toy
       ElementQueries
       Golden
       ComboFx
       UI.GoalIcon
       UI.MoveText
+      UI.Palette
       UI.Presentation
       UI.Sound
       Paths_match3

@@ -18,12 +18,12 @@ import Match3.Levels.Level
 import Match3.Types
 import Match3.Ufo (mkUfo)
 
--- | 第 i 关（0 基下标）；越界为 Nothing。取关时校验行列（越界尺寸 error，不夹取）。
+-- | 第 i 关（0 基下标）；越界为 Nothing。取关时校验关卡数据（第 8 项起是全部检查 assertLevel，一次列出全部问题后 error，不夹取）。
 lookupLevel :: Int -> Maybe Level
 lookupLevel i
   | i < 0 = Nothing
   | otherwise = case drop i allLevels of
-      l : _ -> Just (assertLevelDims l)
+      l : _ -> Just (assertLevel l)
       [] -> Nothing
 
 -- | 关卡数（= length allLevels）。

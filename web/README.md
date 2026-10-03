@@ -127,8 +127,8 @@ make size            # 事后单独看体积
 图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
 1024×1730，WebP 约 488 KB（488,278 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
 
-当前体积（2026-10-03，release/hs-features b8d66ad，`make clean` 后全量重建的发布产物）：wasm 原始 5,372,310 B → `-Oz` 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；
-dist 合计 3,043,111 B ≈ 3.04 MB，逐文件 gzip 合计 1,457,558 B（约 1.46 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
+当前体积（2026-10-03，fix/web-audio-toggle，`make clean` 后全量重建的发布产物；wasm 与 b8d66ad 逐字节相同）：wasm 原始 5,372,310 B → `-Oz` 2,183,488 B ≈ 2.18 MB（gzip 809,221 B）；
+dist 合计 3,045,315 B ≈ 3.05 MB，逐文件 gzip 合计 1,458,362 B（约 1.46 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
 元素类迁移使 `-Oz` 后的 wasm 增加约 71 KB（gzip 约 25 KB）。
 
 随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
@@ -203,8 +203,8 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-10-03，release/hs-features b8d66ad）：49 关，`stack test` 429 个用例全过，
-状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 155 项全过，`make android-check` 见 docs/web.md §7。
+下面是各自的底层命令。当前（2026-10-03，fix/web-audio-toggle）：49 关，`stack test` 429 个用例全过，
+状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 168 项全过，`make android-check` 见 docs/web.md §7。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
@@ -243,7 +243,7 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 `chameleon-l47-*` 第 47 关「变色龙」（竖屏 / 横屏开局、HUD 目标图标）、`chameleon-crop-{before-generic,after}` 通用画法反证前后、
 `chameleon-shift-{before,mid}` 步末换色段前半 / 后半、`chameleon-l47-lost` 玩到失败的结算层、
 `magic-l48-*` 第 48 关「魔法格」（竖屏 / 横屏开局的魔法地格、`magic-l48-lost` 玩到失败）、`wide-l49-won` 第 49 关「宽域」终章通关、
-`magic-widen-seed{2,3,4,5}` 扩圈爆炸那一轮的消失段、`level-name-l{01,41,48}` HUD 关名（预渲染文字图 `name_<i>`）。
+`magic-widen-seed{2,3,4,5}` 扩圈爆炸那一轮的消失段、`sound-chips-l{01,48,49}-*` HUD 音效 / BGM 开关芯片、`level-name-l{01,41,48}` HUD 关名（预渲染文字图 `name_<i>`）。
 另有逐关贴图护栏：每关开局 + 走 3 步后 `m3debug.fallbacks`（走几何降级的格子，按元素名计）必须为空——新元素合入 main 后要在 `www/cells.js` 补画法，漏了 e2e 会失败
 （`report.json` 的 `fallbacksByLevel` 逐关记录，第 43–48 关另有单独的检查项；地面层表外名字 / 缺贴图记为 `<名字>#地面层`；多格 Custom 元素走了通用「元素名贴图 + 角标」画法时记为 `<元素名>#多格通用画法`，带颜色 `c` 的 Custom 格（第 47 关变色龙）走通用画法时记为 `<元素名>#通用画法缺底层宝石`，第 45 关雪怪接入前就是这样画成每格一只整图 + 角标 9、原护栏查不出，见 docs/web.md §2.3）；同一轮逐关检查 HUD 目标标签 = 「目标 」+ `state.goal.label` 且不含 `[a-z_]` 内部名（`goalLabels`）。
 报告里有每个视口的格子尺寸、耗时（tick / 绘制均值）和控制台错误。

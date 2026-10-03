@@ -213,7 +213,7 @@ adb logcat -d | grep -iE "capacitor|chromium|wasm"
 - **大屏**：Android 16 起 sw600dp 以上的设备会忽略竖屏锁定；网页布局本身支持横排，横过来也能玩；
 - **INTERNET 权限**：游戏不联网，但保留了 Capacitor 模板默认的 INTERNET 权限（调试时 live reload 需要）；
 - 进度（当前关卡）不持久化：退出后重开从第 1 关开始（网页版同样没有存档）；
-- 没有音效、没有振动反馈；
+- 没有振动反馈（音效 / BGM 随网页版一起打进 APK，HUD 有开关）；
 - 调试版 APK 里 WebView 可被 `chrome://inspect` 调试（Capacitor 默认，正式版关闭）。
 
 ## 9. iOS
@@ -235,7 +235,7 @@ npx cap sync ios && npx cap open ios
 
 - [ ] 在真机或能跑模拟器的机器上装 APK 实测：加载时间、帧率、安全区、返回键、息屏恢复；
 - [ ] 存档：用 `@capacitor/preferences`（或 localStorage）记住当前关卡与最高分；
-- [ ] 音效与振动（`@capacitor/haptics`）；
+- [ ] 振动（`@capacitor/haptics`）；音效已随网页版提供；
 - [ ] 正式签名、Play Console 内部测试轨道；
 - [ ] CI：`make build apk android-check`，产物作为构建附件；
 - [ ] 考虑把 `web/android-app/` 改名为 `mobile/`（加 iOS 之后）。

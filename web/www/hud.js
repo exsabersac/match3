@@ -30,6 +30,19 @@ function wrap(ctx, s, w, maxLines) {
   return lines;
 }
 
+// 取能放进宽度 w 的第一行（逐字，遇换行符断开），返回 [这一行, 剩下的文字]
+function takeLine(ctx, s, w) {
+  let cur = "", i = 0;
+  const chars = [...s];
+  for (; i < chars.length; i++) {
+    const ch = chars[i];
+    if (ch === "\n") return [cur, chars.slice(i + 1).join("")];
+    if (cur && ctx.measureText(cur + ch).width > w) break;
+    cur += ch;
+  }
+  return [cur, chars.slice(i).join("")];
+}
+
 // value 为 null 时只画底板和标签（关名由 levelName 画）
 function chip(ctx, art, x, y, w, h, label, value, valueColor = "#ffe082") {
   if (!art.panel(ctx, "panel_chip", x, y, w, h, 12)) { ctx.fillStyle = "rgba(30,24,60,.8)"; ctx.fillRect(x, y, w, h); }
@@ -185,21 +198,42 @@ function button(ctx, art, b, enabled, pressed) {
   ctx.restore();
 }
 
+// 音效 / BGM 开关芯片：同桌面 UI.HudArt.drawSoundChipsArt——46 × 28 的 panel_chip（圆角 10）+ 18 高的单字（效 / 乐，关掉为 静），
+// 字号固定 18 设计单位（不走 button 的单字大号 32：那是给 ‹ › 用的，放进 28 高的芯片会溢出、压到提示行）。
+const SOUND_W = 46, SOUND_H = 28, SOUND_GAP = 4, SOUND_FONT = 18;
+function soundChip(ctx, art, r, label) {
+  if (!art.panel(ctx, "panel_chip", r.x, r.y, r.w, r.h, 10)) { ctx.fillStyle = "#554"; ctx.fillRect(r.x, r.y, r.w, r.h); }
+  text(ctx, label, r.x + r.w / 2, r.y + r.h / 2, SOUND_FONT, "#fff", "center", 800);
+}
+// 两枚芯片占的宽度（含与左侧内容的间隔 8）
+const SOUND_SPAN = 2 * SOUND_W + SOUND_GAP + 8;
+// 一行提示文字的实际外框（设计单位；e2e 用它找真实绘制的文字）
+function msgBox(ctx, s, x, cy) {
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  const m = ctx.measureText(s);
+  return { text: s, x: x - (m.actualBoundingBoxLeft || 0), y: cy - (m.actualBoundingBoxAscent || 8), w: (m.actualBoundingBoxLeft || 0) + (m.actualBoundingBoxRight || m.width), h: (m.actualBoundingBoxAscent || 8) + (m.actualBoundingBoxDescent || 8) };
+}
+
 // info：{level, name, rules, score, moves, goalText, goalIcon, progress, target, boss, pulse, msg, undo, busy}（boss = state.boss，非 null 时画血条）；
 // pressed：当前按下的按钮 id。返回关卡面板各部件（面板 / 标签 / 关名 / 规则角标）的矩形、目标标签文字 goal 与 Boss 血条 boss，
 // 供调试钩子与 e2e 检查（goalIcon = 目标条实际画出的图标名，血条关卡为 undefined）。
 export function drawHud(ctx, art, L, info, pressed) {
   const h = L.hud;
-  let lv, boss = null;
+  let lv, boss = null, sfx = null;
+  const msg = [];
   if (L.mode === "portrait") {
     const g = 10, wl = h.w - 2 * (130 + g);
     lv = levelChip(ctx, art, h.x, h.y, wl, 48, info, 15, 11);
     chip(ctx, art, h.x + wl + g, h.y, 130, 48, "分数", info.score);
     chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
-    if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 56, h.w, 36, info, info.pulse); lv.goal = boss.label; }
-    else { const g = goalBar(ctx, art, h.x, h.y + 56, h.w, 36, info); lv.goal = g.label; lv.goalIcon = g.icon; }
+    const gw = h.w - SOUND_SPAN;
+    if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 56, gw, 36, info, info.pulse); lv.goal = boss.label; }
+    else { const g = goalBar(ctx, art, h.x, h.y + 56, gw, 36, info); lv.goal = g.label; lv.goalIcon = g.icon; }
+    sfx = { x: h.x + h.w - 2 * SOUND_W - SOUND_GAP, y: h.y + 56 + (36 - SOUND_H) / 2, w: SOUND_W, h: SOUND_H };
     ctx.font = `600 16px ${FONT}`;
-    text(ctx, fit(ctx, info.msg, h.w), h.x + 2, h.y + 110, 16, "#fff8e1", "left", 600);
+    const ln = fit(ctx, info.msg, h.w);
+    msg.push(msgBox(ctx, ln, h.x + 2, h.y + 110));
+    text(ctx, ln, h.x + 2, h.y + 110, 16, "#fff8e1", "left", 600);
   } else {
     lv = levelChip(ctx, art, h.x, h.y, h.w, 56, info, 17, 12);
     const hw = (h.w - 8) / 2;
@@ -208,20 +242,22 @@ export function drawHud(ctx, art, L, info, pressed) {
     if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 130, h.w, 40, info, info.pulse); lv.goal = boss.label; }
     else { const g = goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info); lv.goal = g.label; lv.goalIcon = g.icon; }
     const top = h.y + 186, bottom = L.buttons[0].y - 8;
+    sfx = { x: h.x + h.w - 2 * SOUND_W - SOUND_GAP, y: top - 8, w: SOUND_W, h: SOUND_H };
     ctx.font = `600 16px ${FONT}`;
-    const lines = wrap(ctx, info.msg, h.w - 4, Math.max(1, Math.floor((bottom - top) / 22)));
-    lines.forEach((ln, i) => text(ctx, ln, h.x + 2, top + 11 + i * 22, 16, "#fff8e1", "left", 600));
+    const maxLines = Math.max(1, Math.floor((bottom - top) / 22));
+    // 第一行与芯片同一行，宽度让出 SOUND_SPAN；剩下的文字按整宽折行（只有一行可用时第一行截断加省略号）
+    const [first, rest] = takeLine(ctx, info.msg, h.w - 4 - SOUND_SPAN);
+    const lines = !rest ? [first] : maxLines > 1 ? [first, ...wrap(ctx, rest, h.w - 4, maxLines - 1)] : [fit(ctx, info.msg.split("\n")[0], h.w - 4 - SOUND_SPAN)];
+    lines.forEach((ln, i) => { msg.push(msgBox(ctx, ln, h.x + 2, top + 11 + i * 22)); text(ctx, ln, h.x + 2, top + 11 + i * 22, 16, "#fff8e1", "left", 600); });
   }
   for (const b of L.buttons) {
     const enabled = !info.busy && (b.id !== "undo" || info.undo > 0);
     button(ctx, art, b, enabled, pressed === b.id);
   }
-  const yChip = h.y + (L.mode === "portrait" ? 98 : 184);
-  const sfx = { x: h.x + h.w - 98, y: yChip, w: 46, h: 28 };
-  const bgm = { x: h.x + h.w - 48, y: yChip, w: 46, h: 28 };
-  button(ctx, art, { ...sfx, id: "sfx", label: info.sfx === false ? "静" : "效" }, true, false);
-  button(ctx, art, { ...bgm, id: "bgm", label: info.bgm === false ? "静" : "乐" }, true, false);
-  return { ...lv, boss, sfx, bgm };
+  const bgm = { ...sfx, x: sfx.x + SOUND_W + SOUND_GAP };
+  soundChip(ctx, art, sfx, info.sfx === false ? "静" : "效");
+  soundChip(ctx, art, bgm, info.bgm === false ? "静" : "乐");
+  return { ...lv, boss, sfx, bgm, msg };
 }
 
 // 结局面板（盖在棋盘上）

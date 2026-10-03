@@ -18,6 +18,7 @@
 //   4f. 真实绘制钩子（drawImage 按调用序记录）：第 46 / 47 关掉落口、第 47 关变色龙；逐关地面层贴图与 HUD 关名 name_<i>；
 //   4g. 第 48 关魔法地格：地面层 magic 贴图与像素、4 组扩圈爆炸（真实绘制格数 = EvBlast 格数）、终章（第 47→48 LevelClear，第 48→49 LevelClear，第 49 关 Won）；
 //   4h. 第 8 / 39–45 / 47 / 48 关玩到失败的结局面板文字（碎石关「用邻消或特效砸开碎石，目标 n 个」）、逐关失败提示无「箱子」/ [a-z_]；
+//   4i. 音效 / BGM 开关芯片：3 种视口 × 第 1 / 45 / 48 / 49 关，真实绘制的字形在芯片内、不大于按钮、不压提示行；
 //   5. 动画进行中改变视口大小：不重置对局与动画，播完后状态正确。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -88,11 +89,24 @@ const DRAW_HOOK = `(() => {
     }
     return orig.apply(this, a);
   };
+  // 文字：同一帧里画到 #board 的每次 fillText（文字、字体、经当前变换后的实际字形外框，后备缓冲像素），帧末放进 window.__frameTexts
+  const origText = P.fillText;
+  let curT = null;
+  P.fillText = function (s, x, y, ...rest) {
+    if (cur && this.canvas && this.canvas.id === "board") {
+      const m = this.getTransform(), t = this.measureText(String(s));
+      const l = x - (t.actualBoundingBoxLeft || 0), r = x + (t.actualBoundingBoxRight || 0);
+      const tp = y - (t.actualBoundingBoxAscent || 0), bt = y + (t.actualBoundingBoxDescent || 0);
+      const X = (u) => m.a * u + m.e, Y = (v) => m.d * v + m.f;
+      curT.push({ seq: seq++, text: String(s), font: this.font, x0: X(l), y0: Y(tp), w: (r - l) * m.a, h: (bt - tp) * m.d });
+    }
+    return origText.call(this, s, x, y, ...rest);
+  };
   const raf = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = (cb) => raf((t) => {
-    try { cb(t); } finally { if (cur && cur.length) { const d = done, log = cur; cur = null; done = null; d(log); } }
+    try { cb(t); } finally { if (cur && cur.length) { const d = done, log = cur; window.__frameTexts = curT; cur = null; curT = null; done = null; d(log); } }
   });
-  window.__captureFrame = () => new Promise((res) => { cur = []; done = res; });
+  window.__captureFrame = () => new Promise((res) => { cur = []; curT = []; done = res; });
 })();`;
 const atlasSprites = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
 const spriteAt = new Map(Object.entries(atlasSprites).map(([n, r]) => [r.join(","), n]));
@@ -102,6 +116,32 @@ async function captureDraws(P) {
   return log.map((d) => ({ ...d, name: d.atlas ? spriteAt.get(d.src.map((v) => Math.round(v)).join(",")) ?? null : null }));
 }
 const near = (a, b, tol = 0.5) => Math.abs(a - b) <= tol;
+// 音效 / BGM 开关（HUD 的 sfx / bgm 芯片）：用真实绘制的 fillText 外框（__frameTexts，换算成设计单位）核对——
+// 芯片里只画了一个字（效 / 乐 / 静）且字形整个落在芯片矩形里；芯片（矩形 ∪ 字形）宽高都不超过 HUD 最小的按钮；
+// 与提示行（真实画出的 600 16px 文字）不相交；两枚芯片互不重叠、都在 HUD 区域里
+async function soundChipCheck(P) {
+  await captureDraws(P);
+  const [texts, hud, L, dpr] = await P.page.evaluate(() => [window.__frameTexts || [], window.m3debug.hud, window.m3debug.layout, window.m3debug.dpr]);
+  const k = dpr * L.u, U = (t) => ({ text: t.text, font: t.font, x: (t.x0 / dpr - L.ox) / L.u, y: (t.y0 / dpr - L.oy) / L.u, w: t.w / k, h: t.h / k });
+  const ts = texts.map(U), H = L.hud;
+  const inter = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.01 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.01;
+  const inside = (a, b, tol = 0.5) => a.x >= b.x - tol && a.y >= b.y - tol && a.x + a.w <= b.x + b.w + tol && a.y + a.h <= b.y + b.h + tol;
+  const union = (a, b) => { const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y); return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }; };
+  const btnW = Math.min(...L.buttons.map((b) => b.w)), btnH = Math.min(...L.buttons.map((b) => b.h));
+  const msgLines = ts.filter((t) => /^600 16px/.test(t.font) && t.text.trim() && inside(t, H, 1));
+  const chips = ["sfx", "bgm"].map((id) => {
+    const r = hud && hud[id];
+    if (!r) return { id, ok: false, why: "hud 没有记录芯片矩形" };
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const glyphs = ts.filter((t) => /^[效乐静]$/.test(t.text) && Math.abs(t.x + t.w / 2 - cx) <= r.w / 2 && Math.abs(t.y + t.h / 2 - cy) <= r.h / 2 + 4);
+    const g = glyphs[0], drawn = g ? union(r, g) : r;
+    const hits = msgLines.filter((m) => inter(drawn, m)).map((m) => m.text);
+    const ok = glyphs.length === 1 && inside(g, r) && drawn.w <= btnW + 0.01 && drawn.h <= btnH + 0.01 && hits.length === 0 && inside(drawn, H, 1);
+    return { id, ok, rect: r, glyph: g ?? null, nGlyphs: glyphs.length, drawn, hitsMsg: hits };
+  });
+  const apart = chips.every((c) => c.drawn) && !inter(chips[0].drawn, chips[1].drawn);
+  return { ok: chips.every((c) => c.ok) && apart && msgLines.length > 0, mode: L.mode, btn: { w: btnW, h: btnH }, chips, apart, msgLines: msgLines.map((m) => ({ text: m.text, x: +m.x.toFixed(1), y: +m.y.toFixed(1), w: +m.w.toFixed(1), h: +m.h.toFixed(1) })) };
+}
 // 棋盘网格：从真实画出的底格 tile_a / tile_b 求 (0,0) 格左上角（设计坐标 (16,16)）与每设计单位的后备缓冲像素数 k；
 // 所有底格都要落在同一张 56k 网格上
 function boardGrid(draws, rows, cols) {
@@ -962,6 +1002,32 @@ try {
         !!te && te.cells.every(([r, c]) => JSON.stringify(s1.board[r][c]) === JSON.stringify(te.after[r][c])) && !!idle?.ok, report.chameleonShift);
       check("第 47 关画面没有走几何降级", Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0, await P.page.evaluate(() => window.m3debug.fallbacks));
       await P.ctx.close();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 3k. 音效 / BGM 开关芯片（效 / 乐）：竖屏 390×844、横屏 1280×800、横持手机 844×390 下第 1 / 45 / 48 / 49 关开局，
+  //     真实绘制（fillText 外框）核对：字形在芯片里、芯片不大于 HUD 最小按钮、不压提示行（soundChipCheck）；
+  //     第 1 关竖屏点一下「效」→ 画成「静」、仍满足同样条件
+  {
+    report.soundChips = [];
+    for (const vp of [{ w: 390, h: 844, dpr: 2, tag: "portrait-390x844" }, { w: 1280, h: 800, dpr: 1, tag: "landscape-1280x800" }, { w: 844, h: 390, dpr: 2, tag: "landscape-844x390" }]) {
+      for (const li of [0, 44, 47, 48]) {
+        const P = await openPage(vp, li, 1);
+        await sleep(300);
+        const sc = await soundChipCheck(P);
+        report.soundChips.push({ level: li + 1, vp: vp.tag, ...sc });
+        check(`第 ${li + 1} 关音效 / BGM 开关：字形在芯片内、不大于 HUD 按钮、不压提示行：${vp.tag}`, sc.ok, sc);
+        if (li === 0 && vp.tag === "portrait-390x844") {
+          const r = sc.chips[0].rect, L = await P.page.evaluate(() => window.m3debug.layout);
+          await P.page.mouse.click(L.ox + (r.x + r.w / 2) * L.u, L.oy + (r.y + r.h / 2) * L.u); await sleep(200);
+          const s2 = await soundChipCheck(P);
+          report.soundChips.push({ level: 1, vp: vp.tag, toggled: true, ...s2 });
+          check("第 1 关点「效」后画成「静」，仍在芯片内、不压提示行：portrait-390x844", s2.ok && s2.chips[0].glyph?.text === "静" && s2.chips[1].glyph?.text === "乐", s2);
+        }
+        if ([0, 47, 48].includes(li) && vp.tag !== "landscape-844x390") await P.shot(`sound-chips-l${String(li + 1).padStart(2, "0")}-${vp.tag}`);
+        await P.ctx.close();
+      }
     }
   }
 

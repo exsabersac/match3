@@ -123,8 +123,25 @@ make size            # 事后单独看体积
 3b. 用 `tools/gen_web_atlas.py`（需 python3 + Pillow）从 `assets/` 生成 `atlas.webp` + `atlas.json` + `background.webp`，
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
    注意：`atlas.webp` 的 ALPH 块（无损 alpha，`method=6`）换机器重建可能差几十字节（同一 Pillow 12.3.0 / libwebp 1.6.0，疑为 libwebp 按 CPU 指令集走不同实现），
-   解码后 RGBA 逐像素相同、VP8 块与 `background.webp` 逐字节相同；2026-10-03 box 换宿主后重建得 488,226 B（原提交版 488,278 B），已改为提交当前 box 重建的版本，使 `make clean` 后重建与提交版逐字节一致；
+   解码后 RGBA 逐像素相同；因此 dist 可复现性对它只比解码像素（见本节末「dist 可复现性比对」）。
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
+
+dist 可复现性比对（发布前、测试跑手自检用）：`make clean && make build` 后，`atlas.webp` 只比**解码像素**，dist 其他文件仍**逐字节**比。
+需要 `dwebp`（`sudo apt-get install -y webp`）：
+
+```sh
+make clean && make build
+# 1) 除 atlas.webp 外 dist 逐字节一致：输出必须为空（含新增 / 删除文件）
+git status --porcelain -- web/dist ':(exclude)web/dist/atlas.webp'
+# 2) atlas.webp 只比解码像素：转 PAM（RGBA）后 cmp，必须无输出、退出码 0
+git show HEAD:web/dist/atlas.webp > /tmp/atlas-head.webp
+dwebp -quiet -pam /tmp/atlas-head.webp -o /tmp/atlas-head.pam
+dwebp -quiet -pam web/dist/atlas.webp  -o /tmp/atlas-new.pam
+cmp /tmp/atlas-head.pam /tmp/atlas-new.pam
+```
+
+两步都过即算可复现；若只有 `atlas.webp` 字节不同而像素相同，不必提交，`git checkout -- web/dist/atlas.webp` 还原即可。
+（2026-10-03 box 换宿主后重建得 488,226 B，原提交版 488,278 B，像素相同；当时已提交新版本，即现在的 488,226 B。）
 
 图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
 1024×1730，WebP 约 488 KB（488,226 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。

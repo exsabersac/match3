@@ -26,10 +26,10 @@ module Match3.Element.Builtin.Actor
 
 import Control.Applicative ((<|>))
 import Data.Bits (xor)
-import Data.Char (ord)
+import Data.List.NonEmpty (NonEmpty (..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
-import Match3.Element.Builtin.Common (colorPlace)
+import Match3.Element.Builtin.Common (boardSeed, colorPlace, pickBy, plainGem, posSeed)
 import Match3.Element.Caps
 import Match3.Element.Event
 import Match3.Element.Registry
@@ -119,26 +119,22 @@ fuzzballAdjacent ctx b =
   in AdjOut b dead []
 
 -- | 步末跳格（纯函数，测试直接调用）：避让格（皮带本步移过的格）与墙（传送门端点）不跳；
+-- 目标格按盘面散列选（'boardSeed' 依赖 @show board@，见 Element.Builtin.Common）；
 -- 返回逐个毛球的 (原格, 新格)（行优先）与跳完的盘面。
 fuzzballJumps :: [Pos] -> [Pos] -> Board -> ([(Pos, Pos)], Board)
 fuzzballJumps avoid walls b0 = (reverse movesRev, bEnd)
   where
     balls = positionsWhere isFuzzball b0
-    seed = fnv (show b0)
+    seed = boardSeed b0
     (movesRev, bEnd, _) = foldl' one ([], b0, []) balls
     one (acc, b, touched) p =
       let cands = [q | q <- orthoNeighbors p, inBounds b q, q `notElem` avoid, q `notElem` walls, q `notElem` touched, plainGem (getCell b q)]
       in case cands of
            [] -> (acc, b, touched)
-           _ ->
-             let q = cands !! fromIntegral ((seed `xor` fnv (show p)) `mod` fromIntegral (length cands))
+           c : cs ->
+             let q = pickBy (seed `xor` posSeed p) (c :| cs)
                  b' = setCell (setCell b q (getCell b p)) p (getCell b q)
              in ((p, q) : acc, b', p : q : touched)
-    plainGem cell = case cell of
-      Gem _ Normal 0 Nothing -> True
-      _ -> False
-    fnv :: String -> Integer
-    fnv = foldl' (\h ch -> ((h `xor` fromIntegral (ord ch)) * 1099511628211) `mod` 18446744073709551616) 14695981039346656037
 
 -- | 步末：毛球跳格，每跳一次记两项（毛球 原格 → 新格、宝石 新格 → 原格）。
 fuzzballRun :: EndCtx -> Board -> (Maybe EndEffect, Board)

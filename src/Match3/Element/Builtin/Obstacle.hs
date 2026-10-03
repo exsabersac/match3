@@ -45,13 +45,13 @@ module Match3.Element.Builtin.Obstacle
 import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.Bits (xor)
-import Data.Char (ord)
+import Data.List.NonEmpty (NonEmpty (..))
 
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
 import Match3.Element.Builtin.Collectible (CookieE(..))
-import Match3.Element.Builtin.Common (colorPlace, deadRule)
+import Match3.Element.Builtin.Common (boardSeed, colorPlace, deadRule, pickBy, plainGem, posSeed)
 import Match3.Element.Builtin.Gem (PlainGem(..))
 import Match3.Element.Caps
 import Match3.Element.Registry
@@ -294,18 +294,13 @@ snowBossDamage ctx b0 = foldl one (AdjOut b0 [] []) (snowBosses b0)
              then AdjOut b (dead ++ map fst parts) sit
              else AdjOut (foldl (\bd (p, x) -> setCell bd p (toCell x {sbHp = hp'})) b parts) dead sit
 
--- | 召唤选格（纯函数，测试直接调用）：避让格 / 墙之外、身外一圈里的普通宝石（无冰无叠层）按盘面散列选一格。
+-- | 召唤选格（纯函数，测试直接调用）：避让格 / 墙之外、身外一圈里的普通宝石（无冰无叠层）按盘面散列选一格
+-- （'boardSeed' 依赖 @show board@，见 Element.Builtin.Common）。
 snowBossSpawn :: [Pos] -> [Pos] -> Board -> Pos -> Maybe Pos
 snowBossSpawn avoid walls b anchor =
   case [q | q <- bossRing b anchor, q `notElem` avoid, q `notElem` walls, plainGem (getCell b q)] of
     [] -> Nothing
-    cands -> Just (cands !! fromIntegral ((fnv (show b) `xor` fnv (show anchor)) `mod` fromIntegral (length cands)))
-  where
-    plainGem cell = case cell of
-      Gem _ Normal 0 Nothing -> True
-      _ -> False
-    fnv :: String -> Integer
-    fnv = foldl' (\h ch -> ((h `xor` fromIntegral (ord ch)) * 1099511628211) `mod` 18446744073709551616) 14695981039346656037
+    c : cs -> Just (pickBy (boardSeed b `xor` posSeed anchor) (c :| cs))
 
 -- | 步末：每只 Boss 召唤计数 +1，满了归零并召唤雪块；记一条 EvTick（四格 + 雪块格）。
 snowBossRun :: EndCtx -> Board -> (Maybe EndEffect, Board)

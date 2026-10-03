@@ -1,7 +1,11 @@
 -- | 各内置本体（石块 / 宝箱 / 蜂蜜 / 气球 / 饼干 / 蛋糕 / 魔法帽 / 果汁机 / 蜗牛 / 保险箱 / 双面块 / 彩蛋 /
 -- 染色瓶 / 时间精灵 / 倒计时）的构造、谓词与读数（第 6 刀从 Match3.Types 拆出）。
 --
--- 依赖：Match3.Color、Match3.Types.Cell。
+-- 第 9 项（docs/haskell-features/09-规则去重.md）：五种带层数的占格障碍（石块 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱）的
+-- mkXLayers / xLayers / isX 原来各是一组只差构造器的 case，现在都由同一个棱镜（Match3.Types.Optics 的 '_Stone' 等）派生：
+-- 构造 = @review 棱镜 . max 1@，读数 = 'layersOf' 棱镜，谓词 = @has 棱镜@。
+--
+-- 依赖：Match3.Color、Match3.Types.Cell、Engine.Optics、Match3.Types.Optics（障碍棱镜）。
 module Match3.Types.Body
   ( mkSnail
   , isSnail
@@ -54,8 +58,20 @@ module Match3.Types.Body
   , countdownTurns
   ) where
 
+import Data.Maybe (fromMaybe)
+import Data.Monoid (First)
+import Engine.Optics (Getting, AReview, has, preview, review)
 import Match3.Color (Color)
 import Match3.Types.Cell
+import Match3.Types.Optics (_Cake, _Chest, _Honey, _Safe, _Stone)
+
+-- | 带层数障碍的构造：至少 1 层（第 9 项前各写一遍 @X (max 1 n)@）。
+mkLayers :: AReview Cell Int -> Int -> Cell
+mkLayers layer n = review layer (max 1 n)
+
+-- | 带层数障碍的层数：不是这种障碍时 0（第 9 项前各写一遍 @xLayers (X n) = n; xLayers _ = 0@）。
+layersOf :: Getting (First Int) Cell Int -> Cell -> Int
+layersOf layer = fromMaybe 0 . preview layer
 
 -- | Snail facing (dr, dc); typically (0,1) right or (1,0) down.
 mkSnail :: Int -> Int -> Cell
@@ -80,15 +96,13 @@ mkStone = Stone 1
 
 -- | Multi-layer stone / crate (开心消消乐-style box).
 mkStoneLayers :: Int -> Cell
-mkStoneLayers n = Stone (max 1 n)
+mkStoneLayers = mkLayers _Stone
 
 stoneLayers :: Cell -> Int
-stoneLayers (Stone n) = n
-stoneLayers _ = 0
+stoneLayers = layersOf _Stone
 
 isStone :: Cell -> Bool
-isStone (Stone _) = True
-isStone _ = False
+isStone = has _Stone
 
 -- | Single-layer treasure chest (宝箱).
 mkChest :: Cell
@@ -96,15 +110,13 @@ mkChest = Chest 1
 
 -- | Multi-layer treasure chest.
 mkChestLayers :: Int -> Cell
-mkChestLayers n = Chest (max 1 n)
+mkChestLayers = mkLayers _Chest
 
 chestLayers :: Cell -> Int
-chestLayers (Chest n) = n
-chestLayers _ = 0
+chestLayers = layersOf _Chest
 
 isChest :: Cell -> Bool
-isChest (Chest _) = True
-isChest _ = False
+isChest = has _Chest
 
 -- | Single-layer honey jar (蜂蜜罐).
 mkHoney :: Cell
@@ -112,15 +124,13 @@ mkHoney = Honey 1
 
 -- | Multi-layer honey jar.
 mkHoneyLayers :: Int -> Cell
-mkHoneyLayers n = Honey (max 1 n)
+mkHoneyLayers = mkLayers _Honey
 
 honeyLayers :: Cell -> Int
-honeyLayers (Honey n) = n
-honeyLayers _ = 0
+honeyLayers = layersOf _Honey
 
 isHoney :: Cell -> Bool
-isHoney (Honey _) = True
-isHoney _ = False
+isHoney = has _Honey
 
 -- | Colored balloon (气球): blocks swaps; adjacent same-color clear pops it.
 mkBalloon :: Color -> Cell
@@ -148,15 +158,13 @@ mkCake = Cake 1
 
 -- | Multi-layer cake (蛋糕).
 mkCakeLayers :: Int -> Cell
-mkCakeLayers n = Cake (max 1 n)
+mkCakeLayers = mkLayers _Cake
 
 cakeLayers :: Cell -> Int
-cakeLayers (Cake n) = n
-cakeLayers _ = 0
+cakeLayers = layersOf _Cake
 
 isCake :: Cell -> Bool
-isCake (Cake _) = True
-isCake _ = False
+isCake = has _Cake
 
 -- | Magic hat (魔法帽): blocks swaps; adjacent clear swaps/recolors neighbor colors.
 mkMagicHat :: Cell
@@ -190,15 +198,13 @@ mkSafe :: Cell
 mkSafe = Safe 1
 
 mkSafeLayers :: Int -> Cell
-mkSafeLayers n = Safe (max 1 n)
+mkSafeLayers = mkLayers _Safe
 
 safeLayers :: Cell -> Int
-safeLayers (Safe n) = n
-safeLayers _ = 0
+safeLayers = layersOf _Safe
 
 isSafe :: Cell -> Bool
-isSafe (Safe _) = True
-isSafe _ = False
+isSafe = has _Safe
 
 -- | Dual-face gem (双面块): matches as front color; a clear hit flips to Normal gem of back.
 mkFlip :: Color -> Color -> Cell

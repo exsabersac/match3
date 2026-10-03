@@ -12,6 +12,10 @@
 -- 'cellAt' 是透镜（坐标在界内时恰好一个焦点），'gemOverlay' / 'overlay' 是遍历（非宝石格没有焦点），
 -- '_Fog' 等是棱镜（叠层是不是这一种）。定律见 test/Spec/Optics.hs。
 --
+-- 第 9 项（docs/haskell-features/09-规则去重.md）加上占格障碍的棱镜 '_Stone' / '_Chest' / '_Honey' / '_Cake' / '_Safe'
+-- （@Prism' Cell Int@：格子是不是这种障碍、剩几层），Match3.Obstacles 的五份邻消揭层与 Match3.Types.Body 的五组
+-- 构造 / 读数 / 谓词都改成「传棱镜」；改色遍历 'cellColorT' 定义在 Match3.Types.Cell（cellColor 要用），这里再导出。
+--
 -- 依赖：Engine.Optics、Match3.Types.Cell、Match3.Types.Board。
 module Match3.Types.Optics
   ( -- * 盘面
@@ -21,6 +25,13 @@ module Match3.Types.Optics
   , _Gem
   , gemOverlay
   , overlay
+  , cellColorT
+    -- * 带层数的占格障碍（第 9 项）
+  , _Stone
+  , _Chest
+  , _Honey
+  , _Cake
+  , _Safe
     -- * 叠层
   , _Fog
   , _Chain
@@ -65,3 +76,14 @@ _Fog = prism' Fog (\o -> case o of Fog n -> Just n; _ -> Nothing)
 _Chain = prism' Chain (\o -> case o of Chain n -> Just n; _ -> Nothing)
 _Freeze = prism' Freeze (\o -> case o of Freeze n -> Just n; _ -> Nothing)
 _Curtain = prism' Curtain (\o -> case o of Curtain n -> Just n; _ -> Nothing)
+
+-- | 带层数（耐久）的占格障碍：石头 / 宝箱 / 蜂蜜罐 / 蛋糕 / 保险箱。
+--
+-- 棱镜的 review 是原样的构造器（@review _Stone 0 == Stone 0@），这样才守棱镜定律；关卡与元素里用的
+-- 「至少 1 层」由 Match3.Types.Body 的 mkStoneLayers 等（= @review _Stone . max 1@）负责。
+_Stone, _Chest, _Honey, _Cake, _Safe :: Prism' Cell Int
+_Stone = prism' Stone (\c -> case c of Stone n -> Just n; _ -> Nothing)
+_Chest = prism' Chest (\c -> case c of Chest n -> Just n; _ -> Nothing)
+_Honey = prism' Honey (\c -> case c of Honey n -> Just n; _ -> Nothing)
+_Cake = prism' Cake (\c -> case c of Cake n -> Just n; _ -> Nothing)
+_Safe = prism' Safe (\c -> case c of Safe n -> Just n; _ -> Nothing)

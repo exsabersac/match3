@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | 单元格类型（第 6 刀从 Match3.Types 拆出）：宝石种类、叠层、单元格内容（全部内置本体 + 自定义开放槽），
 -- 以及对任意格都有定义的通用读数（颜色 / 种类 / 冰层 / 叠层 / 是否宝石 / 软锁）。
@@ -21,9 +22,11 @@ module Match3.Types.Cell
   , isCustom
   , isGem
   , cellColor
+  , cellColorT
   , cellKind
   ) where
 
+import Engine.Optics (Traversal', preview)
 import GHC.Generics (Generic)
 import Match3.Color (Color(..))
 import Match3.Types.Name (CustomState(..), ElementName(..))
@@ -150,12 +153,19 @@ isGem (Custom _ _) = False
 
 -- | 宝石 / 倒计时 / 双面块（正面）的颜色；其余格没有颜色（Nothing）。
 -- 气球 / 榨汁机 / 染色瓶的颜色另见 balloonColor / makerColor / bottleColor。
+-- （第 9 项起 = @preview cellColorT@：「读颜色」与魔法帽 / 染色瓶的「改颜色」是同一个遍历，哪些格有颜色只写一次。）
 cellColor :: Cell -> Maybe Color
-cellColor cell = case cell of
-  Gem c _ _ _ -> Just c
-  Countdown c _ -> Just c
-  Flip f _ -> Just f
-  _ -> Nothing
+cellColor = preview cellColorT
+
+-- | 格子「参与匹配的那个颜色」（Haskell 特性第 9 项）：宝石 / 倒计时 / 双面块的正面各一个焦点，其余格没有焦点。
+-- 读 = 'cellColor'，写 = 魔法帽 / 染色瓶的改色（第 9 项前 Match3.Obstacles 里的 recolorCell 是同样三个分支的手写版）。
+-- 遍历定律在 test/Spec/RulesDedup.hs 检查。
+cellColorT :: Traversal' Cell Color
+cellColorT f cell = case cell of
+  Gem c k i o -> (\c' -> Gem c' k i o) <$> f c
+  Countdown c n -> (`Countdown` n) <$> f c
+  Flip c back -> (`Flip` back) <$> f c
+  _ -> pure cell
 
 -- | 宝石的种类；倒计时与双面块按 Normal 参与组合判定；其余格没有种类（Nothing）。
 cellKind :: Cell -> Maybe GemKind

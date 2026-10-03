@@ -17,6 +17,7 @@ module Match3.Game.Level
   , campaignGame
   , newGameAtLevel
   , newGameAtLevelWith
+  , newGameForLevelWith
   , newDailyGame
   , restart
   , restartLevel
@@ -89,9 +90,18 @@ newGameAtLevel = newGameAtLevelWith defaultRegistry
 -- | newGameAtLevel（指定注册表）：装饰、目标补齐、可玩判定用这张表；关卡级元素 = 这张表里注册的各种 + 核心元素，
 -- 各自由关卡记录（lvlGoal 换成本局目标）给出开局状态（飞碟 / 地毯的目标补齐在各自的 levelStart 里）。
 newGameAtLevelWith :: Registry -> Int -> GameConfig -> Int -> GameState
-newGameAtLevelWith reg li cfg seed =
+newGameAtLevelWith reg li cfg seed = newGameFromWith reg li (lookupLevel li) cfg seed
+
+-- | 按一份完整的关卡记录开局（不必在战役表里，例如关卡包 / 编辑器 / 测试）：步数与目标取自记录，
+-- 装饰、关卡级元素、行列都按记录；gsLevel = lvlIndex（结局与下一关仍按战役下标判定）。
+-- 开局前按 'assertLevel' 校验记录（同 lookupLevel）。对战役里的关，与 'campaignGame' 逐字相同（engine_level_setup_matches_campaign）。
+newGameForLevelWith :: Registry -> Level -> Int -> GameState
+newGameForLevelWith reg l seed = newGameFromWith reg (lvlIndex l) (Just (assertLevel l)) (levelConfig l) seed
+
+-- | 开局的公共部分：关卡下标、关卡记录（Nothing = 没有装饰与关卡级元素，只按目标补齐）、配置、种子。
+newGameFromWith :: Registry -> Int -> Maybe Level -> GameConfig -> Int -> GameState
+newGameFromWith reg li lvl cfg seed =
   let g0 = mkStdGen seed
-      lvl = lookupLevel li
       rows = maybe boardSize lvlRows lvl
       cols = maybe boardSize lvlCols lvl
       (board0, g1) = randomPlayableBoardSized rows cols g0

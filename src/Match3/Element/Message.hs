@@ -23,6 +23,7 @@ module Match3.Element.Message
   , WallCells(..)
   , Morphing(..)
   , Morph(..)
+  , Judging(..)
   ) where
 
 import Data.Typeable (Typeable, cast)
@@ -88,6 +89,11 @@ data Morph = Morph
   , morphSeeds :: [Pos]
   }
 
+-- | 查询（胜负节拍）：一步结算之后、写进 gsOver 之前；结算后的盘面、总分、剩余步数、内置规则判出的结局
+-- （目标满足 → Won / LevelClear，步数用尽 → Lost，否则 MoveApplied）。回复者可以换掉结局再交回
+-- （例如限时关、倒计时归零即输）。只是查询：回复者推进后的状态不写回。没有元素回复 = 按内置规则（原有行为）。
+data Judging = Judging Board Score MovesLeft Outcome
+
 instance Message Refilled
 instance Message Refilling
 instance Message Shaping
@@ -98,3 +104,4 @@ instance Message GroundHit
 instance Message AvoidCells
 instance Message WallCells
 instance Message Morphing
+instance Message Judging

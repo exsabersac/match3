@@ -45,7 +45,8 @@ import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Element.Level (levelRegistryIn)
 import Match3.Element.Registry (Registry)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveFreeSwapWith, resolveHammerWith)
-import Match3.Game.Level (campaignGame, newDailyGame, newGame, newGameAtLevel)
+import Match3.Game.Level (campaignGame, newDailyGame, newGame, newGameAtLevel, newGameForLevelWith)
+import Match3.Levels.Level (Level)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Shuffle (shuffleGameWith)
 import Match3.Game.State (GameState(..), MoveFx(..), applyHintWith, clearMoveFx, moveFx)
@@ -67,6 +68,7 @@ data Setup
   = Campaign Int          -- ^ 战役第 n 关（0 起）
   | CustomLevel GameConfig     -- ^ 任意配置（不带战役装饰）
   | Daily Year Month Day  -- ^ 每日挑战（年 月 日；种子由日期决定，gameNew 的种子参数不用）
+  | LevelSetup Level      -- ^ 任意完整关卡记录（装饰、关卡级元素、行列都按记录；用本实例的注册表开局）
   deriving (Eq, Show)
 
 -- | 一个动作的完整结果（三消外壳需要的全部数据）。
@@ -145,6 +147,7 @@ match3GameWith reg =
       Campaign li -> fromMaybe (newGameAtLevel li defaultConfig seed) (campaignGame li seed)
       CustomLevel cfg -> newGame cfg seed
       Daily y m d -> newDailyGame (dailyConfig y m d) (dailySeed y m d)
+      LevelSetup l -> newGameForLevelWith reg l seed
 
 -- | 三消的撤销规则：交换与三种道具被接受时记快照（最多 20 份，与原 gsHistory 相同）；
 -- 快照去掉提示与洗牌标记，撤销回去时再清掉本步特效字段与终局标记（原 snapshot / undoMove 的逐字搬迁）。

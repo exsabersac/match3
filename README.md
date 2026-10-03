@@ -215,7 +215,7 @@ app/pure/     不依赖 SDL 的纯前端模块（桌面、测试、网页共用�
               UI/MoveText（走步结果 → 桌面提示文案）、UI/Palette（调色板：五色 / 格子颜色）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；461 命名用例）
+test/Spec.hs  测试入口（只汇总；464 命名用例）
 test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
@@ -227,5 +227,5 @@ docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 
 ## 发布状态
 
 - 战役：**49** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球，第 44 关「魔力鸟」是新玩法魔力鸟组合增强，第 45 关「雪怪」是新玩法雪怪 Boss，第 46 关「掉落口」是新玩法饼干掉落口，第 47 关「变色龙」是新玩法变色龙，第 48 关「魔法格」是新玩法魔法地格，第 49 关「宽域」是 6×9 矩形盘面），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **461**（Tasty + QuickCheck）
+- 测试：`stack test` **464**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

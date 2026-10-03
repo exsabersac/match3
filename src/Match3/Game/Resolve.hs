@@ -50,7 +50,7 @@ import Match3.Board.Cascade
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Phase (IsFull, Phase(..), Stage, stageBoard)
-import Match3.Element.Level (coverIn, hitGroundIn, levelHooksWith, levelRegistryIn)
+import Match3.Element.Level (coverIn, hitGroundIn, judgeIn, levelHooksWith, levelRegistryIn)
 import Match3.Element.Registry (Registry)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
 import Match3.Game.EndPhase (EndStage, boosterEndTable, runEndTable, swapEndTable)
@@ -202,7 +202,8 @@ resolveMoveWith reg0 sk startS opening gs =
             , gsLastCleared = nub clearedAll
             , gsLevelElems = elems'
             }
-      outcome = decideOutcome gs' gained
+      -- 胜负：内置规则先判，再交关卡级元素复核（胜负节拍 Judging；没人回复时原样）
+      outcome = judgeIn reg elems' board1 (gsScore gs') (gsMoves gs') (decideOutcome gs' gained)
       gs'' = case terminalOf outcome of
         Just t -> gs' {gsOver = Just t}
         Nothing -> gs'

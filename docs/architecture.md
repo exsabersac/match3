@@ -298,6 +298,7 @@ instance Element StoneE where
 | `Settling 可穿门谓词 可空盘` | 沉降时 | `PortalLevel`（`portalTeleport`） | 钩子 `onSettle`（`Board.Gravity.settleDrainWith`） |
 | `Covering 本步格 新覆盖数` | 步末结算 | `CarpetLevel`（`coverCarpets`） | `coverIn`（`Resolve`） |
 | `GroundHit 规则 命中格 去层数` | 每轮之后（按轮） | `GroundLayer`（规则 = 注册表的 `hitGroundWith`；核心元素） | `hitGroundIn`（`Resolve`） |
+| `Judging 盘面 总分 剩余步数 结局` | 一步结算之后、写进 `gsOver` 之前（初值 = 内置规则判出的结局：目标满足 → `Won` / `LevelClear`，步数用尽 → `Lost`，否则 `MoveApplied`）；只查询，回复者的状态不写回 | 无（内置都不回复 = 原有结局） | `judgeIn`（`Resolve`）；限时关、倒计时归零即输这类输法只加关卡级元素，见 `ext_judging_level_element` |
 
 **Board 层只收钩子记录**（第 7 刀，`Match3.Board.Hooks`）：`LevelHooks { onSettle :: MBoard -> MBoard, onAbsorb :: Board -> ([Pos], LevelHooks), hookRefill :: Maybe RefillPolicy（第 8 刀）, hookLevel :: [SomeLevelElement] }`，由 `levelHooksWith reg (gsLevelElems gs)` 造出；连锁把 `onAbsorb` 交回的钩子一路传下去（`CascadeRun.crHooks`），Game 层最后从 `hookLevel` 取回推进后的关卡级元素。第 3 刀留下的 `[Ufo]` / 传送门对参数全部删掉，Board 核心模块（Match / Clear / Cascade / Gravity / Hooks / Grid）不 import 飞碟 / 皮带 / 地毯模块，也不碰 `GameState`（`br_board_takes_hooks_only` 扫描）。
 
@@ -457,6 +458,7 @@ data GameView = GameView
    - 新玩法 7 的变色龙（`Chameleon`，在 `Element.Builtin.Collectible`）：`Custom` 本体 + `piece [colorIs (colorAt k), keepsOnShuffle, noRecolor, counts (CountNamed "chameleon"), onSwap (SwapRule 15 …), atEnd (moveRule 40 …)]`，主流程不改；第 47 关用新玩法 6 的掉落口（`DropSpec … (Custom "chameleon" 0) 2`）在补子时补进变色龙
    - 新玩法 8 的魔法地格（`MagicGround`，在 `Element.Builtin.Ground`）：地面层 `groundEntry (MagicGround 1)`，`caps _ = piece [widens magicWiden]`（没有 `ground` 规则 = 不被消耗、不计数）；为它加了一个缺省什么都不做的通用钩子（能力 `widens` / 注册表 `regWiden` / `blastWith` 改写，见「规则表」后的扩爆格一段）。主流程的改动只有 `Element.Level.levelRegistryIn` 多写一项与 `Engine.playWith` 展开事件改用 `levelRegistryIn`；第 48 关的地面层写在关卡记录 `lvlGround`
    - 仍需改主流程的：需要**新节拍**的关卡级元素（节拍由主流程在固定位置发出）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）。（补子时生成自定义棋子已可经掉落口 `lvlDrops` 做到，见新玩法 7。）
+   - 胜负条件：内置规则判出结局后经胜负节拍 `Judging` 交关卡级元素复核（`judgeIn`），新的输赢法（限时、某物落底即输……）只写一个回复 `Judging` 的 `LevelElement`，不改 `Game.Outcome`。
 3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 里加一行（关卡级元素加进 `builtinLevelDefs`）；测试 / 扩展元素 = `register (customEntry 原型 (元素 . unCustomState)) defaultRegistry`（地面层用 `groundEntry`，关卡级元素用 `registerLevel (SomeLevelElement 原型值)`，开局状态写在 `levelStart` 里，开局 / 走子用 `newGameAtLevelWith reg` 与 `*With reg` 入口），把注册表传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith reg`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由条目的放置函数落格（`customEntry` 缺省 = `Custom 名字 第一个整数参数`；要别的解析用 `customEntryWith`）。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Presentation.elementRGBTable`（HUD 目标 / 地图 / 几何版 / 步末前沿与碎屑共用）；步末效果的播放、生长曲线与音效见[前端表现表](#前端表现表第-10-刀)的「给新元素加表现和音效」；网页端什么时候要改 `web/www/cells.js` 见 [web.md §2.3](web.md#23-js-渲染器)。
@@ -555,7 +557,7 @@ data GameView = GameView
 | 字段 | 类型 | 说明 | 三消（`Match3.Engine.match3Game`） |
 |------|------|------|------------------------------------|
 | `gameName` | `String` | 名字 | `"match3"` |
-| `gameNew` | `cfg -> Seed -> s` | 开局；**唯一**接受外部种子的地方 | `Setup`：`Campaign 关卡下标` / `CustomLevel 配置` / `Daily 年 月 日`（每日的种子由日期决定） |
+| `gameNew` | `cfg -> Seed -> s` | 开局；**唯一**接受外部种子的地方 | `Setup`：`Campaign 关卡下标` / `CustomLevel 配置` / `Daily 年 月 日`（每日的种子由日期决定）/ `LevelSetup 关卡记录`（任意完整关卡记录，按记录铺装饰、开关卡级元素、定行列，用本实例的注册表；`Game.Level.newGameForLevelWith`） |
 | `gameStep` | `s -> a -> Step s e o r` | 纯函数推进一步，随机数只来自 `s` | 终局时拒绝走步与洗牌（提示除外：只写 `gsHint`，与原前端终局后按 H 的行为一致）；否则 `playWith reg`，`stepReport = Just Played` |
 | `gameOutcome` | `s -> Maybe o` | 结局判定 | `gsOver`（`o = Terminal`：`TWon` / `TLost` / `TLevelClear`） |
 | `gameActions` | `s -> [a]` | 当前会被接受的动作（测试 / 自动演示） | 所有会成交的相邻交换 |

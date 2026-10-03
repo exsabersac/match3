@@ -33,6 +33,7 @@ module Match3.Element.Level
   , wallCellsIn
   , coverIn
   , hitGroundIn
+  , judgeIn
   ) where
 
 import Data.Maybe (listToMaybe, mapMaybe)
@@ -181,3 +182,8 @@ coverIn reg hit elems = maybe (0, elems) (\(Covering _ n, es) -> (n, es)) (askLe
 hitGroundIn :: Registry -> [Pos] -> [SomeLevelElement] -> ([(ElementName, Int)], [SomeLevelElement])
 hitGroundIn reg hits elems =
   maybe ([], elems) (\(GroundHit _ _ cs, es) -> (cs, es)) (askLevelsIn reg elems (GroundHit (hitGroundWith reg) hits []))
+
+-- | 胜负节拍（'Judging'）：内置规则判出的结局交给关卡级元素复核，有回复就用回复里的结局。
+-- 内置关卡级元素都不回复，所以内置关卡与每日挑战的结局与原来逐字相同（judge_default_no_replier）。
+judgeIn :: Registry -> [SomeLevelElement] -> Board -> Score -> MovesLeft -> Outcome -> Outcome
+judgeIn reg elems b score moves out = maybe out (\(Judging _ _ _ o, _) -> o) (askLevelsIn reg elems (Judging b score moves out))

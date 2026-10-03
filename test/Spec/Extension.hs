@@ -32,7 +32,8 @@ import Match3.Element
   ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
   , inertEntry, levelHooksWith, registerLevel, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
 import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
-import Match3.Element.Message (Refilling(..), fromMessage)
+import Match3.Element.Message (Judging(..), Refilling(..), fromMessage)
+import Match3.Element.Level (judgeIn)
 import qualified Match3.Combos as Combos
 import Match3.Types (goalCount, goalScore)
 import System.Random (mkStdGen)
@@ -53,6 +54,8 @@ tests =
   , testCase "ext_combo_rule_line_gem" ext_combo_rule_line_gem
   , testCase "ext_refill_policy_level_element" ext_refill_policy_level_element
   , testCase "ext_refill_policy_level_colors" ext_refill_policy_level_colors
+  , testCase "ext_judging_level_element" ext_judging_level_element
+  , testCase "judge_default_no_replier" judge_default_no_replier
   ]
 
 -- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
@@ -369,3 +372,39 @@ ext_refill_policy_level_colors = do
           (b, _, _) = settleRefillWith r (levelHooksWith r []) (mkStdGen 42) mb
   assertEqual "three colours only" [C1, C2, C3] (colorsOf reg)
   assertEqual "default: all five" [C1, C2, C3, C4, C5] (colorsOf defaultRegistry)
+
+-- | 胜负节拍（Judging）：测试专用「限时」关卡级元素在剩余步数 ≤ 3 时把未结束的一步判成输（Lost 总分）；
+-- 只 registerLevel 即可接入，主流程不改。内置注册表下同一步照常 MoveApplied；步数充足时限时元素不改结局。
+data TimeLimit = TimeLimit
+  deriving (Eq, Show)
+
+instance LevelElement TimeLimit where
+  levelName _ = "time_limit"
+  levelReply l msg
+    | Just (Judging b score moves (MoveApplied _)) <- fromMessage msg
+    , moves <= 3 =
+        Just (SomeMessage (Judging b score moves (Lost score)), l)
+    | otherwise = Nothing
+
+ext_judging_level_element :: Assertion
+ext_judging_level_element = do
+  let reg = registerLevel (SomeLevelElement TimeLimit) defaultRegistry
+      start moves = (newGame (GameConfig moves (goalScore 99999)) 7) {gsBoard = tripleBoard}
+      (p1, p2) = tripleMove
+      (gs1, o, _) = resolveSwapWith reg p1 p2 (start 4)
+      (gsD, oD, _) = resolveSwapWith defaultRegistry p1 p2 (start 4)
+      (gsL, oL, _) = resolveSwapWith reg p1 p2 (start 10)
+  assertEqual "time limit: 3 moves left -> Lost" (Lost (gsScore gs1)) o
+  assertEqual "gsOver follows the judged outcome" (Just (TLost (gsScore gs1))) (gsOver gs1)
+  assertBool "default registry: move applied" (moveApplied oD && gsOver gsD == Nothing)
+  assertBool "plenty of moves: not judged" (moveApplied oL && gsOver gsL == Nothing)
+
+-- | 内置关卡级元素都不回复胜负节拍：全部战役关开局（种子 1），任何结局交给 judgeIn 都原样返回。
+judge_default_no_replier :: Assertion
+judge_default_no_replier =
+  sequence_
+    [ assertEqual ("level " ++ show li ++ " " ++ show o) o (judgeIn defaultRegistry (gsLevelElems gs) (gsBoard gs) (gsScore gs) (gsMoves gs) o)
+    | li <- [0 .. campaignLevelCount - 1]
+    , let gs = levelGame li 1
+    , o <- [MoveApplied 5, Lost 3, Won 7, LevelClear 9 (li + 1)]
+    ]

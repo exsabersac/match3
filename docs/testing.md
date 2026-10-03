@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**461** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**464** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -51,6 +51,7 @@ stack test
     - 前端 API 护栏新增 1 个（`View`：`frontends_import_core_api`）→ 459
     - 终局类型 `Terminal` 新增 1 个（`GoalsLevels`：`terminal_outcome_mapping`，见下文「终局类型 Terminal」）→ 460
   - 贴图生成器调色板纳入颜色对照，+1 → 461（`WebColors`：`gen_assets_gem_palette_matches_palette`）
+  - 可扩展性 P2（2026-10）：完整关卡记录开局 `LevelSetup` +1（`Engine`：`engine_level_setup_matches_campaign`）、胜负节拍 `Judging` +2（`Extension`：`ext_judging_level_element`、`judge_default_no_replier`）→ 464
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 可选完整链路：
@@ -90,7 +91,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 测试套件**直接编译 `src/`**（`source-dirs` 含 `src`，不依赖 `match3` 库）：库模块对测试是同一组件里的模块，GHC 只重编真正用到改动内容的测试模块。改一个库模块导出时，`make verify` 从约 50–67 s 降到约 22–27 s；代价是全量构建多编一遍 `src`（约 +15 s）。
 - 内置内容的数量（关卡数、注册表条目数、本体 instance 数）集中在 `test/Spec/Support/Inventory.hs`，加元素 / 加关卡只改那里。
 - 每个用例默认 120 秒超时（`test/Spec.hs` 的 `defaultTimeout`，命令行 `--timeout` 优先），挂起会变成失败而不是卡住。
-- 目录（用例数合计 461）：
+- 目录（用例数合计 464）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -107,11 +108,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/GoalsLevels.hs` | 33 | 目标、结局、星级、关卡表、每日、地图与步数结转；`find_match_pair_engine_accepts`（测试辅助 `findMatchPair` 选出的对引擎必须接受）；`terminal_outcome_mapping`（`Terminal` ↔ `Outcome` 的对应） |
 | `test/Spec/Levels.hs` | 12 | 第 6a 刀：关卡记录与关卡表——全部内置关卡与每日挑战（两年每天，覆盖 10 种目标）的放置表都是 `Right`、`placeWith` 的 `UnknownElement` / `PlaceOutOfBounds`、坏放置表的报错带关卡名、`campaignGame` 与 `newGameAtLevel … (levelConfig …)` 相同、越界的重开 / 下一关夹到范围内、`allLevels !!` 源码扫描（src / app / web/hs / test），性质 `qc_lookup_level_in_range` / `qc_clamp_level_index_found`；关卡矩形盘面（20455d3）：盘面尺寸越界（5–10 之外）被拒、第 49 关「宽域」是 6×9、其余关卡仍是 8×8 |
 | `test/Spec/Element.hs` | 2 | 元素注册表（测试专用木箱 `Crate` / 条目 `crateDef` 在 Support 里） |
-| `test/Spec/Extension.hs` | 11 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌；第 7b 刀通用步末效果（跳跳虫）；第 8 刀扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、两种补子策略（关卡级元素「金币雨」、关卡颜色数 `colorsRefill 3`）（样例元素苔藓 / 风筝 / 陷坑 / 浮尘 / 跳跳虫 / 金币雨与样例规则只定义在该模块里） |
+| `test/Spec/Extension.hs` | 13 | 段 2c 扩展钩子护栏：Board 层收注册表（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌；第 7b 刀通用步末效果（跳跳虫）；第 8 刀扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、两种补子策略（关卡级元素「金币雨」、关卡颜色数 `colorsRefill 3`）（样例元素苔藓 / 风筝 / 陷坑 / 浮尘 / 跳跳虫 / 金币雨与样例规则只定义在该模块里）；可扩展性 P2 胜负节拍：测试专用「限时」关卡级元素经 `Judging` 把步数 ≤ 3 的一步判成输（`ext_judging_level_element`），内置关卡级元素都不回复（`judge_default_no_replier`，全部战役关） |
 | `test/Spec/Branches.hs` | 11 | 段 4 专门分支收编护栏：测试专用成对交换规则（拉杆）/ 开启规则（豆荚）/ 可推动（小车）只经注册表生效；内置改色 / 推动谓词与原写死谓词相同；关卡级元素（飞碟 / 皮带 / 传送门 / 地毯 / 地面层）的节拍回复与原实现相同、去掉后不生效（含 38 关实测；第 7a 刀起经钩子与 `Element.Level` 的节拍函数）；主流程源码扫描；第 7a 刀 `br_board_takes_hooks_only`（Board 核心只收钩子、流水线不读旧的五个字段、删掉的名字不再出现）；第 7b 刀 `br_end_phase_table_order`（步末表的内容与顺序、按表执行、删掉的步末构造器不再出现）；第 8 刀 `br_rule_tables_out_of_main_flow`（流水线不点名特殊块种类、不直接随机选色、不用组合几何；特殊合成不再挂在元素上） |
 | `test/Spec/ElementClass.hs` | 13 | 元素类（阶段 1 原型 → 阶段 2 迁移）：逐格查询 / 规则 / 逐手结果与阶段 1 的元素查询快照全等；`SomeElement` 的 Eq / Show（第 6b 刀：按类型比较，同名不同类型不等）、冰层修饰器组合、状态在元素值里、开放消息；扁平记录已删（源码扫描）、关卡级元素经消息、第 7a 刀带状态的扩展关卡级元素「虹吸」不改主流程接入（`levelStart` 开局、状态写回 `gsLevelElems`、去掉注册后原样不生效、`Show` 追加 `gsLevelExtra`；第 7b 刀起保留内置飞碟，同一 `Refilled` 节拍两者都吸收）、自定义可匹配宝石；注册表槽位由原型推导、`mkRegistryChecked` 报重名 / 槽位冲突 / 推不出槽位 |
 | `test/Spec/JellyBubble.hs` | 8 | 段 5 双层果冻 / 气泡：按层计数与目标、洗牌 / 撤销、气泡邻消 / 直接命中即破、挡交换 / 无色 / 下落、第 39 / 40 关、主流程源码扫描 |
-| `test/Spec/Engine.hs` | 5 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描） |
+| `test/Spec/Engine.hs` | 6 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描）；`engine_level_setup_matches_campaign`（`LevelSetup` 关卡记录开局 = `Campaign` 下标开局，全部战役关 × 种子 1–2；战役外记录按记录开局） |
 | `test/Spec/UIEvents.hs` | 8 | 前端反馈（MoveFx / 连击反馈 / 清除格）与效果事件 |
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`；第 5 项起把 `Golden.goldenSections` 各段经 `Spec.Support.Parallel.parallelForce` 多核求值、按原顺序拼回再逐行比对） |
@@ -455,7 +456,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 461，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 464，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

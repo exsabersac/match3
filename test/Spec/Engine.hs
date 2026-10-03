@@ -19,7 +19,9 @@ import Match3.Game.Shuffle (shuffleGame)
 import Match3.Game.State (clearMoveFx, gsBelts, gsCarpetOpen, gsCollected, gsColorBag, gsCount, gsPortals, moveFx)
 import Match3.Types (goalScore)
 import Numeric (showHex)
-import Spec.Support (levelGame)
+import Spec.Support (campaignLevelCount, levelAt, levelGame)
+import Match3.Element.Types (Placement(..))
+import Match3.Levels.Level (level)
 import Spec.Support.Source (importsOf, mentionsIdent, sourcesUnder, sourcesUnderAll)
 import Match3.Core
 import Match3.Game.Trace (traceEvents)
@@ -39,6 +41,7 @@ tests =
   , testCase "engine_match3_instance_matches_direct_api" engine_match3_instance_matches_direct_api
   , testCase "engine_undo_after_terminal_matches_legacy_play" engine_undo_after_terminal_matches_legacy_play
   , testCase "engine_frontend_steps_only_via_gameStep" engine_frontend_steps_only_via_gameStep
+  , testCase "engine_level_setup_matches_campaign" engine_level_setup_matches_campaign
   ]
 
 --------------------------------------------------------------------------------
@@ -239,3 +242,19 @@ engine_frontend_steps_only_via_gameStep = do
   where
     tailsS [] = [[]]
     tailsS xs@(_ : r) = xs : tailsS r
+
+-- | Setup 的 LevelSetup：对战役里的每一关（种子 1、2），按关卡记录开局与 Campaign 下标开局逐字相同；
+-- 不在战役表里的记录（6×7 盘、放一块石头、12 步）也按记录开局：行列、放置、步数、目标、gsLevel = lvlIndex。
+engine_level_setup_matches_campaign :: Assertion
+engine_level_setup_matches_campaign = do
+  sequence_
+    [ assertEqual ("level " ++ show li ++ " seed " ++ show seed) (gameNew M3E.match3Game (M3E.Campaign li) seed) (gameNew M3E.match3Game (M3E.LevelSetup (levelAt li)) seed)
+    | li <- [0 .. campaignLevelCount - 1]
+    , seed <- [1, 2]
+    ]
+  let custom = (level 0 "自定" 12 (goalScore 300)) {lvlRows = 6, lvlCols = 7, lvlPlacements = [Place (ElementName "stone") [] [(3, 3)]]}
+      gs = gameNew M3E.match3Game (M3E.LevelSetup custom) 5
+      b = gsBoard gs
+  assertEqual "rows x cols" (6, 7) (boardDims b)
+  assertBool "stone placed" (case getCell b (3, 3) of Stone _ -> True; _ -> False)
+  assertEqual "moves / goal / level" (12, goalScore 300, 0) (gsMoves gs, gsGoal gs, gsLevel gs)

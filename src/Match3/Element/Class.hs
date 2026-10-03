@@ -1,10 +1,10 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE ExistentialQuantification #-}
 -- | 元素类（xmonad LayoutClass 风格）：一种元素 = 一个类型 + 一个 'Element' instance。
--- 第 9 刀起类只剩 name / toCell / caps 三个方法：能力按职责分成五组带默认值的记录（'Caps'：匹配与交换 'MatchCaps'、
+-- 类只有 name / toCell / caps 三个方法：能力按职责分成五组带默认值的记录（'Caps'：匹配与交换 'MatchCaps'、
 -- 消除与受击 'HitCaps'、重力与移动 'MoveCaps'、计数与目标 'CountCaps'、步末与变化 'StepCaps'），缺省值由原型
 -- （'Archetype'：普通棋子 / 障碍 / 固定格）推出，元素只声明自己用到的能力（简写见 Match3.Element.Caps）；
--- 普通宝石除了名字和写回格子以外全用缺省。各能力的查询函数与第 9 刀前的方法同名（color / onHit / counter …）。
+-- 普通宝石除了名字和写回格子以外全用缺省。各能力的查询是普通函数（color / onHit / counter …）。
 --
 -- * 元素自己的状态放在 instance 的值里（石头的层数、保险箱的层数……）；受击（'onHit'）和消息处理
 --   （'handleMessage'）返回新的元素值（'SomeElement'，可以换成别的元素，如保险箱开成饼干）。
@@ -24,7 +24,7 @@ module Match3.Element.Class
   ( -- * 元素
     Element(..)
   , Archetype(..)
-    -- * 能力记录（第 9 刀）
+    -- * 能力记录
   , Caps(..)
   , MatchCaps(..)
   , HitCaps(..)
@@ -38,7 +38,7 @@ module Match3.Element.Class
   , countCaps
   , stepCaps
   , cellGemColor
-    -- * 能力查询（第 9 刀前是同名的类方法）
+    -- * 能力查询
   , archetype
   , color
   , matchColor
@@ -73,7 +73,6 @@ module Match3.Element.Class
   , Modifier(..)
   , ModHit(..)
   , SomeModifier(..)
-  , fromModifier
   , Modified(..)
   , modify
   , Inert(..)
@@ -106,7 +105,7 @@ import Match3.Types
 --------------------------------------------------------------------------------
 -- 元素
 
--- | 元素的原型：决定各组能力的缺省值（旧 ElementDef 的 gemDef / blocker / fixed 三个模板）。
+-- | 元素的原型：决定各组能力的缺省值（普通棋子 / 障碍 / 固定格三个模板）。
 data Archetype
   = Piece    -- ^ 普通棋子：可交换、能点火、会下落、可过传送门、命中即消、可改色 / 推动、洗牌时参与重排
   | Blocker  -- ^ 占格障碍：挡交换、不点火、会下落、打不动、洗牌保留
@@ -167,7 +166,7 @@ data StepCaps = StepCaps
   , stMessage :: SomeMessage -> Maybe SomeElement  -- ^ 处理一条消息：Nothing = 不关心；Just = 新的元素值
   }
 
--- | 一种元素的全部能力（第 9 刀）：原型 + 五组能力记录。缺省值由原型推出（'capsOf'），元素只改自己用到的字段
+-- | 一种元素的全部能力：原型 + 五组能力记录。缺省值由原型推出（'capsOf'），元素只改自己用到的字段
 -- （写法见 Match3.Element.Caps 的 piece / blocker / fixed 与各能力声明）。
 data Caps = Caps
   { capArchetype :: Archetype
@@ -184,7 +183,7 @@ cellGemColor cell = case cell of
   Gem c _ _ _ -> Just c
   _ -> Nothing
 
--- | 各组能力按原型的缺省值（与第 9 刀前各方法的默认实现逐项相同）。
+-- | 各组能力按原型的缺省值。
 matchCaps :: Archetype -> MatchCaps
 matchCaps a = MatchCaps {mcColor = cellGemColor, mcBlocksMatch = False, mcBlocksSwap = a /= Piece, mcHintable = True, mcSwapRule = Nothing}
 
@@ -220,9 +219,9 @@ stepCaps = StepCaps {stEnd = Nothing, stGround = Nothing, stWiden = Nothing, stM
 capsOf :: Archetype -> Caps
 capsOf a = Caps a (matchCaps a) (hitCaps a) (moveCaps a) countCaps stepCaps
 
--- | 元素类（第 9 刀起只剩三个方法）：名字、写回格子、能力记录。只有 'name' 和 'toCell' 必须写；
+-- | 元素类（三个方法）：名字、写回格子、能力记录。只有 'name' 和 'toCell' 必须写；
 -- 'caps' 缺省 = 普通棋子（capsOf Piece）。能力可以依赖元素值（石头的层数决定受击结果）。
--- 各能力的查询（'color' / 'blocksSwap' / 'onHit' / 'counter' …，名字与第 9 刀前的方法相同）是下面的普通函数。
+-- 各能力的查询（'color' / 'blocksSwap' / 'onHit' / 'counter' …）是下面的普通函数。
 class (Show e, Eq e, Typeable e) => Element e where
   -- | 元素名：注册表的键，也是关卡放置表、计数键、前端贴图的键。
   name :: e -> ElementName
@@ -240,7 +239,7 @@ class (Show e, Eq e, Typeable e) => Element e where
   caps :: e -> Caps
   caps _ = capsOf Piece
 
--- 能力查询（第 9 刀前是同名的类方法）
+-- 能力查询
 
 archetype :: Element e => e -> Archetype
 archetype = capArchetype . caps
@@ -333,7 +332,7 @@ handleMessage = stMessage . capStep . caps
 -- | 装箱的元素（同 xmonad 的 Layout）。
 data SomeElement = forall e. Element e => SomeElement e
 
--- | 按具体类型比较（第 6b 刀起不再比较名字字符串）：两边的元素类型不同即不等（Typeable 的 cast 失败），
+-- | 按具体类型比较（不比较名字字符串）：两边的元素类型不同即不等（Typeable 的 cast 失败），
 -- 类型相同再用该类型的 Eq 比状态。名字是元素值的函数（name :: e -> ElementName），同类型同值必然同名，
 -- 所以这比「名字相同且状态相同」更强：名字相同而类型不同的两个元素仍然不等。
 instance Eq SomeElement where
@@ -412,10 +411,6 @@ instance Eq SomeModifier where
 instance Show SomeModifier where
   showsPrec d (SomeModifier m) = showsBoxed "SomeModifier" (modName m) m d
 
--- | 拆箱。
-fromModifier :: Modifier m => SomeModifier -> Maybe m
-fromModifier (SomeModifier m) = cast m
-
 -- | 修饰过的元素（同 xmonad 的 ModifiedLayout）：修饰器在外，被修饰的元素（本体或更内层的修饰）在里。
 data Modified = Modified SomeModifier SomeElement
   deriving (Eq, Show)
@@ -424,9 +419,9 @@ data Modified = Modified SomeModifier SomeElement
 modify :: Modifier m => m -> SomeElement -> SomeElement
 modify m e = SomeElement (Modified (SomeModifier m) e)
 
--- 组合规则与旧注册表的逐层询问一致：挡匹配 / 挡交换任一层即挡；点火与命中自上而下第一个有意见的层决定；
+-- 组合规则（逐层询问）：挡匹配 / 挡交换任一层即挡；点火与命中自上而下第一个有意见的层决定；
 -- 名字 / 颜色 / 计数 / 下落等本体属性取最里面的本体；有上层就洗牌保留；规则类能力（邻格 / 开启 / 成对交换 /
--- 步末 / 地面层）只在原型本体上取，修饰过的元素值上没有（与第 9 刀前 Modified 不定义这些方法相同）。
+-- 步末 / 地面层）只在原型本体上取，修饰过的元素值上没有。
 instance Element Modified where
   name (Modified _ e) = name e
   toCell (Modified (SomeModifier m) e) = modApply m (toCell e)
@@ -473,7 +468,7 @@ instance Element Modified where
 -- 惰性占格
 
 -- | 惰性占格：挡交换、无色、会下落、打不动、洗牌保留，写回原来的格子。注册表用它兜底
--- （未注册的 Custom 名字、内置槽位没有注册定义），测试 / 扩展也可以直接注册它（旧 baseDef 的等价物）。
+-- （未注册的 Custom 名字、内置槽位没有注册定义），测试 / 扩展也可以直接注册它。
 data Inert = Inert ElementName Cell
   deriving (Eq, Show)
 
@@ -489,10 +484,9 @@ inertCaps = let c = capsOf Blocker in c {capMatch = (capMatch c) {mcColor = cons
 --------------------------------------------------------------------------------
 -- 关卡级元素
 
--- | 关卡级元素：不在格子里的机制（飞碟 / 皮带 / 传送门 / 地毯 / 地面层）。第 7 刀（7a）起与格子元素同一写法：
+-- | 关卡级元素：不在格子里的机制（飞碟 / 皮带 / 传送门 / 地毯 / 地面层），与格子元素同一写法：
 -- 一种关卡级元素 = 一个类型 + 一个 instance，**自己的状态放在值里**（飞碟位置、皮带路径……），
--- 一局的全部关卡级元素是 GameState.gsLevelElems :: ['SomeLevelElement']（取代第 7 刀前的 gsUfos / gsBelts /
--- gsPortals / gsCarpetOpen / gsGround 五个专用字段）。
+-- 一局的全部关卡级元素是 GameState.gsLevelElems :: ['SomeLevelElement']。
 --
 -- 主流程在流水线节拍上发消息（Match3.Element.Message 的 Refilled / EndTicked / Settling / Covering / GroundHit，
 -- 也可以是任何新消息类型），元素自己决定回复哪些：回复 = (装箱的回复消息, 推进后的自身)，Nothing = 不关心。
@@ -509,7 +503,7 @@ class (Typeable l, Eq l, Show l) => LevelElement l where
   levelCore :: l -> Bool
   levelCore _ = False
 
--- | 装箱的关卡级元素（第 7 刀前叫 SomeLevel、只有行为没有状态）。
+-- | 装箱的关卡级元素。
 -- 相等 = 同类型且值相等；Show = 值本身的 Show。
 data SomeLevelElement = forall l. LevelElement l => SomeLevelElement l
 

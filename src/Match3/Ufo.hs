@@ -32,7 +32,7 @@ at = boardAt
 -- | True if UFO can absorb this cell as a *full clear* of target color.
 -- Skip peel-locks (Chain/Curtain/Fog/Steam), multi-ice (chip-only), and Flip
 -- (direct hit only flips face) so GoalUfo cannot phantom-count soft hits.
--- Specials (Line/Bomb/Rainbow) are absorbable; Board.clearUfoAbsorbed masks them
+-- Specials (Line/Bomb/Rainbow) are absorbable; Board.Clear.clearUfoAbsorbedWith masks them
 -- so expandSpecials does not detonate on absorb.
 matchesTarget :: Board -> Color -> Pos -> Bool
 matchesTarget b col p =

@@ -1,16 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
--- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreads（beltMoves 再导出自 Conveyor），
+-- | 逐轮回放脚本的数据类型与步末效果：MoveTrace / EndStep，生成步末记录的 traceSpreadsWith（beltMoves 再导出自 Conveyor），
 -- 以及从回放脚本派生效果事件的 traceEvents。
 --
--- 第二刀 2b：EndEffect / applyEndEffect / spreadPairs 搬到 Match3.Element.Event（第 7 刀 7b 起 EndEffect 是通用形状
--- 「事件类型 + 元素名 + 逐项 EndItem」，SpreadKind / SnailMove 已删），
--- traceSnails 搬到 Match3.Element.Builtin（蜗牛的步末规则），这里原样再导出。蔓延改为依次执行注册表里
--- PhaseSpread 阶段的步末规则。
+-- EndEffect / applyEndEffect / spreadPairs 定义在 Match3.Element.Event（EndEffect 是通用形状
+-- 「事件类型 + 元素名 + 逐项 EndItem」），traceSnails 定义在 Match3.Element.Builtin（蜗牛的步末规则），这里原样再导出。
+-- 蔓延 = 依次执行注册表里 PhaseSpread 阶段的步末规则。
 --
 -- 依赖：Match3.Board.*、元素框架（事件词汇 / 注册表）、Conveyor（皮带）。只描述「变了什么」，不结算。
--- 结算直接使用 traceSpreads / traceSnails 返回的盘面（Match3.Game.Resolve），不再另算一遍；
+-- 结算直接使用 traceSpreadsWith / traceSnails 返回的盘面（Match3.Game.Resolve），不另算一遍；
 -- traceSnails 与 stepSnailsAvoidingBlocked 逐只调用同一个 stepSnailAtBlocked，结果恒等。
 -- 护栏 trace_end_steps_replay_to_trySwap_final、trace_end_snail_push_and_turn、trace_end_spread_from_adjacent_source。
 module Match3.Game.Trace
@@ -22,7 +21,6 @@ module Match3.Game.Trace
   , endEffectPairs
   , endItemDir
   , spreadPairs
-  , traceSpreads
   , traceSpreadsWith
   , runPhaseSteps
   , traceSnails
@@ -82,17 +80,13 @@ data EndStep = EndStep
   , esEffect     :: EndEffect
   } deriving (Eq, Show)
 
--- | 蔓延（藤 → 巧 → 蒸汽）的逐步快照（与 trySwap / 道具里的组合完全相同），空效果不记录。
-traceSpreads :: Int -> Board -> ([EndStep], Board)
-traceSpreads = traceSpreadsWith defaultRegistry
-
--- | traceSpreads（指定注册表）：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
--- 每条规则产出的效果记成一个 EndStep（esAfterWaves = k）。
+-- | 蔓延（内置：藤 → 巧 → 蒸汽）的逐步快照：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
+-- 每条规则产出的非空效果记成一个 EndStep（esAfterWaves = k）。trySwap 与道具用的是同一组调用。
 traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
 traceSpreadsWith reg = runPhaseSteps reg PhaseSpread (EndCtx [] [] (pushableWith reg))
 
 -- | 依次跑某阶段的步末规则（'runEndRules'），每条非空效果记成插入点 k 的一个 EndStep：返回 (步末记录, 终盘)。
--- 蔓延（这里）与会走的元素（Match3.Game.EndPhase.runPhase）共用；第 9 项前两处各有一份 foldl + 前插 + reverse。
+-- 蔓延（这里）与会走的元素（Match3.Game.EndPhase.runPhase）共用。
 runPhaseSteps :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
 runPhaseSteps reg ph ctx k b0 =
   let (recs, b1) = runEndRules ctx (endRules reg ph) b0

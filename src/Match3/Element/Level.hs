@@ -1,12 +1,12 @@
--- | 一局的关卡级元素（第 7 刀 7a）：GameState.gsLevelElems :: ['SomeLevelElement'] 的开局、读写、按节拍发消息，
+-- | 一局的关卡级元素：GameState.gsLevelElems :: ['SomeLevelElement'] 的开局、读写、按节拍发消息，
 -- 以及给 Board 层的钩子记录（'levelHooksWith'）。
 --
 -- 注册表与状态的分工（同格子元素：格子存数据、注册表给行为开关）：
 --
 -- * 开局（'startLevelsWith'）：注册表里的每种关卡级元素（注册顺序）+ 核心元素（地面层），各自由关卡记录给出初始状态。
--- * 每个节拍参与的元素（'activeLevels'）：按注册顺序取 gsLevelElems 里同名的状态，gsLevelElems 里没有的用注册的原型值
---   （所以只 registerLevel、不改开局也能接入无状态的元素）；gsLevelElems 里没注册的名字不参与（= 第 7 刀前
---   removeLevel 后「不生效」），核心元素（'levelCore'）总参与。
+-- * 每个节拍参与的元素（内部的 @active@）：按注册顺序取 gsLevelElems 里同名的状态，gsLevelElems 里没有的用注册的原型值
+--   （所以只 registerLevel、不改开局也能接入无状态的元素）；gsLevelElems 里没注册的名字不参与
+--   （removeLevel 后即不生效），核心元素（'levelCore'）总参与。
 -- * 回复者推进后的状态写回 gsLevelElems（同名替换；原来没有的只在状态真的变了时追加）。
 --
 -- 依赖：Element.Class / Message / Registry、Builtin.Level（内置元素的状态读数）、Board.Hooks、Levels.Level。
@@ -14,11 +14,10 @@ module Match3.Element.Level
   ( -- * 一局的关卡级元素
     startLevelsWith
   , coreLevels
-  , activeLevels
   , askLevelsIn
   , levelState
   , putLevel
-    -- * 内置元素的状态读数（第 7 刀前 GameState 的专用字段）
+    -- * 内置元素的状态读数
   , levelUfos
   , levelBelts
   , levelPortals
@@ -74,13 +73,9 @@ active reg elems =
     kinds = levelDefs reg
     named n = listToMaybe [e | e <- elems, levelNameOf e == n]
 
--- | 本节拍参与的关卡级元素（顺序 = 回复顺序）：注册顺序的各种（取 gsLevelElems 里同名的状态，没有则用原型）+ 核心元素。
-activeLevels :: Registry -> [SomeLevelElement] -> [SomeLevelElement]
-activeLevels reg = map fst . active reg
-
--- | 在一个节拍上问一局的关卡级元素：问题与回复同类型（累积器），按 'activeLevels' 的顺序**折叠所有回复者**
+-- | 在一个节拍上问一局的关卡级元素：问题与回复同类型（累积器），按参与顺序（注册顺序的各种 + 核心元素）**折叠所有回复者**
 -- （前一个的回复是后一个的问题），各回复者推进后的状态依次写回；返回 (最终回复, 写回后的关卡级元素)。
--- 没人回复时 Nothing（第 7 刀 7a 取第一个回复者；内置元素每种消息只有一个回复者，结果相同）。
+-- 没人回复时 Nothing（内置元素每种消息只有一个回复者）。
 askLevelsIn :: Message q => Registry -> [SomeLevelElement] -> q -> Maybe (q, [SomeLevelElement])
 askLevelsIn reg elems0 q0 = foldl one Nothing (active reg elems0)
   where
@@ -110,23 +105,23 @@ levelState = listToMaybe . mapMaybe fromLevelElement
 putLevel :: LevelElement l => l -> [SomeLevelElement] -> [SomeLevelElement]
 putLevel = replaceNamed . SomeLevelElement
 
--- | 飞碟（第 7 刀前的 gsUfos）。
+-- | 飞碟。
 levelUfos :: [SomeLevelElement] -> [Ufo]
 levelUfos = maybe [] (\(UfoLevel us) -> us) . levelState
 
--- | 传送带路径（第 7 刀前的 gsBelts）。
+-- | 传送带路径。
 levelBelts :: [SomeLevelElement] -> [Belt]
 levelBelts = maybe [] (\(BeltLevel bs) -> bs) . levelState
 
--- | 传送门对（第 7 刀前的 gsPortals）。
+-- | 传送门对。
 levelPortals :: [SomeLevelElement] -> [(Pos, Pos)]
 levelPortals = maybe [] (\(PortalLevel ps) -> ps) . levelState
 
--- | 未覆盖的地毯格（第 7 刀前的 gsCarpetOpen）。
+-- | 未覆盖的地毯格。
 levelCarpetOpen :: [SomeLevelElement] -> [Pos]
 levelCarpetOpen = maybe [] (\(CarpetLevel ps) -> ps) . levelState
 
--- | 地面层（第 7 刀前的 gsGround）。
+-- | 地面层。
 levelGround :: [SomeLevelElement] -> Ground
 levelGround = maybe [] (\(GroundLayer g) -> g) . levelState
 
@@ -135,8 +130,8 @@ levelDrops :: [SomeLevelElement] -> [Pos]
 levelDrops = maybe [] (\(CookieDrop ds) -> concatMap dropCells ds) . levelState
 
 -- | Board 层的钩子：沉降节拍发 'Settling'（可穿门谓词 = 注册表的本体定义），补子之后发 'Refilled'，
--- 补子策略问 'Refilling'（第 8 刀，初值 = 注册表的策略）。
--- 没人回复时不传送 / 不吸收 / 用注册表的补子策略（第 7 刀前的 teleportWith / absorbWith）。
+-- 补子策略问 'Refilling'（初值 = 注册表的策略）。
+-- 没人回复时不传送 / 不吸收 / 用注册表的补子策略。
 levelHooksWith :: Registry -> [SomeLevelElement] -> LevelHooks
 levelHooksWith reg elems = hooks
   where

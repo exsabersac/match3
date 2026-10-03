@@ -1,39 +1,26 @@
--- | 内置注册表的便捷入口（段 2c）：Board.{Match, Clear, Gravity, Cascade} 自身**不再依赖**
--- defaultRegistry，全部函数都收一个 Registry（*With）；这里把不带 With 的旧名定义为
--- 「*With defaultRegistry」，给只跑内置元素的调用方（Core 再导出、随机开局、前端、测试）用。
+-- | 内置注册表的便捷入口：Board.{Match, Clear, Gravity, Cascade} 自身不依赖 defaultRegistry，
+-- 全部函数都收一个 Registry（*With）；这里只把仍有调用方的几个定义为「*With defaultRegistry」的短名，
+-- 给只跑内置元素的调用方（Core 再导出、随机开局、前端、测试）用。没有调用方的短名不在这里，直接用 *With。
 --
 -- 依赖方向：Board.* ← 本模块 → Element.Builtin；主流程（Game.Resolve 等）一律把 reg 传下去，不经本模块。
 module Match3.Board.Default
   ( gravityFixedCell
-  , colGravity
   , applyGravity
-  , drainBottomCookies
   , applyPortalTeleports
   , settleBoardPortals
-  , settleRefill
   , findMatchRuns
-  , groupGemRuns
   , findMatches
   , hasAnyMatch
   , hasValidMove
   , findHint
   , expandSpecials
-  , spawnSpecials
   , countColor
   , clearMatches
-  , clearMatchesAt
-  , surpriseClearPass
-  , clearMatchesDetailed
-  , clearUfoAbsorbed
-  , clearFromSeedsDetailed
   , cascadeMatches
-  , cascadeMatchesFrom
   , cascadeSeeds
-  , cascadeAfterBelt
   , cascadeCountdowns
   , stepCascade
-  , stepCascadeAt
-    -- * 关卡级钩子（第 7 刀）
+    -- * 关卡级钩子
   , LevelHooks(..)
   , noHooks
   , builtinHooks
@@ -55,7 +42,7 @@ import System.Random (RandomGen)
 --------------------------------------------------------------------------------
 -- 关卡级钩子
 
--- | 内置注册表下、只有飞碟与传送门两种关卡级元素的钩子（第 7 刀前各函数的 @[Ufo]@ / 传送门对参数）。
+-- | 内置注册表下、只有飞碟与传送门两种关卡级元素的钩子。
 builtinHooks :: [Ufo] -> [(Pos, Pos)] -> LevelHooks
 builtinHooks ufos portals = levelHooksWith defaultRegistry [SomeLevelElement (UfoLevel ufos), SomeLevelElement (PortalLevel portals)]
 
@@ -69,28 +56,14 @@ builtinHooks ufos portals = levelHooksWith defaultRegistry [SomeLevelElement (Uf
 gravityFixedCell :: Cell -> Bool
 gravityFixedCell = gravityFixedCellWith defaultRegistry
 
--- | Column gravity: fixed immortals stay put and split the column into segments;
--- fallable cells (gems / Cookie / Countdown / Flip / clearable obstacles) pack
--- down within each segment.
-colGravity :: [Maybe Cell] -> [Maybe Cell]
-colGravity = colGravityWith defaultRegistry
-
 -- | 整盘按列下落：固定格（染色瓶 / 果汁机 / 魔法帽 / 蜗牛）原地不动并把列分段，段内可下落的格压到段底。
 applyGravity :: MBoard -> MBoard
 applyGravity = applyGravityWith defaultRegistry
 
--- | Collect cookies that sit on the bottom row after gravity (开心消消乐饼干掉落收集).
--- Removes them, re-applies gravity, repeats until no bottom-row cookies remain.
--- Returns drained bottom positions so GoalCarpet can cover tiles Cookie only
--- occupied mid-settle (gravity/portal/belt → bottom → drain) — before/after
--- board compare cannot see that intermediate occupancy.
-drainBottomCookies :: MBoard -> (MBoard, Int, [Pos])
-drainBottomCookies = drainBottomCookiesWith defaultRegistry
-
 -- | Bidirectional portal teleport on MBoard: gem/cookie/countdown on A with hole at B
 -- moves A -> B (and reverse). Used after gravity + bottom-cookie drain so clears can
 -- open exits without snatching cookies that already touched the bottom row.
--- 第 7 刀：传送门是关卡级元素，传送经钩子（builtinHooks [] portals）的 onSettle。
+-- 传送门是关卡级元素，传送经钩子（builtinHooks [] portals）的 onSettle。
 applyPortalTeleports :: LevelHooks -> MBoard -> MBoard
 applyPortalTeleports = onSettle
 
@@ -101,20 +74,12 @@ applyPortalTeleports = onSettle
 settleBoardPortals :: LevelHooks -> MBoard -> (MBoard, Int, [Pos])
 settleBoardPortals = settleBoardPortalsWith defaultRegistry
 
--- | 一轮沉降：settle + refill（与 stepCascadeDetailed / 种子清除用的完全相同）。
-settleRefill :: RandomGen g => LevelHooks -> g -> MBoard -> (Board, [Pos], g)
-settleRefill = settleRefillWith defaultRegistry
-
 --------------------------------------------------------------------------------
 -- Match3.Board.Match
 
 -- | 全部横、竖 ≥3 同色连线（先横后竖，行 / 列优先）；被障碍 / 叠层打断的不算。
 findMatchRuns :: Board -> [MatchRun]
 findMatchRuns = findMatchRunsWith defaultRegistry
-
--- | Group contiguous same-color *gems*; stones and color changes break runs.
-groupGemRuns :: Board -> [Pos] -> [(Color, [Pos])]
-groupGemRuns = groupGemRunsWith defaultRegistry
 
 -- | 所有匹配格：各连线位置的去重并集。
 findMatches :: Board -> [Pos]
@@ -142,10 +107,6 @@ findHint = findHintWith defaultRegistry
 expandSpecials :: Board -> [Pos] -> [Pos]
 expandSpecials = expandSpecialsWith defaultRegistry
 
--- | Specials spawned from runs（内置形状规则表：len>=5 Rainbow, len==4 Line (orient by run)）。
-spawnSpecials :: Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
-spawnSpecials = spawnSpecialsWith defaultRegistry
-
 -- | Count how many cleared positions have a given color (pre-clear board; stones skip).
 countColor :: Board -> [Pos] -> Color -> Int
 countColor = countColorWith defaultRegistry
@@ -154,35 +115,6 @@ countColor = countColorWith defaultRegistry
 clearMatches :: Board -> (MBoard, Int)
 clearMatches = clearMatchesAtWith defaultRegistry Nothing
 
--- | 只要「挖空后的盘面 + 清除数」的 clearMatchesDetailed 简化版；prefer 为新特殊块的优先生成位（交换目标格）。
-clearMatchesAt :: Maybe Pos -> Board -> (MBoard, Int)
-clearMatchesAt = clearMatchesAtWith defaultRegistry
-
--- | Open Surprises against clear seeds; explode blasts expand specials + chip ice
--- and re-open nested Surprises until the frontier is quiet.
--- Bomb parity: Bomb→Surprise opens to special/explode; Surprise explode must
--- likewise open nested boxes instead of hole-deleting them via chipIce alone.
--- Saved specials (Bomb/Line from Surprise) must not activate in this pass — mask
--- them as Normal before expandSpecials. Same-pass placement and later re-explode
--- of an unconsumed Surprise center would otherwise fire-and-survive the special.
--- Pre-existing specials (not in saved) still expand. chipIce runs on bOpen so
--- saved specials remain on the board while explode centers clear.
--- Returns (board, trueClears, surpriseDirectHits, savedSpecialPositions).
-surpriseClearPass :: Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
-surpriseClearPass = surpriseClearPassWith defaultRegistry
-
--- | Like clearMatchesAt but also returns the cleared positions (pre-spawn).
-clearMatchesDetailed :: Maybe Pos -> Board -> (MBoard, Int, [Pos])
-clearMatchesDetailed = clearMatchesDetailedWith defaultRegistry
-
--- | Clear UFO-absorbed cells: mask specials first, then normal seed clear.
-clearUfoAbsorbed :: Board -> [Pos] -> (MBoard, Int, [Pos])
-clearUfoAbsorbed = clearUfoAbsorbedWith defaultRegistry
-
--- | Clear an explicit seed set (expand specials + adjacent stones).
-clearFromSeedsDetailed :: Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
-clearFromSeedsDetailed = clearFromSeedsDetailedWith defaultRegistry
-
 --------------------------------------------------------------------------------
 -- Match3.Board.Cascade
 
@@ -190,20 +122,11 @@ clearFromSeedsDetailed = clearFromSeedsDetailedWith defaultRegistry
 cascadeMatches :: RandomGen g => Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatches = cascadeMatchesWith defaultRegistry
 
--- | 普通匹配连锁，波次编号从 startW 之后继续（种子起手 / 飞碟吸收已占用的轮数）。
-cascadeMatchesFrom :: RandomGen g => Int -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
-cascadeMatchesFrom = cascadeMatchesFromWith defaultRegistry
-
 -- | 种子起手的连锁（彩虹 / 特殊合成 / 道具 / 倒计时爆炸）：第一轮清种子（波次 1）并沉降补子，
 -- 跑一次飞碟（吸到则单独一轮，波次 2），再接普通匹配连锁（波次编号衔接「已完成的起手轮数」）。
 -- 种子为空时等同 cascadeMatches。
 cascadeSeeds :: RandomGen g => Maybe Pos -> [Pos] -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeSeeds = cascadeSeedsWith defaultRegistry
-
--- | 皮带移位之后：成消则整段连锁；否则仍沉降一次（收皮带送到底行的饼干，回放记为一个
--- 只有沉降的轮次，盘面没变且没收饼干时不记），沉降后成消再接连锁并补上饼干数与收饼干位。
-cascadeAfterBelt :: RandomGen g => LevelHooks -> g -> Board -> CascadeRun g
-cascadeAfterBelt = cascadeAfterWith defaultRegistry AfterBelt
 
 -- | 一步之后倒计时 -1；归零的 3×3 爆炸走种子连锁（带飞碟与传送门）。
 -- 没有归零时终盘就是 tick 之后的盘面（数字减一），不产生回放轮次。
@@ -211,10 +134,6 @@ cascadeCountdowns :: RandomGen g => LevelHooks -> g -> Board -> CascadeRun g
 cascadeCountdowns = cascadeCountdownsWith defaultRegistry
 
 -- | 恰好一轮匹配消除 + 沉降补子（不跑飞碟、无传送门）；无匹配时返回 Nothing。
--- 与 cascadeMatchesFrom 的单轮是同一组调用：clear → settleBoardPortals → refill。
+-- 与 cascadeMatchesFromWith 的单轮是同一组调用：clear → settleBoardPortals → refill。
 stepCascade :: RandomGen g => g -> Board -> Maybe (Board, Int, g)
 stepCascade = stepCascadeAtWith defaultRegistry Nothing
-
--- | 第一轮在 prefer 处优先生成特殊块的 stepCascade。
-stepCascadeAt :: RandomGen g => Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
-stepCascadeAt = stepCascadeAtWith defaultRegistry

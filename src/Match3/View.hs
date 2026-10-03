@@ -1,9 +1,9 @@
--- | 视图模型（第 11 刀）：从 GameState / 回放状态算出前端要画的东西——整局 HUD 视图（关卡、分数、步数、
+-- | 视图模型：从 GameState / 回放状态算出前端要画的东西——整局 HUD 视图（关卡、分数、步数、
 -- 道具、连击、结局）、目标视图、棋盘视图（逐格底层标记）、关卡进度点、右下角分数徽章、关卡列表，
 -- 以及单格的结构化描述。桌面版（UI.HudArt / UI.HudBlocks / UI.Actions 标题 / UI.Board* 底层）与
--- 网页版（web/hs/Match3Web/Api.hs 的 JSON）都读这里，不再各自从 GameState 现算。
+-- 网页版（web/hs/Match3Web/Api.hs 的 JSON）都读这里，不各自从 GameState 现算。
 --
--- 全部是纯函数、只读；字段逐个对应第 11 刀前各前端的现算式（逐字搬迁，JSON / 标题 / 画面不变）。
+-- 全部是纯函数、只读。
 -- 依赖：Match3.Core、Match3.Engine（连击数经通用接口 gameStatus 取）。
 module Match3.View
   ( -- * 整局视图
@@ -27,7 +27,6 @@ module Match3.View
   , goalInfo
   , goalLine
   , goalBracket
-  , countTag
   , colorTag
   , goalLabel
   , countLabel
@@ -278,22 +277,6 @@ goalBracket gi = case giView gi of
   _ -> ""
   where
     bracket tag n = " [" ++ tag ++ " " ++ show (giProgress gi) ++ "/" ++ show n ++ "]"
-
--- | 计数键在窗口标题 / 状态栏里的标签（stones=3/8、[chest 1/4] …；名字目标用元素名）。
-countTag :: CounterKey -> String
-countTag k = case k of
-  CountStones -> "stones"
-  CountChests -> "chest"
-  CountHoney -> "honey"
-  CountBalloons -> "balloon"
-  CountCookies -> "cookie"
-  CountCakes -> "cake"
-  CountSafes -> "safe"
-  CountUfo -> "ufo"
-  CountCarpets -> "carpet"
-  CountSpirits -> "spirit"
-  CountColor c -> colorTag c
-  CountNamed name -> unElementName name
 
 -- | 颜色的三字母标签。
 colorTag :: Color -> String

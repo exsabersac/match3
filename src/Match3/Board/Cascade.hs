@@ -3,15 +3,15 @@
 
 -- | 连锁：**单一实现**。每一种连锁起手（普通匹配 / 种子 / 皮带后 / 倒计时）只有一个核心函数，
 -- 同时产出「结算计数」（CascadeTally）和「逐轮回放」（[CascadeWave]），两者来自同一次计算，
--- 结算与回放因此天然一致（第二刀之前是 runCascade* 与 traceCascade* 两份平行实现）。
+-- 结算与回放因此天然一致。
 --
 -- 核心：cascadeMatchesFromWith / cascadeSeedsWith / cascadeAfterWith（皮带后 / 步末后）/ cascadeCountdownsWith（全部收 Registry），返回 CascadeRun。
--- 第 3 刀（审核报告第 11 条）：每一轮的「沉降 + 补子」只在 settleRound、整轮吸收只在 absorbRound 各写一次。
--- 第三刀删除了旧元组兼容层（runCascade* / resolveCountdowns / runPostBeltCascade / traceCascade*），
--- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 保留为「恰好一轮」的小工具。段 2c 起本模块不依赖内置注册表（便捷旧名在 Match3.Board.Default）。
+-- 每一轮的「沉降 + 补子」只在 settleRound、整轮吸收只在 absorbRound 各写一次。
+-- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 是「恰好一轮」的小工具。
+-- 本模块不依赖内置注册表（内置注册表的短名在 Match3.Board.Default）。
 --
--- 第 7 刀（7a）：关卡级状态不再作参数（第 3 刀留下的 @[Ufo]@ / 传送门对），只收一个钩子记录 'LevelHooks'
--- （Match3.Board.Hooks；沉降节拍 onSettle、补子后 onAbsorb），推进后的钩子在 CascadeRun 的 crHooks 里。
+-- 关卡级状态只经一个钩子记录 'LevelHooks' 进来（Match3.Board.Hooks；沉降节拍 onSettle、补子后 onAbsorb），
+-- 推进后的钩子在 CascadeRun 的 crHooks 里。
 --
 -- 依赖：Grid、Match、Clear、Gravity、Hooks、元素注册表（计数键 counter、倒计时 = PhaseTick 步末规则）。
 -- 类型层（Haskell 特性第 1 项）：每一轮的盘面带阶段标签（Match3.Board.Phase）——消除得到 Stage 'Cleared，
@@ -21,12 +21,11 @@
 -- （cascadeMatchesFromM / cascadeSeedsM / cascadeAfterM / cascadeCountdownsM / stepCascadeAtM，约束 MonadCascade m：
 -- 补子 MonadRefill、关卡级钩子 MonadLevelHooks、发出回放 MonadWaves，见 Match3.Board.Effect）。对外的 @...With@ 入口签名不变，
 -- 用纯解释器 PureCascade 运行（runCascade）；同一个程序换成追踪解释器（runCascadeTraced）就额外得到事件日志。
--- 第 3 项前生成器 g 与钩子 hooks 在每个函数里手工逐个传递（g → g1 → g2 …），回放在反向累积器里攒好再反转。
 -- 不变量：每轮 = clear → settleRound（settleDrain → refill）→ 整轮吸收 absorbRound（钩子 onAbsorb，内置 = 飞碟；→ 吸收单独一轮），随机数按此顺序消耗；
--- 计数口径（逐字保持旧实现，由金标准锁定）：
+-- 计数口径（由金标准锁定）：
 --   * 匹配轮的颜色袋按「清除格 ∪ 本轮底行收饼干位」在消除前盘面上计色；种子轮 / 飞碟轮只按清除格计色；
 --   * 障碍计数按清除格在消除前盘面上的格子种类计；饼干 = 被清除的饼干 + 沉降时底行收走的饼干；
---     第 4 刀起这些个数（含飞碟吸收 CountUfo、扩展元素 CountNamed）统一在 ctCounts :: Counts，第 5 刀起颜色袋也在（CountColor）；
+--     这些个数（含飞碟吸收 CountUfo、扩展元素 CountNamed）与颜色袋（CountColor）统一在 ctCounts :: Counts；
 --   * 种子起手的最大波次：续连锁有清除时取续连锁的最大波次，否则取「已完成的起手轮数」。
 module Match3.Board.Cascade
   ( -- * 记录版（单一实现）
@@ -47,7 +46,7 @@ module Match3.Board.Cascade
   , CascadeWave(..)
     -- * 单轮
   , stepCascadeAtWith
-    -- * 连锁程序（第 3 项：只依赖能力类，任选解释器运行；见 Match3.Board.Effect）
+    -- * 连锁程序（只依赖能力类，任选解释器运行；见 Match3.Board.Effect）
   , cascadeMatchesM
   , cascadeMatchesFromM
   , cascadeSeedsM
@@ -78,12 +77,12 @@ import Match3.Board.Match
 --------------------------------------------------------------------------------
 -- 数据
 
--- | 一段连锁的累计计数（替代旧的 15 元元组；第 4 刀起各元素 / 飞碟的个数统一在 ctCounts）。
+-- | 一段连锁的累计计数（各元素 / 飞碟 / 颜色的个数统一在 ctCounts）。
 data CascadeTally = CascadeTally
   { ctCells   :: Int            -- ^ 清除格数（含打碎的障碍）
   , ctScore   :: Score          -- ^ 波次计分之和
   , ctMaxWave :: Int            -- ^ 最大波次（连击数）
-  , ctCounts  :: Counts         -- ^ 清除格按本体 counter 计（CountStones … / CountNamed 名字）；各色 CountColor（第 5 刀前的 ctColors）；
+  , ctCounts  :: Counts         -- ^ 清除格按本体 counter 计（CountStones … / CountNamed 名字）；各色 CountColor；
                                 --   CountCookies 另含沉降时底行收走的饼干；CountUfo = 飞碟吸走的格数（GoalUfo）
   , ctCleared :: [Pos]          -- ^ 清除格 + 收饼干位（GoalCarpet / 前端粒子）
   } deriving (Eq, Show)
@@ -96,7 +95,7 @@ zeroTally = CascadeTally 0 0 0 noCounts []
 data CascadeRun g = CascadeRun
   { crBoard :: Board
   , crTally :: CascadeTally
-  , crHooks :: LevelHooks     -- ^ 推进后的关卡级钩子（第 7 刀前的 crUfos；Game 层从 hookLevel 取回关卡级元素）
+  , crHooks :: LevelHooks     -- ^ 推进后的关卡级钩子（Game 层从 hookLevel 取回关卡级元素）
   , crWaves :: [CascadeWave]
   , crGen   :: g
   }
@@ -105,7 +104,7 @@ data CascadeRun g = CascadeRun
 stillRun :: Board -> LevelHooks -> g -> CascadeRun g
 stillRun b hooks g = CascadeRun b zeroTally hooks [] g
 
--- | 沉降时被边缘收走的格按各自的 counter 计数（内置只有饼干 → CountCookies，与旧「底行收饼干计入饼干数」相同）。
+-- | 沉降时被边缘收走的格按各自的 counter 计数（内置只有饼干 → CountCookies：底行收走的饼干计入饼干数）。
 withDrained :: Registry -> [(Pos, Cell)] -> Counts -> Counts
 withDrained reg drained h = h <> foldMap (hitOf . counterWith reg . snd) drained
 
@@ -115,20 +114,20 @@ addHits h t = t {ctCounts = ctCounts t <> h}
 
 -- | 清除格在消除前盘面上的计数（按本体定义的 counter）。
 --
--- 第 2 项（Monoid）：Counts 是交换幺半群（逐键相加、mempty = 什么都没计），所以「逐格 bump 进累积器」
--- 就是「每格一份计数，foldMap 合起来」；和第 2 项前的 foldl + bumpCount 结果相同（加法与顺序无关，Counts 不存 0）。
+-- Counts 是交换幺半群（逐键相加、mempty = 什么都没计），所以「每格一份计数，foldMap 合起来」
+-- 等于逐格 bumpCount 进累积器（加法与顺序无关，Counts 不存 0）。
 hitsOn :: Registry -> Board -> [Pos] -> Counts
 hitsOn reg b = foldMap (hitOf . counterWith reg . getCell b)
 
 -- | 一个格子的计数：计数键加 1。保险箱 / 时间精灵的键按前后盘面差计（Game.Tally，元素的 diffCounter），
--- 不在清除格里计（与第 4 刀前的 Hits 相同；内置元素没有把这两个键当 counter 的）。
+-- 不在清除格里计（内置元素没有把这两个键当 counter 的）。
 hitOf :: Maybe CounterKey -> Counts
 hitOf Nothing = mempty
 hitOf (Just CountSafes) = mempty
 hitOf (Just CountSpirits) = mempty
 hitOf (Just k) = singleCount k 1
 
--- | 一组格在盘面 b 上按颜色计数（CountColor；第 5 刀前是按 allColors 排的颜色袋列表）。
+-- | 一组格在盘面 b 上按颜色计数（CountColor）。
 colorsOn :: Registry -> Board -> [Pos] -> Counts
 colorsOn reg b pos = countsFromList [(CountColor col, countColorWith reg b pos col) | col <- allColors]
 
@@ -153,14 +152,13 @@ waveOf :: Stage 'Full -> [Pos] -> [Pos] -> Stage 'Cleared -> Stage 'Full -> Scor
 waveOf before cleared drained holes after =
   CascadeWave (stageGrid before) cleared drained (stageGrid holes) (stageGrid after)
 
--- | 所有连锁起手共用的一轮（第 3 刀前在匹配 / 飞碟 / 种子 / 种子后飞碟 / 皮带后 / 步末后 / 单轮里逐行重复 7 份）：
+-- | 所有连锁起手（匹配 / 飞碟 / 种子 / 种子后飞碟 / 皮带后 / 步末后 / 单轮）共用的一轮：
 -- 给出消除前盘面 before、本轮清除结果 (挖空盘面, 清除数, 清除格) 与波次 w（得分 = scoreForWave w 清除数），
--- 沉降后按行优先逐个空洞补子（第 8 刀起按补子策略 activeRefill；缺省策略每洞恰好一次 randomColor，随机数顺序与原先相同）。
+-- 沉降后按行优先逐个空洞补子（按补子策略 activeRefill；缺省策略每洞恰好一次 randomColor）。
 -- 阶段按类型走：Cleared --fallStage--> Fallen --refillStage--> Full（调换两步的顺序编译不过）。
 --
--- 第 3 项（效果）：签名只说用到哪两种效果——读钩子（沉降节拍、补子策略）与补子（随机数）；不发出回放
--- （是否记这一轮由调用方决定，见 'cascadeAfterM'）。第 3 项前是 @RandomGen g => ... -> LevelHooks -> g -> ... -> (Round, g)@，
--- 生成器由调用方手工传进传出。
+-- 签名只说用到哪两种效果——读钩子（沉降节拍、补子策略）与补子（随机数）；不发出回放
+-- （是否记这一轮由调用方决定，见 'cascadeAfterM'）。
 settleRoundM :: (MonadRefill m, MonadLevelHooks m) => Registry -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
 settleRoundM reg before (holes, n, pos) w = do
   hooks <- currentHooks
@@ -178,8 +176,8 @@ roundM reg before cr w = do
   pure rd
 
 -- | 补子后的整轮吸收（钩子 onAbsorb：关卡级元素回复 Refilled 消息，内置 = 飞碟）。吸到格子时吸收单独成一轮
--- （clearUfoAbsorbed → 一轮，波次 w，已发出回放）；返回 Just (吸收轮, 其中被吸走的格数)。钩子由 absorbHooks 推进。
--- 第 3 刀前匹配连锁与种子起手各有一份。
+-- （clearUfoAbsorbedWith → 一轮，波次 w，已发出回放）；返回 Just (吸收轮, 其中被吸走的格数)。钩子由 absorbHooks 推进。
+-- 匹配连锁与种子起手共用这一份。
 absorbRoundM :: MonadCascade m => Registry -> Board -> Int -> m (Maybe (Round, Int))
 absorbRoundM reg b w = do
   absorbed <- absorbHooks b
@@ -191,7 +189,7 @@ absorbRoundM reg b w = do
       rd <- roundM reg bS cr w
       pure (Just (rd, length [p | p <- absorbed, p `elem` pos]))
 
--- | 用纯解释器运行一段连锁程序，拼成 CascadeRun（各个 @...With@ 入口都经它，签名与第 3 项前相同）。
+-- | 用纯解释器运行一段连锁程序，拼成 CascadeRun（各个 @...With@ 入口都经它）。
 runCascade :: LevelHooks -> g -> PureCascade g (Board, CascadeTally) -> CascadeRun g
 runCascade hooks g m = ranToRun (runPureCascade hooks g m)
 
@@ -205,20 +203,19 @@ ranToRun (Ran (b, t) hooks waves g) = CascadeRun b t hooks waves g
 --------------------------------------------------------------------------------
 -- 核心：普通匹配连锁
 
--- | cascadeMatches（指定注册表）。
+-- | 普通匹配连锁，波次从 0 起（= cascadeMatchesFromWith reg 0）。
 cascadeMatchesWith :: RandomGen g => Registry -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatchesWith reg = cascadeMatchesFromWith reg 0
 
--- | cascadeMatchesFrom（指定注册表）：纯解释器运行 'cascadeMatchesFromM'。
+-- | 普通匹配连锁，波次从 startW 起：纯解释器运行 'cascadeMatchesFromM'。
 cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatchesFromWith reg startW prefer hooks g b = runCascade hooks g (cascadeMatchesFromM reg startW prefer b)
 
 cascadeMatchesM :: MonadCascade m => Registry -> Maybe Pos -> Board -> m (Board, CascadeTally)
 cascadeMatchesM reg = cascadeMatchesFromM reg 0
 
--- | 普通匹配连锁（程序）。每轮：clearMatchesDetailed → 一轮（沉降 + 补子）→ 整轮吸收（若飞碟吸到格子，吸收单独算下一轮）。
--- 没有匹配时最大波次 = startW。返回 (终盘, 计数)；回放、钩子、生成器都在效果里。
--- 第 3 项前的循环带着 g、hooks、wavesRev 三个手工传递的参数（g → g1 → g2、hooks → hooks'），现在只剩计数相关的累积器。
+-- | 普通匹配连锁（程序）。每轮：clearMatchesDetailedWith → 一轮（沉降 + 补子）→ 整轮吸收（若飞碟吸到格子，吸收单独算下一轮）。
+-- 没有匹配时最大波次 = startW。返回 (终盘, 计数)；回放、钩子、生成器都在效果里，循环只带计数相关的累积器。
 cascadeMatchesFromM :: MonadCascade m => Registry -> Int -> Maybe Pos -> Board -> m (Board, CascadeTally)
 cascadeMatchesFromM reg startW prefer0 b0 =
   go prefer0 b0 0 0 startW noCounts []
@@ -286,10 +283,10 @@ cascadeSeedsM reg prefer seeds b
 --------------------------------------------------------------------------------
 -- 核心：皮带移位之后 / 步末之后的补结算
 
--- | 非匹配起手的连锁入口（第 3 刀前是 cascadeAfterBeltWith / cascadeAfterEndWith 两份）。
+-- | 非匹配起手的连锁入口（皮带后 / 步末后共用 cascadeAfterWith）。
 data AfterEntry
   = AfterBelt         -- ^ 皮带移位之后：盘面已成消则直接连锁，否则先沉降补子再看
-  | AfterEnd [Pos]    -- ^ 步末之后（段 2c）：先把步末规则声明的空洞挖空，再沉降补子
+  | AfterEnd [Pos]    -- ^ 步末之后：先把步末规则声明的空洞挖空，再沉降补子
   deriving (Eq, Show)
 
 -- | 全部步末规则在终盘上声明的空洞（erHoles，去重，按规则顺序）。内置规则恒为 []。
@@ -298,7 +295,7 @@ endHolesWith reg b = nub (concat [erHoles r b | ph <- [PhaseTick, PhaseSpread, P
 
 -- | 皮带后 / 步末后的补结算：挖空（步末的空洞；皮带没有）→ 沉降（重力 / 边缘收集 / 传送门）+ 补子；
 -- 盘面有变化或收走了格时记一个只有沉降的轮次；之后成消则接普通连锁（波次从 1 起）。
--- 步末入口没有空洞、边上也没有待收格时沉降是恒等、refill 不消耗随机数，结果等于旧的「成消才连锁」：
+-- 步末入口没有空洞、边上也没有待收格时沉降是恒等、refill 不消耗随机数，结果就是「成消才连锁」：
 -- 内置元素的步末从不留下空洞（38 关 × 多种子扫描确认，见 docs/testing.md），金标准因此不变。
 cascadeAfterWith :: RandomGen g => Registry -> AfterEntry -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeAfterWith reg entry hooks g b = runCascade hooks g (cascadeAfterM reg entry b)
@@ -341,11 +338,11 @@ cascadeCountdownsTracedWith reg hooks0 g b =
   in (steps, ranToRun r {ranValue = run})
 
 -- | 倒计时（程序）：步末规则是纯的盘面变换，只有引爆种子之后的连锁用到效果；没有种子时什么效果也不发生
--- （= 第 3 项前的 stillRun：盘面、钩子、生成器原样）。
+-- （= stillRun：盘面、钩子、生成器原样）。
 cascadeCountdownsM :: MonadCascade m => Registry -> Board -> m ([(Board, Board, EndEffect)], (Board, CascadeTally))
 cascadeCountdownsM reg b = do
   let rules = endRules reg PhaseTick
-      -- 第 9 项：规则依次执行、收集非空效果 = runEndRules（第 9 项前这里是一份 foldl + reverse）
+      -- 规则依次执行、收集非空效果 = runEndRules
       (steps, bTick) = runEndRules (EndCtx [] [] (pushableWith reg)) rules b
       seeds = nub (concatMap (\r -> erSeeds r bTick) rules)
   run <-

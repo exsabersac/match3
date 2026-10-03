@@ -3,7 +3,7 @@
 --
 -- 共同特征：原型 Piece（可交换、按颜色匹配、能点火、会下落、可过传送门、命中即消、可改色 / 推动），
 -- 盘面编码都是 Gem 格；特殊块另有爆炸范围与洗牌保留。彩虹取色的成对交换规则（srOrder 10）挂在彩虹上；
--- 第 8 刀起特殊 × 特殊合成不再挂在 line_h 上，改为注册表的组合表（Match3.Combos.builtinComboRules，并成 srOrder 20）。
+-- 特殊 × 特殊合成走注册表的组合表（Match3.Combos.builtinComboRules，并成 srOrder 20）。
 -- 特殊块的形状规则表（'builtinShapeRules'：直线 5 → 彩虹、直线 4 → 横 / 竖消）也在这里。
 module Match3.Element.Builtin.Gem
   ( PlainGem(..)
@@ -51,7 +51,7 @@ instance Element SpecialGem where
     piece $ [keepsOnShuffle | k /= Normal] ++ map explodes (maybe [] pure (specialBlast k))
       ++ [c | k == Rainbow, c <- [notHintable, onSwap (SwapRule 10 isRainbowSwap rainbowClearSeeds)]]
 
--- | 内置特殊块形状规则表（第 8 刀；顺序即优先级，与旧 spawnSpecials 相同）：每条连线取第一条认领它的规则——
+-- | 内置特殊块形状规则表（顺序即优先级）：每条连线取第一条认领它的规则——
 -- 长度 ≥ 5 → 彩虹；长度 4 横连 → 横消；长度 4 竖连 → 竖消；长度 3 不生成。落点见 Match3.Element.Special.shapeAnchor。
 -- 目前没有 L / T 形状的规则（交叉的横竖连线各按直线规则生成，后写的覆盖先写的）。
 builtinShapeRules :: [ShapeRule]

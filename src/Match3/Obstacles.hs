@@ -5,8 +5,8 @@
 --
 -- Haskell 特性第 9 项（docs/haskell-features/09-规则去重.md）：五种带层数障碍的邻消揭层合成一个
 -- 'chipAdjacentLayeredExcept'（障碍种类 = 棱镜参数，保险箱末层变饼干 = 另一个参数），九份「相邻的某种格」合成
--- 'adjacentWhere'，魔法帽 / 染色瓶的改色用遍历 'cellColorT'。导出名、签名、结果（含列表顺序）与第 9 项前逐项相同，
--- 对照副本在 test/Spec/Support/LegacyObstacles.hs。
+-- 'adjacentWhere'，魔法帽 / 染色瓶的改色用遍历 'cellColorT'。结果的列表顺序由金标准与
+-- Spec.RulesDedup 的固定例子（dedup_obstacle_orders_pinned）锁定。
 module Match3.Obstacles
   ( orthoNeighbors
   , adjacentWhere
@@ -88,13 +88,13 @@ at = boardAt
 setAt :: Board -> Pos -> Cell -> Board
 setAt = boardSet
 
--- | 上 / 下 / 左 / 右的邻格（不查边界）。顺序决定 adjacentWhere 去重后的先后，金标准依赖它（第 7 项起由 'upDownLeftRight' 写明）。
+-- | 上 / 下 / 左 / 右的邻格（不查边界）。顺序决定 adjacentWhere 去重后的先后，金标准依赖它（由 'upDownLeftRight' 写明）。
 orthoNeighbors :: Pos -> [Pos]
 orthoNeighbors = neighborsIn upDownLeftRight
 
 
 -- | 与给出位置正交相邻、满足谓词的格（去重；顺序 = 按给出位置、每个位置上 / 下 / 左 / 右）。
--- 第 9 项前石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 魔法帽 / 彩蛋 / 染色瓶 / 时间精灵各抄一份同样的列表推导，只差谓词。
+-- 石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 魔法帽 / 彩蛋 / 染色瓶 / 时间精灵的「相邻的某种格」都是它，只差谓词。
 adjacentWhere :: (Cell -> Bool) -> Board -> [Pos] -> [Pos]
 adjacentWhere ok b cleared =
   nub
@@ -133,15 +133,15 @@ hatsAdjacentTo = adjacentWhere isMagicHat
 noExcept :: (Board -> [Pos] -> [Pos] -> r) -> Board -> [Pos] -> r
 noExcept f b clearedGems = f b clearedGems []
 
--- | 带层数占格障碍的邻消（Haskell 特性第 9 项：第 9 项前石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱五份逐字相同，只差构造器）：
+-- | 带层数占格障碍的邻消（石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱共用，只差棱镜）：
 -- 与 clearedGems 正交相邻、不在 except 里（本轮已被直接命中）的这种障碍各削一层。
 --
 -- * @layer@：哪种障碍（棱镜 '_Stone' / '_Chest' / … ，焦点是层数）；
 -- * @onLast@：最后一层被削掉时这一格变成什么——Nothing = 原样留着，由清除管线随本轮清除格移走（石头等）；
 --   @Just mkCookie@ = 原地变成饼干（保险箱开启，饼干不在这里移走）。
 --
--- 返回（新盘面, 最后一层被削掉的位置）。次序与第 9 项前相同：按 'adjacentWhere' 的顺序 foldl，
--- 末层位置用 @nub (p : dead)@ 前插（即逆序），测试 qc_dedup_obstacles_same_as_legacy 逐项锁定。
+-- 返回（新盘面, 最后一层被削掉的位置）。次序：按 'adjacentWhere' 的顺序 foldl，
+-- 末层位置用 @nub (p : dead)@ 前插（即逆序），金标准与测试 dedup_obstacle_orders_pinned 逐项锁定。
 chipAdjacentLayeredExcept :: Prism' Cell Int -> Maybe Cell -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentLayeredExcept layer onLast b clearedGems except =
   foldl hitOne (b, []) [p | p <- adjacentWhere (has layer) b clearedGems, p `notElem` except]
@@ -231,7 +231,7 @@ triggerAdjacentHats = noExcept triggerAdjacentHatsExcept
 triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsExcept = triggerAdjacentHatsBy isGem
 
--- | 段 4：可改色谓词由调用方给出（元素框架里 = 注册表的 recolorable；内置等于 isGem）。
+-- | 可改色谓词由调用方给出（元素框架里 = 注册表的 recolorable；内置等于 isGem）。
 triggerAdjacentHatsBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsBy recolorable b cleared protected =
   foldl triggerOne b (hatsAdjacentTo b cleared)
@@ -247,7 +247,7 @@ triggerAdjacentHatsBy recolorable b cleared protected =
             , recolorable cell
             ]
           sorted = nub (sort nbrs)
-      -- 读颜色与改颜色是同一个遍历 cellColorT（第 9 项前是 cellColor + 手写的 recolorCell 两份分支）
+      -- 读颜色与改颜色是同一个遍历 cellColorT
       in case sorted of
            (p1 : p2 : _)
              | Just c1 <- board ^? cellAt p1 . cellColorT
@@ -367,7 +367,7 @@ triggerAdjacentBottles = noExcept triggerAdjacentBottlesExcept
 triggerAdjacentBottlesExcept :: Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentBottlesExcept = triggerAdjacentBottlesBy isGem
 
--- | 段 4：可改色谓词由调用方给出（同 triggerAdjacentHatsBy）。
+-- | 可改色谓词由调用方给出（同 triggerAdjacentHatsBy）。
 triggerAdjacentBottlesBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentBottlesBy recolorable b cleared protected =
   foldl dyeOne b (bottlesAdjacentTo b cleared)

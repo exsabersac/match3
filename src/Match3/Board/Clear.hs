@@ -1,13 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 一轮消除：匹配清除（clearMatchesDetailed）与种子清除（clearFromSeedsDetailed），两者共用同一个
--- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecialsWith，第 8 刀起查形状规则表）、彩蛋、
--- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbed：吸走 ≠ 引爆）以及计分公式。
+-- | 一轮消除：匹配清除（clearMatchesDetailedWith）与种子清除（clearFromSeedsDetailedWith），两者共用同一个
+-- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecialsWith，查形状规则表）、彩蛋、
+-- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbedWith：吸走 ≠ 引爆）以及计分公式。
 --
--- 第二刀 2b：直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
+-- 直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
 -- （Match3.Element.Registry）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
--- 段 4：彩蛋开启改为注册表的开启规则（openRule），彩虹取色 / 特殊合成改为成对交换规则（swapRule，在 Game.Move）。
--- 段 2c 起本模块不依赖内置注册表，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
+-- 彩蛋开启走注册表的开启规则（openRule），彩虹取色 / 特殊合成是成对交换规则（swapRule，在 Game.Move）。
+-- 本模块不依赖内置注册表，全部函数收 Registry；内置注册表的短名在 Match3.Board.Default。
 --
 -- 依赖：Grid、Match、元素注册表。
 -- 同步：这里的函数只被 Match3.Board.Cascade 的单一连锁实现调用（结算与回放同一次计算），
@@ -44,7 +44,7 @@ expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
--- | 新特殊块（第 8 刀起按注册表的有序形状规则表 shapeRules，解释器 Match3.Element.Special.spawnByShapes）：
+-- | 新特殊块（按注册表的有序形状规则表 shapeRules，解释器 Match3.Element.Special.spawnByShapes）：
 -- 每条连线取第一条认领它的规则的产出（内置：长度 ≥5 彩虹，长度 4 按方向横 / 竖消）；只放在真正挖空的格上
 -- （Flip / ice>1 的格留在盘面上，落点退到连线里别的可清格，否则 4 连在这类格上会悄悄丢掉特殊块）。
 spawnSpecialsWith :: Registry -> Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
@@ -54,8 +54,9 @@ spawnSpecialsWith reg = spawnByShapes (shapeRules reg)
 countColorWith :: Registry -> Board -> [Pos] -> Color -> Int
 countColorWith reg b ps col = length [p | p <- ps, colorOfWith reg (getCell b p) == Just col]
 
--- | surpriseClearPass（指定注册表）：一轮内的多轮开启（段 4 起是通用的「开启类元素」流程：开启规则来自
--- 注册表的 openRule，内置只有彩蛋；开出的格本轮坐住、屏蔽后再展开爆炸，新命中的格进入下一批前沿）。
+-- | 一轮内的多轮开启（通用的「开启类元素」流程：开启规则来自注册表的 openRule，内置只有彩蛋；
+-- 开出的格本轮坐住、屏蔽后再展开爆炸，新命中的格进入下一批前沿）。
+-- 返回 (盘面, 真消除格, 开启带来的直接命中格, 本轮坐住的格)。
 surpriseClearPassWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
 surpriseClearPassWith reg b0 seeds0 =
   go b0 (nub seeds0) [] [] []
@@ -89,11 +90,11 @@ clearMatchesDetailedWith reg prefer b =
   let runs = findMatchRunsWith reg b
   in clearWaveWith reg prefer runs b (nub (concatMap runPos runs))
 
--- | 一轮消除的**唯一流水线**（匹配清除与种子清除共用；第二刀之前是两份逐行相同的代码）：
+-- | 一轮消除的**唯一流水线**（匹配清除与种子清除共用）：
 --
 --   1. expandSpecials：种子里能点火的特殊块展开爆炸范围（= 直接命中格）；
 --   2. chipOnHitWith：直接命中按层结算（冰 → 叠层 → 本体：削层 / 揭层 / 消除 / 免疫）；
---   3. surpriseClearPass：彩蛋在邻格波及之前开启（3×3 爆炸计入真消除，与炸弹同口径）；
+--   3. surpriseClearPassWith：彩蛋在邻格波及之前开启（3×3 爆炸计入真消除，与炸弹同口径）；
 --   4. stripOnClearWith：真消除格上的草 / 藤 / 巧随格清掉（空洞不能再蔓延）；
 --   5. runAdjacentWith：按 arOrder 跑各元素的邻格波及（已被直接命中的格不再重复波及；
 --      彩蛋开出的特殊块与果汁机刚产出的炸弹本轮坐住，不被魔法帽 / 染色瓶改色）；
@@ -118,7 +119,7 @@ clearWaveWith reg prefer runs b base =
       mb1 = setManyM mb0 [(p, Just cell) | (p, cell) <- spawns, p `elem` allPos]
   in (mb1, n, allPos)
 
--- | 旧计分：每格 10 分（不带波次倍数）。
+-- | 不带波次倍数的计分：每格 10 分。
 scoreForCleared :: Int -> Score
 scoreForCleared n = n * 10
 
@@ -126,9 +127,8 @@ scoreForCleared n = n * 10
 scoreForWave :: Int -> Int -> Score
 scoreForWave wave n = n * 10 * max 1 wave
 
--- | UFO 吸收前把特殊降为 Normal，清除时不走 expandSpecials（吸走 ≠ 引爆）。
--- | Demote Line/Bomb/Rainbow at UFO absorb seeds to Normal so clearFromSeedsDetailed
--- removes them without expandSpecials detonation (吸走 ≠ 引爆). Ice / overlays kept.
+-- | 飞碟吸收前把吸收格上的直线 / 炸弹 / 彩虹降为 Normal，种子清除（clearFromSeedsDetailedWith）
+-- 就不会走 expandSpecials 引爆它们（吸走 ≠ 引爆）。冰与叠层保留。
 maskUfoAbsorbSpecials :: Board -> [Pos] -> Board
 maskUfoAbsorbSpecials b ps =
   foldl' maskOne b (nub ps)
@@ -140,7 +140,7 @@ maskUfoAbsorbSpecials b ps =
               setCell board p (Gem c Normal ice ov)
         _ -> board
 
--- | clearUfoAbsorbed（指定注册表）。
+-- | 飞碟吸收一轮：吸收格上的特殊块先降级（'maskUfoAbsorbSpecials'），再以吸收格为种子做种子清除。
 clearUfoAbsorbedWith :: Registry -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearUfoAbsorbedWith reg b absorbed =
   clearFromSeedsDetailedWith reg Nothing (maskUfoAbsorbSpecials b absorbed) absorbed

@@ -7,7 +7,6 @@
 -- randomR，refill / randomBoard 的随机数顺序依赖于此，改动会改变所有固定种子的盘面。
 module Match3.Board.Grid
   ( inBounds
-  , mInBounds
   , getCell
   , setCell
   , swapCells
@@ -33,10 +32,6 @@ import System.Random (RandomGen, randomR)
 inBounds :: Board -> Pos -> Bool
 inBounds b p = inRange (bounds (boardArray b)) p
 
--- | 坐标是否落在可空盘面内。
-mInBounds :: MBoard -> Pos -> Bool
-mInBounds mb p = inRange (bounds mb) p
-
 -- | 读一格，O(1)（Board 是二维数组；调用方保证 inBounds，越界会直接报错）。
 getCell :: Board -> Pos -> Cell
 getCell = boardAt
@@ -53,7 +48,7 @@ swapCells b p1 p2 =
   in setCell b' p2 a
 
 -- | 两格是否上下 / 左右相邻（不含对角）：q 是 p 朝某个方向走一格。
--- 第 7 项前写成 @(abs (r1 - r2) == 1 && c1 == c2) || (abs (c1 - c2) == 1 && r1 == r2)@，逐对等价（测试对照）。
+-- 等价于 @(abs (r1 - r2) == 1 && c1 == c2) || (abs (c1 - c2) == 1 && r1 == r2)@（grid_dir_basics）。
 adjacent :: Pos -> Pos -> Bool
 adjacent p q = isJust (dirBetween p q)
 
@@ -62,7 +57,6 @@ neighborsInBounds :: [Dir] -> Board -> Pos -> [Pos]
 neighborsInBounds ds b = filter (inBounds b) . neighborsIn ds
 
 -- | 可空盘面（沉降用；Nothing = 空洞）：与 Board 同形的二维数组，(行, 列) 下标、行主序。
--- 第 3 刀之前是 [[Maybe Cell]]（读格走两次 (!!)，重力要转置两次）。
 type MBoard = Array Pos (Maybe Cell)
 
 toM :: Board -> MBoard

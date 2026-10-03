@@ -7,7 +7,6 @@
 -- 前端用 mtFinal 与结算后 gsBoard 的差异补播（app 的 StShuffle 阶段）。
 module Match3.Game.Shuffle
   ( CellDecor(..)
-  , extractDecor
   , extractDecorWith
   , restoreDecor
   , ensurePlayable
@@ -33,16 +32,13 @@ data CellDecor = CellDecor
   , cdCell :: Cell
   } deriving (Eq, Show)
 
--- | 记下所有需要在洗牌后原样放回的格（障碍、特殊块、带叠层 / 冰的宝石等）。
-extractDecor :: Board -> [CellDecor]
-extractDecor = extractDecorWith defaultRegistry
-
--- | extractDecor（指定注册表）：保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 keepOnShuffle）。
+-- | 记下所有需要在洗牌后原样放回的格（障碍、特殊块、带叠层 / 冰的宝石等）：
+-- 保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 keepOnShuffle）。
 -- 只有普通宝石会被洗走；直线 / 炸弹 / 彩虹特殊块与所有障碍原样放回。
 extractDecorWith :: Registry -> Board -> [CellDecor]
 extractDecorWith reg = ifoldMap (\p cell -> [CellDecor p cell | keepOnShuffleWith reg cell])
 
--- | 把 extractDecor 记下的格写回新盘面的原位置。
+-- | 把 extractDecorWith 记下的格写回新盘面的原位置。
 restoreDecor :: Board -> [CellDecor] -> Board
 restoreDecor b = foldl (\board (CellDecor p cell) -> setCell board p cell) b
 
@@ -58,9 +54,9 @@ ensurePlayableWith reg gs
   | hasValidMoveWith reg (gsBoard gs) = gs { gsShuffled = False }
   | otherwise = fromMaybe (headS rest) (find (hasValidMoveWith reg . gsBoard) checked)
   where
-    -- 第 4 项（惰性）：全部重洗结果是一条无穷流 s1, s2, …（每次从上一次的生成器接着洗）；
-    -- 前 24 次逐个检查、取第一个有可走步的，都没有就用第 25 次（不再检查）。
-    -- 流是惰性的：第 k 次合格时 s(k+1) 以后根本不会洗，生成器与第 4 项前的计数循环 go 24 … go 0 逐次相同。
+    -- 全部重洗结果是一条惰性的无穷流 s1, s2, …（每次从上一次的生成器接着洗）；
+    -- 前 24 次逐个检查、取第一个有可走步的，都没有就用第 25 次（不检查）。
+    -- 第 k 次合格时 s(k+1) 以后根本不会洗，生成器只推进到第 k 次。
     (checked, rest) = splitAtS 24 (iterateS reshuffleOnce (reshuffleOnce gs))
     dims g = boardDims (gsBoard g)
     reshuffle g =
@@ -78,7 +74,7 @@ ensurePlayableWith reg gs
 shuffleGame :: GameState -> GameState
 shuffleGame = shuffleGameWith defaultRegistry
 
--- | 手动洗牌（指定注册表，段 2c）：保留判定 keepOnShuffleWith 用这张表——自定义元素
+-- | 手动洗牌（指定注册表）：保留判定 keepOnShuffleWith 用这张表——自定义元素
 -- （如测试专用元素）按它自己的 keepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
 shuffleGameWith :: Registry -> GameState -> GameState
 shuffleGameWith reg gs =

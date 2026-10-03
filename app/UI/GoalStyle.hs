@@ -1,9 +1,9 @@
--- | 关卡目标的前端外观（第 5 刀：一处表）：图标、两套色调，全部按 Match3.Goal.goalView 的
--- 目标形状 / 计数键分派（标题 / 状态栏的文字标签 countTag / colorTag 第 11 刀起在 Match3.View）。进度与目标值不在这里：统一由核心 gsProgress / goalTarget 算（第 5 刀前
--- HudArt / HudPrim / LevelMap / Actions / Input 各有一份「目标构造器 → 计数字段 / 颜色」的 case）。
+-- | 关卡目标的前端外观（一处表）：图标、两套色调，全部按 Match3.Goal.goalView 的
+-- 目标形状 / 计数键分派（标题 / 状态栏的文字标签在 Match3.View：goalBracket / colorTag / goalLabel）。
+-- 进度与目标值不在这里：统一由核心 gsProgress / goalTarget 算。
 --
 -- 依赖：Match3.Core、UI.Layout（调色板）、UI.GoalIcon（目标图标名；纯模块，在 app/pure，网页版 Api 也用它）。
--- 同步：色值与第 5 刀前各处逐字相同（截图对照 AE=0）；非内置形状（ViewOther、未列出的计数键）落到多色的外观。
+-- 同步：色值由截图对照锁定（AE=0）；非内置形状（ViewOther、未列出的计数键）落到多色的外观。
 module UI.GoalStyle
   ( goalIcon
   , goalTint

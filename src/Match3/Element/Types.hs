@@ -1,5 +1,5 @@
 -- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数；
--- 第 8 刀加特殊块形状规则（ShapeRule，连线 MatchRun 也移到这里）与组合规则（ComboRule）。
+-- 特殊块形状规则（ShapeRule，连同连线 MatchRun）与组合规则（ComboRule）。
 -- 元素本身是类型类（Match3.Element.Class 的 Element / Modifier / LevelElement），主流程（匹配、挡交换、
 -- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经注册表
 -- （Match3.Element.Registry）问它们，不按构造器写死分支。
@@ -58,7 +58,7 @@ data Slot
   | SlotOverlay Int  -- ^ 宝石叠层（overlaySlot 编号）
   | SlotIce          -- ^ 宝石冰层
   | SlotCustom       -- ^ 自定义本体：Custom 名字 == 元素名
-  | SlotGround       -- ^ 地面层（段 2c）：GameState.gsGround 里名字 == 元素名的格
+  | SlotGround       -- ^ 地面层：GameState.gsGround 里名字 == 元素名的格
   | SlotNone         -- ^ 原型推不出内置槽位（构造器用错）：mkRegistryChecked 报错，mkRegistry 不为它分派
   deriving (Eq, Show)
 
@@ -72,7 +72,7 @@ data HitResult
 
 -- | 邻格波及的上下文：acTrue = 本轮真消除格；acDirect = 本轮已被直接命中的格（不再重复波及）；
 -- acProtect = 本轮刚生成、必须原样坐住的格（彩蛋开出的特殊块 + 之前各轮次产出的 aoSit）；
--- acRecolor（段 4）= 注册表给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格，原先写死 isGem）。
+-- acRecolor = 注册表给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格；内置等于 isGem）。
 data AdjCtx = AdjCtx
   { acTrue    :: [Pos]
   , acDirect  :: [Pos]
@@ -93,14 +93,14 @@ data AdjacentRule = AdjacentRule
   , arRun   :: AdjCtx -> Board -> AdjOut
   }
 
--- 计数键 CounterKey 定义在 Match3.Counts（第 4 刀前是这里的 Counter），这里再导出给元素定义用。
+-- 计数键 CounterKey 定义在 Match3.Counts，这里再导出给元素定义用。
 
 -- | 步末阶段（交换之后；道具只有 PhaseSpread）。皮带是关卡特性，固定夹在 Tick 与 Spread 之间。
 data EndPhase = PhaseTick | PhaseSpread | PhaseMove
   deriving (Eq, Ord, Show)
 
 -- | 步末规则的上下文：ecAvoid = 本步已被皮带移动过的格；ecWalls = 传送门端点（会走的元素当墙）；
--- ecPushable（段 4）= 注册表给出的「本体可被推动」谓词（蜗牛只推这类格，原先写死 pushable）。
+-- ecPushable = 注册表给出的「本体可被推动」谓词（蜗牛只推这类格；内置等于 Snail.pushable）。
 data EndCtx = EndCtx
   { ecAvoid    :: [Pos]
   , ecWalls    :: [Pos]
@@ -108,7 +108,7 @@ data EndCtx = EndCtx
   }
 
 -- | 步末规则：erRun 返回（要记录的步末效果，新盘面）；erSeeds 在 PhaseTick 之后给出要引爆的种子
--- （倒计时归零的 3×3），其余阶段为 const []；erHoles（段 2c）在全部步末阶段之后给出要挖空的格
+-- （倒计时归零的 3×3），其余阶段为 const []；erHoles 在全部步末阶段之后给出要挖空的格
 -- （步末补结算：挖空 → 沉降 / 边缘收集 → 补子 → 成消再连锁），内置规则都是 const []。
 data EndRule = EndRule
   { erPhase :: EndPhase
@@ -122,8 +122,8 @@ data EndRule = EndRule
 type EndRun = EndCtx -> Board -> (Maybe EndEffect, Board)
 
 -- 按阶段的智能构造器（Haskell 特性第 9 项，docs/haskell-features/09-规则去重.md）。
--- 第 9 项前七条内置步末规则都写成 @EndRule 阶段 次序 run (const []) (const [])@：erSeeds 只在 PhaseTick 之后被读
--- （Board.Cascade 的倒计时），erHoles 内置规则全是 const []。三个构造器把「这个阶段有哪些槽」写进参数表——
+-- erSeeds 只在 PhaseTick 之后被读（Board.Cascade 的倒计时），erHoles 内置规则全是 const []。
+-- 三个构造器把「这个阶段有哪些槽」写进参数表——
 -- 只有 'tickRule' 收种子；需要声明空洞的扩展规则（测试里的陷坑）仍然直接用 'EndRule' 记录。
 
 -- | 倒计时阶段（PhaseTick）：跑完之后在新盘面上取引爆种子。
@@ -144,9 +144,8 @@ noCells = const []
 -- | 依次执行一串步末规则（Haskell 特性第 9 项）：盘面从一条规则穿到下一条，收集非空效果。
 -- 返回（[(规则前盘面, 规则后盘面, 效果)]（按规则顺序，空效果不记）, 终盘）。
 --
--- 第 9 项前倒计时（Board.Cascade）、蔓延（Game.Trace）、会走的元素（Game.EndPhase）各写一份
--- @foldl step ([], b) rules@ + 前插 + @reverse@；这里是 'mapAccumL'：累积量 = 当前盘面，每条规则的输出 = 可能的一条记录
--- （同第 2 项 randomBoardSized 的写法）。顺序与旧写法逐项相同（旧写法前插再整体反转 = 按规则顺序）。
+-- 倒计时（Board.Cascade）、蔓延（Game.Trace）、会走的元素（Game.EndPhase）共用这一份。
+-- 写法是 'mapAccumL'：累积量 = 当前盘面，每条规则的输出 = 可能的一条记录（同 randomBoardSized 的写法）；记录按规则顺序。
 runEndRules :: EndCtx -> [EndRule] -> Board -> ([(Board, Board, EndEffect)], Board)
 runEndRules ctx rules b0 =
   let (b1, recs) = mapAccumL one b0 rules
@@ -156,8 +155,8 @@ runEndRules ctx rules b0 =
       let (eff, after) = erRun rule ctx before
       in (after, fmap (\e -> (before, after, e)) eff)
 
--- | 边缘收集的方向（段 2c）：本体位于这条边上的格子在沉降时被收走。
--- 收集顺序固定为 底 → 左 → 右 → 上，每条边内按行 / 列升序（只有底边时与旧「底行收饼干」逐位相同）。
+-- | 边缘收集的方向：本体位于这条边上的格子在沉降时被收走。
+-- 收集顺序固定为 底 → 左 → 右 → 上，每条边内按行 / 列升序（只有底边时就是「底行收饼干」）。
 data Edge = EdgeBottom | EdgeLeft | EdgeRight | EdgeTop
   deriving (Eq, Show)
 
@@ -170,8 +169,8 @@ data Arg = AInt Int | AColor Color
 -- Alternative 的 '<|>' 左偏、只在这一步失败时改试右边（@argInt <|> pure 1@ = 「有整数就取，没有就缺省 1」）。
 -- 跑法分两种，每个放置函数选哪种见 08 文档的表：
 --
--- * 'exactArgs'：必须恰好用完全部参数，多一个也算失败（之前写成 @case args of [AInt n] -> …; _ -> Nothing@ 的那些）；
--- * 'prefixArgs'：只看头部，后面多出的参数忽略（之前写成 @(AInt k : _) -> …@ 的那些）。
+-- * 'exactArgs'：必须恰好用完全部参数，多一个也算失败（相当于 @case args of [AInt n] -> …; _ -> Nothing@）；
+-- * 'prefixArgs'：只看头部，后面多出的参数忽略（相当于 @(AInt k : _) -> …@）。
 newtype ArgP a = ArgP {runArgP :: [Arg] -> Maybe (a, [Arg])}
 
 instance Functor ArgP where
@@ -213,7 +212,7 @@ prefixArgs p = fmap fst . runArgP p
 data Placement = Place ElementName [Arg] [Pos]
   deriving (Eq, Show)
 
--- | 成对交换规则（段 4）：交换两端的组合直接决定起手种子（彩虹取色、特殊 × 特殊合成）。
+-- | 成对交换规则：交换两端的组合直接决定起手种子（彩虹取色、特殊 × 特殊合成）。
 -- srFires 看交换前的盘面；srSeeds 在交换后的盘面上给出种子。多条规则按 srOrder 取第一条成立的。
 data SwapRule = SwapRule
   { srOrder :: Int
@@ -221,21 +220,20 @@ data SwapRule = SwapRule
   , srSeeds :: Board -> Pos -> Pos -> [Pos]
   }
 
--- | 开启规则（段 4，彩蛋类）：一轮里被命中 / 邻格有真消除时开启，可在同一轮内多次开启（新爆炸再波及）。
+-- | 开启规则（彩蛋类）：一轮里被命中 / 邻格有真消除时开启，可在同一轮内多次开启（新爆炸再波及）。
 -- orOpen 盘面 本批前沿 = (开启后盘面, 要展开的爆炸种子, 开出后本轮必须坐住的格)。
 newtype OpenRule = OpenRule
   { orOpen :: Board -> [Pos] -> (Board, [Pos], [Pos])
   }
 
--- | 一条 ≥3 的同色连线（石头等挡匹配的格打断连线）。第 8 刀从 Match3.Board.Match 移到这里（形状规则要用；
--- Board.Match 原名再导出）。
+-- | 一条 ≥3 的同色连线（石头等挡匹配的格打断连线）。定义在这里是因为形状规则要用；Board.Match 再导出。
 data MatchRun = MatchRun
   { runColor :: Color
   , runPos   :: [Pos]
   , runIsH   :: Bool  -- True = horizontal
   } deriving (Eq, Show)
 
--- | 形状规则的上下文（第 8 刀）：scPrefer = 玩家交换落点（优先放在这里）；scRuns = 本轮全部连线
+-- | 形状规则的上下文：scPrefer = 玩家交换落点（优先放在这里）；scRuns = 本轮全部连线
 -- （L / T 这类跨连线的形状要看别的连线）；scClearable = 本轮真正挖空的格（特殊块只放在这些格上）。
 data ShapeCtx = ShapeCtx
   { scPrefer    :: Maybe Pos
@@ -243,18 +241,18 @@ data ShapeCtx = ShapeCtx
   , scClearable :: [Pos]
   }
 
--- | 特殊块形状规则（第 8 刀）：匹配形状 → 生成哪种特殊块。规则表是有序的：每条连线按表顺序问各规则，
+-- | 特殊块形状规则：匹配形状 → 生成哪种特殊块。规则表是有序的：每条连线按表顺序问各规则，
 -- 取第一条认领它的（Just，可以是空列表 = 认领但不生成）；Nothing = 这条规则不管，问下一条；
--- 全不认领 = 不生成。每条连线的产出按连线顺序依次写回，后写的覆盖先写的（与旧 spawnSpecials 相同）。
+-- 全不认领 = 不生成。每条连线的产出按连线顺序依次写回，后写的覆盖先写的。
 data ShapeRule = ShapeRule
   { shapeName  :: String
   , shapeSpawn :: ShapeCtx -> MatchRun -> Maybe [(Pos, Cell)]
   }
 
--- | 特殊块组合规则（第 8 刀）：两个特殊块交换时的组合效果。规则表是有序的：先按表顺序、每条规则先试
+-- | 特殊块组合规则：两个特殊块交换时的组合效果。规则表是有序的：先按表顺序、每条规则先试
 -- (第一端, 第二端) = (p1, p2) 再试 (p2, p1)，取第一条两端谓词都成立的；comboSeeds 收
 -- 交换后盘面与 (对上 comboFirst 的一端, 对上 comboSecond 的一端)。一条规则天然对两个方向都成立（对称）；
--- 表里没有的组合不成立（交给后面的成对规则 / 普通三消，与旧实现相同）。
+-- 表里没有的组合不成立（交给后面的成对规则 / 普通三消）。
 data ComboRule = ComboRule
   { comboName   :: String
   , comboFirst  :: Cell -> Bool

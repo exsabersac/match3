@@ -4,32 +4,18 @@
 -- | 结算计数辅助：「按前后盘面差计数」（保险箱开启 / 时间精灵 / 自定义）、地毯可覆盖的腾空格。
 --
 -- 依赖：Match3.Types、Match3.Board.*、元素注册表。被公共结算 Match3.Game.Resolve.resolveMove 使用
--- （交换与三种道具共用一处）。第二刀 2b：哪些元素按差计数（元素类的 diffCounter / bonusMoves）、
--- 哪些元素离格算地毯覆盖（vacatesCarpet）改由元素自己声明；旧的 countSafes / countTimeSpirits /
--- carpetVacateSeeds 保留为内置注册表上的同名入口。第 5 刀：颜色袋并入 Counts（CountColor），
--- 旧的 lookupColor / mergeTallies 删除。
+-- （交换与三种道具共用一处）。哪些元素按差计数（能力 diffCounter / bonusMoves）、
+-- 哪些元素离格算地毯覆盖（vacatesCarpet）由元素自己声明；盘上某种元素的个数用注册表的 countElementWith。
 module Match3.Game.Tally
-  ( countSafes
-  , countTimeSpirits
-  , carpetVacateSeeds
-  , carpetVacateSeedsWith
+  ( carpetVacateSeedsWith
   , DiffCount(..)
   , diffCountsWith
   ) where
 
 import Match3.Board.Grid (getCell)
-import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, countElementWith, diffCountersWith, elementName, vacatesCarpetWith, weighElementWith)
+import Match3.Element.Registry (Registry, diffCountersWith, elementName, vacatesCarpetWith, weighElementWith)
 import Match3.Element.Types (CounterKey)
 import Match3.Types
-
--- | 盘上保险箱个数（结算时用前后差计「开启数」）。
-countSafes :: Board -> Int
-countSafes = countElementWith defaultRegistry "safe"
-
--- | 盘上时间精灵个数（前后差 = 本步命中数，每只 +2 步）。
-countTimeSpirits :: Board -> Int
-countTimeSpirits = countElementWith defaultRegistry "time_spirit"
 
 -- | 一个「按前后差计数」元素本步的结果。
 data DiffCount = DiffCount
@@ -47,19 +33,11 @@ diffCountsWith reg before after =
   , let cnt = max 0 (weighElementWith reg n before - weighElementWith reg n after)
   ]
 
--- | 地毯补充种子：饼干腾空或保险箱开启离开格子时，即使未进 clear-holes 也要计入覆盖。
--- 沉降中途才落到地毯再底收的饼干由 Board drain 位并入清除列表。
--- | Carpet seeds when Cookie / Safe leave a cell without entering clear-holes.
--- Cookie is immune to mid-board wipe (only gravity + bottom drain); Safe opens
--- in place to Cookie. Start-of-move Cookie occupancy / Safe→Cookie would miss
--- GoalCarpet unless we treat the vacate as a cover seed. (Cookies that only
--- arrive on a tile mid-settle then drain are covered via Board drain positions
--- in cascade clear lists — see settleBoardPortals.)
--- Compare pre-move board to final post-move board (after snail + follow-up cascade).
-carpetVacateSeeds :: Board -> Board -> [Pos]
-carpetVacateSeeds = carpetVacateSeedsWith defaultRegistry
-
--- | carpetVacateSeeds（指定注册表）：步前本体 vacatesCarpet 的格，步后本体换成了别的元素。
+-- | 地毯补充种子：步前本体 vacatesCarpet 的格，步后本体换成了别的元素。
+-- 内置是饼干与保险箱：饼干不怕盘中清除（只随重力下落、在底边被收走），保险箱原地开成饼干；
+-- 它们离开起始格时不进清除格，不当作覆盖种子的话 GoalCarpet 会漏掉这些格。
+-- 沉降中途才落到地毯上、随后被收走的饼干不在这里：它们的收集位已并入连锁的清除格（见 settleBoardPortalsWith）。
+-- 比较的是步前盘面与步后终盘（蜗牛与后续连锁之后）。
 carpetVacateSeedsWith :: Registry -> Board -> Board -> [Pos]
 carpetVacateSeedsWith reg before after =
   [ p

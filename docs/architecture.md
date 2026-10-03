@@ -186,7 +186,7 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | 可执行文件 | `match3-sdl` |
 | 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck） |
 
-库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（第 4 刀起 `Match3.Counts` 用 `Data.Map.Strict`；网页版 `web/match3-web.cabal` 同步加了这一项）。可执行文件额外：`sdl2`、`text`，以及 GHC 自带的 `directory`、`filepath`（贴图加载）与 `containers`。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
+库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（`Match3.Counts` 用 `Data.Map.Strict`）与 `transformers`（网页版 `web/match3-web.cabal` 同样列出这几项）。可执行文件（不用 `array`）：`base`、`random`、`sdl2`、`text`、`vector`，以及 GHC 自带的 `directory`、`filepath`（贴图加载）、`bytestring` 与 `containers`。测试组件另用 `array`、`stm`、`tasty` 系列与 `directory`。各组件的依赖都经 `-Wunused-packages` 核对过，没有多余项。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
 
 ## 网页版（技术验证）
 

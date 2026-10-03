@@ -13,7 +13,6 @@ description:        Playable Haskell 2D Match-3 (消消乐) with SDL2
 
 dependencies:
 - base >= 4.7 && < 5
-- array
 - random
 
 ghc-options:
@@ -30,6 +29,7 @@ ghc-options:
 library:
   source-dirs: src
   dependencies:
+  - array
   - containers
   - transformers
   exposed-modules:
@@ -143,6 +143,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - match3
+    - array
     - stm
     - tasty
     - tasty-hunit

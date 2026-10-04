@@ -4,7 +4,8 @@
 -- 与 node-anim-parity.mjs（wasm 一侧）的输出逐字节比较；另外在原生一侧核对：不加速的步，
 -- 逐帧循环的帧数 / 事件数与 Engine.Playback.runPlayer 一口气播完的结果相同（不一致则退出码 1）。
 -- 用法（仓库根目录）：stack exec -- runghc -isrc -iapp/pure -iweb/hs web/test/AnimParity.hs 12 42 20 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]
--- 第 4 个参数是走法（见 pickMove）：combo 先换盘上的「彩虹 × 直线 / 炸弹」，覆盖第 44 关的变身步。
+-- 第 4 个参数是走法（见 pickMove）：combo 先换盘上的「彩虹 × 直线 / 炸弹」，覆盖第 44 关的变身步；
+-- boost（桌面迁来的道具，同 Parity.hs）：第 0 步锤子打提示第一格、第 1 步十字消打提示第二格、第 2 步自由交换提示两格、第 3 步洗牌，之后按提示。
 module Main (main) where
 
 import Control.Monad (unless, when)
@@ -23,7 +24,7 @@ import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), play)
 import Match3.Game.State (gsGround)
 import Match3Web.Anim (animRunPlayer, animStart, animTick)
-import Match3Web.Api (apiNew, apiSwapAnim, webState)
+import Match3Web.Api (apiCross, apiFreeSwap, apiHammer, apiNew, apiShuffle, apiSwapAnim, webState)
 
 main :: IO ()
 main = do
@@ -44,7 +45,13 @@ main = do
             case (gsOver gs, findHint (gsBoard gs)) of
               (Nothing, Just hint) -> do
                 let (a, b) = fromMaybe (pickMove mode (gsBoard gs) hint) (fixedMove mode k)
-                    (h', ms, _) = apiSwapAnim a b h
+                    boost = case (mode, k) of
+                      ("boost", 0) -> Just (apiHammer (fst hint))
+                      ("boost", 1) -> Just (apiCross (snd hint))
+                      ("boost", 2) -> Just (apiFreeSwap (fst hint) (snd hint))
+                      ("boost", 3) -> Just apiShuffle
+                      _ -> Nothing
+                    (h', ms, _) = maybe (apiSwapAnim a b) id boost h
                 when (mode == "cham-rainbow" && (a, b) `elem` chamRainbowPairs (gsBoard gs)) $
                   hPutStrLn stderr ("走法 cham-rainbow：第 " ++ show k ++ " 步换彩虹 × 变色龙 " ++ show (a, b))
                 when (take 4 mode == "fix-") $

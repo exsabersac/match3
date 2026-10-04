@@ -9,6 +9,8 @@
 #           （先换盘上的「彩虹 × 直线 / 炸弹」再按提示，覆盖第 44 关 rainbow_combos 的变身步；见 Parity.hs 的 pickMove）
 #           或 combo-bomb（同 combo，但先换「彩虹 × 炸弹」）或 cham-rainbow（先换「彩虹 × 变色龙」，第 47 关成对交换规则 15）
 #           或 fix-RCRC-RCRC-…（先按写死的交换走：第 k 步换第 k 对，每对 4 个数字 r1 c1 r2 c2，用完后按提示；第 48 关魔法地格）
+#           或 boost / daily / advance（桌面迁来的接口，仅 state：前四步锤子 / 十字消 / 自由交换 / 洗牌；2026-09-29 每日挑战；
+#           按提示走到结局再前进；三者最后都打印进度 / 徽章 / 地图点选 / 前进 / 重开 / 展示盘，见 Parity.hs 的 extras）
 #           默认另含第 46 关「掉落口」种子 1 / 28 / 30（后两者按提示走在第 5–6 步收走饼干、掉落口补下新饼干）
 #   NODE    默认 ~/.ghc-wasm/nodejs/bin/node
 #   OUT     输出与原生二进制目录，默认 web/.cache/parity
@@ -24,9 +26,13 @@ OUT="${OUT:-$HERE/.cache/parity}"
 
 case "$MODE" in
   state) SRC=Parity;     JS=node-parity.mjs;      STEPS="${STEPS:-12}"
-         DEF="0:20260929 5:1 12:42 15:1 20:1 25:1 27:1 30:1 35:1 37:1 38:2026 39:31337 40:1 41:1 42:1 42:3 43:1 43:1:combo 43:2:combo 43:3:combo-bomb" ;;
+         DEF="0:20260929 5:1 12:42 15:1 20:1 25:1 27:1 30:1 35:1 37:1 38:2026 39:31337 40:1 41:1 42:1 42:3 43:1 43:1:combo 43:2:combo 43:3:combo-bomb"
+         # 桌面迁来的接口（web-sdl-parity）：道具 + 洗牌、每日挑战、结局后前进（过关带入步数 / 失败重开）
+         DEF="$DEF 0:20260929:boost 5:1:boost 20:1:boost 0:20260929:daily 0:20260929:advance 7:1:advance 7:2:advance" ;;
   anim)  SRC=AnimParity; JS=node-anim-parity.mjs; STEPS="${STEPS:-20}"
-         DEF="0:20260929 11:1 12:42 13:1 15:1 27:1 28:1 35:1 38:2026 39:31337 40:1 41:1 42:1 42:2 42:5 43:1:combo 43:2:combo 43:3:combo-bomb" ;;
+         DEF="0:20260929 11:1 12:42 13:1 15:1 27:1 28:1 35:1 38:2026 39:31337 40:1 41:1 42:1 42:2 42:5 43:1:combo 43:2:combo 43:3:combo-bomb"
+         # 道具的逐轮回放（锤子 / 十字消 / 自由交换 / 洗牌，web-sdl-parity）
+         DEF="$DEF 0:20260929:boost 5:1:boost 20:1:boost" ;;
   *) echo "用法：$0 state|anim [步数]" >&2; exit 2 ;;
 esac
 # 第 45 关「雪怪」Boss（下标 44，新玩法 5）：两组都跑 3 个种子
@@ -68,7 +74,13 @@ for c in $CASES; do
   # combo 走法必须真的走到变身步（状态 JSON 的 trace.end 里有 rainbow_line / rainbow_bomb；动画帧里有蔓延段 spread）
   # cham-rainbow 走法必须真的换到了「彩虹 × 变色龙」（两侧 stderr 都记了这一步）
   # fix 走法（第 48 关）必须真的在魔法地格上引爆了扩圈的爆炸，且两侧记下的扩爆行（元素、来源、格数、行列数）逐字相同
-  if [ "${how#fix-}" != "${how}" ]; then
+  # boost 走法必须真的用了道具（state：JSON 里有 keepTool；anim：第 0 步锤子有回放），daily 必须是每日挑战局，advance 必须走到结局并前进成功
+  if [ "${how}" = boost ] || [ "${how}" = daily ] || [ "${how}" = advance ]; then
+    want="$(case "${how}" in boost) [ "$MODE" = state ] && echo '"keepTool":' || echo '"anim":true' ;; daily) echo '"daily":true' ;; advance) echo '"accepted":true,"startMoves":' ;; esac)"
+    if ! grep -q "${want}" "$nat"; then
+      echo "✗ 第 $((li + 1)) 关 种子 ${seed}${tag}：没有覆盖到 ${how}（输出里没有 ${want}）"; fail=$((fail + 1)); continue
+    fi
+  elif [ "${how#fix-}" != "${how}" ]; then
     if ! grep -q "魔法地格扩爆" "$nat.err" || [ "$(grep "魔法地格扩爆" "$nat.err")" != "$(grep "魔法地格扩爆" "$was.err")" ]; then
       echo "✗ 第 $((li + 1)) 关 种子 ${seed}${tag}：没有在魔法地格上引爆，或两侧扩爆记录不同"; fail=$((fail + 1)); continue
     fi

@@ -1,6 +1,8 @@
 // wasm 一侧的一致性脚本（node 直接加载 dist/ 里的 wasm，不经浏览器）：
 // 与 Parity.hs 相同的走法：开局后按 state.hint 连走 N 步，逐步打印 JSON，最后撤销一步；另把每步耗时写到 stderr。
-// 用法：node web/test/node-parity.mjs 0 20260929 12 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]   （先 ./build.sh；第 4 个参数是走法，见 pickMove）
+// 用法：node web/test/node-parity.mjs 0 20260929 12 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…|boost|daily|advance]   （先 ./build.sh；第 4 个参数是走法，见 pickMove）
+// boost / daily / advance（桌面迁来的接口）同 Parity.hs：boost 前四步锤子 / 十字消 / 自由交换 / 洗牌；daily 开 2026-09-29 每日挑战；
+// advance 按提示走到结局（最后不撤销）；三者走完后再打印 extras。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,12 +78,21 @@ const { instance } = await WebAssembly.instantiate(fs.readFileSync(path.join(dis
 Object.assign(ex, instance.exports);
 wasi.initialize(instance);
 const t1 = performance.now();
-let j = instance.exports.m3New(li, seed);
+const X = instance.exports;
+let j = mode === "daily" ? X.m3Daily(2026, 9, 29) : X.m3New(li, seed);
 console.log(j);
+const m0 = JSON.parse(j).state.moves;
+// boost 走法：前四步依次用锤子（提示第一格）/ 十字消（提示第二格）/ 自由交换（提示两格）/ 洗牌（同原生侧 boostStep）
+function boostStep(mode, k, [a, b]) {
+  if (mode !== "boost") return null;
+  return [() => X.m3Hammer(a[0], a[1]), () => X.m3Cross(b[0], b[1]), () => X.m3FreeSwap(a[0], a[1], b[0], b[1]), () => X.m3Shuffle()][k] || null;
+}
 const times = [];
-for (let k = 0; k < n; k++) {
+for (let k = 0; k < (mode === "advance" ? 400 : n); k++) {
   const s = JSON.parse(j).state;
   if (s.over || !s.hint) break;   // 与 Parity.hs 一致：走完（或提前结束）后再撤销一步
+  const bs = boostStep(mode, k, s.hint);
+  if (bs) { j = bs(); console.log(j); continue; }
   const [[r1, c1], [r2, c2]] = fixedMove(mode, k) || pickMove(mode, s);
   if (mode === "cham-rainbow" && chamRainbowPairs(s.board).some(([p, q]) => p[0] === r1 && p[1] === c1 && q[0] === r2 && q[1] === c2)) {
     console.error(`走法 cham-rainbow：第 ${k} 步换彩虹 × 变色龙 ((${r1},${c1}),(${r2},${c2}))`);
@@ -92,5 +103,13 @@ for (let k = 0; k < n; k++) {
   if (mode.startsWith("fix-")) for (const l of magicBlasts(s, JSON.parse(j).events)) console.error(`走法 fix：第 ${k} 步魔法地格扩爆 ${l}`);
   console.log(j);
 }
-console.log(instance.exports.m3Undo());
+if (mode !== "advance") console.log(instance.exports.m3Undo());   // advance 走法停在结局上（同原生侧）
+// 走完后的只读查询与换局接口（同原生侧 extras，同序同参数）
+if (["boost", "daily", "advance"].includes(mode)) {
+  const lv = JSON.parse(X.m3State()).state.level;
+  for (const f of [() => X.m3Progress(0, m0), () => X.m3Progress(40, m0),
+    () => X.m3Badge(0, 0, 0, 0, 0), () => X.m3Badge(1, 3, 123, 0, 0), () => X.m3Badge(1, 1, 77, 0, 0), () => X.m3Badge(0, 0, 0, 50, 4),
+    () => X.m3MapJump(5, 3), () => X.m3MapJump(0, 7), () => X.m3MapJump(48, lv),
+    () => X.m3Advance(m0, 7), () => X.m3Restart(m0, 7), () => X.m3Showcase()]) console.log(f());
+}
 console.error(`node: 实例化+初始化 ${(t1 - t0).toFixed(1)} ms；m3Swap 每步 ms：${times.map((t) => t.toFixed(1)).join(" ")}`);

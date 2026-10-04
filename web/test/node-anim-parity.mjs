@@ -85,7 +85,10 @@ for (let k = 0; k < n; k++) {
   if (mode === "cham-rainbow" && chamRainbowPairs(s.board).some(([p, q]) => p[0] === r1 && p[1] === c1 && q[0] === r2 && q[1] === c2)) {
     console.error(`走法 cham-rainbow：第 ${k} 步换彩虹 × 变色龙 ((${r1},${c1}),(${r2},${c2}))`);
   }
-  const res = JSON.parse(X.m3Swap(r1, c1, r2, c2));
+  // boost 走法：前四步锤子 / 十字消 / 自由交换 / 洗牌（位置取当步提示，同原生侧）
+  const [ha, hb] = s.hint;
+  const boost = mode === "boost" ? [() => X.m3Hammer(ha[0], ha[1]), () => X.m3Cross(hb[0], hb[1]), () => X.m3FreeSwap(ha[0], ha[1], hb[0], hb[1]), () => X.m3Shuffle()][k] : null;
+  const res = JSON.parse(boost ? boost() : X.m3Swap(r1, c1, r2, c2));
   if (mode.startsWith("fix-")) for (const l of magicBlasts(s, res.events)) console.error(`走法 fix：第 ${k} 步魔法地格扩爆 ${l}`);
   s = res.state;
   out.push(`step ${k}`);

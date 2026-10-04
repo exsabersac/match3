@@ -14,6 +14,17 @@ module Match3Web.Api
   , apiSwap
   , apiSwapAnim
   , apiUndo
+  , apiHammer
+  , apiCross
+  , apiFreeSwap
+  , apiShuffle
+  , apiDaily
+  , apiRestart
+  , apiAdvance
+  , apiShowcase
+  , apiProgress
+  , apiMapJump
+  , apiBadge
   , apiState
   , apiLevels
   , apiMeta
@@ -26,15 +37,19 @@ module Match3Web.Api
   ) where
 
 import Engine.Game (Game(..), Step(..))
-import Engine.History (History, Undoable(..), histNow, historyDepth)
+import Engine.History (History, Undoable(..), histNow, historyDepth, startHistory)
 import Match3.Core
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), Setup(..), eventKindTag, match3Shell)
 import Match3.View
 import Match3Web.Anim (AnimSeed, seedOf)
 import Match3Web.Json
+import UI.Chapters (chapterLabel, chapterStarts, chapterTitle)
 import UI.GoalIcon (goalIcon)
+import UI.MoveText (MoveUi(..), keepsTool)
 import UI.Presentation (Curve(..), RGB)
+import UI.Restart (restartSame)
+import UI.Showcase (showcaseState)
 import UI.WebMeta (WebMeta(..), webMeta)
 
 -- ---------------------------------------------------------------------------
@@ -68,9 +83,99 @@ apiSwapAnim p1 p2 = runStep (Act (Swap p1 p2))
 apiUndo :: WebGame -> (WebGame, String)
 apiUndo h = let (h', _, j) = runStep Undo h in (h', j)
 
+-- | 三种道具（同桌面 UI.Actions.applyBooster，经 gameStep 的 Hammer / CrossClear / FreeSwap）：JSON 形状同 m3Swap，
+-- 另加 keepTool（UI.MoveText.keepsTool：之后是否留在点选模式——只有自由交换换不掉、不扣次数时留下）。
+apiHammer :: Pos -> WebGame -> (WebGame, Maybe AnimSeed, String)
+apiHammer p = runStepWith (Just UiHammer) (Act (Hammer p))
+
+apiCross :: Pos -> WebGame -> (WebGame, Maybe AnimSeed, String)
+apiCross p = runStepWith (Just UiCross) (Act (CrossClear p))
+
+apiFreeSwap :: Pos -> Pos -> WebGame -> (WebGame, Maybe AnimSeed, String)
+apiFreeSwap p q = runStepWith (Just UiFreeSwap) (Act (FreeSwap p q))
+
+-- | 手动洗牌（同桌面 S 键 UI.Input.keyShuffle：gameStep 的 Shuffle，终局后被拒）；没有回放脚本，前端播一段轻落。
+apiShuffle :: WebGame -> (WebGame, Maybe AnimSeed, String)
+apiShuffle = runStep (Act Shuffle)
+
+-- | 每日挑战（同桌面 D 键：Setup Daily，种子由日期决定）。
+apiDaily :: Int -> Int -> Int -> (WebGame, String)
+apiDaily y m d = fresh (gameNew match3Shell (Daily (Year y) (Month m) (Day d)) 0)
+
+-- | 重开本关（同桌面 R 键 UI.Input.restartSame）：每日挑战按开局步数与原目标换种子重开，战役关 restartLevel。
+apiRestart :: Int -> Int -> WebGame -> (WebGame, String)
+apiRestart startMoves seed h = fresh (startHistory (restartSame startMoves seed (histNow h)))
+
+-- | 结局后前进（同桌面 N / 空格 / 回车 / 点结算面板，UI.Actions.advanceOrMsg）：过关 → nextLevel（携带剩余步数，最多 3 步），
+-- 通关 → 从第 1 关重开战役，失败 → 同 apiRestart；未结束时 accepted=false、状态不变。
+-- 返回 {ok, accepted, startMoves, state}：startMoves 是新一局的「开局步数」（三星分母；过关进下一关时取该关印制步数，不含携带）。
+apiAdvance :: Int -> Int -> WebGame -> (WebGame, String)
+apiAdvance startMoves seed h = case gvOver (gameView gs) of
+  Just (TLevelClear _ _) ->
+    let gs' = nextLevel gs seed
+        gv' = gameView gs'
+    in done gs' (maybe (gvMoves gv') lvMoves (lookup (gvLevel gv') [(lvIndex l, l) | l <- levelViews]))
+  Just (TWon _) -> case campaignGame 0 seed of
+    Just gs' -> done gs' (gvMoves (gameView gs'))
+    Nothing -> rejected
+  Just (TLost _) -> done (restartSame startMoves seed gs) startMoves
+  Nothing -> rejected
+  where
+    gs = histNow h
+    done gs' sm =
+      let h' = startHistory gs'
+      in (h', obj [("ok", "true"), ("accepted", "true"), ("startMoves", int sm), ("state", encodeState h')])
+    rejected = (h, obj [("ok", "true"), ("accepted", "false"), ("startMoves", int startMoves), ("state", encodeState h)])
+
+-- | 元素展示盘（同桌面 MATCH3_SHOWCASE：UI.Showcase.showcaseState，清空撤销历史）。
+apiShowcase :: WebGame -> (WebGame, String)
+apiShowcase h = fresh (startHistory (showcaseState (histNow h)))
+
+fresh :: WebGame -> (WebGame, String)
+fresh h = (h, obj [("ok", "true"), ("state", encodeState h)])
+
+-- | 选关进度与结算星级（桌面 App 的 appMaxReached / appStartMoves 由网页持有，传进来）：
+--   {reached, stars, dots}——reached = 开局记到当前关（freshLevelUi 的 max appMaxReached 当前关），
+--   终局后再按 unlockAfterOutcome 解锁（每日挑战不解锁）；stars = starRating 开局步数 剩余步数；
+--   dots = 每关一个字符的进度点（Match3.View.levelDots：C 当前 / D 已过 / U 已解锁 / L 未解锁）。
+apiProgress :: Int -> Int -> WebGame -> String
+apiProgress reached startMoves h =
+  obj [("reached", int r2), ("stars", int (starRating startMoves (gvMoves gv))), ("dots", str (map dot (levelDots (gvLevelIndex gv) r2)))]
+  where
+    gs = histNow h
+    gv = gameView gs
+    r1 = max reached (gvLevel gv)
+    r2 = maybe r1 (unlockAfterOutcome gs r1 . fromTerminal) (gvOver gv)
+    dot d = case d of
+      DotCurrent -> 'C'
+      DotDone -> 'D'
+      DotUnlocked -> 'U'
+      DotLocked -> 'L'
+
+-- | 选关地图点击（同桌面 UI.Input.mapClick 的 mapClickJump）：{jump: 关卡下标 | null}——null = 当前关或未解锁（关地图、保留进度）。
+apiMapJump :: Int -> Int -> WebGame -> String
+apiMapJump reached clicked h = obj [("jump", maybe "null" int (mapClickJump (gvLevel (gameView (histNow h))) reached clicked))]
+
+-- | HUD 右下角分数徽章（同桌面 drawHudArt 的 Match3.View.scoreBadge）：
+-- 回放中（replaying ≠ 0）传当前轮连击与滚动中的分数；播完后传总结剩余帧数与本步最高连击。
+--   {kind:"combo"|"rolling"|"summary"|"score", n, shuffled}
+apiBadge :: Int -> Int -> Int -> Int -> Int -> WebGame -> String
+apiBadge replaying combo shown summaryLeft best h = case scoreBadge replay summaryLeft best (gameView (histNow h)) of
+  BadgeCombo n -> badge "combo" n False
+  BadgeRolling n -> badge "rolling" n False
+  BadgeSummary n -> badge "summary" n False
+  BadgeScore sh n -> badge "score" n sh
+  where
+    replay = if replaying /= 0 then Just (ReplayView combo shown) else Nothing
+    badge k n sh = obj [("kind", str k), ("n", int n), ("shuffled", bool sh)]
+
 -- | 执行一个动作：只调 gameStep，表现数据取自 stepReport。
 runStep :: Undoable Action -> WebGame -> (WebGame, Maybe AnimSeed, String)
-runStep act h =
+runStep = runStepWith Nothing
+
+-- | 同 runStep；给出道具的界面路径时 JSON 另带 keepTool（UI.MoveText.keepsTool）。
+runStepWith :: Maybe MoveUi -> Undoable Action -> WebGame -> (WebGame, Maybe AnimSeed, String)
+runStepWith ui act h =
   let st = gameStep match3Shell h act
       h' = stepState st
       gs' = histNow h'
@@ -83,7 +188,7 @@ runStep act h =
       trace = encodeTrace (maybe (emptyTrace gs') pdTrace rep)
   in ( h'
      , rep >>= seedOf (histNow h)
-     , obj
+     , obj $
          [ ("ok", "true")
          , ("accepted", bool (stepAccepted st))
          , ("outcome", outcome)
@@ -91,6 +196,7 @@ runStep act h =
          , ("events", arr (map encodeEvent (maybe [] pdEvents rep)))
          , ("state", encodeState h')
          ]
+         ++ [("keepTool", bool (keepsTool u (maybe InvalidSwap id (rep >>= pdOutcome)))) | Just u <- [ui]]
      )
 
 -- | 仅序列化当前状态。
@@ -129,6 +235,8 @@ apiMeta =
     , ("spreadCurves", obj [(n, curve c) | (n, c) <- wmSpreadCurves m])
     , ("frames", obj [(n, int f) | (n, f) <- wmFrames m])
     , ("sounds", arr (map str (wmSounds m)))
+      -- 选关地图的章节（UI.Chapters，与桌面 UI.LevelMap 同一张表）：[{start: 章节第一关的下标, label: CH1…, title: 第一章…}]
+    , ("chapters", arr [obj [("start", int i), ("label", str (chapterLabel i)), ("title", str (chapterTitle k))] | (k, i) <- zip [0 ..] chapterStarts])
     ]
   where
     m = webMeta
@@ -150,6 +258,11 @@ encodeState h =
   obj
     [ ("level", int (gvLevel gv))
     , ("name", str (gvRawName gv))
+      -- 每日挑战（gvDaily；HUD 关名画「每日挑战」、没有规则角标）与窗口标题（Match3.View.titleLine，同桌面标题栏，网页写进 document.title）
+    , ("daily", bool (gvDaily gv))
+    , ("title", str (titleLine gv))
+      -- 道具剩余次数（gvBoosters，同桌面 HUD 的三枚道具芯片）
+    , ("boosters", obj [("hammer", int (bHammers bs)), ("swap", int (bFreeSwaps bs)), ("cross", int (bCrossClears bs))])
       -- 本关打开的规则开关角标（视图模型 gvRules 查 Match3.View.ruleBadge，与桌面 HUD 同一张表）：
       -- [{name, text, icons}]，前端 HUD 按列表逐个画，新规则登记进 ruleBadgeTable 就自动显示
     , ("rules", arr (map encodeRuleBadge (ruleBadges gv)))
@@ -182,6 +295,7 @@ encodeState h =
     gv = gameView (histNow h)
     goal = gvGoal gv
     bv = gvBoard gv
+    bs = gvBoosters gv
 
 -- | 规则开关角标：{name: 规则开关名, text: 角标文字, icons: [图标贴图名，从下往上叠画]}。
 encodeRuleBadge :: RuleBadge -> String

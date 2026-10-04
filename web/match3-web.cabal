@@ -12,7 +12,8 @@ build-type:         Simple
 executable match3-web
   main-is:          WebMain.hs
   -- ../app/pure 只放桌面前端的纯模块（ComboFx 逐轮回放阶段机、UI.Presentation 表现表、UI.GoalIcon 目标图标名、
-  -- UI.Palette / UI.CellFace / UI.WebMeta 调色板与 m3Meta 的表，不依赖 SDL）；其余 app/ 模块不参与编译
+  -- UI.Palette / UI.CellFace / UI.WebMeta 调色板与 m3Meta 的表、UI.MoveText 的道具点选规则 keepsTool、
+  -- UI.Chapters 选关地图章节、UI.Showcase 元素展示盘、UI.Restart 重开规则，不依赖 SDL）；其余 app/ 模块不参与编译
   hs-source-dirs:   hs ../src ../app/pure
   other-modules:
     Match3Web.Api
@@ -25,6 +26,10 @@ executable match3-web
     UI.Palette
     UI.CellFace
     UI.WebMeta
+    UI.MoveText
+    UI.Chapters
+    UI.Showcase
+    UI.Restart
     -- 以下为核心模块（../src），与 package.yaml 的 library.exposed-modules 一致（通用层 Engine.* + 三消 Match3.*）
     Engine.Game
     Engine.Effect

@@ -2,7 +2,10 @@
 -- 同一关卡 + 种子开局，按核心提示连走 N 步，逐步打印接口 JSON。
 -- 与 node-parity.mjs（wasm 一侧）的输出逐字节比较，验证两端规则与随机数完全一致。
 -- 走完后再撤销一步（覆盖 m3Undo / Engine.History），最后一行是撤销结果。
--- 用法（仓库根目录）：stack runghc -- -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…]
+-- 用法（仓库根目录）：stack runghc -- -isrc -iweb/hs web/test/Parity.hs 0 20260929 12 [hint|combo|combo-bomb|cham-rainbow|fix-RCRC-…|boost|daily|advance]
+-- 桌面迁来的接口（web-sdl-parity）：boost = 第 0 步锤子打提示的第一格、第 1 步十字消打提示的第二格、第 2 步自由交换提示的两格、
+-- 第 3 步手动洗牌，之后按提示；daily = 开 2026-09-29 的每日挑战（apiDaily，不用关卡 / 种子参数）后按提示；
+-- advance = 按提示一直走到结局（不受步数限制、最后不撤销）。这三种走完（撤销）后再打印 extras（进度 / 徽章 / 地图点选 / 前进 / 重开 / 展示盘）。
 module Main (main) where
 
 import Control.Monad (when)
@@ -17,7 +20,10 @@ import Match3.Core
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Engine (Action(..), Played(..), play)
 import Match3.Game.State (gsGround)
-import Match3Web.Api (apiNew, apiSwap, apiUndo, webState)
+import Match3Web.Anim (AnimSeed)
+import Match3Web.Api
+  ( WebGame, apiAdvance, apiBadge, apiCross, apiDaily, apiFreeSwap, apiHammer, apiMapJump, apiNew, apiProgress
+  , apiRestart, apiShowcase, apiShuffle, apiSwap, apiUndo, webState )
 
 main :: IO ()
 main = do
@@ -28,9 +34,19 @@ main = do
       mode = case drop 3 args of
         (m : _) -> m
         [] -> "hint"
-      (gs0, j0) = apiNew li seed
-      go 0 h = putStrLn (snd (apiUndo h))
+      (gs0, j0) = if mode == "daily" then apiDaily 2026 9 29 else apiNew li seed
+      m0 = gsMoves (webState gs0)
+      -- advance 走法停在结局上（不撤销），好让 extras 里的前进真的生效
+      undoLast h
+        | mode == "advance" = pure h
+        | otherwise = let (h', j) = apiUndo h in h' <$ putStrLn j
+      go :: Int -> WebGame -> IO WebGame
+      go 0 h = undoLast h
       go k h = let gs = webState h in case (gsOver gs, findHint (gsBoard gs)) of
+        (Nothing, Just hint) | Just f <- boostStep mode (n - k) hint -> do
+          let (h', _, j) = f h
+          putStrLn j
+          go (k - 1) h'
         (Nothing, Just hint) -> do
           let (a, b) = fromMaybe (pickMove mode (gsBoard gs) hint) (fixedMove mode (n - k))
               (h', j) = apiSwap a b h
@@ -40,9 +56,36 @@ main = do
             mapM_ (\l -> hPutStrLn stderr ("走法 fix：第 " ++ show (n - k) ++ " 步魔法地格扩爆 " ++ l)) (magicBlasts gs a b)
           putStrLn j
           go (k - 1) h'
-        _ -> putStrLn (snd (apiUndo h))
+        _ -> undoLast h
   putStrLn j0
-  go (n :: Int) gs0
+  hEnd <- go (if mode == "advance" then 400 else n) gs0
+  when (mode `elem` ["boost", "daily", "advance"]) $ mapM_ putStrLn (extras m0 hEnd)
+
+-- | boost 走法：前四步依次用锤子 / 十字消 / 自由交换 / 洗牌（位置取当步的核心提示），之后 Nothing（按提示交换）。
+-- 与 node-parity.mjs 的 boostStep 逐条相同。
+boostStep :: String -> Int -> (Pos, Pos) -> Maybe (WebGame -> (WebGame, Maybe AnimSeed, String))
+boostStep "boost" k (a, b) = case k of
+  0 -> Just (apiHammer a)
+  1 -> Just (apiCross b)
+  2 -> Just (apiFreeSwap a b)
+  3 -> Just apiShuffle
+  _ -> Nothing
+boostStep _ _ _ = Nothing
+
+-- | 走完后的只读查询与换局接口（boost / daily / advance）：与 node-parity.mjs 的 extras 同序同参数；
+-- 前进 → 重开 → 展示盘依次作用在上一步的结果上。
+extras :: Int -> WebGame -> [String]
+extras m0 h =
+  [ apiProgress 0 m0 h, apiProgress 40 m0 h
+  , apiBadge 0 0 0 0 0 h, apiBadge 1 3 123 0 0 h, apiBadge 1 1 77 0 0 h, apiBadge 0 0 0 50 4 h
+  , apiMapJump 5 3 h, apiMapJump 0 7 h, apiMapJump 48 (gsLevel (webState h)) h
+  , j1, j2, j3
+  ]
+  where
+    -- 换局接口依次作用（wasm 侧 m3Advance / m3Restart / m3Showcase 会改写当前局，原生侧同样串起来）
+    (h1, j1) = apiAdvance m0 7 h
+    (h2, j2) = apiRestart m0 7 h1
+    (_, j3) = apiShowcase h2
 
 -- | 走法（第 4 个参数，缺省 hint）：hint = 按核心提示；combo = 盘上有「彩虹 × 直线 / 炸弹」相邻（两格都无冰、无叠层）时
 -- 先换这一对（行优先，先右后下），否则按提示——提示不会主动选彩虹组合，第 44 关（rainbow_combos）要靠它覆盖变身步；

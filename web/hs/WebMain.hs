@@ -15,7 +15,9 @@ import System.IO.Unsafe (unsafePerformIO)
 import ComboFx (Cascade)
 import Engine.Playback (Player)
 import Match3Web.Anim (AnimSeed, animStart, animTick)
-import Match3Web.Api (WebGame, apiLevels, apiMeta, apiNew, apiState, apiSwapAnim, apiUndo, jsonString)
+import Match3Web.Api
+  ( WebGame, apiAdvance, apiBadge, apiCross, apiDaily, apiFreeSwap, apiHammer, apiLevels, apiMapJump, apiMeta, apiNew
+  , apiProgress, apiRestart, apiShowcase, apiShuffle, apiState, apiSwapAnim, apiUndo, jsonString )
 
 -- | 当前这一局（含撤销历史；Nothing = 还没调用过 m3New）。
 {-# NOINLINE stateRef #-}
@@ -39,6 +41,19 @@ foreign export javascript "m3AnimStart sync" jsAnimStart :: IO JSString
 foreign export javascript "m3AnimTick sync" jsAnimTick :: Int -> IO JSString
 foreign export javascript "m3Levels sync" jsLevels :: IO JSString
 foreign export javascript "m3Meta sync" jsMeta :: IO JSString
+-- 桌面版功能迁移（web-sdl-parity）：道具 / 洗牌（JSON 形状同 m3Swap，道具另带 keepTool）、每日挑战、重开、结局后前进、
+-- 元素展示盘、选关进度 / 星级、地图点选、分数徽章
+foreign export javascript "m3Hammer sync" jsHammer :: Int -> Int -> IO JSString
+foreign export javascript "m3Cross sync" jsCross :: Int -> Int -> IO JSString
+foreign export javascript "m3FreeSwap sync" jsFreeSwap :: Int -> Int -> Int -> Int -> IO JSString
+foreign export javascript "m3Shuffle sync" jsShuffle :: IO JSString
+foreign export javascript "m3Daily sync" jsDaily :: Int -> Int -> Int -> IO JSString
+foreign export javascript "m3Restart sync" jsRestart :: Int -> Int -> IO JSString
+foreign export javascript "m3Advance sync" jsAdvance :: Int -> Int -> IO JSString
+foreign export javascript "m3Showcase sync" jsShowcase :: IO JSString
+foreign export javascript "m3Progress sync" jsProgress :: Int -> Int -> IO JSString
+foreign export javascript "m3MapJump sync" jsMapJump :: Int -> Int -> IO JSString
+foreign export javascript "m3Badge sync" jsBadge :: Int -> Int -> Int -> Int -> Int -> IO JSString
 
 -- | m3New(level, seed)：开新局并返回 {ok,state}。
 jsNew :: Int -> Int -> IO JSString
@@ -52,6 +67,55 @@ jsNew li seed = guarded $ do
 -- | m3Swap(r1,c1,r2,c2)：交换两格；返回 {ok,accepted,outcome,trace,events,state}。
 jsSwap :: Int -> Int -> Int -> Int -> IO JSString
 jsSwap r1 c1 r2 c2 = withGame (apiSwapAnim (r1, c1) (r2, c2))
+
+-- | m3Hammer(r,c) / m3Cross(r,c) / m3FreeSwap(r1,c1,r2,c2)：三种道具；m3Shuffle()：手动洗牌。JSON 形状同 m3Swap。
+jsHammer :: Int -> Int -> IO JSString
+jsHammer r c = withGame (apiHammer (r, c))
+
+jsCross :: Int -> Int -> IO JSString
+jsCross r c = withGame (apiCross (r, c))
+
+jsFreeSwap :: Int -> Int -> Int -> Int -> IO JSString
+jsFreeSwap r1 c1 r2 c2 = withGame (apiFreeSwap (r1, c1) (r2, c2))
+
+jsShuffle :: IO JSString
+jsShuffle = withGame apiShuffle
+
+-- | m3Daily(年, 月, 日)：开每日挑战（种子由日期决定）；返回 {ok,state}。
+jsDaily :: Int -> Int -> Int -> IO JSString
+jsDaily y m d = guarded $ do
+  let (h, out) = apiDaily y m d
+  _ <- evaluate (length out)
+  writeIORef stateRef (Just h)
+  clearAnim
+  pure out
+
+-- | m3Restart(开局步数, 种子)：重开本关；m3Advance(开局步数, 种子)：结局后前进；m3Showcase()：换成元素展示盘。
+jsRestart :: Int -> Int -> IO JSString
+jsRestart sm seed = withFresh (apiRestart sm seed)
+
+jsAdvance :: Int -> Int -> IO JSString
+jsAdvance sm seed = withFresh (apiAdvance sm seed)
+
+jsShowcase :: IO JSString
+jsShowcase = withFresh apiShowcase
+
+-- | 换一局（重开 / 前进 / 展示盘）：同 withGame，但清空回放。
+withFresh :: (WebGame -> (WebGame, String)) -> IO JSString
+withFresh f = withGame (\h -> let (h', j) = f h in (h', Nothing, j))
+
+-- | m3Progress(已解锁, 开局步数) / m3MapJump(已解锁, 点中的关卡) / m3Badge(回放中, 连击, 显示分数, 总结剩余帧, 最高连击)：只读查询。
+jsProgress :: Int -> Int -> IO JSString
+jsProgress reached sm = readGame (apiProgress reached sm)
+
+jsMapJump :: Int -> Int -> IO JSString
+jsMapJump reached li = readGame (apiMapJump reached li)
+
+jsBadge :: Int -> Int -> Int -> Int -> Int -> IO JSString
+jsBadge rp k shown left best = readGame (apiBadge rp k shown left best)
+
+readGame :: (WebGame -> String) -> IO JSString
+readGame f = guarded $ maybe (errJson "no game") f <$> readIORef stateRef
 
 -- | m3Undo()：撤销一步；JSON 形状同 m3Swap。
 jsUndo :: IO JSString

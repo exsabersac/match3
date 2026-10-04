@@ -23,16 +23,15 @@ import qualified ElementOracle
 import Match3.Board.Grid (getCell)
 import Match3.Element.Ability
 import Match3.Element.Builtin (Bubble(..), SnowBoss(..), defaultRegistry, specialBlast)
-import Match3.Element.Builtin.Collectible (CookieE(..))
-import Match3.Element.Builtin.Common (deadRule)
-import Match3.Element.Builtin.Layer (ChainL(..), ChocoL(..), putOverlay)
+import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
+import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
+import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE)
+import Match3.Element.Rules (kindRules, layerRules)
 import Match3.Element.Kind
 import Match3.Element.Layer
 import Match3.Element.Registry (Registry, elementOf, register, registryDefs)
 import Match3.Element.Types
 import Match3.Element.World
-import Match3.Grass (clearChocoAdjacent)
-import Match3.Obstacles (chipAdjacentStonesExcept)
 import Match3.Types
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -46,6 +45,7 @@ tests =
   , testCase "ab_layered_composes_all_methods" ab_layered_composes_all_methods
   , testCase "ab_boxing_is_transparent" ab_boxing_is_transparent
   , testCase "ab_world_decode_order" ab_world_decode_order
+  , testCase "ab_rule_methods_pinned" ab_rule_methods_pinned
   ]
 
 --------------------------------------------------------------------------------
@@ -120,7 +120,8 @@ instance Kind StoneV where
     Stone n -> Just (StoneV n)
     _ -> Nothing
   place _ args _ = Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
-  boardPasses _ = [AdjacentPass 10 (deadRule chipAdjacentStonesExcept)]
+  neighbourPrio _ = Just 10
+  onNeighbourClear (StoneV n) = if n <= 1 then Dies else Becomes (Stone (n - 1))
 
 data FlipV = FlipV Color Color
   deriving (Eq, Show)
@@ -236,9 +237,12 @@ instance Layer ChocoV where
   layerPlace _ _ cell = case cell of
     Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
     _ -> Nothing
-  layerPasses _ =
-    AdjacentPass 150 (\ctx b -> AdjOut (clearChocoAdjacent b (acTrue ctx)) [] [])
-      : [p | p@EndPass {} <- layerPasses (Proxy :: Proxy ChocoL)]
+  layerNeighbourPrio _ = Just 150
+  layerReach _ = AllNeighbours
+  onLayerNeighbourClear _ cell = case cell of
+    Gem c k i _ -> Becomes (Gem c k i Nothing)
+    _ -> Untouched
+  spreads _ = Just (20, ChocoV)
 
 newtype ChainV = ChainV Int
   deriving (Eq, Show)
@@ -256,7 +260,10 @@ instance Layer ChainV where
   layerPlace _ args cell = case cell of
     Gem col kind ice _ -> (\n -> Gem col kind ice (Just (Chain n))) <$> exactArgs argInt args
     _ -> Nothing
-  layerPasses _ = [p | p@AdjacentPass {} <- layerPasses (Proxy :: Proxy ChainL)]
+  layerNeighbourPrio _ = Just 80
+  onLayerNeighbourClear (ChainV n) cell = case cell of
+    Gem c k i _ | n <= 1 -> Becomes (Gem c k i Nothing)
+    _ -> Becomes (putOn (ChainV (n - 1)) cell)
 
 data JellyV
 
@@ -421,3 +428,30 @@ ab_world_decode_order = do
   assertEqual "dedupe keeps first position" ["stone", "gem"] (map defName (worldDefs w2))
   assertEqual "body" (Just (StoneV 2)) (fromElement (decode w2 (Stone 2)))
   assertEqual "mapMaybe sanity" [1 :: Int] (mapMaybe (\c -> case c of Stone n -> Just n; _ -> Nothing) [getCell (gridFromRows [[Stone 1]]) (0, 0)])
+
+--------------------------------------------------------------------------------
+-- 规则方法（第 3 刀）：优先级 / 波及范围 / 蔓延写死（与旧 R 行的次序一致；元素对照快照另有整盘锁定）
+
+ab_rule_methods_pinned :: Assertion
+ab_rule_methods_pinned = do
+  assertEqual "kind neighbourPrio"
+    [Just 10, Just 20, Just 30, Just 40, Just 110, Just 120, Nothing]
+    [ neighbourPrio (Proxy @StoneE), neighbourPrio (Proxy @ChestE), neighbourPrio (Proxy @HoneyE)
+    , neighbourPrio (Proxy @CakeE), neighbourPrio (Proxy @SafeE), neighbourPrio (Proxy @TimeSpiritE)
+    , neighbourPrio (Proxy @SnowBoss) ]
+  assertEqual "layer neighbourPrio"
+    [Just 70, Just 80, Just 90, Just 100, Just 150, Just 160, Nothing, Nothing]
+    [ layerNeighbourPrio (Proxy @FogL), layerNeighbourPrio (Proxy @ChainL), layerNeighbourPrio (Proxy @FreezeL)
+    , layerNeighbourPrio (Proxy @CurtainL), layerNeighbourPrio (Proxy @ChocoL), layerNeighbourPrio (Proxy @SteamL)
+    , layerNeighbourPrio (Proxy @VineL), layerNeighbourPrio (Proxy @GrassL) ]
+  assertEqual "layer reach"
+    [SkipDirect, SkipDirect, SkipDirect, SkipDirect, AllNeighbours, AllNeighbours]
+    [ layerReach (Proxy @FogL), layerReach (Proxy @ChainL), layerReach (Proxy @FreezeL)
+    , layerReach (Proxy @CurtainL), layerReach (Proxy @ChocoL), layerReach (Proxy @SteamL) ]
+  assertEqual "spreads" [Just 10, Just 20, Just 30, Nothing]
+    [fst <$> spreads (Proxy @VineL), fst <$> spreads (Proxy @ChocoL), fst <$> spreads (Proxy @SteamL), fst <$> spreads (Proxy @FogL)]
+  -- 收集：方法给出的规则在逃生口之前
+  assertEqual "kindRules stone" [10] [o | AdjacentPass o _ <- kindRules (Proxy @StoneE)]
+  assertEqual "layerRules choco" (1, 1) (length [() | AdjacentPass 150 _ <- layerRules (Proxy @ChocoL)], length [() | EndPass _ <- layerRules (Proxy @ChocoL)])
+  assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint (Proxy @SnowBoss) (2, 3))
+  assertEqual "snow boss rules" [200] [o | AdjacentPass o _ <- kindRules (Proxy @SnowBoss)]

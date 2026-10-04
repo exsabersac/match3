@@ -9,6 +9,8 @@
 -- 雪怪 Boss（新玩法 5，Custom "snow_boss"）是占 2×2 的固定格：邻格真消除 / 直接命中扣血，血量归零整只消除；
 -- 每 3 次交换在身边召唤一块雪块（1 层石头）。
 -- 邻格规则顺序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
+-- 多层障碍 / 保险箱的邻消是方法 onNeighbourClear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity（驱动 entityDamage）；
+-- 气球（同色）、魔法石、雪怪召唤读整盘，走逃生口 boardPasses。
 -- 步末：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
 module Match3.Element.Builtin.Obstacle
   ( StoneE(..)
@@ -37,6 +39,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.Bits (xor)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Proxy (Proxy(..))
 
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
@@ -45,13 +48,9 @@ import Match3.Element.Builtin.Common (boardSeed, colorPlace, deadRule, pickBy, p
 import Match3.Element.Ability
 import Match3.Element.Kind
 import Match3.Element.Types
+import Match3.Element.Rules (entityDamage)
 import Match3.Obstacles
   ( chipAdjacentBalloonsExcept
-  , chipAdjacentCakesExcept
-  , chipAdjacentChestsExcept
-  , chipAdjacentHoneyExcept
-  , chipAdjacentSafesExcept
-  , chipAdjacentStonesExcept
   , openSurprises
   , orthoNeighbors
   )
@@ -81,7 +80,8 @@ instance Kind StoneE where
     Stone n -> Just (StoneE n)
     _ -> Nothing
   place _ = layersPlace Stone
-  boardPasses _ = [AdjacentPass 10 (deadRule chipAdjacentStonesExcept)]
+  neighbourPrio _ = Just 10
+  onNeighbourClear (StoneE n) = chipNudge n Stone
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
@@ -107,7 +107,8 @@ instance Kind ChestE where
     Chest n -> Just (ChestE n)
     _ -> Nothing
   place _ = layersPlace Chest
-  boardPasses _ = [AdjacentPass 20 (deadRule chipAdjacentChestsExcept)]
+  neighbourPrio _ = Just 20
+  onNeighbourClear (ChestE n) = chipNudge n Chest
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
@@ -133,7 +134,8 @@ instance Kind HoneyE where
     Honey n -> Just (HoneyE n)
     _ -> Nothing
   place _ = layersPlace Honey
-  boardPasses _ = [AdjacentPass 30 (deadRule chipAdjacentHoneyExcept)]
+  neighbourPrio _ = Just 30
+  onNeighbourClear (HoneyE n) = chipNudge n Honey
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
@@ -159,7 +161,8 @@ instance Kind CakeE where
     Cake n -> Just (CakeE n)
     _ -> Nothing
   place _ = layersPlace Cake
-  boardPasses _ = [AdjacentPass 40 (deadRule chipAdjacentCakesExcept)]
+  neighbourPrio _ = Just 40
+  onNeighbourClear (CakeE n) = chipNudge n Cake
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
@@ -211,7 +214,9 @@ instance Kind SafeE where
     _ -> Nothing
   place _ = layersPlace Safe
   diffCounter _ = Just CountSafes
-  boardPasses _ = [AdjacentPass 110 (\ctx b -> AdjOut (fst (chipAdjacentSafesExcept b (acTrue ctx) (acDirect ctx))) [] [])]
+  neighbourPrio _ = Just 110
+  -- 末层原地开成饼干（不并入清除格）
+  onNeighbourClear (SafeE n) = Becomes (if n <= 1 then Cookie else Safe (n - 1))
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
@@ -385,7 +390,14 @@ instance Kind SnowBoss where
   label _ = Just "雪怪"
   loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
   diffCounter _ = Just (CountNamed snowBossName)
-  boardPasses _ = [AdjacentPass 200 snowBossDamage, EndPass (moveRule 30 snowBossRun)]
+  boardPasses _ = [AdjacentPass 200 (entityDamage (Proxy :: Proxy SnowBoss)), EndPass (moveRule 30 snowBossRun)]
+
+-- | 2×2 多格实体：扣血由通用驱动 'entityDamage' 算（邻格规则 200）。
+instance Entity SnowBoss where
+  footprint _ = snowBossCells
+  partNo = sbQuad
+  hitPoints = sbHp
+  withHp hp b = b {sbHp = hp}
 
 snowBossName :: ElementName
 snowBossName = "snow_boss"
@@ -425,20 +437,6 @@ bossRing b anchor =
   let body = snowBossCells anchor
   in foldr (\q acc -> if q `elem` acc then acc else q : acc) [] [q | x <- body, q <- orthoNeighbors x, inBounds b q, q `notElem` body]
 
--- | 邻格规则：每只 Boss 按本轮伤害扣血；归零的四格并入清除格。
-snowBossDamage :: AdjCtx -> Board -> AdjOut
-snowBossDamage ctx b0 = foldl one (AdjOut b0 [] []) (snowBosses b0)
-  where
-    one out@(AdjOut b dead sit) (anchor, s) =
-      let parts = bossParts b anchor
-          dmg = length [q | q <- bossRing b anchor, q `elem` acTrue ctx] + length [p | (p, _) <- parts, p `elem` acDirect ctx]
-          hp' = max 0 (sbHp s - dmg)
-      in if dmg == 0
-           then out
-           else if hp' == 0
-             then AdjOut b (dead ++ map fst parts) sit
-             else AdjOut (foldl (\bd (p, x) -> setCell bd p (toCell x {sbHp = hp'})) b parts) dead sit
-
 -- | 召唤选格（纯函数，测试直接调用）：避让格 / 墙之外、身外一圈里的普通宝石（无冰无叠层）按盘面散列选一格
 -- （'boardSeed' 依赖 @show board@，见 Element.Builtin.Common）。
 snowBossSpawn :: [Pos] -> [Pos] -> Board -> Pos -> Maybe Pos
@@ -463,6 +461,12 @@ snowBossRun ctx b0 =
           changes = [(p, cell) | (p, cell) <- bossItems ++ snow, getCell b p /= cell]
           b1 = foldl (\bd (p, cell) -> setCell bd p cell) b changes
       in (acc ++ [EndItem p p cell Nothing | (p, cell) <- changes], b1)
+
+-- | 多层障碍被邻格真消除：削一层，末层打碎（并入清除格）。
+chipNudge :: Int -> (Int -> Cell) -> Nudge
+chipNudge n con
+  | n <= 1 = Dies
+  | otherwise = Becomes (con (n - 1))
 
 -- | 多层障碍受直接命中：削一层，末层消除。
 chip :: Int -> (Int -> Cell) -> Strike

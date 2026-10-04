@@ -7,7 +7,10 @@
 -- 'Kind' 的方法都带 @proxy e@ 参数（解码、放置、标签、按差计数、规则），不需要「原型值」。
 -- 地面层元素（不占格，层数在 GameState.gsGround 里）是 'GroundKind'；叠层见 Match3.Element.Layer。
 --
--- 规则：'boardPasses' 是逃生口——元素自带的整盘趟（邻格 / 步末 / 成对交换 / 开启）。
+-- 规则（元素类重构第 3 刀起）：能写成「邻格真消除时这一格怎么变」的邻格规则是方法（'neighbourPrio' / 'reach' /
+-- 'onNeighbourClear'），由通用驱动（Match3.Element.Rules.kindNeighbour）统一找邻格、跳过直接命中、按顺序写回；
+-- 多格实体（'Entity'）的扣血同样由驱动 entityDamage 算。其余读整盘、按自己的顺序写回的规则（步末 / 成对交换 /
+-- 开启 / 同色邻消 / 改色 …）走逃生口 'boardPasses'。
 module Match3.Element.Kind
   ( -- * 本体
     Kind(..)
@@ -15,6 +18,10 @@ module Match3.Element.Kind
   , someKind
   , fromCellAs
   , BoardPass(..)
+  , Reach(..)
+  , Nudge(..)
+    -- * 多格实体
+  , Entity(..)
     -- * 地面层
   , GroundKind(..)
   , SomeGround(..)
@@ -38,6 +45,19 @@ data BoardPass
   | SwapPass SwapRule                              -- ^ 成对交换规则
   | OpenPass OpenRule                              -- ^ 开启规则（彩蛋类）
 
+-- | 邻格波及跳不跳过本轮被直接命中的格（直接命中已经结算过一次）。
+data Reach
+  = SkipDirect     -- ^ 跳过（石头 / 宝箱 / 迷雾 …）
+  | AllNeighbours  -- ^ 不跳过（巧克力 / 蒸汽）
+  deriving (Eq, Show)
+
+-- | 邻格有真消除时，这一格怎么变。
+data Nudge
+  = Untouched     -- ^ 不变
+  | Becomes Cell  -- ^ 原地变成别的格（削一层 / 揭叠层 / 保险箱开成饼干）
+  | Dies          -- ^ 打碎：并入本轮清除格（格子原样留着，由清除管线移走）
+  deriving (Eq, Show)
+
 -- | 一种本体元素（类型级）。
 class Element e => Kind e where
   -- | 元素名（注册表的键；与值级 'Match3.Element.Ability.nameOf' 相同）。
@@ -59,9 +79,26 @@ class Element e => Kind e where
   -- | 按差计数时每少一个奖励的步数。
   bonusMoves :: proxy e -> Int
   bonusMoves _ = 0
+  -- | 邻格规则的优先级（小的先；Nothing = 没有邻格规则）。内置：石头 10 / 宝箱 20 / 蜂蜜 30 / 蛋糕 40 /
+  -- 保险箱 110 / 时间精灵 120。
+  neighbourPrio :: proxy e -> Maybe Int
+  neighbourPrio _ = Nothing
+  reach :: proxy e -> Reach
+  reach _ = SkipDirect
+  -- | 与本轮真消除格正交相邻时这一格怎么变。
+  onNeighbourClear :: e -> Nudge
+  onNeighbourClear _ = Untouched
   -- | 逃生口：元素自带的整盘趟。
   boardPasses :: proxy e -> [BoardPass]
   boardPasses _ = []
+
+-- | 多格实体（雪怪 Boss）：各部件仍是独立的格子，'Entity' 告诉驱动锚点怎么认（'partNo' == 0）、部件在哪
+-- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。伤害由 Match3.Element.Rules.entityDamage 统一算。
+class Kind e => Entity e where
+  footprint :: proxy e -> Pos -> [Pos]
+  partNo :: e -> Int
+  hitPoints :: e -> Int
+  withHp :: Int -> e -> e
 
 -- | 装箱的本体种类（注册表里的一项）。
 data SomeKind = forall e. Kind e => SomeKind (Proxy e)

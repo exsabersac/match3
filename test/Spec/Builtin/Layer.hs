@@ -21,13 +21,13 @@ import Match3.Element.Registry (swapBlockedWith)
 import Match3.Game.Boosters (useFreeSwap, useHammer)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
-import Match3.Grass
+import Match3.Grass (clearOverlaysOn)
+import Spec.Support.Layers
   ( chipAdjacentChain
   , chipAdjacentCurtain
   , chipAdjacentFog
   , chipAdjacentFreeze
   , clearChocoAdjacent
-  , clearOverlaysOn
   , clearSteamAdjacent
   , spreadChoco
   , spreadSteam

@@ -85,6 +85,7 @@ library
       Match3.Element
       Match3.Element.Types
       Match3.Element.Registry
+      Match3.Element.Rules
       Match3.Element.Special
       Match3.Element.Builtin
       Match3.Element.Builtin.Common
@@ -244,6 +245,7 @@ test-suite match3-test
       Spec.Support
       Spec.Support.Arbitrary
       Spec.Support.Inventory
+      Spec.Support.Layers
       Spec.Support.Obstacles
       Spec.Support.Parallel
       Spec.Support.Source
@@ -308,6 +310,7 @@ test-suite match3-test
       Match3.Element.Level
       Match3.Element.Message
       Match3.Element.Registry
+      Match3.Element.Rules
       Match3.Element.Special
       Match3.Element.Types
       Match3.Element.World

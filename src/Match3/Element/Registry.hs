@@ -102,6 +102,7 @@ import Match3.Element.Ability
 import Match3.Element.Class (Message, SomeLevelElement(..), SomeMessage(..), fromMessage, levelNameOf, levelReply)
 import Match3.Element.Kind
 import Match3.Element.Layer
+import Match3.Element.Rules (kindRules, layerRules)
 import Match3.Element.Special (comboSwapRule)
 import Match3.Element.Types
 import Match3.Element.World
@@ -156,8 +157,8 @@ mkRegistry defs0 =
        }
   where
     defPasses d = case d of
-      KindDef (SomeKind p) -> boardPasses p
-      LayerDef (SomeLayer p) -> layerPasses p
+      KindDef (SomeKind p) -> kindRules p
+      LayerDef (SomeLayer p) -> layerRules p
       _ -> []
 
 -- | 往注册表里加（或按名字替换）一个注册项。测试专用元素就这样接进来，主流程不用改。

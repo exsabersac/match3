@@ -12,7 +12,9 @@
 -- * 洗牌保留：有任何一层就保留；
 -- * 名字 / 颜色 / 下落 / 穿门 / 计数 / 显示等本体属性：取里层。
 --
--- 规则（邻格 / 步末）是类型级的（'layerPasses'），与格子值无关。
+-- 规则是类型级的，与格子值无关：邻格揭层 / 清掉（'layerNeighbourPrio' / 'layerReach' / 'onLayerNeighbourClear'）
+-- 与步末蔓延（'spreads'）是方法，由通用驱动（Match3.Element.Rules.layerNeighbour / layerSpread）执行；其余走
+-- 逃生口 'layerPasses'。
 module Match3.Element.Layer
   ( Layer(..)
   , LayerHit(..)
@@ -28,7 +30,7 @@ import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
 import Match3.Element.Ability
-import Match3.Element.Kind (BoardPass)
+import Match3.Element.Kind (BoardPass, Nudge(..), Reach(..))
 import Match3.Element.Types (Placer)
 import Match3.Types
 
@@ -63,7 +65,18 @@ class (Show l, Eq l, Typeable l) => Layer l where
   -- | 关卡放置（缺省不放）。
   layerPlace :: proxy l -> Placer
   layerPlace _ _ _ = Nothing
-  -- | 本层自带的整盘趟（邻格 / 步末）。
+  -- | 邻格规则的优先级（Nothing = 没有）。内置：迷雾 70 / 锁链 80 / 火箭冰冻 90 / 窗帘 100 / 巧克力 150 / 蒸汽 160。
+  layerNeighbourPrio :: proxy l -> Maybe Int
+  layerNeighbourPrio _ = Nothing
+  layerReach :: proxy l -> Reach
+  layerReach _ = SkipDirect
+  -- | 与本轮真消除格正交相邻时这一格（整格，含本层）怎么变。
+  onLayerNeighbourClear :: l -> Cell -> Nudge
+  onLayerNeighbourClear _ _ = Untouched
+  -- | 步末蔓延（PhaseSpread）：(次序, 种到相邻裸宝石上的本层值)；Nothing = 不蔓延。
+  spreads :: proxy l -> Maybe (Int, l)
+  spreads _ = Nothing
+  -- | 逃生口：本层自带的整盘趟。
   layerPasses :: proxy l -> [BoardPass]
   layerPasses _ = []
 

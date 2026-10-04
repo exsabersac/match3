@@ -5,6 +5,7 @@
 -- （本层先回答，没意见再问里面）只写在 Match3.Element.Layer 里一次。冰层削层点火；草 / 藤 / 巧随格清掉；迷雾 / 锁链 / 火箭冰冻 / 窗帘带层数、邻消揭一层；
 -- 巧克力 / 蒸汽被邻格真消除清掉；藤 10 → 巧 20 → 蒸汽 30 步末蔓延（PhaseSpread）。
 -- 邻格规则顺序：迷雾 70 → 锁链 80 → 火箭冰冻 90 → 窗帘 100 → 巧克力 150 → 蒸汽 160。
+-- 这些规则全是方法（layerNeighbourPrio / onLayerNeighbourClear / spreads），由 Match3.Element.Rules 的通用驱动执行。
 module Match3.Element.Builtin.Layer
   ( Ice(..)
   , GrassL(..)
@@ -18,22 +19,9 @@ module Match3.Element.Builtin.Layer
   , putOverlay
   ) where
 
-import Match3.Board.Grid (getCell)
-import Match3.Element.Event
-import Match3.Element.Kind (BoardPass(..))
+import Match3.Element.Kind (Nudge(..), Reach(..))
 import Match3.Element.Layer
 import Match3.Element.Types
-import Match3.Grass
-  ( chipAdjacentChainExcept
-  , chipAdjacentCurtainExcept
-  , chipAdjacentFogExcept
-  , chipAdjacentFreezeExcept
-  , clearChocoAdjacent
-  , clearSteamAdjacent
-  , spreadChoco
-  , spreadSteam
-  , spreadVines
-  )
 import Match3.Types
 
 -- | 冰层：不挡匹配 / 交换；多层冰只削一层（不点火），末层冰随宝石一起碎（并点火）。
@@ -87,7 +75,7 @@ instance Layer VineL where
     _ -> Nothing
   putOn _ = putOverlay Vine
   layerStripsOnClear _ = True
-  layerPasses _ = [EndPass (overlaySpreadRule 10 "vine" Vine spreadVines)]
+  spreads _ = Just (10, VineL)
   layerPlace _ = overlayPlace Vine
 
 -- | 巧克力：真消除时随格清掉；邻格真消除清掉它；步末蔓延。
@@ -101,10 +89,10 @@ instance Layer ChocoL where
     _ -> Nothing
   putOn _ = putOverlay Choco
   layerStripsOnClear _ = True
-  layerPasses _ =
-    [ AdjacentPass 150 (\ctx b -> AdjOut (clearChocoAdjacent b (acTrue ctx)) [] [])
-    , EndPass (overlaySpreadRule 20 "choco" Choco spreadChoco)
-    ]
+  layerNeighbourPrio _ = Just 150
+  layerReach _ = AllNeighbours
+  onLayerNeighbourClear _ cell = Becomes (stripOverlay cell)
+  spreads _ = Just (20, ChocoL)
   layerPlace _ = overlayPlace Choco
 
 -- | 迷雾：挡匹配，邻消揭一层。
@@ -118,7 +106,8 @@ instance Layer FogL where
     _ -> Nothing
   putOn (FogL n) = putOverlay (Fog n)
   layerBlocksMatch _ = True
-  layerPasses _ = [layerChip 70 chipAdjacentFogExcept]
+  layerNeighbourPrio _ = Just 70
+  onLayerNeighbourClear (FogL n) = chipLayer n FogL
   layerPlace _ = layeredPlace Fog
 
 -- | 锁链：挡匹配 / 交换、不点火；直接命中与邻消各揭一层。
@@ -135,7 +124,8 @@ instance Layer ChainL where
   layerBlocksSwap _ = True
   layerFires _ = Just False
   layerHit (ChainL n) = peelHit n ChainL
-  layerPasses _ = [layerChip 80 chipAdjacentChainExcept]
+  layerNeighbourPrio _ = Just 80
+  onLayerNeighbourClear (ChainL n) = chipLayer n ChainL
   layerPlace _ = layeredPlace Chain
 
 -- | 火箭冰冻：不挡匹配、挡交换；邻消揭一层。
@@ -149,7 +139,8 @@ instance Layer FreezeL where
     _ -> Nothing
   putOn (FreezeL n) = putOverlay (Freeze n)
   layerBlocksSwap _ = True
-  layerPasses _ = [layerChip 90 chipAdjacentFreezeExcept]
+  layerNeighbourPrio _ = Just 90
+  onLayerNeighbourClear (FreezeL n) = chipLayer n FreezeL
   layerPlace _ = layeredPlace Freeze
 
 -- | 窗帘：挡匹配、不点火；直接命中与邻消各揭一层。
@@ -165,7 +156,8 @@ instance Layer CurtainL where
   layerBlocksMatch _ = True
   layerFires _ = Just False
   layerHit (CurtainL n) = peelHit n CurtainL
-  layerPasses _ = [layerChip 100 chipAdjacentCurtainExcept]
+  layerNeighbourPrio _ = Just 100
+  onLayerNeighbourClear (CurtainL n) = chipLayer n CurtainL
   layerPlace _ = layeredPlace Curtain
 
 -- | 蒸汽：挡匹配；邻格真消除清掉它；步末蔓延。
@@ -179,10 +171,10 @@ instance Layer SteamL where
     _ -> Nothing
   putOn _ = putOverlay Steam
   layerBlocksMatch _ = True
-  layerPasses _ =
-    [ AdjacentPass 160 (\ctx b -> AdjOut (clearSteamAdjacent b (acTrue ctx)) [] [])
-    , EndPass (overlaySpreadRule 30 "steam" Steam spreadSteam)
-    ]
+  layerNeighbourPrio _ = Just 160
+  layerReach _ = AllNeighbours
+  onLayerNeighbourClear _ cell = Becomes (stripOverlay cell)
+  spreads _ = Just (30, SteamL)
   layerPlace _ = overlayPlace Steam
 
 -- | 直接命中揭一层（锁链 / 窗帘）：宝石留下，不消除。
@@ -191,18 +183,17 @@ peelHit n con
   | n <= 1 = Peel
   | otherwise = Keep (con (n - 1))
 
--- | 叠层的邻消规则：揭一层，不打碎格子。
-layerChip :: Int -> (Board -> [Pos] -> [Pos] -> (Board, Int)) -> BoardPass
-layerChip order f = AdjacentPass order (\ctx b -> AdjOut (fst (f b (acTrue ctx) (acDirect ctx))) [] [])
+-- | 邻格真消除揭一层（迷雾 / 锁链 / 火箭冰冻 / 窗帘）：末层去掉叠层，宝石留下。
+chipLayer :: Layer l => Int -> (Int -> l) -> Cell -> Nudge
+chipLayer n con cell
+  | n <= 1 = Becomes (stripOverlay cell)
+  | otherwise = Becomes (putOn (con (n - 1)) cell)
 
--- | 蔓延：每只幸存的叠层向正交相邻的裸宝石长一格；记录 (来源, 新格)。
-overlaySpreadRule :: Int -> ElementName -> CellOverlay -> (Board -> Board) -> EndRule
-overlaySpreadRule order nm ov spread = spreadRule order run
-  where
-    run _ b =
-      let b' = spread b
-          ps = spreadPairs ov b b'
-      in (if null ps then Nothing else Just (EndEffect EvSpread nm [EndItem src q (getCell b' q) Nothing | (src, q) <- ps]), b')
+-- | 去掉宝石上的叠层（非宝石格不变）。
+stripOverlay :: Cell -> Cell
+stripOverlay cell = case cell of
+  Gem c k i _ -> Gem c k i Nothing
+  _ -> cell
 
 --------------------------------------------------------------------------------
 -- 条目

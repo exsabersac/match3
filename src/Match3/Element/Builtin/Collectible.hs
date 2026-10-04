@@ -22,12 +22,11 @@ module Match3.Element.Builtin.Collectible
 import Control.Applicative ((<|>))
 import Data.List (nub)
 import Match3.Board.Grid (getCell, inBounds, setCell)
-import Match3.Element.Builtin.Common (deadRule)
 import Match3.Element.Ability
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
 import Match3.Element.Types
-import Match3.Obstacles (chipAdjacentTimeSpiritsExcept, orthoNeighbors)
+import Match3.Obstacles (orthoNeighbors)
 import Match3.Rainbow (isRainbow, rainbowClearSeeds)
 import Match3.Types
 
@@ -82,7 +81,8 @@ instance Kind TimeSpiritE where
   place _ _ _ = Just TimeSpirit
   diffCounter _ = Just CountSpirits
   bonusMoves _ = 2
-  boardPasses _ = [AdjacentPass 120 (deadRule chipAdjacentTimeSpiritsExcept)]
+  neighbourPrio _ = Just 120
+  onNeighbourClear _ = Dies
 
 -- | 气泡：占格本体 Custom "bubble" k。无色、挡交换、随重力下落、不穿传送门、洗牌保留；
 -- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。

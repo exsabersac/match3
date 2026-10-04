@@ -87,6 +87,7 @@ executable match3-web
     Match3.Element
     Match3.Element.Types
     Match3.Element.Registry
+    Match3.Element.Rules
     Match3.Element.Special
     Match3.Element.Builtin
     Match3.Element.Builtin.Common

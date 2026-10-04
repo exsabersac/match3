@@ -26,7 +26,7 @@ stack build && stack exec match3-sdl
 
 无显示器冒烟：`xvfb-run -a stack exec match3-sdl`。`stack test` 不需要显示。合 main 前跑 `make verify`（即 `stack test`；流程见 [`docs/testing.md`](docs/testing.md#开发流程)）。
 
-更细的设计说明见 [`docs/`](docs/README.md)；键位表见 [`docs/ui-controls.md`](docs/ui-controls.md)。itch.io 文案见 [`ITCH.md`](ITCH.md)。
+更细的设计说明见 [`docs/`](docs/README.md)；想从头分析整个游戏的框架和实现过程，从[框架与实现分析导读 `docs/guide/`](docs/guide/README.md)读起（总览、数据模型、一步棋的生命周期、元素框架、前端、效果与撤销、测试、演进史、术语表）。键位表见 [`docs/ui-controls.md`](docs/ui-controls.md)。itch.io 文案见 [`ITCH.md`](ITCH.md)。
 
 ## 功能一览
 
@@ -221,6 +221,7 @@ test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / S
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
+docs/guide/   框架与实现分析导读（把上面各篇串成一条阅读路线：总览 → 数据模型 → 一步棋 → 元素 → 前端 → 效果 → 测试 → 演进史 → 术语表）
 ```
 
 冻结规则 API 形态：`trySwap` / `runMove` / `ensurePlayable` / `shuffleGame` / `Outcome` / `GoalCollect`。

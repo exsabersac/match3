@@ -2,8 +2,11 @@
 
 本目录为 **Match-3 消消乐** 的中文设计说明，依据仓库当前 `src/` / `app/` 实现撰写，供评审与上手阅读。竞品「开心消消乐」仅作背景对照，不伪造本仓库没有的机制。
 
+> **从这里开始**：[guide/ 框架与实现分析导读](guide/README.md) 把本目录各篇串成一条完整的分析路线（总览与阅读顺序、核心数据模型、一步棋的完整生命周期、元素框架与新增元素清单、桌面 / 网页前端、效果动画音效与撤销、测试体系、实现过程与演进史、术语表），断言尽量给出文件路径与行号。
+
 | 文档 | 内容 |
 |------|------|
+| [guide/README.md](guide/README.md) | **框架与实现分析导读**（9 篇）：[01 总览与阅读路线](guide/01-总览与阅读路线.md) · [02 核心数据模型](guide/02-核心数据模型.md) · [03 一步棋的生命周期](guide/03-一步棋的生命周期.md) · [04 元素框架](guide/04-元素框架.md) · [05 前端](guide/05-前端.md) · [06 效果、动画、音效与撤销](guide/06-效果动画音效与撤销.md) · [07 测试体系](guide/07-测试体系.md) · [08 演进史](guide/08-演进史.md) · [09 术语表](guide/09-术语表.md) |
 | [architecture.md](architecture.md) | 分层架构、[模块地图](architecture.md#模块地图)（核心库 `Match3.Board.*` / `Match3.Game.*` 子模块、通用层 `Engine.*`、前端 `app/Shell` / `app/UI/*`）、依赖方向（含 `trace*` → `ComboFx` → `UI.Playback` → `UI.Cascade`）、[逐轮回放与规则的同步](architecture.md#逐轮回放与规则的同步)、[专门分支的收编（段 4）](architecture.md#专门分支的收编段-4)、Stack / GHC |
 | [architecture.md § 多游戏接口](architecture.md#多游戏接口) | 通用层 / 三消实现 / SDL 外壳的分层图、`Game` / `Step` / `Effect` / `Stages` / `Player` / `Plugin` 字段说明、record-of-functions 的取舍与种子约定、三消动作映射、接入新游戏的步骤清单 |
 | [domain.md](domain.md) | 领域词汇中英对照（与 `Types` / `GameState` 对齐），含[回放与表现](domain.md#回放与表现)词条 |

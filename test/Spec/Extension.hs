@@ -36,9 +36,8 @@ import Match3.Board.Gravity (settleRefillWith)
 import Match3.Board.Grid (mboardFromRows)
 import Match3.Element
   ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
-  , levelHooksWith, registerLevel, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
-import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
-import Match3.Element.Message (Judging(..), Refilling(..), fromMessage)
+  , levelHooksWith, registerMechanic, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
+import Match3.Element.Mechanic (Mechanic(..), SomeMechanic(..))
 import Match3.Element.Level (judgeIn)
 import qualified Match3.Combos as Combos
 import Match3.Types (goalCount, goalScore)
@@ -385,18 +384,15 @@ ext_combo_rule_line_gem = do
 data CoinRain = CoinRain
   deriving (Eq, Show)
 
-instance LevelElement CoinRain where
-  levelName _ = "coin_rain"
-  levelReply e msg
-    | Just (Refilling _) <- fromMessage msg =
-        Just (SomeMessage (Refilling (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)))), e)
-    | otherwise = Nothing
+instance Mechanic CoinRain where
+  mechName _ = "coin_rain"
+  refillPolicy _ _ = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)))
 
 -- | 补子策略扩展（关卡级元素）：注册 CoinRain 之后，交换出的 4 连（横消落在交换点 (1,2)）挖出的 3 个洞补成金币，
 -- 金币无色不再连锁；其余什么都不改。注册表缺省策略下同一步不出金币。
 ext_refill_policy_level_element :: Assertion
 ext_refill_policy_level_element = do
-  let reg = registerLevel (SomeLevelElement CoinRain) (register (inertDef "coin") defaultWorld)
+  let reg = registerMechanic (SomeMechanic CoinRain) (register (inertDef "coin") defaultWorld)
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
       (gs1, o, mt) = resolveSwapWith reg p1 p2 gs0
@@ -418,22 +414,20 @@ ext_refill_policy_level_colors = do
   assertEqual "three colours only" [C1, C2, C3] (colorsOf reg)
   assertEqual "default: all five" [C1, C2, C3, C4, C5] (colorsOf defaultWorld)
 
--- | 胜负节拍（Judging）：测试专用「限时」关卡级元素在剩余步数 ≤ 3 时把未结束的一步判成输（Lost 总分）；
--- 只 registerLevel 即可接入，主流程不改。内置注册表下同一步照常 MoveApplied；步数充足时限时元素不改结局。
+-- | 胜负节拍（judge）：测试专用「限时」关卡级元素在剩余步数 ≤ 3 时把未结束的一步判成输（Lost 总分）；
+-- 只 registerMechanic 即可接入，主流程不改。内置注册表下同一步照常 MoveApplied；步数充足时限时元素不改结局。
 data TimeLimit = TimeLimit
   deriving (Eq, Show)
 
-instance LevelElement TimeLimit where
-  levelName _ = "time_limit"
-  levelReply l msg
-    | Just (Judging b score moves (MoveApplied _)) <- fromMessage msg
-    , moves <= 3 =
-        Just (SomeMessage (Judging b score moves (Lost score)), l)
-    | otherwise = Nothing
+instance Mechanic TimeLimit where
+  mechName _ = "time_limit"
+  judge _ _ score moves (MoveApplied _)
+    | moves <= 3 = Just (Lost score)
+  judge _ _ _ _ _ = Nothing
 
 ext_judging_level_element :: Assertion
 ext_judging_level_element = do
-  let reg = registerLevel (SomeLevelElement TimeLimit) defaultWorld
+  let reg = registerMechanic (SomeMechanic TimeLimit) defaultWorld
       start moves = (newGame (GameConfig moves (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
       (gs1, o, _) = resolveSwapWith reg p1 p2 (start 4)

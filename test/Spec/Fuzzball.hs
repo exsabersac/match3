@@ -14,7 +14,7 @@ import Match3.Element
   ( Strike(..)
   , blocksSwapWith
   , builtinDefs
-  , builtinLevelDefs
+  , builtinMechanics
   , builtinShapeRules
   , colorOfWith
   , directHitWith
@@ -25,7 +25,7 @@ import Match3.Element
   )
 import Match3.Combos (builtinComboRules)
 import Match3.Element.Event (EventKind(..))
-import Match3.Element.World (World, defName, mkWorld, registerLevel, setComboRules, setShapeRules)
+import Match3.Element.World (World, defName, mkWorld, registerMechanic, setComboRules, setShapeRules)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
 import Test.Tasty
@@ -129,7 +129,7 @@ fz_other_levels_unchanged :: Assertion
 fz_other_levels_unchanged = do
   let noFz :: World
       noFz = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-        foldl (flip registerLevel) (mkWorld (filter ((/= "fuzzball") . defName) builtinDefs)) builtinLevelDefs
+        foldl (flip registerMechanic) (mkWorld (filter ((/= "fuzzball") . defName) builtinDefs)) builtinMechanics
       play reg gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
         | otherwise = case findHintWith reg (gsBoard gs) of

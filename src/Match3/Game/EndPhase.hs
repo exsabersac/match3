@@ -6,7 +6,7 @@
 -- + 执行函数（读写累积器 'EndAcc'）：
 --
 -- * @tick@（PhaseTick）：倒计时减一 / 归零引爆，接倒计时连锁（新的一段连锁）。
--- * @belt@：皮带节拍，问关卡级元素 EndTicked；有人回复时移位并接皮带后连锁，没人回复时是一段空连锁。
+-- * @belt@：皮带节拍，问关卡级机制 onEndTick；有人回复时移位并接皮带后连锁，没人回复时是一段空连锁。
 -- * @spread@（PhaseSpread）：藤 → 巧 → 蒸汽蔓延（不开新段）。
 -- * @move@（PhaseMove）：会走的元素（蜗牛），避让格 / 墙问关卡级元素（不开新段）。
 -- * @settle@：步末补结算（步末规则声明的空洞挖空 → 沉降补子 → 成消再连锁；新的一段连锁）。
@@ -110,7 +110,7 @@ tickStage = EndStage "tick" (Just PhaseTick) $ \reg a ->
       k = wavesSoFar a
   in pushSeg [EndStep k before after e | (before, after, e) <- tickSteps] seg1 a
 
--- | 皮带节拍：关卡级元素（EndTicked）给出移位；没人回复时当作没有皮带（空连锁、不记录）。
+-- | 皮带节拍：关卡级机制（onEndTick）给出移位；没人回复时当作没有皮带（空连锁、不记录）。
 beltStage :: EndStage
 beltStage = EndStage "belt" Nothing $ \reg a ->
   let seg = lastSeg a

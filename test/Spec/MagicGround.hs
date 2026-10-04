@@ -19,7 +19,7 @@ import Match3.Element
   , MagicGround
   , blastWith
   , builtinDefs
-  , builtinLevelDefs
+  , builtinMechanics
   , builtinShapeRules
   , hitGroundWith
   , levelWorldIn
@@ -31,7 +31,7 @@ import Match3.Element
 import Data.Proxy (Proxy(..))
 import Match3.Element.Kind (GroundKind(..))
 import Match3.Element.Event (Event(..), EventKind(..))
-import Match3.Element.World (World, defName, mkWorld, registerLevel, setComboRules, setShapeRules)
+import Match3.Element.World (World, defName, mkWorld, registerMechanic, setComboRules, setShapeRules)
 import Match3.Engine (Action(..), Played(..), playWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
@@ -63,7 +63,7 @@ mgCells = [(6, 2), (6, 5), (5, 3), (5, 4)]
 -- | 去掉魔法地格条目的注册表（地面层里的 "magic" 查不到条目 → 没有扩爆格）。
 noMg :: World
 noMg = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-  foldl (flip registerLevel) (mkWorld (filter ((/= "magic") . defName) builtinDefs)) builtinLevelDefs
+  foldl (flip registerMechanic) (mkWorld (filter ((/= "magic") . defName) builtinDefs)) builtinMechanics
 
 -- | 第 48 关开局（种子 1），盘面上 7 行换成 stableBoard（没有现成三消），底行仍是 8 块三层碎石。
 mgGame :: [(Pos, Cell)] -> GameState

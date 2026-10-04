@@ -175,7 +175,7 @@ roundM reg before cr w = do
   emitWave (rdWave rd)
   pure rd
 
--- | 补子后的整轮吸收（钩子 onAbsorb：关卡级元素回复 Refilled 消息，内置 = 飞碟）。吸到格子时吸收单独成一轮
+-- | 补子后的整轮吸收（钩子 onAbsorb：关卡级机制的 onRefilled，内置 = 飞碟）。吸到格子时吸收单独成一轮
 -- （clearUfoAbsorbedWith → 一轮，波次 w，已发出回放）；返回 Just (吸收轮, 其中被吸走的格数)。钩子由 absorbHooks 推进。
 -- 匹配连锁与种子起手共用这一份。
 absorbRoundM :: MonadCascade m => World -> Board -> Int -> m (Maybe (Round, Int))

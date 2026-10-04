@@ -12,7 +12,7 @@ import Match3.Board.Grid (swapCells)
 import Match3.Core
 import Match3.Combos (rainbowComboMorph)
 import Match3.Counts (countOf)
-import Match3.Element (removeLevel)
+import Match3.Element (removeMechanic)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect, traceEvents)
@@ -139,7 +139,7 @@ rc_morph_skips_iced_and_overlaid = do
 -- 第 44 关两者不同。
 rc_old_levels_unchanged :: Assertion
 rc_old_levels_unchanged = do
-  let off = removeLevel "rainbow_combos" defaultWorld
+  let off = removeMechanic "rainbow_combos" defaultWorld
       (a, b) = comboMove
       key reg li k = let (gs, o, mt) = resolveSwapWith reg a b ((levelGame li 3) {gsBoard = comboBoard k}) in (gsBoard gs, gsScore gs, show (gsGen gs), show o, length (mtEnd mt), map cwCleared (mtWaves mt))
   mapM_

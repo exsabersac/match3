@@ -88,7 +88,7 @@ newGameAtLevel :: Int -> GameConfig -> Int -> GameState
 newGameAtLevel = newGameAtLevelWith defaultWorld
 
 -- | newGameAtLevel（指定注册表）：装饰、目标补齐、可玩判定用这张表；关卡级元素 = 这张表里注册的各种 + 核心元素，
--- 各自由关卡记录（lvlGoal 换成本局目标）给出开局状态（飞碟 / 地毯的目标补齐在各自的 levelStart 里）。
+-- 各自由关卡记录（lvlGoal 换成本局目标）给出开局状态（飞碟 / 地毯的目标补齐在各自的 mechStart 里）。
 newGameAtLevelWith :: World -> Int -> GameConfig -> Int -> GameState
 newGameAtLevelWith reg li cfg seed = newGameFromWith reg li (lookupLevel li) cfg seed
 

@@ -105,12 +105,11 @@ library:
   - Match3.Element.Builtin.Ground
   - Match3.Element.Builtin.Level
   - Match3.Element.Event
-  - Match3.Element.Class
+  - Match3.Element.Mechanic
   - Match3.Element.Ability
   - Match3.Element.Kind
   - Match3.Element.Layer
   - Match3.Element.World
-  - Match3.Element.Message
   - Match3.Element.Level
 
 # 桌面前端的纯模块（不依赖 SDL）：可执行文件经这个内部库用；测试套件直接编译 app/pure 源码（它也直接编译 src，

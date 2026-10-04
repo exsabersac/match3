@@ -21,7 +21,7 @@ import Match3.Element
   , Strike(..)
   , blocksSwapWith
   , builtinDefs
-  , builtinLevelDefs
+  , builtinMechanics
   , builtinShapeRules
   , chameleonCell
   , chameleonShift
@@ -38,7 +38,7 @@ import Match3.Element
   , swapOpeningWith
   )
 import Match3.Element.Event (EventKind(..))
-import Match3.Element.World (World, defName, mkWorld, registerLevel, setComboRules, setShapeRules)
+import Match3.Element.World (World, defName, mkWorld, registerMechanic, setComboRules, setShapeRules)
 import Match3.Game.Boosters (useHammer)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
@@ -196,7 +196,7 @@ ch_other_levels_unchanged :: Assertion
 ch_other_levels_unchanged = do
   let noCh :: World
       noCh = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-        foldl (flip registerLevel) (mkWorld (filter ((/= "chameleon") . defName) builtinDefs)) builtinLevelDefs
+        foldl (flip registerMechanic) (mkWorld (filter ((/= "chameleon") . defName) builtinDefs)) builtinMechanics
       play reg gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
         | otherwise = case findHintWith reg (gsBoard gs) of

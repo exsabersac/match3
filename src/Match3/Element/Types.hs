@@ -288,7 +288,7 @@ overlaySlot ov = case ov of
   Curtain _ -> 6
   Steam -> 7
 
--- | 元素自带的显示附加字段的值（'Match3.Element.Class.ViewCaps' 的 vwFace）：网页格子 JSON 里按出现顺序
+-- | 元素自带的显示附加字段的值（Match3.Element.Ability 的 Renders.face）：网页格子 JSON 里按出现顺序
 -- 追加在 cellFace 字段之后（FaceInt / FaceColor → 数字（颜色取 1..5），FaceBool → true / false），桌面按名字读。
 data FaceValue
   = FaceInt Int

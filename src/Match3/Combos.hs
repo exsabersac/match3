@@ -94,7 +94,7 @@ comboClearSeeds :: Board -> Pos -> Pos -> [Pos]
 comboClearSeeds = comboSeedsFor builtinComboRules
 
 -- | 魔力鸟组合增强（新玩法 4，开心消消乐的「魔力鸟 + 特效」）：只在打开规则开关 "rainbow_combos" 的关卡里用
--- （关卡级元素 RainbowCombos 回复 Morphing）。b0 = 交换前盘面、swapped = 交换后；一端彩虹、另一端直线 / 炸弹，
+-- （关卡级机制 RainbowCombos 的 morph）。b0 = 交换前盘面、swapped = 交换后；一端彩虹、另一端直线 / 炸弹，
 -- 两端都能点火（软锁不算）时成立，给出 (元素名, 变身格, 起手种子)：
 --
 -- * 彩虹 × 直线（"rainbow_line"）：盘上与直线**同色的普通宝石**（无冰、无叠层）全部变成直线，

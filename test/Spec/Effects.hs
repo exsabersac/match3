@@ -26,7 +26,7 @@ import Match3.Board.Grid (swapCells)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Phase (Phase(..), Stage, refillStage)
 import Match3.Board.Random (randomBoardSized)
-import Match3.Element.Class (SomeLevelElement)
+import Match3.Element.Mechanic (SomeMechanic)
 import Match3.Types (boardAt)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Core
@@ -86,7 +86,7 @@ entries (Case _ reg hooks b g) =
     holes = [(0, 1), (nr - 1, 2)]
 
 -- | CascadeRun 的全部可比内容（钩子是函数记录，比它背后的关卡级元素；生成器比 show）。
-type RunView = (Board, CascadeTally, [CascadeWave], [SomeLevelElement], String)
+type RunView = (Board, CascadeTally, [CascadeWave], [SomeMechanic], String)
 
 view :: CascadeRun StdGen -> RunView
 view r = (crBoard r, crTally r, crWaves r, hookLevel (crHooks r), show (crGen r))

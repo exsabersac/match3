@@ -31,8 +31,7 @@ import Match3.Board.Cascade (AfterEntry(..), CascadeRun(..), cascadeAfterWith, c
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty(..))
 import Match3.Conveyor (applyBeltMoves)
-import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
-import Match3.Element.Message (Message, fromMessage)
+import Match3.Element.Mechanic (Mechanic(mechName, onEndTick), SomeMechanic(..))
 import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
 import Match3.Game.Level (newGame)
 import Match3.Game.State
@@ -89,7 +88,7 @@ import Match3.Element
 import Match3.Element.Ability (toCell)
 import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
 import Match3.Element.Layer (Layer(layerName), SomeLayer(..), layerValueName, peelAs)
-import Match3.Element.Class (levelNameOf)
+import Match3.Element.Mechanic (mechNameOf)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
@@ -120,7 +119,7 @@ tests =
       , testProperty "qc_level_hooks_match_legacy" (withMaxSuccess 500 qc_level_hooks_match_legacy)
       , testProperty "qc_level_elems_readers_roundtrip" (withMaxSuccess 100 qc_level_elems_readers_roundtrip)
       , testProperty "qc_end_table_matches_legacy" (withMaxSuccess 300 qc_end_table_matches_legacy)
-      , testProperty "qc_ask_levels_folds_in_order" (withMaxSuccess 300 qc_ask_levels_folds_in_order)
+      , testProperty "qc_beat_folds_in_order" (withMaxSuccess 300 qc_beat_folds_in_order)
       , testProperty "qc_shape_table_matches_legacy" (withMaxSuccess 1000 (checkCoverage qc_shape_table_matches_legacy))
       , testProperty "qc_combo_table_matches_legacy" (withMaxSuccess 3000 (checkCoverage qc_combo_table_matches_legacy))
       , testProperty "qc_combo_table_symmetric" (withMaxSuccess 3000 qc_combo_table_symmetric)
@@ -813,7 +812,7 @@ qc_level_elems_readers_roundtrip =
      let gs = levelGame li seed
          same gs' = gs' == gs .&&. show gs' === show gs
      in conjoin
-         [ map levelNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "ground"]
+         [ map mechNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "ground"]
          , same (setUfos (gsUfos gs) gs)
          , same (setBelts (gsBelts gs) gs)
          , same (setPortals (gsPortals gs) gs)
@@ -895,36 +894,32 @@ legacyBoosterEnd reg seg0 =
       seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crHooks seg0) (crGen seg0) boardSp
   in (seg0 :| [seg1], ends, crBoard seg1, boardH)
 
--- | 第 7 刀（7b）：askLevels / askLevelsIn 折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的问题；
--- 用若干个「加常数」的测试元素随机注册（可含重复的数），结果 = 起始值 + 各回复者的数按注册顺序依次作用。
--- | 测试元素：名字由编号决定（adder1、adder5 …），状态是被问的次数。
+-- | 第 7 刀（7b）起节拍折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的输入（第 5 刀起节拍是 Mechanic 的
+-- 有类型方法，折叠是 Element.Level.beatIn）；用若干个「追加编号」的测试机制随机注册，结果 = 各回复者的编号按注册顺序。
+-- | 测试机制：名字由编号决定（adder1、adder5 …），状态是被问的次数；回复步末移位节拍（onEndTick）。
 data Adder = Adder Int Int
   deriving (Eq, Show)
 
-newtype AdderMsg = AdderMsg [Int]
+instance Mechanic Adder where
+  mechName (Adder k _) = ElementName ("adder" ++ show k)
+  onEndTick (Adder k n) acc = Just (acc ++ [((k, k), (k, k))], Adder k (n + 1))
 
-instance Message AdderMsg
-
-instance LevelElement Adder where
-  levelName (Adder k _) = ElementName ("adder" ++ show k)
-  levelReply (Adder k n) msg = case fromMessage msg of
-    Just (AdderMsg acc) -> Just (SomeMessage (AdderMsg (acc ++ [k])), Adder k (n + 1))
-    Nothing -> Nothing
-
-qc_ask_levels_folds_in_order :: Property
-qc_ask_levels_folds_in_order =
+qc_beat_folds_in_order :: Property
+qc_beat_folds_in_order =
   forAll (choose (0, 5) >>= \n -> vectorOf n (choose (1, 9 :: Int))) $ \ks0 ->
     let ks = nub ks0
-        reg = foldl (\r k -> registerLevel (SomeLevelElement (Adder k 0)) r) defaultWorld ks
-        elems = [SomeLevelElement (Adder k 5) | k <- ks]
-        viaReg = fmap (\(AdderMsg xs) -> xs) (askLevels reg (AdderMsg []))
-        viaIn = fmap (\(AdderMsg xs, es) -> (xs, es)) (askLevelsIn reg elems (AdderMsg []))
-        expected = if null ks then Nothing else Just ks
+        reg = foldl (\r k -> registerMechanic (SomeMechanic (Adder k 0)) r) defaultWorld ks
+        elems = [SomeMechanic (Adder k 5) | k <- ks]
+        viaProto = beatIn reg [] [] onEndTick
+        viaIn = beatIn reg elems [] onEndTick
+        expected = if null ks then Nothing else Just [((k, k), (k, k)) | k <- ks]
     in conjoin
-         [ viaReg === expected
+         [ fmap fst viaProto === expected
+         -- 原型值（不在 gsLevelElems 里）推进后状态变了：追加
+         , fmap snd viaProto === (if null ks then Nothing else Just [SomeMechanic (Adder k 1) | k <- ks])
          , fmap fst viaIn === expected
          -- 每个回复者推进后的状态都写回（同名替换，顺序不变）
-         , fmap snd viaIn === (if null ks then Nothing else Just [SomeLevelElement (Adder k 6) | k <- ks])
+         , fmap snd viaIn === (if null ks then Nothing else Just [SomeMechanic (Adder k 6) | k <- ks])
          ]
 
 --------------------------------------------------------------------------------

@@ -33,7 +33,7 @@ import Match3.Board.Grid (MBoard)
 import Match3.Board.Match
 import Match3.Board.Hooks (LevelHooks(..), noHooks)
 import Match3.Element.Builtin (PortalLevel(..), UfoLevel(..), defaultWorld)
-import Match3.Element.Class (SomeLevelElement(..))
+import Match3.Element.Mechanic (SomeMechanic(..))
 import Match3.Element.Level (levelHooksWith)
 import Match3.Types
 import Match3.Ufo (Ufo)
@@ -44,7 +44,7 @@ import System.Random (RandomGen)
 
 -- | 内置注册表下、只有飞碟与传送门两种关卡级元素的钩子。
 builtinHooks :: [Ufo] -> [(Pos, Pos)] -> LevelHooks
-builtinHooks ufos portals = levelHooksWith defaultWorld [SomeLevelElement (UfoLevel ufos), SomeLevelElement (PortalLevel portals)]
+builtinHooks ufos portals = levelHooksWith defaultWorld [SomeMechanic (UfoLevel ufos), SomeMechanic (PortalLevel portals)]
 
 --------------------------------------------------------------------------------
 -- Match3.Board.Gravity

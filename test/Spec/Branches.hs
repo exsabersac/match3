@@ -6,7 +6,7 @@
 -- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
 -- * 开启规则（openRule）：内置彩蛋；测试专用「豆荚」被邻格真消除时开出直线，本轮坐住不引爆。
 -- * 可改色 / 可推动谓词（recolorable / pushable）：魔法帽 / 染色瓶、蜗牛只看注册表，内置取值与原写死的 isGem / pushable 相同。
--- * 关卡级元素（LevelElement：飞碟 / 皮带 / 传送门 / 地毯 / 地面层）：状态在元素值里，按消息回复，removeLevel 之后该机制不生效（地面层是核心元素）。
+-- * 关卡级元素（Mechanic：飞碟 / 皮带 / 传送门 / 地毯 / 地面层）：状态在元素值里，按消息回复，removeMechanic 之后该机制不生效（地面层是核心元素）。
 -- * 源码扫描：主流程模块不再点名这些元素的专门函数。
 --
 -- 样例元素（拉杆、豆荚、小车）只定义在这里，主流程源码里没有它们的名字。
@@ -27,7 +27,7 @@ import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
 import Match3.Element.Ability
-import Match3.Element.Class (SomeLevelElement(..), levelNameOf)
+import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
@@ -266,42 +266,42 @@ br_pushable_from_registry = do
 -- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按注册表的地面层规则命中。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do
-  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map levelNameOf (levelDefs defaultWorld))
+  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf (mechanicDefs defaultWorld))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       ufos = [mkUfo (3, 3) C1, mkUfo (0, 0) C2]
-      noUfo = removeLevel "ufo" defaultWorld
-      absorb reg = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith reg [SomeLevelElement (UfoLevel ufos)]) b0)
+      noUfo = removeMechanic "ufo" defaultWorld
+      absorb reg = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith reg [SomeMechanic (UfoLevel ufos)]) b0)
   assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorb defaultWorld)
   assertEqual "ufo removed: no absorb, ufos stay" ([], ufos) (absorb noUfo)
   let belts = [[(2, 0), (2, 1), (2, 2), (3, 2)]]
-      beltEl = [SomeLevelElement (BeltLevel belts)]
+      beltEl = [SomeMechanic (BeltLevel belts)]
   assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (fst <$> beltShiftIn defaultWorld beltEl)
   assertEqual "belt cells avoided" (concat belts) (avoidCellsIn defaultWorld beltEl)
-  assertBool "belt removed" (isNothing (beltShiftIn (removeLevel "belt" defaultWorld) beltEl))
-  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultWorld [SomeLevelElement (BeltLevel [])])
+  assertBool "belt removed" (isNothing (beltShiftIn (removeMechanic "belt" defaultWorld) beltEl))
+  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultWorld [SomeMechanic (BeltLevel [])])
   let mb = setM (toM b0) (0, 5) Nothing
       portals = [((7, 0), (0, 5))]
-      settle reg = onSettle (levelHooksWith reg [SomeLevelElement (PortalLevel portals)]) mb
+      settle reg = onSettle (levelHooksWith reg [SomeMechanic (PortalLevel portals)]) mb
   assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultWorld) portals mb) (settle defaultWorld)
   assertBool "portal hook moves something here" (settle defaultWorld /= mb)
-  assertEqual "portal removed: no teleport" mb (settle (removeLevel "portal" defaultWorld))
-  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultWorld [SomeLevelElement (PortalLevel portals)])
+  assertEqual "portal removed: no teleport" mb (settle (removeMechanic "portal" defaultWorld))
+  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultWorld [SomeMechanic (PortalLevel portals)])
   let open0 = [(3, 0), (3, 1), (4, 4)]
       hit = [(3, 0), (3, 1), (5, 5)]
-      cover reg = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn reg hit [SomeLevelElement (CarpetLevel open0)])
+      cover reg = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn reg hit [SomeMechanic (CarpetLevel open0)])
   assertEqual "carpet hook = coverCarpets" (coverCarpets open0 hit) (cover defaultWorld)
-  assertEqual "carpet removed: nothing covered" (open0, 0) (cover (removeLevel "carpet" defaultWorld))
+  assertEqual "carpet removed: nothing covered" (open0, 0) (cover (removeMechanic "carpet" defaultWorld))
   let ground0 = [((3, 0), ("jelly", 2)), ((5, 5), ("jelly", 1)), ((6, 6), ("jelly", 1))]
-      groundHit reg = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn reg hit [SomeLevelElement (GroundLayer ground0)])
+      groundHit reg = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn reg hit [SomeMechanic (GroundLayer ground0)])
   assertEqual "ground hook = hitGroundWith" (hitGroundWith defaultWorld hit ground0) (groundHit defaultWorld)
-  assertEqual "ground is core" (groundHit defaultWorld) (groundHit (removeLevel "ground" defaultWorld))
+  assertEqual "ground is core" (groundHit defaultWorld) (groundHit (removeMechanic "ground" defaultWorld))
   assertBool "ground hit something here" (fst (groundHit defaultWorld) /= ground0)
 
 -- | 38 关 × 前 6 手（种子 1，走提示）：四个关卡级元素都去掉后，飞碟不动不吸、皮带不移位、地毯不覆盖；
 -- 内置表下同样的对局里这三件事都真的发生过（证明扫描覆盖到了）。
 br_level_hooks_removed_in_play :: Assertion
 br_level_hooks_removed_in_play = do
-  let bare = foldr removeLevel defaultWorld ["ufo", "belt", "portal", "carpet"]
+  let bare = foldr removeMechanic defaultWorld ["ufo", "belt", "portal", "carpet"]
       play reg li = go (6 :: Int) (levelGame li 1) []
         where
           go 0 gs acc = (gs, reverse acc)

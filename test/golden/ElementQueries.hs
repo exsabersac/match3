@@ -17,7 +17,7 @@ import Data.Word (Word64)
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Board.Match (findHintWith)
 import Match3.Element
-import Match3.Element.Class (levelNameOf)
+import Match3.Element.Mechanic (mechNameOf)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveHammerWith)
 import Match3.Game.Level (campaignGame, newGameAtLevel)
 import Match3.Game.Move (resolveSwapWith)
@@ -140,7 +140,7 @@ ruleLines =
   , "R swap " ++ show (map srOrder (swapRules reg))
   , "R names " ++ show (map defName (worldDefs reg))
   , "R diff " ++ show [(n, Just k, bonus) | (n, k, bonus) <- diffCountersWith reg]
-  , "R level " ++ show (map levelNameOf (levelDefs reg))
+  , "R level " ++ show (map mechNameOf (mechanicDefs reg))
   ]
     ++ [ "A " ++ show off ++ " " ++ show tc ++ " " ++ hash (show (runAdjacentWith reg tc [(0, 0)] [(7, 7)] (zoo off)))
        | off <- [0, 60, 120, 180, 240]

@@ -13,8 +13,8 @@
 -- layerRules：方法给出的邻格 / 蔓延规则 + 逃生口 boardPasses / layerPasses）也在建世界时收集一次、按次序排好。
 --
 -- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）、
--- 关卡级元素（'SomeLevelElement'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
--- 元素类重构第 4 刀起，旧的注册表 Match3.Element.World（World / Def）并进这里。
+-- 关卡级元素（'SomeMechanic'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
+-- 元素类重构第 4 刀起，旧的注册表模块并进这里（World 取代旧注册表类型、Def 取代旧注册项）。
 module Match3.Element.World
   ( -- * 注册项
     Def(..)
@@ -104,11 +104,10 @@ module Match3.Element.World
   , setComboRules
   , refillPolicyWith
   , setRefillPolicy
-    -- * 关卡级元素（消息）
-  , registerLevel
-  , removeLevel
-  , levelDefs
-  , askLevels
+    -- * 关卡级机制（Match3.Element.Mechanic）
+  , registerMechanic
+  , removeMechanic
+  , mechanicDefs
   ) where
 
 import Control.Monad (foldM)
@@ -119,7 +118,7 @@ import Data.Monoid (Sum(..))
 import Match3.Board.Grid (getCell, setCell)
 import Match3.Board.Refill (RefillPolicy, defaultRefill)
 import Match3.Element.Ability
-import Match3.Element.Class (Message, SomeLevelElement(..), SomeMessage(..), fromMessage, levelNameOf, levelReply)
+import Match3.Element.Mechanic (SomeMechanic, mechNameOf)
 import Match3.Element.Kind
 import Match3.Element.Layer
 import Match3.Element.Rules (kindRules, layerRules)
@@ -177,10 +176,10 @@ data World = World
   , wDiff     :: [(ElementName, CounterKey, Int)] -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
   , wSwap     :: [SwapRule]                       -- 成对交换规则，按 srOrder 排好（稳定）
   , wOpen     :: [OpenRule]                       -- 开启规则（注册顺序）
-  , wLevel    :: [SomeLevelElement]               -- 关卡级元素（注册顺序；同名以后注册的为准）
+  , wLevel    :: [SomeMechanic]                   -- 关卡级机制（注册顺序；同名以后注册的为准）
   , wShapes   :: [ShapeRule]                      -- 特殊块形状规则表（有序）
   , wCombos   :: [ComboRule]                      -- 特殊块组合表（有序）
-  , wRefill   :: RefillPolicy                     -- 补子策略（关卡级元素可经 Refilling 换掉）
+  , wRefill   :: RefillPolicy                     -- 补子策略（关卡级机制可经 refillPolicy 换掉）
   , wStep     :: StepCtx                          -- 本步上下文（缺省 'noStep'）
   }
 
@@ -650,7 +649,7 @@ comboRules = wCombos
 setComboRules :: [ComboRule] -> World -> World
 setComboRules rs reg = reg {wCombos = rs}
 
--- | 注册表的补子策略（缺省 Board.Refill.defaultRefill）；关卡级元素可以经 Refilling 消息换掉（见 Gravity.activeRefill）。
+-- | 注册表的补子策略（缺省 Board.Refill.defaultRefill）；关卡级机制可以经 refillPolicy 换掉（见 Gravity.activeRefill）。
 refillPolicyWith :: World -> RefillPolicy
 refillPolicyWith = wRefill
 
@@ -662,22 +661,13 @@ setRefillPolicy p reg = reg {wRefill = p}
 -- 关卡级元素
 
 -- | 注册（或按名字替换）一个关卡级元素。
-registerLevel :: SomeLevelElement -> World -> World
-registerLevel d reg = reg {wLevel = [x | x <- wLevel reg, levelNameOf x /= levelNameOf d] ++ [d]}
+registerMechanic :: SomeMechanic -> World -> World
+registerMechanic d reg = reg {wLevel = [x | x <- wLevel reg, mechNameOf x /= mechNameOf d] ++ [d]}
 
 -- | 去掉一个关卡级元素（测试用：去掉后该机制不生效）。
-removeLevel :: ElementName -> World -> World
-removeLevel n reg = reg {wLevel = [x | x <- wLevel reg, levelNameOf x /= n]}
+removeMechanic :: ElementName -> World -> World
+removeMechanic n reg = reg {wLevel = [x | x <- wLevel reg, mechNameOf x /= n]}
 
 -- | 全部关卡级元素（注册顺序）。
-levelDefs :: World -> [SomeLevelElement]
-levelDefs = wLevel
-
--- | 问注册的关卡级元素（原型值，不带一局的状态；一局里的节拍见 Match3.Element.Level.askLevelsIn）：
--- 问题与回复同类型（累积器），按注册顺序**折叠所有回复者**（前一个的回复是后一个的问题）；没人回复时 Nothing。
-askLevels :: Message q => World -> q -> Maybe q
-askLevels reg q0 = foldl one Nothing (wLevel reg)
-  where
-    one acc (SomeLevelElement l) = case levelReply l (SomeMessage (maybe q0 id acc)) of
-      Just (reply, _) | Just q' <- fromMessage reply -> Just q'
-      _ -> acc
+mechanicDefs :: World -> [SomeMechanic]
+mechanicDefs = wLevel

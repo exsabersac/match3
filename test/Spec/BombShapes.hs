@@ -18,7 +18,7 @@ import Match3.Element
   , builtinShapeRules
   , levelWorldIn
   , ltBombRule
-  , removeLevel
+  , removeMechanic
   , setShapeRules
   , shapeRules
   , withBombShapes
@@ -90,7 +90,7 @@ bs_l_shape_bomb_on_level41 = do
   assertEqual "level 41: bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) c41
   c1 <- corner defaultWorld 0
   assertEqual "level 1: corner is a hole" Nothing c1
-  cOff <- corner (removeLevel "bomb_shapes" defaultWorld) bombLevel
+  cOff <- corner (removeMechanic "bomb_shapes" defaultWorld) bombLevel
   assertEqual "switch removed: corner is a hole" Nothing cOff
   where
     atM' mb (r, c) = mboardRows mb !! r !! c
@@ -136,4 +136,4 @@ bs_level41_play_spawns_bombs = do
                   here = length [() | w <- mtWaves mt, Just (Gem _ Bomb _ _) <- concat (mboardRows (cwHoles w))]
               in here + bombsInGame reg gs' (n - 1)
   assertBool "level 41 play spawns bombs" (bombsIn defaultWorld > 0)
-  assertEqual "without the switch: no bombs" 0 (bombsIn (removeLevel "bomb_shapes" defaultWorld))
+  assertEqual "without the switch: no bombs" 0 (bombsIn (removeMechanic "bomb_shapes" defaultWorld))

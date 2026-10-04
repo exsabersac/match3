@@ -1,9 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
--- | 内置元素的汇总：注册表条目表 'builtinDefs'、关卡级元素表 'builtinLevelDefs' 与 'defaultWorld'。
+-- | 内置元素的汇总：注册表条目表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultWorld'。
 --
 -- 每种元素一个类型 + 值级能力 instance（Match3.Element.Ability）+ 一个类型级 instance（本体 'Kind' /
--- 叠层 'Layer' / 地面层 'GroundKind'；关卡级元素 LevelElement），xmonad LayoutClass 风格，
+-- 叠层 'Layer' / 地面层 'GroundKind'；关卡级元素 Mechanic），xmonad LayoutClass 风格，
 -- 按功能分组放在 Match3.Element.Builtin.* 里：
 --
 -- * Gem          普通宝石、特殊块（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则，特殊块形状规则表（第 8 刀）
@@ -22,11 +22,11 @@
 -- 锁链 80 → 火箭冰冻 90 → 窗帘 100 → 保险箱 110 → 时间精灵 120 → 果汁机 130 → 染色瓶 140 → 巧克力 150 →
 -- 蒸汽 160 → 气泡 170 → 魔法石 180 → 毛球 190 → 雪怪 200。步末：倒计时 10 → 魔法石 20（PhaseTick）；藤 10 → 巧 20 → 蒸汽 30（PhaseSpread）；
 -- 蜗牛 10 → 毛球 20 → 雪怪 30 → 变色龙 40（PhaseMove）。
--- 成对交换：彩虹取色 10 → 彩虹 × 变色龙 15（新玩法 7）→ 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）按消息回复流水线节拍。
+-- 成对交换：彩虹取色 10 → 彩虹 × 变色龙 15（新玩法 7）→ 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级机制（飞碟 / 皮带 / 传送门 / 地毯 …）实现各自的节拍方法（Match3.Element.Mechanic）。
 module Match3.Element.Builtin
   ( defaultWorld
   , builtinDefs
-  , builtinLevelDefs
+  , builtinMechanics
   , builtinShapeRules
   , builtinComboRules
   , traceSnails
@@ -84,9 +84,9 @@ import Match3.Element.Builtin.Ground
 import Match3.Element.Builtin.Layer
 import Match3.Element.Builtin.Level
 import Match3.Element.Builtin.Obstacle
-import Match3.Element.Class (SomeLevelElement(..))
+import Match3.Element.Mechanic (SomeMechanic(..))
 import Match3.Combos (builtinComboRules)
-import Match3.Element.World (World, mkWorld, registerLevel, setComboRules, setShapeRules)
+import Match3.Element.World (World, mkWorld, registerMechanic, setComboRules, setShapeRules)
 import Match3.Element.World (Def, groundDef, kindDef, layerDef)
 import Match3.Types (GemKind(..))
 
@@ -95,7 +95,7 @@ import Match3.Types (GemKind(..))
 defaultWorld :: World
 defaultWorld =
   setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-    foldl (flip registerLevel) (mkWorld builtinDefs) builtinLevelDefs
+    foldl (flip registerMechanic) (mkWorld builtinDefs) builtinMechanics
 
 -- | 全部内置元素（注册顺序 = 文档里的清单顺序，也是元素查询快照 R 行锁定的顺序；与分组无关，不要重排）：
 -- 只是一张类型列表（解码、放置、规则都是各类型的 instance 方法）。
@@ -140,6 +140,6 @@ builtinDefs =
   ]
 
 
--- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 levelStart 按关卡记录给出）：按消息回复流水线节拍；去掉某项（removeLevel）即该机制不生效。
-builtinLevelDefs :: [SomeLevelElement]
-builtinLevelDefs = [SomeLevelElement (UfoLevel []), SomeLevelElement (BeltLevel []), SomeLevelElement (PortalLevel []), SomeLevelElement (CarpetLevel []), SomeLevelElement (BombShapes False), SomeLevelElement (RainbowCombos False), SomeLevelElement (CookieDrop [])]
+-- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 mechStart 按关卡记录给出）：实现各自关心的节拍方法；去掉某项（removeMechanic）即该机制不生效。
+builtinMechanics :: [SomeMechanic]
+builtinMechanics = [SomeMechanic (UfoLevel []), SomeMechanic (BeltLevel []), SomeMechanic (PortalLevel []), SomeMechanic (CarpetLevel []), SomeMechanic (BombShapes False), SomeMechanic (RainbowCombos False), SomeMechanic (CookieDrop [])]

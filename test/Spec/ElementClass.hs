@@ -14,7 +14,7 @@ module Spec.ElementClass
 
 import Control.Monad (forM_)
 import Data.List (isInfixOf, isPrefixOf)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, isNothing)
 import qualified ElementQueries
 import Match3.Board.Grid (setCell)
 import Match3.Board.Match (findHintWith)
@@ -22,18 +22,15 @@ import Match3.Core
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Ability
-import Match3.Element.Class
-  ( LevelElement(..)
-  , Message
-  , SomeLevelElement(..)
-  , SomeMessage(..)
-  , fromMessage
-  , levelNameOf
+import Match3.Element.Mechanic
+  ( Mechanic(..)
+  , SomeMechanic(..)
+  , fromMechanic
+  , mechNameOf
   )
 import Match3.Element.Kind (Kind(..), customPlace, fromCustom)
 import Match3.Element.Layer (Layer(..), LayerHit(..), Layered(..))
 import Match3.Board.Hooks (LevelHooks(..))
-import Match3.Element.Message (Refilled(..))
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame, newGameAtLevelWith)
 import Match3.Game.Move (resolveSwapWith, trySwap)
@@ -52,7 +49,7 @@ tests =
   , testCase "ec_some_element_eq_by_type" ec_some_element_eq_by_type
   , testCase "ec_ice_layer_composes" ec_ice_layer_composes
   , testCase "ec_state_lives_in_element_value" ec_state_lives_in_element_value
-  , testCase "ec_typed_messages" ec_typed_messages
+  , testCase "ec_mechanic_defaults_silent" ec_mechanic_defaults_silent
   , testCase "ec_flat_record_removed" ec_flat_record_removed
   , testCase "ec_level_elements_by_message" ec_level_elements_by_message
   , testCase "ec_level_element_stateful_extension" ec_level_element_stateful_extension
@@ -205,19 +202,22 @@ ec_state_lives_in_element_value = do
       Custom "nest" _ -> True
       _ -> False
 
--- | 关卡级消息按类型取回：fromMessage 只认自己的类型（格子级消息在元素类重构第 2 刀随旧元素类删除）。
-newtype Warm = Warm Int
+-- | 关卡级机制的节拍方法缺省都不回复（元素类重构第 5 刀起取代开放消息）：只写名字的机制注册进去，
+-- 每个节拍都没有回复，结果与没注册时相同。
+newtype Quiet = Quiet ()
+  deriving (Eq, Show)
 
-instance Message Warm
+instance Mechanic Quiet where
+  mechName _ = "quiet"
 
-newtype Other = Other ()
-
-instance Message Other
-
-ec_typed_messages :: Assertion
-ec_typed_messages = do
-  assertBool "fromMessage type check" (isJust (fromMessage (SomeMessage (Warm 1)) :: Maybe Warm))
-  assertBool "fromMessage wrong type" (not (isJust (fromMessage (SomeMessage (Other ())) :: Maybe Warm)))
+ec_mechanic_defaults_silent :: Assertion
+ec_mechanic_defaults_silent = do
+  let reg = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultWorld (map mechNameOf builtinMechanics))
+      es = [SomeMechanic (Quiet ())]
+  assertBool "no beat reply" (isNothing (beatIn reg es [] onEndTick) && isNothing (queryIn reg es [] avoidCells) && isNothing (queryIn reg es [] wallCells))
+  assertBool "no query reply" (isNothing (queryIn reg es [] shapes) && isNothing (morphIn reg es stableBoard stableBoard (0, 0) (0, 1)))
+  assertEqual "no readings" ([], []) (levelUfos es, levelBelts es)
+  assertBool "fromMechanic type check" (fromMechanic (SomeMechanic (Quiet ())) == Just (Quiet ()))
 
 -- | 阶段 2 消掉的遗留项：源码里没有扁平记录 / 封闭钩子；findHint 不再点名彩虹；
 -- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 33 个：新玩法 2 追加魔法石、新玩法 3 追加毛球，名字与阶段 1 相同由快照锁定）。
@@ -227,7 +227,7 @@ ec_flat_record_removed = do
   assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/Element/World.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
   srcs <- mapM (fmap stripStrings . readFile) srcFiles
   -- 按完整标识符比（第 7 刀的钩子记录 LevelHooks 不是段 4 的封闭钩子 LevelHook）
-  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "Archetype", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry"], mentionsIdent w s]
+  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "Archetype", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "Registry", "HitResult"], mentionsIdent w s]
   assertEqual "no flat record / closed hooks / old element class" [] bad
   match <- readFile "src/Match3/Board/Match.hs"
   assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` stripStrings match) && "Match3.Rainbow" `notElem` importsOf match)
@@ -235,73 +235,71 @@ ec_flat_record_removed = do
   flow <- mapM readFile flowFiles
   assertEqual "main flow does not call level element implementations" [] [(f, w) | (f, s) <- zip flowFiles flow, w <- ["stepUfos", "beltMoves", "coverCarpets"], mentionsIdent w s]
   assertEqual "builtin entries" builtinEntryCount (length builtinDefs)
-  assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map levelNameOf builtinLevelDefs)
+  assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf builtinMechanics)
 
--- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（Refilled）吸走盘上第一颗 C1 宝石；
--- 不改主流程，只 registerLevel（无状态：开局没有它时用注册的原型值）。第 7 刀 7b 起节拍折叠所有回复者：
--- 保留内置飞碟（本局没有飞碟，回复空）时磁铁照样生效。新消息类型（Ping）也能经 askLevels 发给关卡级元素，
--- 多个回复者按注册顺序折叠（磁铁 +1、倍增器 ×2）。
+-- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（onRefilled）吸走盘上第一颗 C1 宝石；
+-- 不改主流程，只 registerMechanic（无状态：开局没有它时用注册的原型值）。第 7 刀 7b 起节拍折叠所有回复者：
+-- 保留内置飞碟（本局没有飞碟，回复空）时磁铁照样生效。同一个节拍的多个回复者按注册顺序折叠：
+-- 计步器（Pinger，避让格 +1 格）、倍增器（Doubler，避让格翻倍）都回复 avoidCells（内置只有有皮带的关卡回复）。
 data Magnet = Magnet
+  deriving (Eq, Show)
+
+data Pinger = Pinger
   deriving (Eq, Show)
 
 data Doubler = Doubler
   deriving (Eq, Show)
 
-newtype Ping = Ping Int
+instance Mechanic Magnet where
+  mechName _ = "magnet"
+  onRefilled m b acc = Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
 
-instance Message Ping
+instance Mechanic Pinger where
+  mechName _ = "pinger"
+  avoidCells _ acc = Just (acc ++ [(0, 0)])
 
-instance LevelElement Magnet where
-  levelName _ = "magnet"
-  levelReply m msg
-    | Just (Refilled b acc) <- fromMessage msg =
-        Just (SomeMessage (Refilled b (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1])), m)
-    | Just (Ping n) <- fromMessage msg = Just (SomeMessage (Ping (n + 1)), m)
-    | otherwise = Nothing
-
-instance LevelElement Doubler where
-  levelName _ = "doubler"
-  levelReply d msg
-    | Just (Ping n) <- fromMessage msg = Just (SomeMessage (Ping (n * 2)), d)
-    | otherwise = Nothing
+instance Mechanic Doubler where
+  mechName _ = "doubler"
+  avoidCells _ acc = Just (acc ++ acc)
 
 ec_level_elements_by_message :: Assertion
 ec_level_elements_by_message = do
-  let reg = registerLevel (SomeLevelElement Magnet) defaultWorld
+  let reg = registerMechanic (SomeMechanic Magnet) defaultWorld
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
       (p1, p2) = ((1, 2), (2, 2))
       (_, o, mt) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b1}
       (_, oD, mtD) = resolveSwapWith defaultWorld p1 p2 gs0 {gsBoard = b1}
-      ping r = fmap (\(Ping n) -> n) (askLevels r (Ping 7))
+      ping r = length <$> queryIn r [] (replicate 7 (0, 0)) avoidCells
+      withPinger = registerMechanic (SomeMechanic Pinger) reg
   assertBool "applied" (moveApplied o && moveApplied oD)
   assertBool "magnet adds an absorb wave (ufo also answers)" (length (mtWaves mt) > length (mtWaves mtD))
-  assertEqual "ping folds the only replier" (Just 8) (ping reg)
-  assertEqual "ping folds all repliers in registration order" (Just 16) (ping (registerLevel (SomeLevelElement Doubler) reg))
-  assertEqual "other order" (Just 15) (ping (registerLevel (SomeLevelElement Magnet) (registerLevel (SomeLevelElement Doubler) defaultWorld)))
-  assertEqual "nobody answers ping by default" Nothing (ping defaultWorld)
-  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "magnet"] (map levelNameOf (levelDefs reg))
+  assertEqual "magnet does not answer other beats" Nothing (ping reg)
+  assertEqual "beat folds the only replier" (Just 8) (ping withPinger)
+  assertEqual "beat folds all repliers in registration order" (Just 16) (ping (registerMechanic (SomeMechanic Doubler) withPinger))
+  assertEqual "other order" (Just 15) (ping (registerMechanic (SomeMechanic Pinger) (registerMechanic (SomeMechanic Doubler) defaultWorld)))
+  assertEqual "nobody answers by default" Nothing (ping defaultWorld)
+  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "magnet"] (map mechNameOf (mechanicDefs reg))
 
--- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 levelStart 给 2 格电量，
--- 每轮补子之后（Refilled）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
--- 由结算写回。只 registerLevel + 用这张表开局 / 走子；去掉注册后状态原样、不再生效。Show 在内置字段后追加
+-- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 mechStart 给 2 格电量，
+-- 每轮补子之后（onRefilled）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
+-- 由结算写回。只 registerMechanic + 用这张表开局 / 走子；去掉注册后状态原样、不再生效。Show 在内置字段后追加
 -- gsLevelExtra（内置对局没有这一项，快照不变）。第 7 刀 7b：保留内置飞碟，同一节拍两者都生效（回复折叠：先飞碟、后虹吸）。
 newtype Siphon = Siphon Int
   deriving (Eq, Show)
 
-instance LevelElement Siphon where
-  levelName _ = "siphon"
-  levelReply (Siphon k) msg
+instance Mechanic Siphon where
+  mechName _ = "siphon"
+  onRefilled (Siphon k) b acc
     | k > 0
-    , Just (Refilled b acc) <- fromMessage msg
     , p : _ <- reverse [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell b q == mkGem C2] =
-        Just (SomeMessage (Refilled b (acc ++ [p])), Siphon (k - 1))
+        Just (acc ++ [p], Siphon (k - 1))
     | otherwise = Nothing
-  levelStart _ _ = Siphon 2
+  mechStart _ _ = Siphon 2
 
 ec_level_element_stateful_extension :: Assertion
 ec_level_element_stateful_extension = do
-  let reg = registerLevel (SomeLevelElement (Siphon 0)) defaultWorld
+  let reg = registerMechanic (SomeMechanic (Siphon 0)) defaultWorld
       gs0 = newGameAtLevelWith reg 0 defaultConfig 7
       charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
       play r n gs
@@ -311,18 +309,18 @@ ec_level_element_stateful_extension = do
             Just (a, b) -> let (gs', _, _) = resolveSwapWith r a b gs in gs : play r (n - 1) gs'
       states = play reg 12 gs0
       final = last states
-  assertEqual "opened in registration order + core ground" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "siphon", "ground"] (map levelNameOf (gsLevelElems gs0))
-  assertEqual "levelStart gives the charge" (Just 2) (charge gs0)
+  assertEqual "opened in registration order + core ground" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "siphon", "ground"] (map mechNameOf (gsLevelElems gs0))
+  assertEqual "mechStart gives the charge" (Just 2) (charge gs0)
   assertBool "Show appends the extension state" ("gsLevelExtra = [Siphon 2]" `isInfixOf` show gs0)
   assertBool "builtin games show no extras" (not ("gsLevelExtra" `isInfixOf` show (newGameAtLevel 0 defaultConfig 7)))
   assertEqual "charge only goes down, one per absorb" [2 - gsCount CountUfo g | g <- states] (map (maybe (-1) id . charge) states)
   assertEqual "depleted" (Just 0) (charge final)
   assertEqual "absorbed exactly two cells" 2 (gsCount CountUfo final)
-  let bare = removeLevel "siphon" reg
+  let bare = removeMechanic "siphon" reg
       finalBare = last (play bare 12 gs0)
   assertEqual "unregistered: state untouched" (Just 2) (charge finalBare)
   assertEqual "unregistered: nothing absorbed" 0 (gsCount CountUfo finalBare)
-  -- 飞碟关（第 13 关）：一次 Refilled 节拍 = 飞碟的吸收 ++ 虹吸的吸收，两者的状态都推进
+  -- 飞碟关（第 13 关）：一次 onRefilled 节拍 = 飞碟的吸收 ++ 虹吸的吸收，两者的状态都推进
   let gsU = newGameAtLevelWith reg 12 defaultConfig 1
       gsUD = newGameAtLevel 12 defaultConfig 1
       bU = gsBoard gsU

@@ -18,7 +18,7 @@ import Match3.Element
   , Strike(..)
   , blocksSwapWith
   , builtinDefs
-  , builtinLevelDefs
+  , builtinMechanics
   , builtinShapeRules
   , colorOfWith
   , directHitWith
@@ -36,7 +36,7 @@ import Data.Proxy (Proxy(..))
 import Match3.Element.Ability (Countable(diffWeight), toCell)
 import Match3.Element.Kind (Kind(diffCounter))
 import Match3.Element.Event (EventKind(..))
-import Match3.Element.World (World, countElementWith, defName, mkWorld, placeWith, registerLevel, setComboRules, setShapeRules, weighElementWith)
+import Match3.Element.World (World, countElementWith, defName, mkWorld, placeWith, registerMechanic, setComboRules, setShapeRules, weighElementWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
@@ -210,7 +210,7 @@ sb_other_levels_unchanged :: Assertion
 sb_other_levels_unchanged = do
   let noBoss :: World
       noBoss = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-        foldl (flip registerLevel) (mkWorld (filter ((/= "snow_boss") . defName) builtinDefs)) builtinLevelDefs
+        foldl (flip registerMechanic) (mkWorld (filter ((/= "snow_boss") . defName) builtinDefs)) builtinMechanics
       play reg gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
         | otherwise = case findHintWith reg (gsBoard gs) of

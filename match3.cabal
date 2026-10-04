@@ -119,10 +119,13 @@ library match3-pure
   exposed-modules:
       ComboFx
       UI.CellFace
+      UI.Chapters
       UI.GoalIcon
       UI.MoveText
       UI.Palette
       UI.Presentation
+      UI.Restart
+      UI.Showcase
       UI.Sound
       UI.WebMeta
   other-modules:
@@ -250,10 +253,13 @@ test-suite match3-test
       Golden
       ComboFx
       UI.CellFace
+      UI.Chapters
       UI.GoalIcon
       UI.MoveText
       UI.Palette
       UI.Presentation
+      UI.Restart
+      UI.Showcase
       UI.Sound
       UI.WebMeta
       Engine.Effect

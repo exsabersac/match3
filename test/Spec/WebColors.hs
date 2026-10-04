@@ -115,7 +115,7 @@ web_meta_frames_and_sounds :: Assertion
 web_meta_frames_and_sounds = do
   let m = webMeta
       frames = wmFrames m
-  assertEqual "帧数常量（网页 render.js / main.js 读这几个键）" ["swap", "fall", "shake", "comboPop", "scorePop"] (map fst frames)
+  assertEqual "帧数常量（网页 render.js / main.js 读这几个键）" ["swap", "fall", "shake", "comboPop", "scorePop", "comboSummary"] (map fst frames)
   assertBool ("帧数都 > 0：" ++ show frames) (all ((> 0) . snd) frames)
   assertEqual "音效名不重复" (wmSounds m) (nub (wmSounds m))
   let used = nub (mapMaybe effectSound [minBound .. maxBound])

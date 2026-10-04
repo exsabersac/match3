@@ -23,25 +23,12 @@ import Foreign.C.Types (CInt)
 import Match3.Core
 import SDL hiding (Normal)
 import UI.BoardArt
+import UI.Chapters (chapterLabel, chapterStarts)
 import UI.Glyph
 import UI.GoalStyle (goalIcon, goalPip)
 import UI.Layout
 import UI.TextArt
 import UI.Types
-
--- | Chapter boundaries (0-based level index starts). Light map separators.
-chapterStarts :: [Int]
-chapterStarts = [0, 7, 14, 21, 28, 34, 36]
-
-chapterLabel :: Int -> String
-chapterLabel 0 = "CH1"
-chapterLabel 7 = "CH2"
-chapterLabel 14 = "CH3"
-chapterLabel 21 = "CH4"
-chapterLabel 28 = "CH5"
-chapterLabel 34 = "CH6"
-chapterLabel 36 = "CH7"
-chapterLabel _ = ""
 
 -- | Extra vertical gap before chapter-start nodes.
 chapterGapBefore :: Int -> CInt

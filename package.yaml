@@ -121,10 +121,13 @@ internal-libraries:
     exposed-modules:
     - ComboFx
     - UI.CellFace
+    - UI.Chapters
     - UI.GoalIcon
     - UI.MoveText
     - UI.Palette
     - UI.Presentation
+    - UI.Restart
+    - UI.Showcase
     - UI.Sound
     - UI.WebMeta
 

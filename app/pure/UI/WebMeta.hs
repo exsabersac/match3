@@ -11,7 +11,7 @@ module UI.WebMeta
   , metaCellRGB
   ) where
 
-import ComboFx (comboPopLife, fallFrames, scorePopLife, shakeFrames, swapFrames)
+import ComboFx (comboPopLife, comboSummaryFrames, fallFrames, scorePopLife, shakeFrames, swapFrames)
 import Match3.Core
 import Match3.Element.Event (EventKind (..))
 import Match3.View (CellField (..), FaceValue (..), cellExtras, cellFace, colorNum)
@@ -29,7 +29,7 @@ data WebMeta = WebMeta
   , wmTickCrumbRGB :: Maybe RGB          -- ^ 倒计时火星色（表现表 EvTick 的 CrumbsAtSources；没有 = 不迸）
   , wmSpreadGlow :: RGB                  -- ^ 生长前沿光的缺省色（表里没有的元素）
   , wmSpreadCurves :: [(String, Curve)]  -- ^ 蔓延的生长曲线（表里没有的元素匀速）
-  , wmFrames :: [(String, Int)]          -- ^ 帧数常量（swap / fall / shake / comboPop / scorePop）
+  , wmFrames :: [(String, Int)]          -- ^ 帧数常量（swap / fall / shake / comboPop / scorePop / comboSummary）
   , wmSounds :: [SoundName]              -- ^ 音效名
   }
 
@@ -52,7 +52,7 @@ webMeta =
         _ -> Nothing
     , wmSpreadGlow = defaultSpreadGlow
     , wmSpreadCurves = curves
-    , wmFrames = [("swap", swapFrames), ("fall", fallFrames), ("shake", shakeFrames), ("comboPop", comboPopLife), ("scorePop", scorePopLife)]
+    , wmFrames = [("swap", swapFrames), ("fall", fallFrames), ("shake", shakeFrames), ("comboPop", comboPopLife), ("scorePop", scorePopLife), ("comboSummary", comboSummaryFrames)]
     , wmSounds = soundNames
     }
   where

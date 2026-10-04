@@ -35,6 +35,7 @@ import Engine.GridUI (Click (..), gridClick, gridDragRelease)
 import UI.Layout
 import UI.LevelMap
 import UI.MoveText (MoveUi (..), moveMsg)
+import qualified UI.Restart as Restart
 import UI.Types
 
 -- | 处理本帧所有事件；先把鼠标坐标换算为逻辑坐标。返回是否退出。
@@ -125,11 +126,7 @@ keyPause ref window appGate = do
 
 -- | 同一关（或同一份每日配置）换种子重开。
 restartSame :: App -> Int -> GameState
-restartSame app seed =
-  let gs0 = appGame app
-  in if gsDaily gs0
-       then newDailyGame (GameConfig (appStartMoves app) (gsGoal gs0)) seed
-       else restartLevel gs0 seed
+restartSame app seed = Restart.restartSame (appStartMoves app) seed (appGame app)
 
 -- | R：重开本关。
 keyRestart :: IORef App -> Window -> IO ()

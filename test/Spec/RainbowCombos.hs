@@ -60,7 +60,7 @@ rc_switch_only_on_new_level = do
   assertEqual "only level 44" [rcLevel] [li | (li, l) <- zip [0 ..] allLevels, "rainbow_combos" `elem` lvlRules l]
   assertBool "Show hides the switch" (not (any (`isInfixOf` show (levelGame rcLevel 1)) ["RainbowCombos", "rainbow_combos"]))
   let (a, b) = comboMove
-      (_, _, mt1) = resolveSwapWith defaultRegistry a b ((levelGame 0 7) {gsBoard = comboBoard LineH})
+      (_, _, mt1) = resolveSwapWith defaultWorld a b ((levelGame 0 7) {gsBoard = comboBoard LineH})
   assertEqual "level 1: no morph" [] (morphSteps mt1)
 
 -- | 成立条件：一端彩虹、另一端直线 / 炸弹，两端都能点火；彩虹 × 普通宝石 / 彩虹 × 彩虹 / 直线 × 炸弹 / 软锁彩虹都不成立。
@@ -84,7 +84,7 @@ rc_rainbow_line_morphs_then_fires = do
   let b0 = comboBoard LineH
       (a, b) = comboMove
       swapped = swapCells b0 a b
-      (_, o, mt) = resolveSwapWith defaultRegistry a b ((levelGame rcLevel 7) {gsBoard = b0})
+      (_, o, mt) = resolveSwapWith defaultWorld a b ((levelGame rcLevel 7) {gsBoard = b0})
   assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
   assertEqual "mtStart = swapped board" swapped (mtStart mt)
   case morphSteps mt of
@@ -111,7 +111,7 @@ rc_rainbow_bomb_morphs_then_fires = do
   let b0 = comboBoard Bomb
       (a, b) = comboMove
       swapped = swapCells b0 a b
-      (_, _, mt) = resolveSwapWith defaultRegistry a b ((levelGame rcLevel 7) {gsBoard = b0})
+      (_, _, mt) = resolveSwapWith defaultWorld a b ((levelGame rcLevel 7) {gsBoard = b0})
       targets = plainC3 swapped
   case morphSteps mt of
     [e] -> do
@@ -139,13 +139,13 @@ rc_morph_skips_iced_and_overlaid = do
 -- 第 44 关两者不同。
 rc_old_levels_unchanged :: Assertion
 rc_old_levels_unchanged = do
-  let off = removeLevel "rainbow_combos" defaultRegistry
+  let off = removeLevel "rainbow_combos" defaultWorld
       (a, b) = comboMove
       key reg li k = let (gs, o, mt) = resolveSwapWith reg a b ((levelGame li 3) {gsBoard = comboBoard k}) in (gsBoard gs, gsScore gs, show (gsGen gs), show o, length (mtEnd mt), map cwCleared (mtWaves mt))
   mapM_
-    (\(li, k) -> assertEqual ("level " ++ show (li + 1) ++ " " ++ show k) (key off li k) (key defaultRegistry li k))
+    (\(li, k) -> assertEqual ("level " ++ show (li + 1) ++ " " ++ show k) (key off li k) (key defaultWorld li k))
     [(li, k) | li <- [0 .. rcLevel - 1], k <- [LineH, Bomb]]
-  assertBool "level 44 differs" (key off rcLevel LineH /= key defaultRegistry rcLevel LineH)
+  assertBool "level 44 differs" (key off rcLevel LineH /= key defaultWorld rcLevel LineH)
 
 -- | 第 44 关：种子 1–3 开局两组「彩虹 + 直线 / 炸弹」与 12 块双层石头；打出彩虹 × 直线：有变身、石头被削掉至少 8 层。
 rc_level44_layout_and_play :: Assertion
@@ -157,7 +157,7 @@ rc_level44_layout_and_play = do
             kinds = [cellKind (getCell (gsBoard gs0) p) | p <- [(3, 2), (3, 3), (4, 4), (4, 5)]]
         assertEqual ("seed " ++ show s ++ " specials") (map Just [Rainbow, LineH, Bomb, Rainbow]) kinds
         assertEqual ("seed " ++ show s ++ " stones") 24 (layers gs0)
-        let (gs1, o, mt) = resolveSwapWith defaultRegistry (3, 2) (3, 3) gs0
+        let (gs1, o, mt) = resolveSwapWith defaultWorld (3, 2) (3, 3) gs0
         assertBool "accepted" (o `notElem` [NoMatch, InvalidSwap])
         assertEqual "one morph" ["rainbow_line"] (map (endEffectElement . esEffect) (morphSteps mt))
         assertBool ("stones chipped: " ++ show (layers gs1)) (layers gs1 + countOf CountStones (gsCounts gs1) * 1 <= 16)

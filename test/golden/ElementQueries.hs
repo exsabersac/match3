@@ -38,8 +38,8 @@ firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
 levelGame :: Int -> Int -> GameState
 levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
-reg :: Registry
-reg = defaultRegistry
+reg :: World
+reg = defaultWorld
 
 hash :: String -> String
 hash s =
@@ -90,7 +90,7 @@ cellLine cell =
       , show (portalWith reg cell)
       , show (drainsWith reg cell)
       , show (drainEdgesWith reg cell)
-      , show (directHitWith reg cell)
+      , "Hit" ++ show (directHitWith reg cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
       , show (hitImmuneWith reg cell)
       , show (counterWith reg cell)
       , show (vacatesCarpetWith reg cell)
@@ -138,7 +138,7 @@ ruleLines =
   [ "R adjacent " ++ show (map arOrder (adjacentRules reg))
   , "R end " ++ show [(ph, map erOrder (endRules reg ph)) | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
   , "R swap " ++ show (map srOrder (swapRules reg))
-  , "R names " ++ show (map entryName (registryDefs reg))
+  , "R names " ++ show (map defName (worldDefs reg))
   , "R diff " ++ show [(n, Just k, bonus) | (n, k, bonus) <- diffCountersWith reg]
   , "R level " ++ show (map levelNameOf (levelDefs reg))
   ]

@@ -22,14 +22,13 @@ import Data.Proxy (Proxy(..))
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
 import Match3.Element.Ability
-import Match3.Element.Builtin (Bubble(..), SnowBoss(..), defaultRegistry, specialBlast)
+import Match3.Element.Builtin (Bubble(..), SnowBoss(..), defaultWorld, specialBlast)
 import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
 import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
 import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE)
 import Match3.Element.Rules (kindRules, layerRules)
 import Match3.Element.Kind
 import Match3.Element.Layer
-import Match3.Element.Registry (Registry, elementOf, register, registryDefs)
 import Match3.Element.Types
 import Match3.Element.World
 import Match3.Types
@@ -274,11 +273,11 @@ instance GroundKind JellyV where
   groundLabel _ = Just "果冻"
 
 -- | 内置注册表里这些条目换成测试里的副本（同名替换，注册位置不变）。
-replaced :: Registry
+replaced :: World
 replaced =
   foldl
     (flip register)
-    defaultRegistry
+    defaultWorld
     [ kindDef @GemV
     , kindDef @LineHV
     , kindDef @StoneV
@@ -295,7 +294,7 @@ ab_same_name_copies_oracle_unchanged :: Assertion
 ab_same_name_copies_oracle_unchanged = do
   expected <- lines <$> readFile "test/golden/element-oracle.txt"
   let actual = ElementOracle.oracleLinesWith replaced
-  assertEqual "names unchanged" (map defName (registryDefs defaultRegistry)) (map defName (registryDefs replaced))
+  assertEqual "names unchanged" (map defName (worldDefs defaultWorld)) (map defName (worldDefs replaced))
   case [(i, x, y) | (i, x, y) <- zip3 [1 :: Int ..] expected actual, x /= y] of
     ((i, x, y) : _) -> assertFailure ("line " ++ show i ++ " differs\nexpected: " ++ take 400 x ++ "\nactual:   " ++ take 400 y)
     [] -> assertEqual "line count" (length expected) (length actual)
@@ -314,7 +313,7 @@ layeredCells =
 ab_layered_matches_builtin :: Assertion
 ab_layered_matches_builtin =
   mapM_
-    (\cell -> assertEqual (show cell) (abilityProbe (elementOf defaultRegistry cell)) (abilityProbe (decode world cell)))
+    (\cell -> assertEqual (show cell) (abilityProbe (elementOf defaultWorld cell)) (abilityProbe (decode world cell)))
     layeredCells
 
 --------------------------------------------------------------------------------
@@ -324,7 +323,7 @@ ab_layered_matches_builtin =
 sampleCells :: [Cell]
 sampleCells =
   [ c
-  | d <- registryDefs defaultRegistry
+  | d <- worldDefs defaultWorld
   , base <- [Gem C1 Normal 0 Nothing, Gem C3 LineV 2 Nothing, Stone 2]
   , args <- [[], [AInt 1], [AInt 2], [AInt 4], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 5, AInt 2], [AInt 2, AColor C1]]
   , Just c <- [defPlace d args base]
@@ -332,7 +331,7 @@ sampleCells =
 
 ab_kind_name_matches_decoded :: Assertion
 ab_kind_name_matches_decoded = do
-  let kinds = [k | KindDef k <- registryDefs defaultRegistry]
+  let kinds = [k | KindDef k <- worldDefs defaultWorld]
       accepted (SomeKind p) = [(kindName p, nameOf e) | c <- sampleCells, Just e <- [fromCellAs p c]]
   assertEqual "all builtin kinds" 25 (length kinds)
   mapM_

@@ -61,17 +61,17 @@ level_placements_all_right = do
   assertEqual "levelCount = length allLevels" (length allLevels) levelCount
   assertEqual "lvlIndex = 下标" [0 .. levelCount - 1] (map lvlIndex allLevels)
   sequence_
-    [ case decorateLevelWith defaultRegistry l b of
+    [ case decorateLevelWith defaultWorld l b of
         Left e -> assertFailure ("第 " ++ show (lvlIndex l + 1) ++ " 关装饰失败：" ++ show e)
         Right b' ->
           assertBool ("第 " ++ show (lvlIndex l + 1) ++ " 关目标补齐失败")
-            (isRight' (goalDecorWith defaultRegistry (lvlGoal l) b'))
+            (isRight' (goalDecorWith defaultWorld (lvlGoal l) b'))
     | l <- allLevels
     , b <- bareBoards
     ]
   -- 目标补齐单独作用在裸盘上（补齐分支一定会真正放置）
   sequence_
-    [ assertBool ("第 " ++ show (lvlIndex l + 1) ++ " 关目标补齐（裸盘）失败") (isRight' (goalDecorWith defaultRegistry (lvlGoal l) b))
+    [ assertBool ("第 " ++ show (lvlIndex l + 1) ++ " 关目标补齐（裸盘）失败") (isRight' (goalDecorWith defaultWorld (lvlGoal l) b))
     | l <- allLevels
     , b <- bareBoards
     ]
@@ -86,8 +86,8 @@ daily_placements_all_right = do
         Nothing -> error "no level 0"
   assertEqual "10 种每日目标都覆盖到" 10 (length (nub (map show goals)))
   sequence_
-    [ assertBool ("每日目标 " ++ show g ++ " 放置失败") (isRight' (decorateLevelWith defaultRegistry l0 b >>= goalDecorWith defaultRegistry g))
-      >> assertBool ("每日目标 " ++ show g ++ " 裸盘补齐失败") (isRight' (goalDecorWith defaultRegistry g b))
+    [ assertBool ("每日目标 " ++ show g ++ " 放置失败") (isRight' (decorateLevelWith defaultWorld l0 b >>= goalDecorWith defaultWorld g))
+      >> assertBool ("每日目标 " ++ show g ++ " 裸盘补齐失败") (isRight' (goalDecorWith defaultWorld g b))
     | g <- nub goals
     , b <- bareBoards
     ]
@@ -96,14 +96,14 @@ daily_placements_all_right = do
 place_with_reports_errors :: Assertion
 place_with_reports_errors = do
   let b = board1
-  assertEqual "unknown" (Left (UnknownElement "no_such_elem")) (placeWith defaultRegistry "no_such_elem" [] b [(0, 0)])
-  assertEqual "row out of bounds" (Left (PlaceOutOfBounds "stone" (boardSize, 0))) (placeWith defaultRegistry "stone" [] b [(1, 1), (boardSize, 0)])
-  assertEqual "negative col" (Left (PlaceOutOfBounds "ice" (0, -1))) (placeWith defaultRegistry "ice" [AInt 1] b [(0, -1)])
-  assertBool "valid placement is Right" (isRight' (placeWith defaultRegistry "stone" [] b [(1, 1), (2, 2)]))
-  assertEqual "empty list is identity" (Right b) (placeWith defaultRegistry "stone" [] b [])
+  assertEqual "unknown" (Left (UnknownElement "no_such_elem")) (placeWith defaultWorld "no_such_elem" [] b [(0, 0)])
+  assertEqual "row out of bounds" (Left (PlaceOutOfBounds "stone" (boardSize, 0))) (placeWith defaultWorld "stone" [] b [(1, 1), (boardSize, 0)])
+  assertEqual "negative col" (Left (PlaceOutOfBounds "ice" (0, -1))) (placeWith defaultWorld "ice" [AInt 1] b [(0, -1)])
+  assertBool "valid placement is Right" (isRight' (placeWith defaultWorld "stone" [] b [(1, 1), (2, 2)]))
+  assertEqual "empty list is identity" (Right b) (placeWith defaultWorld "stone" [] b [])
   assertEqual "table stops at first error"
     (Left (UnknownElement "nope"))
-    (placeAllWith defaultRegistry b [Place "stone" [] [(1, 1)], Place "nope" [] [(2, 2)], Place "grass" [] [(99, 99)]])
+    (placeAllWith defaultWorld b [Place "stone" [] [(1, 1)], Place "nope" [] [(2, 2)], Place "grass" [] [(99, 99)]])
 
 -- | 静态数据边界：坏放置表在 decorateLevel 里报错，错误信息带关卡序号与名字。
 decorate_level_error_names_level :: Assertion

@@ -18,7 +18,7 @@ import Match3.Counts (countOf)
 import Match3.Daily (dailyConfig)
 import Match3.Element
   ( Arg(..)
-  , HitResult(..)
+  , Strike(..)
   , blocksSwapWith
   , builtinDefs
   , builtinLevelDefs
@@ -38,7 +38,7 @@ import Match3.Element
   , swapOpeningWith
   )
 import Match3.Element.Event (EventKind(..))
-import Match3.Element.Registry (Registry, entryName, mkRegistry, registerLevel, setComboRules, setShapeRules)
+import Match3.Element.World (World, defName, mkWorld, registerLevel, setComboRules, setShapeRules)
 import Match3.Game.Boosters (useHammer)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
@@ -78,13 +78,13 @@ stoneBoard = boardFromRows (replicate boardSize (replicate boardSize (Stone 1)))
 -- 消除计 CountNamed "chameleon"；放置取原格宝石颜色（或 AColor 指定），原格不是宝石时不放。
 ch_caps_piece_by_current_color :: Assertion
 ch_caps_piece_by_current_color = do
-  let reg = defaultRegistry
+  let reg = defaultWorld
   mapM_ (\c -> assertEqual ("color " ++ show c) (Just c) (colorOfWith reg (cham c))) allColors
   assertEqual "state = colour index" (Custom "chameleon" (CustomState 2)) (cham C3)
   assertBool "swappable" (not (blocksSwapWith reg (cham C1)))
   assertBool "falls" (fallsWith reg (cham C1))
   assertBool "hintable" (hintableWith reg (cham C1))
-  assertEqual "hit destroys" HitDestroy (directHitWith reg (cham C1))
+  assertEqual "hit destroys" Destroy (directHitWith reg (cham C1))
   assertBool "kept on shuffle" (keepOnShuffleWith reg (cham C1))
   assertBool "not recolorable" (not (recolorableWith reg (cham C1)))
   assertEqual "counter" (Just (CountNamed "chameleon")) (counterWith reg (cham C4))
@@ -99,20 +99,20 @@ ch_matches_by_current_color = do
   let gs0 = levelGame chamLevel 7
       (a, b) = tripleMove
       withCham c = gs0 {gsBoard = setCells tripleBoard [((2, 2), cham c)]}
-      (gs1, o1, _) = resolveSwapWith defaultRegistry a b (withCham C5)
-      (_, o2, _) = resolveSwapWith defaultRegistry a b (withCham C4)
+      (gs1, o1, _) = resolveSwapWith defaultWorld a b (withCham C5)
+      (_, o2, _) = resolveSwapWith defaultWorld a b (withCham C4)
   assertBool "same colour chameleon matches" (o1 `notElem` [NoMatch, InvalidSwap])
   assertBool "counted" (countOf (CountNamed "chameleon") (gsCounts gs1) >= 1)
   assertEqual "other colour does not" NoMatch o2
-  assertBool "standing run with a chameleon" (hasAnyMatchWith defaultRegistry (setCells stableBoard [((0, 0), mkGem C2), ((0, 1), mkGem C2), ((0, 2), cham C2)]))
-  assertBool "different colour breaks the run" (not (hasAnyMatchWith defaultRegistry (setCells stableBoard [((0, 0), mkGem C2), ((0, 1), mkGem C2), ((0, 2), cham C3)])))
+  assertBool "standing run with a chameleon" (hasAnyMatchWith defaultWorld (setCells stableBoard [((0, 0), mkGem C2), ((0, 1), mkGem C2), ((0, 2), cham C2)]))
+  assertBool "different colour breaks the run" (not (hasAnyMatchWith defaultWorld (setCells stableBoard [((0, 0), mkGem C2), ((0, 1), mkGem C2), ((0, 2), cham C3)])))
   -- 只有经过变色龙的一对能成消：stuckNoMoveBoard（没有可走步）的 (1,2) 换成 C3 变色龙后，唯一可走步是
   -- (1,0)↔(2,0)（C3 上移，与 (1,1) 的 C3 和变色龙连成三消）；同一格换成无色的石头则仍然无步可走。
   let bOnly = setCells stuckNoMoveBoard [((1, 2), cham C3)]
   assertEqual "stone there: no move" Nothing (findMatchPair (setCells stuckNoMoveBoard [((1, 2), Stone 1)]))
   assertEqual "findMatchPair uses the chameleon's colour" (Just ((1, 0), (2, 0))) (findMatchPair bOnly)
-  assertEqual "hint agrees" (Just ((1, 0), (2, 0))) (findHintWith defaultRegistry bOnly)
-  let (gs2, o, _) = resolveSwapWith defaultRegistry (1, 0) (2, 0) (gs0 {gsBoard = bOnly})
+  assertEqual "hint agrees" (Just ((1, 0), (2, 0))) (findHintWith defaultWorld bOnly)
+  let (gs2, o, _) = resolveSwapWith defaultWorld (1, 0) (2, 0) (gs0 {gsBoard = bOnly})
   assertBool "engine accepts it" (o `notElem` [NoMatch, InvalidSwap])
   assertBool "chameleon cleared" (countOf (CountNamed "chameleon") (gsCounts gs2) >= 1)
 
@@ -145,7 +145,7 @@ ch_step_end_shift_swap_only = do
   -- 两只（第 47 关掉落口保持 2 只，这样本步不会从掉落口补进新的）
   let gs0 = (levelGame chamLevel 7) {gsBoard = setCells tripleBoard [((6, 6), cham C3), ((7, 7), cham C5)]}
       (a, b) = tripleMove
-      (gs1, o, mt) = resolveSwapWith defaultRegistry a b gs0
+      (gs1, o, mt) = resolveSwapWith defaultWorld a b gs0
   assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
   case [es | es <- mtEnd mt, endEffectElement (esEffect es) == "chameleon"] of
     [es] -> do
@@ -164,8 +164,8 @@ ch_rainbow_swap_clears_current_color = do
   let b0 = setCells stableBoard [((3, 3), Gem C1 Rainbow 0 Nothing), ((3, 4), cham C3), ((7, 7), cham C3), ((0, 1), cham C2)]
       swapped = setCells b0 [((3, 3), cham C3), ((3, 4), Gem C1 Rainbow 0 Nothing)]
       c3gems = [p | p <- allPos, getCell b0 p == mkGem C3]
-  assertBool "fires" (swapFiresWith defaultRegistry b0 (3, 3) (3, 4))
-  case swapOpeningWith defaultRegistry b0 swapped (3, 3) (3, 4) of
+  assertBool "fires" (swapFiresWith defaultWorld b0 (3, 3) (3, 4))
+  case swapOpeningWith defaultWorld b0 swapped (3, 3) (3, 4) of
     Just seeds -> do
       assertBool "all C3 gems" (all (`elem` seeds) c3gems)
       assertBool "both C3 chameleons" (all (`elem` seeds) [(3, 3), (7, 7)])
@@ -173,10 +173,10 @@ ch_rainbow_swap_clears_current_color = do
       assertBool "C2 chameleon untouched" ((0, 1) `notElem` seeds)
     Nothing -> assertFailure "rainbow × chameleon did not open"
   let gs0 = (levelGame chamLevel 7) {gsBoard = b0}
-      (gs1, o, _) = resolveSwapWith defaultRegistry (3, 3) (3, 4) gs0
+      (gs1, o, _) = resolveSwapWith defaultWorld (3, 3) (3, 4) gs0
   assertBool "accepted" (o `notElem` [NoMatch, InvalidSwap])
   assertBool "two chameleons counted" (countOf (CountNamed "chameleon") (gsCounts gs1) >= 2)
-  assertBool "not fired without a rainbow" (not (swapFiresWith defaultRegistry (setCells stableBoard [((3, 4), cham C3)]) (3, 3) (3, 4)))
+  assertBool "not fired without a rainbow" (not (swapFiresWith defaultWorld (setCells stableBoard [((3, 4), cham C3)]) (3, 3) (3, 4)))
 
 -- | 掉落口（复用新玩法 6）按 Custom 名字数同种：盘上已有两只（不同颜色）变色龙时不再掉；只有一只时掉一只 C1。
 ch_drop_port_counts_any_color :: Assertion
@@ -194,9 +194,9 @@ ch_drop_port_counts_any_color = do
 -- （变色龙规则在没有变色龙的盘面上不做任何事，也不耗随机数）；原有关卡开局没有变色龙。
 ch_other_levels_unchanged :: Assertion
 ch_other_levels_unchanged = do
-  let noCh :: Registry
+  let noCh :: World
       noCh = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-        foldl (flip registerLevel) (mkRegistry (filter ((/= "chameleon") . entryName) builtinDefs)) builtinLevelDefs
+        foldl (flip registerLevel) (mkWorld (filter ((/= "chameleon") . defName) builtinDefs)) builtinLevelDefs
       play reg gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
         | otherwise = case findHintWith reg (gsBoard gs) of
@@ -206,10 +206,10 @@ ch_other_levels_unchanged = do
       daily (y, m, d) = newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d))
   assertEqual "older levels have none" [] [li | li <- [0 .. chamLevel - 1], not (null (chamsOn (gsBoard (levelGame li 1))))]
   mapM_
-    (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noCh (levelGame li 3) 6)) (key (play defaultRegistry (levelGame li 3) 6)))
+    (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noCh (levelGame li 3) 6)) (key (play defaultWorld (levelGame li 3) 6)))
     [0 .. chamLevel - 1]
   mapM_
-    (\d -> assertEqual ("daily " ++ show d) (key (play noCh (daily d) 6)) (key (play defaultRegistry (daily d) 6)))
+    (\d -> assertEqual ("daily " ++ show d) (key (play noCh (daily d) 6)) (key (play defaultWorld (daily d) 6)))
     [(2026, 9, 28), (2026, 9, 29), (2026, 9, 30)]
 
 -- | 第 47 关：开局 2 只变色龙在 (3,1) / (5,6)、颜色取原格宝石（开局无现成三消）；目标消 30 只、18 步；
@@ -225,7 +225,7 @@ ch_level47_layout_and_difficulty = do
     ( \s -> do
         let gs = levelGame chamLevel s
         assertEqual ("seed " ++ show s ++ " chameleons") [(3, 1), (5, 6)] (chamsOn (gsBoard gs))
-        assertBool ("seed " ++ show s ++ " no standing run") (not (hasAnyMatchWith defaultRegistry (gsBoard gs)))
+        assertBool ("seed " ++ show s ++ " no standing run") (not (hasAnyMatchWith defaultWorld (gsBoard gs)))
         assertEqual ("seed " ++ show s ++ " drop port") [(0, 3)] (bvDrops (boardView gs))
     )
     [1 .. 3]
@@ -233,10 +233,10 @@ ch_level47_layout_and_difficulty = do
         where
           go gs n ticks
             | n <= 0 || gsOver gs /= Nothing = (gs, ticks)
-            | otherwise = case findHintWith defaultRegistry (gsBoard gs) of
+            | otherwise = case findHintWith defaultWorld (gsBoard gs) of
                 Nothing -> (gs, ticks)
                 Just (p, q) ->
-                  let (gs', _, mt) = resolveSwapWith defaultRegistry p q gs
+                  let (gs', _, mt) = resolveSwapWith defaultWorld p q gs
                   in go gs' (n - 1) (ticks + length [() | es <- mtEnd mt, endEffectElement (esEffect es) == "chameleon"])
       runs = map hintRun [1 .. 30]
       hintWins = length (filter (isWin . gsOver . fst) runs)
@@ -250,7 +250,7 @@ ch_level47_layout_and_difficulty = do
       | otherwise =
           case [ ((negate (countOf (CountNamed "chameleon") (gsCounts g')), negate (gsScore g'), i), g')
                | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], fst d >= 0 && fst d < boardSize && snd d >= 0 && snd d < boardSize]
-               , let (g', o, _) = resolveSwapWith defaultRegistry p q gs
+               , let (g', o, _) = resolveSwapWith defaultWorld p q gs
                , o `notElem` [NoMatch, InvalidSwap] ] of
             [] -> gs
             cs -> greedy (snd (foldr1 (\x y -> if fst x <= fst y then x else y) cs))

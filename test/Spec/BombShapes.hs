@@ -13,10 +13,10 @@ import Match3.Core
 import Match3.Board.Clear (clearMatchesDetailedWith)
 import Match3.Board.Match (MatchRun(..), findHintWith)
 import Match3.Element
-  ( Registry
+  ( World
   , ShapeRule(..)
   , builtinShapeRules
-  , levelRegistryIn
+  , levelWorldIn
   , ltBombRule
   , removeLevel
   , setShapeRules
@@ -44,19 +44,19 @@ tests =
 bombLevel :: Int
 bombLevel = 40
 
-shapeNames :: Registry -> [String]
+shapeNames :: World -> [String]
 shapeNames = map shapeName . shapeRules
 
 -- | 本局每步结算用的形状表（= Game.Resolve 开头换上的那张）。
 gameShapes :: GameState -> [String]
-gameShapes gs = shapeNames (levelRegistryIn defaultRegistry (gsLevelElems gs))
+gameShapes gs = shapeNames (levelWorldIn defaultWorld (gsLevelElems gs))
 
 -- | 只有第 41 关与第 48 关（新玩法 8 魔法格复用这个开关）打开开关：原有 40 关（种子 1 / 2）、每日挑战、自由开局的形状表都等于内置表；
 -- 关卡记录里 bomb_shapes 只写在第 41 / 48 关；GameState 的 Show 不打印这个内置元素。
 bs_switch_only_on_new_level :: Assertion
 bs_switch_only_on_new_level = do
   let builtin = map shapeName builtinShapeRules
-  assertEqual "builtin table unchanged" builtin (shapeNames defaultRegistry)
+  assertEqual "builtin table unchanged" builtin (shapeNames defaultWorld)
   assertEqual "only levels 41 / 48 have bomb_shapes" [(bombLevel, ["bomb_shapes"]), (47, ["bomb_shapes"])] [(li, lvlRules l) | (li, l) <- zip [0 ..] allLevels, "bomb_shapes" `elem` lvlRules l]
   mapM_
     (\(li, seed) -> assertEqual ("level " ++ show (li + 1) ++ " seed " ++ show seed) builtin (gameShapes (levelGame li seed)))
@@ -86,23 +86,23 @@ bs_l_shape_bomb_on_level41 = do
         assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
         w <- firstWave mt
         pure (atM' (cwHoles w) (3, 3))
-  c41 <- corner defaultRegistry bombLevel
+  c41 <- corner defaultWorld bombLevel
   assertEqual "level 41: bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) c41
-  c1 <- corner defaultRegistry 0
+  c1 <- corner defaultWorld 0
   assertEqual "level 1: corner is a hole" Nothing c1
-  cOff <- corner (removeLevel "bomb_shapes" defaultRegistry) bombLevel
+  cOff <- corner (removeLevel "bomb_shapes" defaultWorld) bombLevel
   assertEqual "switch removed: corner is a hole" Nothing cOff
   where
     atM' mb (r, c) = mboardRows mb !! r !! c
 
 -- | 特殊块种类统计（本轮消除、放下新特殊块之后）。
-spawnedKinds :: Registry -> Board -> [GemKind]
+spawnedKinds :: World -> Board -> [GemKind]
 spawnedKinds reg b =
   let (mb, _, _) = clearMatchesDetailedWith reg Nothing b
   in [k | Gem _ k _ _ <- catMaybes (concat (mboardRows mb)), k /= Normal]
 
-bombReg :: Registry
-bombReg = setShapeRules (withBombShapes builtinShapeRules) defaultRegistry
+bombReg :: World
+bombReg = setShapeRules (withBombShapes builtinShapeRules) defaultWorld
 
 -- | 横五连 + 从端点往下的竖三连（交点在五连端点）：五连优先出彩虹，竖线被 L / T 规则认领但不生成，没有炸弹（和内置表一样只出一个彩虹）。
 bs_five_still_rainbow :: Assertion
@@ -110,7 +110,7 @@ bs_five_still_rainbow = do
   let b = setCells stableBoard ([((3, c), mkGem C1) | c <- [0 .. 4]] ++ [((4, 0), mkGem C1)])
   assertEqual "fixture: one 5-run + one 3-run" [(True, 5), (False, 3)] [(runIsH r, length (runPos r)) | r <- findMatchRuns b]
   assertEqual "bomb table: rainbow only" [Rainbow] (spawnedKinds bombReg b)
-  assertEqual "builtin table: same (3-run spawns nothing)" [Rainbow] (spawnedKinds defaultRegistry b)
+  assertEqual "builtin table: same (3-run spawns nothing)" [Rainbow] (spawnedKinds defaultWorld b)
 
 -- | 横四连 + 竖三连交成 L：开关打开时交点出炸弹、不出直线；内置表出一个直线。
 bs_four_in_l_gives_bomb_not_line :: Assertion
@@ -120,7 +120,7 @@ bs_four_in_l_gives_bomb_not_line = do
   let (mb, _, _) = clearMatchesDetailedWith bombReg Nothing b
   assertEqual "bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) (mboardRows mb !! 3 !! 0)
   assertEqual "bomb table: bomb only" [Bomb] (spawnedKinds bombReg b)
-  assertEqual "builtin table: a line" [LineH] (spawnedKinds defaultRegistry b)
+  assertEqual "builtin table: a line" [LineH] (spawnedKinds defaultWorld b)
 
 -- | 第 41 关按提示走 12 步（种子 1–6）：开关打开时对局里真的生成过炸弹；去掉开关后同样的对局一颗炸弹也没有
 -- （本关没有其他炸弹来源）。
@@ -135,5 +135,5 @@ bs_level41_play_spawns_bombs = do
               let (gs', _, mt) = resolveSwapWith reg a b gs
                   here = length [() | w <- mtWaves mt, Just (Gem _ Bomb _ _) <- concat (mboardRows (cwHoles w))]
               in here + bombsInGame reg gs' (n - 1)
-  assertBool "level 41 play spawns bombs" (bombsIn defaultRegistry > 0)
-  assertEqual "without the switch: no bombs" 0 (bombsIn (removeLevel "bomb_shapes" defaultRegistry))
+  assertBool "level 41 play spawns bombs" (bombsIn defaultWorld > 0)
+  assertEqual "without the switch: no bombs" 0 (bombsIn (removeLevel "bomb_shapes" defaultWorld))

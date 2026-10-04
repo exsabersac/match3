@@ -89,7 +89,6 @@ import Match3.Element
 import Match3.Element.Ability (toCell)
 import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
 import Match3.Element.Layer (Layer(layerName), SomeLayer(..), layerValueName, peelAs)
-import Match3.Element.World (Def(..), decodeLayers)
 import Match3.Element.Class (levelNameOf)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
@@ -216,7 +215,7 @@ column mb c = [atM mb (r, c) | r <- [0 .. boardSize - 1]]
 qc_gravity_keeps_cells_and_column_order :: Property
 qc_gravity_keeps_cells_and_column_order =
   forAll genMBoard $ \mb ->
-    let reg = defaultRegistry
+    let reg = defaultWorld
         mb' = applyGravityWith reg mb
         fixed = gravityFixedCellWith reg
         isFixedM = maybe False fixed
@@ -600,16 +599,16 @@ qc_goal_progress_bounded =
 qc_registry_decode_roundtrip :: Property
 qc_registry_decode_roundtrip =
   forAll genCell $ \cell ->
-    let reg = defaultRegistry
-        w = registryWorld reg
-        defs = registryDefs reg
+    let reg = defaultWorld
+        w = reg
+        defs = worldDefs reg
         (layers, inner) = decodeLayers w cell
         kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- defs, kindName p == n]
         layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- defs, layerName p == n]
         bodyName = elementName reg cell
         bodyOk = case inner of
           Custom n _
-            | n `notElem` map entryName defs -> bodyName == n
+            | n `notElem` map defName defs -> bodyName == n
           _ -> kindAccepts bodyName inner
         topName = topLayerName reg cell
         topOk = case (cell, layers) of
@@ -623,8 +622,8 @@ qc_registry_decode_roundtrip =
 -- 8 种叠层各由一个叠层种类认领，冰层只有一个。
 qc_registry_names_slots_unique :: Property
 qc_registry_names_slots_unique =
-  let names = map entryName builtinDefs
-      reg = defaultRegistry
+  let names = map defName builtinDefs
+      reg = defaultWorld
       bodyCells =
         [Gem C1 k 0 Nothing | k <- [Normal, LineH, LineV, Bomb, Rainbow]]
           ++ [Stone 1, Chest 1, Honey 1, Balloon C1, Cookie, Cake 1, MagicHat, Maker C1 1, Snail 0 1, Safe 1, Flip C1 C2, Surprise, Bottle C1, TimeSpirit, Countdown C1 1]
@@ -711,7 +710,7 @@ qc_counts_monotone_legacy_view =
 -- 提示
 
 -- | 第 3 刀之前的 findHintWith（整盘 hasAnyMatchWith (swapCells b p1 p2)），留作参照实现。
-findHintReference :: Registry -> Board -> Maybe (Pos, Pos)
+findHintReference :: World -> Board -> Maybe (Pos, Pos)
 findHintReference reg b =
   case matchHints ++ concatMap ruleHints (swapRules reg) of
     (x : _) -> Just x
@@ -747,7 +746,7 @@ findHintReference reg b =
 qc_find_hint_local_matches_reference :: Property
 qc_find_hint_local_matches_reference =
   forAll genHintBoard $ \b ->
-    findHintWith defaultRegistry b === findHintReference defaultRegistry b
+    findHintWith defaultWorld b === findHintReference defaultWorld b
   where
     genHintBoard =
       oneof
@@ -800,7 +799,7 @@ qc_level_hooks_match_legacy =
               (ps, hooks') = onAbsorb hooks b
           in conjoin
                [ (ps, levelUfos (hookLevel hooks')) === stepUfos b ufos
-               , onSettle hooks mb === portalTeleport (portalWith defaultRegistry) portals mb
+               , onSettle hooks mb === portalTeleport (portalWith defaultWorld) portals mb
                , onSettle hooks' mb === onSettle hooks mb
                ]
 
@@ -839,7 +838,7 @@ qc_end_table_matches_legacy =
           (nr, nc) = boardDims (gsBoard gs0)
       in forAll ((,) <$> choose (0, nr - 1) <*> choose (0, nc - 1)) $ \seedPos ->
         let gs = gs0
-            reg = defaultRegistry
+            reg = defaultWorld
             hooks0 = levelHooksWith reg (gsLevelElems gs)
             summary (segs, ends, board, vacate) =
               ( [(crBoard r, crWaves r, crTally r, show (crGen r), hookLevel (crHooks r)) | r <- NE.toList segs]
@@ -855,7 +854,7 @@ qc_end_table_matches_legacy =
                .&&. summary (runEndTable reg boosterEndTable segB) === summary (legacyBoosterEnd reg segB)
 
 -- | 第 7 刀前 Resolve.swapEnd 的逐字副本（皮带效果改为通用形状）。
-legacySwapEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+legacySwapEnd :: World -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
 legacySwapEnd reg seg0 =
   let ws0 = crWaves seg0
       board0' = crBoard seg0
@@ -889,7 +888,7 @@ legacySwapEnd reg seg0 =
   in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
 
 -- | 第 7 刀前 Resolve.boosterEnd 的逐字副本。
-legacyBoosterEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+legacyBoosterEnd :: World -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
 legacyBoosterEnd reg seg0 =
   let boardH = crBoard seg0
       (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
@@ -916,7 +915,7 @@ qc_ask_levels_folds_in_order :: Property
 qc_ask_levels_folds_in_order =
   forAll (choose (0, 5) >>= \n -> vectorOf n (choose (1, 9 :: Int))) $ \ks0 ->
     let ks = nub ks0
-        reg = foldl (\r k -> registerLevel (SomeLevelElement (Adder k 0)) r) defaultRegistry ks
+        reg = foldl (\r k -> registerLevel (SomeLevelElement (Adder k 0)) r) defaultWorld ks
         elems = [SomeLevelElement (Adder k 5) | k <- ks]
         viaReg = fmap (\(AdderMsg xs) -> xs) (askLevels reg (AdderMsg []))
         viaIn = fmap (\(AdderMsg xs, es) -> (xs, es)) (askLevelsIn reg elems (AdderMsg []))
@@ -1012,7 +1011,7 @@ genPos = (,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)
 genShapeCase :: Gen (Board, Maybe Pos, [Pos])
 genShapeCase = do
   b <- boardFromRows <$> vectorOf boardSize (vectorOf boardSize (frequency [(12, mkGem <$> elements [C1, C2, C3]), (2, genGem), (1, genCell)]))
-  let ps = nub (concatMap runPos (findMatchRunsWith defaultRegistry b))
+  let ps = nub (concatMap runPos (findMatchRunsWith defaultWorld b))
   clearable <- filterM (const (frequency [(4, pure True), (1, pure False)])) ps
   prefer <- oneof ([pure Nothing, Just <$> genPos] ++ [Just <$> elements ps | not (null ps)])
   pure (b, prefer, clearable)
@@ -1021,13 +1020,13 @@ genShapeCase = do
 qc_shape_table_matches_legacy :: Property
 qc_shape_table_matches_legacy =
   forAll genShapeCase $ \(b, prefer, clearable) ->
-    let runs = findMatchRunsWith defaultRegistry b
+    let runs = findMatchRunsWith defaultWorld b
         legacy = legacySpawnSpecials prefer runs clearable
     in cover 20 (not (null legacy)) "spawns a special" $
        cover 3 (length legacy >= 2) "spawns two or more" $
        conjoin
-         [ map shapeName (shapeRules defaultRegistry) === ["line5→rainbow", "line4h→line_h", "line4v→line_v"]
-         , spawnSpecialsWith defaultRegistry prefer runs clearable === legacySpawnSpecials prefer runs clearable
+         [ map shapeName (shapeRules defaultWorld) === ["line5→rainbow", "line4h→line_h", "line4v→line_v"]
+         , spawnSpecialsWith defaultWorld prefer runs clearable === legacySpawnSpecials prefer runs clearable
          , spawnByShapes builtinShapeRules prefer runs clearable === legacySpawnSpecials prefer runs clearable
          -- 空表不生成
          , spawnByShapes [] prefer runs clearable === []
@@ -1055,21 +1054,21 @@ qc_combo_table_matches_legacy :: Property
 qc_combo_table_matches_legacy =
   forAll genComboCase $ \(b, p1, p2) ->
     let swapped = swapCells b p1 p2
-        rules = comboRules defaultRegistry
+        rules = comboRules defaultWorld
         legacyOpening =
           listToMaybe ([rainbowClearSeeds swapped p1 p2 | isRainbowSwap b p1 p2] ++ [legacyComboClearSeeds swapped p1 p2 | legacyIsSpecialCombo b p1 p2])
     in cover 5 (legacyIsSpecialCombo b p1 p2) "combo fires" $
        cover 5 (not (null (legacyComboClearSeeds b p1 p2)) && not (legacyIsSpecialCombo b p1 p2)) "kinds match but soft-locked" $
        conjoin
          [ map comboName rules === ["bomb×bomb", "line×line", "line×bomb", "rainbow×line"]
-         , map srOrder (swapRules defaultRegistry) === [10, 15, 20]
-         , map srOrder (elementSwapRules defaultRegistry) === [10, 15]
+         , map srOrder (swapRules defaultWorld) === [10, 15, 20]
+         , map srOrder (elementSwapRules defaultWorld) === [10, 15]
          , comboFires rules b p1 p2 === legacyIsSpecialCombo b p1 p2
          , Combos.isSpecialCombo b p1 p2 === legacyIsSpecialCombo b p1 p2
          , conjoin [comboSeedsFor rules bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]
          , conjoin [Combos.comboClearSeeds bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]
-         , swapOpeningWith defaultRegistry b swapped p1 p2 === legacyOpening
-         , swapFiresWith defaultRegistry b p1 p2 === (isRainbowSwap b p1 p2 || legacyIsSpecialCombo b p1 p2)
+         , swapOpeningWith defaultWorld b swapped p1 p2 === legacyOpening
+         , swapFiresWith defaultWorld b p1 p2 === (isRainbowSwap b p1 p2 || legacyIsSpecialCombo b p1 p2)
          ]
 
 -- | 组合表对称：交换两端（p1 ↔ p2）后，每条规则是否对得上、整张表是否成立不变，清种子的格集合不变。
@@ -1077,7 +1076,7 @@ qc_combo_table_symmetric :: Property
 qc_combo_table_symmetric =
   forAll genComboCase $ \(b, p1, p2) ->
     let swapped = swapCells b p1 p2
-        rules = comboRules defaultRegistry
+        rules = comboRules defaultWorld
         matched r q1 q2 = isJust (comboMatch [r] b q1 q2)
         seedSet bb q1 q2 = sort (nub (comboSeedsFor rules bb q1 q2))
     in conjoin
@@ -1094,13 +1093,13 @@ qc_refill_policy_default_matches_legacy seed =
     let g = mkStdGen seed
         (b0, g0) = legacyRefill g mb
         same (b1, g1) = b1 === b0 .&&. show g1 === show g0
-        builtinPolicy = activeRefill defaultRegistry (builtinHooks [] [])
+        builtinPolicy = activeRefill defaultWorld (builtinHooks [] [])
     in conjoin
          [ same (refillWith defaultRefill g mb)
          , same (refillWith (colorsRefill numColors) g mb)
          , same (refill g mb)
-         , same (refillWith (activeRefill defaultRegistry noHooks) g mb)
+         , same (refillWith (activeRefill defaultWorld noHooks) g mb)
          , same (refillWith builtinPolicy g mb)
          , refillName builtinPolicy === "random-gem"
-         , refillName (refillPolicyWith defaultRegistry) === "random-gem"
+         , refillName (refillPolicyWith defaultWorld) === "random-gem"
          ]

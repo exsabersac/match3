@@ -38,9 +38,9 @@ import Match3.Board.Grid (getCell)
 import Match3.Conveyor (beltMoves)
 import Data.Array (assocs)
 import Data.List (groupBy, nub)
-import Match3.Element.Builtin (defaultRegistry, traceSnails)
+import Match3.Element.Builtin (defaultWorld, traceSnails)
 import Match3.Element.Event
-import Match3.Element.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName, pushableWith)
+import Match3.Element.World (World, activatesWith, blastWith, elementName, endRules, topLayerName, pushableWith)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), runEndRules)
 import Match3.Types
 import Match3.Game.State
@@ -82,12 +82,12 @@ data EndStep = EndStep
 
 -- | 蔓延（内置：藤 → 巧 → 蒸汽）的逐步快照：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
 -- 每条规则产出的非空效果记成一个 EndStep（esAfterWaves = k）。trySwap 与道具用的是同一组调用。
-traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
+traceSpreadsWith :: World -> Int -> Board -> ([EndStep], Board)
 traceSpreadsWith reg = runPhaseSteps reg PhaseSpread (EndCtx [] [] (pushableWith reg))
 
 -- | 依次跑某阶段的步末规则（'runEndRules'），每条非空效果记成插入点 k 的一个 EndStep：返回 (步末记录, 终盘)。
 -- 蔓延（这里）与会走的元素（Match3.Game.EndPhase.runPhase）共用。
-runPhaseSteps :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
+runPhaseSteps :: World -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
 runPhaseSteps reg ph ctx k b0 =
   let (recs, b1) = runEndRules ctx (endRules reg ph) b0
   in ([EndStep k before after e | (before, after, e) <- recs], b1)
@@ -101,14 +101,14 @@ emptyTrace gs = MoveTrace (gsBoard gs) [] (gsBoard gs) [] (gsGen gs) Nothing
 
 -- | 回放脚本 → 效果事件（内置注册表）。
 traceEvents :: MoveTrace -> [Event]
-traceEvents = traceEventsWith defaultRegistry
+traceEvents = traceEventsWith defaultWorld
 
 -- | 回放脚本 → 按时间顺序的效果事件（纯数据，不参与结算）。时间线与 MoveTrace 相同：
 -- 插入点 k 的步末事件（esAfterWaves == k）在第 k 轮之前；自动洗牌在最后。
 -- 轮内事件顺序：特殊块爆炸 → 消除（被消格按 cwCleared 的顺序、连续同名为一组，拼起来即 cwCleared）→
 -- 波及（按最上层元素名分组）→
 -- 底收 → 得分 → 连击（本步第 2 次起有消除的轮）。
-traceEventsWith :: Registry -> MoveTrace -> [Event]
+traceEventsWith :: World -> MoveTrace -> [Event]
 traceEventsWith reg t =
   concat [endsAt k ++ waveEvents k w | (k, w) <- zip [0 ..] waves]
     ++ endsAt (length waves)

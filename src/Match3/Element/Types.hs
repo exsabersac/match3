@@ -1,8 +1,8 @@
--- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数；
+-- | 元素框架的词汇类型：邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数、格子的分派编号（cellSlot）；
 -- 特殊块形状规则（ShapeRule，连同连线 MatchRun）与组合规则（ComboRule）。
--- 元素本身是类型类（Match3.Element.Class 的 Element / Modifier / LevelElement），主流程（匹配、挡交换、
--- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经注册表
--- （Match3.Element.Registry）问它们，不按构造器写死分支。
+-- 元素本身是类型类（Match3.Element.Ability / Kind / Layer；命中结果是 Ability 的 Strike），主流程（匹配、挡交换、
+-- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经元素世界
+-- （Match3.Element.World）问它们，不按构造器写死分支。
 --
 -- 依赖：Match3.Types、Element.Event（步末规则产出 EndEffect）。不含具体元素（见 Element.Builtin）。
 --
@@ -12,8 +12,6 @@
 module Match3.Element.Types
   ( ElementName(..)
   , CustomState(..)
-  , Slot(..)
-  , HitResult(..)
   , AdjCtx(..)
   , AdjOut(..)
   , AdjacentRule(..)
@@ -53,24 +51,6 @@ import Data.Maybe (catMaybes)
 import Match3.Counts (CounterKey(..))
 import Match3.Element.Event (EndEffect)
 import Match3.Types
-
--- | 注册表条目接管格子的哪一层。
-data Slot
-  = SlotCell Int     -- ^ 内置本体（cellSlot 编号；宝石按种类各占一个编号）
-  | SlotOverlay Int  -- ^ 宝石叠层（overlaySlot 编号）
-  | SlotIce          -- ^ 宝石冰层
-  | SlotCustom       -- ^ 自定义本体：Custom 名字 == 元素名
-  | SlotGround       -- ^ 地面层：GameState.gsGround 里名字 == 元素名的格
-  | SlotNone         -- ^ 原型推不出内置槽位（构造器用错）：mkRegistryChecked 报错，mkRegistry 不为它分派
-  deriving (Eq, Show)
-
--- | 直接命中（匹配 / 特殊块 / 道具种子落在本格）时这一层的反应。
-data HitResult
-  = HitPierce       -- ^ 这一层不管，继续问下一层（只对冰层 / 叠层有意义）
-  | HitAbsorb Cell  -- ^ 这一层吃掉命中：格子变成给出的新内容，本格不消除
-  | HitDestroy      -- ^ 本格被消除（进入清除格）
-  | HitImmune       -- ^ 打不动：格子原样，不消除（锤子对它拒绝且不扣次数）
-  deriving (Eq, Show)
 
 -- | 邻格波及的上下文：acTrue = 本轮真消除格；acDirect = 本轮已被直接命中的格（不再重复波及）；
 -- acProtect = 本轮刚生成、必须原样坐住的格（彩蛋开出的特殊块 + 之前各轮次产出的 aoSit）；

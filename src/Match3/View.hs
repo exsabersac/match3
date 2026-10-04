@@ -64,8 +64,8 @@ import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Board.Default (findHint)
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (defaultRegistry, snowBossHp, snowBossName)
-import Match3.Element.Registry (Registry, faceFieldsWith)
+import Match3.Element.Builtin (defaultWorld, snowBossHp, snowBossName)
+import Match3.Element.World (World, faceFieldsWith)
 import Match3.Element.Types (FaceValue (..))
 import Match3.Engine (match3Game)
 import Match3.Game.Outcome (loseHint)
@@ -452,10 +452,10 @@ cellFace cell = case cell of
 -- 内置：雪怪 Boss 的 q（象限 0–3）/ hurt（血量是否过半）/ turn（召唤计数）/ every（召唤周期），变色龙的 c（当前颜色）。
 -- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；桌面按名字读（app/pure/UI/CellFace.hs）。
 cellExtras :: Cell -> [(String, FaceValue)]
-cellExtras = cellExtrasWith defaultRegistry
+cellExtras = cellExtrasWith defaultWorld
 
 -- | 'cellExtras'，用给定的注册表解码（扩展元素）。
-cellExtrasWith :: Registry -> Cell -> [(String, FaceValue)]
+cellExtrasWith :: World -> Cell -> [(String, FaceValue)]
 cellExtrasWith = faceFieldsWith
 
 overlayName :: CellOverlay -> String

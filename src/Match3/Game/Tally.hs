@@ -13,7 +13,7 @@ module Match3.Game.Tally
   ) where
 
 import Match3.Board.Grid (getCell)
-import Match3.Element.Registry (Registry, diffCountersWith, elementName, vacatesCarpetWith, weighElementWith)
+import Match3.Element.World (World, diffCountersWith, elementName, vacatesCarpetWith, weighElementWith)
 import Match3.Element.Types (CounterKey)
 import Match3.Types
 
@@ -26,7 +26,7 @@ data DiffCount = DiffCount
   } deriving (Eq, Show)
 
 -- | 注册表里所有带 diffCounter 的元素，按步前 / 步后盘面算个数差（格子按 diffWeight 加权，缺省每格 1）。
-diffCountsWith :: Registry -> Board -> Board -> [DiffCount]
+diffCountsWith :: World -> Board -> Board -> [DiffCount]
 diffCountsWith reg before after =
   [ DiffCount n k cnt (cnt * bonus)
   | (n, k, bonus) <- diffCountersWith reg
@@ -38,7 +38,7 @@ diffCountsWith reg before after =
 -- 它们离开起始格时不进清除格，不当作覆盖种子的话 GoalCarpet 会漏掉这些格。
 -- 沉降中途才落到地毯上、随后被收走的饼干不在这里：它们的收集位已并入连锁的清除格（见 settleBoardPortalsWith）。
 -- 比较的是步前盘面与步后终盘（蜗牛与后续连锁之后）。
-carpetVacateSeedsWith :: Registry -> Board -> Board -> [Pos]
+carpetVacateSeedsWith :: World -> Board -> Board -> [Pos]
 carpetVacateSeedsWith reg before after =
   [ p
   | p <- boardPositions before

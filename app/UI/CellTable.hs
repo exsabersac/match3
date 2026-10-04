@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | 单格绘制的元素查表（第三刀）：键 = 规则层注册表的元素名（elementName defaultRegistry），
+-- | 单格绘制的元素查表（第三刀）：键 = 规则层注册表的元素名（elementName defaultWorld），
 -- 值 = 同一元素的两个渲染后端 —— 几何降级版（UI.Cell.Prim）与贴图版（UI.Cell.Art）——
 -- 以及它的主贴图名（缺图检测用）。UI.BoardPrim.drawGemAt 与 UI.BoardArt.drawCellArt 都经这张表分派。
 --
@@ -8,7 +8,7 @@
 -- customTable（段 5：气泡），查不到走自定义渲染器；cellTable 里查不到的名字也退回自定义渲染器（它只画 Custom 格，其它格为空）。
 -- 新增棋盘元素：在 UI.Cell.Prim / UI.Cell.Art 各写一个函数，在这里加一行。
 --
--- 依赖：UI.Cell.Prim、UI.Cell.Art、Art、Match3.Core（含元素名 elementName / defaultRegistry）。
+-- 依赖：UI.Cell.Prim、UI.Cell.Art、Art、Match3.Core（含元素名 elementName / defaultWorld）。
 module UI.CellTable
   ( CellRenderer(..)
   , cellTable
@@ -88,7 +88,7 @@ customTable =
 cellRenderer :: Cell -> CellRenderer
 cellRenderer cell = case cell of
   Custom n _ -> fromMaybe customRenderer (lookup n customTable)
-  _ -> fromMaybe customRenderer (lookup (elementName defaultRegistry cell) cellTable)
+  _ -> fromMaybe customRenderer (lookup (elementName defaultWorld cell) cellTable)
 
 -- | 该格的主贴图名（用于检测资源缺失时逐格回退）。
 primarySprite :: Cell -> String

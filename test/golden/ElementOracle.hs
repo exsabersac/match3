@@ -116,7 +116,7 @@ allPos = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
 boardText :: Board -> String
 boardText b = show (map (getCell b) allPos)
 
-valueLine :: Registry -> Cell -> String
+valueLine :: World -> Cell -> String
 valueLine reg cell =
   "V " ++ show cell ++ " | "
     ++ unwords
@@ -128,7 +128,7 @@ valueLine reg cell =
       , show (fallsWith reg cell)
       , show (portalWith reg cell)
       , show (drainEdgesWith reg cell)
-      , show (directHitWith reg cell)
+      , "Hit" ++ show (directHitWith reg cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
       , show (hitImmuneWith reg cell)
       , show (counterWith reg cell)
       , show (vacatesCarpetWith reg cell)
@@ -147,17 +147,17 @@ valueLine reg cell =
       , show (swapBlockedWith reg (setCell base (2, 2) cell) (2, 2) (2, 3))
       ]
 
-names :: Registry -> [ElementName]
-names reg = map entryName (registryDefs reg)
+names :: World -> [ElementName]
+names reg = map defName (worldDefs reg)
 
-nameLines :: Registry -> [String]
+nameLines :: World -> [String]
 nameLines reg =
   [ "N " ++ show n ++ " " ++ show (displayLabelWith reg n) ++ " " ++ show (fmap ($ 7) (loseHintWith reg n))
   | n <- names reg ++ ["unregistered", "ufo"]
   ]
     ++ ["N labels " ++ show (displayLabels reg), "N diff " ++ show (diffCountersWith reg)]
 
-placeLines :: Registry -> [String]
+placeLines :: World -> [String]
 placeLines reg =
   [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ either show (show . (`getCell` (4, 4))) (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])
   | n <- names reg ++ ["unregistered"]
@@ -236,7 +236,7 @@ ruleSummary f =
 adjOutText :: Board -> AdjOut -> (Bool, String)
 adjOutText b0 out = (aoBoard out /= b0 || not (null (aoDead out)) || not (null (aoSit out)), show (boardText (aoBoard out), aoDead out, aoSit out))
 
-ruleLines :: Registry -> [String]
+ruleLines :: World -> [String]
 ruleLines reg =
   [ "AR " ++ show i ++ " " ++ show (arOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (arRun r (AdjCtx (smTrue s) (smDirect s) (smProtect s) (recolorableWith reg)) (smBoard s)))
   | (i, r) <- zip [0 :: Int ..] (adjacentRules reg)
@@ -270,8 +270,8 @@ ruleLines reg =
       _ -> False
 
 oracleLines :: [String]
-oracleLines = oracleLinesWith defaultRegistry
+oracleLines = oracleLinesWith defaultWorld
 
 -- | 同一套投影，换一张注册表（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
-oracleLinesWith :: Registry -> [String]
+oracleLinesWith :: World -> [String]
 oracleLinesWith reg = map (valueLine reg) valueCells ++ nameLines reg ++ placeLines reg ++ ruleLines reg

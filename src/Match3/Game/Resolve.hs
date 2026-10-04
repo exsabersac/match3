@@ -47,11 +47,11 @@ import Match3.Board.Cascade
   , cascadeMatchesWith
   , cascadeSeedsWith
   )
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Phase (IsFull, Phase(..), Stage, stageBoard)
-import Match3.Element.Level (coverIn, hitGroundIn, judgeIn, levelHooksWith, levelRegistryIn)
-import Match3.Element.Registry (Registry)
+import Match3.Element.Level (coverIn, hitGroundIn, judgeIn, levelHooksWith, levelWorldIn)
+import Match3.Element.World (World)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
 import Match3.Game.EndPhase (EndStage, boosterEndTable, runEndTable, swapEndTable)
 import Match3.Types
@@ -127,19 +127,19 @@ combineCombo (t0 : ts) = foldl step (ctMaxWave t0) ts
 resolveMove
   :: IsFull (StartPhase k)
   => SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
-resolveMove = resolveMoveWith defaultRegistry
+resolveMove = resolveMoveWith defaultWorld
 
 -- | 公共结算（指定注册表）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
 -- 三个参数的类型都由同一个 k 决定：操作种类、起手盘面的阶段、起手方式必须彼此吻合。
 -- 约束 IsFull (StartPhase k) 在调用处 k 已知时自动成立（起手阶段只有 'Swapped / 'Full，都是满盘）。
 resolveMoveWith
   :: IsFull (StartPhase k)
-  => Registry -> SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
+  => World -> SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
 resolveMoveWith reg0 sk startS opening gs =
   let kind = moveKind sk
       start = stageBoard startS
       -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
-      reg = levelRegistryIn reg0 (gsLevelElems gs)
+      reg = levelWorldIn reg0 (gsLevelElems gs)
       hooks0 = levelHooksWith reg (gsLevelElems gs)
       -- 变身起手（OpenMorph）：第一轮之前先把变身写进盘面，并记一条 esAfterWaves = 0 的步末效果
       (startW, preEnds) = case opening of

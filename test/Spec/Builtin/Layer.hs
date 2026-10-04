@@ -17,7 +17,7 @@ import Match3.Board.Default
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard))
 import Match3.Core
 import Match3.Board.Grid (setCell)
-import Match3.Element.Registry (swapBlockedWith)
+import Match3.Element.World (swapBlockedWith)
 import Match3.Game.Boosters (useFreeSwap, useHammer)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
@@ -480,7 +480,7 @@ chain_blocks_swap = do
   out @?= NoMatch
   gsBoard gs1 @?= gsBoard gs0
   gsMoves gs1 @?= gsMoves gs0
-  assertBool "swapBlocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
+  assertBool "swapBlocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
 
 chain_cleared_by_adjacent :: Assertion
 chain_cleared_by_adjacent = do
@@ -543,7 +543,7 @@ freeze_blocks_swap :: Assertion
 freeze_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkFreezeGem C2 1)
   assertBool "has freeze" (hasFreeze (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
   -- Frozen gem CAN still participate in matches (unlike Chain)
   let boardM =
         setCell
@@ -791,7 +791,7 @@ curtain_allows_swap_blocks_match = do
           (5, 4)
           (mkGem C2)
   assertBool "curtain does not block swap" $
-    not (swapBlockedWith defaultRegistry board (5, 3) (5, 2))
+    not (swapBlockedWith defaultWorld board (5, 3) (5, 2))
   assertBool "no H match through curtain" $
     not ((5, 2) `elem` findMatches board)
       && not ((5, 3) `elem` findMatches board)
@@ -816,7 +816,7 @@ freeze_blocks_freeswap_and_swap = do
           , gsMoves = 10
           , gsFreeSwaps = 2
           })
-  assertBool "swapBlocked" (swapBlockedWith defaultRegistry board (2, 2) (2, 3))
+  assertBool "swapBlocked" (swapBlockedWith defaultWorld board (2, 2) (2, 3))
   let (gs1, out1) = trySwap (2, 2) (2, 3) gs0
   assertEqual "trySwap NoMatch" NoMatch out1
   assertEqual "moves kept" (gsMoves gs0) (gsMoves gs1)

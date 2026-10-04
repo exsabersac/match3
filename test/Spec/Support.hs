@@ -61,14 +61,14 @@ import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
 import Match3.Board.Grid (inBounds, setCell, swapCells)
-import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
+import Match3.Element (Def, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
 import Match3.Element.Ability (Cellular(..), Countable(counter), Fixed(..), Hittable(fires, struck), Matchable, Movable, Renders, Strike(..))
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), startHistory)
-import Match3.Element.Registry (Registry, swapBlockedWith)
+import Match3.Element.World (World, swapBlockedWith)
 import qualified Match3.Engine as M3E
 import Test.Tasty.HUnit
 import Spec.Support.Inventory
@@ -145,7 +145,7 @@ findMatchPair b =
     (p : _) -> Just p
     [] -> Nothing
   where
-    accepted (p1, p2) = not (swapBlockedWith defaultRegistry b p1 p2) && hasAnyMatch (swapCells b p1 p2)
+    accepted (p1, p2) = not (swapBlockedWith defaultWorld b p1 p2) && hasAnyMatch (swapCells b p1 p2)
 
 -- | 旧版 'findMatchPair'（不查能否交换），只给回归测试对照用。
 findMatchPairNaive :: Board -> Maybe (Pos, Pos)
@@ -378,7 +378,7 @@ crateAdjacent ctx b =
       (b', dead') = foldl bump (b, []) targets
   in AdjOut b' dead' []
 
-crateDef :: Entry
+crateDef :: Def
 crateDef = kindDef @Crate
 
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
@@ -395,7 +395,7 @@ cratesOn b = [(p, cell) | p <- allPos, let cell = getCell b p, isCustom cell]
 
 -- | 撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith reg 执行一个动作，
 -- 再执行 Undo，返回撤销后的状态；走步或撤销被拒时 Nothing。
-stepThenUndo :: Registry -> GameState -> M3E.Action -> Maybe GameState
+stepThenUndo :: World -> GameState -> M3E.Action -> Maybe GameState
 stepThenUndo reg gs act =
   let g = M3E.match3ShellWith reg
       s1 = gameStep g (startHistory gs) (Act act)

@@ -11,7 +11,7 @@
 -- 步骤清单见 docs/architecture.md「元素框架与事件」。
 module Match3.Element
   ( module Match3.Element.Types
-  , module Match3.Element.Registry
+  , module Match3.Element.World
   , module Match3.Element.Builtin
   , module Match3.Element.Event
   , module Match3.Element.Level
@@ -23,6 +23,6 @@ import Match3.Board.Refill
 import Match3.Element.Builtin
 import Match3.Element.Event
 import Match3.Element.Level
-import Match3.Element.Registry
+import Match3.Element.World
 import Match3.Element.Special
 import Match3.Element.Types

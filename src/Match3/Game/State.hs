@@ -49,10 +49,10 @@ import Data.Maybe (isJust)
 import Engine.Optics (Lens', lens)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
+import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultWorld)
 import Match3.Element.Class (LevelElement, SomeLevelElement, fromLevelElement)
 import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
-import Match3.Element.Registry (Registry)
+import Match3.Element.World (World)
 import Match3.Ufo (Ufo(..))
 import Match3.Conveyor (Belt)
 import Match3.Types
@@ -297,10 +297,10 @@ moveFx before after out
 
 -- | 计算一手可走的交换并记在 gsHint（不改盘面）。
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))
-applyHint = applyHintWith defaultRegistry
+applyHint = applyHintWith defaultWorld
 
 -- | applyHint（指定注册表）：可走判定用这张表里的挡交换 / 匹配色定义。
-applyHintWith :: Registry -> GameState -> (GameState, Maybe (Pos, Pos))
+applyHintWith :: World -> GameState -> (GameState, Maybe (Pos, Pos))
 applyHintWith reg gs =
   let h = findHintWith reg (gsBoard gs)
   in (gs { gsHint = h }, h)

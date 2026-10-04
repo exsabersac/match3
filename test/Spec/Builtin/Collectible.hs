@@ -10,7 +10,7 @@ import Match3.Board.Default (cascadeSeeds, findMatches, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Board.Grid (setCell)
 import Match3.Core
-import Match3.Element.Registry (swapBlockedWith)
+import Match3.Element.World (swapBlockedWith)
 import Match3.Game.Boosters (useHammer)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
@@ -42,7 +42,7 @@ tests =
 cookie_blocks_swap :: Assertion
 cookie_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkCookie
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
   assertBool "is cookie" (isCookie (getCell board (3, 3)))
 
 cookie_falls_with_gravity :: Assertion
@@ -101,7 +101,7 @@ time_spirit_blocks_swap :: Assertion
 time_spirit_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkTimeSpirit
   assertBool "is spirit" (isTimeSpirit (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
 
 time_spirit_awards_moves :: Assertion
 time_spirit_awards_moves = do

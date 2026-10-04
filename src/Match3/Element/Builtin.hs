@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
--- | 内置元素的汇总：注册表条目表 'builtinDefs'、关卡级元素表 'builtinLevelDefs' 与 'defaultRegistry'。
+-- | 内置元素的汇总：注册表条目表 'builtinDefs'、关卡级元素表 'builtinLevelDefs' 与 'defaultWorld'。
 --
 -- 每种元素一个类型 + 值级能力 instance（Match3.Element.Ability）+ 一个类型级 instance（本体 'Kind' /
 -- 叠层 'Layer' / 地面层 'GroundKind'；关卡级元素 LevelElement），xmonad LayoutClass 风格，
@@ -24,7 +24,7 @@
 -- 蜗牛 10 → 毛球 20 → 雪怪 30 → 变色龙 40（PhaseMove）。
 -- 成对交换：彩虹取色 10 → 彩虹 × 变色龙 15（新玩法 7）→ 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级元素（飞碟 / 皮带 / 传送门 / 地毯）按消息回复流水线节拍。
 module Match3.Element.Builtin
-  ( defaultRegistry
+  ( defaultWorld
   , builtinDefs
   , builtinLevelDefs
   , builtinShapeRules
@@ -86,16 +86,16 @@ import Match3.Element.Builtin.Level
 import Match3.Element.Builtin.Obstacle
 import Match3.Element.Class (SomeLevelElement(..))
 import Match3.Combos (builtinComboRules)
-import Match3.Element.Registry (Registry, mkRegistry, registerLevel, setComboRules, setShapeRules)
+import Match3.Element.World (World, mkWorld, registerLevel, setComboRules, setShapeRules)
 import Match3.Element.World (Def, groundDef, kindDef, layerDef)
 import Match3.Types (GemKind(..))
 
 -- | 内置注册表：全部内置元素 + 内置规则表（第 8 刀：形状规则 builtinShapeRules、组合表 builtinComboRules；
--- 补子策略是 mkRegistry 的缺省 defaultRefill）。主流程的旧函数名（不带 With）都用它。
-defaultRegistry :: Registry
-defaultRegistry =
+-- 补子策略是 mkWorld 的缺省 defaultRefill）。主流程的旧函数名（不带 With）都用它。
+defaultWorld :: World
+defaultWorld =
   setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-    foldl (flip registerLevel) (mkRegistry builtinDefs) builtinLevelDefs
+    foldl (flip registerLevel) (mkWorld builtinDefs) builtinLevelDefs
 
 -- | 全部内置元素（注册顺序 = 文档里的清单顺序，也是元素查询快照 R 行锁定的顺序；与分组无关，不要重排）：
 -- 只是一张类型列表（解码、放置、规则都是各类型的 instance 方法）。

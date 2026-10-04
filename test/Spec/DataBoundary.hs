@@ -37,7 +37,7 @@ import Data.Foldable (toList)
 import Data.List (isInfixOf, isPrefixOf, nub, sort, tails)
 import Engine.Effect (Effect (..), beats)
 import Match3.Core
-import Match3.Element.Registry (elementOf, placeWith, registryDefs, registryWorld, topLayerName)
+import Match3.Element.World (elementOf, placeWith, worldDefs, topLayerName)
 import Match3.Types (goalScore)
 import Match3.Ufo (mkUfo)
 import Match3.View (cellFace)
@@ -170,7 +170,7 @@ argp_placers_pinned = do
         sequence_ [assertEqual (show (n, args, cell)) e a | ((cell, args), e, a) <- zip3 inputs expected actual]
     | (n, expected) <- pinnedPlacements
     , let inputs = [(cell, args) | cell <- argpCells, args <- argpArgs]
-          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultRegistry (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
+          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultWorld (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
     ]
 
 -- | argp_placers_pinned 的期望（由现实现生成，生成时与删除前的手写 case 副本核对过）。
@@ -345,11 +345,11 @@ generic_generators_cover_constructors = do
 generic_every_constructor_has_registry_face_and_ui :: Assertion
 generic_every_constructor_has_registry_face_and_ui = do
   cells <- cellSamples
-  let reg = defaultRegistry
-      entries = registryDefs reg
+  let reg = defaultWorld
+      entries = worldDefs reg
       kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- entries, kindName p == n]
       layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- entries, layerName p == n]
-      inner = snd . decodeLayers (registryWorld reg)
+      inner = snd . decodeLayers reg
       customNames = [kindName p | KindDef (SomeKind p) <- entries, any (\k -> isJust (fromCellAs p (Custom (kindName p) (CustomState k)))) [0 .. 20]]
       reps = representatives ([c | c <- cells, notUnregistered c] ++ [Custom n (CustomState 0) | n <- customNames])
       notUnregistered c = case c of

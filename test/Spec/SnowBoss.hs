@@ -15,7 +15,7 @@ import Match3.Board.Match (findHintWith)
 import Match3.Counts (countOf, countsFromList)
 import Match3.Element
   ( Arg(..)
-  , HitResult(..)
+  , Strike(..)
   , blocksSwapWith
   , builtinDefs
   , builtinLevelDefs
@@ -36,7 +36,7 @@ import Data.Proxy (Proxy(..))
 import Match3.Element.Ability (Countable(diffWeight), toCell)
 import Match3.Element.Kind (Kind(diffCounter))
 import Match3.Element.Event (EventKind(..))
-import Match3.Element.Registry (Registry, countElementWith, entryName, mkRegistry, placeWith, registerLevel, setComboRules, setShapeRules, weighElementWith)
+import Match3.Element.World (World, countElementWith, defName, mkWorld, placeWith, registerLevel, setComboRules, setShapeRules, weighElementWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
@@ -86,7 +86,7 @@ hpOf b = [sbHp s | (_, s) <- snowBosses b]
 -- | 能力：固定（挡交换、不下落）、无色、洗牌保留；直接命中原样吃掉（不免疫，锤子可打）；左上格按血量加权计差。
 sb_caps_fixed_blocker :: Assertion
 sb_caps_fixed_blocker = do
-  let reg = defaultRegistry
+  let reg = defaultWorld
   mapM_
     ( \q -> do
         let c = boss 12 1 q
@@ -94,7 +94,7 @@ sb_caps_fixed_blocker = do
         assertBool "does not fall" (not (fallsWith reg c))
         assertEqual "colorless" Nothing (colorOfWith reg c)
         assertBool "kept on shuffle" (keepOnShuffleWith reg c)
-        assertEqual "hit absorbed as itself" (HitAbsorb c) (directHitWith reg c)
+        assertEqual "hit absorbed as itself" (Absorb c) (directHitWith reg c)
     )
     [0 .. 3]
   assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [diffWeight (SnowBoss 12 40 1 q) | q <- [0 .. 3]]
@@ -105,7 +105,7 @@ sb_caps_fixed_blocker = do
 -- | 放置参数 [血量, 象限]；第 45 关开局四格在 (2,3)–(3,4)、满血 = 目标值；其余内置元素的差计权重都是 1。
 sb_placement_and_weight :: Assertion
 sb_placement_and_weight = do
-  let reg = defaultRegistry
+  let reg = defaultWorld
       placed args = fmap (\b -> getCell b (4, 4)) (placeWith reg "snow_boss" args stableBoard [(4, 4)])
   assertEqual "place [40, 2]" (Just (boss 40 0 2)) (either (const Nothing) Just (placed [AInt 40, AInt 2]))
   assertEqual "bad args: cell unchanged" [] [a | a <- [[], [AInt 40], [AInt 0, AInt 0], [AInt 5, AInt 4]], placed a /= Right (getCell stableBoard (4, 4))]
@@ -136,16 +136,16 @@ sb_placement_and_weight = do
 sb_adjacent_and_direct_damage :: Assertion
 sb_adjacent_and_direct_damage = do
   let b0 = bossBoard 10
-      (b1, dead1, _) = runAdjacentWith defaultRegistry [(1, 3), (1, 4), (4, 4), (1, 2), (5, 5)] [] [] b0
+      (b1, dead1, _) = runAdjacentWith defaultWorld [(1, 3), (1, 4), (4, 4), (1, 2), (5, 5)] [] [] b0
   assertEqual "3 ring clears -> 7" [7] (hpOf b1)
   assertEqual "all four cells share hp" [boss 7 0 q | q <- [0 .. 3]] (map (getCell b1) body)
   assertEqual "nothing dies" [] (filter (`elem` body) dead1)
-  let (b2, _, _) = runAdjacentWith defaultRegistry [(2, 2)] [(2, 3), (3, 3), (2, 2)] [] b0
+  let (b2, _, _) = runAdjacentWith defaultWorld [(2, 2)] [(2, 3), (3, 3), (2, 2)] [] b0
   assertEqual "1 ring clear + 2 direct -> 7" [7] (hpOf b2)
-  let (b3, dead3, _) = runAdjacentWith defaultRegistry ring [] [] (bossBoard 5)
+  let (b3, dead3, _) = runAdjacentWith defaultWorld ring [] [] (bossBoard 5)
   assertEqual "defeated: all four cells cleared" (sort body) (sort (filter (`elem` body) dead3))
   assertEqual "cells untouched until cleared (hp not rewritten)" (map (getCell (bossBoard 5)) body) (map (getCell b3) body)
-  let (b4, dead4, _) = runAdjacentWith defaultRegistry [(0, 0), (7, 7)] [] [] b0
+  let (b4, dead4, _) = runAdjacentWith defaultWorld [(0, 0), (7, 7)] [] [] b0
   assertEqual "far clears: no change" b0 b4
   assertEqual "far clears: no dead" [] (filter (`elem` body) dead4)
 
@@ -154,13 +154,13 @@ sb_hammer_and_defeat_wins :: Assertion
 sb_hammer_and_defeat_wins = do
   let gs0 = levelGame bossLevel 1
   assertBool "has hammers" (gsHammers gs0 > 0)
-  let (gs1, o1, _) = resolveHammerWith defaultRegistry (3, 4) gs0
+  let (gs1, o1, _) = resolveHammerWith defaultWorld (3, 4) gs0
   assertBool "hammer accepted" (o1 `notElem` [NoMatch, InvalidSwap])
   assertEqual "hp 39" 39 (snowBossHp (gsBoard gs1))
   assertEqual "counted 1" 1 (countOf (CountNamed "snow_boss") (gsCounts gs1))
   assertEqual "boss stays in place" body (sort (customsOn "snow_boss" (gsBoard gs1)))
   let gsLow = gs0 {gsBoard = setCells (gsBoard gs0) [(p, boss 1 0 q) | (q, p) <- zip [0 ..] body], gsCounts = countsFromList [(CountNamed "snow_boss", 39)]}
-      (gs2, o2, mt) = resolveHammerWith defaultRegistry (2, 3) gsLow
+      (gs2, o2, mt) = resolveHammerWith defaultWorld (2, 3) gsLow
   assertEqual "boss gone" [] (customsOn "snow_boss" (gsBoard gs2))
   assertEqual "counted to 40" 40 (countOf (CountNamed "snow_boss") (gsCounts gs2))
   assertEqual "hud bar after hammer" (Just (BossView 39 40)) (gvBoss (gameView gs1))
@@ -173,8 +173,8 @@ sb_hammer_and_defeat_wins = do
 sb_step_end_summons_snow :: Assertion
 sb_step_end_summons_snow = do
   let gs0 = levelGame bossLevel 2
-      stepHint gs = case findHintWith defaultRegistry (gsBoard gs) of
-        Just (p, q) -> resolveSwapWith defaultRegistry p q gs
+      stepHint gs = case findHintWith defaultWorld (gsBoard gs) of
+        Just (p, q) -> resolveSwapWith defaultWorld p q gs
         Nothing -> error "no hint"
       (gs1, _, mt1) = stepHint gs0
       (gs2, _, mt2) = stepHint gs1
@@ -197,7 +197,7 @@ sb_step_end_summons_snow = do
   assertBool "snow on the ring" (all (`elem` ring) snow)
   mapM_ (\es -> assertEqual "summon choice is deterministic" (snowBossSpawn [] [] (esBefore es) anchor) (snowBossSpawn [] [] (esBefore es) anchor)) (bossSteps mt3)
   assertEqual "no snow on steps 1-2" [] [it | mt <- [mt1, mt2], es <- bossSteps mt, it <- endEffectItems (esEffect es), eiCell it == Stone 1]
-  let (gsH, _, mtH) = resolveHammerWith defaultRegistry (7, 0) gs1
+  let (gsH, _, mtH) = resolveHammerWith defaultWorld (7, 0) gs1
   assertEqual "hammer: no boss end step" [] (bossSteps mtH)
   assertEqual "hammer: counter unchanged" (turns gs1) (turns gsH)
   -- 无候选（身外一圈都不是普通宝石）：不召唤
@@ -208,9 +208,9 @@ sb_step_end_summons_snow = do
 -- | 去掉雪怪条目的注册表：前 44 关按提示各走 6 步，盘面、分数、计数与随机种子逐一相同；原有关卡开局没有 Boss。
 sb_other_levels_unchanged :: Assertion
 sb_other_levels_unchanged = do
-  let noBoss :: Registry
+  let noBoss :: World
       noBoss = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-        foldl (flip registerLevel) (mkRegistry (filter ((/= "snow_boss") . entryName) builtinDefs)) builtinLevelDefs
+        foldl (flip registerLevel) (mkWorld (filter ((/= "snow_boss") . defName) builtinDefs)) builtinLevelDefs
       play reg gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
         | otherwise = case findHintWith reg (gsBoard gs) of
@@ -219,7 +219,7 @@ sb_other_levels_unchanged = do
       key gs = (gsBoard gs, gsScore gs, gsCounts gs, gsMoves gs, show (gsGen gs))
   assertEqual "older levels have none" [] [li | li <- [0 .. bossLevel - 1], not (null (customsOn "snow_boss" (gsBoard (levelGame li 1))))]
   mapM_
-    (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noBoss (levelGame li 3) 6)) (key (play defaultRegistry (levelGame li 3) 6)))
+    (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noBoss (levelGame li 3) 6)) (key (play defaultWorld (levelGame li 3) 6)))
     [0 .. bossLevel - 1]
 
 -- | 第 45 关：种子 1–6 按提示走满 24 步：Boss 始终在原位（活着时）、每局都扣过血且计数 = 扣掉的血、召唤过雪块、
@@ -228,10 +228,10 @@ sb_level45_layout_and_play :: Assertion
 sb_level45_layout_and_play = do
   let play gs n acc
         | n <= (0 :: Int) || gsOver gs /= Nothing = pure (gs, acc)
-        | otherwise = case findHintWith defaultRegistry (gsBoard gs) of
+        | otherwise = case findHintWith defaultWorld (gsBoard gs) of
             Nothing -> pure (gs, acc)
             Just (p, q) -> do
-              let (gs', _, mt) = resolveSwapWith defaultRegistry p q gs
+              let (gs', _, mt) = resolveSwapWith defaultWorld p q gs
               _ <- replayTimeline "level 45" mt
               let alive = customsOn "snow_boss" (gsBoard gs')
               assertBool "boss stays put while alive" (null alive || sort alive == body)
@@ -251,7 +251,7 @@ sb_level45_layout_and_play = do
         | otherwise =
             case [ (snowBossHp (gsBoard g'), negate (gsScore g'), i, g')
                  | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], fst d >= 0 && fst d < boardSize && snd d >= 0 && snd d < boardSize]
-                 , let (g', o, _) = resolveSwapWith defaultRegistry p q gs
+                 , let (g', o, _) = resolveSwapWith defaultWorld p q gs
                  , o `notElem` [NoMatch, InvalidSwap] ] of
               [] -> gs
               cs -> let (_, _, _, g') = minimum4 cs in greedy g'

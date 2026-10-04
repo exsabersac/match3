@@ -86,7 +86,6 @@ executable match3-web
     Match3.Carpet
     Match3.Element
     Match3.Element.Types
-    Match3.Element.Registry
     Match3.Element.Rules
     Match3.Element.Special
     Match3.Element.Builtin

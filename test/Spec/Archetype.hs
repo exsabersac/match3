@@ -160,7 +160,7 @@ instance Kind Thorn where
 
 archetype_ext_element_plugs_in :: Assertion
 archetype_ext_element_plugs_in = do
-  let reg = register (kindDef @Thorn) defaultRegistry
+  let reg = register (kindDef @Thorn) defaultWorld
       p = (3, 3)
       thorn = Custom "thorn" (CustomState 2)
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "thorn") 1)) 1) {gsBoard = setCell stableBoard p thorn, gsHammers = 5}
@@ -172,7 +172,7 @@ archetype_ext_element_plugs_in = do
   assertEqual "first hit chips it" (Custom "thorn" (CustomState 1)) (getCell (gsBoard gs1) p)
   assertBool "second hit breaks it" (not (isThorn (getCell (gsBoard gs2) p)))
   assertEqual "counted by name" [("thorn", 1)] (namedCounts (gsCounts gs2))
-  assertEqual "unknown to the default registry" (Just (Inert "thorn" thorn)) (fromElement (bodyOf defaultRegistry thorn))
+  assertEqual "unknown to the default registry" (Just (Inert "thorn" thorn)) (fromElement (bodyOf defaultWorld thorn))
   where
     isThorn c = case c of
       Custom "thorn" _ -> True

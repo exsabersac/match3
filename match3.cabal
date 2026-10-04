@@ -84,7 +84,6 @@ library
       Match3.Carpet
       Match3.Element
       Match3.Element.Types
-      Match3.Element.Registry
       Match3.Element.Rules
       Match3.Element.Special
       Match3.Element.Builtin
@@ -309,7 +308,6 @@ test-suite match3-test
       Match3.Element.Layer
       Match3.Element.Level
       Match3.Element.Message
-      Match3.Element.Registry
       Match3.Element.Rules
       Match3.Element.Special
       Match3.Element.Types

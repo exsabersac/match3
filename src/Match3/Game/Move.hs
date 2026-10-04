@@ -17,10 +17,10 @@ import Match3.Board.Grid (inBounds, adjacent)
 import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Board.Phase (fullStage, stageBoard, swapStage)
 import Data.Maybe (isNothing)
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Element.Level (morphIn)
 import Match3.Element.Message (Morph(..))
-import Match3.Element.Registry (Registry, swapBlockedWith, swapOpeningWith)
+import Match3.Element.World (World, swapBlockedWith, swapOpeningWith)
 import Match3.Types
 import Match3.Game.Resolve
 import Match3.Game.State
@@ -30,10 +30,10 @@ import Match3.Game.Trace
 -- 拒绝路径：已结束原样返回；越界 / 不相邻 → InvalidSwap；挡交换 / 交换后无匹配 → NoMatch 回滚。
 -- 拒绝时清零 gsCombo / gsLastCleared（clearMoveFx / rejectMove），回放脚本为空。
 resolveSwap :: Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveSwap = resolveSwapWith defaultRegistry
+resolveSwap = resolveSwapWith defaultWorld
 
 -- | resolveSwap（指定注册表）：挡交换、成消判定与结算都查这张表。
-resolveSwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
+resolveSwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveSwapWith reg p1 p2 gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
@@ -63,7 +63,7 @@ trySwap :: Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwap p1 p2 gs = let (g, o, _) = resolveSwap p1 p2 gs in (g, o)
 
 -- | trySwap（指定注册表；测试专用元素经此接入）。
-trySwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcome)
+trySwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome)
 trySwapWith reg p1 p2 gs = let (g, o, _) = resolveSwapWith reg p1 p2 gs in (g, o)
 
 -- | trySwap 的别名（冻结 API）。

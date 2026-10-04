@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（tripleBoard / tripleMove / allPos / isWin / firstWave / firstLevel …），
 -- 以及固定例子测试用的指纹 'digest'。
@@ -59,8 +61,9 @@ import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
 import Match3.Board.Grid (inBounds, setCell, swapCells)
-import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), customEntry)
-import Match3.Element.Caps (Element(..), Hit(..), SomeElement(..), counts, fixed, hit, onAdjacent)
+import Match3.Element (Entry, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
+import Match3.Element.Ability (Cellular(..), Countable(counter), Fixed(..), Hittable(fires, struck), Matchable, Movable, Renders, Strike(..))
+import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
@@ -340,12 +343,25 @@ checkEffectDetail tag e = case endEffectKind eff of
 -- （并入清除格，计数 CountNamed "crate"）；直接命中（锤子 / 爆炸）同样 -1 / 碎。状态（耐久）在元素值里。
 newtype Crate = Crate Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Fixed Crate)
 
-instance Element Crate where
-  name _ = "crate"
-  toCell (Crate n) = Custom "crate" (CustomState n)
-  caps (Crate n) =
-    fixed [hit (if n <= 1 then Destroy else Absorb (SomeElement (Crate (n - 1)))), onAdjacent 200 crateAdjacent, counts (CountNamed "crate")]
+instance Cellular Crate where
+  nameOf _ = "crate"
+
+instance Hittable Crate where
+  struck (Crate n) = if n <= 1 then Destroy else Absorb (toCell (Crate (n - 1)))
+  fires _ = False
+
+instance Countable Crate where
+  counter _ = Just (CountNamed "crate")
+
+instance Renders Crate
+
+instance Kind Crate where
+  kindName _ = "crate"
+  fromCell = fromCustom "crate" Crate
+  place _ = customPlace "crate"
+  boardPasses _ = [AdjacentPass 200 crateAdjacent]
 
 -- | 木箱的邻格规则：真消除格的正交邻格里的木箱（直接命中格除外）耐久 -1，耐久 1 的碎掉。
 crateAdjacent :: AdjCtx -> Board -> AdjOut
@@ -363,7 +379,7 @@ crateAdjacent ctx b =
   in AdjOut b' dead' []
 
 crateDef :: Entry
-crateDef = customEntry (Crate 1) (Crate . unCustomState)
+crateDef = kindDef @Crate
 
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
 crateBoard :: Int -> Board

@@ -86,7 +86,11 @@ import Match3.Counts
   , plusCounts
   )
 import Match3.Element
-import Match3.Element.Class (levelNameOf, toCell)
+import Match3.Element.Ability (toCell)
+import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
+import Match3.Element.Layer (Layer(layerName), SomeLayer(..), layerValueName, peelAs)
+import Match3.Element.World (Def(..), decodeLayers)
+import Match3.Element.Class (levelNameOf)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
@@ -590,43 +594,48 @@ qc_goal_progress_bounded =
 --------------------------------------------------------------------------------
 -- 元素注册表
 
--- | 解码往返：任意格解码成元素值（修饰器包着本体）再编码回去，得到原格；本体的元素名落在注册表的条目上，
--- 且条目的槽位与格子的编号一致（内置本体 = SlotCell (cellSlot 格)，已注册的自定义 = SlotCustom），
--- 最上层的叠层 / 冰层同样落在槽位一致的条目上。未注册的自定义名字解码成惰性占格，编码仍是原格。
+-- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在注册表的本体条目上、
+-- 且那个种类的 fromCell 认这个（拆掉叠层后的）格子；最上层的叠层 / 冰层同样落在 peel 认这个格子的叠层条目上。
+-- 未注册的自定义名字解码成惰性占格（名字照旧），编码仍是原格。
 qc_registry_decode_roundtrip :: Property
 qc_registry_decode_roundtrip =
   forAll genCell $ \cell ->
     let reg = defaultRegistry
-        entries = registryDefs reg
-        slotOf n = [entrySlot e | e <- entries, entryName e == n]
+        w = registryWorld reg
+        defs = registryDefs reg
+        (layers, inner) = decodeLayers w cell
+        kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- defs, kindName p == n]
+        layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- defs, layerName p == n]
         bodyName = elementName reg cell
-        bodyOk = case cell of
+        bodyOk = case inner of
           Custom n _
-            | n `elem` map entryName entries -> bodyName == n && slotOf n == [SlotCustom]
-            | otherwise -> bodyName == n && null (slotOf n)
-          _ -> slotOf bodyName == [SlotCell (cellSlot cell)]
+            | n `notElem` map entryName defs -> bodyName == n
+          _ -> kindAccepts bodyName inner
         topName = topLayerName reg cell
-        topOk = case cell of
-          Gem _ _ ice ov
-            | ice > 0 -> slotOf topName == [SlotIce]
-            | Just o <- ov -> slotOf topName == [SlotOverlay (overlaySlot o)]
+        topOk = case (cell, layers) of
+          (Gem _ _ ice _, _) | ice > 0 -> topName == "ice" && layerAccepts topName cell
+          (_, l : _) -> topName == layerValueName l && layerAccepts topName cell
           _ -> topName == bodyName
-    in counterexample (show (bodyName, topName, slotOf bodyName, slotOf topName)) $
+    in counterexample (show (bodyName, topName, map layerValueName layers, inner)) $
          toCell (elementOf reg cell) === cell .&&. bodyOk .&&. topOk
 
--- | 内置条目表（去重之前的原始列表）：名字互不相同；内置本体 / 叠层的槽号互不相同；冰层只有一个；
--- 全部内置本体槽号 0..19 与叠层槽号 0..7 都有条目。
+-- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
+-- 8 种叠层各由一个叠层种类认领，冰层只有一个。
 qc_registry_names_slots_unique :: Property
 qc_registry_names_slots_unique =
   let names = map entryName builtinDefs
-      cells = sort [i | SlotCell i <- map entrySlot builtinDefs]
-      ovs = sort [i | SlotOverlay i <- map entrySlot builtinDefs]
-      ices = [() | SlotIce <- map entrySlot builtinDefs]
+      reg = defaultRegistry
+      bodyCells =
+        [Gem C1 k 0 Nothing | k <- [Normal, LineH, LineV, Bomb, Rainbow]]
+          ++ [Stone 1, Chest 1, Honey 1, Balloon C1, Cookie, Cake 1, MagicHat, Maker C1 1, Snail 0 1, Safe 1, Flip C1 C2, Surprise, Bottle C1, TimeSpirit, Countdown C1 1]
+      bodyNames = map (elementName reg) bodyCells
+      ovNames = [topLayerName reg (Gem C1 Normal 0 (Just o)) | o <- [Grass, Vine, Choco, Fog 1, Chain 1, Freeze 1, Curtain 1, Steam]]
+      ices = [n | LayerDef (SomeLayer p) <- builtinDefs, let n = layerName p, isJust (peelAs p (Gem C1 Normal 1 Nothing))]
   in conjoin
        [ counterexample "names unique" (length (nub names) === length names)
-       , counterexample "body slots unique and complete" (cells === [0 .. 19])
-       , counterexample "overlay slots unique and complete" (ovs === [0 .. 7])
-       , counterexample "one ice entry" (length ices === 1)
+       , counterexample "body cells claimed, one kind each" (length (nub bodyNames) === 20 .&&. notElem "?" bodyNames)
+       , counterexample "overlays claimed, one layer each" (length (nub ovNames) === 8 .&&. notElem "gem" ovNames)
+       , counterexample "one ice entry" (ices === ["ice"])
        ]
 
 --------------------------------------------------------------------------------

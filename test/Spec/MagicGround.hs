@@ -15,8 +15,8 @@ import Match3.Combos (builtinComboRules)
 import Match3.Counts (countOf)
 import Match3.Daily (dailyConfig)
 import Match3.Element
-  ( Jelly(..)
-  , MagicGround(..)
+  ( Jelly
+  , MagicGround
   , blastWith
   , builtinDefs
   , builtinLevelDefs
@@ -28,7 +28,8 @@ import Match3.Element
   , swapOpeningWith
   , widenedCells
   )
-import Match3.Element.Class (Element(..), widenRule)
+import Data.Proxy (Proxy(..))
+import Match3.Element.Kind (GroundKind(..))
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.Element.Registry (Registry, entryName, mkRegistry, registerLevel, setComboRules, setShapeRules)
 import Match3.Engine (Action(..), Played(..), playWith)
@@ -84,15 +85,15 @@ line sp = Gem C4 sp 0 Nothing
 blastCells :: Played -> [[Pos]]
 blastCells pd = [map snd (evCells e) | e <- pdEvents pd, evKind e == EvBlast]
 
--- | 能力：显示值恒为 1（Custom "magic" 1）、带扩爆规则；没有地面反应（上方消除不去层、不计数），
+-- | 能力：带扩爆规则；没有地面反应（上方消除不去层、不计数），
 -- 果冻没有扩爆规则。实战里地面层始终是开局的 4 格、计数里没有 magic。
 mg_caps_ground_not_consumed :: Assertion
 mg_caps_ground_not_consumed = do
   assertEqual "name" "magic" magicGroundName
-  assertEqual "display cell" (Custom "magic" (CustomState 1)) (toCell (MagicGround 1))
+  assertEqual "ground name" magicGroundName (groundName (Proxy :: Proxy MagicGround))
   let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
-  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\f -> f b8 [(3, 3)]) (widenRule (MagicGround 1)))
-  assertBool "jelly does not widen" (null (fmap (\f -> f b8 [(3, 3)]) (widenRule (Jelly 2))))
+  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\f -> f b8 [(3, 3)]) (groundWiden (Proxy :: Proxy MagicGround)))
+  assertBool "jelly does not widen" (null (fmap (\f -> f b8 [(3, 3)]) (groundWiden (Proxy :: Proxy Jelly))))
   let g0 = [(p, ("magic", 1)) | p <- mgCells]
   assertEqual "hit: kept, no counter" (g0, []) (hitGroundWith defaultRegistry mgCells g0)
   let gs0 = levelGame mgLevel 2

@@ -14,10 +14,14 @@ module Match3.Element.World
   , kindDef
   , layerDef
   , groundDef
+  , inertDef
   , defName
+  , defPlace
     -- * 世界
   , World
   , mkWorld
+  , mkWorldChecked
+  , WorldError(..)
   , worldDefs
   , worldKinds
   , worldLayers
@@ -36,7 +40,7 @@ import Data.Maybe (isJust, listToMaybe)
 import Match3.Element.Ability
 import Match3.Element.Kind
 import Match3.Element.Layer
-import Match3.Element.Types (cellSlot, overlaySlot)
+import Match3.Element.Types (Placer, cellSlot, overlaySlot)
 import Match3.Types
 
 -- | 世界里的一项（注册顺序有意义：名字表、显示名表、规则同优先级时的先后）。
@@ -44,6 +48,7 @@ data Def
   = KindDef SomeKind
   | LayerDef SomeLayer
   | GroundDef SomeGround
+  | InertDef ElementName  -- ^ 只登记名字的惰性占格（Custom 名字 状态值；放置 = 'customPlace'）
 
 -- | @kindDef \@StoneE@、@layerDef \@Ice@、@groundDef \@Jelly@。
 kindDef :: forall e. Kind e => Def
@@ -55,11 +60,24 @@ layerDef = LayerDef (someLayer @l)
 groundDef :: forall g. GroundKind g => Def
 groundDef = GroundDef (someGround @g)
 
+-- | 只登记名字的惰性占格：挡交换、无色、会下落、打不动、洗牌保留（测试 / 扩展用）。
+inertDef :: ElementName -> Def
+inertDef = InertDef
+
 defName :: Def -> ElementName
 defName d = case d of
   KindDef (SomeKind p) -> kindName p
   LayerDef (SomeLayer p) -> layerName p
   GroundDef (SomeGround p) -> groundName p
+  InertDef n -> n
+
+-- | 注册项的关卡放置（地面层不经放置表）。
+defPlace :: Def -> Placer
+defPlace d = case d of
+  KindDef (SomeKind p) -> place p
+  LayerDef (SomeLayer p) -> layerPlace p
+  GroundDef _ -> \_ _ -> Nothing
+  InertDef n -> customPlace n
 
 -- | 世界：注册项 + 解码缓存。用 'mkWorld' 构造。
 data World = World
@@ -88,6 +106,36 @@ mkWorld defs0 =
     layers = reverse [l | LayerDef l <- defs]
     accepts (SomeKind p) cell = isJust (fromCellAs p cell)
     peels (SomeLayer p) cell = isJust (peelAs p cell)
+
+-- | 建世界时发现的注册错误（'mkWorldChecked'）。
+data WorldError
+  = DuplicateName ElementName        -- ^ 同名注册项出现多次
+  | SharedCell String [ElementName]  -- ^ 同一种格子（本体编号 / 冰层 / 叠层编号）被多个种类认领（注册顺序）
+  | Unclaimed ElementName            -- ^ 种类不认领任何格子（解码永远轮不到它）
+  deriving (Eq, Show)
+
+-- | 由注册项建世界并检查：名字互不相同、每种格子至多一个种类认领、每个本体 / 叠层种类至少认领一种格子。
+-- 有错时返回全部错误；没错时与 'mkWorld' 建出同一个世界。
+mkWorldChecked :: [Def] -> Either [WorldError] World
+mkWorldChecked defs0 = case dups ++ shared ++ unclaimed of
+  [] -> Right w
+  errs -> Left errs
+  where
+    w = mkWorld defs0
+    names = map defName defs0
+    dups = [DuplicateName n | n <- nub names, length (filter (== n) names) > 1]
+    kname (SomeKind p) = kindName p
+    lname (SomeLayer p) = layerName p
+    cells = [("cell " ++ show i, map kname (reverse (wSlots w ! i))) | i <- [0 .. 19]]
+      ++ [("ice", map lname (reverse (wIce w)))]
+      ++ [("overlay " ++ show i, map lname (reverse (wOverlays w ! i))) | i <- [0 .. 7]]
+    shared = [SharedCell c ns | (c, ns) <- cells, length ns > 1]
+    claimed = concatMap snd cells ++ map fst (wCustom w)
+    unclaimed = [Unclaimed n | d <- wDefs w, isTyped d, let n = defName d, n `notElem` claimed]
+    isTyped d = case d of
+      KindDef _ -> True
+      LayerDef _ -> True
+      _ -> False
 
 -- | 各内置本体编号的代表格（已拆掉叠层）。
 slotProbes :: Int -> [Cell]
@@ -144,7 +192,7 @@ firstDecode ks cell = listToMaybe [SomeElement e | SomeKind p <- ks, Just e <- [
 -- | 本体层的元素值（参数是拆掉叠层之后的格子，或原格：本体不看叠层）。
 decodeBody :: World -> Cell -> SomeElement
 decodeBody w cell = case cell of
-  Custom n _ -> maybe (SomeElement (Inert n cell)) id (lookup n (wCustom w) >>= (`firstDecode` cell))
+  Custom n _ -> maybe (SomeElement (Inert n cell)) id (lookup n (wCustom w) >>= (`firstDecode` cell))  -- 含 'InertDef'
   _ ->
     let i = cellSlot cell
         cands = if inRange (bounds (wSlots w)) i then wSlots w ! i else []

@@ -1,32 +1,28 @@
--- | 元素注册表：元素名 → 构造器（'Entry'），以及主流程查询元素行为的**唯一入口**（各 *With 函数）。
+-- | 元素注册表：主流程查询元素行为的**唯一入口**（各 *With 函数）。
 --
--- 构造器负责两件事：从格子解码出元素值（盘面以 'Cell' 存储）、按关卡放置参数写格子（关卡解析用）。
--- 分派：内置本体按 cellSlot 编号、叠层按 overlaySlot 编号用数组 O(1) 取解码器；冰层单独一个；
--- Custom 按名字查（未注册的名字退回 'Inert'：挡交换、打不动、会下落的惰性占格）。
--- 一个格子解码成「修饰器（冰 → 叠层）包着本体」的元素值（'elementOf'），各查询就是在它上面取能力（Element.Class 的查询函数）。
--- 关卡级元素（'SomeLevelElement'）的种类表（注册顺序；一局的状态与节拍见 Match3.Element.Level）。
+-- 注册的元素只是一张有序的类型列表（Match3.Element.World 的 'Def'：本体 'Kind' / 叠层 'Layer' / 地面层 'GroundKind'），
+-- 解码由 World 做（叠层由外向内 peel，剩下的交给本体 fromCell）；各查询就是在解码出的元素值上调能力类的方法
+-- （Match3.Element.Ability）。规则（邻格 / 步末 / 成对交换 / 开启）由各类型的 boardPasses / layerPasses 收集一次、
+-- 按次序排好缓存在这里。关卡级元素（'SomeLevelElement'）的种类表（注册顺序；一局的状态与节拍见 Match3.Element.Level）。
 --
--- 第 8 刀：另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）。
---
--- 依赖：Element.Class / Message / Types / Special、Match3.Types、Board.Grid、Board.Refill。不含任何具体元素（内置见 Element.Builtin）。
+-- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）。
 module Match3.Element.Registry
   ( Registry
   , Entry
   , entryName
-  , entrySlot
   , Placer
-    -- * 构造器
-  , bodyEntry
-  , customEntry
-  , customEntryWith
-  , modifierEntry
-  , groundEntry
-  , inertEntry
+    -- * 注册项
+  , kindDef
+  , layerDef
+  , groundDef
+  , inertDef
   , mkRegistry
   , mkRegistryChecked
-  , RegistryError(..)
+  , RegistryError
+  , WorldError(..)
   , register
   , registryDefs
+  , registryWorld
   , lookupElement
     -- * 解码
   , bodyOf
@@ -96,150 +92,62 @@ module Match3.Element.Registry
   ) where
 
 import Control.Monad (foldM)
-import Data.Array (Array, accumArray, bounds, inRange, (!))
+import Data.Array (bounds, inRange)
 import Data.List (mapAccumL, nub, sortOn)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe)
 import Data.Monoid (Sum(..))
 import Match3.Board.Grid (getCell, setCell)
 import Match3.Board.Refill (RefillPolicy, defaultRefill)
-import Match3.Element.Class
+import Match3.Element.Ability
+import Match3.Element.Class (Message, SomeLevelElement(..), SomeMessage(..), fromMessage, levelNameOf, levelReply)
+import Match3.Element.Kind
+import Match3.Element.Layer
 import Match3.Element.Special (comboSwapRule)
 import Match3.Element.Types
+import Match3.Element.World
 import Match3.Types
 
--- | 构造器的原型值与解码器。
-data Proto
-  = PBody SomeElement (Cell -> Maybe SomeElement)   -- 内置本体槽位
-  | PCustom SomeElement (CustomState -> SomeElement)  -- Custom 名字 状态值
-  | PMod SomeModifier (Cell -> Maybe SomeModifier)  -- 冰层 / 叠层
-  | PGround SomeElement                             -- 地面层（gsGround 里按名字）
+-- | 注册项（= World 的 'Def'）。
+type Entry = Def
 
--- | 注册表条目 = 名字 → 构造器（原型值 + 解码器 + 放置）。
-data Entry = Entry
-  { entryName  :: ElementName
-  , entrySlot  :: Slot
-  , entryProto :: Proto
-  , entryPlace :: Placer
-  }
+entryName :: Entry -> ElementName
+entryName = defName
 
--- | 内置本体槽位的构造器：原型值、解码器、放置。槽号由原型写回的格子推导（'cellSlot'），
--- 原型写回 Custom 时推不出内置槽位（'SlotNone'，mkRegistryChecked 报错）。
-bodyEntry :: Element e => e -> (Cell -> Maybe e) -> Placer -> Entry
-bodyEntry proto dec = Entry (name proto) (bodySlot (toCell proto)) (PBody (SomeElement proto) (fmap SomeElement . dec))
+-- | 建表时发现的注册错误（= World 的 'WorldError'）。
+type RegistryError = WorldError
 
--- | 本体格子的内置槽位。
-bodySlot :: Cell -> Slot
-bodySlot cell = case cell of
-  Custom _ _ -> SlotNone
-  _ -> SlotCell (cellSlot cell)
-
--- | 自定义本体（格子 = Custom 名字 状态值）：原型值、状态值 → 元素值；放置 = Custom 名字 参数（缺省 1）。
--- 放置参数按前缀取（'prefixArgs'：头一个是整数就用它，后面多出的参数忽略；头一个不是整数时缺省 1）。
--- 第 6b 刀：状态值是 CustomState（newtype），解码函数收 CustomState。
-customEntry :: Element e => e -> (CustomState -> e) -> Entry
-customEntry proto mk = customEntryWith proto mk (\args _ -> Just (Custom n (CustomState (fromMaybe 1 (prefixArgs argInt args)))))
-  where
-    n = name proto
-
--- | 自定义本体，放置自定。
-customEntryWith :: Element e => e -> (CustomState -> e) -> Placer -> Entry
-customEntryWith proto mk = Entry (name proto) SlotCustom (PCustom (SomeElement proto) (SomeElement . mk))
-
--- | 修饰器（冰层 / 叠层）的构造器：原型值、解码器、放置。槽位由原型写到一颗裸宝石上的结果推导：
--- 盖了叠层 = SlotOverlay ('overlaySlot')，否则有冰层 = SlotIce，都没有 = 'SlotNone'。
-modifierEntry :: Modifier m => m -> (Cell -> Maybe m) -> Placer -> Entry
-modifierEntry proto dec = Entry (modName proto) (modifierSlot proto) (PMod (SomeModifier proto) (fmap SomeModifier . dec))
-
-modifierSlot :: Modifier m => m -> Slot
-modifierSlot m = case modApply m (Gem C1 Normal 0 Nothing) of
-  Gem _ _ _ (Just o) -> SlotOverlay (overlaySlot o)
-  Gem _ _ ice Nothing | ice > 0 -> SlotIce
-  _ -> SlotNone
-
--- | 地面层元素（不占格；层数在 gsGround 里）：规则取原型值的 'ground' 与 'counter'；不经放置表放。
-groundEntry :: Element e => e -> Entry
-groundEntry proto = Entry (name proto) SlotGround (PGround (SomeElement proto)) (\_ _ -> Nothing)
-
--- | 惰性占格（旧 baseDef 的等价物）：挡交换、无色、会下落、打不动、洗牌保留。
-inertEntry :: ElementName -> Entry
-inertEntry n = customEntry (Inert n (Custom n (CustomState 1))) (Inert n . Custom n)
-
--- | 注册表。用 mkRegistry / register 构造；字段不导出（分派数组由条目列表派生）。
+-- | 注册表。用 mkRegistry / register 构造；字段不导出（解码缓存与规则表由注册项派生）。
 data Registry = Registry
-  { regDefs     :: [Entry]                          -- 注册顺序
-  , regCells    :: Array Int (Cell -> SomeElement)  -- 内置本体的解码器（按 cellSlot；边界由条目算出）
-  , regOverlays :: Array Int (Cell -> Maybe SomeModifier)  -- 叠层（按 overlaySlot；边界由条目算出）
-  , regIce      :: Cell -> Maybe SomeModifier
-  , regCustom   :: [(ElementName, CustomState -> SomeElement)]
-  , regGround   :: [(ElementName, SomeElement)]
+  { regWorld    :: World
   , regAdjacent :: [AdjacentRule]                   -- 按 arOrder 排好（稳定）
   , regEnd      :: [EndRule]                        -- 按 (阶段, erOrder) 排好（稳定）
-  , regDiff     :: [(ElementName, CounterKey, Int)]    -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
+  , regDiff     :: [(ElementName, CounterKey, Int)] -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
   , regSwap     :: [SwapRule]                       -- 成对交换规则，按 srOrder 排好（稳定）
   , regOpen     :: [OpenRule]                       -- 开启规则（注册顺序）
-  , regLevel    :: [SomeLevelElement]                      -- 关卡级元素（注册顺序；同名以后注册的为准）
-  , regShapes   :: [ShapeRule]                      -- 特殊块形状规则表（有序；第 8 刀）
-  , regCombos   :: [ComboRule]                      -- 特殊块组合表（有序；第 8 刀）
-  , regRefill   :: RefillPolicy                     -- 补子策略（第 8 刀；关卡级元素可经 Refilling 换掉）
-  , regWiden    :: [(Pos, Board -> [Pos] -> [Pos])]  -- 本步的扩爆格（新玩法 8）：格 → 爆炸范围改写；缺省空，
-                                                    -- 每步由 Element.Level.levelRegistryIn 按地面层的 widenRule 填
+  , regLevel    :: [SomeLevelElement]               -- 关卡级元素（注册顺序；同名以后注册的为准）
+  , regShapes   :: [ShapeRule]                      -- 特殊块形状规则表（有序）
+  , regCombos   :: [ComboRule]                      -- 特殊块组合表（有序）
+  , regRefill   :: RefillPolicy                     -- 补子策略（关卡级元素可经 Refilling 换掉）
+  , regWiden    :: [(Pos, Board -> [Pos] -> [Pos])] -- 本步的扩爆格（新玩法 8）：格 → 爆炸范围改写；缺省空，
+                                                    -- 每步由 Element.Level.levelRegistryIn 按地面层的 groundWiden 填
   }
 
--- | 建表时发现的条目错误（'mkRegistryChecked'）。
-data RegistryError
-  = DuplicateName ElementName        -- ^ 同名条目出现多次
-  | DuplicateSlot Slot [ElementName] -- ^ 同一内置槽位（本体 / 叠层 / 冰层）被多个条目占用
-  | NoSlot ElementName               -- ^ 原型推不出内置槽位（'SlotNone'）
-  deriving (Eq, Show)
-
--- | 由条目列表建表并检查：名字互不相同、内置槽位互不相同、每个内置构造器都推得出槽位。
--- 有错时返回全部错误（按条目顺序）；没错时与 'mkRegistry' 建出同一张表。
+-- | 由注册项建表并检查（见 'mkWorldChecked'）。没错时与 'mkRegistry' 建出同一张表。
 mkRegistryChecked :: [Entry] -> Either [RegistryError] Registry
-mkRegistryChecked defs =
-  case dupNames ++ dupSlots ++ noSlots of
-    [] -> Right (mkRegistry defs)
-    errs -> Left errs
-  where
-    names = map entryName defs
-    dupNames = [DuplicateName n | n <- nub names, length (filter (== n) names) > 1]
-    builtinSlot sl = case sl of
-      SlotCell _ -> True
-      SlotOverlay _ -> True
-      SlotIce -> True
-      _ -> False
-    slots = nub [entrySlot d | d <- defs, builtinSlot (entrySlot d)]
-    dupSlots =
-      [ DuplicateSlot sl ns
-      | sl <- slots
-      , let ns = [entryName d | d <- defs, entrySlot d == sl]
-      , length ns > 1
-      ]
-    noSlots = [NoSlot (entryName d) | d <- defs, entrySlot d == SlotNone]
+mkRegistryChecked defs = fmap (const (mkRegistry defs)) (mkWorldChecked defs)
 
--- | 由条目列表建表（总函数，不报错）。同一槽位 / 同名的多个条目以后出现的为准；推不出槽位的条目不参与分派。
--- 分派数组的边界由条目的槽号算出，查不到的槽号退回缺省（本体 = 惰性占格，叠层 = 无）。
+-- | 由注册项建表（总函数，不报错）。同名多项以后出现的为准，位置取第一次出现处。
 mkRegistry :: [Entry] -> Registry
 mkRegistry defs0 =
-  let defs = dedupe defs0
-      opaque cell = SomeElement (Inert (ElementName "?") cell)
-      cellDecs = [(i, \cell -> fromMaybe (opaque cell) (dec cell)) | Entry {entrySlot = SlotCell i, entryProto = PBody _ dec} <- defs]
-      ovDecs = [(i, dec) | Entry {entrySlot = SlotOverlay i, entryProto = PMod _ dec} <- defs]
-      cells = accumArray (\_ d -> d) opaque (slotBounds (map fst cellDecs)) cellDecs
-      ovs = accumArray (\_ d -> d) (const Nothing) (slotBounds (map fst ovDecs)) ovDecs
-      ice = fromMaybe (const Nothing) (listToMaybe (reverse [dec | Entry {entrySlot = SlotIce, entryProto = PMod _ dec} <- defs]))
-      bodies = concat [bodyProto d | d <- defs]
+  let w = mkWorld defs0
+      passes = concatMap defPasses (worldDefs w)
   in Registry
-       { regDefs = defs
-       , regCells = cells
-       , regOverlays = ovs
-       , regIce = ice
-       , regCustom = [(entryName d, mk) | d@Entry {entryProto = PCustom _ mk} <- defs]
-       , regGround = [(entryName d, g) | d@Entry {entryProto = PGround g} <- defs]
-       , regAdjacent = sortOn arOrder (concatMap ruleAdj defs)
-       , regEnd = sortOn (\r -> (erPhase r, erOrder r)) (concatMap ruleEnd defs)
-       , regDiff = [(name e, k, bonusMoves e) | e <- bodies, Just k <- [diffCounter e]]
-       , regSwap = sortOn srOrder (mapMaybe swapRule bodies)
-       , regOpen = mapMaybe openRule bodies
+       { regWorld = w
+       , regAdjacent = sortOn arOrder [AdjacentRule o f | AdjacentPass o f <- passes]
+       , regEnd = sortOn (\r -> (erPhase r, erOrder r)) [r | EndPass r <- passes]
+       , regDiff = [(kindName p, k, bonusMoves p) | SomeKind p <- worldKinds w, Just k <- [diffCounter p]]
+       , regSwap = sortOn srOrder [r | SwapPass r <- passes]
+       , regOpen = [r | OpenPass r <- passes]
        , regLevel = []
        , regShapes = []
        , regCombos = []
@@ -247,31 +155,16 @@ mkRegistry defs0 =
        , regWiden = []
        }
   where
-    -- 同名只留最后一个，位置取第一次出现处（注册顺序稳定）
-    dedupe ds =
-      [ d
-      | n <- nub (map entryName ds)
-      , Just d <- [listToMaybe (reverse [d' | d' <- ds, entryName d' == n])]
-      ]
-    -- 槽号 0..最大者；没有条目时为空区间
-    slotBounds is = (0, maximum (-1 : is))
-    bodyProto d = case entryProto d of
-      PBody e _ -> [e]
-      PCustom e _ -> [e]
-      PGround e -> [e]
-      PMod _ _ -> []
-    ruleAdj d = case entryProto d of
-      PMod (SomeModifier m) _ -> maybe [] pure (modAdjacent m)
-      _ -> concatMap (maybe [] pure . adjacentRule) (bodyProto d)
-    ruleEnd d = case entryProto d of
-      PMod (SomeModifier m) _ -> maybe [] pure (modEnd m)
-      _ -> concatMap (maybe [] pure . endRule) (bodyProto d)
+    defPasses d = case d of
+      KindDef (SomeKind p) -> boardPasses p
+      LayerDef (SomeLayer p) -> layerPasses p
+      _ -> []
 
--- | 往注册表里加（或按名字替换）一个条目。测试专用元素就这样接进来，主流程不用改。
+-- | 往注册表里加（或按名字替换）一个注册项。测试专用元素就这样接进来，主流程不用改。
 -- 关卡级元素与规则表（形状 / 组合 / 补子策略）原样保留。
 register :: Entry -> Registry -> Registry
 register d reg =
-  (mkRegistry (regDefs reg ++ [d]))
+  (mkRegistry (worldDefs (regWorld reg) ++ [d]))
     { regLevel = regLevel reg
     , regShapes = regShapes reg
     , regCombos = regCombos reg
@@ -279,86 +172,77 @@ register d reg =
     , regWiden = regWiden reg
     }
 
--- | 全部条目（注册顺序）。
+-- | 全部注册项（注册顺序）。
 registryDefs :: Registry -> [Entry]
-registryDefs = regDefs
+registryDefs = worldDefs . regWorld
 
--- | 按名字找条目（关卡放置、计数、文档用）。
+-- | 注册表的元素世界（解码用）。
+registryWorld :: Registry -> World
+registryWorld = regWorld
+
+-- | 按名字找注册项（关卡放置、计数、文档用）。
 lookupElement :: Registry -> ElementName -> Maybe Entry
-lookupElement reg n = listToMaybe [d | d <- regDefs reg, entryName d == n]
+lookupElement reg = lookupDef (regWorld reg)
 
 --------------------------------------------------------------------------------
--- 显示（ViewCaps；只给前端 / 文案用，不参与规则）
+-- 显示（只给前端 / 文案用，不参与规则）
 
--- | 本体格子的显示附加字段（元素的 vwFace；未注册的 Custom 名字 = 无）。
+-- | 本体格子的显示附加字段（元素的 'face'；未注册的 Custom 名字 = 无）。
 faceFieldsWith :: Registry -> Cell -> [(String, FaceValue)]
-faceFieldsWith reg = faceFields . bodyOf reg
+faceFieldsWith reg = face . bodyOf reg
 
--- | 条目的原型元素值（本体 / 自定义 / 地面层；修饰器没有 'Element' 能力记录 = Nothing）。
-entryElement :: Entry -> Maybe SomeElement
-entryElement d = case entryProto d of
-  PBody e _ -> Just e
-  PCustom e _ -> Just e
-  PGround e -> Just e
-  PMod _ _ -> Nothing
-
--- | 按元素名计数的目标的中文名（元素的 vwLabel；没登记 = Nothing）。
+-- | 按元素名计数的目标的中文名（本体 'label' / 地面层 'groundLabel'；没登记 = Nothing）。
 displayLabelWith :: Registry -> ElementName -> Maybe String
-displayLabelWith reg n = lookupElement reg n >>= entryElement >>= displayLabel
+displayLabelWith reg n = lookupElement reg n >>= defLabel
 
--- | 按元素名计数的目标的失败提示（元素的 vwLoseHint）。
+defLabel :: Entry -> Maybe String
+defLabel d = case d of
+  KindDef (SomeKind p) -> label p
+  GroundDef (SomeGround p) -> groundLabel p
+  _ -> Nothing
+
+-- | 按元素名计数的目标的失败提示。
 loseHintWith :: Registry -> ElementName -> Maybe (Int -> String)
-loseHintWith reg n = lookupElement reg n >>= entryElement >>= loseHintFor
+loseHintWith reg n = lookupElement reg n >>= \d -> case d of
+  KindDef (SomeKind p) -> loseHint p
+  GroundDef (SomeGround p) -> groundLoseHint p
+  _ -> Nothing
 
 -- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
 displayLabels :: Registry -> [(ElementName, String)]
-displayLabels reg = [(entryName d, l) | d <- regDefs reg, Just e <- [entryElement d], Just l <- [displayLabel e]]
+displayLabels reg = [(entryName d, l) | d <- registryDefs reg, Just l <- [defLabel d]]
 
 --------------------------------------------------------------------------------
 -- 解码
 
--- | 本体层的元素值。
+-- | 本体层的元素值（拆掉冰层 / 叠层之后）。
 bodyOf :: Registry -> Cell -> SomeElement
-bodyOf reg cell = case cell of
-  Custom n k -> maybe (SomeElement (Inert n cell)) ($ k) (lookup n (regCustom reg))
-  _ -> slotAt (regCells reg) (cellSlot cell) (\c -> SomeElement (Inert (ElementName "?") c)) cell
-
--- | 按槽号取分派数组里的解码器；越界（注册表里没有该槽位的条目）取缺省。
-slotAt :: Array Int a -> Int -> a -> a
-slotAt arr i dflt
-  | inRange (bounds arr) i = arr ! i
-  | otherwise = dflt
+bodyOf reg cell = decodeBody (regWorld reg) (snd (decodeLayers (regWorld reg) cell))
 
 -- | 本体之上的各层（自上而下）：冰层（ice > 0）、叠层。
-upperOf :: Registry -> Cell -> [SomeModifier]
-upperOf reg cell = case cell of
-  Gem _ _ ice ov ->
-    [m | ice > 0, Just m <- [regIce reg cell]]
-      ++ [m | Just o <- [ov], Just m <- [slotAt (regOverlays reg) (overlaySlot o) (const Nothing) cell]]
-  _ -> []
+upperOf :: Registry -> Cell -> [SomeLayerValue]
+upperOf reg = fst . decodeLayers (regWorld reg)
 
--- | 整个格子的元素值：修饰器（冰 → 叠层，自上而下）包着本体。
+-- | 整个格子的元素值：叠层（冰 → 叠层，自外向内）包着本体。
 elementOf :: Registry -> Cell -> SomeElement
-elementOf reg cell = foldr (\(SomeModifier m) e -> modify m e) (bodyOf reg cell) (upperOf reg cell)
+elementOf reg = decode (regWorld reg)
 
 -- | 本体的元素名。
 elementName :: Registry -> Cell -> ElementName
-elementName reg = name . bodyOf reg
+elementName reg = nameOf . bodyOf reg
 
 -- | 最上面一层的元素名（事件里「波及了什么」用）。
 topLayerName :: Registry -> Cell -> ElementName
 topLayerName reg cell = case upperOf reg cell of
-  (SomeModifier m : _) -> modName m
+  (lv : _) -> layerValueName lv
   [] -> elementName reg cell
 
 --------------------------------------------------------------------------------
 -- 钩子
 
--- | 参与匹配的颜色：任一上层挡匹配则 Nothing，否则本体颜色。（匹配、提示的热路径。）
+-- | 参与匹配的颜色：任一层挡匹配则 Nothing，否则本体颜色。（匹配、提示的热路径。）
 matchColorWith :: Registry -> Cell -> Maybe Color
-matchColorWith reg cell
-  | any (\(SomeModifier m) -> modBlocksMatch m) (upperOf reg cell) = Nothing
-  | otherwise = matchColor (bodyOf reg cell)
+matchColorWith reg = matchColor . elementOf reg
 
 -- | 本体颜色（颜色袋计数用，不看叠层）。
 colorOfWith :: Registry -> Cell -> Maybe Color
@@ -370,15 +254,15 @@ blocksSwapWith reg = blocksSwap . elementOf reg
 
 -- | 只看上层（冰 / 叠层）是否挡交换（彩虹 / 特殊合成提示用，本体由它们自己判定）。
 upperBlocksSwapWith :: Registry -> Cell -> Bool
-upperBlocksSwapWith reg = any (\(SomeModifier m) -> modBlocksSwap m) . upperOf reg
+upperBlocksSwapWith reg = any (\(SomeLayerValue l) -> layerBlocksSwap l) . upperOf reg
 
 -- | 交换两格是否被挡（任一端挡即挡）。
 swapBlockedWith :: Registry -> Board -> Pos -> Pos -> Bool
 swapBlockedWith reg b p1 p2 = blocksSwapWith reg (getCell b p1) || blocksSwapWith reg (getCell b p2)
 
--- | 特殊块能否点火：自上而下第一个有意见的层决定；都没有意见则 False。
+-- | 特殊块能否点火：自上而下第一个有意见的层决定，都没有意见则问本体。
 activatesWith :: Registry -> Cell -> Bool
-activatesWith reg = fromMaybe False . activates . elementOf reg
+activatesWith reg = fires . elementOf reg
 
 -- | 本体随重力下落。
 fallsWith :: Registry -> Cell -> Bool
@@ -396,10 +280,10 @@ drainsWith reg = not . null . drains . bodyOf reg
 drainEdgesWith :: Registry -> Cell -> [Edge]
 drainEdgesWith reg = drains . bodyOf reg
 
--- | 直接命中：修饰器自上而下先说（穿透的问里面），吃掉命中时格子写成新的元素值。
+-- | 直接命中：叠层自上而下先回答（穿透的问里面），吃掉命中时格子写成新的内容。
 directHitWith :: Registry -> Cell -> HitResult
-directHitWith reg cell = case onHit (elementOf reg cell) of
-  Absorb e -> HitAbsorb (toCell e)
+directHitWith reg cell = case struck (elementOf reg cell) of
+  Absorb cell' -> HitAbsorb cell'
   Destroy -> HitDestroy
   Immune -> HitImmune
 
@@ -418,21 +302,20 @@ chipOnHitWith reg b seeds = foldl step (b, []) (nub seeds)
 hitImmuneWith :: Registry -> Cell -> Bool
 hitImmuneWith reg cell = directHitWith reg cell == HitImmune
 
--- | 真消除格上随格清掉的叠层（草 / 藤 / 巧）。
+-- | 真消除格上随格清掉的叠层（草 / 藤 / 巧）：去掉这些层，其余各层原样盖回。
 stripOnClearWith :: Registry -> Board -> [Pos] -> Board
 stripOnClearWith reg b ps = foldl strip b (nub ps)
   where
-    strip board p = case getCell board p of
-      cell@(Gem col kind ice (Just o))
-        | Just (SomeModifier m) <- slotAt (regOverlays reg) (overlaySlot o) (const Nothing) cell
-        , modStripOnClear m ->
-            setCell board p (Gem col kind ice Nothing)
-      _ -> board
+    strip board p =
+      let (ls, inner) = decodeLayers (regWorld reg) (getCell board p)
+          kept = [lv | lv@(SomeLayerValue l) <- ls, not (layerStripsOnClear l)]
+      in if length kept == length ls
+           then board
+           else setCell board p (foldr (\(SomeLayerValue l) c -> putOn l c) inner kept)
 
 -- | 邻格波及规则（已按 arOrder 排好）。
 adjacentRules :: Registry -> [AdjacentRule]
 adjacentRules = regAdjacent
-
 -- | 按顺序跑完一轮的全部邻格波及：返回 (盘面, 打碎的格（按规则顺序拼接）, 新生成需坐住的格)。
 -- 每条规则的 acProtect = 起始保护格 ++ 之前各规则的 aoSit。
 runAdjacentWith :: Registry -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
@@ -463,7 +346,7 @@ countElementWith reg n = getSum . foldMap (\cell -> if elementName reg cell == n
 -- | 盘上本体为该元素的格按 'diffWeight' 加权的总数（按差计数用）。权重缺省 1，这时与 'countElementWith' 相同；
 -- 新玩法 5 雪怪 Boss 的左上格权重 = 血量，其余格 0。
 weighElementWith :: Registry -> ElementName -> Board -> Int
-weighElementWith reg n = getSum . foldMap (\cell -> if elementName reg cell == n then Sum (diffWeight (bodyOf reg cell)) else mempty)
+weighElementWith reg n = getSum . foldMap (\cell -> let e = bodyOf reg cell in if nameOf e == n then Sum (diffWeight e) else mempty)
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
 vacatesCarpetWith :: Registry -> Cell -> Bool
@@ -487,7 +370,7 @@ widenAtWith reg b p area = foldl (\a w -> w b a) area [w | (q, w) <- regWiden re
 -- | 地面层里带扩爆规则（'widenRule'）的格（新玩法 8：魔法地格）与各自的改写函数；地面层按格序。
 groundWideningWith :: Registry -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
 groundWideningWith reg g =
-  [(p, w) | (p, (n, _)) <- g, Just e <- [lookup n (regGround reg)], Just w <- [widenRule e]]
+  [(p, w) | (p, (n, _)) <- g, Just (SomeGround gp) <- [lookupGround (regWorld reg) n], Just w <- [groundWiden gp]]
 
 -- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelRegistryIn 调用）。
 setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> Registry -> Registry
@@ -520,25 +403,24 @@ placeWith reg n args b0 ps = case lookupElement reg n of
   where
     one d b p
       | not (inRange (bounds (boardArray b)) p) = Left (PlaceOutOfBounds n p)
-      | otherwise = Right (maybe b (setCell b p) (entryPlace d args (getCell b p)))
+      | otherwise = Right (maybe b (setCell b p) (defPlace d args (getCell b p)))
 
 -- | 按顺序应用一张放置表（遇到第一处失败即返回 Left）。
 placeAllWith :: Registry -> Board -> [Placement] -> Either PlaceError Board
 placeAllWith reg = foldM (\b (Place n args ps) -> placeWith reg n args b ps)
 
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
--- 返回（新地面层，按计数名的去层数）。只有注册为地面层、且原型值有 'ground' 的名字会反应；
--- 计数键取原型值的 'counter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
+-- 返回（新地面层，按计数名的去层数）。只有注册为地面层的名字会反应（'groundHit'）；
+-- 计数键取 'groundCounter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
 hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(ElementName, Int)])
 hitGroundWith reg hits = foldr one ([], [])
   where
     one (p, (n, layers)) (acc, counts)
       | p `elem` hits
-      , Just g <- lookup n (regGround reg)
-      , Just react <- groundRule g =
-          let after = react layers
+      , Just (SomeGround g) <- lookupGround (regWorld reg) n =
+          let after = groundHit g layers
               removed = layers - maybe 0 id after
-              counts' = case counter g of
+              counts' = case groundCounter g of
                 Just (CountNamed k) | removed > 0 -> (k, removed) : counts
                 _ -> counts
           in (maybe acc (\l -> (p, (n, l)) : acc) after, counts')

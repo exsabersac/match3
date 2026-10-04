@@ -448,7 +448,7 @@ cellFace cell = case cell of
     n k = ("n", FieldInt k)
     col c = ("c", FieldInt (colorNum c))
 
--- | 单格的显示附加字段：元素自己提供（能力记录的显示组 vwFace，Match3.Element.Caps.displays），这里不按元素名特判。
+-- | 单格的显示附加字段：元素自己提供（能力类 Renders 的 face，Match3.Element.Ability），这里不按元素名特判。
 -- 内置：雪怪 Boss 的 q（象限 0–3）/ hurt（血量是否过半）/ turn（召唤计数）/ every（召唤周期），变色龙的 c（当前颜色）。
 -- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；桌面按名字读（app/pure/UI/CellFace.hs）。
 cellExtras :: Cell -> [(String, FaceValue)]

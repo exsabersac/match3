@@ -32,7 +32,9 @@ import Match3.Element
   , decodeBoss
   )
 import Match3.Combos (builtinComboRules)
-import Match3.Element.Class (Element(..), diffCounter, diffWeight)
+import Data.Proxy (Proxy(..))
+import Match3.Element.Ability (Countable(diffWeight), toCell)
+import Match3.Element.Kind (Kind(diffCounter))
 import Match3.Element.Event (EventKind(..))
 import Match3.Element.Registry (Registry, countElementWith, entryName, mkRegistry, placeWith, registerLevel, setComboRules, setShapeRules, weighElementWith)
 import Match3.Game.Boosters (resolveHammerWith)
@@ -96,7 +98,7 @@ sb_caps_fixed_blocker = do
     )
     [0 .. 3]
   assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [diffWeight (SnowBoss 12 40 1 q) | q <- [0 .. 3]]
-  assertEqual "counter" (Just (CountNamed "snow_boss")) (diffCounter (SnowBoss 12 40 1 0))
+  assertEqual "counter" (Just (CountNamed "snow_boss")) (diffCounter (Proxy :: Proxy SnowBoss))
   assertEqual "encoding round-trips" [SnowBoss hp 40 t q | hp <- [0, 12, 40], t <- [0 .. 2], q <- [0 .. 3]]
     [decodeBoss st | hp <- [0, 12, 40], t <- [0 .. 2], q <- [0 .. 3], Custom _ st <- [boss hp t q]]
 

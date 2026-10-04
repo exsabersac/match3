@@ -1,4 +1,6 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 -- | 段 4：原先写死在主流程里的专门分支收进元素框架后的行为锁定。
 --
 -- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
@@ -24,7 +26,9 @@ import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
-import Match3.Element.Caps (Element(..), SomeLevelElement(..), blocker, breaks, levelNameOf, noPush, noRecolor, onSwap, opens, piece, pushes, swappable)
+import Match3.Element.Ability
+import Match3.Element.Class (SomeLevelElement(..), levelNameOf)
+import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Level (newGame)
@@ -59,31 +63,69 @@ tests =
 allCells :: Board -> [Cell]
 allCells b = map (getCell b) allPos
 
--- | 替换内置「gem」的测试版本：原型同普通宝石，只关掉可改色 / 可推动（原先写成旧记录的字段更新）。
-data TweakedGem = TweakedGem Bool Bool Color
+-- | 替换内置「gem」的测试版本：同普通宝石（缺省方法），只关掉可改色（'NoRecolorGem'）或可推动（'NoPushGem'）。
+newtype NoRecolorGem = NoRecolorGem Color
   deriving (Eq, Show)
 
-instance Element TweakedGem where
-  name _ = "gem"
-  toCell (TweakedGem _ _ c) = Gem c Normal 0 Nothing
-  caps (TweakedGem r p _) = piece ([noRecolor | not r] ++ [noPush | not p])
+instance Cellular NoRecolorGem where
+  nameOf _ = "gem"
+  toCell (NoRecolorGem c) = Gem c Normal 0 Nothing
+instance Matchable NoRecolorGem
+instance Hittable NoRecolorGem
+instance Movable NoRecolorGem where
+  recolorable _ = False
+instance Countable NoRecolorGem
+instance Renders NoRecolorGem
 
-tweakedGem :: Bool -> Bool -> Entry
-tweakedGem r p = bodyEntry (TweakedGem r p C1) (\cell -> case cell of Gem c _ _ _ -> Just (TweakedGem r p c); _ -> Nothing) (\_ _ -> Nothing)
+instance Kind NoRecolorGem where
+  kindName _ = "gem"
+  fromCell cell = case cell of
+    Gem c _ _ _ -> Just (NoRecolorGem c)
+    _ -> Nothing
 
--- | 测试专用「拉杆」：可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
+newtype NoPushGem = NoPushGem Color
+  deriving (Eq, Show)
+
+instance Cellular NoPushGem where
+  nameOf _ = "gem"
+  toCell (NoPushGem c) = Gem c Normal 0 Nothing
+instance Matchable NoPushGem
+instance Hittable NoPushGem
+instance Movable NoPushGem where
+  pushable _ = False
+instance Countable NoPushGem
+instance Renders NoPushGem
+
+instance Kind NoPushGem where
+  kindName _ = "gem"
+  fromCell cell = case cell of
+    Gem c _ _ _ -> Just (NoPushGem c)
+    _ -> Nothing
+
+-- | 测试专用「拉杆」：占格障碍原型包，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
 newtype Lever = Lever Int
   deriving (Eq, Show)
+  deriving (Movable) via (Obstacle Lever)
 
-instance Element Lever where
-  name _ = "lever"
-  toCell (Lever k) = Custom "lever" (CustomState k)
-  caps _ = blocker [swappable, breaks, onSwap (SwapRule 5 fires (\_ p1 p2 -> [p1, p2]))]
-    where
-      fires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
+instance Cellular Lever where
+  nameOf _ = "lever"
+instance Matchable Lever
+instance Hittable Lever where
+  fires _ = False
+instance Countable Lever
+instance Renders Lever
+
+instance Kind Lever where
+  kindName _ = "lever"
+  fromCell = fromCustom "lever" Lever
+  place _ = customPlace "lever"
+  boardPasses _ = [SwapPass (SwapRule 5 leverFires (\_ p1 p2 -> [p1, p2]))]
+
+leverFires :: Board -> Pos -> Pos -> Bool
+leverFires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
 
 leverDef :: Entry
-leverDef = customEntry (Lever 1) (Lever . unCustomState)
+leverDef = kindDef @Lever
 
 br_swap_rule_test_element :: Assertion
 br_swap_rule_test_element = do
@@ -108,14 +150,21 @@ br_swap_rule_test_element = do
 -- | 测试专用「豆荚」：被命中或邻格在本批前沿里时开出 C2 直线（本轮坐住，不在本轮清除）。
 newtype Pod = Pod Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Obstacle Pod)
 
-instance Element Pod where
-  name _ = "pod"
-  toCell (Pod k) = Custom "pod" (CustomState k)
-  caps _ = blocker [opens openPods]
+instance Cellular Pod where
+  nameOf _ = "pod"
+instance Countable Pod
+instance Renders Pod
+
+instance Kind Pod where
+  kindName _ = "pod"
+  fromCell = fromCustom "pod" Pod
+  place _ = customPlace "pod"
+  boardPasses _ = [OpenPass (OpenRule openPods)]
 
 podDef :: Entry
-podDef = customEntry (Pod 1) (Pod . unCustomState)
+podDef = kindDef @Pod
 
 openPods :: Board -> [Pos] -> (Board, [Pos], [Pos])
 openPods b front =
@@ -161,7 +210,7 @@ br_builtin_predicates_match_legacy = do
 -- | 魔法帽只给注册表里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
 br_recolorable_from_registry :: Assertion
 br_recolorable_from_registry = do
-  let regNoRecolor = register (tweakedGem False True) defaultRegistry
+  let regNoRecolor = register (kindDef @NoRecolorGem) defaultRegistry
       board0 = setCell tripleBoard (0, 1) MagicHat
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
@@ -176,14 +225,26 @@ br_recolorable_from_registry = do
 -- | 蜗牛只推注册表里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
 newtype Cart = Cart Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable) via (Obstacle Cart)
 
-instance Element Cart where
-  name _ = "cart"
-  toCell (Cart k) = Custom "cart" (CustomState k)
-  caps _ = blocker [pushes]
+instance Cellular Cart where
+  nameOf _ = "cart"
+-- 占格障碍原型包的移动方法，只把可推动打开
+instance Movable Cart where
+  portal _ = False
+  keepOnShuffle _ = True
+  recolorable _ = False
+  pushable _ = True
+instance Countable Cart
+instance Renders Cart
+
+instance Kind Cart where
+  kindName _ = "cart"
+  fromCell = fromCustom "cart" Cart
+  place _ = customPlace "cart"
 
 cartDef :: Entry
-cartDef = customEntry (Cart 1) (Cart . unCustomState)
+cartDef = kindDef @Cart
 
 br_pushable_from_registry :: Assertion
 br_pushable_from_registry = do
@@ -197,7 +258,7 @@ br_pushable_from_registry = do
   assertBool "default registry: snail turns around" (isSnail (getCell bD (7, 1)) && isCustomNamed "cart" (getCell bD (7, 2)))
   let boardG = setCell tripleBoard (7, 1) (mkSnail 0 1)
       bG = final defaultRegistry boardG
-      bNoPush = final (register (tweakedGem True False) defaultRegistry) boardG
+      bNoPush = final (register (kindDef @NoPushGem) defaultRegistry) boardG
   assertBool "default: gem pushed" (isSnail (getCell bG (7, 2)))
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 

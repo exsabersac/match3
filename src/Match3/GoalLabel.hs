@@ -49,8 +49,8 @@ countLabel k = case k of
   CountColor c -> colorLabel c ++ "色宝石"
   CountNamed name -> fromMaybe (unElementName name) (lookup (unElementName name) namedGoalLabelTable)
 
--- | 按元素名计数的目标（'GoalNamed'）的中文名：[(元素名, 中文名)]，由元素条目提供（能力记录的显示组，
--- Match3.Element.Caps.labelled；注册顺序）。新元素做成关卡目标时在元素的 caps 里写 labelled "…"
+-- | 按元素名计数的目标（'GoalNamed'）的中文名：[(元素名, 中文名)]，由元素种类提供（Kind / GroundKind 的
+-- label / groundLabel；注册顺序）。新元素做成关卡目标时在它的 Kind instance 里写 label _ = Just "…"
 -- （stack test 的 frontends_read_view_model 与 outcome_lose_hint_no_internal_names 核对全部关卡目标都有中文名）。
 namedGoalLabelTable :: [(String, String)]
 namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultRegistry]

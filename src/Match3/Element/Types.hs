@@ -7,8 +7,8 @@
 -- 依赖：Match3.Types、Element.Event（步末规则产出 EndEffect）。不含具体元素（见 Element.Builtin）。
 --
 -- 一个格子最多三层，自上而下：冰层（宝石的 ice Int）→ 叠层（CellOverlay）→ 本体（CellContents 构造器 /
--- 宝石种类 / Custom 名字）。冰层与叠层是修饰器（Modifier），本体是元素（Element）；命中与挡匹配等
--- 按层自上而下组合（见 Class 的 Modified 与 Registry）。
+-- 宝石种类 / Custom 名字）。冰层与叠层是叠层种类（Match3.Element.Layer 的 Layer），本体是本体种类（Kind）；
+-- 命中与挡匹配等按层自上而下组合（见 Layer 的 Layered 与 World 的解码）。
 module Match3.Element.Types
   ( ElementName(..)
   , CustomState(..)

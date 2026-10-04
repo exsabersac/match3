@@ -1,4 +1,6 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 -- | 扩展钩子（段 2c）：按元素名计数的目标 GoalNamed、地面层元素槽、方向可配的边缘收集、
 -- 步末之后的补结算、自定义注册表下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
 -- **只定义在测试里**，主流程源码里没有它们的名字；这组测试证明双层果冻、气泡这类元素今后
@@ -15,8 +17,9 @@ import Match3.Board.Match (MatchRun(..))
 import Match3.Core
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
-import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, customEntry, groundEntry, register)
-import Match3.Element.Caps (Element(..), atEnd, blocker, counts, displays, drainsAt, fixed, ground, labelled, loseHintIs, piece, reshuffles)
+import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Entry, groundDef, inertDef, kindDef, register)
+import Match3.Element.Ability
+import Match3.Element.Kind (BoardPass(..), GroundKind(..), Kind(..), customPlace, fromCustom)
 import Match3.Element.Registry (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)
@@ -33,7 +36,7 @@ import Match3.Board.Gravity (settleRefillWith)
 import Match3.Board.Grid (mboardFromRows)
 import Match3.Element
   ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
-  , inertEntry, levelHooksWith, registerLevel, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
+  , levelHooksWith, registerLevel, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
 import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
 import Match3.Element.Message (Judging(..), Refilling(..), fromMessage)
 import Match3.Element.Level (judgeIn)
@@ -94,16 +97,15 @@ ext_goal_named_counts_crate = do
 
 -- | 测试专用地面层元素「苔藓」（地面层，2 层）：上方格子每被消除一次去一层、按层计入 GoalNamed；
 -- 不占格、不挡交换、洗牌不动、撤销恢复；未注册时地面层原样不动。
-newtype Moss = Moss Int
-  deriving (Eq, Show)
+data Moss
 
-instance Element Moss where
-  name _ = "moss"
-  toCell (Moss n) = Custom "moss" (CustomState n)
-  caps _ = piece [ground (\n -> if n > 1 then Just (n - 1) else Nothing), counts (CountNamed "moss")]
+instance GroundKind Moss where
+  groundName _ = "moss"
+  groundHit _ n = if n > 1 then Just (n - 1) else Nothing
+  groundCounter _ = Just (CountNamed "moss")
 
 mossDef :: Entry
-mossDef = groundEntry (Moss 2)
+mossDef = groundDef @Moss
 
 ext_ground_layer_test_element :: Assertion
 ext_ground_layer_test_element = do
@@ -136,14 +138,28 @@ ext_ground_layer_test_element = do
 -- 内部格与底边的风筝不收；未注册时是惰性占格。内置饼干的底边收集由原有 cookie_* 测试与金标准锁定。
 newtype Kite = Kite Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable) via (Obstacle Kite)
 
-instance Element Kite where
-  name _ = "kite"
-  toCell (Kite k) = Custom "kite" (CustomState k)
-  caps _ = blocker [drainsAt [EdgeLeft], counts (CountNamed "kite")]
+instance Cellular Kite where
+  nameOf _ = "kite"
+-- 占格障碍原型包的移动方法，另加左边收集
+instance Movable Kite where
+  portal _ = False
+  drains _ = [EdgeLeft]
+  keepOnShuffle _ = True
+  recolorable _ = False
+  pushable _ = False
+instance Countable Kite where
+  counter _ = Just (CountNamed "kite")
+instance Renders Kite
+
+instance Kind Kite where
+  kindName _ = "kite"
+  fromCell = fromCustom "kite" Kite
+  place _ = customPlace "kite"
 
 kiteDef :: Entry
-kiteDef = customEntry (Kite 1) (Kite . unCustomState)
+kiteDef = kindDef @Kite
 
 ext_edge_drain_side_collectible :: Assertion
 ext_edge_drain_side_collectible = do
@@ -167,14 +183,21 @@ ext_edge_drain_side_collectible = do
 -- 补结算是统一路径（内置元素步末从不留下空洞，见 docs/testing.md 的扫描），没有开关。
 newtype Sinkhole = Sinkhole Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Fixed Sinkhole)
 
-instance Element Sinkhole where
-  name _ = "sinkhole"
-  toCell (Sinkhole k) = Custom "sinkhole" (CustomState k)
-  caps _ = fixed [atEnd (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))]
+instance Cellular Sinkhole where
+  nameOf _ = "sinkhole"
+instance Countable Sinkhole
+instance Renders Sinkhole
+
+instance Kind Sinkhole where
+  kindName _ = "sinkhole"
+  fromCell = fromCustom "sinkhole" Sinkhole
+  place _ = customPlace "sinkhole"
+  boardPasses _ = [EndPass (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))]
 
 sinkholeDef :: Entry
-sinkholeDef = customEntry (Sinkhole 1) (Sinkhole . unCustomState)
+sinkholeDef = kindDef @Sinkhole
 
 ext_post_end_settle_hole_element :: Assertion
 ext_post_end_settle_hole_element = do
@@ -204,14 +227,25 @@ ext_post_end_settle_hole_element = do
 -- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的注册表，不再退回内置表。
 newtype Dust = Dust Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable) via (Obstacle Dust)
 
-instance Element Dust where
-  name _ = "dust"
-  toCell (Dust k) = Custom "dust" (CustomState k)
-  caps _ = blocker [reshuffles]
+instance Cellular Dust where
+  nameOf _ = "dust"
+-- 占格障碍原型包的移动方法，只把洗牌时原样放回关掉
+instance Movable Dust where
+  portal _ = False
+  recolorable _ = False
+  pushable _ = False
+instance Countable Dust
+instance Renders Dust
+
+instance Kind Dust where
+  kindName _ = "dust"
+  fromCell = fromCustom "dust" Dust
+  place _ = customPlace "dust"
 
 dustDef :: Entry
-dustDef = customEntry (Dust 1) (Dust . unCustomState)
+dustDef = kindDef @Dust
 
 ext_manual_shuffle_keeps_crate_via_engine :: Assertion
 ext_manual_shuffle_keeps_crate_via_engine = do
@@ -231,11 +265,18 @@ ext_manual_shuffle_keeps_crate_via_engine = do
 -- 主流程：回放按时间线重放到终盘（applyEndEffect 逐项重放）、效果事件里有它、内置表下它是惰性占格。
 newtype Hopper = Hopper Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Fixed Hopper)
 
-instance Element Hopper where
-  name _ = "hopper"
-  toCell (Hopper k) = Custom "hopper" (CustomState k)
-  caps _ = fixed [atEnd (EndRule PhaseMove 80 hop (const []) (const []))]
+instance Cellular Hopper where
+  nameOf _ = "hopper"
+instance Countable Hopper
+instance Renders Hopper
+
+instance Kind Hopper where
+  kindName _ = "hopper"
+  fromCell = fromCustom "hopper" Hopper
+  place _ = customPlace "hopper"
+  boardPasses _ = [EndPass (EndRule PhaseMove 80 hop (const []) (const []))]
     where
       hop _ b0 =
         let step (items, b) p =
@@ -248,7 +289,7 @@ instance Element Hopper where
 
 ext_end_effect_generic_hopper :: Assertion
 ext_end_effect_generic_hopper = do
-  let reg = register (customEntry (Hopper 1) (Hopper . unCustomState)) defaultRegistry
+  let reg = register (kindDef @Hopper) defaultRegistry
       hopper = Custom "hopper" (CustomState 1)
       board0 = setCell tripleBoard (7, 0) hopper
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
@@ -355,7 +396,7 @@ instance LevelElement CoinRain where
 -- 金币无色不再连锁；其余什么都不改。注册表缺省策略下同一步不出金币。
 ext_refill_policy_level_element :: Assertion
 ext_refill_policy_level_element = do
-  let reg = registerLevel (SomeLevelElement CoinRain) (register (inertEntry "coin") defaultRegistry)
+  let reg = registerLevel (SomeLevelElement CoinRain) (register (inertDef "coin") defaultRegistry)
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
       (gs1, o, mt) = resolveSwapWith reg p1 p2 gs0
@@ -419,16 +460,25 @@ judge_default_no_replier =
 -- 主流程与前端不用改；没注册时什么都没有。
 newtype Lantern = Lantern Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Obstacle Lantern)
 
-instance Element Lantern where
-  name _ = "lantern"
-  toCell (Lantern k) = Custom "lantern" (CustomState k)
-  caps (Lantern k) =
-    blocker [counts (CountNamed "lantern"), labelled "灯笼", loseHintIs (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏"), displays [("lit", FaceBool (k > 0)), ("k", FaceInt k)]]
+instance Cellular Lantern where
+  nameOf _ = "lantern"
+instance Countable Lantern where
+  counter _ = Just (CountNamed "lantern")
+instance Renders Lantern where
+  face (Lantern k) = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]
+
+instance Kind Lantern where
+  kindName _ = "lantern"
+  fromCell = fromCustom "lantern" Lantern
+  place _ = customPlace "lantern"
+  label _ = Just "灯笼"
+  loseHint _ = Just (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏")
 
 ext_element_display_fields :: Assertion
 ext_element_display_fields = do
-  let reg = register (customEntry (Lantern 0) (Lantern . unCustomState)) defaultRegistry
+  let reg = register (kindDef @Lantern) defaultRegistry
       cell k = Custom "lantern" (CustomState k)
   assertEqual "extras (lit)" [("lit", FaceBool True), ("k", FaceInt 2)] (cellExtrasWith reg (cell 2))
   assertEqual "extras (dark)" [("lit", FaceBool False), ("k", FaceInt 0)] (cellExtrasWith reg (cell 0))

@@ -8,7 +8,7 @@
 -- | 类型类与抽象（Haskell 特性第 2 项，docs/haskell-features/02-类型类与抽象.md）。
 --
 -- * newtype 派生（DerivingStrategies）：ElementName / CustomState 的 Show / IsString 与底层 String / Int 逐字相同。
--- * 缺省 toCell（DefaultSignatures）：六个 Int newtype 元素的写回格子与第 2 项前手写的 Custom 编码相同，
+-- * 缺省 toCell（DefaultSignatures）：四个 Int newtype 本体元素的写回格子与第 2 项前手写的 Custom 编码相同，
 --   注册表解码回来是同一个元素值；表示不是 Int 的元素不写 toCell 就是类型错误。
 -- * 存在类型的公共相等：同类型比值、不同类型即不等（三个装箱类型行为相同）。
 -- * Grid 的 Functor / Foldable / Traversable：定律、行主序、形状不变；随机盘（mapAccumL）与旧递归逐种子相同；
@@ -28,7 +28,8 @@ import Match3.Counts (Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Board.Random (randomBoardSized)
 import Match3.Element
 import Match3.Element.Builtin.Obstacle (StoneE(..))
-import Match3.Element.Class (Element(..), SomeElement(..), SomeModifier(..), diffWeight, modify)
+import Match3.Element.Ability
+import Match3.Element.Layer (Layered(..))
 import Match3.Types (Grid, boardCells, gridFromRows, gridRows, minBoardDim)
 import System.Random (StdGen, mkStdGen, randomR)
 import Test.Tasty
@@ -67,8 +68,8 @@ classes_newtype_show_same_as_underlying =
 --------------------------------------------------------------------------------
 -- 2. 缺省 toCell
 
--- | 第 2 项前六个元素手写的 toCell（逐字副本）与现在的缺省实现相同；格子本体（地面层的果冻 / 魔法地格不在
--- 本体注册表里，只比编码）经注册表从格子解码回同一个元素值。
+-- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在的缺省实现相同，经注册表从格子解码回同一个元素值
+-- （元素类重构第 2 刀起地面层果冻 / 魔法地格是不带值的 GroundKind 类型，不再有 toCell）。
 classes_default_toCell_same_as_handwritten :: Assertion
 classes_default_toCell_same_as_handwritten =
   mapM_ one [0 .. 6]
@@ -78,8 +79,6 @@ classes_default_toCell_same_as_handwritten =
       body (Bubble k) (Custom "bubble" (CustomState k))
       body (Chameleon k) (Custom "chameleon" (CustomState k))
       body (MagicStone k) (Custom "magic_stone" (CustomState k))
-      encode (Jelly k) (Custom "jelly" (CustomState k))
-      encode (MagicGround k) (Custom "magic" (CustomState k))
       -- 表示同样是 Int、但写了自己 toCell 的元素不受缺省影响
       encode (StoneE k) (Stone k)
     encode :: Element e => e -> Cell -> Assertion
@@ -93,8 +92,8 @@ classes_default_toCell_same_as_handwritten =
 data Pair = Pair Int Int
   deriving (Eq, Show)
 
-instance Element Pair where
-  name _ = "pair"
+instance Cellular Pair where
+  nameOf _ = "pair"
 
 classes_default_toCell_needs_coercible :: Assertion
 classes_default_toCell_needs_coercible = do
@@ -109,10 +108,15 @@ classes_default_toCell_needs_coercible = do
 newtype Twin = Twin Int
   deriving (Eq, Show)
 
-instance Element Twin where
-  name _ = "bubble" -- 故意与内置泡泡同名、同编码
+instance Cellular Twin where
+  nameOf _ = "bubble" -- 故意与内置泡泡同名、同编码
+instance Matchable Twin
+instance Hittable Twin
+instance Movable Twin
+instance Countable Twin
+instance Renders Twin
 
--- | 同类型比值；名字、编码都相同但类型不同即不等（三个装箱类型共用 sameTypeEq）。
+-- | 同类型比值；名字、编码都相同但类型不同即不等（装箱类型共用 sameTypeEq）。
 classes_boxed_eq_by_type :: Assertion
 classes_boxed_eq_by_type = do
   assertEqual "same encoding" (toCell (Bubble 2)) (toCell (Twin 2))
@@ -121,12 +125,12 @@ classes_boxed_eq_by_type = do
   assertBool "other type" (SomeElement (Bubble 2) /= SomeElement (Twin 2))
   assertEqual "show" "SomeElement \"bubble\" (Bubble 2)" (show (SomeElement (Bubble 2)))
   assertEqual "show nested" "Just (SomeElement \"bubble\" (Twin 2))" (show (Just (SomeElement (Twin 2))))
-  let iced = modify (Ice 2) (SomeElement (Bubble 1))
-  assertBool "modified eq" (iced == modify (Ice 2) (SomeElement (Bubble 1)))
-  assertBool "modified other inner type" (iced /= modify (Ice 2) (SomeElement (Twin 1)))
-  assertBool "modifier boxes" (SomeModifier (Ice 2) == SomeModifier (Ice 2) && SomeModifier (Ice 2) /= SomeModifier (Ice 1))
-  case iced of
-    SomeElement e -> assertEqual "modified show" "SomeElement \"bubble\" (Modified (SomeModifier \"ice\" (Ice 2)) (SomeElement \"bubble\" (Bubble 1)))" (show (SomeElement e))
+  let iced = SomeElement (Layered (Ice 2) (SomeElement (Bubble 1)))
+  assertBool "layered eq" (iced == SomeElement (Layered (Ice 2) (SomeElement (Bubble 1))))
+  assertBool "layered other layer value" (iced /= SomeElement (Layered (Ice 1) (SomeElement (Bubble 1))))
+  assertBool "layered other inner type" (iced /= SomeElement (Layered (Ice 2) (SomeElement (Twin 1))))
+  assertEqual "layered show" "SomeElement \"bubble\" (Layered (Ice 2) (SomeElement \"bubble\" (Bubble 1)))" (show iced)
+  assertEqual "decoded show" "SomeElement \"gem\" (Layered (Ice 2) (SomeElement \"gem\" (PlainGem C1)))" (show (elementOf defaultRegistry (Gem C1 Normal 2 Nothing)))
   assertBool "level boxes" (all (\l -> l == l) (gsLevelElems (levelGame0 0)))
   where
     levelGame0 li = maybe (error "no level") id (campaignGame li 1)

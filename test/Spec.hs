@@ -29,7 +29,7 @@ import qualified Spec.ReplayUndo
 import qualified Spec.Golden
 import qualified Spec.Properties
 import qualified Spec.SourceScan
-import qualified Spec.Caps
+import qualified Spec.Archetype
 import qualified Spec.Presentation
 import qualified Spec.View
 import qualified Spec.BombShapes
@@ -91,7 +91,7 @@ tests =
         , Spec.ReplayUndo.tests
         , Spec.Golden.tests
         , Spec.Properties.tests
-        , Spec.Caps.tests
+        , Spec.Archetype.tests
         , Spec.Presentation.tests
         , Spec.View.tests
         , Spec.BombShapes.tests

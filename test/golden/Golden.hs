@@ -34,7 +34,7 @@ import Match3.Board.Random (randomBoard, randomPlayableBoard)
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), historyDepth, pushHistory, replaceNow, startHistory, undoHistory)
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Registry (Registry, inertEntry, register)
+import Match3.Element.Registry (Registry, inertDef, register)
 import qualified Match3.Engine as M3E
 import Match3.Game.Boosters
 import Match3.Game.Level
@@ -516,7 +516,7 @@ h6Dead =
 -- | H6 用的自定义注册表：内置表 + 一个测试专用的惰性元素（不在盘面上）。
 -- 经 match3GameWith 的洗牌 / 交换动作走注册表路径，结果必须与内置表逐字相同。
 h6Reg :: Registry
-h6Reg = register (inertEntry "golden_probe") defaultRegistry
+h6Reg = register (inertDef "golden_probe") defaultRegistry
 
 -- | H6：洗牌 + 自定义注册表。每步先手动洗牌（Shuffle 动作），再按固定公式挑一手成交的交换；
 -- 最后记死局的自动洗牌与手动洗牌。

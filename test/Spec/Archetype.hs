@@ -97,6 +97,7 @@ expected n cell col swapBlocked fire falling port keep move =
   , ("diffWeight", show (1 :: Int))
   , ("vacatesCarpet", show False)
   , ("face", show ([] :: [(String, FaceValue)]))
+  , ("faceBase", show (Nothing :: Maybe (String, [(String, CellField)])))
   ]
   where
     strikeV = case () of

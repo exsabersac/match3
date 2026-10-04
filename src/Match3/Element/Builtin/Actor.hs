@@ -24,7 +24,7 @@ import Data.Bits (xor)
 import Data.List.NonEmpty (NonEmpty (..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
-import Match3.Element.Builtin.Common (boardSeed, colorPlace, pickBy, plainGem, posSeed)
+import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
 import Match3.Element.Ability
 import Match3.Element.Event
 import Match3.Element.Kind
@@ -44,7 +44,8 @@ instance Cellular MagicHatE where
   toCell _ = MagicHat
 
 instance Countable MagicHatE
-instance Renders MagicHatE
+instance Renders MagicHatE where
+  faceBase _ = Just ("hat", [])
 
 instance Kind MagicHatE where
   kindName _ = "magic_hat"
@@ -64,7 +65,8 @@ instance Cellular MakerE where
   toCell (MakerE c n) = Maker c n
 
 instance Countable MakerE
-instance Renders MakerE
+instance Renders MakerE where
+  faceBase (MakerE c k) = Just ("maker", [colorField c, nField k])
 
 instance Kind MakerE where
   kindName _ = "maker"
@@ -84,7 +86,8 @@ instance Cellular SnailE where
   toCell (SnailE dr dc) = Snail dr dc
 
 instance Countable SnailE
-instance Renders SnailE
+instance Renders SnailE where
+  faceBase (SnailE dr dc) = Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])
 
 instance Kind SnailE where
   kindName _ = "snail"
@@ -104,7 +107,8 @@ instance Cellular BottleE where
   toCell (BottleE c) = Bottle c
 
 instance Countable BottleE
-instance Renders BottleE
+instance Renders BottleE where
+  faceBase (BottleE c) = Just ("bottle", [colorField c])
 
 instance Kind BottleE where
   kindName _ = "bottle"
@@ -132,7 +136,8 @@ instance Movable CountdownE where
   keepOnShuffle _ = True
 
 instance Countable CountdownE
-instance Renders CountdownE
+instance Renders CountdownE where
+  faceBase (CountdownE c k) = Just ("countdown", [colorField c, nField k])
 
 instance Kind CountdownE where
   kindName _ = "countdown"

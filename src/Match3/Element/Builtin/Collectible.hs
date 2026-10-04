@@ -71,7 +71,8 @@ instance Hittable TimeSpiritE where
   fires _ = False
 
 instance Countable TimeSpiritE
-instance Renders TimeSpiritE
+instance Renders TimeSpiritE where
+  faceBase _ = Just ("spirit", [])
 
 instance Kind TimeSpiritE where
   kindName _ = "time_spirit"

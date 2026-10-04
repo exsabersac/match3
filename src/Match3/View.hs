@@ -50,6 +50,7 @@ module Match3.View
     -- * 单格描述
   , CellField (..)
   , cellFace
+  , cellFaceWith
   , FaceValue (..)
   , cellExtras
   , cellExtrasWith
@@ -65,8 +66,9 @@ import Engine.Game (Game (..))
 import Match3.Board.Default (findHint)
 import Match3.Counts (CounterKey(..))
 import Match3.Element.Builtin (defaultWorld, snowBossHp, snowBossName)
-import Match3.Element.World (World, faceFieldsWith)
-import Match3.Element.Types (FaceValue (..))
+import Match3.Element.Ability (Cellular(nameOf), Renders(faceBase))
+import Match3.Element.World (World, bodyOf, faceFieldsWith)
+import Match3.Element.Types (CellField (..), FaceValue (..))
 import Match3.Engine (match3Game)
 import Match3.Game.Outcome (loseHint)
 import Match3.Game.State (GameState(..), gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress, gsUfos)
@@ -417,35 +419,27 @@ levelViews = [LevelView (lvlIndex l) (lvlName l) (lvlMoves l) (goalInfo (lvlGoal
 -- 单格描述
 
 -- | 结构化描述里的一个字段值。
-data CellField = FieldInt Int | FieldText String | FieldNull
-  deriving (Eq, Show)
-
 -- | 单格的结构化描述：类型标签 + 按固定顺序的字段（网页 JSON 的 t / c / k / i / o / n …；
 -- 桌面版按 UI.CellTable 画，不读这里）。
 cellFace :: Cell -> (String, [(String, CellField)])
-cellFace cell = case cell of
+cellFace = cellFaceWith defaultWorld
+
+-- | 'cellFace'，用给定的世界解码（扩展元素）。宝石格（冰层 / 叠层都在宝石格的字段里）按存储编码给出；
+-- 其余格问本体的 'faceBase'（Match3.Element.Ability.Renders），没给时：Custom 格 = ("custom", name / v)，
+-- 其余 = (元素名, 无字段)。元素类重构第 6 刀前这里是按 Cell 构造器写死的 case，网页 JSON 逐字节不变。
+cellFaceWith :: World -> Cell -> (String, [(String, CellField)])
+cellFaceWith w cell = case cell of
   Gem c k ice ov ->
     ( "G"
     , [ col c, ("k", FieldText (kindCode k)), ("i", FieldInt ice)
-      , ("o", maybe FieldNull (FieldText . overlayName) ov), n (maybe 0 overlayLayers ov) ] )
-  Stone k -> ("stone", [n k])
-  Chest k -> ("chest", [n k])
-  Honey k -> ("honey", [n k])
-  Balloon c -> ("balloon", [col c])
-  Cookie -> ("cookie", [])
-  Cake k -> ("cake", [n k])
-  MagicHat -> ("hat", [])
-  Maker c k -> ("maker", [col c, n k])
-  Snail dr dc -> ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])
-  Safe k -> ("safe", [n k])
-  Flip f b -> ("flip", [col f, ("b", FieldInt (colorNum b))])
-  Surprise -> ("surprise", [])
-  Bottle c -> ("bottle", [col c])
-  TimeSpirit -> ("spirit", [])
-  Countdown c k -> ("countdown", [col c, n k])
-  Custom name v -> ("custom", [("name", FieldText (unElementName name)), ("v", FieldInt (unCustomState v))])
+      , ("o", maybe FieldNull (FieldText . overlayName) ov), ("n", FieldInt (maybe 0 overlayLayers ov)) ] )
+  _ -> case faceBase body of
+    Just f -> f
+    Nothing -> case cell of
+      Custom name v -> ("custom", [("name", FieldText (unElementName name)), ("v", FieldInt (unCustomState v))])
+      _ -> (unElementName (nameOf body), [])
   where
-    n k = ("n", FieldInt k)
+    body = bodyOf w cell
     col c = ("c", FieldInt (colorNum c))
 
 -- | 单格的显示附加字段：元素自己提供（能力类 Renders 的 face，Match3.Element.Ability），这里不按元素名特判。

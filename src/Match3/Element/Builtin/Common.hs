@@ -3,6 +3,9 @@
 module Match3.Element.Builtin.Common
   ( deadRule
   , colorPlace
+    -- * 前端格子字段（Renders.faceBase）
+  , nField
+  , colorField
     -- * 按盘面散列选格（毛球跳格 / 雪怪召唤）
   , boardSeed
   , posSeed
@@ -23,6 +26,14 @@ deadRule f ctx b = let (b', dead) = f b (acTrue ctx) (acDirect ctx) in AdjOut b'
 -- | 放置：一个颜色参数（气球 / 染色瓶；精确匹配）。
 colorPlace :: (Color -> Cell) -> Placer
 colorPlace con args _ = con <$> exactArgs argColor args
+
+-- | 前端格子的层数 / 计数字段 n。
+nField :: Int -> (String, CellField)
+nField k = ("n", FieldInt k)
+
+-- | 前端格子的颜色字段 c（颜色编号 1..5）。
+colorField :: Color -> (String, CellField)
+colorField c = ("c", FieldInt (fromEnum c + 1))
 
 --------------------------------------------------------------------------------
 -- 按盘面散列选格

@@ -44,7 +44,7 @@ module Match3.Element.Ability
 import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Counts (CounterKey)
-import Match3.Element.Types (Edge, FaceValue)
+import Match3.Element.Types (CellField, Edge, FaceValue)
 import Match3.Types
 
 --------------------------------------------------------------------------------
@@ -136,6 +136,10 @@ class Countable e where
 class Renders e where
   face :: e -> [(String, FaceValue)]
   face _ = []
+  -- | 前端格子的类型标签与基本字段（网页 JSON 的 t 与其后的字段，Match3.View.cellFace）。Nothing = 缺省：
+  -- Custom 格 = ("custom", name / v)，其余 = (元素名, 无字段)；宝石格（含冰层 / 叠层）由 View 按存储编码给出。
+  faceBase :: e -> Maybe (String, [(String, CellField)])
+  faceBase _ = Nothing
 
 -- | 宝石格的颜色（'color' 的缺省：只有宝石格有颜色）。
 cellGemColor :: Cell -> Maybe Color
@@ -191,6 +195,7 @@ instance Countable SomeElement where
 
 instance Renders SomeElement where
   face (SomeElement e) = face e
+  faceBase (SomeElement e) = faceBase e
 
 -- | 拆箱。
 fromElement :: Typeable e => SomeElement -> Maybe e
@@ -222,6 +227,7 @@ abilityProbe e =
   , ("diffWeight", show (diffWeight e))
   , ("vacatesCarpet", show (vacatesCarpet e))
   , ("face", show (face e))
+  , ("faceBase", show (faceBase e))
   ]
   where
     probeBoard = gridFromRows (replicate 8 (replicate 8 (Gem C1 Normal 0 Nothing)))

@@ -15,6 +15,7 @@ module Spec.ElementAbility
   ) where
 
 import Control.Applicative ((<|>))
+import Control.Monad (forM_)
 import Data.Char (isAlphaNum, isSpace)
 import Data.List (isInfixOf, isPrefixOf, sort)
 import Data.Maybe (mapMaybe)
@@ -34,6 +35,9 @@ import Match3.Element.World
 import Match3.Types
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck (Property, forAll, testProperty, (===))
+import Spec.Properties (genCell)
+import Match3.View (cellFace)
 
 tests :: [TestTree]
 tests =
@@ -45,6 +49,8 @@ tests =
   , testCase "ab_boxing_is_transparent" ab_boxing_is_transparent
   , testCase "ab_world_decode_order" ab_world_decode_order
   , testCase "ab_rule_methods_pinned" ab_rule_methods_pinned
+  , testCase "ab_cell_face_matches_legacy_zoo" ab_cell_face_matches_legacy_zoo
+  , testProperty "qc_cell_face_matches_legacy" qc_cell_face_matches_legacy
   ]
 
 --------------------------------------------------------------------------------
@@ -111,7 +117,8 @@ instance Hittable StoneV where
 instance Countable StoneV where
   counter _ = Just CountStones
 
-instance Renders StoneV
+instance Renders StoneV where
+  faceBase (StoneV n) = Just ("stone", [("n", FieldInt n)])
 
 instance Kind StoneV where
   kindName _ = "stone"
@@ -454,3 +461,67 @@ ab_rule_methods_pinned = do
   assertEqual "layerRules choco" (1, 1) (length [() | AdjacentPass 150 _ <- layerRules (Proxy @ChocoL)], length [() | EndPass _ <- layerRules (Proxy @ChocoL)])
   assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint (Proxy @SnowBoss) (2, 3))
   assertEqual "snow boss rules" [200] [o | AdjacentPass o _ <- kindRules (Proxy @SnowBoss)]
+
+--------------------------------------------------------------------------------
+-- 前端格子描述（第 6 刀）：cellFace 由 Renders.faceBase 驱动，与第 6 刀前按构造器写死的 case 逐字段相同
+
+-- | 第 6 刀前 Match3.View.cellFace 的逐字副本。
+legacyCellFace :: Cell -> (String, [(String, CellField)])
+legacyCellFace cell = case cell of
+  Gem c k ice ov ->
+    ( "G"
+    , [ col c, ("k", FieldText (kindCodeL k)), ("i", FieldInt ice)
+      , ("o", maybe FieldNull (FieldText . overlayNameL) ov), n (maybe 0 overlayLayersL ov) ] )
+  Stone k -> ("stone", [n k])
+  Chest k -> ("chest", [n k])
+  Honey k -> ("honey", [n k])
+  Balloon c -> ("balloon", [col c])
+  Cookie -> ("cookie", [])
+  Cake k -> ("cake", [n k])
+  MagicHat -> ("hat", [])
+  Maker c k -> ("maker", [col c, n k])
+  Snail dr dc -> ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])
+  Safe k -> ("safe", [n k])
+  Flip f b -> ("flip", [col f, ("b", FieldInt (fromEnum b + 1))])
+  Surprise -> ("surprise", [])
+  Bottle c -> ("bottle", [col c])
+  TimeSpirit -> ("spirit", [])
+  Countdown c k -> ("countdown", [col c, n k])
+  Custom name v -> ("custom", [("name", FieldText (unElementName name)), ("v", FieldInt (unCustomState v))])
+  where
+    n k = ("n", FieldInt k)
+    col c = ("c", FieldInt (fromEnum c + 1))
+    kindCodeL k = case k of
+      Normal -> "N"
+      LineH -> "H"
+      LineV -> "V"
+      Bomb -> "B"
+      Rainbow -> "R"
+    overlayNameL ov = case ov of
+      Grass -> "grass"
+      Vine -> "vine"
+      Choco -> "choco"
+      Fog _ -> "fog"
+      Chain _ -> "chain"
+      Freeze _ -> "freeze"
+      Curtain _ -> "curtain"
+      Steam -> "steam"
+    overlayLayersL ov = case ov of
+      Fog k -> k
+      Chain k -> k
+      Freeze k -> k
+      Curtain k -> k
+      _ -> 0
+
+ab_cell_face_matches_legacy_zoo :: Assertion
+ab_cell_face_matches_legacy_zoo =
+  forM_ zoo $ \cell -> assertEqual (show cell) (legacyCellFace cell) (cellFace cell)
+  where
+    customs = [Custom (defName d) (CustomState v) | d <- worldDefs defaultWorld, v <- [0, 1, 3, 17]] ++ [Custom "nobody" (CustomState 2)]
+    zoo =
+      customs
+        ++ [Stone 2, Chest 1, Honey 3, Balloon C4, Cookie, Cake 2, MagicHat, Maker C3 2, Snail 0 (-1), Safe 1, Flip C2 C5, Surprise, Bottle C1, TimeSpirit, Countdown C5 4]
+        ++ [Gem c k i ov | c <- [C1, C5], k <- [Normal, Bomb, Rainbow], i <- [0, 2], ov <- [Nothing, Just Grass, Just (Fog 2), Just Steam]]
+
+qc_cell_face_matches_legacy :: Property
+qc_cell_face_matches_legacy = forAll genCell $ \cell -> cellFace cell === legacyCellFace cell

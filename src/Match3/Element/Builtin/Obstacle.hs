@@ -44,7 +44,7 @@ import Data.Proxy (Proxy(..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
-import Match3.Element.Builtin.Common (boardSeed, colorPlace, deadRule, pickBy, plainGem, posSeed)
+import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, deadRule, nField, pickBy, plainGem, posSeed)
 import Match3.Element.Ability
 import Match3.Element.Kind
 import Match3.Element.Types
@@ -72,7 +72,8 @@ instance Hittable StoneE where
 instance Countable StoneE where
   counter _ = Just CountStones
 
-instance Renders StoneE
+instance Renders StoneE where
+  faceBase (StoneE k) = Just ("stone", [nField k])
 
 instance Kind StoneE where
   kindName _ = "stone"
@@ -99,7 +100,8 @@ instance Hittable ChestE where
 instance Countable ChestE where
   counter _ = Just CountChests
 
-instance Renders ChestE
+instance Renders ChestE where
+  faceBase (ChestE k) = Just ("chest", [nField k])
 
 instance Kind ChestE where
   kindName _ = "chest"
@@ -126,7 +128,8 @@ instance Hittable HoneyE where
 instance Countable HoneyE where
   counter _ = Just CountHoney
 
-instance Renders HoneyE
+instance Renders HoneyE where
+  faceBase (HoneyE k) = Just ("honey", [nField k])
 
 instance Kind HoneyE where
   kindName _ = "honey"
@@ -153,7 +156,8 @@ instance Hittable CakeE where
 instance Countable CakeE where
   counter _ = Just CountCakes
 
-instance Renders CakeE
+instance Renders CakeE where
+  faceBase (CakeE k) = Just ("cake", [nField k])
 
 instance Kind CakeE where
   kindName _ = "cake"
@@ -179,7 +183,8 @@ instance Hittable BalloonE where
 instance Countable BalloonE where
   counter _ = Just CountBalloons
 
-instance Renders BalloonE
+instance Renders BalloonE where
+  faceBase (BalloonE c) = Just ("balloon", [colorField c])
 
 instance Kind BalloonE where
   kindName _ = "balloon"
@@ -205,7 +210,8 @@ instance Hittable SafeE where
 instance Countable SafeE where
   vacatesCarpet _ = True
 
-instance Renders SafeE
+instance Renders SafeE where
+  faceBase (SafeE k) = Just ("safe", [nField k])
 
 instance Kind SafeE where
   kindName _ = "safe"
@@ -237,7 +243,8 @@ instance Movable FlipE where
   keepOnShuffle _ = True
 
 instance Countable FlipE
-instance Renders FlipE
+instance Renders FlipE where
+  faceBase (FlipE f b) = Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])
 
 instance Kind FlipE where
   kindName _ = "flip"

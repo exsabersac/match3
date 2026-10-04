@@ -2,7 +2,7 @@
 
 本文描述 **当前代码** 中一次成功玩家步的编排顺序，入口为 `Match3.Game.trySwap`（校验与起手选择在 `Match3.Game.Move.resolveSwap`，其后的步骤由交换与三种道具共用的 `Match3.Game.Resolve.resolveMove` 完成；`runMove` 为其别名）。不发明源码中不存在的机制。
 
-第二刀 2b 起，下文每一步里「某个格子怎么反应」（能否交换、是否挡匹配、被命中 / 被邻格波及时削层还是打碎、是否下落、计数、洗牌是否保留、步末规则）都由元素注册表分派（`Match3.Element`，见 [architecture.md](architecture.md#元素框架与事件)）；流水线顺序本身不变，邻格规则按固定顺序表执行。
+第二刀 2b 起，下文每一步里「某个格子怎么反应」（能否交换、是否挡匹配、被命中 / 被邻格波及时削层还是打碎、是否下落、计数、洗牌是否保留、步末规则）都由元素元素世界分派（`Match3.Element`，见 [architecture.md](architecture.md#元素框架与事件)）；流水线顺序本身不变，邻格规则按固定顺序表执行。
 
 ## 总览
 
@@ -52,8 +52,8 @@
 
 1. 已有 `gsOver`（`Terminal`）→ 原样返回该结局（`fromTerminal` 换回 `Outcome`）。
 2. 坐标越界或不相邻 → `InvalidSwap`。
-3. `swapBlockedWith reg`（注册表的 `blocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
-4. `swapCells` 后先问关卡级元素的**交换变身**（新玩法 4，消息 `Morphing`，内置只有规则开关 `rainbow_combos` 打开的关卡回复：彩虹 × 直线 / 炸弹）：有回复时同色普通宝石先变成直线 / 炸弹（记一条 `esAfterWaves = 0` 的步末效果 `EvSpread rainbow_line / rainbow_bomb`），再按回复的种子起手，不再看下面的成对规则。没人回复时：若没有成对交换规则成立（段 4：注册表的 `swapRule`，按 `srOrder`：彩虹取色 10 → 特殊合成 20（第 8 刀起 = 注册表组合表 `comboRules` 并成的一条，内置表：炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线，两个方向都试、表里没有的组合不成立）；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。
+3. `swapBlockedWith reg`（元素世界的 `blocksSwap`：石头/宝箱/蜂蜜/气球/饼干/蛋糕/帽/机/蜗牛/保险箱/彩蛋/瓶/精灵/锁链/火箭冰冻等挡交换情形，见 Obstacles）→ `NoMatch`。
+4. `swapCells` 后先问关卡级元素的**交换变身**（新玩法 4，节拍 `Mechanic.morph`，内置只有规则开关 `rainbow_combos` 打开的关卡回复：彩虹 × 直线 / 炸弹）：有回复时同色普通宝石先变成直线 / 炸弹（记一条 `esAfterWaves = 0` 的步末效果 `EvSpread rainbow_line / rainbow_bomb`），再按回复的种子起手，不再看下面的成对规则。没人回复时：若没有成对交换规则成立（段 4：元素世界的成对交换规则（`SwapPass`），按 `srOrder`：彩虹取色 10 → 特殊合成 20（第 8 刀起 = 世界的组合表 `comboRules` 并成的一条，内置表：炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线，两个方向都试、表里没有的组合不成立）；经 `swapOpeningWith`）、且 `not hasAnyMatch` → `NoMatch`。成立时以该规则在交换后盘面给出的种子起手。
 
 2–4 返回的状态盘面 / 分数 / 步数不变，但会经 `clearMoveFx` 把 `gsCombo`、`gsLastCleared` 清零（这两个字段只描述最近一次**真正结算**的一步）。道具被拒（锤免疫、次数用完、自由交换无匹配）、撤销（`Engine.History` 的 `Undo`，经 `match3History.hpRestore`）、`shuffleGame` 同样清零。
 
@@ -65,10 +65,10 @@
 
 每轮依次执行下列步骤，直至无匹配（结果是 `CascadeRun`：终盘、`CascadeTally` 计数、每轮 `CascadeWave`、飞碟、生成器）：
 
-1. `clearMatchesDetailedWith`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 注册表开启规则 `openRule`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），魔法石充能（180）、毛球消灭（190）、雪怪扣血（新玩法 5，200：身外一圈的真消除 + 直接命中的 Boss 格各扣 1，归零四格并入清除格），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊（第 8 刀起按注册表的有序形状规则表 `shapeRules`：每条连线取第一条认领它的规则；内置 = 长度 ≥5 彩虹 → 横 4 横消 → 竖 4 竖消，放在交换落点或连线可清格的中间，横线在前、竖线在后，后写的覆盖先写的；新玩法 1：规则开关 `bomb_shapes` 打开的关卡在「长度 ≥5 彩虹」之后多一条 L / T 规则——同色横竖连线交叉时横线在交点放炸弹、竖线认领不生成）。本关的形状表在每步结算开始时确定：`resolveMoveWith` 先用 `levelRegistryIn` 问关卡级元素 `Shaping`，有回复就换上回复的表，这一步的所有轮次都用它。新玩法 8：同一个 `levelRegistryIn` 还把地面层里的魔法地格写成本步的扩爆格（`regWiden`），`expandSpecials` 取每个直线 / 炸弹的范围时经 `blastWith`：引爆格是魔法地格就把范围扩一圈（原范围各格的八邻格，盘内），扩出来的格同样算直接命中、其中的特效照常连锁；没有魔法地格的关卡扩爆格为空，范围与原来逐格相同。
-2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级元素：元素类迁移后为 `Settling` 消息，内置回复者调 `portalTeleport`；第 7 刀起 Board 层经钩子 `onSettle` 调用）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`；第 7 刀起是关卡级元素 `GroundLayer`，按轮发 `GroundHit`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
-3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则注册表的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。新玩法 6：有掉落口（关卡记录 `lvlDrops`）的关卡，关卡级元素 `CookieDrop` 回复 `Refilling`，把策略包一层 `dropRefill`——每个空洞仍照原策略补一次（随机数照常消耗），若空洞在掉落口格上、且此刻盘上（已补的算在内）的饼干少于 `dropKeep` 块，就换成饼干；饼干之后照常下落、到底行被收走。新玩法 7 起名额按「同种」数（`Custom` 按名字、内置格按相等），第 47 关用同一机制掉变色龙（`Custom "chameleon" 0`）。
-4. 飞碟吸收（段 4：注册表关卡级元素回复 `Refilled` 消息，内置 = `stepUfos`；去掉 `ufo` 即不吸收；第 7 刀起经钩子 `onAbsorb`，飞碟位置在 `UfoLevel` 的值里）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbedWith`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
+1. `clearMatchesDetailedWith`：找 ≥3 连，扩展特殊（`expandSpecials`），`chipIceOnClear`，彩蛋通道，清本格草等 overlay（彩蛋通道 = 元素世界的开启规则 `OpenPass`，段 4），邻格削石头/宝箱/蜂蜜/蛋糕/气球/雾/链/冻/帘/保险箱/精灵、打破气泡（段 5，邻格规则 170），魔法石充能（180）、毛球消灭（190）、雪怪扣血（新玩法 5，200：身外一圈的真消除 + 直接命中的 Boss 格各扣 1，归零四格并入清除格），触发帽与瓶，充能果汁机，清邻巧克力/蒸汽，挖空真清除格，可能在清除位生成新特殊（第 8 刀起按元素世界的有序形状规则表 `shapeRules`：每条连线取第一条认领它的规则；内置 = 长度 ≥5 彩虹 → 横 4 横消 → 竖 4 竖消，放在交换落点或连线可清格的中间，横线在前、竖线在后，后写的覆盖先写的；新玩法 1：规则开关 `bomb_shapes` 打开的关卡在「长度 ≥5 彩虹」之后多一条 L / T 规则——同色横竖连线交叉时横线在交点放炸弹、竖线认领不生成）。本关的形状表在每步结算开始时确定：`resolveMoveWith` 先用 `levelWorldIn` 问关卡级机制的 `shapes` 节拍，有回复就换上回复的表，这一步的所有轮次都用它。新玩法 8：同一个 `levelWorldIn` 还把地面层里的魔法地格写成本步的扩爆格（`regWiden`），`expandSpecials` 取每个直线 / 炸弹的范围时经 `blastWith`：引爆格是魔法地格就把范围扩一圈（原范围各格的八邻格，盘内），扩出来的格同样算直接命中、其中的特效照常连锁；没有魔法地格的关卡扩爆格为空，范围与原来逐格相同。
+2. `settleBoardPortals`：重力 → 底行饼干收集 → 传送门传送（段 4 起经关卡级机制：元素类重构后为 `onSettling` 节拍，内置回复者调 `portalTeleport`；第 7 刀起 Board 层经钩子 `onSettle` 调用）→ 再重力/收集（循环至稳）。段 2c 起收集按元素的 `drains :: [Edge]` 进行（底 → 左 → 右 → 上，角格只收一次；内置只有饼干 = 底边），被收格按其 `counter` 计数；地面层（`gsGround`；第 7 刀起是关卡级机制 `GroundLayer`，按轮调 `onGroundHit`）在每轮的真清除格 + 收集格上各削一层（段 5 起第 39 关的双层果冻用到它）。
+3. 补子：第 8 刀起按补子策略（`activeRefill`：关卡级元素回复 `Refilling` 换的策略优先，否则元素世界的 `refillPolicyWith`）行优先逐个空洞补；缺省 `defaultRefill` = 随机普通宝石（每洞恰好一次 `randomColor`，与第 8 刀前的 `refill` 逐字相同）。新玩法 6：有掉落口（关卡记录 `lvlDrops`）的关卡，关卡级元素 `CookieDrop` 回复 `Refilling`，把策略包一层 `dropRefill`——每个空洞仍照原策略补一次（随机数照常消耗），若空洞在掉落口格上、且此刻盘上（已补的算在内）的饼干少于 `dropKeep` 块，就换成饼干；饼干之后照常下落、到底行被收走。新玩法 7 起名额按「同种」数（`Custom` 按名字、内置格按相等），第 47 关用同一机制掉变色龙（`Custom "chameleon" 0`）。
+4. 飞碟吸收（段 4：关卡级机制的 `onRefilled` 节拍，内置 = `stepUfos`；去掉 `ufo` 即不吸收；第 7 刀起经钩子 `onAbsorb`，飞碟位置在 `UfoLevel` 的值里）：吸正交同色可吸收目标；若有吸收，先 `maskUfoAbsorbSpecials`（特殊降级为 Normal）再 `clearUfoAbsorbedWith`，**吸走 ≠ 引爆**，再 settle/补子，计入 `GoalUfo`。
 
 波次分：`scoreForWave wave n`。
 
@@ -99,7 +99,7 @@
 
 ## 4. 传送带（`beltMoves` + `applyBeltMoves` + `cascadeAfterWith AfterBelt`）
 
-- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经注册表关卡级元素回复 `EndTicked` 消息取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EvBelt` 步末效果）与重放（`applyEndEffect`）共用这一份。
+- 有皮带：沿每条 `Belt` 环向移位一格。`Conveyor.beltMoves`（段 4：经关卡级机制的 `onEndTick` 节拍取用；去掉 `belt` 即不移位、也没有皮带后的再连锁）给出「原格 → 新格」（同一格出现多次时以最后一次为准），`applyBeltMoves` 按它移位；结算、回放描述（`EvBelt` 步末效果）与重放（`applyEndEffect`）共用这一份。
 - 移位后有匹配 → 全连锁。
 - **无匹配**仍 `settleBoardPortals`：皮带把饼干送到底行时也要收集；settle 后若出现匹配再连锁。
 
@@ -113,7 +113,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 ```
 
 - 本步已清除的藤/巧/蒸汽不蔓延。
-- 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。只推注册表里 `pushable` 的格（段 4，内置 = 宝石 / 倒计时 / 双面块）；魔法帽 / 染色瓶同样只改 `recolorable` 的格。
+- 蜗牛避开皮带占用格；传送门端点视为墙（避免永生装饰卡死门对）。只推元素世界里 `pushable` 的格（段 4，内置 = 宝石 / 倒计时 / 双面块）；魔法帽 / 染色瓶同样只改 `recolorable` 的格。
 - 蜗牛推动后若形成匹配：再 `cascadeMatches` 一次；**不再**重复倒计时/皮带/蜗牛/蔓延。
 - 毛球（新玩法 3，`PhaseMove` 20，在蜗牛之后）：每个毛球跳到一个正交相邻的普通宝石格并与之换位；避让格 / 墙与蜗牛相同，同一步已被别的毛球占过的格不选；跳后成消同样由步末补结算处理。道具路径没有 `PhaseMove`，毛球不跳。
 - 雪怪 Boss（新玩法 5，`PhaseMove` 30，在毛球之后）：每只 Boss 召唤计数 +1，满 3 次归零并把身外一圈（与四格正交相邻的 8 格）里的一颗普通宝石（无冰无叠层、不在避让格 / 墙上）变成雪块（1 层石头）；选格按这一步步末开始时的盘面散列，不耗 `gsGen`；一圈里没有候选时本次不召唤。每步记一条 `EvTick "snow_boss"`（四格的新计数 + 雪块格）。道具路径没有 `PhaseMove`，计数不走。
@@ -121,7 +121,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 ## 6. 结算
 
-- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeedsWith`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级元素：元素类迁移后为 `Covering` 消息，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`（按步前 / 步后盘面差计的元素，新玩法 5 起按 `diffWeight` 加权求差：缺省每格 1；雪怪左上格 = 剩余血量、其余 0，所以 `CountNamed "snow_boss"` 的增量 = 本步扣掉的血），按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；第 5 刀起各色清除数也在里面（`CountColor 色`，由各段的 `ctCounts` 带来），`gsColorBag` / `gsCollected` 改为派生读数，目标进度 / 达成由目标数据（`Match3.Goal`）统一从 `gsScore` + `gsCounts` 算，结算不再按目标种类分支。
+- 分数、色袋、石头/宝箱/蜂蜜/气球/饼干/蛋糕/保险箱计数、UFO 吸收、地毯（清除位 ∪ `carpetVacateSeedsWith`：饼干腾空或保险箱开启；段 4 起覆盖经关卡级机制：元素类重构后为 `onCover` 节拍，内置回复者调 `coverCarpets`）。第 4 刀起这些个数（连同时间精灵个数与扩展元素的具名计数）统一累计在 `gsCounts :: Counts`（按步前 / 步后盘面差计的元素，新玩法 5 起按 `diffWeight` 加权求差：缺省每格 1；雪怪左上格 = 剩余血量、其余 0，所以 `CountNamed "snow_boss"` 的增量 = 本步扣掉的血），按 `CounterKey` 读（`gsCount CountStones gs` 等，见 `Match3.Counts`）；第 5 刀起各色清除数也在里面（`CountColor 色`，由各段的 `ctCounts` 带来），`gsColorBag` / `gsCollected` 改为派生读数，目标进度 / 达成由目标数据（`Match3.Goal`）统一从 `gsScore` + `gsCounts` 算，结算不再按目标种类分支。
 - 步数与道具次数：`gsMoves - kindCost + 奖励步数`（`kindCost`：交换 1、三种道具 0；道具另扣自己的次数 `kindCharges`）。奖励步数 = 各「按差计数」元素的 `dcBonus` 之和（`Game.Tally.diffCountsWith`，= 本步减少的个数 × 该元素的 `bonusMoves`）；内置只有时间精灵带奖励（每只 +2），所以交换路径就是原来的「−1 + 2 × 被消除的时间精灵数」。
 - `decideOutcome`：目标满足 → 每日则 `Won`，否则战役 `LevelClear` 或终章 `Won`；步数用尽 → `Lost`；否则 `MoveApplied`。
 - `MoveApplied` 时 `ensurePlayable`：无合法手则洗牌并 `restoreDecor`（保留障碍/特殊/叠层等装饰）。

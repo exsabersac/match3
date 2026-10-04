@@ -3,8 +3,8 @@
 -- | 沉降与补子：重力（固定格不动）、底行饼干收集、沉降节拍的关卡级钩子（onSettle，内置 = 传送门传送）、
 -- 补子（按补子策略 RefillPolicy，见 Match3.Board.Refill；refill = 缺省策略）以及回放用的 settleRefillWith。
 --
--- 依赖：Grid、Board.Refill（补子策略）、Board.Hooks（关卡级钩子）、元素注册表（固定格 falls、边缘收集 drains（方向可配））。
--- 本模块不依赖内置注册表，全部函数收 World；内置注册表的短名在 Match3.Board.Default。
+-- 依赖：Grid、Board.Refill（补子策略）、Board.Hooks（关卡级钩子）、元素元素世界（固定格 falls、边缘收集 drains（方向可配））。
+-- 本模块不依赖内置元素世界，全部函数收 World；内置元素世界的短名在 Match3.Board.Default。
 -- 不变量：补子按行优先顺序逐个空洞消耗随机数（缺省策略每洞恰好一次 randomColor）；settleRefillWith 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
 module Match3.Board.Gravity
@@ -34,7 +34,7 @@ import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
 
--- | 固定格（指定注册表）：本体 falls = False。
+-- | 固定格（指定元素世界）：本体 falls = False。
 gravityFixedCellWith :: World -> Cell -> Bool
 gravityFixedCellWith reg = not . fallsWith reg
 
@@ -55,7 +55,7 @@ colGravityWith reg = concatMap packSegment . splitFixed
           holes = length seg - length solids
       in replicate holes Nothing ++ map Just solids
 
--- | applyGravity（指定注册表）：每列与 colGravityWith 相同（固定格不动、把列切成段，段内实格保持次序落到底、空洞在上）。
+-- | applyGravity（指定元素世界）：每列与 colGravityWith 相同（固定格不动、把列切成段，段内实格保持次序落到底、空洞在上）。
 --
 -- 性能（Haskell 特性第 5 项）：在 runSTArray 里复制一份盘面，逐列逐段「双指针」就地压实——读指针自下而上扫，
 -- 遇到实格就写到写指针处，最后把段顶剩下的格写成空洞，不为每列建列表、切段、拼接。
@@ -122,7 +122,7 @@ drainEdgesMWith reg mb =
              (mb2, more) = drainEdgesMWith reg (applyGravityWith reg mb1)
          in (mb2, hits ++ more)
 
--- | settleBoardPortals（指定注册表；传送经钩子 onSettle）。
+-- | settleBoardPortals（指定元素世界；传送经钩子 onSettle）。
 settleBoardPortalsWith :: World -> LevelHooks -> MBoard -> (MBoard, Int, [Pos])
 settleBoardPortalsWith reg hooks mb =
   let (mb', drained) = settleDrainWith reg hooks mb
@@ -142,7 +142,7 @@ settleDrainWith reg hooks mb =
 refill :: RandomGen g => g -> MBoard -> (Board, g)
 refill = refillWith defaultRefill
 
--- | 本轮用的补子策略：关卡级元素换的（钩子 hookRefill）优先，否则注册表的（缺省 = 随机五色宝石）。
+-- | 本轮用的补子策略：关卡级元素换的（钩子 hookRefill）优先，否则元素世界的（缺省 = 随机五色宝石）。
 activeRefill :: World -> LevelHooks -> RefillPolicy
 activeRefill reg hooks = fromMaybe (refillPolicyWith reg) (hookRefill hooks)
 

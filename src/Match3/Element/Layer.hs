@@ -122,7 +122,7 @@ instance Element e => Renders (Layered l e) where
   face (Layered _ e) = face e
   faceBase (Layered _ e) = faceBase e
 
--- | 装箱的叠层种类（注册表里的一项）。
+-- | 装箱的叠层种类（元素世界里的一项）。
 data SomeLayer = forall l. Layer l => SomeLayer (Proxy l)
 
 someLayer :: forall l. Layer l => SomeLayer

@@ -28,7 +28,7 @@ import Match3.Board.Grid (inBounds, swapCells, toM)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith, matchCodesWith)
 import Match3.Core
 import Match3.Types (boardNCols, boardNRows)
-import Match3.Element.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith)
+import Match3.Element.World (World, blocksSwapWith, colorOfWith, hintableWith)
 import qualified Spec.Support.LegacyPerf as Old
 import System.CPUTime (getCPUTime)
 import Text.Printf (printf)
@@ -60,7 +60,7 @@ timeIt name reps f bs = do
 -- | 对照变体：ST 版提示搜索（只做普通匹配提示这一半；规则提示与现行实现相同，这里略去）。
 -- 匹配码 thaw 进一张 STUArray，每个候选「就地换过去、查交换触及的行 / 列、再换回来」；
 -- 未触及的行 / 列仍用原盘的结论（与现行纯函数写法相同）。
-hintST :: Registry -> Board -> Maybe (Pos, Pos)
+hintST :: World -> Board -> Maybe (Pos, Pos)
 hintST reg b = runST $ do
   m <- thaw codes
   let tryPair :: forall s. STUArray s Pos Int -> (Pos, Pos) -> ST s Bool
@@ -110,7 +110,7 @@ codesHaveRun = go (-1) (0 :: Int)
 main :: IO ()
 main = do
   let bs = boards
-      reg = defaultRegistry
+      reg = defaultWorld
       holed b = toM b A.// [((r, c), Nothing) | (r, c) <- boardPositions b, (r * 7 + c * 3) `mod` 5 == 0]
       mbs = map holed (take 3000 bs)
   printf "盘面数 %d\n" (length bs)

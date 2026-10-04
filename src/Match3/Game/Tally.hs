@@ -3,9 +3,9 @@
 
 -- | 结算计数辅助：「按前后盘面差计数」（保险箱开启 / 时间精灵 / 自定义）、地毯可覆盖的腾空格。
 --
--- 依赖：Match3.Types、Match3.Board.*、元素注册表。被公共结算 Match3.Game.Resolve.resolveMove 使用
+-- 依赖：Match3.Types、Match3.Board.*、元素元素世界。被公共结算 Match3.Game.Resolve.resolveMove 使用
 -- （交换与三种道具共用一处）。哪些元素按差计数（能力 diffCounter / bonusMoves）、
--- 哪些元素离格算地毯覆盖（vacatesCarpet）由元素自己声明；盘上某种元素的个数用注册表的 countElementWith。
+-- 哪些元素离格算地毯覆盖（vacatesCarpet）由元素自己声明；盘上某种元素的个数用元素世界的 countElementWith。
 module Match3.Game.Tally
   ( carpetVacateSeedsWith
   , DiffCount(..)
@@ -25,7 +25,7 @@ data DiffCount = DiffCount
   , dcBonus   :: Int  -- ^ 奖励步数 = dcCount * bonusMoves
   } deriving (Eq, Show)
 
--- | 注册表里所有带 diffCounter 的元素，按步前 / 步后盘面算个数差（格子按 diffWeight 加权，缺省每格 1）。
+-- | 元素世界里所有带 diffCounter 的元素，按步前 / 步后盘面算个数差（格子按 diffWeight 加权，缺省每格 1）。
 diffCountsWith :: World -> Board -> Board -> [DiffCount]
 diffCountsWith reg before after =
   [ DiffCount n k cnt (cnt * bonus)

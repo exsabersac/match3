@@ -55,7 +55,7 @@ import Match3.Types
 
 -- | 邻格波及的上下文：acTrue = 本轮真消除格；acDirect = 本轮已被直接命中的格（不再重复波及）；
 -- acProtect = 本轮刚生成、必须原样坐住的格（彩蛋开出的特殊块 + 之前各轮次产出的 aoSit）；
--- acRecolor = 注册表给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格；内置等于 isGem）。
+-- acRecolor = 元素世界给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格；内置等于 isGem）。
 data AdjCtx = AdjCtx
   { acTrue    :: [Pos]
   , acDirect  :: [Pos]
@@ -83,7 +83,7 @@ data EndPhase = PhaseTick | PhaseSpread | PhaseMove
   deriving (Eq, Ord, Show)
 
 -- | 步末规则的上下文：ecAvoid = 本步已被皮带移动过的格；ecWalls = 传送门端点（会走的元素当墙）；
--- ecPushable = 注册表给出的「本体可被推动」谓词（蜗牛只推这类格；内置等于 Snail.pushable）。
+-- ecPushable = 元素世界给出的「本体可被推动」谓词（蜗牛只推这类格；内置等于 Snail.pushable）。
 data EndCtx = EndCtx
   { ecAvoid    :: [Pos]
   , ecWalls    :: [Pos]

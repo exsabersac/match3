@@ -60,7 +60,7 @@ data Nudge
 
 -- | 一种本体元素（类型级）。
 class Element e => Kind e where
-  -- | 元素名（注册表的键；与值级 'Match3.Element.Ability.nameOf' 相同）。
+  -- | 元素名（元素世界的键；与值级 'Match3.Element.Ability.nameOf' 相同）。
   kindName :: proxy e -> ElementName
   -- | 从格子解码出元素值（Nothing = 这格不是本元素）。
   fromCell :: Cell -> Maybe e
@@ -100,7 +100,7 @@ class Kind e => Entity e where
   hitPoints :: e -> Int
   withHp :: Int -> e -> e
 
--- | 装箱的本体种类（注册表里的一项）。
+-- | 装箱的本体种类（元素世界里的一项）。
 data SomeKind = forall e. Kind e => SomeKind (Proxy e)
 
 -- | @someKind \@StoneE@。

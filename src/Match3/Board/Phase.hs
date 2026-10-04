@@ -31,7 +31,7 @@
 -- 运行时代价：'Stage' 只是给 Board / MBoard 套一层构造器，转换函数内部调用的仍是原来的
 -- clear* / settleDrainWith / refillWith，计算与随机数消耗逐字不变（金标准锁定）。
 --
--- 依赖：Board.Grid、Board.Gravity（沉降 settleDrainWith）、Board.Refill（补子 refillWith）、Board.Hooks、元素注册表。
+-- 依赖：Board.Grid、Board.Gravity（沉降 settleDrainWith）、Board.Refill（补子 refillWith）、Board.Hooks、元素元素世界。
 -- 被 Board.Cascade（每一轮 settleRound）与 Game.Resolve / Move / Boosters（一步棋的起手盘面）使用。
 module Match3.Board.Phase
   ( -- * 阶段与带阶段的盘面

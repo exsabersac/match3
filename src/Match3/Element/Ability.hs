@@ -10,7 +10,7 @@
 -- * 'Hittable'  —— 直接命中的反应（'Strike'）、能否点火、爆炸范围；
 -- * 'Movable'   —— 下落、传送门、边缘收集、洗牌保留、被改色 / 推动；
 -- * 'Countable' —— 进入清除格的计数键、按差计数的权重、离格覆盖地毯；
--- * 'Renders'   —— 前端要的附加显示字段。
+-- * 'Renders'   —— 显示：基础字形与数值字段（faceBase）、前端要的附加显示字段（face）。
 --
 -- 类同义词 'Element' 把六个类捆在一起；存在类型 'SomeElement' 只带 'Element' 这一个约束，逐类转发每个方法
 -- （新增方法要动四处：类里加方法与默认值、'SomeElement' 转发一行、Match3.Element.Layer 的 'Layered' 合成一行、

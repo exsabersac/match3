@@ -2,7 +2,7 @@
 
 -- | 洗牌：保留装饰（障碍 / 特殊 / 叠层）的重洗，以及无可走步时的自动洗牌 ensurePlayable。
 --
--- 依赖：State、Match3.Board.*（shufflePlayable / hasValidMove）、元素注册表（保留判定 keepOnShuffleWith）。
+-- 依赖：State、Match3.Board.*（shufflePlayable / hasValidMove）、元素元素世界（保留判定 keepOnShuffleWith）。
 -- 不变量：只换普通宝石颜色的位置，装饰原样放回；自动洗牌不在回放脚本的 mtEnd 里，
 -- 前端用 mtFinal 与结算后 gsBoard 的差异补播（app 的 StShuffle 阶段）。
 module Match3.Game.Shuffle
@@ -47,7 +47,7 @@ restoreDecor b = foldl (\board (CellDecor p cell) -> setCell board p cell) b
 ensurePlayable :: GameState -> GameState
 ensurePlayable = ensurePlayableWith defaultWorld
 
--- | ensurePlayable（指定注册表）。
+-- | ensurePlayable（指定元素世界）。
 ensurePlayableWith :: World -> GameState -> GameState
 ensurePlayableWith reg gs
   | Just _ <- gsOver gs = gs { gsShuffled = False }
@@ -74,7 +74,7 @@ ensurePlayableWith reg gs
 shuffleGame :: GameState -> GameState
 shuffleGame = shuffleGameWith defaultWorld
 
--- | 手动洗牌（指定注册表）：保留判定 keepOnShuffleWith 用这张表——自定义元素
+-- | 手动洗牌（指定元素世界）：保留判定 keepOnShuffleWith 用这张表——自定义元素
 -- （如测试专用元素）按它自己的 keepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
 shuffleGameWith :: World -> GameState -> GameState
 shuffleGameWith reg gs =

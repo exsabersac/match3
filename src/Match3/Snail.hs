@@ -62,7 +62,7 @@ stepSnailAt = stepSnailAtBlocked []
 stepSnailAtBlocked :: [Pos] -> Board -> Pos -> Board
 stepSnailAtBlocked = stepSnailAtBy pushable
 
--- | 段 4：可推动谓词由调用方给出（元素框架里 = 注册表的 pushable；内置等于 pushable）。
+-- | 段 4：可推动谓词由调用方给出（元素框架里 = 元素世界的 pushable；内置等于 pushable）。
 stepSnailAtBy :: (Cell -> Bool) -> [Pos] -> Board -> Pos -> Board
 stepSnailAtBy canPush walls b pos = case at b pos of
   Snail dr dc ->

@@ -153,7 +153,7 @@ dropRefill ds base = RefillPolicy (refillName base ++ "+drop") pick
       (Custom n _, Custom m _) -> n == m
       _ -> x == y
 
--- | 传送门的实现（PortalLevel 回复 onSettling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由注册表给出。
+-- | 传送门的实现（PortalLevel 回复 onSettling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由元素世界给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard
 portalTeleport canPort pairs mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.

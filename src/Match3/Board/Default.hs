@@ -1,4 +1,4 @@
--- | 内置注册表的便捷入口：Board.{Match, Clear, Gravity, Cascade} 自身不依赖 defaultWorld，
+-- | 内置元素世界的便捷入口：Board.{Match, Clear, Gravity, Cascade} 自身不依赖 defaultWorld，
 -- 全部函数都收一个 World（*With）；这里只把仍有调用方的几个定义为「*With defaultWorld」的短名，
 -- 给只跑内置元素的调用方（Core 再导出、随机开局、前端、测试）用。没有调用方的短名不在这里，直接用 *With。
 --
@@ -42,7 +42,7 @@ import System.Random (RandomGen)
 --------------------------------------------------------------------------------
 -- 关卡级钩子
 
--- | 内置注册表下、只有飞碟与传送门两种关卡级元素的钩子。
+-- | 内置元素世界下、只有飞碟与传送门两种关卡级元素的钩子。
 builtinHooks :: [Ufo] -> [(Pos, Pos)] -> LevelHooks
 builtinHooks ufos portals = levelHooksWith defaultWorld [SomeMechanic (UfoLevel ufos), SomeMechanic (PortalLevel portals)]
 

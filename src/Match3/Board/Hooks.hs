@@ -1,7 +1,7 @@
 -- | 连锁的关卡级钩子（第 7 刀 7a）：Board 层（Gravity / Cascade）不再直接收关卡状态（第 3 刀留下的
 -- @[Ufo]@ / 传送门对参数），只收这一个钩子记录；钩子背后是哪些关卡级元素、各自的状态是什么，Board 层不看。
 --
--- 钩子由 Match3.Element.Level.levelHooksWith 从注册表 + GameState.gsLevelElems 造出：每个钩子在对应的
+-- 钩子由 Match3.Element.Level.levelHooksWith 从元素世界 + GameState.gsLevelElems 造出：每个钩子在对应的
 -- 流水线节拍上调关卡级机制的节拍方法（Match3.Element.Mechanic）。会推进状态的钩子（onAbsorb）交回推进后的钩子，连锁把它一路传下去，
 -- Game 层最后从 'hookLevel' 取回推进后的关卡级元素。
 --
@@ -24,7 +24,7 @@ data LevelHooks = LevelHooks
     -- ^ 补子之后的整轮吸收（内置 = 飞碟）：吸走的格（空 = 本轮没有吸收轮）与推进后的钩子。
   , hookRefill :: Maybe RefillPolicy
     -- ^ 补子节拍（第 8 刀）：关卡级元素换的补子策略（Mechanic 的 refillPolicy 回复）；
-    -- Nothing = 没有元素换，用注册表的策略（Gravity.activeRefill）。
+    -- Nothing = 没有元素换，用元素世界的策略（Gravity.activeRefill）。
   , hookLevel :: [SomeMechanic]
     -- ^ 钩子背后的关卡级元素的当前状态（Game 层取回写进 gsLevelElems；Board 层不读）。
   }

@@ -2,7 +2,7 @@
 -- 与 overlay 火箭冰冻 Freeze（只挡交换）不同。
 --
 -- 第二刀 2b：直接命中改由元素框架按层结算（冰层 → 叠层 → 本体，见 Match3.Element.World.directHitWith，
--- 各层反应在 Match3.Element.Builtin）；chipIceOnClear 保留为内置注册表上的同名入口。
+-- 各层反应在 Match3.Element.Builtin）；chipIceOnClear 保留为内置元素世界上的同名入口。
 module Match3.Ice
   ( chipIceOnClear
   , iceLayers

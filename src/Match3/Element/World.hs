@@ -551,7 +551,7 @@ endRules reg ph = [r | r <- wEnd reg, erPhase r == ph]
 
 -- | 放置失败的原因（第 6 刀：placeWith 不再直接 error）。
 data PlaceError
-  = UnknownElement ElementName          -- ^ 注册表里没有这个名字
+  = UnknownElement ElementName          -- ^ 元素世界里没有这个名字
   | PlaceOutOfBounds ElementName Pos    -- ^ 放置格不在盘面内
   deriving (Eq, Show)
 
@@ -632,7 +632,7 @@ pushableWith reg = pushable . bodyOf reg
 -- 规则表（第 8 刀）
 
 -- | 特殊块形状规则表（有序；Board.Clear.spawnSpecialsWith 用）。mkWorld 建出的表为空（不生成特殊块），
--- 内置注册表是 Element.Builtin.Gem.builtinShapeRules。
+-- 内置元素世界是 Element.Builtin.Gem.builtinShapeRules。
 shapeRules :: World -> [ShapeRule]
 shapeRules = wShapes
 
@@ -641,7 +641,7 @@ setShapeRules :: [ShapeRule] -> World -> World
 setShapeRules rs reg = reg {wShapes = rs}
 
 -- | 特殊块组合表（有序）。非空时整张表并成一条次序 comboOrder（20）的成对交换规则（见 'swapRules'）。
--- mkWorld 建出的表为空，内置注册表是 Match3.Combos.builtinComboRules。
+-- mkWorld 建出的表为空，内置元素世界是 Match3.Combos.builtinComboRules。
 comboRules :: World -> [ComboRule]
 comboRules = wCombos
 
@@ -649,11 +649,11 @@ comboRules = wCombos
 setComboRules :: [ComboRule] -> World -> World
 setComboRules rs reg = reg {wCombos = rs}
 
--- | 注册表的补子策略（缺省 Board.Refill.defaultRefill）；关卡级机制可以经 refillPolicy 换掉（见 Gravity.activeRefill）。
+-- | 元素世界的补子策略（缺省 Board.Refill.defaultRefill）；关卡级机制可以经 refillPolicy 换掉（见 Gravity.activeRefill）。
 refillPolicyWith :: World -> RefillPolicy
 refillPolicyWith = wRefill
 
--- | 换掉注册表的补子策略。
+-- | 换掉元素世界的补子策略。
 setRefillPolicy :: RefillPolicy -> World -> World
 setRefillPolicy p reg = reg {wRefill = p}
 

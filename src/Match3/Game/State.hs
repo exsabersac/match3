@@ -299,7 +299,7 @@ moveFx before after out
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))
 applyHint = applyHintWith defaultWorld
 
--- | applyHint（指定注册表）：可走判定用这张表里的挡交换 / 匹配色定义。
+-- | applyHint（指定元素世界）：可走判定用这张表里的挡交换 / 匹配色定义。
 applyHintWith :: World -> GameState -> (GameState, Maybe (Pos, Pos))
 applyHintWith reg gs =
   let h = findHintWith reg (gsBoard gs)

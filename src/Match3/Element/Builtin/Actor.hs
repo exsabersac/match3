@@ -242,7 +242,7 @@ snailRun ctx b =
 traceSnails :: [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnails = traceSnailsBy Snail.pushable
 
--- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 注册表的 pushable）。
+-- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 元素世界的 pushable）。
 traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnailsBy canPush avoid walls b0 =
   let (movesRev, b1) = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]

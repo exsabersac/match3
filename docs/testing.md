@@ -226,8 +226,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `qc_goal_matches_legacy` | 2000 | 第 5 刀：测试里留一份第 5 刀前的 13 构造器目标 `OldGoal`（派生 `Show`）与逐字抄来的 `goalMetEx` / `goalProgressEx` / `goalTarget`；任意旧目标换成新目标数据后，`show`（含 `showsPrec 11` 加括号）、目标值、在任意分数 / 计数（内置各键、时间精灵、各色、名字）下的达成与进度都与旧实现相同（旧 `gsCollected` 按旧结算口径由计数给出） |
 | `qc_goal_progress_laws` | 1000 | 第 5 刀：任意 1–3 项配额（分数与计数混合）：进度 ≥ 0；达成 ⟺ 每项度量 ≥ 目标值；单项 达成 ⟺ 进度 ≥ 目标值；多项 进度 ≤ 目标值且 达成 ⟺ 进度 = 目标值；分数 / 计数只增时进度不减、达成保持 |
 | `qc_goal_progress_bounded` | 60 | 第 5 刀：整局 1–10 步（约 1/3 抽多色关 6 / 14）每个状态：进度 ≥ 0、达成 ⟺ 各项配额都达到、单项 达成 ⟺ 进度 ≥ 目标值、多色 进度 ≤ 目标值；`Won` / `LevelClear` 结局时目标达成、`Lost` 时未达成 |
-| `qc_registry_decode_roundtrip` | 1000 | 任意格 `toCell (elementOf reg cell) == cell`；本体名落在槽位一致的条目上（内置本体 = `SlotCell (cellSlot cell)`，已注册自定义 = `SlotCustom`，未注册名字不在表里）；最上层的冰层 / 叠层落在 `SlotIce` / `SlotOverlay (overlaySlot o)` 的条目上 |
-| `qc_registry_names_slots_unique` | 1 | 内置条目原始列表 `builtinDefs`（元素世界去重之前）：名字互不相同；本体槽号恰好 0–19、叠层槽号恰好 0–7 各一个；冰层条目只有一个 |
+| `qc_registry_decode_roundtrip` | 1000 | 任意格 `toCell (elementOf w cell) == cell`；解码出的本体名是认领拆层后格子的那个种类（`fromCell` 接受），未注册的 `Custom` 名字原样作惰性占格；最上层的冰层 / 叠层名是 `peel` 接受该格的叠层种类（元素类重构前按 `Slot` 核对） |
+| `qc_registry_names_slots_unique` | 1 | 内置类型列表 `builtinDefs`（世界去重之前）：名字互不相同；20 种内置本体格、8 种叠层各解码到一个名字且互不相同；冰层种类只有一个 |
 | `qc_find_hint_local_matches_reference` | 400 | 第 3 刀：`findHintWith`（只对交换两格所在行 / 列做局部匹配检查）与留在测试里的旧实现 `findHintReference`（整盘 `hasAnyMatchWith (swapCells …)`）返回相同：带现成匹配的盘面、各关开局、默认开局、整盘随机格四类。去掉局部检查的任一分支时该性质在 20 例内即失败 |
 | `qc_counts_algebra` | 1000 | 第 4 刀：`Counts` 的代数——`countOf` 等于按键求和；稀疏（不存 0）、键升序；`plusCounts`（`<>`）逐键相加、交换、结合、`noCounts` 为单位元；`bumpCount k n` = 加一个单键计数；`namedCounts` = `CountNamed` 项按名字升序 |
 | `qc_counts_monotone_legacy_view` | 60 | 第 4 刀：一局 1–8 步里 `gsCounts` 每个存下的个数都 > 0、每个键不减；与旧字段对照——「按某个计数键」的目标（石块 … 地毯、名字；第 5 刀起用 `goalView` 取键）下 `gsCollected == gsCount 该键`（旧实现直接取对应字段），`show` 仍按旧字段名（`gsStonesCleared = …` … `gsElementCounts = …`）打印同一个数。另在仓库外做过一次对照：40 关 × 25 个种子 × 最多 25 手（提示交换 + 锤子 + 十字）共 17866 个局面，新旧（4b83dc9）`show` 全等；第 5 刀对 47485c3 重做（另加 30 天每日挑战，每行再打印目标值、`checkOutcome`、失败提示）共 18383 行全等 |

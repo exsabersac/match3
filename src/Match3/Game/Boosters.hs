@@ -1,7 +1,7 @@
 -- | 道具：锤子 / 自由交换 / 十字清除。每种道具一个 resolve* 函数（校验 + 起手方式），
 -- 结算与回放都是它的投影（use* = 结果，trace* = 回放脚本），公共结算见 Match3.Game.Resolve。
 --
--- 依赖：Resolve、State、Trace、Match3.Board.*、Match3.Boosters（十字种子几何）、元素注册表（挡交换 / 锤子免疫 / 成对交换规则 = 彩虹与特殊合成）。
+-- 依赖：Resolve、State、Trace、Match3.Board.*、Match3.Boosters（十字种子几何）、元素元素世界（挡交换 / 锤子免疫 / 成对交换规则 = 彩虹与特殊合成）。
 -- 不变量：道具不耗步、不推进倒计时、没有皮带 / 蜗牛，步末只有蔓延；锤子对免疫格不扣次数（NoMatch）。
 -- 类型层：锤子 / 十字从原盘起手（Stage 'Full，起手只能是 OpenSeeds），自由交换从交换后的盘起手（Stage 'Swapped），
 -- 由 Game.Resolve 的 StartPhase 检查。
@@ -42,7 +42,7 @@ thd3 (_, _, c) = c
 resolveHammer :: Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveHammer = resolveHammerWith defaultWorld
 
--- | resolveHammer（指定注册表）。
+-- | resolveHammer（指定元素世界）。
 resolveHammerWith :: World -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveHammerWith reg p gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
@@ -55,7 +55,7 @@ resolveHammerWith reg p gs
 resolveFreeSwap :: Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveFreeSwap = resolveFreeSwapWith defaultWorld
 
--- | resolveFreeSwap（指定注册表）。
+-- | resolveFreeSwap（指定元素世界）。
 resolveFreeSwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveFreeSwapWith reg p1 p2 gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
@@ -77,7 +77,7 @@ resolveFreeSwapWith reg p1 p2 gs
 resolveCrossClear :: Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveCrossClear = resolveCrossClearWith defaultWorld
 
--- | resolveCrossClear（指定注册表）。
+-- | resolveCrossClear（指定元素世界）。
 resolveCrossClearWith :: World -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveCrossClearWith reg p gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)

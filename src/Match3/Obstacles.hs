@@ -110,7 +110,7 @@ cycleColor c = colorAt (fromEnum c + 1)
 triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsExcept = triggerAdjacentHatsBy isGem
 
--- | 可改色谓词由调用方给出（元素框架里 = 注册表的 recolorable；内置等于 isGem）。
+-- | 可改色谓词由调用方给出（元素框架里 = 元素世界的 recolorable；内置等于 isGem）。
 triggerAdjacentHatsBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsBy recolorable b cleared protected =
   foldl triggerOne b (hatsAdjacentTo b cleared)

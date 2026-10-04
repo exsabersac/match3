@@ -11,7 +11,7 @@
 -- trySwap 与三种道具的入口只负责「校验 + 选择起手方式」，结算与回放脚本全部在这里，只写一次。
 --
 -- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、EndPhase（步末表）、
--- 元素注册表（按差计数、地毯腾空都查注册表）、Element.Level（
+-- 元素元素世界（按差计数、地毯腾空都查元素世界）、Element.Level（
 -- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经 Mechanic 的节拍方法）。
 -- 不变量（金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
@@ -129,7 +129,7 @@ resolveMove
   => SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
 resolveMove = resolveMoveWith defaultWorld
 
--- | 公共结算（指定注册表）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
+-- | 公共结算（指定元素世界）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
 -- 三个参数的类型都由同一个 k 决定：操作种类、起手盘面的阶段、起手方式必须彼此吻合。
 -- 约束 IsFull (StartPhase k) 在调用处 k 已知时自动成立（起手阶段只有 'Swapped / 'Full，都是满盘）。
 resolveMoveWith
@@ -138,7 +138,7 @@ resolveMoveWith
 resolveMoveWith reg0 sk startS opening gs =
   let kind = moveKind sk
       start = stageBoard startS
-      -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
+      -- 本关的元素世界：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
       reg = levelWorldIn reg0 (gsLevelElems gs)
       hooks0 = levelHooksWith reg (gsLevelElems gs)
       -- 变身起手（OpenMorph）：第一轮之前先把变身写进盘面，并记一条 esAfterWaves = 0 的步末效果

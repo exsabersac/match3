@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | 特殊×特殊合成：Line×Bomb、Rainbow×Line、Bomb×Bomb、Line×Line。第 8 刀起组合效果是一张有序的组合表
--- （'builtinComboRules'，解释器见 Match3.Element.Special；注册表 World.comboRules 持有、并成一条成对交换规则），
+-- （'builtinComboRules'，解释器见 Match3.Element.Special；元素世界 World.comboRules 持有、并成一条成对交换规则），
 -- isSpecialCombo / comboClearSeeds 是这张表的判定与清种子；另有各组合的种类谓词与爆炸几何（扩展组合用）。
 -- 两端须 specialActivates（软锁不发火）。普通三消与彩虹单端交换见 Board / Rainbow。
 module Match3.Combos

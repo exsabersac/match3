@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
--- | 内置元素的汇总：注册表条目表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultWorld'。
+-- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultWorld'。
 --
 -- 每种元素一个类型 + 值级能力 instance（Match3.Element.Ability）+ 一个类型级 instance（本体 'Kind' /
 -- 叠层 'Layer' / 地面层 'GroundKind'；关卡级元素 Mechanic），xmonad LayoutClass 风格，
@@ -90,7 +90,7 @@ import Match3.Element.World (World, mkWorld, registerMechanic, setComboRules, se
 import Match3.Element.World (Def, groundDef, kindDef, layerDef)
 import Match3.Types (GemKind(..))
 
--- | 内置注册表：全部内置元素 + 内置规则表（第 8 刀：形状规则 builtinShapeRules、组合表 builtinComboRules；
+-- | 内置元素世界：全部内置元素 + 内置规则表（第 8 刀：形状规则 builtinShapeRules、组合表 builtinComboRules；
 -- 补子策略是 mkWorld 的缺省 defaultRefill）。主流程的旧函数名（不带 With）都用它。
 defaultWorld :: World
 defaultWorld =

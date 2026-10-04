@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | 单格绘制的元素查表（第三刀）：键 = 规则层注册表的元素名（elementName defaultWorld），
+-- | 单格绘制的元素查表（第三刀）：键 = 规则层元素世界的元素名（elementName defaultWorld），
 -- 值 = 同一元素的两个渲染后端 —— 几何降级版（UI.Cell.Prim）与贴图版（UI.Cell.Art）——
 -- 以及它的主贴图名（缺图检测用）。UI.BoardPrim.drawGemAt 与 UI.BoardArt.drawCellArt 都经这张表分派。
 --

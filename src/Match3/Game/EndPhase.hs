@@ -17,7 +17,7 @@
 --   道具     'boosterEndTable' = vacate → spread → settle
 --
 -- 随机数：只有开新段的阶段（tick / belt / settle）经连锁消耗生成器，顺序即表的顺序，与旧实现相同。
--- 依赖：Board.Cascade（记录版连锁）、Board.Hooks、Element.Level（关卡级元素节拍）、注册表、Game.Trace（EndStep）。
+-- 依赖：Board.Cascade（记录版连锁）、Board.Hooks、Element.Level（关卡级元素节拍）、元素世界、Game.Trace（EndStep）。
 module Match3.Game.EndPhase
   ( EndStage(..)
   , EndAcc(..)

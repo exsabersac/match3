@@ -8,12 +8,12 @@
 -- 核心：cascadeMatchesFromWith / cascadeSeedsWith / cascadeAfterWith（皮带后 / 步末后）/ cascadeCountdownsWith（全部收 World），返回 CascadeRun。
 -- 每一轮的「沉降 + 补子」只在 settleRound、整轮吸收只在 absorbRound 各写一次。
 -- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 是「恰好一轮」的小工具。
--- 本模块不依赖内置注册表（内置注册表的短名在 Match3.Board.Default）。
+-- 本模块不依赖内置元素世界（内置元素世界的短名在 Match3.Board.Default）。
 --
 -- 关卡级状态只经一个钩子记录 'LevelHooks' 进来（Match3.Board.Hooks；沉降节拍 onSettle、补子后 onAbsorb），
 -- 推进后的钩子在 CascadeRun 的 crHooks 里。
 --
--- 依赖：Grid、Match、Clear、Gravity、Hooks、元素注册表（计数键 counter、倒计时 = PhaseTick 步末规则）。
+-- 依赖：Grid、Match、Clear、Gravity、Hooks、元素元素世界（计数键 counter、倒计时 = PhaseTick 步末规则）。
 -- 类型层（Haskell 特性第 1 项）：每一轮的盘面带阶段标签（Match3.Board.Phase）——消除得到 Stage 'Cleared，
 -- 下落得到 Stage 'Fallen，补子回到 Stage 'Full；settleRound 与回放记录 waveOf 只收对应阶段的盘面，
 -- 「没下落就补子」「cwHoles 记成下落后的盘面」之类的错位编译不过。
@@ -33,7 +33,7 @@ module Match3.Board.Cascade
   , zeroTally
   , CascadeRun(..)
   , stillRun
-    -- * 指定注册表（元素框架；内置注册表的便捷入口见 Match3.Board.Default）
+    -- * 指定元素世界（元素框架；内置元素世界的便捷入口见 Match3.Board.Default）
   , cascadeMatchesWith
   , cascadeMatchesFromWith
   , cascadeSeedsWith
@@ -247,7 +247,7 @@ cascadeMatchesFromM reg startW prefer0 b0 =
 --------------------------------------------------------------------------------
 -- 核心：种子起手
 
--- | cascadeSeeds（指定注册表）：纯解释器运行 'cascadeSeedsM'。
+-- | cascadeSeeds（指定元素世界）：纯解释器运行 'cascadeSeedsM'。
 cascadeSeedsWith :: RandomGen g => World -> Maybe Pos -> [Pos] -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeSeedsWith reg prefer seeds hooks g b = runCascade hooks g (cascadeSeedsM reg prefer seeds b)
 
@@ -324,7 +324,7 @@ cascadeAfterM reg entry b = case entry of
 --------------------------------------------------------------------------------
 -- 核心：倒计时
 
--- | cascadeCountdowns（指定注册表）：依次跑 PhaseTick 阶段的步末规则，再合并各规则的引爆种子。
+-- | cascadeCountdowns（指定元素世界）：依次跑 PhaseTick 阶段的步末规则，再合并各规则的引爆种子。
 cascadeCountdownsWith :: RandomGen g => World -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeCountdownsWith reg hooks0 g b = snd (cascadeCountdownsTracedWith reg hooks0 g b)
 
@@ -354,7 +354,7 @@ cascadeCountdownsM reg b = do
 --------------------------------------------------------------------------------
 -- 单轮
 
--- | 恰好一轮匹配消除 + 沉降补子（指定注册表；没有关卡级钩子：不跑飞碟、无传送门）；无匹配时返回 Nothing。
+-- | 恰好一轮匹配消除 + 沉降补子（指定元素世界；没有关卡级钩子：不跑飞碟、无传送门）；无匹配时返回 Nothing。
 -- 与 cascadeMatchesFromWith 的单轮是同一组调用：clear → settleRound（沉降 + 补子）；
 -- prefer 为第一轮新特殊块的优先生成位。
 stepCascadeAtWith :: RandomGen g => World -> Maybe Pos -> g -> Board -> Maybe (Board, Int, g)

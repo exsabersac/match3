@@ -448,7 +448,7 @@ cellFaceWith w cell = case cell of
 cellExtras :: Cell -> [(String, FaceValue)]
 cellExtras = cellExtrasWith defaultWorld
 
--- | 'cellExtras'，用给定的注册表解码（扩展元素）。
+-- | 'cellExtras'，用给定的元素世界解码（扩展元素）。
 cellExtrasWith :: World -> Cell -> [(String, FaceValue)]
 cellExtrasWith = faceFieldsWith
 

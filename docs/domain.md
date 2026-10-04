@@ -71,11 +71,11 @@
 | 地面层（扩展槽） | `GroundLayer Ground`（读数 `gsGround`，`[(Pos,(ElementName, 层数))]`），`SlotGround` / `groundRule` | 段 2c：格子下面的层，不占格、不随重力 / 洗牌移动；上方格子每被消除 / 收走一次削一层并按元素计数。内置关卡恒为空，供扩展元素（如果冻）使用；新玩法 8 的魔法地格（`"magic"`）也在这一层，但没有 `groundRule`（不被消耗、不计数），只带扩爆规则 `widenRule` |
 | 边缘收集 | `drains :: [Edge]`（`EdgeBottom` / `EdgeLeft` / `EdgeRight` / `EdgeTop`） | 段 2c：收集物到达声明的边即被收走；内置只有饼干（底边） |
 | 步末补结算 | `EndRule.erHoles`、`cascadeAfterWith (AfterEnd …)` | 段 2c：步末阶段之后挖掉的格按常规沉降 / 补子 / 连锁；内置元素不触发 |
-| 关卡级元素 | `LevelElement` / `SomeLevelElement`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel` / 核心元素 `GroundLayer`），一局的全部在 `gsLevelElems`；节拍消息 `Refilled` / `EndTicked` / `Settling` / `Covering` / `GroundHit`；Board 层的钩子 `LevelHooks` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经注册表取（`defaultRegistry` 里注册为 ufo / belt / portal / carpet）；元素类迁移后改为回复流水线节拍消息；第 7 刀起状态在元素值里（取代五个 `GameState` 专用字段，旧名为派生读数），开局状态由 `levelStart` 从关卡记录取；去掉即不生效（地面层除外） |
+| 关卡级机制 | `Mechanic` / `SomeMechanic`（`UfoLevel` / `BeltLevel` / `PortalLevel` / `CarpetLevel` / 规则开关 / 掉落口 / 核心机制 `GroundLayer`），一局的全部在 `gsLevelElems`；节拍是有类型的方法 `onRefilled` / `onEndTick` / `onSettling` / `onCover` / `onGroundHit` / `shapes` / `morph` / `judge` …（元素类重构第 5 刀起取代节拍消息）；Board 层的钩子 `LevelHooks` | 段 4 起飞碟 / 皮带 / 传送门 / 地毯的实现经元素世界取（`defaultWorld` 里注册了内置机制；`removeMechanic` 去掉即不生效） |
 
 ## 双层果冻与气泡（段 5）
 
-两种新元素都只经注册表（`Element.Builtin.Ground` 的 `Jelly` 与 `Element.Builtin.Collectible` 的 `Bubble`）与段 2c 的白名单钩子接入，主流程（`Board.*` / `Game.*` / `Engine.*`）没有改动（源码扫描 `jb_main_flow_untouched_scan`）。
+两种新元素都只经元素世界（`Element.Builtin.Ground` 的 `Jelly` 与 `Element.Builtin.Collectible` 的 `Bubble`）与段 2c 的白名单钩子接入，主流程（`Board.*` / `Game.*` / `Engine.*`）没有改动（源码扫描 `jb_main_flow_untouched_scan`）。
 
 | | 双层果冻 `jelly` | 气泡 `bubble` |
 |---|---|---|
@@ -91,7 +91,7 @@
 取舍说明：
 - **果冻按层计目标**：目标数字 = 总层数，HUD 进度每去一层 +1，玩家能看到「消一次、薄一层」；不另设「整格清完才算」的计数。
 - **气泡一次就破、不分颜色**：和已有的气球（同色邻消才爆）、蜂蜜 / 宝箱（多层）区分开，是「最软」的障碍；难点来自它**会下落、挡交换**——落到底部或角落后只能靠旁边成消或道具。
-- **气泡不做「上浮」**：真正的气泡往上飘需要反向重力，是主流程改动；这里保持普通重力，只经注册表字段接入。
+- **气泡不做「上浮」**：真正的气泡往上飘需要反向重力，是主流程改动；这里保持普通重力，只经元素世界字段接入。
 - **气泡不可交换**：可交换的话需要给无色格定义「交换后是否成立」的新规则，超出白名单；挡交换沿用原型 `Blocker` 的默认方法。
 - 两关追加在第 38 关之后，前 38 关不改；因此第 38 关「织毯」不再是终章（过关由 `Won` 变为 `LevelClear` 进入第 39 关），终章变成第 40 关。
 
@@ -166,7 +166,7 @@
 | 彩虹 × 炸弹 | 同色的普通宝石全部变成炸弹 |
 | 引爆 | 变身之后按原有彩虹取色的种子起手（彩虹 + 该色全部格，含交换来的直线 / 炸弹、带冰 / 叠层的同色宝石、倒计时 / 双面块），种子里的特效**在同一轮里一起引爆**（原作逐个依次引爆，这里简化为同一轮连锁展开；之后的下落 / 连锁照常） |
 | 不变身的同色格 | 带冰 / 叠层的同色宝石、已有的同色特效、倒计时 / 双面块只作为种子被命中（削冰、清叠层、特效照常点火），不改变种类 |
-| 开关 | 关卡记录 `lvlRules` 含 `"rainbow_combos"` 时打开（关卡级元素 `RainbowCombos`，玩家交换成立前回复新消息 `Morphing`）；原有 43 关、每日挑战都关着，彩虹 × 直线 / 炸弹仍是「只清同色」 |
+| 开关 | 关卡记录 `lvlRules` 含 `"rainbow_combos"` 时打开（关卡级机制 `RainbowCombos`，玩家交换成立前回复节拍 `morph`）；原有 43 关、每日挑战都关着，彩虹 × 直线 / 炸弹仍是「只清同色」 |
 | 回放 | 变身记成第 0 轮之前的一条步末效果（`EvSpread`，元素名 `rainbow_line` / `rainbow_bomb`，每项 = 彩虹所在格 → 目标格、变身后的格）；`mtStart` 仍是交换后的盘面，第一轮从变身后的盘面开始 |
 | 放置 | 新玩法 4 起直线 / 炸弹 / 彩虹可以写进放置表：`Place "rainbow" [] 格`（颜色取原格的宝石） |
 | 关卡 | 第 44 关「魔力鸟」：24 步，开局放好两组组合（彩虹 (3,2) + 横向直线 (3,3)、炸弹 (4,4) + 彩虹 (4,5)），12 块双层石头在四边，`goalCount CountStones 12` |
@@ -193,12 +193,12 @@
 | 回放 | 每次交换的步末记一条 `EvTick "snow_boss"`：四格的新计数（召唤时还有雪块格），`applyEndEffect` 可重放 |
 | 放置 | `Place "snow_boss" [AInt 血量 (1–255), AInt 象限] 格`；关卡里用 `bossAt (行, 列) 血量` 一次铺四格 |
 | 关卡 | 第 45 关「雪怪」：24 步，Boss 左上角在 (2,3)（占 (2,3)–(3,4)），40 血，目标击败 Boss |
-| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素 caps 的 `displays`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；桌面经 `UI.CellFace.bossPart` 读） |
+| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素的 `Renders.face`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；桌面经 `UI.CellFace.bossPart` 读） |
 | 前端 | 贴图 `snow_boss_0..3`（整只冰蓝雪怪切成四块）/ `snow_boss_hurt_0..3`（血量 ≤ 一半时的受伤表情），右下块上三个召唤进度点；HUD 目标条换成红色血条 + `snow_boss` 头像 +「HP 剩余/满血」，过半后深红闪烁；几何版为冰蓝 2×2 方块 + 眼睛 + 同样的血条 |
 
 取舍说明：
 - **四个 Custom 格而不是关卡级元素**：backlog 原写「关卡级元素记位置和血量」；这里按「占 2×2 格、挡交换不下落」的要求，直接用四个固定格表达——挡交换 / 不下落 / 洗牌保留 / 前端画格都走现成的固定格路径，状态随盘面走（撤销 / 回放 / 快照天然正确），`gsLevelElems` 不变。代价是血量在四格里各存一份，规则里总是四格一起改写。
-- **最小通用钩子**：只加了一个计数能力 `weighs n`（`CountCaps.ccDiffWeight`，缺省 1；`Registry.weighElementWith`、`Game.Tally.diffCountsWith` 按权重求和）。缺省权重 1 时与原来的「个数差」逐字相同，所以原有元素（双面块等 `countsDiff`）不受影响。掉血、击败、召唤都用已有的邻格规则 / 直接命中 / 步末规则表达，主流程没有点名雪怪。
+- **最小通用钩子**：只加了一个计数能力 `weighs n`（当时的 `CountCaps.ccDiffWeight`，元素类重构后是 `Countable.diffWeight`，缺省 1；`weighElementWith`、`Game.Tally.diffCountsWith` 按权重求和）。缺省权重 1 时与原来的「个数差」逐字相同，所以原有元素（双面块等 `countsDiff`）不受影响。掉血、击败、召唤都用已有的邻格规则 / 直接命中 / 步末规则表达，主流程没有点名雪怪。
 - **确定性召唤**：召唤选格若从 `gsGen` 取随机数，会让补子序列移位、所有后续局面变化；按盘面散列保证只有第 45 关行为变化（`sb_other_levels_unchanged` 去掉雪怪条目逐关比对）。散列与毛球共用 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`，同样依赖派生的 `Show`（`Spec.BoardSeed` 钉住第 45 关开局的召唤格）。
 - **雪块 = 1 层石头**：不引入新障碍类型，前端与计数都现成；打碎雪块照常计石头。
 - **扣血只看真消除 + 直接命中**：与魔法石 / 毛球一致，被波及的叠层 / 冰层（没有真消除）不算，避免一次特效在一格上重复扣血。
@@ -212,7 +212,7 @@
 | 关卡数据 | 关卡记录新字段 `lvlDrops :: [DropSpec]`（缺省 `[]`）；`DropSpec { dropCells :: [Pos], dropCell :: Cell, dropKeep :: Int }` = 掉落口格、掉下来的格子、盘上少于多少块时才掉 |
 | 掉落 | 补子时（每轮沉降之后、以及步末补结算），掉落口格上的空洞若此刻盘上（本次已补的格子算在内）的 `dropCell` 少于 `dropKeep` 块，就补 `dropCell` 而不是宝石；多个空洞按行优先先补的先占名额；掉落口格没有空洞（那一列没有消除）时不掉 |
 | 确定性 | 每个空洞仍照原补子策略调一次（随机数照常消耗），掉落口只替换结果，所以 `gsGen` 的推进与没有掉落口时完全相同；掉不掉只由盘面决定 |
-| 接入 | 关卡级元素 `CookieDrop [DropSpec]`（`levelStart` 读 `lvlDrops`）回复已有的补子策略查询 `Refilling`，把收到的策略包一层 `dropRefill`；`lvlDrops` 为空时不回复（= 原策略）。去掉注册（`removeLevel "cookie_drop"`）即不掉 |
+| 接入 | 关卡级元素 `CookieDrop [DropSpec]`（`levelStart` 读 `lvlDrops`）回复已有的补子策略查询 `Refilling`，把收到的策略包一层 `dropRefill`；`lvlDrops` 为空时不回复（= 原策略）。去掉注册（`removeMechanic "cookie_drop"`）即不掉 |
 | 开局 | 有掉落口的关卡不做目标补齐（`goalDecorWith` 原本会按目标数一次铺满饼干），开局只有关卡放置的几块，其余由掉落口补 |
 | 收集 | 原有规则不变：饼干到达底行即被收走、计 `CountCookies`；目标 `goalCount CountCookies n` |
 | 关卡 | 第 46 关「掉落口」：26 步，掉落口在顶行 (0,1) / (0,3) / (0,4) / (0,6)，开局四个掉落口上各一块饼干，盘上少于 4 块时掉，目标收 8 块 |
@@ -257,7 +257,7 @@
 | 命中 | 扩出来的格与原范围一样算直接命中：障碍削层、其中的特效照常连锁；同一轮里一格只受一次（碎石被直接命中又挨着消除，也只削 1 层，同原规则） |
 | 只看引爆格 | 爆炸只是扫过魔法地格不扩；彩虹取色、特效 × 特效组合（组合表）、十字道具、魔法石发射、倒计时 3×3、彩蛋开出的爆炸这些**种子**不经 `blast`，不扩；种子里的直线 / 炸弹照常逐个引爆，落在魔法地格上的那枚照样扩（例：直线 × 直线交换到魔法地格的那一端是竖直线，它扩成三列） |
 | 道具 | 锤子 / 任意交换 / 十字触发的特效同样按引爆格扩（与交换走同一条结算路径） |
-| 接入 | 能力 `widens 改写`（`StepCaps.stWiden`，缺省 `Nothing`）；每步结算开始时 `Element.Level.levelRegistryIn` 把地面层里带扩爆规则的格写进注册表的本步扩爆格 `regWiden`（缺省 `[]`；没有这种格时注册表原样返回），`Registry.blastWith` 在引爆格是扩爆格时改写范围；`Engine.playWith` 展开事件也用这张本步注册表，`EvBlast` 的覆盖格含扩出来的一圈 |
+| 接入 | 地面层种类的 `groundWiden`（缺省 `Nothing`；元素类重构前是能力 `widens`）；每步结算开始时 `Element.Level.levelWorldIn` 把地面层里带扩爆规则的格写进世界的本步上下文 `StepCtx`（缺省 `noStep`；没有这种格时世界原样返回），`World.blastWith` 在引爆格是扩爆格时改写范围；`Engine.playWith` 展开事件也用这个本步世界，`EvBlast` 的覆盖格含扩出来的一圈 |
 | 随机 | 不消耗 `gsGen`；地面层在每步开始时取一次（魔法地格不变，与逐轮取相同） |
 | 关卡 | 第 48 关「魔法格」：18 步，目标碎石 8 块；底行 8 块三层碎石（`Place "stone" [AInt 3]`）；魔法地格 4 格 (6,2) / (6,5) / (5,3) / (5,4)；打开 `bomb_shapes`（L / T 形出炸弹） |
 | 视图 / 前端 | 视图模型照旧（`bvGround` / `groundAtView` 给出 `("magic", 1)`；网页 Api `state.ground` 里 `{p, name:"magic", layers:1}`）；桌面贴图 `magic`（紫色符文地砖，画在棋子下面），几何版 `primMagic`（紫色双线框 + 四角小方点，画在棋子上面）；扩大的爆炸没有新动画，按 `EvBlast` / 清除格原样高亮；HUD 目标仍是碎石 |
@@ -267,7 +267,7 @@
 - **「扩一圈」= 按八邻格膨胀**：对任意形状的范围都有定义（直线、炸弹、将来的新特效），直线变三行、炸弹变 5×5，与原作「横竖各多一格」的观感一致；新格按行优先接在原范围后面，事件里的顺序确定。
 - **只看引爆格**：「扫过就扩」会让一次爆炸在多个魔法地格上连续放大、范围难以预判；只看引爆格时玩家知道「把特效做在紫格上」。
 - **种子不扩，种子里的特效扩**：组合表 / 彩虹 / 十字给出的是一整片种子而不是某个特效的 `blast`，再扩会改变这些已有规则的几何；但种子里的直线 / 炸弹本来就逐个经 `blast` 引爆，保持「只看引爆格」的一致性，不给它们开例外。
-- **每步取一次**：扩爆格在每步开始时写进本步注册表（和 `bomb_shapes` 的形状表同一处），而不是逐轮查地面层；魔法地格不会变化，所以结果相同，改动也只在 `levelRegistryIn` 一处。
+- **每步取一次**：扩爆格在每步开始时写进本步世界（和 `bomb_shapes` 的形状表同一处），而不是逐轮查地面层；魔法地格不会变化，所以结果相同，改动也只在 `levelWorldIn`（当时叫 `levelRegistryIn`）一处。
 - **底行碎石配 (5,3) / (5,4)**：第 5 行的直线在魔法地格上扩到 4–6 行，第 6 行被消掉时邻消削到底行，整排碎石一起掉一层；第 6 行的两格让竖直线 / 炸弹扩到三列 / 5×5 直接打到底行。魔法地格放在第 4 行时扩出的一圈到不了底行（贪心 10/30，与不放魔法地格的 9/30 相当），所以放在第 5 / 6 行。
 
 ## 目标与结局
@@ -323,13 +323,13 @@
 | 步末效果 | `EndEffect { endEffectKind, endEffectElement, endEffectItems }`（第 7 刀 7b 起的通用形状） | 事件类型 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` + 元素名 countdown / belt / vine·choco·steam / snail；`applyEndEffect` 逐项重放回盘面 |
 | 步末一项 | `EndItem { eiFrom, eiTo, eiCell, eiBack }` | 目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它；蜗牛 `eiFrom == eiTo` 表示碰壁掉头，新朝向 = `endItemDir` |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（类 / 注册表） | `Element`（类型类，一种元素 = 一个类型 + 一个 instance；第 9 刀起类只有 `name` / `toCell` / `caps`）、能力记录 `Caps`（五组：匹配与交换 `MatchCaps` / 消除与受击 `HitCaps` / 重力与移动 `MoveCaps` / 计数与目标 `CountCaps` / 步末与变化 `StepCaps`，外加只管显示的 `ViewCaps`，带按原型的缺省值，元素用 `Match3.Element.Caps` 的简写只声明用到的几项）、`SomeElement`、修饰器 `Modifier`、`Registry`（名字 → 构造器 `Entry`）、`defaultRegistry` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)）；`gsCounts` 的 `CountNamed 名字` 记注册表元素的具名计数（`namedCounts` 列出） |
-| 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是注册表 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
-| 成对交换规则 / 开启规则 | `SwapRule`（`swapRule`）/ `OpenRule`（`openRule`） | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
-| 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（注册表 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消；L / T 形 → 炸弹（`ltBombRule`）只在规则开关 `bomb_shapes` 打开的关卡插入（见下文「L / T 形出炸弹」） |
-| 特殊块组合规则 | `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`（第 8 刀） | 两个特殊块交换时的组合效果；有序表（注册表 `comboRules`），两个方向都试（对称），整张表并成成对交换规则 20。内置 `builtinComboRules`：炸弹 × 炸弹、直线 × 直线、直线 × 炸弹、彩虹 × 直线 |
-| 补子策略 | `RefillPolicy { refillName, refillCell }`、`RefillCtx`（第 8 刀） | 沉降后空洞补什么：注册表的策略（`refillPolicyWith`，缺省 `defaultRefill` = 随机五色普通宝石），关卡级元素可回复 `Refilling` 换掉；`colorsRefill n` = 只用前 n 色 |
-| 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由注册表判定；内置 = 宝石各种类、倒计时、双面块 |
+| 元素（类 / 元素世界） | 六个能力类 `Cellular` / `Matchable` / `Hittable` / `Movable` / `Countable` / `Renders`（类同义词 `Element`，每个方法带「普通宝石」缺省；障碍用 DerivingVia 原型包 `Obstacle` / `Fixed`）、类型级 `Kind`（解码、放置、标签、邻格规则方法、逃生口 `boardPasses`）/ `Entity`（多格实体）/ `GroundKind`（地面层）、叠层 `Layer` 与合成 `Layered`、`SomeElement`、元素世界 `World`（有序的类型列表 `[Def]`，`kindDef @T` …）、`defaultWorld` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)、[guide/04](guide/04-元素框架.md)）；`gsCounts` 的 `CountNamed 名字` 记元素的具名计数（`namedCounts` 列出） |
+| 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是元素世界 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
+| 成对交换规则 / 开启规则 | `SwapRule`（`SwapPass`）/ `OpenRule`（`OpenPass`），挂在 `Kind.boardPasses` 上 | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
+| 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（元素世界 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消；L / T 形 → 炸弹（`ltBombRule`）只在规则开关 `bomb_shapes` 打开的关卡插入（见下文「L / T 形出炸弹」） |
+| 特殊块组合规则 | `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`（第 8 刀） | 两个特殊块交换时的组合效果；有序表（元素世界 `comboRules`），两个方向都试（对称），整张表并成成对交换规则 20。内置 `builtinComboRules`：炸弹 × 炸弹、直线 × 直线、直线 × 炸弹、彩虹 × 直线 |
+| 补子策略 | `RefillPolicy { refillName, refillCell }`、`RefillCtx`（第 8 刀） | 沉降后空洞补什么：元素世界的策略（`refillPolicyWith`，缺省 `defaultRefill` = 随机五色普通宝石），关卡级元素可回复 `Refilling` 换掉；`colorsRefill n` = 只用前 n 色 |
+| 可改色 / 可推动 | `recolorable` / `pushable` | 段 4：魔法帽 / 染色瓶改色、蜗牛推动的对象由元素世界判定；内置 = 宝石各种类、倒计时、双面块 |
 | 自动洗牌（表现段） | 前端 `StShuffle` | **不是** `EndEffect`：`mtFinal` ≠ 结算后 `gsBoard` 时前端追加，22 帧 |
 | 本步特效 | `MoveFx { fxCombo, fxCleared }` / `moveFx` | 边沿触发；`NoMatch` / `InvalidSwap` / 已终局为空 → 不重播上一步 |
 | 回放加速 | 点击 / 空格 / 回车 / `N` | 每帧推进 3 帧（`fastStep`）；播放期间锁定交换、道具、撤销、洗牌 |

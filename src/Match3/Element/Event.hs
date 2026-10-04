@@ -27,7 +27,7 @@ import Match3.Board.Grid (getCell, neighborsInBounds, setCell)
 import Match3.Types
 
 -- | 步末效果（通用形状）：事件类型（EvTick / EvBelt / EvSpread / EvMove …，前端播放表的键）、相关元素名
--- （注册表的键；皮带是关卡级元素，记为 "belt"）、按发生顺序的逐项变化。只描述「变了什么」，规则仍由元素定义计算。
+-- （元素世界的键；皮带是关卡级元素，记为 "belt"）、按发生顺序的逐项变化。只描述「变了什么」，规则仍由元素定义计算。
 data EndEffect = EndEffect
   { endEffectKind    :: EventKind
   , endEffectElement :: ElementName
@@ -133,7 +133,7 @@ data EventKind
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | 一个效果事件。evWave：发生在第几轮之后（与 EndStep.esAfterWaves 同一时间轴；轮内事件 = 轮下标）。
--- evCells：(来源, 目标) 对；单格事件写成 (p, p)。evElement：相关元素名（注册表的键），无则为 ""。
+-- evCells：(来源, 目标) 对；单格事件写成 (p, p)。evElement：相关元素名（元素世界的键），无则为 ""。
 data Event = Event
   { evKind    :: EventKind
   , evWave    :: Int

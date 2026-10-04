@@ -107,9 +107,6 @@ import Match3.Element.Special (comboSwapRule)
 import Match3.Element.Types
 import Match3.Types
 
--- | 关卡放置：给出参数与原格，返回新格（Nothing = 不放）。
-type Placer = [Arg] -> Cell -> Maybe Cell
-
 -- | 构造器的原型值与解码器。
 data Proto
   = PBody SomeElement (Cell -> Maybe SomeElement)   -- 内置本体槽位

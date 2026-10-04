@@ -13,7 +13,6 @@ module Match3.Element.Builtin.Common
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List.NonEmpty (NonEmpty (..))
-import Match3.Element.Registry (Placer)
 import Match3.Element.Types
 import Match3.Types
 

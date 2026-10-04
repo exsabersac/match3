@@ -34,6 +34,7 @@ module Match3.Element.Types
   , exactArgs
   , prefixArgs
   , Placement(..)
+  , Placer
   , FaceValue(..)
   , SwapRule(..)
   , OpenRule(..)
@@ -208,6 +209,9 @@ exactArgs p as = case runArgP p as of
 -- | 前缀匹配：解析成功即可，剩下的参数忽略。
 prefixArgs :: ArgP a -> [Arg] -> Maybe a
 prefixArgs p = fmap fst . runArgP p
+
+-- | 关卡放置：给出参数与原格，返回新格（Nothing = 不放）。
+type Placer = [Arg] -> Cell -> Maybe Cell
 
 -- | 关卡放置表的一项：把元素（按名字）以给定参数放到若干格（按列表顺序逐格）。
 data Placement = Place ElementName [Arg] [Pos]

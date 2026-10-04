@@ -14,6 +14,7 @@
 -- 重构期间内部 API 会变：只改投影（本文件），快照一个字都不动。生成：stack exec -- ghc … -main-is ElementOracle。
 module ElementOracle
   ( oracleLines
+  , oracleLinesWith
   , main
   ) where
 
@@ -33,8 +34,6 @@ import Numeric (showHex)
 main :: IO ()
 main = mapM_ putStrLn oracleLines
 
-reg :: Registry
-reg = defaultRegistry
 
 hash :: String -> String
 hash s =
@@ -117,8 +116,8 @@ allPos = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
 boardText :: Board -> String
 boardText b = show (map (getCell b) allPos)
 
-valueLine :: Cell -> String
-valueLine cell =
+valueLine :: Registry -> Cell -> String
+valueLine reg cell =
   "V " ++ show cell ++ " | "
     ++ unwords
       [ show (matchColorWith reg cell)
@@ -148,20 +147,20 @@ valueLine cell =
       , show (swapBlockedWith reg (setCell base (2, 2) cell) (2, 2) (2, 3))
       ]
 
-names :: [ElementName]
-names = map entryName (registryDefs reg)
+names :: Registry -> [ElementName]
+names reg = map entryName (registryDefs reg)
 
-nameLines :: [String]
-nameLines =
+nameLines :: Registry -> [String]
+nameLines reg =
   [ "N " ++ show n ++ " " ++ show (displayLabelWith reg n) ++ " " ++ show (fmap ($ 7) (loseHintWith reg n))
-  | n <- names ++ ["unregistered", "ufo"]
+  | n <- names reg ++ ["unregistered", "ufo"]
   ]
     ++ ["N labels " ++ show (displayLabels reg), "N diff " ++ show (diffCountersWith reg)]
 
-placeLines :: [String]
-placeLines =
+placeLines :: Registry -> [String]
+placeLines reg =
   [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ either show (show . (`getCell` (4, 4))) (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])
-  | n <- names ++ ["unregistered"]
+  | n <- names reg ++ ["unregistered"]
   , args <- [[], [AInt 0], [AInt 1], [AInt 2], [AInt 4], [AInt 300], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 5, AInt 2], [AInt 0, AInt (-1)], [AInt 2, AColor C1]]
   , cell <- [mkGem C2, Gem C3 LineH 1 (Just Grass), Gem C4 Normal 0 (Just (Chain 2)), Stone 1, Countdown C4 2, custom "bubble" 1]
   ]
@@ -237,8 +236,8 @@ ruleSummary f =
 adjOutText :: Board -> AdjOut -> (Bool, String)
 adjOutText b0 out = (aoBoard out /= b0 || not (null (aoDead out)) || not (null (aoSit out)), show (boardText (aoBoard out), aoDead out, aoSit out))
 
-ruleLines :: [String]
-ruleLines =
+ruleLines :: Registry -> [String]
+ruleLines reg =
   [ "AR " ++ show i ++ " " ++ show (arOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (arRun r (AdjCtx (smTrue s) (smDirect s) (smProtect s) (recolorableWith reg)) (smBoard s)))
   | (i, r) <- zip [0 :: Int ..] (adjacentRules reg)
   ]
@@ -256,7 +255,7 @@ ruleLines =
     ++ [ "ST " ++ ruleSummary (\s -> let b = stripOnClearWith reg (smBoard s) (smTrue s) in (b /= smBoard s, boardText b)) ]
     ++ [ "BW " ++ ruleSummary (\s -> let ws = groundWideningWith reg (smGround s); r' = setWidening ws reg; xs = [blastWith r' (smBoard s) (getCell (smBoard s) p) p | p <- smTrue s] in (any (not . null) xs && not (null ws), show (map fst ws, xs))) ]
     ++ [ "HG " ++ ruleSummary (\s -> let out = hitGroundWith reg (smTrue s) (smGround s) in (fst out /= smGround s, show out)) ]
-    ++ [ "CT " ++ ruleSummary (\s -> let xs = [(countElementWith reg n (smBoard s), weighElementWith reg n (smBoard s)) | n <- names] in (True, show xs)) ]
+    ++ [ "CT " ++ ruleSummary (\s -> let xs = [(countElementWith reg n (smBoard s), weighElementWith reg n (smBoard s)) | n <- names reg] in (True, show xs)) ]
   where
     endOut r s =
       let ctxs = [EndCtx [] [] (pushableWith reg), EndCtx (smProtect s) (take 4 (smDirect s)) (pushableWith reg)]
@@ -271,4 +270,8 @@ ruleLines =
       _ -> False
 
 oracleLines :: [String]
-oracleLines = map valueLine valueCells ++ nameLines ++ placeLines ++ ruleLines
+oracleLines = oracleLinesWith defaultRegistry
+
+-- | 同一套投影，换一张注册表（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
+oracleLinesWith :: Registry -> [String]
+oracleLinesWith reg = map (valueLine reg) valueCells ++ nameLines reg ++ placeLines reg ++ ruleLines reg

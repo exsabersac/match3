@@ -1223,6 +1223,324 @@ try {
     check("截到改尺寸中的动画", done);
     await P.ctx.close();
   }
+
+  // -------------------------------------------------------------------------
+  // 5. 桌面版功能迁移（web-sdl-parity，网页将是唯一前端）：新按钮布局、道具（锤子 / 自由交换 / 十字消，含 keepTool 与次数用完）、
+  //    手动洗牌、每日挑战、选关地图（跳关 / 未解锁 / localStorage 进度）、暂停（冻结动画、R 可重开、点任意处继续）、按键表与 Esc、
+  //    结局后前进（过关带入剩余步数 / 失败重开）与星级、分数徽章（连击 / 总结）、首关提示与按键条、窗口标题、元素展示盘。
+  //    每个功能竖屏 390×844 与横屏 1280×800 各截一张 sdl-<功能>-<竖屏|横屏>.png。
+  {
+    const VPS = [{ tag: "竖屏", w: 390, h: 844, dpr: 2 }, { tag: "横屏", w: 1280, h: 800, dpr: 1 }];
+    const ui = (P) => P.page.evaluate(() => window.m3debug.ui);
+    const hudOf = (P) => P.page.evaluate(() => window.m3debug.hud);
+    const press = async (P, k) => { await P.page.keyboard.press(k); await sleep(40); };
+    const ws = (x) => String(x).replace(/\s+/g, " ").trim();   // document.title 会把连续空白折成一个
+    const lsGet = (P, k) => P.page.evaluate((key) => localStorage.getItem(key), k);
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const overlap = (a, b) => a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01 && a.y < b.y + b.h - 0.01 && b.y < a.y + a.h - 0.01;
+    // 按提示走到结局（空格加速）；cb(P) 在每步交换之后、加速之前调用
+    async function playToEnd(P, maxMoves = 80) {
+      for (let k = 0; k < maxMoves; k++) {
+        const s = await P.st();
+        if (s.over || !s.hint) return s;
+        await P.swap(s.hint[0], s.hint[1], false); await sleep(30);
+        await P.page.keyboard.press(" "); await P.idle();
+      }
+      return P.st();
+    }
+    // 自由交换「换不掉」的一对：两格都是普通宝石、颜色不同、不相邻，换完后经过两格都没有 3 连（测试侧只看普通宝石）
+    function noMatchPair(b) {
+      const R = b.length, C = b[0].length, plain = (x) => x && x.t === "G" && x.k === "N" && x.i === 0 && x.o === null;
+      const runs = (g, r, c) => {
+        const col = g[r][c].c, at = (rr, cc) => rr >= 0 && rr < R && cc >= 0 && cc < C && g[rr][cc].t === "G" && g[rr][cc].c === col;
+        let h = 1, v = 1;
+        for (let d = 1; at(r, c - d); d++) h++; for (let d = 1; at(r, c + d); d++) h++;
+        for (let d = 1; at(r - d, c); d++) v++; for (let d = 1; at(r + d, c); d++) v++;
+        return h >= 3 || v >= 3;
+      };
+      for (let r1 = 0; r1 < R; r1++) for (let c1 = 0; c1 < C; c1++) for (let r2 = r1; r2 < R; r2++) for (let c2 = 0; c2 < C; c2++) {
+        if ((r2 === r1 && c2 <= c1) || Math.abs(r1 - r2) + Math.abs(c1 - c2) <= 1) continue;
+        const a = b[r1][c1], q = b[r2][c2];
+        if (!plain(a) || !plain(q) || a.c === q.c) continue;
+        const g = b.map((row) => row.slice()); g[r1][c1] = q; g[r2][c2] = a;
+        if (!runs(g, r1, c1) && !runs(g, r2, c2)) return [[r1, c1], [r2, c2]];
+      }
+      return null;
+    }
+    report.sdlParity = { layout: [] };
+
+    // 5a. 新按钮布局：13 个按钮齐全、互不重叠、不压棋盘、都在布局内、不小于最小触控；横竖屏与手机横屏 / 小屏
+    for (const vp of [...VPS, { tag: "横屏手机844x390", w: 844, h: 390, dpr: 3, touch: true, mobile: true }, { tag: "小屏375x667", w: 375, h: 667, dpr: 2, touch: true, mobile: true }]) {
+      const P = await openPage(vp, 3, 7);
+      await sleep(150);
+      const L = await P.page.evaluate(() => window.m3debug.layout);
+      const ids = L.buttons.map((b) => b.id), want = ["help", "prev", "next", "restart", "hint", "undo", "hammer", "swap", "cross", "shuffle", "map", "daily", "pause"];
+      const pairs = [];
+      L.buttons.forEach((a, i) => L.buttons.slice(i + 1).forEach((b) => { if (overlap(a, b)) pairs.push([a.id, b.id]); }));
+      const board = { x: L.board.x, y: L.board.y, w: L.VW, h: L.VH };
+      const onBoard = L.buttons.filter((b) => overlap(b, board)).map((b) => b.id);
+      const inside = L.buttons.every((b) => b.x >= -0.5 && b.y >= -0.5 && b.x + b.w <= L.w + 0.5 && b.y + b.h <= L.h + 0.5);
+      const minW = Math.min(...L.buttons.map((b) => b.w)), minH = Math.min(...L.buttons.map((b) => b.h));
+      const fits = L.ox >= -0.5 && L.oy >= -0.5 && L.ox + L.w * L.u <= L.W + 0.5 && L.oy + L.h * L.u <= L.H + 0.5;
+      check(`新按钮齐全、互不重叠、不压棋盘、在布局内、宽 ≥ 48 高 ≥ 28 设计单位：${vp.tag}`,
+        want.every((i) => ids.includes(i)) && ids.length === want.length && !pairs.length && !onBoard.length && inside && minW >= 48 && minH >= 28 && fits, { ids, pairs, onBoard, minW, minH, fits });
+      report.sdlParity.layout.push({ vp: vp.tag, mode: L.mode, cellCss: +L.cellCss.toFixed(1), minW: +minW.toFixed(1), minH: +minH.toFixed(1) });
+      if (!vp.touch) await P.shot(`sdl-buttons-${vp.tag}`);
+      await P.ctx.close();
+    }
+
+    for (const vp of VPS) {
+      const t = vp.tag;
+      // 5b. 道具：锤子（按钮 → 点格）、十字消（已选中一格时按 3 立即使用）、自由交换（换不掉留在模式且不扣次数；换掉扣一次退出）、次数用完
+      {
+        const P = await openPage(vp, 3, 7);
+        await sleep(120);
+        const s0 = await P.st();
+        check(`道具初始次数 锤子 2 / 自由交换 1 / 十字消 1：${t}`, same(s0.boosters, { hammer: 2, swap: 1, cross: 1 }), s0.boosters);
+        await P.button("hammer"); await sleep(60);
+        let u = await ui(P);
+        check(`点「锤」进入锤子模式、棋盘上沿横幅「锤子：点一格」、按钮金框：${t}`, u.tool === "hammer" && u.drawn.banner?.text === "锤子：点一格", { tool: u.tool, banner: u.drawn.banner });
+        await P.shot(`sdl-hammer-${t}`);
+        const [hx, hy] = await P.center([4, 4]); await P.page.mouse.click(hx, hy); await sleep(30); await P.idle();
+        let s1 = await P.st(); u = await ui(P);
+        check(`锤子打一格：次数 2 → 1、退出模式、盘面变化：${t}`, s1.boosters.hammer === 1 && u.tool === null && !same(s1.board, s0.board), { boosters: s1.boosters, tool: u.tool, msg: u.msg });
+        // 十字消：先点选一格再按 3，立即使用（同桌面 keyCross 的「已选格且有次数」分支）
+        const [cx, cy] = await P.center([3, 3]); await P.page.mouse.click(cx, cy); await sleep(40);
+        await press(P, "3"); await sleep(30); await P.idle();
+        let s2 = await P.st();
+        check(`已选中一格时按 3：十字消立即使用（次数 1 → 0）：${t}`, s2.boosters.cross === 0 && !same(s2.board, s1.board), s2.boosters);
+        // 自由交换换不掉：留在模式、不扣次数、盘面不变（keepTool）
+        const pr = noMatchPair(s2.board) || [[0, 0], [0, 2]];   // 找不到时随便给一对（下面的检查会失败并报出盘面）
+        await P.button("swap"); await sleep(40);
+        const [ax, ay] = await P.center(pr[0]), [bx, by] = await P.center(pr[1]);
+        await P.page.mouse.click(ax, ay); await sleep(30);
+        u = await ui(P);
+        const firstOk = same(u.swapFirst, pr[0]);
+        await P.page.mouse.click(bx, by); await sleep(30); await P.idle();
+        let s3 = await P.st(); u = await ui(P);
+        check(`自由交换换不掉（不相邻两格）：留在自由交换模式、不扣次数、盘面不变：${t}`, !!pr && firstOk && u.tool === "swap" && s3.boosters.swap === 1 && same(s3.board, s2.board), { pr, tool: u.tool, boosters: s3.boosters, msg: u.msg });
+        if (t === "竖屏") await P.shot(`sdl-freeswap-keep-${t}`);
+        // 再按提示的两格换：扣一次、退出模式
+        await P.page.mouse.click(...(await P.center(s3.hint[0]))); await sleep(30);
+        await P.page.mouse.click(...(await P.center(s3.hint[1]))); await sleep(30); await P.idle();
+        const s4 = await P.st(); u = await ui(P);
+        check(`自由交换换掉：次数 1 → 0、退出模式、盘面变化：${t}`, s4.boosters.swap === 0 && u.tool === null && !same(s4.board, s3.board), { boosters: s4.boosters, tool: u.tool });
+        // 次数用完：自由交换拒绝进入；十字消进入模式但提示用完、点格即退出且盘面不变
+        await press(P, "2"); u = await ui(P);
+        check(`自由交换用完：按 2 不进入模式、提示用完：${t}`, u.tool === null && u.msg === "自由交换用完了", { tool: u.tool, msg: u.msg });
+        await press(P, "3"); u = await ui(P);
+        const enter = u.tool === "cross" && u.msg === "十字消用完了";
+        await P.page.mouse.click(cx, cy); await sleep(40);
+        const s5 = await P.st(); u = await ui(P);
+        check(`十字消用完：按 3 进入模式并提示用完、点格退出且盘面不变：${t}`, enter && u.tool === null && same(s5.board, s4.board) && !(await P.page.evaluate(() => window.m3debug.busy)), { tool: u.tool, msg: u.msg });
+        // 再按一次道具键 = 取消（锤子还剩 1 次）
+        await press(P, "1"); const on = (await ui(P)).tool; await press(P, "1"); u = await ui(P);
+        check(`再按 1 取消锤子模式：${t}`, on === "hammer" && u.tool === null && u.msg === "已取消锤子", { on, tool: u.tool, msg: u.msg });
+        await P.ctx.close();
+      }
+      // 5c. 手动洗牌（S 键 / 「洗牌」按钮）：轻落动画、步数不变、盘面换了、提示「已洗牌」；分数芯片标签「已洗牌」由核心 m3Badge 决定
+      {
+        const P = await openPage(vp, 5, 1);
+        await sleep(120);
+        const s0 = await P.st();
+        if (t === "竖屏") await P.button("shuffle"); else await press(P, "s");
+        const busy = await P.page.evaluate(() => window.m3debug.anim.kind);
+        await P.idle();
+        const s1 = await P.st(), u = await ui(P);
+        check(`洗牌：播轻落、步数不变、盘面换了、提示「已洗牌」、分数芯片标签「已洗牌」：${t}`,
+          busy === "fall" && s1.moves === s0.moves && !same(s1.board, s0.board) && u.msg === "已洗牌" && u.badge.kind === "score" && u.badge.shuffled === true,
+          { anim: busy, moves: [s0.moves, s1.moves], msg: u.msg, badge: u.badge });
+        await P.shot(`sdl-shuffle-${t}`);
+        await P.ctx.close();
+      }
+      // 5d. 每日挑战：?daily=2026-09-29 开局（同一天盘面相同）、HUD 关名「每日挑战」+ 日期、D 键开今天的挑战
+      {
+        const P = await openPage(vp, 0, 1);
+        await P.page.goto(`http://127.0.0.1:${PORT}/?daily=2026-09-29`);
+        await P.page.waitForFunction(() => window.m3debug && window.m3debug.state && window.m3debug.state.daily, null, { timeout: 30000 });
+        await sleep(120);
+        const s0 = await P.st(), u = await ui(P), hud = await hudOf(P);
+        check(`每日挑战 2026-09-29：state.daily、HUD 关名「每日挑战」、关卡标签为日期、窗口标题 = 每日局的 titleLine：${t}`,
+          s0.daily === true && hud.name?.text === "每日挑战" && u.daily === "2026-09-29" && hud.label && ws(u.title).startsWith(ws(`${s0.title}  |  `)), { name: hud.name, daily: u.daily, title: u.title });
+        await P.shot(`sdl-daily-${t}`);
+        await press(P, "r"); await sleep(60);
+        const s1 = await P.st();
+        check(`每日挑战按 R 重开：仍是每日挑战、步数回到开局：${t}`, s1.daily === true && s1.moves === s0.moves && (await ui(P)).daily === "2026-09-29", { daily: s1.daily, moves: s1.moves });
+        const Q = await openPage(vp, 7, 3);
+        await Q.page.goto(`http://127.0.0.1:${PORT}/?daily=2026-09-29&seed=99`);
+        await Q.page.waitForFunction(() => window.m3debug && window.m3debug.state && window.m3debug.state.daily, null, { timeout: 30000 });
+        check(`每日挑战：同一天盘面相同（与种子参数无关）：${t}`, same((await Q.st()).board, s0.board));
+        await Q.ctx.close();
+        const R = await openPage(vp, 4, 1);
+        if (t === "竖屏") await R.button("daily"); else await press(R, "d");
+        await sleep(60);
+        const ud = await ui(R), now = new Date(), today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        check(`「每日」按钮 / D 键：开本地今天的每日挑战：${t}`, (await R.st()).daily === true && ud.daily === today, { daily: ud.daily, today });
+        await R.ctx.close();
+        await P.ctx.close();
+      }
+      // 5e. 选关地图：M / 「地图」按钮打开；49 个节点、7 个中文章节标签；未解锁节点 → 关地图不换关；已解锁节点 → 跳关；
+      //     进度存 localStorage「m3-reached」，刷新后保留
+      {
+        const P = await openPage(vp, 3, 7);
+        await sleep(120);
+        if (t === "竖屏") await P.button("map"); else await press(P, "m");
+        await sleep(60);
+        let u = await ui(P);
+        const m = u.drawn.map;
+        check(`地图打开：49 个节点（当前第 4 关金色、1–3 已过、5 起未解锁）、7 个章节「第一章…第七章」：${t}`,
+          u.mapOpen && m && m.nodes.length === 49 && m.nodes[3].kind === "node_cur" && m.nodes[2].kind === "node_done" && m.nodes[4].kind === "node_lock" &&
+          same(m.labels, ["第一章", "第二章", "第三章", "第四章", "第五章", "第六章", "第七章"]), { labels: m?.labels, n: m?.nodes.length, kinds: m?.nodes.slice(0, 6) });
+        await P.shot(`sdl-map-${t}`);
+        await P.page.mouse.click(...(await P.page.evaluate(() => window.m3debug.mapNodeCenter(9)))); await sleep(60);
+        u = await ui(P);
+        check(`地图点未解锁的第 10 关：关地图、不换关：${t}`, !u.mapOpen && (await P.st()).level === 3 && /还没解锁/.test(u.msg), { msg: u.msg });
+        await press(P, "m");
+        await P.page.mouse.click(...(await P.page.evaluate(() => window.m3debug.mapNodeCenter(1)))); await sleep(60);
+        u = await ui(P);
+        check(`地图点已解锁的第 2 关：跳过去、地图关闭：${t}`, !u.mapOpen && (await P.st()).level === 1, { msg: u.msg, level: (await P.st()).level });
+        await press(P, "m"); await press(P, "Escape"); u = await ui(P);
+        check(`Esc 关闭地图：${t}`, !u.mapOpen);
+        check(`进度写进 localStorage「m3-reached」= 3：${t}`, (await lsGet(P, "m3-reached")) === "3", await lsGet(P, "m3-reached"));
+        await P.page.goto(`http://127.0.0.1:${PORT}/?level=0&seed=5`);
+        await P.page.waitForFunction(() => window.m3debug && window.m3debug.state, null, { timeout: 30000 });
+        await press(P, "m"); u = await ui(P);
+        check(`刷新后进度保留：第 4 关仍可进（节点不锁）、第 5 关仍锁：${t}`, u.reached === 3 && u.drawn.map?.nodes[3].kind === "node_done" && u.drawn.map?.nodes[4].kind === "node_lock", { reached: u.reached, kinds: u.drawn.map?.nodes.slice(0, 6) });
+        await P.page.mouse.click(5, 5); await sleep(40);
+        check(`点地图空白处关闭、不换关：${t}`, !(await ui(P)).mapOpen && (await P.st()).level === 0);
+        // HUD 进度点：每关一个点，当前关 C
+        const hud = await hudOf(P);
+        check(`HUD 关卡进度点 49 个：${t}`, hud.dots && hud.dots.n === 49, hud.dots);
+        await P.ctx.close();
+      }
+      // 5f. 暂停：P / 「暂停」按钮；13 行按键 + 触屏对应、5 颗宝石图例；动画中暂停 = 冻结；R 在暂停中可重开；点任意处继续
+      {
+        const P = await openPage(vp, 0, 20260929);
+        await sleep(120);
+        const s0 = await P.st();
+        await P.swap(s0.hint[0], s0.hint[1], false);
+        await sleep(50);
+        if (t === "竖屏") await P.button("pause"); else await press(P, "p");
+        const a1 = await P.info(); await sleep(400); const a2 = await P.info();
+        let u = await ui(P);
+        check(`暂停：13 行按键（含触屏入口）、5 颗宝石图例：${t}`, u.paused && u.drawn.pause?.rows.length === 13 && u.drawn.pause.rows.every((r) => r.touch) && u.drawn.pause.gems.length === 5, u.drawn.pause && { rows: u.drawn.pause.rows.map((r) => r.key).join(""), gems: u.drawn.pause.gems });
+        check(`暂停冻结动画（400 ms 内帧号不变）：${t}`, a1.kind !== null && a1.kind === a2.kind && a1.fr === a2.fr && a1.p === a2.p, { a1, a2 });
+        await P.shot(`sdl-pause-${t}`);
+        await P.page.mouse.click(10, 10); await sleep(40);
+        u = await ui(P);
+        check(`暂停中点任意处继续：${t}`, !u.paused);
+        await P.idle();
+        const s1 = await P.st();
+        await press(P, "p"); await press(P, "r"); await sleep(60);
+        const s2 = await P.st(); u = await ui(P);
+        check(`暂停中按 R 重开本关（步数回到开局、取消暂停）：${t}`, !u.paused && s2.moves === s0.moves && s1.moves === s0.moves - 1 && s2.level === 0, { moves: [s0.moves, s1.moves, s2.moves], paused: u.paused });
+        await press(P, "p"); await press(P, "Escape");
+        check(`Esc 关闭暂停：${t}`, !(await ui(P)).paused);
+        await P.ctx.close();
+      }
+      // 5g. 按键表：H 提示、U 撤销、K / B 音效开关（localStorage）、? 本关说明、Esc 关说明；窗口标题 = titleLine + 提示
+      {
+        const P = await openPage(vp, 2, 4);
+        await sleep(120);
+        const s0 = await P.st();
+        await press(P, "h"); let u = await ui(P);
+        check(`H：亮提示（与核心 hint 相同）：${t}`, same(u.hint, s0.hint) && u.msg === "提示：交换高亮的两格", { hint: u.hint, msg: u.msg });
+        await P.swap(s0.hint[0], s0.hint[1], false); await sleep(30); await P.idle();
+        await press(P, "u"); const s1 = await P.st();
+        check(`U：撤销一步（步数回到开局）：${t}`, s1.moves === s0.moves && same(s1.board, s0.board));
+        const sfx0 = await lsGet(P, "m3-sfx"); await press(P, "k"); const sfx1 = await lsGet(P, "m3-sfx"); await press(P, "k");
+        const bgm0 = await lsGet(P, "m3-bgm"); await press(P, "b"); const bgm1 = await lsGet(P, "m3-bgm"); await press(P, "b");
+        check(`K / B：音效 / BGM 开关（localStorage m3-sfx / m3-bgm）：${t}`, sfx1 === "off" && bgm1 === "off" && (await lsGet(P, "m3-sfx")) === "on" && (await lsGet(P, "m3-bgm")) === "on", { sfx0, sfx1, bgm0, bgm1 });
+        await press(P, "?"); const g1 = (await ui(P)).showGuide; await press(P, "Escape"); const g2 = (await ui(P)).showGuide;
+        check(`? 打开本关说明、Esc 关闭：${t}`, g1 === true && g2 === false);
+        u = await ui(P);
+        check(`窗口标题 = Match3.View.titleLine +「  |  」+ 提示：${t}`, ws(u.title) === ws(`${s1.title}  |  ${u.msg}`) && u.title.includes("Hm="), { title: u.title, want: `${s1.title}  |  ${u.msg}` });
+        await P.ctx.close();
+      }
+      // 5h. 首关提示与按键条（桌面 freshLevelUi / drawHelpStripArt）：第 1 关开局自动亮提示 + 横幅「按 H 查看提示」，
+      //     有键盘鼠标时棋盘底部按键条 300 帧后消失；触屏设备横幅改成「点「提示」查看提示」、不画按键条
+      {
+        const P = await openPage(vp, 0, 20260929);
+        await sleep(150);
+        const s0 = await P.st(); let u = await ui(P);
+        check(`第 1 关开局：自动亮提示、横幅「按 H 查看提示」、按键条 H123USDMRKBNP：${t}`, same(u.hint, s0.hint) && u.drawn.banner?.text === "按 H 查看提示" && !!u.drawn.help && u.fine, { hint: u.hint, banner: u.drawn.banner, help: u.drawn.help });
+        await P.shot(`sdl-tip-help-${t}`);
+        await P.page.waitForFunction(() => window.m3debug.ui.helpFrames === 0 && window.m3debug.ui.tipFrames === 0, null, { timeout: 15000 });
+        await sleep(60); u = await ui(P);
+        check(`300 帧后按键条与提示横幅消失：${t}`, !u.drawn.help && !u.drawn.banner, u.drawn);
+        await P.ctx.close();
+        const Q = await openPage({ ...vp, touch: true, mobile: true }, 0, 20260929);
+        await sleep(150); const q = await ui(Q);
+        check(`触屏设备：横幅「点「提示」查看提示」、不画按键条：${t}`, !q.fine && q.drawn.banner?.text === "点「提示」查看提示" && !q.drawn.help, q.drawn);
+        await Q.ctx.close();
+      }
+    }
+
+    // 5i. 结局后前进与星级（竖屏用点棋盘，横屏用 N）：第 1 关种子 20260930 按提示约 6 步过关（第 3 步有 2 连击）→ 结算面板星级 + 操作提示；
+    //     过关后洗牌无效；前进 = 第 2 关（开局步数 = 印制步数，剩余步数最多带入 3 步）；途中抓一次连击，查分数徽章「连击 xN」与本步总结
+    for (const vp of VPS) {
+      const t = vp.tag;
+      const P = await openPage(vp, 0, 20260930);
+      await sleep(120);
+      let combo = null, summary = null;
+      for (let k = 0; k < 40; k++) {
+        const s = await P.st();
+        if (s.over || !s.hint) break;
+        if (!combo) await P.breakAt((i) => i.p === "flash" && i.k >= 2 && i.fr >= 4);
+        await P.swap(s.hint[0], s.hint[1], false);
+        await P.frozenOrIdle();
+        if (!combo && (await P.isFrozen())) {
+          combo = { hud: (await hudOf(P)).badge, badge: (await ui(P)).badge, k: (await P.info()).k };
+          await P.shot(`sdl-badge-combo-${t}`);
+          await P.clearBreak(); await P.resume(); await P.idle();
+          await sleep(30);
+          summary = { hud: (await hudOf(P)).badge, u: await ui(P) };
+        }
+        await P.clearBreak(); await P.resume(); await P.idle();
+      }
+      const end = await P.st(), ov = await P.page.evaluate(() => window.m3debug.overlay), u = await ui(P);
+      check(`分数徽章：连击中「连击 xN」、播完后本步总结（m3Badge）：${t}`, !!combo && combo.hud === "combo" && combo.badge.kind === "combo" && combo.badge.n === combo.k &&
+        summary.hud === "summary" && summary.u.comboLeft > 0 && summary.u.badge.kind === "summary", { combo, summary: summary && { hud: summary.hud, left: summary.u.comboLeft, badge: summary.u.badge } });
+      check(`第 1 关过关：结算面板「过关！」、三颗星贴图、操作提示、说明文字不变：${t}`,
+        end.over?.tag === "LevelClear" && ov.title === "过关！" && ov.sub.includes("进入第 2 关") && ov.stars === u.progress.stars && ov.stars >= 1 && ov.starSprites.length === 3 &&
+        ov.starSprites.filter((x) => x === "star_on").length === ov.stars && /下一关/.test(ov.action), { over: end.over, ov });
+      await P.shot(`sdl-result-stars-${t}`);
+      await press(P, "s");
+      check(`过关后洗牌无效（盘面不变）：${t}`, same((await P.st()).board, end.board) && !(await P.page.evaluate(() => window.m3debug.busy)));
+      check(`过关后进度解锁到第 2 关（m3-reached = 1）：${t}`, (await lsGet(P, "m3-reached")) === "1" && u.reached === 1, { ls: await lsGet(P, "m3-reached"), reached: u.reached });
+      if (t === "竖屏") await P.page.mouse.click(...(await P.center([4, 4]))); else await press(P, "n");
+      await sleep(80);
+      const nx = await P.st(), u2 = await ui(P), carry = Math.min(3, end.moves);
+      check(`前进：第 2 关、开局步数 = 印制步数、带入剩余步数 min(3, ${end.moves})：${t}`, nx.level === 1 && !nx.over && nx.moves === u2.startMoves + carry && u2.startMoves > 0, { level: nx.level, moves: nx.moves, startMoves: u2.startMoves, carry });
+      await P.ctx.close();
+    }
+    // 5j. 失败后前进 = 重开本关（第 8 关种子 2 按提示会用完步数）：竖屏点棋盘、横屏按 R
+    for (const vp of VPS) {
+      const t = vp.tag;
+      const P = await openPage(vp, 7, 2);
+      const end = await playToEnd(P, 60);
+      await sleep(100);
+      const ov = await P.page.evaluate(() => window.m3debug.overlay), sm = (await ui(P)).startMoves;
+      check(`失败面板：不画星星、操作提示「重试」：${t}`, end.over?.tag === "Lost" && ov.stars === null && /重试/.test(ov.action), { over: end.over, ov });
+      await P.shot(`sdl-lost-${t}`);
+      if (t === "竖屏") await P.page.mouse.click(...(await P.center([4, 4]))); else await press(P, "n");
+      await sleep(80);
+      const s = await P.st();
+      check(`失败后点棋盘 / N：重开本关（同一关、步数回到开局）：${t}`, s.level === 7 && !s.over && s.moves === sm, { level: s.level, moves: s.moves, sm });
+      await P.ctx.close();
+    }
+    // 5k. 元素展示盘（桌面 MATCH3_SHOWCASE → ?showcase=1）
+    for (const vp of VPS) {
+      const P = await openPage(vp, 0, 1);
+      await P.page.goto(`http://127.0.0.1:${PORT}/?showcase=1`);
+      await P.page.waitForFunction(() => window.m3debug && window.m3debug.state && /展示盘/.test(window.m3debug.ui.msg), null, { timeout: 30000 });
+      await sleep(150);
+      const s = await P.st(), kinds = new Set(s.board.flat().map((c) => (c.t === "custom" ? c.name : c.t + (c.k || ""))));
+      check(`元素展示盘：盘上至少 8 种元素、没有几何降级：${vp.tag}`, kinds.size >= 8 && Object.keys(await P.page.evaluate(() => window.m3debug.fallbacks)).length === 0, [...kinds]);
+      await P.shot(`sdl-showcase-${vp.tag}`);
+      await P.ctx.close();
+    }
+  }
 } finally {
   await browser.close();
   server.kill();

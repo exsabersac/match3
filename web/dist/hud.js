@@ -57,6 +57,13 @@ function chip(ctx, art, x, y, w, h, label, value, valueColor = "#ffe082") {
 // 图集里没有这张图时退回浏览器字体画 state.name。返回实际画出的矩形与贴图名 / 文字（e2e 检查每关画的是对应的 name_N）。
 const NAME_H = 21;
 function levelName(ctx, art, x, cy, maxW, info) {
+  // 每日挑战：同桌面 HudArt 的 zh_daily，画「每日挑战」（网页图集没有 zh_* 文字图，用画布字体）
+  if (info.daily) {
+    ctx.font = `800 21px ${FONT}`;
+    const t = fit(ctx, "每日挑战", maxW);
+    text(ctx, t, x, cy, 21, "#ffe082", "left", 800);
+    return { x, y: cy - 10.5, w: Math.min(maxW, ctx.measureText(t).width), h: 21, sprite: null, text: t };
+  }
   const sprite = `name_${info.level}`, sz = art.size(sprite);
   if (sz) {
     let h = NAME_H, w = (sz[0] * NAME_H) / sz[1];
@@ -128,19 +135,60 @@ function drawRuleBadges(ctx, art, rules, x, cy, maxW, h, size) {
 }
 
 // 关卡小面板：chip + 标签行右侧的规则角标（标签「第 N 关」之后到面板右边距之间）。返回各部件矩形（e2e 用）。
+// 标签：战役关「第 N 关」，每日挑战是挑战日期（info.dailyLabel）。底边一排关卡进度点（levelDots）。
 function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
-  chip(ctx, art, x, y, w, h, `第 ${info.level + 1} 关`, null);
+  const lab = info.daily ? info.dailyLabel || "每日" : `第 ${info.level + 1} 关`;
+  chip(ctx, art, x, y, w, h, lab, null);
   const name = levelName(ctx, art, x + 12, y + h * 0.68, w - 24, info);
   ctx.font = `600 13px ${FONT}`;
-  const labelW = ctx.measureText(`第 ${info.level + 1} 关`).width;
+  const labelW = ctx.measureText(lab).width;
   const bx = x + 12 + labelW + 8;
   const badges = drawRuleBadges(ctx, art, info.rules, bx, y + h * 0.3, x + w - 8 - bx, badgeH, badgeSize);
+  const dots = levelDots(ctx, info.dots, x + 12, y + h - 4, w - 24);
   return {
     chip: { x, y, w, h },
     label: { x: x + 12, y: y + h * 0.3 - 6.5, w: labelW, h: 13 },
     name,
     badges,
+    dots,
   };
+}
+
+// 关卡进度点（同桌面 drawHudArt：m3Progress 的 dots，每关一个字符 C 当前 / D 已过 / U 已解锁 / L 未解锁；
+// 已过绿、当前金且高一些、未解锁暗）。点距最多 6，关卡多时收窄到放得下。cy = 点的底边。返回 {x, y, w, h, n}。
+const DOT_RGB = { C: "rgb(255,214,90)", D: "rgb(90,210,130)", U: "rgb(120,180,140)", L: "rgb(80,72,130)" };
+function levelDots(ctx, dots, x, bottom, maxW) {
+  if (!dots) return null;
+  const n = dots.length, step = Math.min(6, maxW / Math.max(1, n)), dw = Math.max(1.5, step * 0.66);
+  [...dots].forEach((d, i) => {
+    const hh = d === "C" ? 6 : 3;
+    ctx.fillStyle = DOT_RGB[d] || DOT_RGB.L;
+    ctx.fillRect(x + i * step, bottom - hh, dw, hh);
+  });
+  return { x, y: bottom - 6, w: n * step, h: 6, n };
+}
+
+// 分数芯片（同桌面 drawHudArt 右下角 Match3.View.scoreBadge，经 m3Badge）：回放中连击 ≥ 2 显示「连击 xN」，否则滚动的分数；
+// 播完后 comboSummary 帧内显示本步「N 连击！」；其余显示得分（洗过牌时标签换成「已洗牌」）。
+function scoreChip(ctx, art, x, y, w, h, info) {
+  const b = info.badge || { kind: "score", n: info.score, shuffled: false };
+  if (b.kind === "combo") {
+    if (!art.panel(ctx, "panel_gold", x, y, w, h, 12)) { ctx.fillStyle = "rgba(90,60,10,.85)"; ctx.fillRect(x, y, w, h); }
+    text(ctx, "连击", x + 12, y + h * 0.3, 13, "rgba(255,240,200,.9)", "left", 600);
+    text(ctx, `x${b.n}`, x + 12, y + h * 0.68, 21, info.comboColor || "#ffe082", "left", 800);
+  } else if (b.kind === "summary") {
+    if (!art.panel(ctx, "panel_gold", x, y, w, h, 12)) { ctx.fillStyle = "rgba(90,60,10,.85)"; ctx.fillRect(x, y, w, h); }
+    text(ctx, "本步", x + 12, y + h * 0.3, 13, "rgba(255,240,200,.9)", "left", 600);
+    ctx.font = `800 21px ${FONT}`;
+    text(ctx, fit(ctx, `${b.n} 连击！`, w - 24), x + 12, y + h * 0.68, 21, info.comboColor || "#ffe082", "left", 800);
+  } else chip(ctx, art, x, y, w, h, b.kind === "score" && b.shuffled ? "已洗牌" : "分数", b.kind === "rolling" ? b.n : info.score);
+  return b.kind;
+}
+// 步数 ≤ 5 时变红并闪烁（同桌面 160 + 95 × breathe(pulse, 40)）
+function movesColor(info) {
+  if (info.moves > 5) return "#ffe082";
+  const k = Math.round(160 + 95 * (0.5 + 0.5 * Math.sin(((info.pulse || 0) * 2 * Math.PI) / 40)));
+  return `rgb(255,${Math.round(k / 2)},${Math.round(k / 2)})`;
 }
 
 // 目标进度条：左边目标图标（info.goalIcon = state.goal.icon，核心侧 UI.GoalIcon.goalIcon，与桌面 HUD 同一张表；缺图不画、
@@ -187,11 +235,24 @@ function bossBar(ctx, art, x, y, w, h, info, pulse) {
 }
 const clampHp = (hp, mx) => Math.max(0, Math.min(mx, hp));
 
-function button(ctx, art, b, enabled, pressed) {
+// left：道具按钮的剩余次数（其余 null）；active：当前道具点选模式（同桌面道具芯片的金框）。
+// 道具按钮画「图标 + 次数」（同桌面 HudArt 的道具芯片：icon_hammer / icon_swap / icon_cross），缺图时退回单字标签。
+function button(ctx, art, b, enabled, pressed, left = null, active = false) {
   ctx.save();
-  ctx.globalAlpha = enabled ? 1 : 0.45;
-  const name = b.id === "hint" || b.id === "undo" || b.id === "restart" || b.id === "help" ? "panel_gold" : "panel_chip";
-  if (!art.panel(ctx, name, b.x, b.y + (pressed ? 2 : 0), b.w, b.h, 14)) { ctx.fillStyle = "#554"; ctx.fillRect(b.x, b.y, b.w, b.h); }
+  ctx.globalAlpha = enabled || active ? 1 : 0.45;
+  const name = active || b.id === "hint" || b.id === "undo" || b.id === "restart" || b.id === "help" ? "panel_gold" : "panel_chip";
+  const dy = pressed ? 2 : 0;
+  if (!art.panel(ctx, name, b.x, b.y + dy, b.w, b.h, 14)) { ctx.fillStyle = "#554"; ctx.fillRect(b.x, b.y, b.w, b.h); }
+  if (active) { ctx.lineWidth = 3; ctx.strokeStyle = "#ffd65a"; roundPath(ctx, b.x + 1.5, b.y + dy + 1.5, b.w - 3, b.h - 3, 12); ctx.stroke(); }
+  if (b.booster) {
+    const s = Math.min(b.h - 16, 30), num = String(left ?? 0);
+    ctx.font = `800 20px ${FONT}`;
+    const tw = ctx.measureText(num).width, total = s + 4 + tw, x0 = b.x + (b.w - total) / 2, cy = b.y + b.h / 2 + dy;
+    if (art.draw(ctx, b.booster.icon, x0, cy - s / 2, s, s)) text(ctx, num, x0 + s + 4, cy, 20, left > 0 ? "#fff" : "#9a94c0", "left", 800);
+    else text(ctx, `${b.label}${num}`, b.x + b.w / 2, cy, 20, "#fff", "center", 800);
+    ctx.restore();
+    return;
+  }
   const big = b.label.length === 1;
   const gold = name === "panel_gold";
   text(ctx, b.label, b.x + b.w / 2, b.y + b.h / 2 + (pressed ? 2 : 0) + (big ? -2 : 0), big ? 32 : 20, gold ? "#ffe9a8" : "#fff", "center", 800);
@@ -224,8 +285,8 @@ export function drawHud(ctx, art, L, info, pressed) {
   if (L.mode === "portrait") {
     const g = 10, wl = h.w - 2 * (130 + g);
     lv = levelChip(ctx, art, h.x, h.y, wl, 48, info, 15, 11);
-    chip(ctx, art, h.x + wl + g, h.y, 130, 48, "分数", info.score);
-    chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
+    lv.badge = scoreChip(ctx, art, h.x + wl + g, h.y, 130, 48, info);
+    chip(ctx, art, h.x + wl + 130 + 2 * g, h.y, 130, 48, "步数", info.moves, movesColor(info));
     const gw = h.w - SOUND_SPAN;
     if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 56, gw, 36, info, info.pulse); lv.goal = boss.label; }
     else { const g = goalBar(ctx, art, h.x, h.y + 56, gw, 36, info); lv.goal = g.label; lv.goalIcon = g.icon; }
@@ -237,11 +298,11 @@ export function drawHud(ctx, art, L, info, pressed) {
   } else {
     lv = levelChip(ctx, art, h.x, h.y, h.w, 56, info, 17, 12);
     const hw = (h.w - 8) / 2;
-    chip(ctx, art, h.x, h.y + 64, hw, 56, "分数", info.score);
-    chip(ctx, art, h.x + hw + 8, h.y + 64, hw, 56, "步数", info.moves, info.moves <= 5 ? "#ff8a80" : "#ffe082");
+    lv.badge = scoreChip(ctx, art, h.x, h.y + 64, hw, 56, info);
+    chip(ctx, art, h.x + hw + 8, h.y + 64, hw, 56, "步数", info.moves, movesColor(info));
     if (info.boss) { boss = bossBar(ctx, art, h.x, h.y + 130, h.w, 40, info, info.pulse); lv.goal = boss.label; }
     else { const g = goalBar(ctx, art, h.x, h.y + 130, h.w, 40, info); lv.goal = g.label; lv.goalIcon = g.icon; }
-    const top = h.y + 186, bottom = L.buttons[0].y - 8;
+    const top = h.y + 186, bottom = Math.min(...L.buttons.map((b) => b.y)) - 8;
     sfx = { x: h.x + h.w - 2 * SOUND_W - SOUND_GAP, y: top - 8, w: SOUND_W, h: SOUND_H };
     ctx.font = `600 16px ${FONT}`;
     const maxLines = Math.max(1, Math.floor((bottom - top) / 22));
@@ -251,8 +312,11 @@ export function drawHud(ctx, art, L, info, pressed) {
     lines.forEach((ln, i) => { msg.push(msgBox(ctx, ln, h.x + 2, top + 11 + i * 22)); text(ctx, ln, h.x + 2, top + 11 + i * 22, 16, "#fff8e1", "left", 600); });
   }
   for (const b of L.buttons) {
-    const enabled = !info.busy && (b.id !== "undo" || info.undo > 0);
-    button(ctx, art, b, enabled, pressed === b.id);
+    const left = b.booster && info.boosters ? info.boosters[b.booster.key] : null;
+    // 结局后道具 / 洗牌无效（核心拒绝），画成灰的
+    const locked = info.over && (b.booster || b.id === "shuffle");
+    const enabled = (b.id === "pause" || b.id === "map" || !info.busy) && (b.id !== "undo" || info.undo > 0) && (left === null || left > 0) && !locked;
+    button(ctx, art, b, enabled, pressed === b.id, left, info.tool === b.id);
   }
   const bgm = { ...sfx, x: sfx.x + SOUND_W + SOUND_GAP };
   soundChip(ctx, art, sfx, info.sfx === false ? "静" : "效");
@@ -260,13 +324,65 @@ export function drawHud(ctx, art, L, info, pressed) {
   return { ...lv, boss, sfx, bgm, msg };
 }
 
-// 结局面板（盖在棋盘上）
-export function drawOverlay(ctx, art, rect, title, sub) {
+// 结局面板（盖在棋盘上）：标题、星级（stars = null 时不画；同桌面 drawOverlayArtNow：过关 / 通关画 star_on / star_off 三颗，
+// 失败不画）、说明 sub（最多 3 行）、底部一行操作提示 action（点棋盘 / 按键做什么）。返回星星与各行的矩形（e2e 用）。
+export function drawOverlay(ctx, art, rect, title, sub, stars = null, action = "") {
   ctx.fillStyle = "rgba(10,6,24,.72)";
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  const pw = rect.w * 0.8, ph = 150, px = rect.x + (rect.w - pw) / 2, py = rect.y + (rect.h - ph) / 2;
+  const starH = stars === null ? 0 : 46;
+  const pw = rect.w * 0.8, ph = 150 + starH + (action ? 28 : 0), px = rect.x + (rect.w - pw) / 2, py = rect.y + (rect.h - ph) / 2, cx = rect.x + rect.w / 2;
   art.panel(ctx, "panel_dark", px, py, pw, ph, 18);
-  text(ctx, title, rect.x + rect.w / 2, py + 50, 38, "#ffe082", "center", 900);
+  text(ctx, title, cx, py + 50, 38, "#ffe082", "center", 900);
+  const starRects = [];
+  if (stars !== null) {
+    const s = 40;
+    for (let i = 0; i < 3; i++) {
+      const r = { x: cx - 1.5 * s - 6 + i * (s + 6), y: py + 78, w: s, h: s, on: i < stars };
+      if (!art.draw(ctx, r.on ? "star_on" : "star_off", r.x, r.y, s, s)) text(ctx, r.on ? "★" : "☆", r.x + s / 2, r.y + s / 2, 32, "#ffd65a", "center", 800);
+      starRects.push(r);
+    }
+  }
   ctx.font = `600 17px ${FONT}`;
-  wrap(ctx, sub, pw - 30, 3).forEach((ln, i) => text(ctx, ln, rect.x + rect.w / 2, py + 96 + i * 24, 17, "#fff", "center", 600));
+  wrap(ctx, sub, pw - 30, 3).forEach((ln, i) => text(ctx, ln, cx, py + 96 + starH + i * 24, 17, "#fff", "center", 600));
+  if (action) {
+    ctx.font = `600 14px ${FONT}`;
+    text(ctx, fit(ctx, action, pw - 30), cx, py + ph - 20, 14, "rgba(255,236,170,.9)", "center", 600);
+  }
+  return { panel: { x: px, y: py, w: pw, h: ph }, stars: starRects };
+}
+
+// 棋盘上沿的横幅（同桌面 drawToolBannerArt / drawTipBannerArt：panel_gold 底 + 图标或按键芯片 + 文字）。
+// icon：贴图名；key：按键字母（画成小键帽）；返回横幅矩形。
+export function drawBanner(ctx, art, board, s, { icon = null, key = null } = {}) {
+  ctx.font = `700 18px ${FONT}`;
+  const tw = ctx.measureText(s).width, lead = icon || key ? 30 : 0, w = Math.min(board.w - 16, 24 + lead + tw), h = 32;
+  const x = board.x + (board.w - w) / 2, y = board.y + 6;
+  if (!art.panel(ctx, "panel_gold", x, y, w, h, 12)) { ctx.fillStyle = "rgba(90,60,10,.9)"; ctx.fillRect(x, y, w, h); }
+  let tx = x + 12;
+  if (icon && art.draw(ctx, icon, tx, y + 5, 22, 22)) tx += lead;
+  else if (key) { keyCap(ctx, art, tx, y + 5, key); tx += lead; }
+  text(ctx, fit(ctx, s, x + w - 12 - tx), tx, y + h / 2, 18, "#fff8e1", "left", 700);
+  return { x, y, w, h, text: s };
+}
+
+// 小键帽：22 × 22 的 panel_chip + 金色字母（同桌面 keyChipA）
+export function keyCap(ctx, art, x, y, ch, size = 22) {
+  if (!art.panel(ctx, "panel_chip", x, y, size, size, 6)) { ctx.fillStyle = "#3a3060"; ctx.fillRect(x, y, size, size); }
+  text(ctx, ch, x + size / 2, y + size / 2 + 0.5, Math.round(size * 0.62), "#ffdc78", "center", 800);
+}
+
+// 按键条（同桌面 drawHelpStripArt：开局 / 取消暂停后 300 帧，棋盘底部浮层）：各键帽 + 「P：暂停并查看全部按键」。
+// 只在有键盘鼠标的设备上画（调用方判断 (hover: hover) and (pointer: fine)）。返回矩形。
+export const HELP_KEYS = "H123USDMRKBNP";
+export function drawHelpStrip(ctx, art, board) {
+  const h = 30, x = board.x + 8, w = board.w - 16, y = board.y + board.h - h - 6;
+  ctx.save(); ctx.globalAlpha = 0.94;
+  if (!art.panel(ctx, "panel_chip", x, y, w, h, 10)) { ctx.fillStyle = "rgba(30,24,60,.9)"; ctx.fillRect(x, y, w, h); }
+  ctx.restore();
+  const step = Math.min(24, (w - 190) / HELP_KEYS.length), cap = Math.min(20, step - 2);
+  [...HELP_KEYS].forEach((ch, i) => keyCap(ctx, art, x + 6 + i * step, y + (h - cap) / 2, ch, cap));
+  const tx = x + 6 + HELP_KEYS.length * step + 4;
+  ctx.font = `700 14px ${FONT}`;
+  text(ctx, fit(ctx, "P：暂停并查看全部按键", x + w - 6 - tx), tx, y + h / 2, 14, "#fff8e1", "left", 700);
+  return { x, y, w, h };
 }

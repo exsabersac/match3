@@ -10,36 +10,34 @@ export let ROWS = 8, COLS = 8;
 export function setDims(rows, cols) { ROWS = rows; COLS = cols; }
 export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
 
-// 颜色表与桌面逐项比对（test/Spec/WebColors.hs，改这里或桌面任一边都要两边一起改）。
-// 五色主色（与 tools/gen_assets.py 调色板、UI.Palette.colorRGB 一致）
-export const COLOR_RGB = { 1: [236, 62, 78], 2: [52, 196, 96], 3: [56, 128, 246], 4: [255, 194, 36], 5: [172, 88, 236] };
-// 按元素名取色（UI.Presentation.elementRGBTable）：生长前沿光 / 自定义格
-export const ELEMENT_RGB = { vine: [110, 220, 90], choco: [150, 90, 45], steam: [225, 225, 235], jelly: [240, 110, 180], bubble: [150, 215, 250], magic_stone: [92, 60, 160],
-  fuzzball: [196, 150, 170] };   // 毛球：同桌面几何版 UI.Cell.Prim.primFuzzball 的灰粉色（降级色 / 消灭时的粒子色）
+// 颜色表由 wasm 下发（m3Meta = UI.WebMeta，唯一来源是桌面 UI.Palette / UI.Presentation），启动时 setPalette 填入。
+export const COLOR_RGB = {};     // 五色主色：颜色编号 → [r, g, b]
+export const ELEMENT_RGB = {};   // 按元素名取色（elementRGBTable）：自定义格 / 蔓延
+const TAG_RGB = {}, COLOR_TAGS = new Set();
+let FALLBACK_RGB = null, SPREAD_GLOW = null;
+export function setPalette(meta) {
+  Object.assign(COLOR_RGB, meta.colorRGB);
+  Object.assign(ELEMENT_RGB, meta.elementRGB);
+  Object.assign(TAG_RGB, meta.tagRGB);
+  for (const t of meta.colorTags) COLOR_TAGS.add(t);
+  FALLBACK_RGB = meta.fallbackRGB; SPREAD_GLOW = meta.spreadGlow;
+}
+// 生长前沿光：按元素名取色，表里没有的元素用缺省色（UI.Presentation.spreadGlowFor）
+export const spreadGlow = (name) => ELEMENT_RGB[name] || SPREAD_GLOW;
 
 export const clamp = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
 export const breathe = (pulse, period) => 0.5 + 0.5 * Math.sin((pulse * 2 * Math.PI) / period);
 export const origin = ([r, c]) => [PAD + c * CELL, PAD + r * CELL];
 const gemSprite = (c) => `gem_c${c}`;
 
-// 粒子 / 退回画法颜色（UI.Palette.cellRGB）
+// 粒子 / 退回画法颜色（UI.Palette.cellRGB；规则见 UI.WebMeta，stack test 的 Spec.WebColors 按同一规则逐格核对）：
+// 按 "c" 取主色的标签 / 固定色的标签 / 自定义格（元素给出 "c" 就按当前颜色，否则按名字）/ 其余缺省色
 export function cellRGB(cell) {
-  if (!cell) return [160, 160, 170];
-  switch (cell.t) {
-    case "G": case "balloon": case "maker": case "flip": case "bottle": case "countdown": return COLOR_RGB[cell.c] || [200, 200, 200];
-    case "stone": return [120, 120, 130];
-    case "chest": return [220, 170, 60];
-    case "honey": return [240, 180, 40];
-    case "cookie": return [210, 160, 90];
-    case "cake": return [255, 140, 180];
-    case "hat": return [140, 90, 200];
-    case "snail": return [90, 160, 70];
-    case "safe": return [180, 150, 40];
-    case "surprise": return [255, 100, 160];
-    case "spirit": return [80, 220, 255];
-    case "custom": return cell.name === "chameleon" && cell.c ? COLOR_RGB[cell.c] : ELEMENT_RGB[cell.name] || [160, 160, 170];   // 变色龙：当前颜色（同桌面 cellRGB）
-    default: return [160, 160, 170];
-  }
+  if (!cell) return FALLBACK_RGB;
+  if (COLOR_TAGS.has(cell.t)) return COLOR_RGB[cell.c] || [200, 200, 200];
+  if (cell.t in TAG_RGB) return TAG_RGB[cell.t];
+  if (cell.t === "custom") return cell.c ? COLOR_RGB[cell.c] || [200, 200, 200] : ELEMENT_RGB[cell.name] || FALLBACK_RGB;
+  return FALLBACK_RGB;
 }
 
 // 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
@@ -64,7 +62,7 @@ export function primarySprite(cell) {
     case "countdown": return gemSprite(cell.c);
     case "custom":
       if (cell.name === "magic_stone") return `magic_stone_${clamp(0, 3, cell.v)}`;   // 魔法石按充能取贴图
-      // 变色龙：当前颜色的宝石（c 由 Api 按核心 chameleonColor 解码）。桌面 customTable 的主贴图是环 "chameleon"，
+      // 变色龙：当前颜色的宝石（c 是元素自带的显示字段，Match3.View.cellExtras）。桌面 customTable 的主贴图是环 "chameleon"，
       // 缩放画法（消失 / 缩放段）因此只画环；网页缩放画法画当前颜色的宝石（见 docs/web.md §8.1）
       if (cell.name === "chameleon" && !forceGeneric.has("chameleon")) return gemSprite(cell.c);
       return cell.name;
@@ -141,7 +139,7 @@ const CELL_ART = {
 // 按 Custom 名字分派的专门画法（同桌面 UI.CellTable.customTable；查不到的名字走 CELL_ART.custom）。
 // 新玩法 5 雪怪 Boss（Custom "snow_boss"，占 2×2）：同桌面 UI.Cell.Art.artSnowBoss——每格画整只雪怪的四分之一
 // snow_boss_<象限>（血量 ≤ 满血一半换 snow_boss_hurt_<象限> 受伤表情）；右下格底部画召唤进度小点（每 3 次交换召唤一块雪块，
-// 点亮已走的次数）。象限 q / 受伤 hurt / 计数 turn / 周期 every 由 Api 按 Match3.View.bossPart 解码给出，这里不拆 v。
+// 点亮已走的次数）。象限 q / 受伤 hurt / 计数 turn / 周期 every 是元素自带的显示字段（Match3.View.cellExtras），这里不拆 v。
 // 四块拼成一只：画布缩放时双线性采样会从图集里贴图外的透明缝取色，格子边又落在小数像素上，四块之间会露出一条细缝（十字线）。
 // 这里在朝向另外三块的两条内边上把源矩形各收 1 个源像素，并把目标矩形对齐到后备缓冲的整像素（相邻格算出的边界相同）；
 // 桌面按 1:1 画，没有这个问题。
@@ -165,7 +163,7 @@ function drawSnowBoss(ctx, art, pulse, x, y, c) {
   }
 }
 // 新玩法 7 变色龙（Custom "chameleon"，v = 颜色下标 0..4）：同桌面 UI.Cell.Art.artChameleon——先画当前颜色的宝石
-// gem_c<c>（c = 1..5 由 Api 按核心 Match3.Element.Builtin.chameleonColor 解码，前端不拆 v），再叠一张缓慢旋转的五色描边环
+// gem_c<c>（c = 1..5 是元素自带的显示字段 Match3.View.cellExtras，前端不拆 v），再叠一张缓慢旋转的五色描边环
 // chameleon（角度 = 呼吸计数 mod 360 度，每个逻辑帧 1 度：桌面 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈）。
 // 每步换色是步末 EvTick "chameleon"（原格改写），render.js 的倒计时段照常播：前半段旧色、后半段新色，全程红光脉冲。
 function drawChameleon(ctx, art, pulse, x, y, c) {

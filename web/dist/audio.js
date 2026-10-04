@@ -1,6 +1,8 @@
 // 网页音效。浏览器要在用户点过之后才能出声。
 // 音效与 BGM 各自开关，默认开；localStorage 键 m3-sfx / m3-bgm。
-const NAMES = ["swap", "clear", "special", "illegal", "win", "lose", "bgm"];
+// 音效名由 wasm 下发（m3Meta 的 sounds = UI.Presentation.soundNames），启动时 setSoundNames 填入
+let NAMES = [];
+export function setSoundNames(names) { NAMES = names; }
 const KEY_SFX = "m3-sfx";
 const KEY_BGM = "m3-bgm";
 

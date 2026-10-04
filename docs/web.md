@@ -11,6 +11,9 @@
 
 核心源码一行未改：`web/match3-web.cabal` 直接用 `hs-source-dirs: hs ../src ../app/pure` 引用仓库里的模块。
 
+**定位（2026-10-04 起）**：网页是唯一前端。SDL2 桌面版将来放弃，PC 端像安卓一样给网页套一层壳（壳尚未做）。
+桌面版的功能已全部迁到网页（`feat/web-sdl-parity`，对照表见 §2.6），桌面代码暂时保留未删。
+
 ## 2. 结构
 
 ```
@@ -22,7 +25,8 @@
 │   ├─ render.js  盘面与动画（交换、逐轮消除下落、步末效果、粒子、浮字、震屏） │
 │   │    └─ cells.js  桌面 UI.CellTable 的 JS 移植：每种格子怎么画          │
 │   │         └─ art.js  图集绘制：普通 / 着色 / 叠加 / 旋转 / 九宫格        │
-│   └─ hud.js     HUD 面板、目标进度、按钮、结局遮罩                        │
+│   ├─ hud.js     HUD 面板、目标进度、按钮、结局遮罩、横幅 / 按键条           │
+│   └─ panels.js  全屏浮层：暂停按键说明、选关地图（迁自桌面 HudArt / LevelMap）│
 │        │  JSON 字符串（同步 JSFFI 调用）                                   │
 │        ▼                                                               │
 │ match3-web.wasm（WASI reactor + ghc_wasm_jsffi.js 胶水 + WASI 垫片）      │
@@ -72,11 +76,21 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 | `m3Swap(r1,c1,r2,c2)` | 交换一步：`{accepted, outcome, trace, events, state}` |
 | `m3Undo()` | 撤销（核心 `Engine.History`，最多 20 步） |
 | `m3State()` / `m3Levels()` | 当前状态 / 49 关列表 |
-| `m3Meta()` | 表现表（颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名；`UI.WebMeta`），启动时读一次 |
+| `m3Meta()` | 表现表（颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名；`UI.WebMeta`；另带章节表 `chapters [{start,label,title}]`，`UI.Chapters`），启动时读一次 |
 | `m3AnimStart()` | 为上一步建 ComboFx 播放器，返回本步用到的盘面表与下落表 |
 | `m3AnimTick(fast)` | 推进一帧，返回相位、帧号、连击、得分、当前盘面编号和本帧事件 |
+| `m3Hammer(r,c)` / `m3Cross(r,c)` / `m3FreeSwap(r1,c1,r2,c2)` | 三种道具（`gameStep` 的 `Hammer` / `CrossClear` / `FreeSwap`）：形状同 `m3Swap`，另带 `keepTool`（`UI.MoveText.keepsTool`：自由交换换不掉时留在点选模式） |
+| `m3Shuffle()` | 手动洗牌（`Act Shuffle`，终局后被拒）：形状同 `m3Swap` |
+| `m3Daily(年,月,日)` | 开每日挑战（`Setup Daily`，种子由日期决定） |
+| `m3Restart(开局步数, 种子)` | 重开本关（同桌面 `restartSame`：每日挑战按开局步数与原目标重开，战役关 `restartLevel`） |
+| `m3Advance(开局步数, 种子)` | 结局后前进（同桌面 `advanceOrMsg`）：过关 → `nextLevel`（带入剩余步数，最多 3）、通关 → 第 1 关、失败 → 重开；`{accepted, startMoves, state}` |
+| `m3Showcase()` | 元素展示盘（`UI.Showcase.showcaseState`，桌面 `MATCH3_SHOWCASE`） |
+| `m3Progress(已解锁, 开局步数)` | 只读：`{reached, stars, dots}`（`unlockAfterOutcome` / `starRating` / `levelDots`；进度由网页存 localStorage） |
+| `m3MapJump(已解锁, 关卡)` | 只读：地图点选 `{jump}`（`mapClickJump`；`null` = 当前关或未解锁） |
+| `m3Badge(回放中, 连击, 显示分, 总结剩余帧, 最高连击)` | 只读：分数徽章 `{kind, n, shuffled}`（`Match3.View.scoreBadge`） |
 
-`state` 包含分数、步数、目标、结局、提示、规则开关角标 `rules`（视图模型 `gvRules` → `Match3.View.ruleBadge`，HUD 在关卡面板里通用地画，
+`state` 包含分数、步数、目标、结局、提示、`daily`（每日挑战局）、`title`（`Match3.View.titleLine`，网页写进 `document.title`）、
+道具次数 `boosters {hammer, swap, cross}`（`gvBoosters`）、规则开关角标 `rules`（视图模型 `gvRules` → `Match3.View.ruleBadge`，HUD 在关卡面板里通用地画，
 与桌面同一张表）、地面层（果冻）、关卡级元素（皮带、传送门、飞碟、地毯）和结构化盘面（每格 `{"t":种类,…,"s":show 文本}`）。字段细节见 `web/README.md` §5。
 
 ### 2.2 ComboFx 在 wasm 里
@@ -159,6 +173,35 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   `drawHud` 返回芯片矩形 `sfx` / `bgm`（点击命中也用它）与提示行外框 `msg`。修正前（38724d2 起）芯片走 `button` 的单字大号（32，给 ‹ › 用），
   字形溢出 28 高的芯片，且芯片压在提示行上；e2e 3k 用真实绘制的 `fillText` 外框核对（见 testing.md）。
 
+### 2.6 桌面版功能迁移（`feat/web-sdl-parity`）
+
+逐项对照 `app/UI/*`（SDL 桌面版）与网页。规则一律在核心（新 wasm 导出见 §2.1），JS 只画与收输入。
+「可删桌面代码」= 网页成为唯一前端、PC 壳就位后，这部分桌面代码可以直接删（本分支没删）；`app/pure` 里网页也在用的模块要留。
+
+| 功能 | 桌面实现 | 网页（键盘 / 触屏入口） | 可删桌面代码 |
+| --- | --- | --- | --- |
+| 道具：锤子 / 自由交换 / 十字消 | `Input.keyHammer/keyFreeSwap/keyCross`、`cellClick` 道具分支、`Actions.applyBooster`、`HudArt` 道具芯片与 `drawToolBannerArt` | **已迁**：`1/2/3` 与「锤 / 换 / 十」按钮（图标 + 次数，当前模式金框）；先选格再按 1/3 立即用；次数 0 时锤子 / 十字进模式提示用完、点格退出，自由交换不进模式；换不掉留在模式（`keepTool`）；棋盘上沿横幅「锤子：点一格」等 | 可删（`UI.MoveText.keepsTool` 网页在用，留；英文 `moveMsg` 只桌面用，可删） |
+| 手动洗牌 | `Input.keyShuffle`（轻落） | **已迁**：`S` /「洗牌」；新盘面轻落；终局 / 播放中无效 | 可删 |
+| 每日挑战 | `Input.keyDaily`（固定演示日期 2026-09-29） | **已迁**：`D` /「每日」开本地今天；`?daily=YYYY-MM-DD` 指定；关名「每日挑战」、标签为日期；失败重开同一份配置 | 可删 |
+| 选关地图 | `UI.LevelMap`（节点位置、命中、几何 / 贴图两版绘制）、`Input.keyMap/mapClick`，进度 `appMaxReached` 在内存 | **已迁**：`M` /「地图」；按章节分块（第一章…第七章，竖排一列、横排两列），`node_cur/done/lock` + 目标图标 + 当前关光晕；点已解锁关跳关、当前关 / 未解锁 / 空白处关闭；进度存 localStorage `m3-reached`（刷新保留） | 可删（`UI.Chapters` 章节表网页在用，留） |
+| 暂停与全部按键说明 | `Input.keyPause`、`HudArt.drawPauseHelpArt`（+ 几何版） | **已迁**：`P` /「暂停」；13 行「按键 + 作用 + 触屏入口」与宝石图例；冻结动画、清选中 / 拖划；暂停中 `R` 可重开；点任意处 / `P` / `Esc` 继续 | 可删 |
+| 其余按键 K / B / R / N / 回车 / 空格 / U / H | `Input.handleKey/playKey` | **已迁**：同桌面；另 `Z` 撤销、`?` 本关说明；`Esc` 关最上层浮层（暂停 → 地图 → 说明 → 道具模式） | 可删 |
+| 结局后前进 | `Actions.advanceOrMsg`、`Input.restartSame`（规则已移进 `app/pure/UI/Restart.hs`，桌面改为调它）、点结算面板 | **已迁**：点棋盘或 `N` / 回车 / 空格；过关进下一关（带入剩余步数 ≤ 3，三星分母 = 印制步数）、通关回第 1 关、失败重开；过关时「›」也是前进 | 可删（`UI.Restart` 网页在用，留） |
+| 结算星级 | `drawOverlayArtNow`（`star_on/off`） | **已迁**：过关 / 通关画三颗星（`starRating`），失败不画；面板底部加一行操作提示（原说明文字不变） | 可删 |
+| HUD 关卡进度点 | `drawHudArt` 的 `levelDots` | **已迁**：关卡面板底边一排点（当前金、已过绿、未解锁暗） | 可删 |
+| 分数徽章 | `drawHudArt` 的 `scoreBadge`、`drawComboSummaryArt` | **已迁**：分数芯片在回放中显示「连击 xN」，播完 96 帧「本步 N 连击！」，洗过牌标签「已洗牌」（`m3Badge`） | 可删 |
+| 首关提示 | `freshLevelUi`（自动 `applyHint` + 240 帧）、`drawTipBannerArt` | **已迁**：第 1 关（含每日挑战）开局自动亮提示 + 横幅「按 H 查看提示」（触屏「点「提示」查看提示」） | 可删 |
+| 按键条 | `drawHelpStripArt`（开局 / 取消暂停后） | **已迁**：棋盘底部 `H123USDMRKBNP` +「P：暂停并查看全部按键」，300 / 240 帧；只在有键盘鼠标的设备（`(hover: hover) and (pointer: fine)`）上画 | 可删 |
+| 窗口标题 | `Actions.updateTitle`（`titleLine` + 提示） | **已迁**：`document.title`（PC 壳可显示在标题栏） | 可删（`titleLine` 在核心，留） |
+| 元素展示盘 | 环境变量 `MATCH3_SHOWCASE`（`UI.Env`） | **已迁**：`?showcase=1`（`UI.Showcase` 移进 `app/pure`，桌面重新导出） | 可删（`UI.Showcase` 留） |
+| 小项：步数 ≤ 5 闪烁、加速提示、无步时提示洗牌 | `drawHudArt` / `speedUp` / `keyHint` | **已迁** | 可删 |
+| 交换（点选 / 拖划）、回放加速、撤销、提示、重开、本关说明、音效 / BGM、结算遮罩、粒子 / 浮字 / 震屏 | `UI.Input`、`UI.Cascade`、`UI.Playback`、`UI.Audio` 等 | 早已有 | 可删（`ComboFx`、`UI.Presentation`、`UI.Sound` 等 `app/pure` 模块留） |
+| 窗口缩放 / HiDPI | `MATCH3_SCALE`、`Art` 的 `@` 尺寸变体 | 早已有：自适应布局 + dpr（PC 壳改窗口大小即重排，动画不断） | 可删 |
+| **不补**：SDL 初始化与窗口参数（`MATCH3_SCALE`、渲染器标志）、BMP 读图（`Art.loadArt`）、整套几何降级 UI（`UI.Draw` / `HudPrim` / `HudBlocks` / `Cell.Prim*`；网页是逐格降级 + 护栏）、`Esc` / `Q` 退出（归 PC 壳）、16 ms 帧长（网页 1/60 s） | `app/Main.hs`、`app/Shell/*`、`app/Art.hs`、`app/UI/*` | 不补（SDL 实现本身的东西） | 可删（`tools/gen_assets.py` 生成的 `assets/` 仍是网页图集的来源，留） |
+
+触屏：每个按键都有触屏入口（暂停页第三列列出）；`K` / `B` 对应 HUD 的「效 / 乐」芯片，`N` 对应点结算面板。
+布局：竖排按钮条两行（第一行原有 6 个，第二行「锤 换 十 洗牌 地图 每日 暂停」），横排侧栏四行；13 个按钮互不重叠、不压棋盘、都在布局内、宽 ≥ 48 高 ≥ 28 设计单位（e2e 5a）。代价：竖排多一行按钮、横排侧栏变高，格子比原来小一些（平板 83.3 → 76.7、1280×800 89.6 → 83、横屏手机 43.7 → 40.4 CSS px），小屏最小按钮约 37–38 CSS px。
+
 ### 2.4 自适应布局（`layout.js`）
 
 - 画布铺满视口；监听 `visualViewport` resize、`resize`、`orientationchange`、`ResizeObserver`；
@@ -167,10 +210,12 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   竖排（HUD 在上、按钮条在下，手机）与横排（HUD 在右侧栏，桌面 / 平板 / 横屏手机）各算一次 `u`，取格子更大的那种；
   棋盘按每关的行 × 列算，格子上限 112 CSS px；
 - 避开 `env(safe-area-inset-*)`（探针元素读取），`viewport-fit=cover`，页面禁滚动 / 缩放 / 双击放大（`touch-action: none`）；
-- 指针事件用同一个变换反算到格子 / 按钮，点选与拖划都支持；竖排纵向有富余时按钮条加高到 ≥ 46 CSS px；
+- 指针事件用同一个变换反算到格子 / 按钮，点选与拖划都支持；竖排纵向有富余时按钮条（两行）各行加高到 ≥ 46 CSS px；
+- 横排侧栏至少 `SIDE_MIN_H` = 520 设计单位高（四行按钮 + 至少两行提示），棋盘在其中竖直居中；
+- 全屏浮层（暂停、选关地图）盖住整个布局矩形，随布局缩放；地图节点的命中区是整格（边长 = 节点间距），比节点图大；
 - 文字用浏览器字体（关名除外，画预渲染文字图 `name_<i>`，见 §2.3），字号随 `u` 缩放。
 
-实测：iPhone SE（375×667）格子 43 CSS px，390×844 为 44.8，横屏手机 43.7，平板 83，1280×800 为 90，1920 以上封顶 112。
+实测（`feat/web-sdl-parity` 起）：iPhone SE（375×667）格子 43 CSS px，390×844 为 44.8，横屏手机 40.4（侧栏加到四行按钮后变矮，原 43.7），平板 76.7（原 83.3），1280×800 为 83（原 89.6），1920 以上封顶 112。
 
 ### 2.5 资源管线
 
@@ -302,7 +347,9 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 ## 6. 调试要点
 
 - 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.dropMarks`（最近一帧画的掉落口标记格与设计坐标）/ `m3debug.overlay`（结算层实际画出的标题 / 副标题）/ `m3debug.perf`；URL `?level=0..48&seed=N` 复现一局；
-- 快捷键：`u` / `z` 撤销，`h` 提示，空格加速；
+- 快捷键（同桌面 `UI.Input.handleKey`，另加 `Z` / `?`）：`H` 提示、`1/2/3` 道具、`U`/`Z` 撤销、`S` 洗牌、`D` 每日挑战、`M` 地图、`K`/`B` 音效 / BGM、
+  `R` 重开（暂停中也可）、`N`/回车/空格 播放中加速否则前进、`P` 暂停、`?` 本关说明、`Esc` 关浮层；带 Ctrl / ⌘ / Alt 的组合键不拦（留给浏览器 / PC 壳）；
+- URL：`?level=0..48&seed=N`、`?daily=YYYY-MM-DD`、`?showcase=1`；`m3debug.ui` 给出道具模式、暂停 / 地图、进度、徽章、各浮层画出的内容，`m3debug.mapNodeCenter(i)` 给地图节点坐标；
 - 页面白屏先看网络面板里 `.wasm` 的 Content-Type（必须是 `application/wasm`）。
 
 ## 7. 测试
@@ -310,23 +357,35 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
 | `stack test` | 核心规则（464 个） | `make test-native` |
-| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（33 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 与种子 140 的 `cham-rainbow` 走法、第 48 关种子 2–5 的 `fix-…` 固定走法——第 3 步在魔法地格上引爆扩圈爆炸）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
-| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（31 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
+| 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（40 组，含迁自桌面的 `boost` / `daily` / `advance` 走法 7 组（道具、洗牌、每日挑战、结局后前进，并比较 `m3Progress` / `m3Badge` / `m3MapJump` / `m3Restart` / `m3Showcase`），含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 与种子 140 的 `cham-rainbow` 走法、第 48 关种子 2–5 的 `fix-…` 固定走法——第 3 步在魔法地格上引爆扩圈爆炸）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
+| 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（34 组，含 `boost` 走法 3 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、逐关地面层贴图与 HUD 关名 `name_<i>` 的真实绘制、第 48 关魔法地格（贴图位置与像素、4 组扩圈爆炸的真实绘制格数 = EvBlast 格数）、终章（第 47、48 关过关进入下一关，第 49 关「宽域」Won）、音效 / BGM 开关芯片（真实绘制的字形在芯片内、不大于按钮、不压提示行）、逐关失败提示（无「箱子」/ 内部名，碎石关「砸开碎石」）、第 8 / 39–45 / 47 / 48 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
 
 `make test` 依次跑这四组；底层命令见 `web/README.md` §4。最近一次完整记录（2026-10-03，`chore/audit-wrapup`（审计整改第 1–8 项之后，基于 `fa719fa`），`make clean` 后重建 `web/dist` 再 `make check`）：`stack test` 460 通过；状态一致性 33 组、动画一致性 31 组全部一致（含第 43 / 44 关、第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 / 140（cham-rainbow）、第 48 关种子 2–5（fix 走法，扩爆 25 / 24 / 24 / 24 格））；e2e 168 项全过（49 关逐关贴图护栏全空、音效 / BGM 开关芯片 13 项、49 关地面层贴图与关名文字图的真实绘制、HUD 目标全是中文名、第 48 关魔法地格与 4 组扩圈爆炸、终章（第 49 关 Won）、逐关失败提示、10 关玩到失败的结算文字（碎石关 =「用邻消或特效砸开碎石，目标 n 个」），无控制台错误）。
+
+`feat/web-sdl-parity`（2026-10-04，基于 `33e65bf`，迁入桌面功能后）`make check E2E_PORT=8831`：`stack test` 464 通过；状态一致性 40/40、动画一致性 34/34；e2e 258 项全过（新增第 5 节 90 项：5a 按钮布局、5b 道具、5c 洗牌、5d 每日挑战、5e 选关地图与进度、5f 暂停、5g 按键与窗口标题、5h 首关提示与按键条、5i 结局后前进 / 星级 / 连击徽章、5j 失败重开、5k 展示盘），截图 `sdl-*-竖屏.png` / `sdl-*-横屏.png`。
 e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-badge-*`，外加 `report.json`）。网页版自家模块编译 0 警告（`web/cabal.project` 对本包开 `-Werror`），e2e 端口用 `E2E_PORT` 改（默认 8765）。
 
 ## 8. 已知限制
 
-- 只接了交换、撤销、提示、切关、重开；道具（锤子 / 任意交换 / 十字）、洗牌按钮、每日挑战、选关地图未接；
-- 小屏触控目标略低于 44 CSS px（iPhone SE 格子 43，横屏手机按钮约 42）；
+- 桌面版功能已全部迁来（§2.6）；PC 壳还没做（方案待定）；
+- 小屏触控目标略低于 44 CSS px（iPhone SE 格子 43；横屏手机 844×390 格子 40.4；最小按钮 SE 36.9、其余手机约 38）；
 - 播放期间 HUD 显示的是结算后的分数与装饰层（与桌面一致），不逐轮递增；
 - 没有离线缓存；
 - `m3Swap` 每步返回完整 JSON（中位数约 30 KB，长连锁可达约 120 KB），未做增量；
 - 真机（iOS Safari / Android Chrome）和 itch.io 上线都还没实测，只在无头 Chrome 里验证过。
 
 ### 8.1 已知差异（与桌面版，已确认接受）
+
+迁移桌面功能（§2.6）时有意保留的不同：
+
+- **每日挑战日期**：桌面固定演示日期 2026-09-29，网页用本地今天（`?daily=` 可指定，e2e 用 2026-09-29）。
+- **选关进度**：桌面 `appMaxReached` 只在内存，网页存 localStorage `m3-reached`；网页「‹ ›」仍可自由切关，进入某关即记到该关（同桌面 `freshLevelUi`）。
+- **地图版式**：桌面一屏 6 个一行蛇形、章节间隔；网页按章节分块（每行最多 7 个、块内蛇形），竖排一列、横排两列，整体缩放进布局；命中区为整格。
+- **结算文字**：标题仍是网页原来的「过关！/ 通关！/ 步数用完了」（桌面「过关！/ 胜利！/ 失败」），说明文字不变，星级与操作提示是新加的行。
+- **分数芯片标签**：网页「分数」，桌面「得分」；总结显示为「本步 / N 连击！」。
+- **按键条**：只在有键盘鼠标的设备上画；触屏设备首关横幅改成「点「提示」查看提示」。
+- **`Esc`**：网页关浮层，不退出（退出归 PC 壳）；`document.title` 会把标题里的连续空格折成一个。
 
 - **第 45 关雪怪血条的读数时机**：动画播放期间，网页 HUD 的雪怪血条显示**本步之前**的 HP（与网页目标条的进度一致，`main.js` 的 `hudInfo`
   在 `anim` 非空时读 `state.boss`），桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（已用 4 个种子 × 24 步核对）。
@@ -345,8 +404,9 @@ e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-b
 
 ## 9. TODO
 
-- [ ] 道具与洗牌按钮：导出 `m3Hammer` / `m3FreeSwap` / `m3Cross` / `m3Shuffle`（`match3Shell` 已支持），HUD 加按钮与点选流
-- [ ] 每日挑战与选关地图（CH1–CH7）
+- [x] 道具与洗牌按钮（`m3Hammer` / `m3FreeSwap` / `m3Cross` / `m3Shuffle`，HUD 按钮与点选流；`feat/web-sdl-parity`）
+- [x] 每日挑战、选关地图（CH1–CH7）、暂停、结局后前进、星级、进度点、分数徽章、首关提示、按键条、窗口标题、展示盘（同上，§2.6）
+- [ ] PC 端套壳（网页成为唯一前端后；壳选型未定），之后删桌面 SDL 代码（§2.6「可删」列）
 - [ ] 真机测试：iPhone（dpr3）、Android、iPad；确认安全区与手势（安卓应用壳见 [`android.md`](android.md)）
 - [ ] 小屏触控：iPhone SE 竖排考虑缩小棋盘边距，让格子到 44 px
 - [ ] 按 dpr 选 3x 图集（约 +400 KB，只给 dpr3 / 平板）

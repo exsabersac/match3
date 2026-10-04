@@ -20,7 +20,9 @@ web/
 │   ├── Match3Web/Api.hs  纯接口层：经 Match3.Engine.match3Shell 的 gameStep 执行，Step / Played → JSON（无 JSFFI，原生 GHC 也能编）
 │   ├── Match3Web/Anim.hs 动画接口：Played → ComboFx 播放器（与桌面 withMovePlayback 同条件），逐帧 JSON
 │   ├── Match3Web/Json.hs 极简 JSON 拼接（只输出整数，保证原生与 wasm 逐字节一致）
-│   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels / m3Meta / m3AnimStart / m3AnimTick
+│   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels / m3Meta / m3AnimStart / m3AnimTick，
+│                         以及迁自桌面的 m3Hammer / m3Cross / m3FreeSwap / m3Shuffle / m3Daily / m3Restart / m3Advance /
+│                         m3Showcase / m3Progress / m3MapJump / m3Badge
 ├── tools/
 │   ├── gen_web_atlas.py  由 assets/ 打网页图集（只读 assets/，不改 tools/gen_assets.py）
 │   ├── doctor.sh         环境自检（make doctor）
@@ -174,8 +176,11 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 - 交换补间 → （第 44 关彩虹组合：第一轮之前的变身段）→ 逐轮高亮 / 消失 + 粒子 / 下落补子 → 连锁、连击浮字、震屏 → 步末效果（倒计时、传送带 / 毛球跳格、蔓延、蜗牛、洗牌）；
   播放期间锁输入，点击或空格加速（对应 `m3AnimTick(1)`）；
 - 换了不能消：换过去再换回，不扣步；过关 / 通关 / 步数用完时出现结局遮罩；
-- 按钮：‹ / › 切关、重开、提示（高亮核心 `findHint`）、撤销（核心 `Engine.History`，最多 20 步）；
-  快捷键 `u`/`z` 撤销、`h` 提示；URL 参数 `?level=0..48&seed=N`（关卡下标 0 起，共 49 关）；
+- 按钮：第一行 ? / ‹ / › 切关、重开、提示（高亮核心 `findHint`）、撤销（核心 `Engine.History`，最多 20 步）；
+  第二行（迁自桌面）锤 / 换 / 十 三种道具（图标 + 剩余次数）、洗牌、地图（选关，进度存 localStorage）、每日（每日挑战）、暂停（全部按键说明）；
+- 快捷键同桌面：`H` 提示、`1/2/3` 道具、`U`/`Z` 撤销、`S` 洗牌、`D` 每日、`M` 地图、`K`/`B` 音效 / BGM、`R` 重开、
+  `N`/回车/空格 加速或结局后前进、`P` 暂停、`?` 本关说明、`Esc` 关浮层；
+- URL 参数 `?level=0..48&seed=N`（关卡下标 0 起，共 49 关）、`?daily=YYYY-MM-DD`、`?showcase=1`；
 - HUD「目标 …」显示核心给的中文名（`state.goal.label`，如第 43 关「目标 毛球」），不显示内部名。
 
 ### 自适应布局（layout.js）
@@ -192,12 +197,14 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 
 | 视口 | 模式 | 格子 CSS px | 最小按钮 CSS px | 格子物理 px |
 | --- | --- | --- | --- | --- |
-| 375×667 dpr2（iPhone SE） | 竖 | 43.0 | 43.0 | 86 |
-| 390×844 dpr3 | 竖 | 44.8 | 44.8 | 134 |
-| 844×390 dpr3（横屏手机） | 横 | 43.7 | 42.1 | 131 |
-| 768×1024 dpr2（平板） | 竖 | 83.3 | 80.4 | 167 |
-| 1280×800 | 横 | 89.6 | 86.4 | 90 |
-| 1920×1080 / 2560×1440 | 横 | 112（上限） | 108 | 112 |
+| 375×667 dpr2（iPhone SE） | 竖 | 43.0 | 36.9 | 86 |
+| 390×844 dpr3 | 竖 | 44.8 | 38.4 | 134 |
+| 844×390 dpr3（横屏手机） | 横 | 40.4 | 38.3 | 121 |
+| 768×1024 dpr2（平板） | 竖 | 76.7 | 65.7 | 153 |
+| 1280×800 | 横 | 83.0 | 78.5 | 83 |
+| 1920×1080 / 2560×1440 | 横 | 112（上限） | 106 | 112 |
+
+（`feat/web-sdl-parity` 起竖排按钮条两行、横排侧栏四行，格子与按钮比之前小一些，见 docs/web.md §2.6。）
 
 必须通过 HTTP 访问（`file://` 下 `fetch` wasm 会被浏览器拒绝）。服务器需给 `.wasm` 返回
 `application/wasm`（python http.server 默认如此），否则 `instantiateStreaming` 会失败。
@@ -206,7 +213,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
 下面是各自的底层命令。当前（2026-10-03，chore/audit-wrapup，基于 fa719fa）：49 关，`stack test` 460 个用例全过，
-状态一致性 33 组、动画一致性 31 组（都含第 43–48 关），e2e 168 项全过。
+状态一致性 40 组、动画一致性 34 组（都含第 43–48 关与迁自桌面的道具 / 每日 / 前进走法），e2e 258 项全过（第 5 节 90 项为迁自桌面的功能）。
 
 ```sh
 # 无头浏览器：真实鼠标点选/拖拽，截图到 /workspace/match3-web-shots/，并输出 report.json
@@ -252,7 +259,7 @@ e2e 截图（每次运行先清空输出目录）：`01–06` 主流程（开局
 
 ## 5. 网页端与核心的接口
 
-wasm 导出 8 个 **同步** JSFFI 函数（`foreign export javascript "... sync"`），都返回 JSON 字符串：
+wasm 导出 19 个 **同步** JSFFI 函数（`foreign export javascript "... sync"`），都返回 JSON 字符串：
 
 | 导出 | 参数 | 返回 |
 | --- | --- | --- |
@@ -261,12 +268,22 @@ wasm 导出 8 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 | `m3Undo()` | – | 同 `m3Swap`（`trace` 为空脚本、`events` 为空；没有历史时 `accepted:false`） |
 | `m3State()` | – | `{ok, state}` |
 | `m3Levels()` | – | 关卡列表 `[{index,name,moves,goal}]` |
-| `m3Meta()` | – | 表现表（`UI.WebMeta`，`main.js` 启动时读一次，JS 不手抄）：`{colorRGB,elementRGB,colorTags,tagRGB,fallbackRGB,spreadCrumbRGB,tickCrumbRGB,spreadGlow,spreadCurves,frames,sounds}` |
+| `m3Meta()` | – | 表现表（`UI.WebMeta`，`main.js` 启动时读一次，JS 不手抄）：`{colorRGB,elementRGB,colorTags,tagRGB,fallbackRGB,spreadCrumbRGB,tickCrumbRGB,spreadGlow,spreadCurves,frames,sounds,chapters}`（`chapters = [{start,label,title}]`，`UI.Chapters`，选关地图用） |
 | `m3AnimStart()` | – | 为上一次被接受的 `m3Swap` 建动画播放器：`{ok,anim:true,boards,base,fall}`；不需要播放时 `{ok,anim:false}` |
 | `m3AnimTick(fast)` | 0 / 1（1 = 加速） | 推进一帧（60 fps 固定步长）：播放中 `{p,fr,n,w,k,g,b[,s][,ev]}`，播完 `{done:true,b,best,g,fall}` |
+| `m3Hammer(r,c)` / `m3Cross(r,c)` | 一格 | 道具锤子 / 十字消：同 `m3Swap`，另带 `keepTool` |
+| `m3FreeSwap(r1,c1,r2,c2)` | 两个格子 | 道具自由交换：同 `m3Swap`，另带 `keepTool`（换不掉时 `true`，前端留在点选模式） |
+| `m3Shuffle()` | – | 手动洗牌：同 `m3Swap` |
+| `m3Daily(y,m,d)` | 日期 | 开每日挑战：`{ok, state}`（`state.daily = true`） |
+| `m3Restart(sm,seed)` | 开局步数、种子 | 重开（每日挑战按开局步数重开同一配置）：`{ok, state}` |
+| `m3Advance(sm,seed)` | 开局步数、种子 | 结局后前进：`{ok, accepted, startMoves, state}`（未结束时 `accepted:false`） |
+| `m3Showcase()` | – | 元素展示盘：`{ok, state}` |
+| `m3Progress(reached,sm)` | 已解锁关、开局步数 | 只读 `{reached, stars, dots}`（`dots` 每关一字：C 当前 / D 已过 / U 已解锁 / L 未解锁） |
+| `m3MapJump(reached,li)` | 已解锁关、点的关 | 只读 `{jump}`（`null` = 不跳） |
+| `m3Badge(replaying,combo,shown,summaryLeft,best)` | 回放状态 | 只读分数徽章 `{kind:"combo|rolling|summary|score", n, shuffled}` |
 
-- `state`：`level/name/rules/score/moves/goal/progress/target/boss/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
-  （`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal = {kind,text,target[,name],label}`：`goal.name` 为 `GoalNamed` 的元素名，
+- `state`：`level/name/daily/title/boosters/rules/score/moves/goal/progress/target/boss/over/loseHint/combo/shuffled/undo/hint/lastCleared/ground/board`
+  （`daily` = 每日挑战局；`title` = 窗口标题行（`titleLine`）；`boosters = {hammer,swap,cross}` 剩余道具次数；`undo` = 可撤销步数；`ground` = 地面层 `[{p,name,layers}]`，如第 39 关果冻；`goal = {kind,text,target[,name],label}`：`goal.name` 为 `GoalNamed` 的元素名，
   `goal.label` 为中文显示名（视图模型 `Match3.View.goalLabel`：分数 / 收集红色宝石 / 多色收集（红 / 蓝）/ 碎石 / 毛球 …，名字目标查 `namedGoalLabelTable`（由元素 caps 的 `labelled` 推出），
   没登记的名字退回元素名），HUD「目标 …」直接画它，`m3Levels` 的 `goal` 同样带 `label`；
   `boss` = 雪怪 Boss 血条 `{hp,max}`（视图模型 `gvBoss`，目标不是「击败 Boss」时为 `null`），`hud.js` 用它把目标条换成血条）；
@@ -309,9 +326,9 @@ wasm 导出 8 个 **同步** JSFFI 函数（`foreign export javascript "... sync
 
 ## 6. 已知限制
 
-- 只接了交换与撤销；道具（锤子/自由交换/十字消）、洗牌按钮、每日挑战未接（`match3Shell` 已支持，只差 JSFFI 导出与 UI）；
-- 小屏触控：iPhone SE 竖屏格子 43 CSS px、横屏手机格子约 43.7 / 按钮约 42 CSS px，略低于 44 的建议值
-  （8 列棋盘宽度受限；横屏是高度受限），拖划交换可弥补；
+- 网页是唯一前端：桌面版功能已全部迁来（道具、洗牌、每日挑战、选关地图、暂停、结局后前进等，对照表与「可删桌面代码」见 docs/web.md §2.6）；PC 壳尚未做；
+- 小屏触控：iPhone SE 竖屏格子 43 CSS px、按钮最小约 37；横屏手机格子约 40.4 / 按钮约 38 CSS px，低于 44 的建议值
+  （8 列棋盘宽度受限；横屏是高度受限，侧栏有四行按钮），拖划交换可弥补；
 - 3x 图集：面积是 2x 的 2.25 倍，WebP 估计多约 400 KB，只对 dpr3 手机和平板（格子物理 130–170 px）有收益，
   目前放大后观感可接受，先不做，可作为可选项（按 dpr 选图集）；
 - 播放期间 HUD 的分数 / 装饰层显示的是结算后的状态（与桌面版一致），不逐轮递增；

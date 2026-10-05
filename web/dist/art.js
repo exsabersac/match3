@@ -1,5 +1,5 @@
-// 贴图集（网页版）：加载 atlas.webp + atlas.json + background.webp（由 web/tools/gen_web_atlas.py 从桌面资源生成），
-// 提供与桌面 app/Art.hs 对应的绘制原语：
+// 贴图集（网页版）：加载 atlas.webp + atlas.json + background.webp（由 web/tools/gen_web_atlas.py 从 assets/ 生成），
+// 提供绘制原语（名字沿用原 SDL 桌面版 app/Art.hs，已移除）：
 //   draw  = drawSprite（整张贴图画进目标矩形）
 //   mod   = drawSpriteMod（着色 + 透明度，SDL textureColorMod / AlphaMod）
 //   add   = drawSpriteAdd（叠加混合发光，SDL BlendAdditive → Canvas "lighter"）

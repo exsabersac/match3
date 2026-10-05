@@ -1,8 +1,8 @@
-// 单格与棋盘底层绘制（网页版）：对应桌面 app/UI/CellTable.hs（元素 → 渲染器查表）、UI/Cell/Art.hs（各元素贴图画法）、
+// 单格与棋盘底层绘制（网页版）：对应原桌面版 app/UI/CellTable.hs（元素 → 渲染器查表）、UI/Cell/Art.hs（各元素贴图画法）、
 // UI/Ground.hs（地面层）与 UI/BoardArt.hs 的棋盘底层。格子 JSON 见 Match3Web.Api.encodeCell（t = 元素种类）。
 // 主贴图缺失时逐格退回几何画法（纯色块），不会因为缺图而崩。
 
-// 坐标约定：棋盘层一律用「设计单位」——格 = 56、棋盘外框留白 PAD = 16（与桌面逻辑像素相同），
+// 坐标约定：棋盘层一律用「设计单位」——格 = 56、棋盘外框留白 PAD = 16（原 SDL 桌面版的逻辑像素），
 // 由 layout.js 的变换把设计单位映射到屏幕（按可用空间算出的格子大小 × devicePixelRatio）。
 // 行列数按关卡盘面设置（setDims）；当前 49 关里前 48 关是 8×8，第 49 关「宽域」是 6 行 × 9 列，绘制不假设正方形。
 export const CELL = 56, PAD = 16;
@@ -10,7 +10,7 @@ export let ROWS = 8, COLS = 8;
 export function setDims(rows, cols) { ROWS = rows; COLS = cols; }
 export const boardW = () => COLS * CELL, boardH = () => ROWS * CELL;
 
-// 颜色表由 wasm 下发（m3Meta = UI.WebMeta，唯一来源是桌面 UI.Palette / UI.Presentation），启动时 setPalette 填入。
+// 颜色表由 wasm 下发（m3Meta = UI.WebMeta，唯一来源是 app/pure 的 UI.Palette / UI.Presentation），启动时 setPalette 填入。
 export const COLOR_RGB = {};     // 五色主色：颜色编号 → [r, g, b]
 export const ELEMENT_RGB = {};   // 按元素名取色（elementRGBTable）：自定义格 / 蔓延
 const TAG_RGB = {}, COLOR_TAGS = new Set();
@@ -42,7 +42,7 @@ export function cellRGB(cell) {
 
 // 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
 export function primarySprite(cell) {
-  if (cell.t === "custom" && cell.name === "snow_boss" && !forceGeneric.has("snow_boss")) return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同桌面 customTable）
+  if (cell.t === "custom" && cell.name === "snow_boss" && !forceGeneric.has("snow_boss")) return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同原桌面版 customTable）
   switch (cell.t) {
     case "G": return cell.k === "R" ? "rainbow" : gemSprite(cell.c);
     case "stone": return "stone_3";
@@ -62,7 +62,7 @@ export function primarySprite(cell) {
     case "countdown": return gemSprite(cell.c);
     case "custom":
       if (cell.name === "magic_stone") return `magic_stone_${clamp(0, 3, cell.v)}`;   // 魔法石按充能取贴图
-      // 变色龙：当前颜色的宝石（c 是元素自带的显示字段，Match3.View.cellExtras）。桌面 customTable 的主贴图是环 "chameleon"，
+      // 变色龙：当前颜色的宝石（c 是元素自带的显示字段，Match3.View.cellExtras）。原桌面版 customTable 的主贴图是环 "chameleon"，
       // 缩放画法（消失 / 缩放段）因此只画环；网页缩放画法画当前颜色的宝石（见 docs/web.md §8.1）
       if (cell.name === "chameleon" && !forceGeneric.has("chameleon")) return gemSprite(cell.c);
       return cell.name;
@@ -86,8 +86,8 @@ const OVERLAY_SPRITE = {
   fog: (n) => `fog_${clamp(1, 2, n)}`, chain: (n) => `chain_${clamp(1, 2, n)}`,
   freeze: (n) => `freeze_${clamp(1, 2, n)}`, curtain: (n) => `curtain_${clamp(1, 2, n)}`,
 };
-// 轻微上下浮动（桌面 UI.Cell.Art.cellKit 的 sprBob：bob = round (2 * sin (pulse / 9))，振幅 2 设计像素、周期 2π×9 ≈ 56.5 个呼吸计数）。
-// 气球 / 时间精灵 / 气泡 / 满格魔法石 / 毛球共用。呼吸计数每个逻辑帧 +1：桌面固定 16 ms 一帧（≈ 0.90 s 一个周期），
+// 轻微上下浮动（原桌面版 UI.Cell.Art.cellKit 的 sprBob：bob = round (2 * sin (pulse / 9))，振幅 2 设计像素、周期 2π×9 ≈ 56.5 个呼吸计数）。
+// 气球 / 时间精灵 / 气泡 / 满格魔法石 / 毛球共用。呼吸计数每个逻辑帧 +1：原桌面版固定 16 ms 一帧（≈ 0.90 s 一个周期），
 // 网页固定 1/60 s 一帧（≈ 0.94 s），同一个公式、慢约 4%，与其它浮动元素保持一致，不单独折算。
 const bobY = (pulse) => Math.round(2 * Math.sin(pulse / 9));
 const CELL_ART = {
@@ -126,23 +126,23 @@ const CELL_ART = {
   custom(ctx, art, p, x, y, c) {
     // 气泡有专门画法（轻微浮动、无角标）；其它自定义元素：贴图名 = 元素名 + 层数角标
     if (c.name === "bubble") art.draw(ctx, "bubble", x, y + bobY(p), CELL, CELL);
-    // 新玩法 2 魔法石：按充能 v 画 magic_stone_0..3（满 3 格时浮动），同桌面 UI.Cell.Art.artMagicStone；不画层数角标
+    // 新玩法 2 魔法石：按充能 v 画 magic_stone_0..3（满 3 格时浮动），同原桌面版 UI.Cell.Art.artMagicStone；不画层数角标
     else if (c.name === "magic_stone") {
       art.draw(ctx, primarySprite(c), x, y + (c.v >= 3 ? bobY(p) : 0), CELL, CELL);
     }
-    // 新玩法 3 毛球：贴图 fuzzball，一直轻微浮动（它每步会跳），同桌面 UI.Cell.Art.artFuzzball（sprBob "fuzzball"）；不画状态角标
+    // 新玩法 3 毛球：贴图 fuzzball，一直轻微浮动（它每步会跳），同原桌面版 UI.Cell.Art.artFuzzball（sprBob "fuzzball"）；不画状态角标
     else if (c.name === "fuzzball") art.draw(ctx, "fuzzball", x, y + bobY(p), CELL, CELL);
     else { noteGenericCustom(c); art.draw(ctx, c.name, x, y, CELL, CELL); layerBadge(ctx, art, x, y, c.v); }
   },
 };
 
-// 按 Custom 名字分派的专门画法（同桌面 UI.CellTable.customTable；查不到的名字走 CELL_ART.custom）。
-// 新玩法 5 雪怪 Boss（Custom "snow_boss"，占 2×2）：同桌面 UI.Cell.Art.artSnowBoss——每格画整只雪怪的四分之一
+// 按 Custom 名字分派的专门画法（同原桌面版 UI.CellTable.customTable；查不到的名字走 CELL_ART.custom）。
+// 新玩法 5 雪怪 Boss（Custom "snow_boss"，占 2×2）：同原桌面版 UI.Cell.Art.artSnowBoss——每格画整只雪怪的四分之一
 // snow_boss_<象限>（血量 ≤ 满血一半换 snow_boss_hurt_<象限> 受伤表情）；右下格底部画召唤进度小点（每 3 次交换召唤一块雪块，
 // 点亮已走的次数）。象限 q / 受伤 hurt / 计数 turn / 周期 every 是元素自带的显示字段（Match3.View.cellExtras），这里不拆 v。
 // 四块拼成一只：画布缩放时双线性采样会从图集里贴图外的透明缝取色，格子边又落在小数像素上，四块之间会露出一条细缝（十字线）。
 // 这里在朝向另外三块的两条内边上把源矩形各收 1 个源像素，并把目标矩形对齐到后备缓冲的整像素（相邻格算出的边界相同）；
-// 桌面按 1:1 画，没有这个问题。
+// 原桌面版按 1:1 画，没有这个问题。
 function drawSnowBoss(ctx, art, pulse, x, y, c) {
   const s = art.S[`${c.hurt ? "snow_boss_hurt_" : "snow_boss_"}${c.q}`];
   if (!s) return;
@@ -162,9 +162,9 @@ function drawSnowBoss(ctx, art, pulse, x, y, c) {
     ctx.fillRect(x + CELL - 12 - (c.every - 1 - i) * 9, y + CELL - 11, 6, 6);
   }
 }
-// 新玩法 7 变色龙（Custom "chameleon"，v = 颜色下标 0..4）：同桌面 UI.Cell.Art.artChameleon——先画当前颜色的宝石
+// 新玩法 7 变色龙（Custom "chameleon"，v = 颜色下标 0..4）：同原桌面版 UI.Cell.Art.artChameleon——先画当前颜色的宝石
 // gem_c<c>（c = 1..5 是元素自带的显示字段 Match3.View.cellExtras，前端不拆 v），再叠一张缓慢旋转的五色描边环
-// chameleon（角度 = 呼吸计数 mod 360 度，每个逻辑帧 1 度：桌面 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈）。
+// chameleon（角度 = 呼吸计数 mod 360 度，每个逻辑帧 1 度：原桌面版 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈）。
 // 每步换色是步末 EvTick "chameleon"（原格改写），render.js 的倒计时段照常播：前半段旧色、后半段新色，全程红光脉冲。
 function drawChameleon(ctx, art, pulse, x, y, c) {
   art.draw(ctx, gemSprite(c.c), x, y, CELL, CELL);
@@ -252,9 +252,9 @@ export function beltAngles(belt) {
 
 const key = ([r, c]) => r * 64 + c;
 
-// 地面层（UI.Ground.groundTable）：名字 → 贴图名(层数)；画在棋盘格之上、棋子之下（同桌面 drawGroundArtAt）。
+// 地面层（UI.Ground.groundTable）：名字 → 贴图名(层数)；画在棋盘格之上、棋子之下（同原桌面版 drawGroundArtAt）。
 // 表里没有的名字或贴图缺失时画淡灰框，并按「<名字>#地面层」计进 fallbacks（e2e 逐关护栏；第 48 关魔法地格接入前就是淡灰框、护栏查不出）。
-// magic：第 48 关魔法地格（新玩法 8，layers 恒为 1、只用于显示），贴图同桌面 const "magic"。
+// magic：第 48 关魔法地格（新玩法 8，layers 恒为 1、只用于显示），贴图同原桌面版 const "magic"。
 const GROUND = { jelly: (n) => (n >= 2 ? "jelly_2" : "jelly"), magic: () => "magic" };
 function drawGround(ctx, art, x, y, g) {
   const f = GROUND[g.name];
@@ -296,11 +296,11 @@ export function drawUfos(ctx, art, st, pulse, yOff = 0) {
   }
 }
 
-// 饼干掉落口标记（新玩法 6，state.drops = 视图模型 bvDrops）：同桌面 UI.BoardArt.drawDropsArt——画在棋子之上、掉落口格上沿
+// 饼干掉落口标记（新玩法 6，state.drops = 视图模型 bvDrops）：同原桌面版 UI.BoardArt.drawDropsArt——画在棋子之上、掉落口格上沿
 // （上移 6 压在棋盘框上），固定不随下落偏移；缺图时退回几何画法（同 UI.BoardPrim.drawDropMark：三级金色台阶 + 白色箭头），
 // 并按 "cookie_drop" 计进 fallbacks（e2e 逐关护栏）。
 // dropMarks 记下最近一次画的标记（格子与棋盘设计坐标，seq 每画一次加 1），main.js 以 m3debug.dropMarks 暴露，
-// e2e 用它核对交换补间中 / 补间结束后的标记格 = state.drops（bvDrops）、坐标 = 桌面 drawDropsArt 的 (cellOrigin, y − 6)。
+// e2e 用它核对交换补间中 / 补间结束后的标记格 = state.drops（bvDrops）、坐标 = 原桌面版 drawDropsArt 的 (cellOrigin, y − 6)。
 export const dropMarks = { seq: 0, marks: [] };
 export function drawDrops(ctx, art, st) {
   dropMarks.seq++;

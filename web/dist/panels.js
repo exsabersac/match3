@@ -1,4 +1,4 @@
-// 全屏浮层：菜单（网页自有：常驻按钮之外的全部操作）、暂停说明（从桌面 app/UI/HudArt.drawPauseHelpArt 迁来）
+// 全屏浮层：菜单（网页自有：常驻按钮之外的全部操作）、暂停说明（从原桌面版 app/UI/HudArt.drawPauseHelpArt 迁来）
 // 与选关地图（app/UI/LevelMap.drawLevelMapArt）。
 // 盖住整个布局（area = {x, y, w, h}，设计单位），随布局缩放；竖排一列、横排两列。
 // 只画与命中，不算规则：能否跳关由核心 m3MapJump（Match3.Core.mapClickJump）判，进度点由 m3Progress 给。
@@ -87,8 +87,8 @@ export function drawMenu(ctx, art, a, mlay, st) {
 }
 
 // ---------------------------------------------------------------------------
-// 暂停：每个按键一行（键帽 + 作用 + 触屏上对应的按钮），底部宝石图例（gem_c1..5，同桌面「图例」行）
-// 与桌面 rows 同序；第三列是网页 / 触屏入口（PC 壳和手机都没有键盘时用）。
+// 暂停：每个按键一行（键帽 + 作用 + 触屏上对应的按钮），底部宝石图例（gem_c1..5，同原桌面版「图例」行）
+// 与原桌面版 rows 同序；第三列是网页 / 触屏入口（PC 壳和手机都没有键盘时用）。
 export const PAUSE_ROWS = [
   ["H", "提示", "「提示」"], ["1", "锤子", "菜单 → 锤子"], ["2", "自由交换", "菜单 → 自由交换"], ["3", "十字消", "菜单 → 十字消"],
   ["U", "撤销", "「撤销」"], ["S", "洗牌", "菜单 → 洗牌"], ["D", "每日挑战", "菜单 → 每日挑战"], ["M", "选关地图", "菜单 → 选关地图"],
@@ -127,7 +127,7 @@ export function drawPause(ctx, art, a, pulse) {
 
 // ---------------------------------------------------------------------------
 // 选关地图：按章节（m3Meta.chapters = UI.Chapters 的 chapterStarts / chapterTitle）分块，每块一个章节标签 + 若干行节点
-// （每行最多 PER_ROW 个，块内蛇形排列，同桌面 mapNodePos 的 zig-zag）；竖排一列、横排两列，整体缩放到放得下。
+// （每行最多 PER_ROW 个，块内蛇形排列，同原桌面版 mapNodePos 的 zig-zag）；竖排一列、横排两列，整体缩放到放得下。
 const PER_ROW = 7, LABEL_U = 0.5, COL_GAP_U = 0.8, HEAD_H = 76;
 export function mapLayout(a, chapters, n) {
   const blocks = chapters.map((ch, k) => {
@@ -169,7 +169,7 @@ export function mapLayout(a, chapters, n) {
   });
   return { nodes, labels, paths, u, ncol: columns.length };
 }
-// 点中哪个节点：命中区 = 节点所在的整格（边长 u，比节点图大，手指好点；桌面 mapHitTest 是节点外 ±2）；没点中为 null
+// 点中哪个节点：命中区 = 节点所在的整格（边长 u，比节点图大，手指好点；原桌面版 mapHitTest 是节点外 ±2）；没点中为 null
 export function mapHit(ml, x, y) {
   const nd = ml.nodes.find((d) => Math.abs(x - d.x) < ml.u / 2 && Math.abs(y - d.y) < ml.u / 2);
   return nd ? nd.i : null;

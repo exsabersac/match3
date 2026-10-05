@@ -32,9 +32,6 @@ module Match3.Element.Phase
   , phaseReach
   , phaseDieOrder
   , phaseOnNear
-  , Beat(..)
-  , MechLayout(..)
-  , emptyLayout
   ) where
 
 import Match3.Element.Near
@@ -158,17 +155,3 @@ phaseOnNear :: forall e. Phase e => e -> NearCtx -> NearOut
 phaseOnNear e ctx = case cNear (codec @e) of
   Nothing -> NearIdle
   Just rule -> onNear rule ctx e
-
-data Beat r where
-  Refilled :: Board -> [Pos] -> Beat [Pos]
-  EndTick :: [(Pos, Pos)] -> Beat [(Pos, Pos)]
-  AskJudge :: Board -> Score -> MovesLeft -> Outcome -> Beat Outcome
-
-data MechLayout = MechLayout
-  { mlName :: ElementName
-  , mlCore :: Bool
-  }
-  deriving (Eq, Show)
-
-emptyLayout :: ElementName -> MechLayout
-emptyLayout n = MechLayout n False

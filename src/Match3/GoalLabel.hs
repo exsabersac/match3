@@ -12,6 +12,7 @@ module Match3.GoalLabel
   , colorLabel
   , namedGoalLabelTable
   , namedLoseHint
+  , namedGoalIcon
   ) where
 
 import Data.List (intercalate)
@@ -19,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import Match3.Color (Color(..))
 import Match3.Counts (CounterKey(..))
 import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (displayLabels, loseHintWith)
+import Match3.Element.World (displayLabels, goalIconWith, loseHintWith)
 import Match3.Goal (GoalView(..))
 import Match3.Types.Name (ElementName(..))
 
@@ -58,6 +59,10 @@ namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultWor
 -- | 按元素名计数的目标的专用失败提示（元素条目的 loseHintIs；参数 = 目标值；没有 = Nothing，用通用句式）。
 namedLoseHint :: ElementName -> Maybe (Int -> String)
 namedLoseHint = loseHintWith defaultWorld
+
+-- | 按元素名计数的目标的覆盖图标贴图名（元素 Kind.goalIconName；没有 = Nothing，调用方用元素名本身）。
+namedGoalIcon :: ElementName -> Maybe String
+namedGoalIcon = goalIconWith defaultWorld
 
 -- | 颜色的中文名（与图例、ui-art.md 的颜色表一致）。
 colorLabel :: Color -> String

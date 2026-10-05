@@ -30,6 +30,7 @@ module Match3.View
   , countLabel
   , colorLabel
   , namedGoalLabelTable
+  , namedGoalIcon
     -- * 棋盘视图
   , BoardView (..)
   , boardView
@@ -68,7 +69,7 @@ import Match3.Element.Types (CellField (..), FaceValue (..))
 import Match3.Engine (match3Game)
 import Match3.Game.Outcome (loseHint)
 import Match3.Game.State (GameState(..), gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress, gsUfos)
-import Match3.GoalLabel (colorLabel, countLabel, goalViewLabel, namedGoalLabelTable)
+import Match3.GoalLabel (colorLabel, countLabel, goalViewLabel, namedGoalIcon, namedGoalLabelTable)
 import Match3.Element.Level (levelDrops)
 import Match3.Levels.Campaign (allLevels, levelCarpets, levelCount, lookupLevel)
 import Match3.Levels.Level (Level(..))

@@ -40,7 +40,6 @@ import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.Bits (xor)
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Proxy (Proxy(..))
 
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))

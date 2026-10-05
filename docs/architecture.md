@@ -140,7 +140,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 
 ### 前端模块（`app/pure` 与 `web/hs`）
 
-网页是唯一前端。原 SDL2 桌面版（`app/Main.hs`、`app/Shell/Loop.hs`、`app/UI/**` 28 个模块、`app/Art.hs`、`app/pure/UI/Sound.hs`，可执行文件 `match3-sdl`）已于 2026-10-05 移除（`refactor/web-only`）；它的模块说明见 git 历史（本文件在 `origin/main` 45844bf 的版本）。
+网页是唯一前端。原 SDL2 桌面版（`app/Main.hs`、`app/Shell/Loop.hs`、`app/UI/**` 25 个模块、`app/Art.hs`、`app/pure/UI/Sound.hs`，可执行文件 `match3-sdl`）已于 2026-10-05 移除（`refactor/web-only`）；它的模块说明见 git 历史（本文件在 `origin/main` 45844bf 的版本）。
 
 `app/pure/` 放**纯前端模块**（不依赖任何图形库），是 `package.yaml` 的内部库 `match3-pure`（模块清单在那里，`web/build.sh` 核对网页用到的模块都在清单里）：测试套件直接编译 `app/pure` 源码（它也直接编译 `src`，经内部库用会得到两份不同的 `Match3.*` 类型）；网页版按源码编（`web/match3-web.cabal` 的 `hs-source-dirs` 含 `../app/pure`，`other-modules` 列出全部 10 个）。
 

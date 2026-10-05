@@ -38,7 +38,8 @@ instance Cellular PlainGem where
   nameOf _ = "gem"
   toCell (PlainGem c) = Gem c Normal 0 Nothing
 
-instance Matchable PlainGem
+instance Matchable PlainGem where
+  color (PlainGem c) = Just c  -- 与缺省（取写回格子的颜色）相同，热路径上省掉写回
 instance Hittable PlainGem
 instance Movable PlainGem
 instance Countable PlainGem
@@ -87,6 +88,7 @@ instance SpecialKind k => Cellular (SpecialGem k) where
   toCell g@(SpecialGem c) = Gem c (kindOf g) 0 Nothing
 
 instance SpecialKind k => Matchable (SpecialGem k) where
+  color (SpecialGem c) = Just c  -- 与缺省相同，省掉写回
   hintable g = kindOf g /= Rainbow
 
 instance SpecialKind k => Hittable (SpecialGem k) where

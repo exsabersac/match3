@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -317,8 +318,14 @@ lookupDef w n = listToMaybe [d | d <- wDefs w, defName d == n]
 lookupGround :: World -> ElementName -> Maybe SomeGround
 lookupGround w n = listToMaybe [g | GroundDef g@(SomeGround p) <- wDefs w, groundName p == n]
 
+-- 候选表上第一个认领该格的种类（显式递归：解码在匹配 / 提示 / 计数的热路径上，不建中间列表）。
 firstDecode :: [SomeKind] -> Cell -> Maybe SomeElement
-firstDecode ks cell = listToMaybe [SomeElement e | SomeKind p <- ks, Just e <- [fromCellAs p cell]]
+firstDecode ks0 cell = go ks0
+  where
+    go [] = Nothing
+    go (SomeKind p : ks) = case fromCellAs p cell of
+      Just e -> Just (SomeElement e)
+      Nothing -> go ks
 
 -- | 本体层的元素值（参数是拆掉叠层之后的格子，或原格：本体不看叠层）。
 decodeBody :: World -> Cell -> SomeElement
@@ -333,32 +340,48 @@ decodeBody w cell = case cell of
 
 -- | 本体之上的各层（自外向内：冰层 → 叠层）与拆完之后的格子。
 decodeLayers :: World -> Cell -> ([SomeLayerValue], Cell)
-decodeLayers w cell = case cell of
-  Gem _ _ ice ov ->
-    let (ls1, c1) = if ice > 0 then tryLayers (wIce w) cell else ([], cell)
-        (ls2, c2) = case ov of
-          Just o -> tryLayers (wOverlays w ! overlaySlot o) c1
-          Nothing -> ([], c1)
-    in (ls1 ++ ls2, c2)
-  _ -> ([], cell)
+decodeLayers w cell
+  | hasLayers cell = case cell of
+      Gem _ _ ice ov ->
+        let !(ls1, c1) = if ice > 0 then tryLayers (wIce w) cell else ([], cell)
+            !(ls2, c2) = case ov of
+              Just o -> tryLayers (wOverlays w ! overlaySlot o) c1
+              Nothing -> ([], c1)
+        in (ls1 ++ ls2, c2)
+      _ -> ([], cell)
+  | otherwise = ([], cell)
   where
-    tryLayers ls c = case [(SomeLayerValue l, inner) | SomeLayer p <- ls, Just (l, inner) <- [peelAs p c]] of
-      ((lv, inner) : _) -> ([lv], inner)
-      [] -> ([], c)
+    tryLayers [] c = ([], c)
+    tryLayers (SomeLayer p : ls) c = case peelAs p c of
+      Just (l, inner) -> ([SomeLayerValue l], inner)
+      Nothing -> tryLayers ls c
+
+-- | 格子是否可能带冰层 / 叠层（只有宝石格带层；不带层时解码跳过拆层，热路径不分配）。
+hasLayers :: Cell -> Bool
+hasLayers cell = case cell of
+  Gem _ _ ice ov -> ice > 0 || isJust ov
+  _ -> False
+{-# INLINE hasLayers #-}
 
 -- | 整个格子的元素值：叠层（自外向内）包着本体。
 decode :: World -> Cell -> SomeElement
-decode w cell =
-  let (ls, inner) = decodeLayers w cell
-  in foldr (\(SomeLayerValue l) e -> SomeElement (Layered l e)) (decodeBody w inner) ls
+decode w cell
+  | hasLayers cell =
+      let (ls, inner) = decodeLayers w cell
+      in foldr (\(SomeLayerValue l) e -> SomeElement (Layered l e)) (decodeBody w inner) ls
+  | otherwise = decodeBody w cell
 
 -- | 本体层的元素值（拆掉冰层 / 叠层之后）。
 bodyOf :: World -> Cell -> SomeElement
-bodyOf w cell = decodeBody w (snd (decodeLayers w cell))
+bodyOf w cell
+  | hasLayers cell = decodeBody w (snd (decodeLayers w cell))
+  | otherwise = decodeBody w cell
 
 -- | 本体之上的各层（自上而下）：冰层（ice > 0）、叠层。
 upperOf :: World -> Cell -> [SomeLayerValue]
-upperOf w = fst . decodeLayers w
+upperOf w cell
+  | hasLayers cell = fst (decodeLayers w cell)
+  | otherwise = []
 
 -- | 整个格子的元素值：叠层（冰 → 叠层，自外向内）包着本体。
 elementOf :: World -> Cell -> SomeElement

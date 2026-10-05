@@ -5,7 +5,7 @@
 --
 -- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
 -- * 开启规则（openRule）：内置彩蛋；测试专用「豆荚」被邻格真消除时开出直线，本轮坐住不引爆。
--- * 可改色 / 可推动谓词（recolorable / pushable）：魔法帽 / 染色瓶、蜗牛只看注册表，内置取值与原写死的 isGem / pushable 相同。
+-- * 可改色 / 可推动谓词（recolorable / pushable）：魔法帽 / 染色瓶、蜗牛只看元素世界，内置取值与原写死的 isGem / pushable 相同。
 -- * 关卡级元素（Mechanic：飞碟 / 皮带 / 传送门 / 地毯 / 地面层）：状态在元素值里，按消息回复，removeMechanic 之后该机制不生效（地面层是核心元素）。
 -- * 源码扫描：主流程模块不再点名这些元素的专门函数。
 --
@@ -48,8 +48,8 @@ tests =
   [ testCase "br_swap_rule_test_element" br_swap_rule_test_element
   , testCase "br_open_rule_test_element" br_open_rule_test_element
   , testCase "br_builtin_predicates_match_legacy" br_builtin_predicates_match_legacy
-  , testCase "br_recolorable_from_registry" br_recolorable_from_registry
-  , testCase "br_pushable_from_registry" br_pushable_from_registry
+  , testCase "br_recolorable_from_world" br_recolorable_from_world
+  , testCase "br_pushable_from_world" br_pushable_from_world
   , testCase "br_level_hooks_builtin_and_removable" br_level_hooks_builtin_and_removable
   , testCase "br_level_hooks_removed_in_play" br_level_hooks_removed_in_play
   , testCase "br_main_flow_no_special_branches" br_main_flow_no_special_branches
@@ -207,9 +207,9 @@ br_builtin_predicates_match_legacy = do
     assertEqual ("recolorable " ++ show cell) (isGem cell) (recolorableWith defaultWorld cell)
     assertEqual ("pushable " ++ show cell) (Snail.pushable cell) (pushableWith defaultWorld cell)
 
--- | 魔法帽只给注册表里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
-br_recolorable_from_registry :: Assertion
-br_recolorable_from_registry = do
+-- | 魔法帽只给元素世界里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
+br_recolorable_from_world :: Assertion
+br_recolorable_from_world = do
   let worldNoRecolor = register (kindDef @NoRecolorGem) defaultWorld
       board0 = setCell tripleBoard (0, 1) MagicHat
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
@@ -222,7 +222,7 @@ br_recolorable_from_registry = do
   assertEqual "default: hat swapped the two colors" (mkGem C3, mkGem C1) (getCell bDef (1, 0), getCell bDef (0, 2))
   assertEqual "not recolorable: colors kept" (mkGem C1, mkGem C3) (getCell bNo (1, 0), getCell bNo (0, 2))
 
--- | 蜗牛只推注册表里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
+-- | 蜗牛只推元素世界里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
 newtype Cart = Cart Int
   deriving (Eq, Show)
   deriving (Matchable, Hittable) via (Obstacle Cart)
@@ -246,8 +246,8 @@ instance Kind Cart where
 cartDef :: Def
 cartDef = kindDef @Cart
 
-br_pushable_from_registry :: Assertion
-br_pushable_from_registry = do
+br_pushable_from_world :: Assertion
+br_pushable_from_world = do
   let board0 = setCell (setCell tripleBoard (7, 1) (mkSnail 0 1)) (7, 2) (Custom "cart" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
@@ -263,7 +263,7 @@ br_pushable_from_registry = do
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 
 -- | 关卡级元素：内置表里四种元素各自回复节拍（状态在元素值里，Board 层经钩子 LevelHooks 调用）；
--- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按注册表的地面层规则命中。
+-- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按元素世界的地面层规则命中。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do
   assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf (mechanicDefs defaultWorld))
@@ -347,7 +347,7 @@ br_main_flow_no_special_branches = do
           ++ [(f, w) | (f, s) <- zip files srcs, w <- bannedIdents, mentionsIdent w s]
   assertEqual "special-cased names in main flow" [] bad
 
--- | 第 8 刀：特殊块形状、特殊块组合、顶部补子都是注册表上的规则表 / 策略，结算流水线不再写死——
+-- | 第 8 刀：特殊块形状、特殊块组合、顶部补子都是元素世界上的规则表 / 策略，结算流水线不再写死——
 -- Board / Game 层代码（去掉注释与字符串）不点名特殊块种类（LineH / LineV / Bomb / Rainbow）、不直接随机选色
 -- （randomColor / numColors），也不用 Combos 的几何函数；特殊合成不再挂在 line_h 的元素规则上（只剩彩虹取色）。
 br_rule_tables_out_of_main_flow :: Assertion

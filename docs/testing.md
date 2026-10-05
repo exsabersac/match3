@@ -14,13 +14,13 @@ stack test
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
     - 第 1 刀新增 8 条 QuickCheck 性质与 1 个扫描工具自测
-    - 第 2 刀新增 2 个（`cell_accessors_total`、`ec_registry_checked_slots`）
+    - 第 2 刀新增 2 个（`cell_accessors_total`、`ec_world_checked_cells`）
     - 第 3 刀新增 1 条性质（`qc_find_hint_local_matches_reference`）
     - 第 4 刀新增 2 条性质（`qc_counts_algebra`、`qc_counts_monotone_legacy_view`）
     - 第 5 刀新增 3 条性质（`qc_goal_matches_legacy`、`qc_goal_progress_laws`、`qc_goal_progress_bounded`）
     - 第 6a 刀新增 9 个（`test/Spec/Levels.hs`：7 个单元测试 + 2 条性质）
     - 第 6b 刀新增 2 个（`ec_some_element_eq_by_type`、性质 `qc_name_newtypes_show_ord`）
-    - 第 7a 刀新增 4 个（`ec_level_element_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`）
+    - 第 7a 刀新增 4 个（`ec_mechanic_stateful_extension`、`br_board_takes_hooks_only`、性质 `qc_level_hooks_match_legacy` / `qc_level_elems_readers_roundtrip`）
     - 第 7b 刀新增 4 个（`br_end_phase_table_order`、`ext_end_effect_generic_hopper`、性质 `qc_end_table_matches_legacy` / `qc_ask_levels_folds_in_order`）
     - 第 8 刀新增 9 个（`br_rule_tables_out_of_main_flow`、`ext_shape_rule_lt_bomb` / `ext_combo_rule_line_gem` / `ext_refill_policy_level_element` / `ext_refill_policy_level_colors`、性质 `qc_shape_table_matches_legacy` / `qc_combo_table_matches_legacy` / `qc_combo_table_symmetric` / `qc_refill_policy_default_matches_legacy`）
     - 第 9 刀新增 5 个（`test/Spec/Caps.hs`：`caps_element_class_is_thin`、`ext_caps_element_plugs_in`、性质 `qc_caps_match_legacy_elements` / `qc_caps_rules_match_legacy` / `qc_default_caps_match_legacy_defaults`）
@@ -176,7 +176,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | 每日 / 三星 | `daily_seed_stable`、`star_rating_tiers` |
 | 提示 / 撤销 / 洗牌 | `hint_finds_move`、`undo_restores`、`shuffle_when_no_moves` |
 | 逐轮回放 / 步末效果 | `trace_*`、`trace_end_*`（见下节） |
-| 元素框架（第二刀 2b） | `element_registry_custom_crate_extensibility`、`element_registry_matches_legacy_predicates`、`trace_events_consistent_with_trace`（见「元素框架验收」） |
+| 元素框架（第二刀 2b） | `element_world_custom_crate_extensibility`、`element_world_matches_legacy_predicates`、`trace_events_consistent_with_trace`（见「元素框架验收」） |
 | 特效不重播（爆击/连击） | `failed_swap_resets_combo_feedback`、`invalid_swap_resets_combo_feedback`、`booster_noop_resets_combo_feedback`、`undo_shuffle_reset_combo_feedback`、`move_fx_ignores_already_over` |
 | 稳定性巡航 | 软锁、地毯↔饼干/保险箱、精灵+2、步数携带上限、皮带→蒸汽→蜗牛顺序、吸走≠引爆、每日 Won 不解锁等 |
 
@@ -226,8 +226,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `qc_goal_matches_legacy` | 2000 | 第 5 刀：测试里留一份第 5 刀前的 13 构造器目标 `OldGoal`（派生 `Show`）与逐字抄来的 `goalMetEx` / `goalProgressEx` / `goalTarget`；任意旧目标换成新目标数据后，`show`（含 `showsPrec 11` 加括号）、目标值、在任意分数 / 计数（内置各键、时间精灵、各色、名字）下的达成与进度都与旧实现相同（旧 `gsCollected` 按旧结算口径由计数给出） |
 | `qc_goal_progress_laws` | 1000 | 第 5 刀：任意 1–3 项配额（分数与计数混合）：进度 ≥ 0；达成 ⟺ 每项度量 ≥ 目标值；单项 达成 ⟺ 进度 ≥ 目标值；多项 进度 ≤ 目标值且 达成 ⟺ 进度 = 目标值；分数 / 计数只增时进度不减、达成保持 |
 | `qc_goal_progress_bounded` | 60 | 第 5 刀：整局 1–10 步（约 1/3 抽多色关 6 / 14）每个状态：进度 ≥ 0、达成 ⟺ 各项配额都达到、单项 达成 ⟺ 进度 ≥ 目标值、多色 进度 ≤ 目标值；`Won` / `LevelClear` 结局时目标达成、`Lost` 时未达成 |
-| `qc_registry_decode_roundtrip` | 1000 | 任意格 `toCell (elementOf w cell) == cell`；解码出的本体名是认领拆层后格子的那个种类（`fromCell` 接受），未注册的 `Custom` 名字原样作惰性占格；最上层的冰层 / 叠层名是 `peel` 接受该格的叠层种类（元素类重构前按 `Slot` 核对） |
-| `qc_registry_names_slots_unique` | 1 | 内置类型列表 `builtinDefs`（世界去重之前）：名字互不相同；20 种内置本体格、8 种叠层各解码到一个名字且互不相同；冰层种类只有一个 |
+| `qc_world_decode_roundtrip` | 1000 | 任意格 `toCell (elementOf w cell) == cell`；解码出的本体名是认领拆层后格子的那个种类（`fromCell` 接受），未注册的 `Custom` 名字原样作惰性占格；最上层的冰层 / 叠层名是 `peel` 接受该格的叠层种类（元素类重构前按 `Slot` 核对） |
+| `qc_world_names_cells_unique` | 1 | 内置类型列表 `builtinDefs`（世界去重之前）：名字互不相同；20 种内置本体格、8 种叠层各解码到一个名字且互不相同；冰层种类只有一个 |
 | `qc_find_hint_local_matches_reference` | 400 | 第 3 刀：`findHintWith`（只对交换两格所在行 / 列做局部匹配检查）与留在测试里的旧实现 `findHintReference`（整盘 `hasAnyMatchWith (swapCells …)`）返回相同：带现成匹配的盘面、各关开局、默认开局、整盘随机格四类。去掉局部检查的任一分支时该性质在 20 例内即失败 |
 | `qc_counts_algebra` | 1000 | 第 4 刀：`Counts` 的代数——`countOf` 等于按键求和；稀疏（不存 0）、键升序；`plusCounts`（`<>`）逐键相加、交换、结合、`noCounts` 为单位元；`bumpCount k n` = 加一个单键计数；`namedCounts` = `CountNamed` 项按名字升序 |
 | `qc_counts_monotone_legacy_view` | 60 | 第 4 刀：一局 1–8 步里 `gsCounts` 每个存下的个数都 > 0、每个键不减；与旧字段对照——「按某个计数键」的目标（石块 … 地毯、名字；第 5 刀起用 `goalView` 取键）下 `gsCollected == gsCount 该键`（旧实现直接取对应字段），`show` 仍按旧字段名（`gsStonesCleared = …` … `gsElementCounts = …`）打印同一个数。另在仓库外做过一次对照：40 关 × 25 个种子 × 最多 25 手（提示交换 + 锤子 + 十字）共 17866 个局面，新旧（4b83dc9）`show` 全等；第 5 刀对 47485c3 重做（另加 30 天每日挑战，每行再打印目标值、`checkOutcome`、失败提示）共 18383 行全等 |
@@ -243,7 +243,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `qc_refill_policy_default_matches_legacy` | 500 | 第 8 刀：任意可空盘 × 种子：`refillWith defaultRefill`、`refillWith (colorsRefill numColors)`、`Gravity.refill`、`activeRefill` 在 `noHooks` / `builtinHooks` 下的策略与逐字保留的旧 `refill` 相同——盘面相同、推进后的生成器（`show`）相同，即随机数消费顺序不变；内置关卡级元素不换策略（名字 random-gem） |
 | `qc_name_newtypes_show_ord` | 1000 | 第 6b 刀：任意名字（含引号 / 中文 / 空串）与整数：`ElementName` / `CustomState` 的 `show` 与 `showsPrec 11` 和底层 `String` / `Int` 相同，`compare` / `==` 相同；`Custom` 格的 `show` / `showsPrec 11` 逐字等于改前的派生输出、`Ord` 与按 (名字, 状态) 比较相同 |
 
-条目的原型值（`Proto`）不导出，所以「解码往返」从格子一侧做：对每种格子验证解码再编码得到原格、并且解码落到槽位一致的条目上；再用 `qc_registry_names_slots_unique` 保证每个槽位恰好一个条目。第 1 刀跑这些性质时没有发现规则 bug。
+条目的原型值（`Proto`）不导出，所以「解码往返」从格子一侧做：对每种格子验证解码再编码得到原格、并且解码落到槽位一致的条目上；再用 `qc_world_names_cells_unique` 保证每个槽位恰好一个条目。第 1 刀跑这些性质时没有发现规则 bug。
 
 ## 源码扫描约定（第 1 刀）
 
@@ -302,8 +302,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `element_registry_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在测试里：`test/Spec/Support.hs` 的 `Crate` instance + `kindDef @Crate`**：`Fixed` 原型包、`struck` 削耐久、邻格规则、`counter`：固定格，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：元素世界多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`namedCounts (gsCounts gs) == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultWorld` 下它是惰性占格（不被波及、锤子免疫、不计数）；`src/` 与 `app/` 下全部源文件（含注释，按目录列出）里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
-| `element_registry_matches_legacy_predicates` | 全部内置本体 × 宝石种类 × 冰层 × 叠层：元素世界的挡交换 / 锤子免疫 / 固定格 / 点火 / 匹配色 / 洗牌保留与第二刀之前按构造器写死的谓词逐格相等；直接命中的几条代表（冰、锁链、保险箱、翻转、石头）与旧口径一致 |
+| `element_world_custom_crate_extensibility` | 测试专用元素「木箱」`Custom "crate" 耐久`（**只定义在测试里：`test/Spec/Support.hs` 的 `Crate` instance + `kindDef @Crate`**：`Fixed` 原型包、`struck` 削耐久、邻格规则、`counter`：固定格，不下落、邻格真消除波及耐久 −1、耐久 1 再被波及就碎、计数 `CountNamed "crate"`）经 `register` 接入后：元素世界多一项、内置一个不少；对它交换返回 `NoMatch` 且盘面不变；无匹配色；第 1 手（邻格 C5 三消）耐久 2→1、原地不动、不计数、不在清除格、事件里有 `EvHit "crate"`；第 2 手（耐久 1）碎掉、进入第一轮清除格、`namedCounts (gsCounts gs) == [("crate",1)]`、事件里有 `EvClear "crate"`；锤子削到 1；洗牌保留；同一局面在 `defaultWorld` 下它是惰性占格（不被波及、锤子免疫、不计数）；`src/` 与 `app/` 下全部源文件（含注释，按目录列出）里没有字面量 `"crate"` / 「木箱」——主流程没有为它改一行 |
+| `element_world_matches_legacy_predicates` | 全部内置本体 × 宝石种类 × 冰层 × 叠层：元素世界的挡交换 / 锤子免疫 / 固定格 / 点火 / 匹配色 / 洗牌保留与第二刀之前按构造器写死的谓词逐格相等；直接命中的几条代表（冰、锁链、保险箱、翻转、石头）与旧口径一致 |
 | `trace_events_consistent_with_trace` | 全部关卡（段 5 起 40 关，新玩法起逐关追加）× 种子 1–2 × 前 3 个成交交换：`EvScore` 之和 = 本步得分；`EvClear` 的格 = 各轮清除格并集；步末事件数 = `mtEnd` 长度；`EvShuffle` ⇔ `mtShuffle`；`EvBlast` 只来自直线 / 炸弹；**逐轮严格相等**（第三刀，前端波次界面改读事件后加）：该轮 EvClear 的格按事件顺序拼接 = `cwCleared`（顺序也相同），该轮 EvScore 之和 = `cwScore` |
 
 ## 扩展钩子验收（段 2c）
@@ -312,7 +312,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `ext_board_modules_take_registry` | 源码扫描：`src/Match3/Board/` 下除 `Board.Default` 以外的全部模块（按目录列出）代码里不用 `defaultWorld`、不 import `Match3.Element.Builtin*`（不带 With 的旧名集中在 `Board.Default`） |
+| `ext_board_modules_take_world` | 源码扫描：`src/Match3/Board/` 下除 `Board.Default` 以外的全部模块（按目录列出）代码里不用 `defaultWorld`、不 import `Match3.Element.Builtin*`（不带 With 的旧名集中在 `Board.Default`） |
 | `ext_goal_named_counts_crate` | 木箱经 `CountNamed "crate"` 计数，`GoalNamed "crate" N` 达成即判胜；`resolve` 与 `gameStep` 两条入口结果相同；内置表下木箱是惰性占格、不计数 |
 | `ext_ground_layer_test_element` | 测试专用苔藓（`SlotGround`，2 层）：上方每消一次去一层并按层计数，不占格、不挡匹配；撤销恢复、洗牌不动；未注册时毫无反应 |
 | `ext_edge_drain_side_collectible` | 测试专用风筝（`drains = [EdgeLeft]`）：到左边被收走并计数，内部 / 底边的留在原处；同盘饼干照常底收、计数不受影响；未注册时是惰性占格 |
@@ -335,8 +335,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `br_swap_rule_test_element` | 拉杆（`swapRule`，`srOrder` 5，种子 = 交换两端）：无普通匹配的交换被接受、两端在首轮清除；无路可走的盘上提示经同一条规则给出拉杆；内置表下拉杆挡交换、被拒 |
 | `br_open_rule_test_element` | 豆荚（`openRule`）：邻格真消除时开成直线，本轮不清除（坐住）、落定后仍在；与内置彩蛋同盘时两条开启规则都跑；内置表下原样下落 |
 | `br_builtin_predicates_match_legacy` | 21 种样例格上 `recolorableWith defaultWorld` = `isGem`、`pushableWith defaultWorld` = `Snail.pushable` |
-| `br_recolorable_from_registry` | 魔法帽：内置表下给两个邻格换色；把 gem 定义改成 `recolorable = False` 后颜色不变 |
-| `br_pushable_from_registry` | 蜗牛：`pushable` 的小车被推回、蜗牛前进；内置表下小车挡住、蜗牛掉头；gem 改成不可推后蜗牛不推宝石 |
+| `br_recolorable_from_world` | 魔法帽：内置表下给两个邻格换色；把 gem 定义改成 `recolorable = False` 后颜色不变 |
+| `br_pushable_from_world` | 蜗牛：`pushable` 的小车被推回、蜗牛前进；内置表下小车挡住、蜗牛掉头；gem 改成不可推后蜗牛不推宝石 |
 | `br_level_hooks_builtin_and_removable` | 内置表的四个关卡级机制依次为 ufo / belt / portal / carpet，经节拍方法回复的结果与原实现（`stepUfos` / `beltMoves` / `portalTeleport` / `coverCarpets`）结果相同；`removeLevel` 后各自退化为不吸收 / 不移位 / 不传送 / 不覆盖 |
 | `br_level_hooks_removed_in_play` | 38 关、种子 1、按提示走 6 手：四个关卡级元素都去掉后，飞碟关飞碟不动不吸、皮带关没有皮带步末效果（`EvBelt`）、地毯关不覆盖；内置表下同样的对局里三者都发生过 |
 | `br_rule_tables_out_of_main_flow` | 第 8 刀源码扫描：Board 核心（Match / Clear / Cascade / Gravity / Hooks）与 Game 的 Move / Resolve / Boosters 代码里不点名 `LineH` / `LineV` / `Bomb` / `Rainbow`、不用 `randomColor` / `numColors`、不用 `bigBomb` / `fullRowCol` / `lineBombCross`；元素声明的成对交换规则只剩彩虹 10，组合表并成 20 |
@@ -378,7 +378,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `ec_state_lives_in_element_value` | 测试专用「鸟窝」：剩余命中数在元素值里，锤子每敲一次减一、最后一下才碎并计数；放置经构造器 |
 | `ec_mechanic_defaults_silent` | 元素类重构第 5 刀（取代 `ec_open_messages`）：只写 `mechName` 的机制在全部节拍与读数上都是 `Nothing`，参与折叠时结果与没有它相同 |
 | `ec_flat_record_removed` | 源码扫描（去掉注释与字符串）：`Element/`、`Board/`、`Game/` 全部模块里没有 `ElementDef` / `baseDef` / `LevelHook` / `Hook*`（元素类重构第 5 刀起连同注释也不许出现 `SomeMessage` / `fromMessage` / `LevelElement` / `SomeLevelElement` / `levelReply` / `Registry` / `HitResult`）；`Board.Match` 不点名彩虹、不 import `Match3.Rainbow`；结算流水线（`pipelineSources`）不调关卡级元素的实现 `stepUfos` / `beltMoves` / `coverCarpets`；内置条目 31 个、关卡级元素 ufo / belt / portal / carpet |
-| `ec_level_elements_by_message` | 测试专用「磁铁」只经 `registerMechanic` 在补子节拍（`onRefilled`）多吸走一颗宝石（保留内置飞碟，回复折叠）；测试机制「Pinger」/「Doubler」经 `avoidCells` 折叠所有回复者（按注册顺序，结果依次累加），内置世界下没人回复（用例名沿用旧称） |
+| `ec_mechanics_by_beat` | 测试专用「磁铁」只经 `registerMechanic` 在补子节拍（`onRefilled`）多吸走一颗宝石（保留内置飞碟，回复折叠）；测试机制「Pinger」/「Doubler」经 `avoidCells` 折叠所有回复者（按注册顺序，结果依次累加），内置世界下没人回复（用例名沿用旧称） |
 | `ec_custom_matchable_gem` | 测试专用「星星」（`Custom "star"`，缺省能力、覆盖 `color`）：可交换、与同色宝石成三连被清除并按名字计数、进提示；未注册时是惰性占格 |
 
 元素类迁移的等价性依据：上述快照全等；金标准 2534 行全等；showcase / l28 / l1map 三场景截图与 `25db84a` 基线 AE=0。
@@ -615,7 +615,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `ms_caps_fixed_immune_colorless` | 充能 0–3：挡交换、不下落、无色、洗牌保留、直接命中 `Immune`；发射中（4）命中 `Absorb` 成 0 格 |
+| `ms_ability_fixed_immune_colorless` | 充能 0–3：挡交换、不下落、无色、洗牌保留、直接命中 `Immune`；发射中（4）命中 `Absorb` 成 0 格 |
 | `ms_charges_once_per_round` | `runAdjacentWith`：两个邻格同一轮只 +1；满 3 不再涨；只有斜角邻格不动；三轮充满、第四轮仍是 3 |
 | `ms_fires_row_and_col_at_step_end` | `tripleBoard` 的交换让 (2,1) 的魔法石从 2 格充满：步末恰一条 `EvTick "magic_stone"`，某一轮清掉第 2 行和第 1 列（除它自己），结算后 0 格 |
 | `ms_not_full_does_not_fire` | 同一步魔法石 0 格：充到 1 格、没有发射 |
@@ -626,7 +626,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `fz_caps_blocker_falls_breaks` | 挡交换、随重力下落、无色、洗牌保留、直接命中 `Destroy` |
+| `fz_ability_blocker_falls_breaks` | 挡交换、随重力下落、无色、洗牌保留、直接命中 `Destroy` |
 | `fz_adjacent_clear_kills` | `runAdjacentWith`：与真消除格正交相邻的毛球进入死亡格且只算一次；只有斜角邻格的不动；本轮已被直接命中的不重复算 |
 | `fz_jumps_to_plain_gem_neighbour` | `fuzzballJumps`：四周都是普通宝石时跳到其中一格、原格换成那颗宝石；同一盘面两次结果相同 |
 | `fz_jumps_respect_walls_avoid_and_blockers` | 墙 + 避让格只剩一格时跳那一格；四周是石头 / 特殊块时不动、盘面不变；两个毛球相邻时只能跳普通宝石；两个毛球争同一格只有一个跳过去 |
@@ -646,13 +646,13 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `rc_old_levels_unchanged` | 前 43 关 × {直线, 炸弹}：同一局面在默认世界与 `removeMechanic "rainbow_combos"` 下盘面、得分、`gsGen`、结局、步末数、各轮清除格逐项相同；第 44 关两者不同 |
 | `rc_level44_layout_and_play` | 第 44 关种子 1–3 开局两组组合在固定位置、石头共 24 层；打出彩虹 × 直线：恰一条 `rainbow_line` 变身，石头剩余层数 + 已碎数 ≤ 16 |
 
-改动了的旧测试：`test/Spec/Support.hs` 的 `checkEffectDetail`（逐轮回放护栏用）认识变身步：来源是彩虹、目标由同色普通宝石变成直线 / 炸弹且颜色不变（其余蔓延仍要求来源正交相邻）；`bs_switch_only_on_new_level` 的断言改为「只有第 41 关写了 `bomb_shapes`」；内置关卡级元素列表（`br_level_hooks_builtin_and_removable`、`ec_flat_record_removed`、`ec_level_elements_by_message`、`ec_level_element_stateful_extension`）多了 `rainbow_combos`（性质 `qc_level_elems_readers_roundtrip` 的开局元素列表同样）；关卡数 43 → 44。
+改动了的旧测试：`test/Spec/Support.hs` 的 `checkEffectDetail`（逐轮回放护栏用）认识变身步：来源是彩虹、目标由同色普通宝石变成直线 / 炸弹且颜色不变（其余蔓延仍要求来源正交相邻）；`bs_switch_only_on_new_level` 的断言改为「只有第 41 关写了 `bomb_shapes`」；内置关卡级元素列表（`br_level_hooks_builtin_and_removable`、`ec_flat_record_removed`、`ec_mechanics_by_beat`、`ec_mechanic_stateful_extension`）多了 `rainbow_combos`（性质 `qc_level_elems_readers_roundtrip` 的开局元素列表同样）；关卡数 43 → 44。
 
 `test/Spec/SnowBoss.hs` 的断言：
 
 | 用例 | 断言 |
 |------|------|
-| `sb_caps_fixed_blocker` | 四个象限：挡交换、不下落、无色、洗牌保留、直接命中 `Absorb` 自身；差计权重左上 = 血量、其余 0；计数键 `CountNamed "snow_boss"`；编码往返 |
+| `sb_ability_fixed_blocker` | 四个象限：挡交换、不下落、无色、洗牌保留、直接命中 `Absorb` 自身；差计权重左上 = 血量、其余 0；计数键 `CountNamed "snow_boss"`；编码往返 |
 | `sb_placement_and_weight` | 放置 `[血量, 象限]` 与坏参数；第 45 关种子 1–3 四格在 (2,3)–(3,4)、满血 40 = 目标值、`weighElementWith` = 40；目标 = `goalCount (CountNamed "snow_boss") 40`；`gvBoss` 第 45 关 = `BossView 40 40`、前 44 关为 `Nothing`；`bossPart` 象限 / 过半受伤；其余元素 `weighElementWith` = `countElementWith` |
 | `sb_adjacent_and_direct_damage` | `runAdjacentWith`：身外一圈 3 格真消除扣 3、1 格 + 直接命中 2 格扣 3，四格同血；血量不够时四格一起进入死亡格；远处 / 斜角的消除不变 |
 | `sb_hammer_and_defeat_wins` | 锤子打 Boss 格被接受、血 40 → 39、计 1、Boss 原位、`gvBoss` = 39/40；血 1 时再锤：四格在第一轮清除、计数 40、过关 |
@@ -674,13 +674,13 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `cd_other_levels_unchanged` | 去掉 `cookie_drop` 条目的元素世界与默认世界：前 45 关（种子 3）与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、`gsGen` 逐项相同；第 46 关按提示走 26 步在种子 1–30 里至少一局不同 |
 | `cd_level46_difficulty` | 按提示走种子 1–30 赢 ≤ 25 局（backlog 的「太容易」标准）；一步贪心种子 1 过关 |
 
-改动了的旧测试：关卡数 45 → 46（`jb_levels_appended`、`Builtin/Obstacle`、`Builtin/Layer` 4 处、`GoalsLevels` 2 处）；内置关卡级元素列表多了 `cookie_drop`（`br_level_hooks_builtin_and_removable`、`ec_flat_record_removed`、`ec_level_elements_by_message`、`ec_level_element_stateful_extension`，性质 `qc_level_elems_readers_roundtrip` 同样）；`campaign_levels_batch_ok` 的「开局收集物数 ≥ 目标」对有掉落口的关卡改为「开局至少一块、掉落口掉的是饼干」。测试辅助 `findMatchPair` 已按引擎的挡交换条件过滤（饼干挡交换），`find_match_pair_engine_accepts` 自动覆盖第 46 关。
+改动了的旧测试：关卡数 45 → 46（`jb_levels_appended`、`Builtin/Obstacle`、`Builtin/Layer` 4 处、`GoalsLevels` 2 处）；内置关卡级元素列表多了 `cookie_drop`（`br_level_hooks_builtin_and_removable`、`ec_flat_record_removed`、`ec_mechanics_by_beat`、`ec_mechanic_stateful_extension`，性质 `qc_level_elems_readers_roundtrip` 同样）；`campaign_levels_batch_ok` 的「开局收集物数 ≥ 目标」对有掉落口的关卡改为「开局至少一块、掉落口掉的是饼干」。测试辅助 `findMatchPair` 已按引擎的挡交换条件过滤（饼干挡交换），`find_match_pair_engine_accepts` 自动覆盖第 46 关。
 
 `test/Spec/Chameleon.hs` 的断言：
 
 | 用例 | 断言 |
 |------|------|
-| `ch_caps_piece_by_current_color` | `Custom "chameleon" k` 的颜色 = 第 k 种；可交换、会下落、进提示、命中即消、洗牌保留、不可改色、计 `CountNamed "chameleon"`；放置取原格宝石颜色（或 `AColor` 指定），原格不是宝石时不放 |
+| `ch_ability_piece_by_current_color` | `Custom "chameleon" k` 的颜色 = 第 k 种；可交换、会下落、进提示、命中即消、洗牌保留、不可改色、计 `CountNamed "chameleon"`；放置取原格宝石颜色（或 `AColor` 指定），原格不是宝石时不放 |
 | `ch_matches_by_current_color` | 同色变色龙参与交换三消并计数，异色则 `NoMatch`；现成连线按当前颜色判断；无可走步的盘面放一只 C3 变色龙后唯一可走步 (1,0)↔(2,0)，`findMatchPair`、提示 `findHintWith` 都找到它且引擎接受，同一格换成石头则无步可走 |
 | `ch_shift_fixed_order_skips_instant_runs` | `chameleonShift`：C2 → C3 → C4 → C5 → C1 → C2 循环；下一种会立刻连成三消时顺延（跳 C2 取 C3；再跳 C3 取 C4）；四种都连成时回到原色；两只相邻时后一只看的是前一只换过的颜色；没有变色龙时原样 |
 | `ch_step_end_shift_swap_only` | 玩家交换一步：(6,6) C3 → C4、(7,7) C5 → C1，恰一条 `EvTick "chameleon"`（两项），`applyEndEffect` 重放一致；锤子不换色 |
@@ -695,7 +695,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `mg_caps_ground_not_consumed` | 名字 `magic`、显示格 `Custom "magic" 1`、扩爆规则 = `magicWiden`（果冻没有）；`hitGroundWith` 命中 4 格魔法地格后原样、不计数；第 48 关按提示走 6 步后地面层不变、计数里没有 `magic` |
+| `mg_ability_ground_not_consumed` | 名字 `magic`、显示格 `Custom "magic" 1`、扩爆规则 = `magicWiden`（果冻没有）；`hitGroundWith` 命中 4 格魔法地格后原样、不计数；第 48 关按提示走 6 步后地面层不变、计数里没有 `magic` |
 | `mg_widen_one_ring` | 第 6 行直线 → 第 5–7 行（原范围在前、新格按行优先在后）；中间 3×3 → 5×5（25 格）；角上一格 → 2×2；空范围不变 |
 | `mg_blast_widened_only_at_magic_cell` | 第 48 关本步扩爆格 = [(6,2),(6,5),(5,3),(5,4)]；横直线在这 4 格引爆 = `magicWiden` 原范围，在 (6,3) / (5,2) / (4,3) / (7,2) 引爆 = 原范围；(6,2) 的炸弹 5×5 贴底边截成 20 格；普通宝石没有爆炸；缺省世界不扩 |
 | `mg_swap_and_hammer_reach_bottom_row` | 交换 (5,4)↔(6,4) 连成 (6,2..4) 三消，(6,2) 的横直线 `EvBlast` 覆盖 6 / 5 / 7 行共 24 格（去掉条目时只有第 6 行 8 格）；锤子敲 (5,3) 的横直线：8 块三层碎石全削成 2 层（去掉条目、或敲非魔法格 (5,2)：底行不动）；锤子敲 (6,2) 的炸弹削到第 0–4 列（去掉条目 1–3 列），竖直线削到 1–3 列（去掉条目只有第 2 列） |

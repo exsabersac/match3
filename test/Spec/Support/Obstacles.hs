@@ -14,7 +14,7 @@ module Spec.Support.Obstacles
   , chipAdjacentHoney
   , chipAdjacentCakes
   , chipAdjacentSafes
-  , chipAdjacentBalloons
+  , popAdjacentBalloons
   , openAdjacentSurprises
   , triggerAdjacentHats
   , triggerAdjacentBottles
@@ -23,13 +23,12 @@ module Spec.Support.Obstacles
 
 import Data.Proxy (Proxy(..))
 import Match3.Board.Grid (getCell)
-import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE)
+import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE, balloonPop)
 import Match3.Element.Kind (Kind)
 import Match3.Element.Rules (kindNeighbour)
 import Match3.Element.Types (AdjCtx(..), AdjOut(..))
 import Match3.Obstacles
   ( chargeAdjacentMakersSit
-  , chipAdjacentBalloonsExcept
   , openSurprises
   , triggerAdjacentBottlesExcept
   , triggerAdjacentHatsExcept
@@ -68,9 +67,9 @@ chipAdjacentHoney b gems = chipAdjacentHoneyExcept b gems []
 chipAdjacentCakes b gems = chipAdjacentCakesExcept b gems []
 chipAdjacentSafes b gems = chipAdjacentSafesExcept b gems []
 
--- | 同色邻消打爆的气球位置（盘面不变，由清除管线移走）。
-chipAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
-chipAdjacentBalloons b gems = chipAdjacentBalloonsExcept b gems []
+-- | 同色邻消打爆的气球位置（盘面不变，由清除管线移走）：气球自己的邻格规则 'balloonPop'，没有直接命中格。
+popAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
+popAdjacentBalloons b gems = let out = balloonPop (AdjCtx gems [] [] (const True)) b in (aoBoard out, aoDead out)
 
 -- | 'openSurprises' 去掉「原地变成特殊块的位置」；返回（新盘面, 爆炸种子）。
 openAdjacentSurprises :: Board -> [Pos] -> (Board, [Pos])

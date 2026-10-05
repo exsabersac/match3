@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | 元素注册表：测试专用木箱证明可扩展，内置表与旧谓词逐格一致。
+-- | 元素世界：测试专用木箱证明可扩展，内置表与旧谓词逐格一致。
 module Spec.Element
   ( tests
   ) where
@@ -55,16 +55,16 @@ import Spec.Support
 -- | 本模块的测试（平铺进顶层 "match3" 组）。
 tests :: [TestTree]
 tests =
-  [ testCase "element_registry_custom_crate_extensibility" element_registry_custom_crate_extensibility
-  , testCase "element_registry_matches_legacy_predicates" element_registry_matches_legacy_predicates
+  [ testCase "element_world_custom_crate_extensibility" element_world_custom_crate_extensibility
+  , testCase "element_world_matches_legacy_predicates" element_world_matches_legacy_predicates
   ]
 
--- | 扩展性验收：测试专用元素只经注册表接入，跑一局并断言它按定义起作用；同时证明主流程没有为它改动。
-element_registry_custom_crate_extensibility :: Assertion
-element_registry_custom_crate_extensibility = do
+-- | 扩展性验收：测试专用元素只经元素世界接入，跑一局并断言它按定义起作用；同时证明主流程没有为它改动。
+element_world_custom_crate_extensibility :: Assertion
+element_world_custom_crate_extensibility = do
   let world = register crateDef defaultWorld
       gs0 = (newGame defaultConfig 1) {gsBoard = crateBoard 2}
-  -- 注册表里有它，内置定义一个不少
+  -- 元素世界里有它，内置定义一个不少
   assertBool "registered" (isJust (lookupDef world "crate"))
   assertEqual "builtins kept" (length (worldDefs defaultWorld) + 1) (length (worldDefs world))
   -- 挡交换（固定格原型），不可匹配
@@ -109,9 +109,9 @@ element_registry_custom_crate_extensibility = do
   let mentions = [f | (f, src) <- zip coreFiles srcs, show ("crate" :: String) `isInfixOf` src || "木箱" `isInfixOf` src]
   assertEqual "core sources do not mention the test element" [] mentions
 
--- | 注册表的查询与第二刀之前按构造器写死的谓词逐格等价（对所有内置本体 × 冰层 × 叠层）。
-element_registry_matches_legacy_predicates :: Assertion
-element_registry_matches_legacy_predicates = do
+-- | 元素世界的查询与第二刀之前按构造器写死的谓词逐格等价（对所有内置本体 × 冰层 × 叠层）。
+element_world_matches_legacy_predicates :: Assertion
+element_world_matches_legacy_predicates = do
   let world = defaultWorld
       overlays = Nothing : map Just [Grass, Vine, Choco, Fog 1, Fog 2, Chain 1, Chain 2, Freeze 1, Freeze 2, Curtain 1, Curtain 2, Steam]
       gems = [Gem col k ice ov | col <- [C1, C4], k <- [Normal, LineH, LineV, Bomb, Rainbow], ice <- [0, 1, 2], ov <- overlays]

@@ -4,7 +4,7 @@
 -- | QuickCheck 性质测试。
 --
 -- qc_findMatches_ge3 是原有的性质（逐字不变）。其余是第 1 刀新增的不变量，覆盖重力、补子、连锁、
--- 撤销 / 重做、回放、目标进度与元素注册表；第 8 刀加形状规则表 / 组合表 / 补子策略与旧实现的对照、组合表的对称性。为了可复现，新性质统一挂在固定种子下
+-- 撤销 / 重做、回放、目标进度与元素世界；第 8 刀加形状规则表 / 组合表 / 补子策略与旧实现的对照、组合表的对称性。为了可复现，新性质统一挂在固定种子下
 -- （localOption (QuickCheckReplayLegacy 20260930)），每条用 withMaxSuccess 控制次数。
 -- 生成器只用本模块里的 Gen（格子、可空盘面、战役关卡 + 种子 + 动作选择），不依赖规则实现。
 module Spec.Properties
@@ -110,8 +110,8 @@ tests =
       , testProperty "qc_goal_matches_legacy" (withMaxSuccess 2000 qc_goal_matches_legacy)
       , testProperty "qc_goal_progress_laws" (withMaxSuccess 1000 qc_goal_progress_laws)
       , testProperty "qc_goal_progress_bounded" (withMaxSuccess 60 qc_goal_progress_bounded)
-      , testProperty "qc_registry_decode_roundtrip" (withMaxSuccess 1000 qc_registry_decode_roundtrip)
-      , testProperty "qc_registry_names_slots_unique" (once qc_registry_names_slots_unique)
+      , testProperty "qc_world_decode_roundtrip" (withMaxSuccess 1000 qc_world_decode_roundtrip)
+      , testProperty "qc_world_names_cells_unique" (once qc_world_names_cells_unique)
       , testProperty "qc_find_hint_local_matches_reference" (withMaxSuccess 400 qc_find_hint_local_matches_reference)
       , testProperty "qc_counts_algebra" (withMaxSuccess 1000 qc_counts_algebra)
       , testProperty "qc_counts_monotone_legacy_view" (withMaxSuccess 60 qc_counts_monotone_legacy_view)
@@ -245,7 +245,7 @@ qc_refill_leaves_no_holes seed =
             _ -> False
     in all cellOk [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
 
--- | 连锁：从带现成匹配的盘面开始，内置注册表下的连锁一定结束（2 秒内），结束后盘面上没有现成匹配，
+-- | 连锁：从带现成匹配的盘面开始，内置元素世界下的连锁一定结束（2 秒内），结束后盘面上没有现成匹配，
 -- 每一轮首尾相接。
 qc_cascade_terminates_stable :: Int -> Property
 qc_cascade_terminates_stable seed =
@@ -590,13 +590,13 @@ qc_goal_progress_bounded =
                all okState states && all okOutcome states
 
 --------------------------------------------------------------------------------
--- 元素注册表
+-- 元素元素世界
 
--- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在注册表的本体条目上、
+-- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在元素世界的本体条目上、
 -- 且那个种类的 fromCell 认这个（拆掉叠层后的）格子；最上层的叠层 / 冰层同样落在 peel 认这个格子的叠层条目上。
 -- 未注册的自定义名字解码成惰性占格（名字照旧），编码仍是原格。
-qc_registry_decode_roundtrip :: Property
-qc_registry_decode_roundtrip =
+qc_world_decode_roundtrip :: Property
+qc_world_decode_roundtrip =
   forAll genCell $ \cell ->
     let world = defaultWorld
         w = world
@@ -619,8 +619,8 @@ qc_registry_decode_roundtrip =
 
 -- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
 -- 8 种叠层各由一个叠层种类认领，冰层只有一个。
-qc_registry_names_slots_unique :: Property
-qc_registry_names_slots_unique =
+qc_world_names_cells_unique :: Property
+qc_world_names_cells_unique =
   let names = map defName builtinDefs
       world = defaultWorld
       bodyCells =
@@ -786,8 +786,8 @@ qc_name_newtypes_show_ord =
   where
     nameGen = oneof [elements ["bubble", "jelly", "nest", "a\"b", "中文", ""], arbitrary]
 
--- | 第 7 刀（7a）：Board 层的关卡级钩子（levelHooksWith 内置注册表 + 飞碟 / 传送门的元素值）与第 7 刀前的直接调用相同：
--- 补子后吸收 = stepUfos（吸走的格、移动后的飞碟），沉降传送 = portalTeleport（本体可穿门谓词取自注册表）。
+-- | 第 7 刀（7a）：Board 层的关卡级钩子（levelHooksWith 内置元素世界 + 飞碟 / 传送门的元素值）与第 7 刀前的直接调用相同：
+-- 补子后吸收 = stepUfos（吸走的格、移动后的飞碟），沉降传送 = portalTeleport（本体可穿门谓词取自元素世界）。
 qc_level_hooks_match_legacy :: Property
 qc_level_hooks_match_legacy =
   forAll genPlayBoard $ \b ->
@@ -1081,7 +1081,7 @@ qc_combo_table_symmetric =
          ]
 
 -- | 补子策略：缺省策略（defaultRefill、colorsRefill numColors、Gravity.refill）与旧 refill 逐字相同——
--- 盘面与推进后的生成器都相同（随机数消费顺序不变）；内置关卡级元素不换策略（activeRefill = 注册表的缺省）。
+-- 盘面与推进后的生成器都相同（随机数消费顺序不变）；内置关卡级元素不换策略（activeRefill = 元素世界的缺省）。
 qc_refill_policy_default_matches_legacy :: Int -> Property
 qc_refill_policy_default_matches_legacy seed =
   forAll genMBoard $ \mb ->

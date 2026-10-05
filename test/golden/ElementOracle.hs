@@ -272,6 +272,6 @@ ruleLines world =
 oracleLines :: [String]
 oracleLines = oracleLinesWith defaultWorld
 
--- | 同一套投影，换一张注册表（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
+-- | 同一套投影，换一张元素世界（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
 oracleLinesWith :: World -> [String]
 oracleLinesWith world = map (valueLine world) valueCells ++ nameLines world ++ placeLines world ++ ruleLines world

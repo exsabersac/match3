@@ -10,7 +10,7 @@ module Spec.Support.Inventory
 campaignLevelCount :: Int
 campaignLevelCount = 49
 
--- | 内置注册表条目数（'Match3.Element.Builtin.builtinDefs' 的长度）。
+-- | 内置元素世界条目数（'Match3.Element.Builtin.builtinDefs' 的长度）。
 builtinEntryCount :: Int
 builtinEntryCount = 36
 

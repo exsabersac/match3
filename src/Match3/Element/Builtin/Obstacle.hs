@@ -18,6 +18,7 @@ module Match3.Element.Builtin.Obstacle
   , HoneyE(..)
   , CakeE(..)
   , BalloonE(..)
+  , balloonPop
   , SafeE(..)
   , FlipE(..)
   , SurpriseEgg(..)
@@ -44,13 +45,13 @@ import Data.Proxy (Proxy(..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
-import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, deadRule, nField, pickBy, plainGem, posSeed)
+import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
 import Match3.Element.Ability
 import Match3.Element.Kind
 import Match3.Element.Types
 import Match3.Element.Rules (entityDamage)
 import Match3.Obstacles
-  ( chipAdjacentBalloonsExcept
+  ( balloonsAdjacentSameColor
   , openSurprises
   , orthoNeighbors
   )
@@ -192,7 +193,13 @@ instance Kind BalloonE where
     Balloon c -> Just (BalloonE c)
     _ -> Nothing
   place _ = colorPlace Balloon
-  boardPasses _ = [AdjacentPass 50 (deadRule chipAdjacentBalloonsExcept)]
+  boardPasses _ = [AdjacentPass 50 balloonPop]
+
+-- | 气球的邻格规则（逃生口而不是 'onNeighbourClear'：要看相邻真消除格**自己的颜色**，方法只看得到本格）：
+-- 与同色真消除宝石正交相邻、本轮没被直接命中的气球打破，并入清除格（盘面不变，由清除管线移走）；
+-- 打破的格按「消除格顺序、每格上 / 下 / 左 / 右」去重排列（通用驱动是后处理的在前，顺序不同，所以不走驱动）。
+balloonPop :: AdjCtx -> Board -> AdjOut
+balloonPop ctx b = AdjOut b [p | p <- balloonsAdjacentSameColor b (acTrue ctx), p `notElem` acDirect ctx] []
 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int

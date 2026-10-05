@@ -51,10 +51,10 @@ tests =
   , testCase "ec_state_lives_in_element_value" ec_state_lives_in_element_value
   , testCase "ec_mechanic_defaults_silent" ec_mechanic_defaults_silent
   , testCase "ec_flat_record_removed" ec_flat_record_removed
-  , testCase "ec_level_elements_by_message" ec_level_elements_by_message
-  , testCase "ec_level_element_stateful_extension" ec_level_element_stateful_extension
+  , testCase "ec_mechanics_by_beat" ec_mechanics_by_beat
+  , testCase "ec_mechanic_stateful_extension" ec_mechanic_stateful_extension
   , testCase "ec_custom_matchable_gem" ec_custom_matchable_gem
-  , testCase "ec_registry_checked_slots" ec_registry_checked_slots
+  , testCase "ec_world_checked_cells" ec_world_checked_cells
   ]
 
 -- | 快照里以给定前缀开头的行，两边逐行比；报告第一处分叉。
@@ -98,11 +98,11 @@ ec_some_element_eq_show = do
   assertEqual "gem defaults" (False, True, True, True, Destroy, True, True, False, True) (blocksSwap g, fires g, falls g, portal g, struck g, recolorable g, pushable g, keepOnShuffle g, hintable g)
   assertBool "rainbow not hintable" (not (hintable (SpecialGem @'Rainbow C1)))
   assertEqual "egg is an obstacle" (True, False, Nothing, True) (blocksSwap SurpriseEgg, fires SurpriseEgg, color SurpriseEgg, keepOnShuffle SurpriseEgg)
-  -- 注册表把格子解码成元素值
+  -- 元素世界把格子解码成元素值
   assertEqual "decode gem" (SomeElement (PlainGem C5)) (bodyOf defaultWorld (mkGem C5))
   assertEqual "decode iced line" (iceOn 2 (SomeElement (SpecialGem @'LineV C1))) (elementOf defaultWorld (Gem C1 LineV 2 Nothing))
 
--- | 冰层包在外面的元素值（与注册表解码出的形状相同）。
+-- | 冰层包在外面的元素值（与元素世界解码出的形状相同）。
 iceOn :: Int -> SomeElement -> SomeElement
 iceOn n e = SomeElement (Layered (Ice n) e)
 
@@ -162,7 +162,7 @@ ec_ice_layer_composes = do
     assertEqual ("world directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultWorld cell)
 
 -- | 测试专用「鸟窝」：状态（剩余命中数）放在元素值里；受击返回新的元素值，写回 Custom "nest" k；
--- 注册进注册表后，锤子每敲一次减一，最后一下才碎并计数。
+-- 注册进元素世界后，锤子每敲一次减一，最后一下才碎并计数。
 newtype Nest = Nest Int
   deriving (Eq, Show)
   deriving (Matchable, Movable) via (Obstacle Nest)
@@ -262,8 +262,8 @@ instance Mechanic Doubler where
   mechName _ = "doubler"
   avoidCells _ acc = Just (acc ++ acc)
 
-ec_level_elements_by_message :: Assertion
-ec_level_elements_by_message = do
+ec_mechanics_by_beat :: Assertion
+ec_mechanics_by_beat = do
   let world = registerMechanic (SomeMechanic Magnet) defaultWorld
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
@@ -297,8 +297,8 @@ instance Mechanic Siphon where
     | otherwise = Nothing
   mechStart _ _ = Siphon 2
 
-ec_level_element_stateful_extension :: Assertion
-ec_level_element_stateful_extension = do
+ec_mechanic_stateful_extension :: Assertion
+ec_mechanic_stateful_extension = do
   let world = registerMechanic (SomeMechanic (Siphon 0)) defaultWorld
       gs0 = newGameAtLevelWith world 0 defaultConfig 7
       charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
@@ -372,7 +372,7 @@ ec_custom_matchable_gem = do
   assertEqual "unregistered star is inert" Nothing (matchColorWith defaultWorld star)
   assertBool "unregistered: no match through it" (not (moveApplied oD) || namedCounts (gsCounts (fst (trySwap p1 p2 gs0))) == [])
 
--- | 注册表检查（元素类重构第 2 刀起由世界的解码探针推导）：mkWorldChecked 把重名 / 同一种格子被多个种类认领 /
+-- | 元素世界检查（元素类重构第 2 刀起由世界的解码探针推导）：mkWorldChecked 把重名 / 同一种格子被多个种类认领 /
 -- 种类不认领任何格子暴露成值，内置条目表通过检查；mkWorld 是总函数（空表也能解码，认不出的格子退回惰性占格）。
 newtype OtherGem = OtherGem Color
   deriving (Eq, Show)
@@ -406,13 +406,13 @@ instance Kind Stray where
   kindName _ = "stray"
   fromCell _ = Nothing
 
-ec_registry_checked_slots :: Assertion
-ec_registry_checked_slots = do
+ec_world_checked_cells :: Assertion
+ec_world_checked_cells = do
   let errsOf = either Just (const Nothing) . mkWorldChecked
   assertEqual "builtin defs pass the check" Nothing (errsOf builtinDefs)
   assertEqual "duplicate name" (Just [DuplicateName "dup"]) (errsOf [inertDef "dup", inertDef "dup"])
   assertEqual "shared cell" (Just [SharedCell "cell 0" ["gem", "other_gem"]]) (errsOf (builtinDefs ++ [kindDef @OtherGem]))
   assertEqual "unclaimed" (Just [Unclaimed "stray"]) (errsOf [kindDef @Stray])
-  -- 总函数：register 按名字替换仍可用；空注册表解码不崩
+  -- 总函数：register 按名字替换仍可用；空元素世界解码不崩
   assertEqual "empty world decodes to inert" "?" (elementName (mkWorld []) (mkGem C1))
   assertEqual "empty world: no upper layers" 0 (length (upperOf (mkWorld []) (mkIceGem C1 2)))

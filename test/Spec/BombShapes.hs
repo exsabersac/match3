@@ -75,7 +75,7 @@ bs_rule_order = do
   assertEqual "rule name" "l/t→bomb" (shapeName ltBombRule)
 
 -- | 两条三连交叉成 L 的局面（交换后）：第 41 关第一轮在交点留下炸弹；同一局面在第 1 关、
--- 以及去掉规则开关的注册表下，交点是空洞（内置表不认 L 形）。
+-- 以及去掉规则开关的元素世界下，交点是空洞（内置表不认 L 形）。
 bs_l_shape_bomb_on_level41 :: Assertion
 bs_l_shape_bomb_on_level41 = do
   let lBoard = setCells stableBoard [((3, 1), mkGem C1), ((3, 2), mkGem C1), ((4, 3), mkGem C1), ((5, 3), mkGem C1), ((2, 3), mkGem C1), ((3, 3), mkGem C3)]

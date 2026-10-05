@@ -2,10 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 扩展钩子（段 2c）：按元素名计数的目标 GoalNamed、地面层元素槽、方向可配的边缘收集、
--- 步末之后的补结算、自定义注册表下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
+-- 步末之后的补结算、自定义元素世界下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
 -- **只定义在测试里**，主流程源码里没有它们的名字；这组测试证明双层果冻、气泡这类元素今后
--- 可以只靠注册表 + 白名单钩子接入。第 8 刀：扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、
--- 一种补子策略（关卡级元素换成掉金币 / 关卡颜色数），都只改注册表的规则表或加一个关卡级元素，主流程不用改。
+-- 可以只靠元素世界 + 白名单钩子接入。第 8 刀：扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、
+-- 一种补子策略（关卡级元素换成掉金币 / 关卡颜色数），都只改元素世界的规则表或加一个关卡级元素，主流程不用改。
 module Spec.Extension
   ( tests
   ) where
@@ -48,7 +48,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "ext_board_modules_take_registry" ext_board_modules_take_registry
+  [ testCase "ext_board_modules_take_world" ext_board_modules_take_world
   , testCase "ext_goal_named_counts_crate" ext_goal_named_counts_crate
   , testCase "ext_ground_layer_test_element" ext_ground_layer_test_element
   , testCase "ext_edge_drain_side_collectible" ext_edge_drain_side_collectible
@@ -66,10 +66,10 @@ tests =
 
 -- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
 
--- | 通用层之下的 Board.*（除了按内置注册表包一层的 Board.Default）不再直接依赖内置注册表（全程收 world）：
+-- | 通用层之下的 Board.*（除了按内置元素世界包一层的 Board.Default）不再直接依赖内置元素世界（全程收 world）：
 -- 不 import Element.Builtin*，代码里（去掉注释与字符串）不用 defaultWorld。
-ext_board_modules_take_registry :: Assertion
-ext_board_modules_take_registry = do
+ext_board_modules_take_world :: Assertion
+ext_board_modules_take_world = do
   files <- filter (/= "src/Match3/Board/Default.hs") <$> sourcesUnder "src/Match3/Board"
   assertBool "scanned Board core" (all (`elem` files) ["src/Match3/Board/" ++ m ++ ".hs" | m <- ["Cascade", "Clear", "Gravity", "Match"]])
   srcs <- mapM readFile files
@@ -223,7 +223,7 @@ ext_post_end_settle_hole_element = do
   assertBool "default world: no settle-only wave" (all (not . null . cwCleared) (mtWaves mtD))
 
 -- | 手动洗牌走 match3GameWith customReg 的 Shuffle 动作：木箱原样保留；「浮尘」（keepOnShuffle = False 的障碍）
--- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的注册表，不再退回内置表。
+-- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的元素世界，不再退回内置表。
 newtype Dust = Dust Int
   deriving (Eq, Show)
   deriving (Matchable, Hittable) via (Obstacle Dust)
@@ -329,7 +329,7 @@ ltBombRule = ShapeRule "l/t→bomb" spawn
 lBoard :: Board
 lBoard = setCells stableBoard [((3, 1), mkGem C1), ((3, 2), mkGem C1), ((4, 3), mkGem C1), ((5, 3), mkGem C1), ((2, 3), mkGem C1), ((3, 3), mkGem C3)]
 
--- | 形状规则表扩展：把 L / T 规则插到内置表最前面（优先于直线规则），注册表之外什么都不改——
+-- | 形状规则表扩展：把 L / T 规则插到内置表最前面（优先于直线规则），元素世界之外什么都不改——
 -- 同一局面在内置表下不生成特殊块（两条三连），扩展后交点生成炸弹；走正式的交换流程（resolveSwapWith）也一样。
 ext_shape_rule_lt_bomb :: Assertion
 ext_shape_rule_lt_bomb = do
@@ -362,7 +362,7 @@ lineGemRule = ComboRule "line×gem" isLineCell isNormalCell (\b l _ -> Combos.fu
       Gem _ Normal _ _ -> True
       _ -> False
 
--- | 组合表扩展：往内置组合表末尾加一条「直线 × 普通宝石」，注册表之外什么都不改——内置表下这一步不成三消、
+-- | 组合表扩展：往内置组合表末尾加一条「直线 × 普通宝石」，元素世界之外什么都不改——内置表下这一步不成三消、
 -- 被拒；扩展后按组合起手（两个方向都成立），第一轮清掉直线端所在的整行整列。
 ext_combo_rule_line_gem :: Assertion
 ext_combo_rule_line_gem = do
@@ -389,7 +389,7 @@ instance Mechanic CoinRain where
   refillPolicy _ _ = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)))
 
 -- | 补子策略扩展（关卡级元素）：注册 CoinRain 之后，交换出的 4 连（横消落在交换点 (1,2)）挖出的 3 个洞补成金币，
--- 金币无色不再连锁；其余什么都不改。注册表缺省策略下同一步不出金币。
+-- 金币无色不再连锁；其余什么都不改。元素世界缺省策略下同一步不出金币。
 ext_refill_policy_level_element :: Assertion
 ext_refill_policy_level_element = do
   let world = registerMechanic (SomeMechanic CoinRain) (register (inertDef "coin") defaultWorld)
@@ -402,7 +402,7 @@ ext_refill_policy_level_element = do
   assertEqual "three coins refilled at the top (the line_h sits at (1,2))" [(0, 0), (0, 1), (0, 3)] (sort (customsOn "coin" (gsBoard gs1)))
   assertEqual "default policy: no coins" [] (customsOn "coin" (gsBoard gsD))
 
--- | 补子策略扩展（关卡颜色数）：注册表换成只用 3 色的策略（colorsRefill 3），沉降补子只补 C1..C3；
+-- | 补子策略扩展（关卡颜色数）：元素世界换成只用 3 色的策略（colorsRefill 3），沉降补子只补 C1..C3；
 -- 同一盘面在缺省策略下会出现别的颜色。
 ext_refill_policy_level_colors :: Assertion
 ext_refill_policy_level_colors = do
@@ -415,7 +415,7 @@ ext_refill_policy_level_colors = do
   assertEqual "default: all five" [C1, C2, C3, C4, C5] (colorsOf defaultWorld)
 
 -- | 胜负节拍（judge）：测试专用「限时」关卡级元素在剩余步数 ≤ 3 时把未结束的一步判成输（Lost 总分）；
--- 只 registerMechanic 即可接入，主流程不改。内置注册表下同一步照常 MoveApplied；步数充足时限时元素不改结局。
+-- 只 registerMechanic 即可接入，主流程不改。内置元素世界下同一步照常 MoveApplied；步数充足时限时元素不改结局。
 data TimeLimit = TimeLimit
   deriving (Eq, Show)
 
@@ -450,7 +450,7 @@ judge_default_no_replier =
 
 
 -- | 测试专用灯笼（Custom "lantern" k）：显示附加字段、目标中文名与失败提示都只写在元素的 caps 里
--- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与注册表的 displayLabelWith / loseHintWith 直接取到，
+-- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与元素世界的 displayLabelWith / loseHintWith 直接取到，
 -- 主流程与前端不用改；没注册时什么都没有。
 newtype Lantern = Lantern Int
   deriving (Eq, Show)

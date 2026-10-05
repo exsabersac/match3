@@ -3,7 +3,7 @@
 -- 特效（直线 / 炸弹）在这一格上引爆时爆炸范围向外扩一圈（原范围各格的八邻格并进来：直线一行 → 三行，
 -- 炸弹 3×3 → 5×5），扩出来的格与原范围一样算直接命中。只看引爆格；彩虹取色、特效 × 特效组合给的清除种子不扩
 -- （种子里的特效照常按各自的引爆格判断）。
--- 实现是通用钩子：能力 widens（StepCaps.stWiden）→ 每步 levelWorldIn 把地面层的扩爆格写进注册表
+-- 实现是通用钩子：能力 widens（StepCaps.stWiden）→ 每步 levelWorldIn 把地面层的扩爆格写进元素世界
 -- （本步上下文 StepCtx 的 stepWiden，缺省空）→ blastWith 按引爆格改写范围。第 48 关「魔法格」用到它（底行 8 块三层碎石）。
 module Spec.MagicGround
   ( tests
@@ -42,7 +42,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "mg_caps_ground_not_consumed" mg_caps_ground_not_consumed
+  [ testCase "mg_ability_ground_not_consumed" mg_ability_ground_not_consumed
   , testCase "mg_widen_one_ring" mg_widen_one_ring
   , testCase "mg_blast_widened_only_at_magic_cell" mg_blast_widened_only_at_magic_cell
   , testCase "mg_swap_and_hammer_reach_bottom_row" mg_swap_and_hammer_reach_bottom_row
@@ -60,7 +60,7 @@ mgLevel = 47
 mgCells :: [Pos]
 mgCells = [(6, 2), (6, 5), (5, 3), (5, 4)]
 
--- | 去掉魔法地格条目的注册表（地面层里的 "magic" 查不到条目 → 没有扩爆格）。
+-- | 去掉魔法地格条目的元素世界（地面层里的 "magic" 查不到条目 → 没有扩爆格）。
 noMg :: World
 noMg = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
   foldl (flip registerMechanic) (mkWorld (filter ((/= "magic") . defName) builtinDefs)) builtinMechanics
@@ -87,8 +87,8 @@ blastCells pd = [map snd (evCells e) | e <- pdEvents pd, evKind e == EvBlast]
 
 -- | 能力：带扩爆规则；没有地面反应（上方消除不去层、不计数），
 -- 果冻没有扩爆规则。实战里地面层始终是开局的 4 格、计数里没有 magic。
-mg_caps_ground_not_consumed :: Assertion
-mg_caps_ground_not_consumed = do
+mg_ability_ground_not_consumed :: Assertion
+mg_ability_ground_not_consumed = do
   assertEqual "name" "magic" magicGroundName
   assertEqual "ground name" magicGroundName (groundName (Proxy :: Proxy MagicGround))
   let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
@@ -118,8 +118,8 @@ mg_widen_one_ring = do
   assertEqual "corner clipped" [(0, 0), (0, 1), (1, 0), (1, 1)] (magicWiden b8 [(0, 0)])
   assertEqual "empty stays empty" [] (magicWiden b8 [])
 
--- | 第 48 关的注册表：本步扩爆格 = 4 格魔法地格；直线 / 炸弹只在引爆格是魔法地格时扩（别的格原样），
--- 缺省注册表不扩；非特效没有爆炸。
+-- | 第 48 关的元素世界：本步扩爆格 = 4 格魔法地格；直线 / 炸弹只在引爆格是魔法地格时扩（别的格原样），
+-- 缺省元素世界不扩；非特效没有爆炸。
 mg_blast_widened_only_at_magic_cell :: Assertion
 mg_blast_widened_only_at_magic_cell = do
   let gs = levelGame mgLevel 1
@@ -156,7 +156,7 @@ mg_swap_and_hammer_reach_bottom_row = do
   assertEqual "hammer vline at (6,2)" (chipped [1 .. 3]) (hammer defaultWorld (6, 2) LineV)
   assertEqual "hammer vline at (6,2), no entry" (chipped [2]) (hammer noMg (6, 2) LineV)
 
--- | 成对交换规则（彩虹取色、特效 × 特效组合）给出的清除种子不扩（与缺省注册表逐项相同）；
+-- | 成对交换规则（彩虹取色、特效 × 特效组合）给出的清除种子不扩（与缺省元素世界逐项相同）；
 -- 但种子里的特效照常逐个引爆、只看各自的引爆格：
 -- * 彩虹 × 宝石（盘上没有别的特效）：与去掉魔法条目时逐项相同；
 -- * 直线 × 直线：交换后 (6,2)（魔法地格）上的竖直线扩成 1–3 列（24 格），(6,3) 上的横直线仍是一行（8 格）；
@@ -190,7 +190,7 @@ mg_default_no_widening = do
     (\(y, m, d) -> assertEqual ("daily " ++ show (y, m, d)) [] (widenedCells (levelWorldIn defaultWorld (gsLevelElems (newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d)))))))
     [(2026, 9, 28), (2026, 9, 29), (2026, 9, 30)]
 
--- | 去掉魔法地格条目的注册表：前 47 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、gsGen 逐项相同
+-- | 去掉魔法地格条目的元素世界：前 47 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、gsGen 逐项相同
 -- （扩爆钩子缺省什么都不做，也不耗随机数）；原有关卡的地面层里没有 magic。
 mg_other_levels_unchanged :: Assertion
 mg_other_levels_unchanged = do

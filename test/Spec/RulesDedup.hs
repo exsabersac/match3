@@ -160,7 +160,7 @@ qc_run_end_rules_is_fold =
 -- 阶段智能构造器
 
 -- | tickRule / spreadRule / moveRule：阶段、次序、执行函数原样；只有 tickRule 带种子；空洞恒为 []。
--- 内置注册表里的步末规则（全部改用智能构造器）在各阶段的 erHoles 都是 []，PhaseSpread / PhaseMove 的 erSeeds 也是 []。
+-- 内置元素世界里的步末规则（全部改用智能构造器）在各阶段的 erHoles 都是 []，PhaseSpread / PhaseMove 的 erSeeds 也是 []。
 end_rule_smart_constructors :: Assertion
 end_rule_smart_constructors = do
   let b = boardFromRows (replicate 4 (replicate 4 (Stone 1)))

@@ -29,7 +29,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "ms_caps_fixed_immune_colorless" ms_caps_fixed_immune_colorless
+  [ testCase "ms_ability_fixed_immune_colorless" ms_ability_fixed_immune_colorless
   , testCase "ms_charges_once_per_round" ms_charges_once_per_round
   , testCase "ms_fires_row_and_col_at_step_end" ms_fires_row_and_col_at_step_end
   , testCase "ms_not_full_does_not_fire" ms_not_full_does_not_fire
@@ -50,8 +50,8 @@ stateAt b p = case getCell b p of
   _ -> Nothing
 
 -- | 能力：固定（不下落）、挡交换、无色、洗牌保留；平时打不动，发射中被命中归零。
-ms_caps_fixed_immune_colorless :: Assertion
-ms_caps_fixed_immune_colorless = do
+ms_ability_fixed_immune_colorless :: Assertion
+ms_ability_fixed_immune_colorless = do
   let world = defaultWorld
   assertEqual "full = 3, firing = 4" (3, 4) (magicStoneFull, magicStoneFiring)
   mapM_

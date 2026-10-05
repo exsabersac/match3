@@ -49,7 +49,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "sb_caps_fixed_blocker" sb_caps_fixed_blocker
+  [ testCase "sb_ability_fixed_blocker" sb_ability_fixed_blocker
   , testCase "sb_placement_and_weight" sb_placement_and_weight
   , testCase "sb_adjacent_and_direct_damage" sb_adjacent_and_direct_damage
   , testCase "sb_hammer_and_defeat_wins" sb_hammer_and_defeat_wins
@@ -84,8 +84,8 @@ hpOf :: Board -> [Int]
 hpOf b = [sbHp s | (_, s) <- snowBosses b]
 
 -- | 能力：固定（挡交换、不下落）、无色、洗牌保留；直接命中原样吃掉（不免疫，锤子可打）；左上格按血量加权计差。
-sb_caps_fixed_blocker :: Assertion
-sb_caps_fixed_blocker = do
+sb_ability_fixed_blocker :: Assertion
+sb_ability_fixed_blocker = do
   let world = defaultWorld
   mapM_
     ( \q -> do
@@ -205,7 +205,7 @@ sb_step_end_summons_snow = do
   assertEqual "no candidate" Nothing (snowBossSpawn [] [] full anchor)
   assertEqual "avoid / walls respected" Nothing (snowBossSpawn (take 4 ring) (drop 4 ring) (bossBoard 9) anchor)
 
--- | 去掉雪怪条目的注册表：前 44 关按提示各走 6 步，盘面、分数、计数与随机种子逐一相同；原有关卡开局没有 Boss。
+-- | 去掉雪怪条目的元素世界：前 44 关按提示各走 6 步，盘面、分数、计数与随机种子逐一相同；原有关卡开局没有 Boss。
 sb_other_levels_unchanged :: Assertion
 sb_other_levels_unchanged = do
   let noBoss :: World

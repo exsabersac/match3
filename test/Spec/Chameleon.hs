@@ -51,7 +51,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "ch_caps_piece_by_current_color" ch_caps_piece_by_current_color
+  [ testCase "ch_ability_piece_by_current_color" ch_ability_piece_by_current_color
   , testCase "ch_matches_by_current_color" ch_matches_by_current_color
   , testCase "ch_shift_fixed_order_skips_instant_runs" ch_shift_fixed_order_skips_instant_runs
   , testCase "ch_step_end_shift_swap_only" ch_step_end_shift_swap_only
@@ -76,8 +76,8 @@ stoneBoard = boardFromRows (replicate boardSize (replicate boardSize (Stone 1)))
 
 -- | 能力：可交换、会下落、按当前颜色（CustomState = 颜色下标）上色、进提示、命中即消、洗牌保留、不可改色、
 -- 消除计 CountNamed "chameleon"；放置取原格宝石颜色（或 AColor 指定），原格不是宝石时不放。
-ch_caps_piece_by_current_color :: Assertion
-ch_caps_piece_by_current_color = do
+ch_ability_piece_by_current_color :: Assertion
+ch_ability_piece_by_current_color = do
   let world = defaultWorld
   mapM_ (\c -> assertEqual ("color " ++ show c) (Just c) (colorOfWith world (cham c))) allColors
   assertEqual "state = colour index" (Custom "chameleon" (CustomState 2)) (cham C3)
@@ -190,7 +190,7 @@ ch_drop_port_counts_any_color = do
   assertEqual "two of other colours: no drop" (base mb1) (fill mb1)
   assertEqual "sanity: two chameleons" 2 (length [() | Just (Custom "chameleon" _) <- toList mb1])
 
--- | 去掉变色龙条目的注册表：前 46 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、gsGen 逐项相同
+-- | 去掉变色龙条目的元素世界：前 46 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、gsGen 逐项相同
 -- （变色龙规则在没有变色龙的盘面上不做任何事，也不耗随机数）；原有关卡开局没有变色龙。
 ch_other_levels_unchanged :: Assertion
 ch_other_levels_unchanged = do

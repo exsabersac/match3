@@ -2,7 +2,7 @@
 --
 -- * 匹配扫描（先算整盘匹配码 unboxed UArray，再在码上扫）与提示搜索（STUArray 上就地换过去查再换回来）：
 --   findMatchRunsWith / hasAnyMatchWith / findHintWith 在全部关卡开局盘及其每一种相邻交换、沿提示走 12 手途经的盘面
---   （按关接上本关注册表）上的结果写死成指纹；匹配码与 matchColorWith 逐格一致；
+--   （按关接上本关元素世界）上的结果写死成指纹；匹配码与 matchColorWith 逐格一致；
 -- * 重力（STArray 上逐段双指针压实）：全部关卡开局盘按若干图案挖空（含不下落的固定格）后的结果写死成指纹；
 --   （两个指纹生成时与删除前的逐格查注册表写法 / 列表版重力副本逐盘核对过）
 -- * 并行批量求值（Spec.Support.Parallel，STM 领任务 + 每任务一个结果槽）与串行 map 逐项相同、顺序不变，
@@ -96,7 +96,7 @@ perf_match_scan_pinned = do
 pinnedScan :: (Int, String)
 pinnedScan = (18137, "b1ca0608fe66790c")
 
--- | 重力用例：49 关 × 2 种子 × 6 种挖空图案（按关接上本关注册表）。
+-- | 重力用例：49 关 × 2 种子 × 6 种挖空图案（按关接上本关元素世界）。
 gravityCases :: [(String, World, MBoard)]
 gravityCases =
         [ (concat ["L", show li, " s", show seed, " hole ", show k], world, holed)

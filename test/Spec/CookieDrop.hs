@@ -58,7 +58,7 @@ cookiesOn b = [p | p <- allPos, getCell b p == Cookie]
 cookiesM :: MBoard -> Int
 cookiesM mb = length (filter (== Just Cookie) (toList mb))
 
--- | 按提示走 n 步（注册表 world），记下每步之后的状态。
+-- | 按提示走 n 步（元素世界 world），记下每步之后的状态。
 hintPlay :: World -> GameState -> Int -> [GameState]
 hintPlay world gs n
   | n <= 0 || gsOver gs /= Nothing = []
@@ -150,7 +150,7 @@ cd_level46_start_no_goal_decor = do
         assertBool ("level " ++ show (li + 1) ++ " still topped up to its goal") (length (cookiesOn (gsBoard gs)) >= goalTarget (gsGoal gs))
     )
     [21, 22]
-  -- 掉落口开局与注册表无关：去掉 cookie_drop 条目开局相同（只是之后不再掉）
+  -- 掉落口开局与元素世界无关：去掉 cookie_drop 条目开局相同（只是之后不再掉）
   let off = removeMechanic "cookie_drop" defaultWorld
       l46 = levelAt dropLevel
   assertEqual "start board independent of the entry" (gsBoard (levelGame dropLevel 2)) (gsBoard (newGameAtLevelWith off dropLevel (levelConfig l46) 2))
@@ -182,7 +182,7 @@ cd_drops_and_collects_in_play = do
   assertBool "without the entry: never more than the starting 4" (all (\g -> length (cookiesOn (gsBoard g)) + gsCount CountCookies g <= 4) noDrop)
   assertEqual "counts via drains" (gsCount CountCookies (last (levelGame dropLevel 1 : greedyPlay (levelGame dropLevel 1)))) (countOf CountCookies (gsCounts (last (levelGame dropLevel 1 : greedyPlay (levelGame dropLevel 1)))))
 
--- | 去掉 cookie_drop 条目的注册表：前 45 关与每日挑战按提示各走 6 步，盘面、分数、计数、步数、gsGen 逐关相同。
+-- | 去掉 cookie_drop 条目的元素世界：前 45 关与每日挑战按提示各走 6 步，盘面、分数、计数、步数、gsGen 逐关相同。
 cd_other_levels_unchanged :: Assertion
 cd_other_levels_unchanged = do
   let off = removeMechanic "cookie_drop" defaultWorld

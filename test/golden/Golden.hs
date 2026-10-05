@@ -513,12 +513,12 @@ h6Dead =
       stripes = boardFromRows [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. boardSize - 1]] | r <- [0 .. boardSize - 1]]
   in base {gsBoard = setCell stripes (3, 3) (Stone 2)}
 
--- | H6 用的自定义注册表：内置表 + 一个测试专用的惰性元素（不在盘面上）。
--- 经 match3GameWith 的洗牌 / 交换动作走注册表路径，结果必须与内置表逐字相同。
+-- | H6 用的自定义元素世界：内置表 + 一个测试专用的惰性元素（不在盘面上）。
+-- 经 match3GameWith 的洗牌 / 交换动作走元素世界路径，结果必须与内置表逐字相同。
 h6Reg :: World
 h6Reg = register (inertDef "golden_probe") defaultWorld
 
--- | H6：洗牌 + 自定义注册表。每步先手动洗牌（Shuffle 动作），再按固定公式挑一手成交的交换；
+-- | H6：洗牌 + 自定义元素世界。每步先手动洗牌（Shuffle 动作），再按固定公式挑一手成交的交换；
 -- 最后记死局的自动洗牌与手动洗牌。
 h6Lines :: [String]
 h6Lines =

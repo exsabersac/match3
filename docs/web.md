@@ -7,12 +7,13 @@
 
 用 GHC 9.14 的 wasm 后端把**纯规则核心**（`src/Engine/*` + `src/Match3/*`）和**动画状态机**（`app/pure/ComboFx.hs`，帧数读同目录的表现表 `UI/Presentation.hs`）
 编成一个 `.wasm`，浏览器里的 JS 只做三件事：**加载、画、收输入**。规则判定、连锁时间轴、帧数都在 Haskell 里算，
-所以同关卡同种子，网页版与桌面版的每一步结果、每一帧动画相位都逐字节一致（有测试守着，见 §7）。
+所以同关卡同种子，网页版（wasm）与原生 GHC 编出的同一份核心的每一步结果、每一帧动画相位都逐字节一致（有测试守着，见 §7）。
 
 核心源码一行未改：`web/match3-web.cabal` 直接用 `hs-source-dirs: hs ../src ../app/pure` 引用仓库里的模块。
 
-**定位（2026-10-04 起）**：网页是唯一前端。SDL2 桌面版将来放弃，PC 端像安卓一样给网页套一层壳（壳尚未做）。
-桌面版的功能已全部迁到网页（`feat/web-sdl-parity`，对照表见 §2.6），桌面代码暂时保留未删。
+**定位**：网页是**唯一前端**。PC 端以后像安卓一样给网页套一层壳（壳尚未做）。
+SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表见 §2.6），随后桌面代码（`match3-sdl`、`app/Main.hs` / `app/Shell` / `app/UI` / `app/Art.hs`）于 `refactor/web-only` 移除。
+本文里「同（原）桌面版 X」「与原桌面版相同」之类的说法指已删的 SDL2 实现，作为行为出处保留，可在 `refactor/web-only` 之前的历史里查到。
 
 ## 2. 结构
 
@@ -23,22 +24,22 @@
 │ main.js ── 加载 wasm + 图集，rAF 固定步长（60 fps），输入，交换 / 连锁流程 │
 │   ├─ layout.js  自适应布局：竖排 / 横排，安全区，CSS↔设计单位变换，命中检测 │
 │   ├─ render.js  盘面与动画（交换、逐轮消除下落、步末效果、粒子、浮字、震屏） │
-│   │    └─ cells.js  桌面 UI.CellTable 的 JS 移植：每种格子怎么画          │
+│   │    └─ cells.js  每种格子怎么画（移植自原桌面 UI.CellTable）          │
 │   │         └─ art.js  图集绘制：普通 / 着色 / 叠加 / 旋转 / 九宫格        │
 │   ├─ hud.js     HUD 面板、目标进度、按钮、结局遮罩、横幅 / 按键条           │
-│   └─ panels.js  全屏浮层：暂停按键说明、选关地图（迁自桌面 HudArt / LevelMap）│
+│   └─ panels.js  全屏浮层：菜单、暂停按键说明、选关地图（迁自原桌面版）     │
 │        │  JSON 字符串（同步 JSFFI 调用）                                   │
 │        ▼                                                               │
 │ match3-web.wasm（WASI reactor + ghc_wasm_jsffi.js 胶水 + WASI 垫片）      │
 │   WebMain.hs    JSFFI 导出；当前局面、动画播放器放在 IORef（一页一局）      │
-│   Match3Web/Api.hs   gameStep match3Shell → JSON（与桌面外壳同一条路径）   │
+│   Match3Web/Api.hs   gameStep match3Shell → JSON（前端只走通用接口）       │
 │   Match3Web/Anim.hs  Played → ComboFx 播放器 → 逐帧 JSON                  │
 │   Match3Web/Json.hs  极简 JSON（只输出整数，保证原生 / wasm 输出一致）      │
 │   ── 核心：Engine.* / Match3.*（纯）  ComboFx（纯阶段机）                  │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-依赖方向与桌面版相同：接口层只依赖核心和 `ComboFx`，不依赖 SDL。`Api.hs` / `Anim.hs` 没有 JSFFI，
+依赖方向：接口层只依赖核心和 `app/pure`（`ComboFx` 等纯模块）。`Api.hs` / `Anim.hs` 没有 JSFFI，
 原生 GHC 也能编，这是原生 / wasm 对比测试的基础。
 
 ### 2.0 元素框架在 wasm 里
@@ -60,7 +61,7 @@
   变成 `Match3.Core` 导出的同名派生读数，源码与 JSON 都不用改；
 - 第 7b 刀起步末效果 `EndEffect` 是通用形状（事件类型 + 元素名 + 逐项 `EndItem`），`Api.hs` 的 `encodeEndEffect` 改为按
   事件类型编码（`tick` / `belt` / `spread` / `snail` 四种输出与之前逐字节相同；其余事件类型编码为 `{type, kind, pairs}`）；
-- 第 11 刀起 `encodeState` / `encodeGoal` / `apiLevels` / `encodeCell` 全部读视图模型 `Match3.View`（`gameView` / `GoalInfo` / `BoardView` / `levelViews` / `cellFace`，与桌面 HUD、标题同一份读数），`Api.hs` 不再从 `GameState` 现算（测试 `frontends_read_view_model` 扫描）；字段与顺序逐字搬迁，JSON 逐字节不变（`make check` 22 组一致）；
+- 第 11 刀起 `encodeState` / `encodeGoal` / `apiLevels` / `encodeCell` 全部读视图模型 `Match3.View`（`gameView` / `GoalInfo` / `BoardView` / `levelViews` / `cellFace`，与原桌面版 HUD、标题同一份读数），`Api.hs` 不再从 `GameState` 现算（测试 `frontends_read_view_model` 扫描）；字段与顺序逐字搬迁，JSON 逐字节不变（`make check` 22 组一致）；
 - 因此 JSON 形状、`cells.js`（CellTable 移植）的映射都不用改。合入前后 22 组一致性输出（原生与 wasm 各一份）逐字节相同，
   说明规则行为与编码都没变。新增元素时：元素框架里注册即可生效，网页端只在它引入新的 `Cell` 构造器或新贴图时才要改
   `Match3.View.cellFace` 与 `cells.js`。
@@ -81,92 +82,91 @@
 | `m3Hammer(r,c)` / `m3Cross(r,c)` / `m3FreeSwap(r1,c1,r2,c2)` | 三种道具（`gameStep` 的 `Hammer` / `CrossClear` / `FreeSwap`）：形状同 `m3Swap`，另带 `keepTool`（`UI.MoveText.keepsTool`：自由交换换不掉时留在点选模式） |
 | `m3Shuffle()` | 手动洗牌（`Act Shuffle`，终局后被拒）：形状同 `m3Swap` |
 | `m3Daily(年,月,日)` | 开每日挑战（`Setup Daily`，种子由日期决定） |
-| `m3Restart(开局步数, 种子)` | 重开本关（同桌面 `restartSame`：每日挑战按开局步数与原目标重开，战役关 `restartLevel`） |
-| `m3Advance(开局步数, 种子)` | 结局后前进（同桌面 `advanceOrMsg`）：过关 → `nextLevel`（带入剩余步数，最多 3）、通关 → 第 1 关、失败 → 重开；`{accepted, startMoves, state}` |
-| `m3Showcase()` | 元素展示盘（`UI.Showcase.showcaseState`，桌面 `MATCH3_SHOWCASE`） |
+| `m3Restart(开局步数, 种子)` | 重开本关（同原桌面版 `restartSame`：每日挑战按开局步数与原目标重开，战役关 `restartLevel`） |
+| `m3Advance(开局步数, 种子)` | 结局后前进（同原桌面版 `advanceOrMsg`）：过关 → `nextLevel`（带入剩余步数，最多 3）、通关 → 第 1 关、失败 → 重开；`{accepted, startMoves, state}` |
+| `m3Showcase()` | 元素展示盘（`UI.Showcase.showcaseState`，原桌面版 `MATCH3_SHOWCASE`） |
 | `m3Progress(已解锁, 开局步数)` | 只读：`{reached, stars, dots}`（`unlockAfterOutcome` / `starRating` / `levelDots`；进度由网页存 localStorage） |
 | `m3MapJump(已解锁, 关卡)` | 只读：地图点选 `{jump}`（`mapClickJump`；`null` = 当前关或未解锁） |
 | `m3Badge(回放中, 连击, 显示分, 总结剩余帧, 最高连击)` | 只读：分数徽章 `{kind, n, shuffled}`（`Match3.View.scoreBadge`） |
 
 `state` 包含分数、步数、目标、结局、提示、`daily`（每日挑战局）、`title`（`Match3.View.titleLine`，网页写进 `document.title`）、
 道具次数 `boosters {hammer, swap, cross}`（`gvBoosters`）、规则开关角标 `rules`（视图模型 `gvRules` → `Match3.View.ruleBadge`，HUD 在关卡面板里通用地画，
-与桌面同一张表）、地面层（果冻）、关卡级元素（皮带、传送门、飞碟、地毯）和结构化盘面（每格 `{"t":种类,…,"s":show 文本}`）。字段细节见 `web/README.md` §5。
+与原桌面版同一张表）、地面层（果冻）、关卡级元素（皮带、传送门、飞碟、地毯）和结构化盘面（每格 `{"t":种类,…,"s":show 文本}`）。字段细节见 `web/README.md` §5。
 
 ### 2.2 ComboFx 在 wasm 里
 
-桌面版的连锁回放由 `ComboFx.cascadeStages`（高亮 → 消失 → 下落 → 落定，再加步末：倒计时 / 皮带 / 蔓延 / 蜗牛 / 洗牌）
-和 `Engine.Playback.Player`（帧号、加速）驱动。网页版把这两块原样编进 wasm：
+连锁回放由 `ComboFx.cascadeStages`（高亮 → 消失 → 下落 → 落定，再加步末：倒计时 / 皮带 / 蔓延 / 蜗牛 / 洗牌）
+和 `Engine.Playback.Player`（帧号、加速）驱动，这两块原样编进 wasm（原 SDL2 桌面版直接调同一份）：
 
-- `m3AnimStart` 按与桌面 `withMovePlayback` 相同的条件建播放器，一次性返回本步的**盘面编号表**
+- `m3AnimStart` 按与原桌面版 `withMovePlayback` 相同的条件建播放器（`MoveFx` 为空不播），一次性返回本步的**盘面编号表**
   （`[start] ++ 每轮 [before, after] ++ 每个步末 [before, after] ++ [final, state.board]`）和下落表；
 - 之后每帧 `m3AnimTick` 只返回编号和几个整数（≤ 约 140 B），JS 按相位插值绘制；
-- 加速（点击 / 空格）就是 `m3AnimTick(1)`，与桌面同一套加速规则。
+- 加速（点击 / 空格）就是 `m3AnimTick(1)`，走 `Engine.Playback.acceleratePlayer`。
 
-好处：动画节奏不需要在 JS 里再写一遍，也不会与桌面版漂移。代价：每帧一次 JSFFI 调用，实测约 0.14 ms（node）/ 0.3 ms（Chrome），可以忽略。
+好处：动画节奏不需要在 JS 里再写一遍，也不会与原生 `AnimParity.hs` 漂移。代价：每帧一次 JSFFI 调用，实测约 0.14 ms（node）/ 0.3 ms（Chrome），可以忽略。
 
 ### 2.3 JS 渲染器
 
 - Canvas 2D，`requestAnimationFrame` + 固定步长累加器（60 fps 逻辑帧，渲染帧率随显示器）；
 - 流程：`doSwap` → 交换补间（不能消时换过去再换回）→ `m3AnimStart` → 每帧 `m3AnimTick` → 播完（必要时补一段轻落，如自动洗牌）→ 刷新 HUD；
-- 播放期间锁输入（与桌面 `animBusy` 一致），按钮 / 撤销在播完后可用；
+- 播放期间锁输入（`busy`；规则同原桌面版 `animBusy`），按钮 / 撤销在播完后可用；
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
 - `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
 - **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成（元素类重构第 6 刀起由元素的 `Renders.faceBase` 给出类型标签与基本字段，缺省时），`Custom` 元素统一是
   `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素的 `Renders.face`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
-  - **不用改**：单格、不带颜色、桌面版也没有专门画法（`UI.CellTable.customTable` 里没有它）的 `Custom`——桌面画「贴图名 = 元素名 + 层数角标」，
-    网页 `CELL_ART.custom` 的通用画法一样；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 只跳过文字图
+  - **不用改**：单格、不带颜色、没有专门画法的 `Custom`——网页 `CELL_ART.custom` 的通用画法画「贴图名 = 元素名 + 层数角标」；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 只跳过文字图
     `g_*` / `zh_*` 与 `@` 变体；关名文字图 `name_*` 要收）。降级色缺省是灰色。
-  - **要改**：① 新的 `Cell` 构造器（同时给它的元素写 `Renders.faceBase`）；② 桌面在 `customTable` 有专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
-    在 `CUSTOM_ART` / `primarySprite` 补同样的画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 `Renders.face` 里给出字段（`Api` 不用改）、
+  - **要改**：① 新的 `Cell` 构造器（同时给它的元素写 `Renders.faceBase`）；② 要专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
+    在 `CUSTOM_ART` / `primarySprite` 补画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 `Renders.face` 里给出字段（`Api` 不用改）、
     `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时只在 `UI.Presentation.elementRGBTable` 补一项（网页经 `m3Meta` 读同一张表）。
   - **回归护栏**：漏了画法或贴图的格子会走几何降级（色块 + 类型名，如魔法石合入时的「custom」灰块），③ 类走了通用画法也会记一笔；
     `cells.js` 按元素名统计，`m3debug.fallbacks` 暴露；e2e 对**每一关**开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡
     （见 [testing.md](testing.md#网页版测试make-check)）；颜色表、格子取色规则、步末碎屑色、生长曲线、帧数、音效名
-    都由 wasm 的 `m3Meta`（`UI.WebMeta`）启动时下发，JS 不手抄；`stack test` 的 `WebColors` 按 `cells.js` 的取色规则逐格核对它 = 桌面 `UI.Palette.cellRGB`。
-  - 例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像桌面 `sprBob` 一样浮动；
-  第 43 关毛球 `{t:"custom", name:"fuzzball", v:1}` 画 `fuzzball` 并一直浮动（同桌面 `artFuzzball`：`round(2·sin(pulse/9))` 设计像素，
-  振幅相同；呼吸计数桌面 16 ms 一帧、网页 1/60 s 一帧，所以网页周期约 0.94 s、桌面约 0.90 s，与气球 / 精灵 / 气泡同一个公式）。
-- **步末 / 变身动画复用已有段**：毛球跳格是核心的 `EvBelt "fuzzball"`，按皮带段平移播放（与桌面 `drawEndBelt` 相同）；
+    都由 wasm 的 `m3Meta`（`UI.WebMeta`）启动时下发，JS 不手抄；`stack test` 的 `WebColors` 按 `cells.js` 的取色规则逐格核对它 = 原桌面版 `UI.Palette.cellRGB`。
+  - 例：第 42 关魔法石 `{t:"custom", name:"magic_stone", v:0..4}`（4 = 发射中）画 `magic_stone_${min(3,v)}`，满 3 格时像原桌面版 `sprBob` 一样浮动；
+  第 43 关毛球 `{t:"custom", name:"fuzzball", v:1}` 画 `fuzzball` 并一直浮动（同原桌面版 `artFuzzball`：`round(2·sin(pulse/9))` 设计像素，
+  振幅相同；呼吸计数原桌面版 16 ms 一帧、网页 1/60 s 一帧，所以网页周期约 0.94 s、原桌面版约 0.90 s，与气球 / 精灵 / 气泡同一个公式）。
+- **步末 / 变身动画复用已有段**：毛球跳格是核心的 `EvBelt "fuzzball"`，按皮带段平移播放（与原桌面版 `drawEndBelt` 相同）；
   第 44 关彩虹组合（规则开关 `rainbow_combos`）的变身是第一轮之前（`afterWaves = 0`）的 `EvSpread rainbow_line / rainbow_bomb`，
-  ComboFx 在第一轮之前插入蔓延段，`render.js` 按桌面 `drawEndSpread` 逐分支画：来源（彩虹格）与目标不相邻 → 变身后的直线 / 炸弹从格子中心的方块匀速长满，
-  前沿白光、不迸碎屑（名字不在生长曲线 / 颜色表里，同桌面缺省）；目标恰好与彩虹差一行或一列（`dc = ±1` 或 `dr = ±1`）时桌面按方向擦出，网页相同。
+  ComboFx 在第一轮之前插入蔓延段，`render.js` 按原桌面版 `drawEndSpread` 逐分支画：来源（彩虹格）与目标不相邻 → 变身后的直线 / 炸弹从格子中心的方块匀速长满，
+  前沿白光、不迸碎屑（名字不在生长曲线 / 颜色表里，同原桌面版缺省）；目标恰好与彩虹差一行或一列（`dc = ±1` 或 `dr = ±1`）时桌面按方向擦出，网页相同。
 - **HUD 目标标签**：`state.goal.label`（视图模型 `Match3.View.goalLabel`，唯一来源），`main.js` 不再有「目标种类 → 中文」映射表；
   新元素做成关卡目标时在元素的 `Kind` instance 里写 `label _ = Just "中文名"`（`namedGoalLabelTable` 由元素世界推出，定义在 `Match3.GoalLabel`，`Match3.View` 重新导出）（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
 - 第 45 关雪怪 Boss（2×2）`{t:"custom", name:"snow_boss", v, q, hurt, turn, every}`——`q/hurt/turn/every` 是元素自带的显示字段
-  （`Match3.View.cellExtras`，前端不拆 v）；`cells.js` 的 `CUSTOM_ART`（同桌面 `customTable`）按象限画 `snow_boss_<q>`、
+  （`Match3.View.cellExtras`，前端不拆 v）；`cells.js` 的 `CUSTOM_ART`（同原桌面版 `customTable`）按象限画 `snow_boss_<q>`、
   血量过半画 `snow_boss_hurt_<q>`，右下格画召唤进度小点（同 `artSnowBoss`）；四块拼接处源矩形内收 1 像素 + 目标对齐整像素，
   避免缩放采样露出十字细缝。HUD：`state.boss`（`gvBoss`）非空时 `hud.js` 把目标条换成血条（`snow_boss` 头像 + 目标标签「目标 雪怪」（`goal.label`）+「HP 剩余/满血」，
-  红条过半后深红呼吸闪烁，同桌面 `HudArt`）。扣血 / 击败 / 召唤没有专门动画，与桌面相同走通用的逐轮高亮 / 消失与步末 tick 红光。
+  红条过半后深红呼吸闪烁，同原桌面版 `HudArt`）。扣血 / 击败 / 召唤没有专门动画，与原桌面版相同走通用的逐轮高亮 / 消失与步末 tick 红光。
   **多格元素护栏**：接入前雪怪走的是通用的「贴图名 = 元素名 + 层数角标」画法——每格一只缩小的整只 `snow_boss` 加角标 9（v 是打包值），
   而 `snow_boss` 贴图在图集里，降级护栏查不出。现在带 `q`（本格在多格整体里的编号）的 Custom 格一旦走到通用画法（整格或缩放），
   就按 `<元素名>#多格通用画法` 计进 `m3debug.fallbacks`，逐关护栏随之失败；e2e 另做反证（页面里 `import("/cells.js")` 后
   `forceGeneric.add("snow_boss")` 强制旧画法，护栏必须报出），并截前后对比 `snow-boss-crop-before-generic.png` / `snow-boss-crop-after.png`。
 - 第 46 关饼干掉落口——饼干格沿用 `cookie` 画法，补子由核心结算（新补的饼干和宝石一样按 `fall` 表从上沿落入）；掉落口格经 Api
-  `state.drops`（视图模型 `bvDrops`）给出，`cells.js` 的 `drawDrops` 同桌面 `UI.BoardArt.drawDropsArt`：棋子之上、格子上沿（上移 6）
-  画 `cookie_drop`，不随下落偏移；画的时机也同桌面（静止盘 / 高亮段 / 轻落 / 皮带 / 蜗牛段画，消失 / 下落段不画；唯一不同是交换补间里也画，
-  桌面 `drawSwap` 不画，见 §8.1）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
+  `state.drops`（视图模型 `bvDrops`）给出，`cells.js` 的 `drawDrops` 同原桌面版 `UI.BoardArt.drawDropsArt`：棋子之上、格子上沿（上移 6）
+  画 `cookie_drop`，不随下落偏移；画的时机也同原桌面版（静止盘 / 高亮段 / 轻落 / 皮带 / 蜗牛段画，消失 / 下落段不画；唯一不同是交换补间里也画，
+  原桌面版 `drawSwap` 不画，见 §8.1）。缺图时退回几何版（同 `drawDropMark`）并计入 `fallbacks.cookie_drop`。
 - 第 47 关变色龙 `{t:"custom", name:"chameleon", v:0..4, c:1..5}`——v 是核心的颜色下标（0..4 = C1 红 / C2 绿 / C3 蓝 / C4 黄 / C5 紫），
   `c` 是元素自带的显示字段（`Match3.View.cellExtras`，同宝石的 `c`，前端不换算 v）。`cells.js` 的 `drawChameleon`
-  同桌面 `UI.Cell.Art.artChameleon`：先画当前颜色的宝石 `gem_c<c>`，再叠一张缓慢旋转的五色描边环 `chameleon`（角度 = 呼吸计数 mod 360 度）；
-  `primarySprite` = `gem_c<c>`、降级色 / 消除碎屑色 = 当前颜色（同桌面 `cellRGB`）。带颜色 `c` 的 Custom 格若走到通用的「元素名贴图 + 角标」
+  同原桌面版 `UI.Cell.Art.artChameleon`：先画当前颜色的宝石 `gem_c<c>`，再叠一张缓慢旋转的五色描边环 `chameleon`（角度 = 呼吸计数 mod 360 度）；
+  `primarySprite` = `gem_c<c>`、降级色 / 消除碎屑色 = 当前颜色（同原桌面版 `cellRGB`）。带颜色 `c` 的 Custom 格若走到通用的「元素名贴图 + 角标」
   画法（接入前就是这样：只有环、没有底下的宝石），按 `<元素名>#通用画法缺底层宝石` 计进 `fallbacks`，逐关护栏随之失败。
-  每步换色是步末 `EvTick "chameleon"`（每项原格改写），`render.js` 的倒计时段照常播（同桌面 `drawEndTick`：前半段旧盘、后半段新盘，全程红光脉冲）；
+  每步换色是步末 `EvTick "chameleon"`（每项原格改写），`render.js` 的倒计时段照常播（同原桌面版 `drawEndTick`：前半段旧盘、后半段新盘，全程红光脉冲）；
   彩虹 × 变色龙由核心成对交换规则 15 结算，网页只播事件（通用的逐轮高亮 / 消失）。HUD：目标条左侧画 `state.goal.icon`
-  （`UI.GoalIcon.goalIcon`，与桌面 HUD 同一张表，本关 `chameleon_icon`），标签「目标 变色龙」读 `state.goal.label`；
+  （`UI.GoalIcon.goalIcon`，与原桌面版 HUD 同一张表，本关 `chameleon_icon`），标签「目标 变色龙」读 `state.goal.label`；
   关名同其他关画预渲染文字图（本关 `name_46`「变色龙」，见下文「HUD 关名」）。该关 (0,3) 的掉落口同第 46 关走 `state.drops`。
 - 第 48 关魔法地格（新玩法 8）——地面层由 Api 编码：`state.ground` 里 `{p:[r,c], name:"magic", layers:1}`（layers 恒为 1、只用于显示；
-  盘面上没有 Custom magic 格）。`cells.js` 的 `GROUND` 表（同桌面 `UI.Ground.groundTable`）加了 `magic: () => "magic"`，贴图 `magic`
-  （紫色符文地砖，`tools/gen_assets.py` 的 `magic_ground`）画在棋盘格之上、棋子之下（同桌面 `drawGroundArtAt`）。接入前表里没有 `magic`，
+  盘面上没有 Custom magic 格）。`cells.js` 的 `GROUND` 表（同原桌面版 `UI.Ground.groundTable`）加了 `magic: () => "magic"`，贴图 `magic`
+  （紫色符文地砖，`tools/gen_assets.py` 的 `magic_ground`）画在棋盘格之上、棋子之下（同原桌面版 `drawGroundArtAt`）。接入前表里没有 `magic`，
   画的是表外名字的淡灰框，而地面层走不到 `fallbacks` 计数、护栏查不出；现在表外名字或缺贴图的地面层格按 `<名字>#地面层` 计进 `fallbacks`，
   e2e 另用真实绘制钩子逐关核对每个地面层格都画了表内贴图（见 [testing.md](testing.md#网页版测试make-check)）。
   扩大的爆炸不加新动画：核心 `EvBlast` 的目标格已含扩出来的一圈（直线 1 行 → 3 行、炸弹 3×3 → 5×5），网页按事件格原样画
-  （被消格走通用的高亮 / 消失 + 粒子，碎石等受击不消的格显示受击后的样子，同桌面）。HUD 目标是碎石（`goal.label`「碎石」），不改。
+  （被消格走通用的高亮 / 消失 + 粒子，碎石等受击不消的格显示受击后的样子，同原桌面版）。HUD 目标是碎石（`goal.label`「碎石」），不改。
   第 47 关、第 48 关过关为 `LevelClear`，进入下一关；第 49 关「宽域」（6×9）是终章（最后一关，过关为 `Won`「通关！」）。
-- **HUD 关名**：同桌面 `UI.HudArt`（`zhA ren art ("name_" ++ show li) 66 11 24`），全部关卡画预渲染文字图 `name_<关卡下标>`
-  （第 N 关 = `name_<N−1>`，`tools/gen_assets.py` 按关卡表烘焙，与桌面同一张图；如第 47 关 `name_46`「变色龙」、第 48 关 `name_47`「魔法格」）。
+- **HUD 关名**：同原桌面版 `UI.HudArt`（`zhA ren art ("name_" ++ show li) 66 11 24`），全部关卡画预渲染文字图 `name_<关卡下标>`
+  （第 N 关 = `name_<N−1>`，`tools/gen_assets.py` 按关卡表烘焙，与原桌面版同一张图；如第 47 关 `name_46`「变色龙」、第 48 关 `name_47`「魔法格」）。
   `hud.js` 的 `levelName` 按原图宽高比画在原来 21 设计单位高的关名槽里（规则角标布局不变），超出槽宽时等比缩小；图集里没有对应文字图时
   退回浏览器字体画 `state.name`（当前 49 关都有文字图，没有关卡走降级）。网页图集因此收了 `name_*`（仍不收 `g_*` / `zh_*`）。
-- **音效 / BGM 开关**（`audio.js`，偏好存 localStorage `m3-sfx` / `m3-bgm`）：HUD 两枚芯片同桌面 `UI.HudArt.drawSoundChipsArt`——
+- **音效 / BGM 开关**（`audio.js`，偏好存 localStorage `m3-sfx` / `m3-bgm`）：HUD 两枚芯片同原桌面版 `UI.HudArt.drawSoundChipsArt`——
   46 × 28 的 `panel_chip`（圆角 10）+ 18 设计单位的单字（效 / 乐，关掉为 静；网页图集不收 `zh_*`，字用浏览器字体），两枚间隔 4。
   竖屏放在目标条（或雪怪血条）这一行的右端，目标条让出 104 单位；横屏放在提示区第一行右端（目标条下方），提示第一行让出 104、其余行整宽。
   `drawHud` 返回芯片矩形 `sfx` / `bgm` 与提示行外框 `msg`。2026-10-05 起芯片只显示状态、不接点击（太小，够不到 44 CSS px 触控尺寸），开关在菜单「音效 / 音乐」与 `K` / `B` 键。修正前（38724d2 起）芯片走 `button` 的单字大号（32，给 ‹ › 用），
@@ -174,29 +174,29 @@
 
 ### 2.6 桌面版功能迁移（`feat/web-sdl-parity`）
 
-逐项对照 `app/UI/*`（SDL 桌面版）与网页。规则一律在核心（新 wasm 导出见 §2.1），JS 只画与收输入。
-「可删桌面代码」= 网页成为唯一前端、PC 壳就位后，这部分桌面代码可以直接删（本分支没删）；`app/pure` 里网页也在用的模块要留。
+逐项对照 `app/UI/*`（原 SDL 桌面版，已于 `refactor/web-only` 删除）与网页。规则一律在核心（新 wasm 导出见 §2.1），JS 只画与收输入。
+**桌面版已移除**（`refactor/web-only`）：最后一列记录各项桌面代码的去向；`app/pure` 里网页在用的模块保留，只给桌面用的 `UI.Sound` 与英文 `moveMsg` 一并删掉。
 
-| 功能 | 桌面实现 | 网页（键盘 / 触屏入口） | 可删桌面代码 |
+| 功能 | 原桌面实现 | 网页（键盘 / 触屏入口） | 桌面代码（已移除） |
 | --- | --- | --- | --- |
-| 道具：锤子 / 自由交换 / 十字消 | `Input.keyHammer/keyFreeSwap/keyCross`、`cellClick` 道具分支、`Actions.applyBooster`、`HudArt` 道具芯片与 `drawToolBannerArt` | **已迁**：`1/2/3` 与菜单「锤子 / 自由交换 / 十字消」（图标 + 次数，当前模式金框、菜单按钮也加金框）；先选格再按 1/3 立即用；次数 0 时锤子 / 十字进模式提示用完、点格退出，自由交换不进模式；换不掉留在模式（`keepTool`）；棋盘上沿横幅「锤子：点一格」等 | 可删（`UI.MoveText.keepsTool` 网页在用，留；英文 `moveMsg` 只桌面用，可删） |
+| 道具：锤子 / 自由交换 / 十字消 | `Input.keyHammer/keyFreeSwap/keyCross`、`cellClick` 道具分支、`Actions.applyBooster`、`HudArt` 道具芯片与 `drawToolBannerArt` | **已迁**：`1/2/3` 与菜单「锤子 / 自由交换 / 十字消」（图标 + 次数，当前模式金框、菜单按钮也加金框）；先选格再按 1/3 立即用；次数 0 时锤子 / 十字进模式提示用完、点格退出，自由交换不进模式；换不掉留在模式（`keepTool`）；棋盘上沿横幅「锤子：点一格」等 | 已删（`UI.MoveText.keepsTool` 网页在用，留；英文 `moveMsg` 已删） |
 | 手动洗牌 | `Input.keyShuffle`（轻落） | **已迁**：`S` / 菜单「洗牌」；新盘面轻落；终局 / 播放中无效 | 可删 |
 | 每日挑战 | `Input.keyDaily`（固定演示日期 2026-09-29） | **已迁**：`D` / 菜单「每日挑战」开本地今天；`?daily=YYYY-MM-DD` 指定；关名「每日挑战」、标签为日期；失败重开同一份配置 | 可删 |
-| 选关地图 | `UI.LevelMap`（节点位置、命中、几何 / 贴图两版绘制）、`Input.keyMap/mapClick`，进度 `appMaxReached` 在内存 | **已迁**：`M` / 菜单「选关地图」；按章节分块（第一章…第七章，竖排一列、横排两列），`node_cur/done/lock` + 目标图标 + 当前关光晕；点已解锁关跳关、当前关 / 未解锁 / 空白处关闭；进度存 localStorage `m3-reached`（刷新保留） | 可删（`UI.Chapters` 章节表网页在用，留） |
+| 选关地图 | `UI.LevelMap`（节点位置、命中、几何 / 贴图两版绘制）、`Input.keyMap/mapClick`，进度 `appMaxReached` 在内存 | **已迁**：`M` / 菜单「选关地图」；按章节分块（第一章…第七章，竖排一列、横排两列），`node_cur/done/lock` + 目标图标 + 当前关光晕；点已解锁关跳关、当前关 / 未解锁 / 空白处关闭；进度存 localStorage `m3-reached`（刷新保留） | 已删（`UI.Chapters` 章节表网页在用，留） |
 | 暂停与全部按键说明 | `Input.keyPause`、`HudArt.drawPauseHelpArt`（+ 几何版） | **已迁**：`P` / 菜单「按键说明」；13 行「按键 + 作用 + 触屏入口」与宝石图例；冻结动画、清选中 / 拖划；暂停中 `R` 可重开；点任意处 / `P` / `Esc` 继续 | 可删 |
-| 其余按键 K / B / R / N / 回车 / 空格 / U / H | `Input.handleKey/playKey` | **已迁**：同桌面；另 `Z` 撤销、`?` 本关说明；`Esc` 关最上层浮层（暂停 → 地图 → 说明 → 道具模式） | 可删 |
-| 结局后前进 | `Actions.advanceOrMsg`、`Input.restartSame`（规则已移进 `app/pure/UI/Restart.hs`，桌面改为调它）、点结算面板 | **已迁**：点棋盘或 `N` / 回车 / 空格；过关进下一关（带入剩余步数 ≤ 3，三星分母 = 印制步数）、通关回第 1 关、失败重开；过关时「›」也是前进 | 可删（`UI.Restart` 网页在用，留） |
+| 其余按键 K / B / R / N / 回车 / 空格 / U / H | `Input.handleKey/playKey` | **已迁**：同原桌面版；另 `Z` 撤销、`?` 本关说明；`Esc` 关最上层浮层（暂停 → 地图 → 说明 → 道具模式） | 可删 |
+| 结局后前进 | `Actions.advanceOrMsg`、`Input.restartSame`（规则已移进 `app/pure/UI/Restart.hs`）、点结算面板 | **已迁**：点棋盘或 `N` / 回车 / 空格；过关进下一关（带入剩余步数 ≤ 3，三星分母 = 印制步数）、通关回第 1 关、失败重开；过关时「›」也是前进 | 已删（`UI.Restart` 网页在用，留） |
 | 结算星级 | `drawOverlayArtNow`（`star_on/off`） | **已迁**：过关 / 通关画三颗星（`starRating`），失败不画；面板底部加一行操作提示（原说明文字不变） | 可删 |
 | HUD 关卡进度点 | `drawHudArt` 的 `levelDots` | **已迁**：关卡面板底边一排点（当前金、已过绿、未解锁暗） | 可删 |
 | 分数徽章 | `drawHudArt` 的 `scoreBadge`、`drawComboSummaryArt` | **已迁**：分数芯片在回放中显示「连击 xN」，播完 96 帧「本步 N 连击！」，洗过牌标签「已洗牌」（`m3Badge`） | 可删 |
 | 首关提示 | `freshLevelUi`（自动 `applyHint` + 240 帧）、`drawTipBannerArt` | **已迁**：第 1 关（含每日挑战）开局自动亮提示 + 横幅「按 H 查看提示」（触屏「点「提示」查看提示」） | 可删 |
 | 按键条 | `drawHelpStripArt`（开局 / 取消暂停后） | **已迁**：棋盘底部 `H123USDMRKBNP` +「P：暂停并查看全部按键」，300 / 240 帧；只在有键盘鼠标的设备（`(hover: hover) and (pointer: fine)`）上画 | 可删 |
-| 窗口标题 | `Actions.updateTitle`（`titleLine` + 提示） | **已迁**：`document.title`（PC 壳可显示在标题栏） | 可删（`titleLine` 在核心，留） |
-| 元素展示盘 | 环境变量 `MATCH3_SHOWCASE`（`UI.Env`） | **已迁**：`?showcase=1`（`UI.Showcase` 移进 `app/pure`，桌面重新导出） | 可删（`UI.Showcase` 留） |
+| 窗口标题 | `Actions.updateTitle`（`titleLine` + 提示） | **已迁**：`document.title`（PC 壳可显示在标题栏） | 已删（`titleLine` 在核心，留） |
+| 元素展示盘 | 环境变量 `MATCH3_SHOWCASE`（`UI.Env`） | **已迁**：`?showcase=1`（`UI.Showcase` 移进 `app/pure`） | 已删（`UI.Showcase` 留） |
 | 小项：步数 ≤ 5 闪烁、加速提示、无步时提示洗牌 | `drawHudArt` / `speedUp` / `keyHint` | **已迁** | 可删 |
-| 交换（点选 / 拖划）、回放加速、撤销、提示、重开、本关说明、音效 / BGM、结算遮罩、粒子 / 浮字 / 震屏 | `UI.Input`、`UI.Cascade`、`UI.Playback`、`UI.Audio` 等 | 早已有 | 可删（`ComboFx`、`UI.Presentation`、`UI.Sound` 等 `app/pure` 模块留） |
+| 交换（点选 / 拖划）、回放加速、撤销、提示、重开、本关说明、音效 / BGM、结算遮罩、粒子 / 浮字 / 震屏 | `UI.Input`、`UI.Cascade`、`UI.Playback`、`UI.Audio` 等 | 早已有 | 已删（`ComboFx`、`UI.Presentation` 等 `app/pure` 模块留；`UI.Sound` 只给桌面用，已删） |
 | 窗口缩放 / HiDPI | `MATCH3_SCALE`、`Art` 的 `@` 尺寸变体 | 早已有：自适应布局 + dpr（PC 壳改窗口大小即重排，动画不断） | 可删 |
-| **不补**：SDL 初始化与窗口参数（`MATCH3_SCALE`、渲染器标志）、BMP 读图（`Art.loadArt`）、整套几何降级 UI（`UI.Draw` / `HudPrim` / `HudBlocks` / `Cell.Prim*`；网页是逐格降级 + 护栏）、`Esc` / `Q` 退出（归 PC 壳）、16 ms 帧长（网页 1/60 s） | `app/Main.hs`、`app/Shell/*`、`app/Art.hs`、`app/UI/*` | 不补（SDL 实现本身的东西） | 可删（`tools/gen_assets.py` 生成的 `assets/` 仍是网页图集的来源，留） |
+| **不补**：SDL 初始化与窗口参数（`MATCH3_SCALE`、渲染器标志）、BMP 读图（`Art.loadArt`）、整套几何降级 UI（`UI.Draw` / `HudPrim` / `HudBlocks` / `Cell.Prim*`；网页是逐格降级 + 护栏）、`Esc` / `Q` 退出（归 PC 壳）、16 ms 帧长（网页 1/60 s） | `app/Main.hs`、`app/Shell/*`、`app/Art.hs`、`app/UI/*` | 不补（SDL 实现本身的东西） | 已删（`tools/gen_assets.py` 生成的 `assets/` 仍是网页图集的来源，留） |
 
 触屏：每个按键都有触屏入口（暂停页第三列列出）：`H` / `U` 是常驻按钮，其余在菜单里（`K` / `B` = 菜单「音效 / 音乐」），`N` 对应点结算面板。
 布局（2026-10-05 改版，yu：新增那一行按钮收进菜单，保住格子大小与 44 px 触控）：常驻按钮只有 **撤销 / 提示 / 菜单** 三个（竖排棋盘下一行、横排侧栏底部一行），
@@ -231,7 +231,7 @@
 ### 2.5 资源管线
 
 ```
-tools/gen_assets.py（桌面版，已有）→ assets/*.bmp（2x，112 px/格）
+tools/gen_assets.py（源资源生成器）→ assets/*.bmp（2x，112 px/格）
                                           │  只读
 web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张，1024×1730，约 488 KB）
                                             atlas.json（约 5.0 KB，名字 → 矩形）
@@ -239,8 +239,8 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 ```
 
 - 由 `web/build.sh` 第 3b 步调用，结果缓存在 `web/.cache/art`，`assets/` 或生成器变动才重新生成；
-- 不收文字图 `g_` / `zh_`（网页用浏览器字体）和 `@` 变体，保留角标 `badge_*`；收关名文字图 `name_<i>`（49 张，HUD 关名同桌面画这张图）；
-- 着色 / 加色在 JS 里用离屏画布缓存（对应桌面 `Art` 的染色 / 加色绘制）；
+- 不收文字图 `g_` / `zh_`（网页用浏览器字体）和 `@` 变体，保留角标 `badge_*`；收关名文字图 `name_<i>`（49 张，HUD 关名同原桌面版画这张图）；
+- 着色 / 加色在 JS 里用离屏画布缓存（对应原桌面版 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
 体积（2026-10-03，`chore/audit-wrapup`（审计整改第 1–8 项之后，基于 `fa719fa`），`make clean` 后全量重建的发布产物）：wasm 原始 5,442,572 B，`-Oz` 后 2,212,226 B ≈ 2.21 MB（gzip 817,932 B）；dist 合计 3,074,199 B ≈ 3.07 MB，逐文件 gzip 1,467,127 B（约 1.47 MB）；dist 里除页面脚本外还有 `audio.js`、`guide.js` 与 `sfx/` 下 7 个 WAV（约 196 KB）。图集多了 `magic` 与 48 张关名文字图（WebP 约 +100 KB）。
@@ -248,8 +248,8 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 ## 3. 工具链与构建
 
 - 工具链：[ghc-wasm-meta](https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta) `FLAVOUR=9.14`，装在 `~/.ghc-wasm`（约 6.4 GB），
-  与桌面版的 Stack / GHC 9.14.1（原生 x86_64 / arm64）完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
-- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；桌面版现为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
+  与根目录原生的 Stack / GHC 9.14.1（x86_64 / arm64，跑 `stack test` 与一致性测试原生侧）完全独立；`~/.ghc-wasm/env` 会改 `CC` 等变量，**不要 source 进日常 shell**；
+- 随机数：`web/cabal.project` 把 `random` / `splitmix` 钉在与根目录 `stack.yaml` 相同的版本（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5；原生为 GHC 9.14.1，lts-24.60 + `compiler: ghc-9.14.1`），保证同种子同结果；
 - 构建：`web/build.sh` → 核对模块清单与 `package.yaml` 一致 → `wasm32-wasi-cabal build` → `wasm-opt -Oz` → JSFFI 胶水
   → WASI 垫片（`@bjorn3/browser_wasi_shim`，缓存）→ 图集 → `web/dist/`，最后打印体积；
 - 构建只在 Linux 盒子上做过；macOS 上理论可行（ghc-wasm-meta 支持），未验证。`web/dist/` 是可部署的构建产物，已提交进仓库；其他机器部署只需拷贝该目录，不需要工具链。平时的分支不碰 `web/dist`，只在上 Mac / 部署前 `make clean && make build` 全量重建一次再提交（见 [testing.md「开发流程」](testing.md#开发流程)）。
@@ -257,21 +257,19 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 ### 3.1 make 目标
 
 仓库根目录的 `Makefile` 是日常入口，**在仓库根目录运行 `make <目标>`**；`make help` 按分组列出
-（通用 / 桌面版 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境）。桌面版目标只是 Stack 命令的薄包装。
+（通用 / 原生核心 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境）。`verify` / `test-native` 只是 `stack test` 的薄包装。
 第一次先 `make doctor` 看缺什么，再 `make toolchain`（已装则只校验）→ `make build` → `make test`；合 main 前跑 `make verify`（只跑 `stack test`，见 [testing.md「开发流程」](testing.md#开发流程)）；`make check` 留作手动 / CI 用。
 在 box 上从 `make clean` 开始跑 `make check`（完整重编 wasm + 四组测试 + 体积）约 2 分 45 秒。
 
 | 目标 | 作用 |
 | --- | --- |
 | `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
-| `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
-| `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
 | `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.14.1、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 464 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心规则与 `app/pure`，470 个） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -283,7 +281,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 | `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |
 | `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
 | `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
-| `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（桌面版用 `stack clean`） |
+| `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（原生侧用 `stack clean`） |
 | `make android-sync` / `apk` / `apk-release` / `aab` / `android-check` | 安卓：同步 dist 进 Capacitor 工程 / 调试版 APK / 正式版 APK / Play 用 AAB / 桌面 Chrome 手机视口替代验证（`web/android-app/build-apk.sh`，见 [`android.md`](android.md)） |
 
 ## 4. 本地运行
@@ -347,7 +345,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 3. 嵌入尺寸建议 960×640 并打开全屏按钮，勾选移动端友好（布局本身会适配任意尺寸）；
 4. 上传后在桌面和手机浏览器各试一次，确认 wasm 正常加载（itch 的 CDN 应返回 `application/wasm`，未实测）。
 
-桌面版的上传清单见 [`ITCH.md`](../ITCH.md)；网页版可以作为同一项目的在线试玩，或单独一个页面。
+itch.io 文案见 [`ITCH.md`](../ITCH.md)；网页版就是要上传的游戏本体。
 其他静态托管（GitHub Pages、Netlify、任意 nginx）同理，只要 `.wasm` 的 MIME 类型正确。
 
 ### 5.3 安卓应用（Capacitor）
@@ -358,7 +356,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 ## 6. 调试要点
 
 - 控制台 `m3debug.state` / `m3debug.layout` / `m3debug.hud`（上一帧关卡面板与规则角标的矩形、目标标签文字 `goal`）/ `m3debug.dropMarks`（最近一帧画的掉落口标记格与设计坐标）/ `m3debug.overlay`（结算层实际画出的标题 / 副标题）/ `m3debug.perf`；URL `?level=0..48&seed=N` 复现一局；
-- 快捷键（同桌面 `UI.Input.handleKey`，另加 `Z` / `?`）：`H` 提示、`1/2/3` 道具、`U`/`Z` 撤销、`S` 洗牌、`D` 每日挑战、`M` 地图、`K`/`B` 音效 / BGM、
+- 快捷键（迁自原桌面版 `UI.Input.handleKey`，另加 `Z` / `?`；全表见 [ui-controls.md](ui-controls.md)）：`H` 提示、`1/2/3` 道具、`U`/`Z` 撤销、`S` 洗牌、`D` 每日挑战、`M` 地图、`K`/`B` 音效 / BGM、
   `R` 重开（暂停中也可）、`N`/回车/空格 播放中加速否则前进、`P` 暂停、`?` 本关说明、`Esc` 关浮层；带 Ctrl / ⌘ / Alt 的组合键不拦（留给浏览器 / PC 壳）；
 - URL：`?level=0..48&seed=N`、`?daily=YYYY-MM-DD`、`?showcase=1`；`m3debug.ui` 给出道具模式、暂停 / 地图、进度、徽章、各浮层画出的内容，`m3debug.mapNodeCenter(i)` 给地图节点坐标；
 - 页面白屏先看网络面板里 `.wasm` 的 Content-Type（必须是 `application/wasm`）。
@@ -367,7 +365,7 @@ bash deploy-mac.sh start | status | stop [--remove]   # launchd 常驻 / 状态 
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（464 个） | `make test-native` |
+| `stack test` | 核心规则（470 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（40 组，含迁自桌面的 `boost` / `daily` / `advance` 走法 7 组（道具、洗牌、每日挑战、结局后前进，并比较 `m3Progress` / `m3Badge` / `m3MapJump` / `m3Restart` / `m3Showcase`），含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 与种子 140 的 `cham-rainbow` 走法、第 48 关种子 2–5 的 `fix-…` 固定走法——第 3 步在魔法地格上引爆扩圈爆炸）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（34 组，含 `boost` 走法 3 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、逐关地面层贴图与 HUD 关名 `name_<i>` 的真实绘制、第 48 关魔法地格（贴图位置与像素、4 组扩圈爆炸的真实绘制格数 = EvBlast 格数）、终章（第 47、48 关过关进入下一关，第 49 关「宽域」Won）、音效 / BGM 开关芯片（真实绘制的字形在芯片内、不大于按钮、不压提示行）、逐关失败提示（无「箱子」/ 内部名，碎石关「砸开碎石」）、第 8 / 39–45 / 47 / 48 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |
@@ -379,46 +377,47 @@ e2e 截图输出到 `/workspace/match3-web-shots/`（编号 01–32 与 `rules-b
 
 ## 8. 已知限制
 
-- 桌面版功能已全部迁来（§2.6）；PC 壳还没做（方案待定）；
+- 网页是唯一前端：桌面版功能已全部迁来（§2.6），SDL2 桌面版已移除；PC 壳还没做（方案待定）；
 - 格子本身在小屏上略低于 44 CSS px（iPhone SE 43、横屏手机 43.7；8 列棋盘宽度受限 / 横屏高度受限），拖划交换可弥补；按钮与菜单项都 ≥ 44 CSS px；
-- 播放期间 HUD 显示的是结算后的分数与装饰层（与桌面一致），不逐轮递增；
+- 播放期间 HUD 显示的是结算后的分数与装饰层（与原桌面版一致），不逐轮递增；
 - 没有离线缓存；
 - `m3Swap` 每步返回完整 JSON（中位数约 30 KB，长连锁可达约 120 KB），未做增量；
 - 真机（iOS Safari / Android Chrome）和 itch.io 上线都还没实测，只在无头 Chrome 里验证过。
 
 ### 8.1 已知差异（与桌面版，已确认接受）
 
-迁移桌面功能（§2.6）时有意保留的不同：
+迁移桌面功能（§2.6）时有意保留的不同（桌面版已移除，本节作为迁移记录保留）：
 
-- **每日挑战日期**：桌面固定演示日期 2026-09-29，网页用本地今天（`?daily=` 可指定，e2e 用 2026-09-29）。
-- **选关进度**：桌面 `appMaxReached` 只在内存，网页存 localStorage `m3-reached`；网页「‹ ›」仍可自由切关，进入某关即记到该关（同桌面 `freshLevelUi`）。
+- **每日挑战日期**：原桌面版固定演示日期 2026-09-29，网页用本地今天（`?daily=` 可指定，e2e 用 2026-09-29）。
+- **选关进度**：原桌面版 `appMaxReached` 只在内存，网页存 localStorage `m3-reached`；网页「‹ ›」仍可自由切关，进入某关即记到该关（同原桌面版 `freshLevelUi`）。
 - **地图版式**：桌面一屏 6 个一行蛇形、章节间隔；网页按章节分块（每行最多 7 个、块内蛇形），竖排一列、横排两列，整体缩放进布局；命中区为整格。
 - **结算文字**：标题仍是网页原来的「过关！/ 通关！/ 步数用完了」（桌面「过关！/ 胜利！/ 失败」），说明文字不变，星级与操作提示是新加的行。
-- **分数芯片标签**：网页「分数」，桌面「得分」；总结显示为「本步 / N 连击！」。
-- **菜单**：网页自有（桌面没有），常驻按钮之外的操作都在里面；HUD 音效芯片只显示状态。
+- **分数芯片标签**：网页「分数」，原桌面版「得分」；总结显示为「本步 / N 连击！」。
+- **菜单**：网页自有（原桌面版没有），常驻按钮之外的操作都在里面；HUD 音效芯片只显示状态。
 - **按键条**：只在有键盘鼠标的设备上画；触屏设备首关横幅改成「点「提示」查看提示」。
 - **`Esc`**：网页关浮层，不退出（退出归 PC 壳）；`document.title` 会把标题里的连续空格折成一个。
 
 - **第 45 关雪怪血条的读数时机**：动画播放期间，网页 HUD 的雪怪血条显示**本步之前**的 HP（与网页目标条的进度一致，`main.js` 的 `hudInfo`
-  在 `anim` 非空时读 `state.boss`），桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（已用 4 个种子 × 24 步核对）。
-- **第 46 关掉落口标记在交换补间里也画**：网页的交换补间走 `drawCellsExcept`，顺带画了 `cookie_drop`，桌面 `drawSwap` 不画；
-  标记是不动的装饰、不影响状态，补间中与补间结束后的标记格都等于核心 `bvDrops`、坐标同桌面 `drawDropsArt`（`cellOrigin`、上移 6）——
+  在 `anim` 非空时读 `state.boss`），原桌面版则在动画一开始就显示本步之后的 HP；动画结束帧两边完全一致（已用 4 个种子 × 24 步核对）。
+- **第 46 关掉落口标记在交换补间里也画**：网页的交换补间走 `drawCellsExcept`，顺带画了 `cookie_drop`，原桌面版 `drawSwap` 不画；
+  标记是不动的装饰、不影响状态，补间中与补间结束后的标记格都等于核心 `bvDrops`、坐标同原桌面版 `drawDropsArt`（`cellOrigin`、上移 6）——
   e2e 3g 用 `m3debug.dropMarks` 核对（「第 46 关交换补间中 / 补间结束后：掉落口标记格 = state.drops…」两项）。消失 / 下落段两边都不画。
   3h 另用真实绘制钩子（`drawImage` 调用记录，不读 `dropMarks`）核对第 46 / 47 关静止帧与交换补间帧里 `cookie_drop` 的屏幕矩形
-  = 桌面 `(16+56c, 16+56r−6)` 经布局换算，反证（副本里画到 x+4 而 `dropMarks` 不变）8 项失败。
+  = 原桌面版 `(16+56c, 16+56r−6)` 经布局换算，反证（副本里画到 x+4 而 `dropMarks` 不变）8 项失败。
 - **第 47 关变色龙在缩放 / 弹出画法里的样子**：桌面缩放 / 弹出（`primarySprite` = `"chameleon"`）只画环，网页 `primarySprite` = 当前颜色的
   `gem_c<c>`，消除缩小、特殊块弹出等缩放段画的是当前颜色的宝石（不带环）；静止盘与步末段两边都是「宝石 + 环」。
-- **第 47 关变色龙环的转速**：角度 = 呼吸计数 mod 360，每个逻辑帧 1 度——桌面 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈（同毛球浮动的帧长差别）。
-- **HUD 目标图标**：网页目标条左侧新画 `state.goal.icon`（`UI.GoalIcon.goalIcon`，与桌面 HUD 同一张表），对所有非 Boss 关卡生效——
-  之前的网页 HUD 只有文字与进度条，现在与桌面 HUD 一样带图标；图标尺寸 = 目标条高，进度条右移（条高 + 6）。
+- **第 47 关变色龙环的转速**：角度 = 呼吸计数 mod 360，每个逻辑帧 1 度——原桌面版 16 ms 一帧约 5.8 s 一圈，网页 1/60 s 一帧 6 s 一圈（同毛球浮动的帧长差别）。
+- **HUD 目标图标**：网页目标条左侧新画 `state.goal.icon`（`UI.GoalIcon.goalIcon`，与原桌面版 HUD 同一张表），对所有非 Boss 关卡生效——
+  之前的网页 HUD 只有文字与进度条，现在与原桌面版 HUD 一样带图标；图标尺寸 = 目标条高，进度条右移（条高 + 6）。
 - ~~**关名文字**：网页用浏览器字体画 `state.name`，桌面画预渲染文字图 `name_<i>`~~——**已消除**（web-magic-ground）：网页全部关卡改画同一张 `name_<关卡下标>`，
-  e2e 逐关用真实绘制核对（错位一关的反证必须失败）。只剩尺寸不同：网页关名槽高 21 设计单位，桌面 24。
+  e2e 逐关用真实绘制核对（错位一关的反证必须失败）。只剩尺寸不同：网页关名槽高 21 设计单位，原桌面版 24。
 
 ## 9. TODO
 
 - [x] 道具与洗牌按钮（`m3Hammer` / `m3FreeSwap` / `m3Cross` / `m3Shuffle`，HUD 按钮与点选流；`feat/web-sdl-parity`）
 - [x] 每日挑战、选关地图（CH1–CH7）、暂停、结局后前进、星级、进度点、分数徽章、首关提示、按键条、窗口标题、展示盘（同上，§2.6）
-- [ ] PC 端套壳（网页成为唯一前端后；壳选型未定），之后删桌面 SDL 代码（§2.6「可删」列）
+- [ ] PC 端套壳（壳选型未定）
+- [x] 删桌面 SDL 代码（§2.6 最后一列；`refactor/web-only`）
 - [ ] 真机测试：iPhone（dpr3）、Android、iPad；确认安全区与手势（安卓应用壳见 [`android.md`](android.md)）
 - [ ] 小屏触控：iPhone SE 竖排考虑缩小棋盘边距，让格子到 44 px
 - [ ] 按 dpr 选 3x 图集（约 +400 KB，只给 dpr3 / 平板）

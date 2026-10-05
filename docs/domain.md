@@ -193,7 +193,7 @@
 | 回放 | 每次交换的步末记一条 `EvTick "snow_boss"`：四格的新计数（召唤时还有雪块格），`applyEndEffect` 可重放 |
 | 放置 | `Place "snow_boss" [AInt 血量 (1–255), AInt 象限] 格`；关卡里用 `bossAt (行, 列) 血量` 一次铺四格 |
 | 关卡 | 第 45 关「雪怪」：24 步，Boss 左上角在 (2,3)（占 (2,3)–(3,4)），40 血，目标击败 Boss |
-| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素的 `Renders.face`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；桌面经 `UI.CellFace.bossPart` 读） |
+| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素的 `Renders.face`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；`UI.CellFace.bossPart` 把它们拼回 `BossPart`，网页格子 JSON 是同一组字段） |
 | 前端 | 贴图 `snow_boss_0..3`（整只冰蓝雪怪切成四块）/ `snow_boss_hurt_0..3`（血量 ≤ 一半时的受伤表情），右下块上三个召唤进度点；HUD 目标条换成红色血条 + `snow_boss` 头像 +「HP 剩余/满血」，过半后深红闪烁；几何版为冰蓝 2×2 方块 + 眼睛 + 同样的血条 |
 
 取舍说明：
@@ -216,7 +216,7 @@
 | 开局 | 有掉落口的关卡不做目标补齐（`goalDecorWith` 原本会按目标数一次铺满饼干），开局只有关卡放置的几块，其余由掉落口补 |
 | 收集 | 原有规则不变：饼干到达底行即被收走、计 `CountCookies`；目标 `goalCount CountCookies n` |
 | 关卡 | 第 46 关「掉落口」：26 步，掉落口在顶行 (0,1) / (0,3) / (0,4) / (0,6)，开局四个掉落口上各一块饼干，盘上少于 4 块时掉，目标收 8 块 |
-| 视图 / 前端 | `Match3.View.BoardView.bvDrops`（掉落口格，读 `Element.Level.levelDrops`）；桌面版在掉落口格上沿画金色漏斗 `cookie_drop`（画在棋子之上，几何版 `drawDropMark` 是金色台阶 + 白色箭头） |
+| 视图 / 前端 | `Match3.View.BoardView.bvDrops`（掉落口格，读 `Element.Level.levelDrops`）；网页在掉落口格上沿画金色漏斗 `cookie_drop`（画在棋子之上，同原桌面版；原桌面几何版 `drawDropMark` 已随桌面版移除） |
 
 取舍说明：
 - **按「盘上少于 N 块」而不是「每隔 N 步」**：补子策略只看得到盘面（`RefillCtx` = 空洞位置 + 当前盘面），按盘面数量决定既不用给 `GameState` 加步数计数，也天然限制了场上饼干的数量（不会越积越多堵死棋盘）；原作的节奏感由「收走一块才掉一块」体现。
@@ -238,7 +238,7 @@
 | 彩虹 | 成对交换规则 15（在彩虹取色 10 之后、特殊合成 20 之前，挂在变色龙上）：彩虹 × 变色龙 = 把变色龙那端当同色普通宝石问内置彩虹取色，再加上同色的全部变色龙 |
 | 放置 | `Place "chameleon" [] 格`：颜色取原格宝石（开局不会凭空连成三消）；`[AColor c]` 指定颜色；原格不是宝石时不放 |
 | 关卡 | 第 47 关「变色龙」：18 步，目标消 30 只；开局 2 只在 (3,1) / (5,6)；复用新玩法 6 的掉落口：顶行 (0,3)，盘上少于 2 只时补一只 C1（红）变色龙 |
-| 视图 / 前端 | 格子即 `Custom "chameleon" k`（网页 Api 的 `cellFace` = `{t:"custom", name:"chameleon", v:k}`）；桌面版先画 `gem_<颜色>` 再画缓慢旋转的五色环 `chameleon`（几何版 `primChameleon`：普通宝石 + 五色描边）；HUD 目标图标 `chameleon_icon`（黄宝石 + 五色环） |
+| 视图 / 前端 | 格子即 `Custom "chameleon" k`（网页 Api 的 `cellFace` = `{t:"custom", name:"chameleon", v:k}`）；先画 `gem_<颜色>` 再画缓慢旋转的五色环 `chameleon`（网页同原桌面版；原桌面几何版 `primChameleon` 已移除）；HUD 目标图标 `chameleon_icon`（黄宝石 + 五色环） |
 
 取舍说明：
 - **换色跳过会立刻成消的颜色**：若换色后直接连成三消由步末补结算自动消掉，变色龙会「自己把自己消掉」（试验：10 只、不跳过时一步贪心 2–6 步就清完），玩法就不需要「抓时机」了；跳过这种颜色后，只有玩家的交换能消它。判断只看不带叠层的宝石与变色龙（其余格打断连线），五种都会连成（只在换色前就有现成三消时）才取下一种、交给补结算。
@@ -260,7 +260,7 @@
 | 接入 | 地面层种类的 `groundWiden`（缺省 `Nothing`；元素类重构前是能力 `widens`）；每步结算开始时 `Element.Level.levelWorldIn` 把地面层里带扩爆规则的格写进世界的本步上下文 `StepCtx`（缺省 `noStep`；没有这种格时世界原样返回），`World.blastWith` 在引爆格是扩爆格时改写范围；`Engine.playWith` 展开事件也用这个本步世界，`EvBlast` 的覆盖格含扩出来的一圈 |
 | 随机 | 不消耗 `gsGen`；地面层在每步开始时取一次（魔法地格不变，与逐轮取相同） |
 | 关卡 | 第 48 关「魔法格」：18 步，目标碎石 8 块；底行 8 块三层碎石（`Place "stone" [AInt 3]`）；魔法地格 4 格 (6,2) / (6,5) / (5,3) / (5,4)；打开 `bomb_shapes`（L / T 形出炸弹） |
-| 视图 / 前端 | 视图模型照旧（`bvGround` / `groundAtView` 给出 `("magic", 1)`；网页 Api `state.ground` 里 `{p, name:"magic", layers:1}`）；桌面贴图 `magic`（紫色符文地砖，画在棋子下面），几何版 `primMagic`（紫色双线框 + 四角小方点，画在棋子上面）；扩大的爆炸没有新动画，按 `EvBlast` / 清除格原样高亮；HUD 目标仍是碎石 |
+| 视图 / 前端 | 视图模型照旧（`bvGround` / `groundAtView` 给出 `("magic", 1)`；网页 Api `state.ground` 里 `{p, name:"magic", layers:1}`）；贴图 `magic`（紫色符文地砖，画在棋子下面；原桌面几何版 `primMagic` 已移除）；扩大的爆炸没有新动画，按 `EvBlast` / 清除格原样高亮；HUD 目标仍是碎石 |
 
 取舍说明（backlog 只写了「特效在魔法地格上引爆时范围扩一圈」，下面几条是补的细节）：
 - **永久、不计数**：原作的魔法地格不会被消耗；这里没有地面反应规则，所以不需要给它计数或目标，关卡目标交给它帮忙打到的东西（第 48 关是碎石）。
@@ -347,5 +347,5 @@
 | 种子 | `Seed = Int` | 只在开局 `gameNew` 用；之后随机数只来自状态 |
 | 通用效果 | `Engine.Effect.Effect { efBeat, efKind, efSubject, efSpots, efAmount }` | 播放层只认它；同一节拍的效果同时播 |
 | 阶段机 / 播放器 | `Engine.Playback.Stages`、`Player { plStage, plFrame, plFast }` | 游戏给出阶段长度与后继，播放器管帧号与加速 |
-| 外壳 / 插件 | `Shell.Loop.runShell`、`Plugin` | SDL 窗口与固定步长主循环；具体游戏的输入映射与绘制作为插件接入 |
+| 外壳 / 前端 | `web/hs/Match3Web/Api.hs`（wasm 导出）+ `web/www/*.js` | 网页前端：输入映射成动作经 `gameStep match3Shell` 执行，JS 绘制；原 SDL 外壳 `Shell.Loop.runShell` / `Plugin` 已于 2026-10-05 移除 |
 | 三消动作 | `Match3.Engine.Action` = `Swap` / `Hammer` / `FreeSwap` / `CrossClear` / `Hint` / `Shuffle`（撤销是通用层的 `Undo`） | 一次结算得到 `Played`（状态、`Outcome`、回放脚本、`MoveFx`、事件），经 `gameStep` 的 `stepReport` 带回；外壳用 `match3Shell` |

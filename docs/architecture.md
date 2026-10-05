@@ -3,17 +3,14 @@
 ## 分层
 
 ```
-app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
+web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，refactor/web-only；图中箭头 = 依赖）
 ┌──────────────────────────────────────────────────────────────┐
-│ Main（读环境变量）──→ Shell.Loop（通用外壳：窗口 / 固定步长主循环）│
-│   └─ UI.Plugin（三消插件：把下面这些接到外壳的钩子上）           │
-│        ├─ UI.Input ──→ UI.Actions ──→ UI.Playback              │  输入映射 → 动作 → 表现编排
-│        ├─ UI.Draw ──→ UI.Cascade / UI.EndStage / UI.HudArt …   │  一帧绘制
-│        │     └─ UI.BoardArt / UI.BoardPrim ──→ UI.CellTable     │  单格：元素名 → 贴图 / 几何两个后端
-│        │                                   └─ UI.Cell.Art / UI.Cell.Prim
-│        └─ UI.Env（环境变量 / 高分屏倍率）                        │
-│ UI.Types / UI.Layout（状态类型、布局常量，被上面所有模块依赖）  │
-│ ComboFx（纯阶段机 cascadeStages）   Art（贴图图集）              │
+│ web/www/*.js（Canvas 绘制、输入、音效、浮层）                    │
+│   └─ 经 wasm 导出调 Match3Web.Api（m3State / m3Swap / m3Meta …）│
+│ web/hs/Match3Web.Api / Anim / Json（接口层：JSON 编码、回放帧）   │
+│ app/pure（纯前端模块：ComboFx 阶段机、UI.Presentation 表现表、   │
+│   UI.Palette / UI.CellFace / UI.WebMeta、UI.GoalIcon、UI.Chapters、│
+│   UI.Showcase、UI.Restart、UI.MoveText.keepsTool）               │
 └───────────────┬──────────────────────────────┬───────────────┘
                 │ 规则：Match3.Core / Match3.Engine │ 时钟：Engine.Playback
 ┌───────────────▼──────────────────────────────▼───────────────┐
@@ -40,16 +37,16 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 
 **依赖方向（硬约束）**
 
-- 纯核心 / library ← 应用：`match3-sdl` 依赖 `match3` 库；库**不**依赖 SDL。前端（`app/` 与 `web/hs`）从库里只 import 前端 API：`Match3.Core`（类型、查询与对局操作）、`Match3.Engine`（执行动作）、`Match3.View`（视图模型）、`Match3.Element.Event`（效果事件）与通用层 `Engine.*`；测试 `frontends_import_core_api` 扫描这一条。
-- 通用层 ← 具体游戏：`Engine.*` 与 `app/Shell/Loop.hs` 不 import 任何 `Match3` 模块；`Match3.Engine` 实现通用接口，三消前端作为插件接入外壳（见[多游戏接口](#多游戏接口)）。测试 `engine_layer_is_game_agnostic` 检查这一方向。
-- `Match3.Core` 只再导出前端用到的名字（101 个），每个函数都有前端在用（同一测试检查），前端要用新名字时在这里加。库内模块（含 `Match3.View`）与测试直接 import 所在的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、各机制模块），不经 `Core`。没有 `Match3.Board` / `Match3.Game` 这样的外观模块。
+- 纯核心 / library ← 前端：网页版（`web/match3-web.cabal`）按源码编核心库与 `app/pure`；库不依赖任何图形库。前端（`app/pure` 与 `web/hs`）从库里只 import 前端 API：`Match3.Core`（类型、查询与对局操作）、`Match3.Engine`（执行动作）、`Match3.View`（视图模型）、`Match3.Element.Event`（效果事件）与通用层 `Engine.*`；测试 `frontends_import_core_api` 扫描这一条。
+- 通用层 ← 具体游戏：`Engine.*` 不 import 任何 `Match3` 模块（原 SDL 外壳 `app/Shell/Loop.hs` 也受这条约束，已随桌面版移除）；`Match3.Engine` 实现通用接口，前端只经 `gameStep match3Shell` 执行动作（见[多游戏接口](#多游戏接口)）。测试 `engine_layer_is_game_agnostic` 检查这一方向。
+- `Match3.Core` 只再导出前端用到的名字（SDL2 前端移除后又删去 25 个只有桌面在用的导出），每个函数都有前端在用（同一测试检查），前端要用新名字时在这里加。库内模块（含 `Match3.View`）与测试直接 import 所在的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、各机制模块），不经 `Core`。没有 `Match3.Board` / `Match3.Game` 这样的外观模块。
 - 子模块之间单向依赖、无环（下文 `A ← B` 表示 B 依赖 A）：Board 内 `Grid ← Match ← Clear`、`Grid ← Gravity`、`Match ← Random`，`Cascade` 依赖 Grid / Match / Clear / Gravity / Effect（第 3 项：`Phase` / `Refill` / `Hooks` / `Wave` ← `Effect` ← `Cascade`，效果层不依赖元素世界）；Game 内 `State ← Outcome / Shuffle / Trace`、`Shuffle ← Level`，`Resolve`（公共结算）依赖 State / Tally / Outcome / Shuffle / Trace，`Move` / `Boosters` 只做校验与起手选择、依赖 `Resolve`。Game 子模块直接 import 所需的 Board 子模块。
 - 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types` → `Element.Ability`（值级能力类；`SomeElement` 的相等按具体类型（`Typeable` 的 `cast`）+ 该类型的 `Eq`）→ `Element.Kind` / `Element.Layer`（类型级）→ `Element.Rules`（通用驱动）→ `Element.Mechanic`（关卡级机制类）→ `Element.World`（解码与全部 `*With` 查询）→ `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过元素世界查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
 - 关卡级机制（第 7 刀；元素类重构第 5 刀起是 `class Mechanic`）：`Element.Mechanic`（`SomeMechanic`）← `Board.Hooks`（钩子记录 `LevelHooks`，只把机制列表当不透明载荷）← `Board.Gravity` / `Board.Cascade`；`Element.World` / `Element.Mechanic` / `Board.Hooks` ← `Element.Level`（开局、节拍折叠、造钩子；不依赖任何内置机制）← `Board.Default`（`builtinHooks`）/ `Game.State` / `Game.Level` / `Game.Resolve`。`Element.Mechanic` 为 `mechStart` 依赖 `Levels.Level`（关卡记录）。
 - 步末表（第 7b 刀）：`Board.Cascade` / `Element.Level` / `Game.Trace`（`EndStep`、`traceSpreadsWith`）← `Game.EndPhase`（`runEndTable`）← `Game.Resolve`（`endTableFor`）；步末效果的通用形状在 `Element.Event`。
 - 类型层（第 6 刀拆分）：`Match3.Color` / `Types.Name` ← `Types.Cell ← Types.Overlay / Types.Body`、`Types.Cell ← Types.Board ← Types.Game`（`Types.Game` 另依赖 `Match3.Goal`；`Types.Name` 无依赖，`Match3.Counts` 的 `CountNamed` 也用它），`Match3.Types` 只再导出这六个模块（导出列表与拆分前相同，只少了移走的关卡表、多了第 6b 刀的 `ElementName` / `CustomState`）；关卡层 `Levels.Level ← Levels.Campaign` 在 `Types` / `Element.Types`（放置表）/ `Ufo` / `Conveyor`（`Belt`）之上、`Game.Level` / `Daily` / `Game.Outcome` 之下。
 - 机制子模块（障碍、彩虹、合成、冰、草系、地毯、蜗牛、飞碟、倒计时、传送带、道具种子、每日）尽量只依赖 `Types`（及彼此必要的窄依赖），由 `Board.*` / `Game.*` 编排调用顺序。
-- 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/pure/ComboFx.hs`（纯阶段机，按时间线把它拆成帧；帧数读表现表 `UI.Presentation`）→ `UI.Playback`（阶段事件 → 弹字 / 粒子 / 震屏 / 音效队列）→ `UI.Cascade` / `UI.EndStage`（绘制，颜色 / 贴图读表现表）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
+- 回放方向单向：`Match3.Game.Resolve.resolveMove`（经 `Match3.Board.Cascade` 的记录版连锁）与结算结果一起产出 `MoveTrace` → `app/pure/ComboFx.hs`（纯阶段机，按时间线把它拆成帧；帧数读表现表 `UI.Presentation`）→ `web/hs/Match3Web/Anim.hs`（帧序列编码成 JSON）→ `web/www/render.js`（绘制，颜色 / 帧数经 `m3Meta` 读表现表）。核心**不**知道帧、阶段或样式；`ComboFx` 不 import SDL，也不调用 `trySwap` 等规则入口，只读 `MoveTrace` 与前端传入的结算后盘面。
 
 ## 模块地图
 
@@ -141,47 +138,28 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | `Engine.Optics` | Haskell 特性第 6 项：手写 van Laarhoven 光学（只依赖 base）：`Lens` / `Traversal` / `Prism`（最小的 `Choice` profunctor）、`lens` / `prism` / `prism'` / `only` / `ignored` / `_Just`、`view` / `over` / `set` / `preview` / `has` / `toListOf` / `review` 与中缀 `^.` / `%~` / `.~` / `^?` / `^..` / `&`；定律在 `test/Spec/Optics.hs` | 具体游戏的光学（`Match3.Types.Optics`、`Match3.Game.State`） |
 | `Engine.Playback` | 纯播放层：阶段机 `Stages`、播放器 `Player`（帧号 / 加速）、`stepPlayer` / `playerProgress` / `runPlayer`（第 4 项起帧计数严格、空事件表不入累积器）；固定队列 `Cue` / `cueStages` / `effectCues` | 阶段内容（由游戏给出）、SDL |
 
-### 前端模块（`app/`）
+### 前端模块（`app/pure` 与 `web/hs`）
 
-`app/pure/` 放**不依赖 SDL 的纯前端模块**（`ComboFx`、`UI.Presentation`、`UI.Sound`、`UI.GoalIcon`、`UI.MoveText`、`UI.Palette`、`UI.CellFace`、`UI.WebMeta`），是 `package.yaml` 的内部库 `match3-pure`（模块清单在那里）：可执行文件经它用；测试套件直接编译 `app/pure` 源码（它也直接编译 `src`，经内部库用会得到两份不同的 `Match3.*` 类型）；网页版按源码编（`web/match3-web.cabal` 的 `hs-source-dirs` 含 `../app/pure`，`other-modules` 只列网页用到的，`web/build.sh` 检查它们都在内部库清单里）。其余 `app/` 模块只进可执行文件。
+网页是唯一前端。原 SDL2 桌面版（`app/Main.hs`、`app/Shell/Loop.hs`、`app/UI/**` 28 个模块、`app/Art.hs`、`app/pure/UI/Sound.hs`，可执行文件 `match3-sdl`）已于 2026-10-05 移除（`refactor/web-only`）；它的模块说明见 git 历史（本文件在 `origin/main` 45844bf 的版本）。
+
+`app/pure/` 放**纯前端模块**（不依赖任何图形库），是 `package.yaml` 的内部库 `match3-pure`（模块清单在那里，`web/build.sh` 核对网页用到的模块都在清单里）：测试套件直接编译 `app/pure` 源码（它也直接编译 `src`，经内部库用会得到两份不同的 `Match3.*` 类型）；网页版按源码编（`web/match3-web.cabal` 的 `hs-source-dirs` 含 `../app/pure`，`other-modules` 列出全部 10 个）。
 
 | 模块 | 职责 |
 |------|------|
-| `Main` | 入口：读环境变量（种子 / 起始关 / 展示盘 / 窗口倍数），`runShell (match3ShellConfig o) (match3Plugin o)` |
-| `Shell.Loop` | 通用 SDL 外壳（不 import Match3）：初始化、HiDPI 窗口、渲染器、alpha 混合、固定步长主循环（帧首钩子 → 取事件 → 事件钩子 → 推进 → 绘制 → present → 补足 16 ms）、`Plugin` 钩子 |
-| `UI.Plugin` | 三消插件：初始 `App`（开局提示 / 展示盘）、加载贴图、各钩子接到 `syncScale` / `foldEvents` / `tickAnim` / `draw` |
-| `UI.Types` | `App`、`Anim`（`AnimCascade` 持有 `Player Cascade`）、`Particle`、`ToolMode`，帧数常量，`animBusy` / `playingPlayer` / `playingCascade`，第 11 刀起 `appHighlight :: App -> Highlight Pos`（选中 / 提示 / 闪光 / 自由交换第一格） |
-| `UI.Layout` | 逻辑像素布局常量、格子坐标换算（第 11 刀起 `boardGrid :: GridGeom CInt`，`pixelToCell` / `cellOrigin` / `allCells` 签名不变、经 `Engine.GridUI` 算）、矩形 / 插值工具；再导出调色板（`colorRGB` / `namedRGB` / `cellRGB` 定义在 `UI.Palette`，`elementRGBTable` / `smoothT` / `easeOutT` 定义在 `UI.Presentation`）；在这里包 / 拆 `PxX` / `PxY` |
-| `UI.Env` | 环境变量（`MATCH3_LEVEL` / `SEED` / `SCALE` / `SHOWCASE`）、展示盘、高分屏倍率与鼠标坐标换算 |
-| `UI.Input` | 输入映射：`handleEvent` 分派到 `handleKey`（每键一个函数）/ `handleMouseUp`（拖拽交换）/ `handleMouseDown`（地图 / 加速 / 结束浮层 / 点格）；点选与拖动判定经 `Engine.GridUI.gridClick` / `gridDragRelease`；规则一律经通用接口 `gameStep`（`UI.Actions.stepShell`，实例 `Match3.Engine.match3Shell`；撤销是 `Undo`，由 `Engine.History` 处理）；播放锁定（见 [ui-controls.md](ui-controls.md#播放锁定animbusy)） |
-| `UI.Actions` | 标题栏（= `Match3.View.titleLine` + `"  \|  "` + 提示消息）、`stepShell`（外壳执行动作的唯一入口：`gameStep M3E.match3Shell`）、`playMove` / `playbackOf`（一次 `gameStep` 的整步报告 → 表现编排）、关卡重置、三种道具共用的 `applyBooster`（`Booster` = 锤子 / 十字 / 自由交换；文案与之后的点选模式查 `UI.MoveText`）、回放加速、过关前进 / 重试 |
-| `UI.Playback` | 纯函数：每帧推进动画；按本次 `MoveFx` / `MoveTrace` 编排回放，阶段事件产生弹字 / 浮字 / 震屏 / 粒子；步末碎屑按表现表的 `prCrumbs` 解释（`endCrumbs`）；音效名排进 `appSounds` |
-| `UI.Draw` | 一帧的层次与贴图 / 几何分派 |
-| `UI.Cascade` | 静止盘、交换补间、轻落、逐轮回放（高亮 / 消失 / 下落）、震屏视口 |
-| `UI.EndStage` | 步末阶段绘制：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌（绘制表 `endStageDrawers` 按 `StageKind` 查；颜色、光效贴图、蔓延生长曲线读表现表） |
-| `UI.BoardArt` | 棋盘贴图绘制与分派（`drawCellAny` / `drawCellArt` / `drawStatic` 等）、回放共用的底盘部件（地毯 / 地面层 / 皮带 / 传送门读 `BoardView`，选中 / 提示 / 闪光读 `appHighlight`）；新玩法 6 的掉落口标记 `drawDropsArt` / `drawDropsAny`（读 `bvDrops`，画在棋子之上） |
-| `UI.BoardPrim` | 棋盘几何降级绘制（`drawGemAt` 查表分派、底盘 / 传送门 / 飞碟 / 皮带 / 掉落口 `drawDropMark` / 蔓延预告 / 粒子；底层与高亮同贴图版读 `BoardView` / `appHighlight`） |
-| `UI.CellTable` | 单格绘制的元素查表：元素名（元素世界）→ `CellRenderer{crPrim, crArt, crSprite}`；宝石 5 个名字共用一个渲染器；`Custom` 先查按名字的 `customTable`（段 5：气泡；新玩法 5：雪怪 `snow_boss` 按象限画四分之一身体；新玩法 7：变色龙 `chameleon` = 当前颜色宝石 + 五色环），查不到走自定义渲染器 |
-| `UI.Ground` | 段 5：地面层的绘制查表（某格的地面层第 11 刀起由 `Match3.View.groundAtView` 取）：名字 → 几何版 / 贴图名(层数)；贴图版画在棋子之下，几何版画在棋子之上（框） |
-| `UI.Cell.Prim` / `UI.Cell.Art` | 每种元素一个几何 / 贴图渲染函数（从原 `drawGemAt` / `drawCellArt` 的大 case 逐字拆出）；`Cell.Art` 另含 `colorKey` / `gemSprite` / `breathe` / 角标 |
-| `UI.Cell.PrimOverlay` | 第 10 刀：几何版宝石覆盖层，每种一个函数（`overlayGrass` / `Vine` / `Choco` / `Fog` / `Chain` / `Freeze` / `Curtain` / `Steam`，层数点共用 `overlayLayerPips`），`primOverlay` 只按构造子分派（`UI.Cell.Prim` 再导出） |
-| `UI.HudArt` / `UI.HudPrim` | HUD、横幅、键位条、暂停帮助、结算面板、弹字的贴图版 / 几何降级版（第 11 刀起 HUD 读数全部来自 `Match3.View`：关卡下标、进度点 `levelDots`、目标、步数上限、道具、右下角 `scoreBadge`；新玩法 5 起 `gvBoss` 为 `Just` 时目标条换成 Boss 血条；得分浮字色、连击贴图名读表现表）；几何版 `drawHud` 只按顺序调用 `UI.HudBlocks` 的区块 |
-| `UI.HudBlocks` | 第 10 刀：几何版 HUD 的区块（`hudFrame` 底板、`hudLevel` 关卡号与进度点、`hudGoal` 目标条、`hudGoalSwatch` 收集色块、`hudMoves` 步数条、`hudBoosters` 道具与工具模式、`hudComboBadge` 连击徽章、`hudStatus` 结局色条；新玩法 5 的 `hudBoss` 血条收 `Maybe BossView`，在 `hudGoal` 之后画；第 11 刀起参数是视图模型：`hudLevel` / `hudMoves` 收 `GameView`、`hudGoal` / `hudGoalSwatch` 收 `GoalInfo`、`hudBoosters` 收 `Boosters`、`hudComboBadge` 多收 `GameView`、`hudStatus` 收 `PlayStatus`）与进度条 `drawMeter`（`UI.HudPrim` 再导出） |
-| `UI.GoalStyle` | 第 5 刀：目标外观的唯一一张表（图标 `goalIcon` 再导出自 `UI.GoalIcon`、贴图版色调 `goalTint`、几何版 / 地图小点颜色 `goalPip`），按 `goalView` 分派（新玩法 7：`CountNamed "chameleon"` 的图标是合成图 `chameleon_icon`）；HUD、选关地图读它（颜色文字标签 `colorTag` 在 `Match3.View`） |
-| `UI.TextArt` / `UI.Glyph` | 烘焙文字 / 中文标签贴图的排版；缺字形时的像素字 |
-| `UI.LevelMap` | 选关地图：章节、节点坐标、点击命中、两种绘制 |
 | `ComboFx`（`app/pure`） | 连锁逐轮回放的纯逻辑（步末阶段种类与基础帧数、高亮 / 浮字 / 弹字帧数都查表现表 `UI.Presentation`，按事件种类分派；`StageKind` / 连击等级样式从那里再导出）：阶段机 `cascadeStages`（高亮→消失→下落→落定，以及步末阶段：倒计时 / 皮带 / 蔓延 / 蜗牛 / 自动洗牌；帧号与加速交给 `Engine.Playback.Player`）、波次视图 `WaveView`（快照 + 本轮效果事件）、时间线常量、连击等级样式、下落映射、浮字曲线；只消费 `MoveTrace` 与效果事件，不绘制 |
-| `UI.Presentation`（`app/pure`） | 第 10 刀：效果事件 → 前端表现的唯一一张表 `presentationTable`（表现方式、帧数、主色、贴图、步末碎屑、音效名），按元素名细分的生长曲线 `spreadCurves` 与颜色 `elementRGBTable`、缺省表现、连击等级样式、缓动；纯数据，不 import SDL，见[前端表现表](#前端表现表第-10-刀) |
-| `UI.Sound`（`app/pure`） | 音效名的纯部分：`cascadeEventKinds`（回放阶段事件 → 效果种类）、`cascadeSounds`（查表现表的 `effectSound`）；`playSounds` 是留给网页等其他前端的空操作，桌面版不用它（真正播放在 `UI.Audio`） |
-| `UI.Palette`（`app/pure`） | 调色板：五色主色 `colorRGB`、名字目标 / 自定义元素取色 `namedRGB`、格子的粒子 / 退回画法颜色 `cellRGB`（元素名的颜色查 `UI.Presentation.elementRGBTable`，元素给出当前颜色时按它）；`UI.Layout` 再导出；网页经 `UI.WebMeta` / `m3Meta` 读同一份 |
-| `UI.CellFace`（`app/pure`） | 桌面按名字读单格的显示附加字段（`Match3.View.cellExtras`）：`bossPart`（q / hurt / turn / every → `BossPart`）、`faceColor`（c）；不认元素名 |
+| `UI.Presentation`（`app/pure`） | 第 10 刀：效果事件 → 前端表现的唯一一张表 `presentationTable`（表现方式、帧数、主色、贴图、步末碎屑、音效名），按元素名细分的生长曲线 `spreadCurves` 与颜色 `elementRGBTable`、缺省表现、连击等级样式、缓动；纯数据，见[前端表现表](#前端表现表第-10-刀) |
+| `UI.Palette`（`app/pure`） | 调色板：五色主色 `colorRGB`、名字目标 / 自定义元素取色 `namedRGB`、格子的粒子 / 退回画法颜色 `cellRGB`（元素名的颜色查 `UI.Presentation.elementRGBTable`，元素给出当前颜色时按它）；网页经 `UI.WebMeta` / `m3Meta` 读 |
+| `UI.CellFace`（`app/pure`） | 按名字读单格的显示附加字段（`Match3.View.cellExtras`）：`bossPart`（q / hurt / turn / every → `BossPart`）、`faceColor`（c）；不认元素名；`UI.Palette` 用 |
 | `UI.WebMeta`（`app/pure`） | 网页启动时读的表现表（`m3Meta`）：颜色、格子取色规则、碎屑色、生长曲线、帧数、音效名，全由 `UI.Palette` / `UI.Presentation` / `ComboFx` 推出；`metaCellRGB` 按网页取色规则算颜色（`Spec.WebColors` 核对 = `cellRGB`） |
-| `UI.MoveText`（`app/pure`） | 桌面走步提示文案：`moveMsg`（界面路径 `MoveUi` = 拖拽 / 点击 / 锤子 / 十字 / 自由交换 × 结算结果 `Outcome` → 一句话，写进 `appMsg`）、`keepsTool`（只有自由交换换不掉时保持点选模式）；`UI.Actions` / `UI.Input` 调用，文案由 `test/Spec/MoveText.hs` 逐字钉住；网页不编译它 |
-| `UI.GoalIcon`（`app/pure`） | 关卡目标 → 图标贴图名 `goalIcon` 的唯一一张表（按 `goalView` 分派，复用棋子贴图）；桌面贴图版 HUD / 选关地图（经 `UI.GoalStyle` 再导出）与网页版（`Match3Web.Api` 编进 `state.goal.icon`）共用 |
-| `UI.Audio` | 桌面音效与 BGM（SDL 音频，素材 `assets/sfx/*.wav`）：`start` 加载并开设备、`cue` 播放一组音效名（`UI.Plugin` 每帧把 `appSounds` 队列交给它；`win` / `lose` 同时停 BGM）、`beginLevel` 进关重新循环 BGM、`toggleSfx` / `toggleBgm`（K / B 键，偏好写在 `~/.config/match3/{sfx,bgm}`）、`sfxEnabled` / `bgmEnabled`（HUD 开关芯片读）；缺设备或缺文件时静默 |
-| `Art` | 贴图图集（BMP + 索引）加载、路径查找、九宫格面板、染色/加色绘制；缺资源时各绘制模块退回几何版 |
+| `UI.GoalIcon`（`app/pure`） | 关卡目标 → 图标贴图名 `goalIcon` 的唯一一张表（按 `goalView` 分派，复用棋子贴图）；`Match3Web.Api` 编进 `state.goal.icon` |
+| `UI.MoveText`（`app/pure`） | 道具点选模式规则 `keepsTool`（只有自由交换换不掉时保持点选模式；网页 `m3Hammer` / `m3Cross` / `m3FreeSwap` 的 `keepTool` 字段）与界面路径 `MoveUi`；原桌面英文走步文案 `moveMsg` 已随 SDL2 前端移除 |
+| `UI.Chapters`（`app/pure`） | 选关地图的章节划分（CH1–CH7），网页 `m3Meta.chapters` |
+| `UI.Showcase`（`app/pure`） | 元素展示盘（网页 `?showcase=1`） |
+| `UI.Restart`（`app/pure`） | 「重开本关」规则 `restartSame`（每日挑战按开局步数与原目标换种子重开，战役关 `restartLevel`） |
+| `Match3Web.Api`（`web/hs`） | wasm 导出：对局状态 JSON、交换 / 道具 / 撤销 / 提示 / 切关 / 重开（一律经 `gameStep match3Shell`）、`m3Meta`；见 [web.md](web.md) |
+| `Match3Web.Anim` / `Match3Web.Json`（`web/hs`） | 回放帧序列编码、最小 JSON 编码器 |
 
-前端依赖同样单向无环：纯模块 `UI.Presentation ← ComboFx ← UI.Sound` 与 `UI.MoveText`、`UI.CellFace ← UI.Palette ← UI.WebMeta`（另依赖 `UI.Presentation` / `ComboFx`）在最底层（只依赖核心库），其上 `UI.Types` / `UI.Layout`；`UI.HudBlocks ← UI.HudPrim`、`UI.Cell.PrimOverlay ← UI.Cell.Prim`；`UI.Glyph ← UI.TextArt ← UI.HudArt`，`UI.GoalStyle ← UI.HudArt / UI.HudBlocks / UI.LevelMap`；核心库的 `Match3.View` 与 `Engine.GridUI` 被 HUD / 棋盘 / 标题 / 输入 / `UI.Layout` / `UI.Types` 读，`UI.Cell.Prim / UI.Cell.Art ← UI.CellTable ← UI.BoardPrim ← UI.BoardArt ← UI.EndStage ← UI.Cascade ← UI.Draw`，`UI.Playback ← UI.Actions ← UI.Input ← UI.Plugin ← Main`，`Shell.Loop ← UI.Plugin`（`A ← B` 表示 B 依赖 A）。
+前端依赖同样单向无环：`UI.Presentation ← ComboFx`、`UI.CellFace ← UI.Palette`（另依赖 `UI.Presentation`）`← UI.WebMeta`（另依赖 `UI.Presentation` / `ComboFx`），`UI.GoalIcon` / `UI.MoveText` / `UI.Chapters` / `UI.Showcase` / `UI.Restart` 只依赖核心库；`web/hs` 在最上层（`A ← B` 表示 B 依赖 A）。
 
 ## 构建工具链
 
@@ -191,16 +169,16 @@ app/（可执行文件 match3-sdl，依赖 SDL2；图中箭头 = 依赖）
 | Resolver | **lts-24.60** + `compiler: ghc-9.14.1`（Stackage 暂无 9.14 快照；`extra-deps` 钉 random 1.2.1.1 / splitmix 0.1.0.5 等，见 `stack.yaml`） |
 | GHC | **9.14.1**（`stack.yaml`：`system-ghc: true`，用 ghcup 安装） |
 | 库名 | `match3` |
-| 内部库 | `match3-pure`（`app/pure`，可执行文件用） |
-| 可执行文件 | `match3-sdl` |
+| 内部库 | `match3-pure`（`app/pure`；模块清单是网页版与测试共用的权威列表） |
+| 可执行文件 | 无（原 `match3-sdl` 已移除；网页版由 `web/build.sh` 用 wasm32-wasi-cabal 构建） |
 | 测试套件 | `match3-test`（入口 `test/Spec.hs` 汇总 `test/Spec/*.hs` 各功能模块，tasty + HUnit + QuickCheck；直接编译 `src/`，不依赖库，见 [testing.md「套件结构」](testing.md#套件结构)） |
 
-库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（`Match3.Counts` 用 `Data.Map.Strict`）与 `transformers`（网页版 `web/match3-web.cabal` 同样列出这几项）。可执行文件（不用 `array`）：`base`、`random`、`sdl2`、`text`、`vector`，以及 GHC 自带的 `directory`、`filepath`（贴图加载）、`bytestring` 与 `containers`。测试组件直接编译 `src/`，所以列出库的依赖（`array`、`containers`、`transformers`、`random`），另用 `stm`、`tasty` 系列与 `directory`。各组件的依赖都经 `-Wunused-packages` 核对过，没有多余项。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
+库依赖：`base`、`array`、`random`，以及 GHC 自带的 `containers`（`Match3.Counts` 用 `Data.Map.Strict`）与 `transformers`（网页版 `web/match3-web.cabal` 同样列出这几项）。内部库 `match3-pure`：顶层公共依赖之外只加 `match3`。（原可执行文件的 `sdl2`、`text`、`vector`、`bytestring`、`filepath` 与只经 SDL2 依赖链引入的 `stack.yaml` extra-deps `parallel` / `unordered-containers` 已随桌面版移除。）测试组件直接编译 `src/`，所以列出库的依赖（`array`、`containers`、`transformers`、`random`），另用 `stm`、`tasty` 系列与 `directory`。各组件的依赖都经 `-Wunused-packages` 核对过，没有多余项。贴图由 `tools/gen_assets.py` 生成到 `assets/`，详见 [ui-art.md](ui-art.md)。
 
 ## 网页版（技术验证）
 
 `web/` 目录（已合入 main，`59f1e53`）用 GHC wasm 后端把核心（`Engine.*` / `Match3.*`）和 `ComboFx` 编成 wasm，
-接口层 `web/hs/Match3Web/Api.hs` 与桌面外壳一样只调 `gameStep match3Shell`，JS 只负责绘制与输入，核心源码不改。
+接口层 `web/hs/Match3Web/Api.hs` 只调 `gameStep match3Shell`（网页是唯一前端），JS 只负责绘制与输入，核心源码不改。
 元素框架（`Match3.Element.Ability` / `Kind` / `Layer` / `World` / `Mechanic` 与 `SomeElement` 等存在类型、
 `Match3.Element.Builtin.*` 分文件）整体编进 wasm；网页接口层不直接调用元素类，盘面按 `Cell` 构造器编码成 JSON，
 所以元素迁移不改变网页端的 JSON 与贴图映射。核心新增模块时要同步到 `web/match3-web.cabal`（`web/build.sh` 会核对）。
@@ -347,7 +325,7 @@ instance Kind StoneE where
 | `EvTick` / `EvBelt` / `EvSpread` / `EvMove` | `mtEnd` 的每个 `EndStep` | countdown / belt / vine·choco·steam / snail | 原格 → 新格 |
 | `EvShuffle` | `mtShuffle` | — | — |
 
-前端按事件种类查**表现表** `UI.Presentation.presentationTable`（第 10 刀起的唯一一张表，取代原来的 `ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.spreadProgress`（生长曲线）以及散在 `UI.BoardArt.waveTint` / `UI.HudArt` / `UI.HudPrim` / `UI.EndStage` 的颜色与贴图常量）；步末阶段怎么画仍由 `UI.EndStage.endStageDrawers`（阶段 → 绘制）分派，元素名 → 颜色在 `UI.Presentation.elementRGBTable`。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
+前端按事件种类查**表现表** `UI.Presentation.presentationTable`（第 10 刀起的唯一一张表，取代原来的 `ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.spreadProgress`（生长曲线）以及散在 `UI.BoardArt.waveTint` / `UI.HudArt` / `UI.HudPrim` / `UI.EndStage` 的颜色与贴图常量；这些桌面模块已随 SDL2 前端移除）；步末阶段怎么画由网页 `web/www/render.js` 的 `drawEndStage`（阶段 → 绘制）分派，元素名 → 颜色在 `UI.Presentation.elementRGBTable`。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
 
 ### 前端表现表（第 10 刀）
 
@@ -363,6 +341,8 @@ data Presentation = Presentation
   , prSound  :: Maybe SoundName   -- 音效名（内置：EvClear = "clear"、EvBlast = "special"，其余 Nothing）
   }
 ```
+
+「读取方」一列是第 10 刀时的读表位置；其中 `UI.*`（`app/UI`）是原 SDL2 桌面版模块，已随桌面版移除，网页经 `m3Meta`（`UI.WebMeta`）读同一张表、在 `web/www/render.js` / `hud.js` 里画。
 
 | 事件 | 表现方式 | 帧数 | 主色 | 贴图 | 碎屑 | 读取方 |
 |------|----------|------|------|------|------|--------|
@@ -380,18 +360,18 @@ data Presentation = Presentation
 
 **缺省表现（扩展元素）**：`EventKind` 是封闭的，扩展元素的步末效果也落在某个已有种类上（例如测试里的 `hopper` 产出 `EvMove`，按蜗牛段播放）；按元素名细分的表里没有的名字用明确的缺省——生长曲线 `defaultSpreadCurve = CurveLinear`（匀速）、前沿柔光 `defaultSpreadGlow = (255,255,255)`（白）、`CrumbsByElement` 查不到颜色时不迸碎屑。整张表里查不到的种类（将来新增 `EventKind` 忘了加行）用 `defaultPresentation`：蔓延段、18 帧、无颜色 / 贴图 / 碎屑 / 音效（与第 10 刀前 `stageKindFor` / `endStageBase` 的缺省相同）。测试 `presentation_extension_defaults` 锁定这些缺省。
 
-**音效**：`effectSound :: EventKind -> Maybe SoundName` = 表项的 `prSound`；内置表只有消除 `EvClear` = `"clear"`、爆炸 `EvBlast` = `"special"`，其余无声。回放每切换一个阶段，`UI.Playback.applyCascadeEvent` 经 `UI.Sound.cascadeSounds`（高亮 = `EvCombo`（连击轮）；消失 = 本轮的轮内事件种类；步末段 = 该段每步的种类）把查到的音效名追加到 `App.appSounds`；走子结果的音效（`swap` / `illegal` / `win` / `lose`）由 `UI.Input` 按 `Outcome` 追加。`UI.Plugin` 每帧推进后把队列交给 `UI.Audio.cue` 播放并清空；音效只在 UI 层，不影响规则与帧序（`effect_sound_names_clear_and_special`、`cascade_sounds_follow_clear_and_special`）。
+**音效**：`effectSound :: EventKind -> Maybe SoundName` = 表项的 `prSound`；内置表只有消除 `EvClear` = `"clear"`、爆炸 `EvBlast` = `"special"`，其余无声。网页经 `m3Meta` 取音效名（`UI.WebMeta`，`web/www/audio.js`），回放时按同一张表选音效；音效只在前端，不影响规则与帧序（`effect_sound_names_clear_and_special`）。（原桌面 `UI.Sound.cascadeSounds` / `UI.Playback` / `UI.Audio.cue` 的音效队列已随 SDL2 前端移除。）
 
 **给新元素加表现和音效**：
 
 1. 新元素的步末效果选一个已有 `EventKind`（蔓延类用 `EvSpread`、会走的用 `EvMove`……），不用改表就能按那一行播放；
-2. 蔓延类要自己的颜色 / 生长节奏：在 `elementRGBTable` 加 `("名字", (r, g, b))`（同时决定前沿柔光、碎屑、HUD 目标色块与几何版 `Custom` 格颜色），在 `spreadCurves` 加 `("名字", CurveSegments n | CurveEaseOut | CurveLinear)`；
-3. 要音效：给那一行填 `prSound = Just "名字"`（按事件种类，不按元素），并在 `assets/sfx/` 放同名 `.wav`、把名字加进 `UI.Presentation.soundNames`（桌面 `UI.Audio` 按它加载，网页经 `m3Meta` 取，JS 不用改）；
-4. 真正新的表现方式（新的 `StageKind`）才需要：`StageKind` 加构造子 → 表里加一行 `LookStage 新段` → `UI.EndStage.endStageDrawers` 加绘制函数；测试 `presentation_table_covers_every_event_kind` 会检查每种事件恰有一行、每个段恰有一种事件使用。
+2. 蔓延类要自己的颜色 / 生长节奏：在 `elementRGBTable` 加 `("名字", (r, g, b))`（同时决定前沿柔光、碎屑、HUD 目标色块与 `Custom` 格的退回颜色），在 `spreadCurves` 加 `("名字", CurveSegments n | CurveEaseOut | CurveLinear)`；
+3. 要音效：给那一行填 `prSound = Just "名字"`（按事件种类，不按元素），并在 `assets/sfx/` 放同名 `.wav`、把名字加进 `UI.Presentation.soundNames`（网页经 `m3Meta` 取，JS 不用改）；
+4. 真正新的表现方式（新的 `StageKind`）才需要：`StageKind` 加构造子 → 表里加一行 `LookStage 新段` → 网页 `web/www/render.js` 的 `drawEndStage` 加绘制分支；测试 `presentation_table_covers_every_event_kind` 会检查每种事件恰有一行、每个段恰有一种事件使用。
 
 ### 视图模型（第 11 刀）
 
-`src/Match3/View.hs` 是「从 `GameState` / 回放状态算前端要画的东西」的唯一一处，纯函数、字段惰性（不用的读数不算）。桌面版的 HUD（贴图 / 几何）、窗口标题、提示后缀、棋盘底层，网页版的 `encodeState` / `encodeGoal` / `encodeCell` / `apiLevels` 都读它；各字段是第 11 刀前各前端现算式的逐字搬迁（`view_*` 测试对照字面副本）。
+`src/Match3/View.hs` 是「从 `GameState` / 回放状态算前端要画的东西」的唯一一处，纯函数、字段惰性（不用的读数不算）。网页版的 `encodeState` / `encodeGoal` / `encodeCell` / `apiLevels` 都读它；各字段是第 11 刀前各前端现算式的逐字搬迁（`view_*` 测试对照字面副本）。
 
 ```haskell
 data GameView = GameView
@@ -409,18 +389,18 @@ data GameView = GameView
 
 | 函数 | 用途 | 读取方 |
 |------|------|--------|
-| `titleLine gv` | 窗口标题（不含 `"  \|  "` 与消息） | `UI.Actions.updateTitle` |
-| `goalLine` / `goalBracket` | 标题目标段 / 提示消息里的收集进度 `[RED 3/20]` | `titleLine`、`UI.Input.collectMsg` |
-| `carpetAt bv pos` / `groundAtView bv pos` | 逐格地毯标记（`CarpetNone` / `CarpetCovered` / `CarpetOpen`）/ 地面层 | `UI.BoardPrim` / `UI.BoardArt` |
-| `bvDrops bv` | 新玩法 6：掉落口格（`Element.Level.levelDrops`；没有掉落口为空） | `UI.BoardArt.drawDropsArt` / `UI.BoardPrim.drawDropMark` |
-| `levelDots cur maxReached` | 各关进度点 `DotCurrent` / `DotDone` / `DotUnlocked` / `DotLocked`（贴图版传夹紧下标与最高解锁；几何版传原值与 −1） | `UI.HudArt` / `UI.HudBlocks.hudLevel` |
-| `scoreBadge replay summaryLeft best gv` | 右下角：`BadgeCombo n`（回放中连击 ≥2）/ `BadgeRolling 分`（回放中）/ `BadgeSummary n`（播完后的总结）/ `BadgeScore 洗牌? 分`；回放状态由前端从 `Cascade` 换成 `ReplayView{rvCombo, rvShownScore}` | `UI.HudArt`、`UI.HudBlocks.hudComboBadge`（只画 `BadgeCombo` / `BadgeSummary`） |
+| `titleLine gv` | 标题（不含 `"  \|  "` 与消息） | `Match3Web.Api`（原桌面窗口标题） |
+| `goalLine` / `goalBracket` | 标题目标段 / 提示消息里的收集进度 `[RED 3/20]` | `titleLine`（原桌面 `UI.Input.collectMsg`，已移除） |
+| `carpetAt bv pos` / `groundAtView bv pos` | 逐格地毯标记（`CarpetNone` / `CarpetCovered` / `CarpetOpen`）/ 地面层 | 网页 `encodeState`（原桌面 `UI.BoardPrim` / `UI.BoardArt`） |
+| `bvDrops bv` | 新玩法 6：掉落口格（`Element.Level.levelDrops`；没有掉落口为空） | 网页 `state.drops`（原桌面 `drawDropsArt` / `drawDropMark`） |
+| `levelDots cur maxReached` | 各关进度点 `DotCurrent` / `DotDone` / `DotUnlocked` / `DotLocked`（贴图版传夹紧下标与最高解锁；几何版传原值与 −1） | 原桌面 `UI.HudArt` / `UI.HudBlocks.hudLevel`（已移除；网页自己画进度） |
+| `scoreBadge replay summaryLeft best gv` | 右下角：`BadgeCombo n`（回放中连击 ≥2）/ `BadgeRolling 分`（回放中）/ `BadgeSummary n`（播完后的总结）/ `BadgeScore 洗牌? 分`；回放状态由前端从 `Cascade` 换成 `ReplayView{rvCombo, rvShownScore}` | 原桌面 `UI.HudArt` / `UI.HudBlocks.hudComboBadge`（已移除） |
 | `levelViews` | 关卡列表（序号 / 名字 / 步数 / 目标） | 网页 `apiLevels` |
-| `cellFace cell` | 单格结构化描述（类型标签 + 按固定顺序的 `CellField` 字段） | 网页 `encodeCell`（桌面按 `UI.CellTable` 画，不读它） |
+| `cellFace cell` | 单格结构化描述（类型标签 + 按固定顺序的 `CellField` 字段） | 网页 `encodeCell` |
 
-网格交互在通用层 `Engine.GridUI`（见[模块地图](#通用层srcengine)）：桌面的 `UI.Layout.boardGrid` 描述棋盘在窗口里的位置，`pixelToCell` / `cellOrigin` / `allCells` 签名不变；`UI.Input` 的普通点选与自由交换两步点选都是 `gridClick`，拖动交换是 `gridDragRelease adjacent`；`UI.Types.appHighlight` 给出本帧高亮，两套棋盘绘制按它画选中环 / 提示光 / 闪光 / 自由交换第一格。
+网格交互在通用层 `Engine.GridUI`（见[模块地图](#通用层srcengine)）：原 SDL 桌面版用它做像素 ↔ 格（`GridGeom`）、点选（`gridClick`）、拖动交换（`gridDragRelease adjacent`）与本帧高亮（`Highlight`）。桌面版移除后它暂无前端调用（网页的命中判定在 `web/www/main.js`），作为通用层保留，行为由 `grid_ui_*` 测试钉住。
 
-**加一个要显示的读数**：在 `GameView`（或 `GoalInfo` / `BoardView`）加字段并在 `gameView` 里算，桌面与网页都从视图读；不要在前端再从 `GameState` 现算（`frontends_read_view_model` 扫描 HUD / 棋盘 / 网页 API）。
+**加一个要显示的读数**：在 `GameView`（或 `GoalInfo` / `BoardView`）加字段并在 `gameView` 里算，网页 `Match3Web.Api` 从视图读；不要在前端再从 `GameState` 现算（`frontends_read_view_model` 扫描网页 API）。
 
 ### 扩展钩子（段 2c）
 
@@ -453,7 +433,7 @@ data GameView = GameView
    - 胜负条件：内置规则判出结局后经机制的 `judge` 节拍复核（`judgeIn`），新的输赢法（限时、某物落底即输……）只写一个实现 `judge` 的 `Mechanic`，不改 `Game.Outcome`。
 3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 末尾加一行 `kindDef @类型`（已有项不要重排：注册顺序被元素查询快照的 `R` 行锁定；关卡级机制加进 `builtinMechanics`）；测试 / 扩展元素 = `register (kindDef @类型) defaultWorld`（叠层 `layerDef`，地面层 `groundDef`，关卡级机制 `registerMechanic (SomeMechanic 原型值)`，开局状态写在 `mechStart` 里，开局 / 走子用 `newGameAtLevelWith w` 与 `*With w` 入口），把世界传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith w`。
 4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 `Kind.place` 落格（`customPlace "名字"` = `Custom 名字 第一个整数参数`；要别的解析就自己写 `Placer`，参数解析器见 `Element.Types` 的 `ArgP`）。
-5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在 `UI.CellTable.customTable` 加一行，地面层元素在 `UI.Ground.groundTable` 加一行，颜色在 `UI.Presentation.elementRGBTable`（HUD 目标 / 地图 / 几何版 / 步末前沿与碎屑共用）；步末效果的播放、生长曲线与音效见[前端表现表](#前端表现表第-10-刀)的「给新元素加表现和音效」；网页端什么时候要改 `web/www/cells.js` 见 [web.md §2.3](web.md#23-js-渲染器)。
+5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在网页 `web/www/cells.js` 加画法，颜色在 `UI.Presentation.elementRGBTable`（HUD 目标 / 地图 / 步末前沿与碎屑共用，网页经 `m3Meta` 读）；步末效果的播放、生长曲线与音效见[前端表现表](#前端表现表第-10-刀)的「给新元素加表现和音效」；网页端什么时候要改 `web/www/cells.js` 见 [web.md §2.3](web.md#23-js-渲染器)。
 6. 测试：参照 `archetype_ext_element_plugs_in`（`test/Spec/Archetype.hs`，最短的完整例子：障碍「荆棘」`Thorn` 不改主流程接入）、`element_world_custom_crate_extensibility`、`test/Spec/Extension.hs` 与 `test/Spec/ElementClass.hs`（测试专用「木箱」`Crate` 只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
 ### 专门分支的收编（段 4）
@@ -530,15 +510,14 @@ data GameView = GameView
 │ src/Engine/Effect.hs    Effect（节拍 / 种类 / 主体 / 格 / 数量）、beats                      │
 │ src/Engine/Playback.hs  Stages / Player / Tick：帧节拍、分段推进、加速、进度；Cue 队列        │
 │ src/Engine/GridUI.hs    GridGeom / gridCellAt / gridClick / gridDragRelease / Highlight：网格 UI│
-│ app/Shell/Loop.hs       SDL 外壳：初始化 / HiDPI 窗口 / 渲染器 / 固定 16 ms 主循环；Plugin   │
 └──────────────▲───────────────────────────────▲──────────────────────────▲────────────────┘
-               │ 实现 Game                      │ 用 Player + 自己的 Stages  │ 实现 Plugin
+               │ 实现 Game                      │ 用 Player + 自己的 Stages  │ 只调 gameStep match3Shell
 ┌──────────────┴─────────────┐  ┌──────────────┴──────────────┐  ┌────────┴──────────────────┐
-│ 三消实现（库）              │  │ 三消回放（app/pure/ComboFx）  │  │ 三消插件（app/UI.*）        │
-│ Match3.Engine：match3Game、│  │ cascadeStages：高亮→消失→下落 │  │ UI.Plugin 钩子、UI.Input   │
-│ Action、match3Shell、toEffect│  │ →落定 / 步末阶段；WaveView    │  │ 输入映射、UI.Draw /        │
-│   ▲ Match3.Game.* / Board.* │  │                              │  │ UI.CellTable 绘制          │
-│   │ / Element.*（规则）      │  │                              │  │                            │
+│ 三消实现（库）              │  │ 三消回放（app/pure/ComboFx）  │  │ 网页接口层（web/hs）        │
+│ Match3.Engine：match3Game、│  │ cascadeStages：高亮→消失→下落 │  │ Match3Web.Api / Anim：     │
+│ Action、match3Shell、toEffect│  │ →落定 / 步末阶段；WaveView    │  │ JSON 编码，JS 绘制与输入   │
+│   ▲ Match3.Game.* / Board.* │  │                              │  │（原 SDL 外壳 Shell.Loop 与 │
+│   │ / Element.*（规则）      │  │                              │  │  插件 app/UI.* 已移除）    │
 └────────────────────────────┘  └──────────────────────────────┘  └────────────────────────────┘
 测试：test/Toy.hs（只 import Engine.*）+ engine_toy_counter_game
 ```
@@ -565,7 +544,7 @@ data GameView = GameView
 
 `Engine.Playback`：`Stages{stageLen, stageNext}` 由游戏给出（阶段多长；播完后 `Right (下一阶段, 进入时触发的事件)` 或 `Left 最终状态`）；`Player{plStage, plFrame, plFast}` 只管时钟：每帧推进 1 帧、加速后推进 `fastStep` 帧，到达阶段长度就切换、帧归零。`playerProgress` 给出阶段进度 0..1。简单游戏可直接用 `effectCues framesFor effects` + `cueStages`。
 
-`Shell.Loop.Plugin w{plugInit, plugBegin, plugEvents, plugTick, plugDraw}`：外壳在窗口 / 渲染器建好后调 `plugInit` 建世界状态 `w`，之后每帧依次调 `plugBegin` → 取事件 → `plugEvents`（返回是否退出）→ `plugTick` → `plugDraw` → present → 补足 `scFrameMs`。
+（原 SDL 外壳 `Shell.Loop` 的插件记录 `Plugin w{plugInit, plugBegin, plugEvents, plugTick, plugDraw}` 已随桌面版移除；网页前端的帧循环在 `web/www/main.js`，每步经 wasm 导出调 `gameStep match3Shell`。）
 
 **取舍：record-of-functions，而不是带关联类型的 typeclass。** 同一种游戏可以有多份配置不同的实例（三消：`match3GameWith world` 接任意元素世界），记录是一等值，类型类按类型只能有一个实例；不需要 `TypeFamilies` / 孤儿实例，玩具实现在测试里写一个值即可；状态、动作、事件、结局都是普通类型参数，推断直接。代价是没有「按类型自动找实例」，调用处要显式传 `Game` 值——对只有少数几个游戏的项目这是好事。
 
@@ -580,7 +559,7 @@ data GameView = GameView
 | `Hint` | `applyHint`（写 `gsHint`，`pdHint` 带回提示） | 从不 | 无 |
 | `Shuffle` | `shuffleGame` | 已结束 | `EvShuffle` |
 
-撤销不是三消的动作：外壳用 `match3Shell`（`withHistory match3History match3Game`），动作是 `Act (Swap p q)` / … / `Undo`。整步报告 `Played{pdState, pdOutcome, pdTrace, pdFx, pdEvents, pdHint, pdAccepted}` 经 `stepReport` 带回；界面行为（终局后仍可撤销、终局后按 H 仍给提示）与原来直接调 `play` 完全相同。测试：`engine_match3_instance_matches_direct_api`（`gameStep` 与直接调旧入口逐位相同）、`engine_undo_after_terminal_matches_legacy_play`（终局后撤销 = `13094d1` 的 `play Undo`）、`engine_frontend_steps_only_via_gameStep`（`app/` 源码扫描）。
+撤销不是三消的动作：外壳用 `match3Shell`（`withHistory match3History match3Game`），动作是 `Act (Swap p q)` / … / `Undo`。整步报告 `Played{pdState, pdOutcome, pdTrace, pdFx, pdEvents, pdHint, pdAccepted}` 经 `stepReport` 带回；界面行为（终局后仍可撤销、终局后按 H 仍给提示）与原来直接调 `play` 完全相同。测试：`engine_match3_instance_matches_direct_api`（`gameStep` 与直接调旧入口逐位相同）、`engine_undo_after_terminal_matches_legacy_play`（终局后撤销 = `13094d1` 的 `play Undo`）、`engine_frontend_steps_only_via_gameStep`（`app/pure` + `web/hs` 源码扫描）。
 
 **段 3 对 `Engine.*` 的改动**：`Engine.Game` 的 `Game` / `Step` 多一个类型参数 `r` 与字段 `stepReport`（原因：前端要的回放脚本 / 特效 / 提示原来只能从 `play` 拿，要让外壳只调 `gameStep`，接口必须能带出整步报告）；新增 `Engine.History`。玩具 `test/Toy.hs` 的 `r = ()`，其余不变。
 
@@ -590,7 +569,7 @@ data GameView = GameView
 2. **写 `Game` 值**：`gameNew`（只在这里用种子）、`gameStep`（纯；非法动作返回 `rejectedStep` 式的结果）、`gameOutcome`、`gameActions`、`gameStatus`、`gameEffect`。
 3. **纯测试**：参照 `test/Toy.hs` 与 `engine_toy_counter_game`——`runActions` 走到胜 / 负、非法动作被拒且不改状态、结局后拒绝一切、`gameActions` 全部被接受、效果按节拍播放的帧数（含加速）。
 4. **回放**：时间线简单就用 `effectCues` + `cueStages`；复杂时间线自己写 `Stages`（参照 `ComboFx.cascadeStages`），交给 `Player`，绘制时用 `playerProgress` 取进度。
-5. **前端**：网格类游戏直接用 `Engine.GridUI`（`GridGeom` 做像素 ↔ 格、`gridClick` / `gridDragRelease` 做点选 / 拖动、`Highlight` 做高亮）；前端要画的读数写成一个纯的视图模型模块（参照 `Match3.View`），桌面 / 网页都读它。
-6. **外壳**：写一个 `Plugin`（`plugInit` 加载资源、建世界状态；`plugEvents` 把 SDL 事件映射成动作并调 `gameStep`（要撤销就用 `withHistory` 套一层，历史不要放进游戏状态；前端要的额外数据放进 `stepReport`）；`plugTick` 推进 `Player`；`plugDraw` 绘制），`main = runShell cfg plugin`。
-7. **依赖检查**：新游戏与通用层之间只允许「新游戏 → Engine.* / Shell.Loop」；需要时把新的通用文件加入 `engine_layer_is_game_agnostic` 的检查列表。
+5. **前端**：网格类游戏直接用 `Engine.GridUI`（`GridGeom` 做像素 ↔ 格、`gridClick` / `gridDragRelease` 做点选 / 拖动、`Highlight` 做高亮）；前端要画的读数写成一个纯的视图模型模块（参照 `Match3.View`），前端只读它。
+6. **外壳**：参照 `web/hs/Match3Web/Api.hs` 写接口层：把输入映射成动作并调 `gameStep`（要撤销就用 `withHistory` 套一层，历史不要放进游戏状态；前端要的额外数据放进 `stepReport`），状态与回放帧编码给 JS 绘制。
+7. **依赖检查**：新游戏与通用层之间只允许「新游戏 → Engine.*」；需要时把新的通用文件加入 `engine_layer_is_game_agnostic` 的检查列表。
 8. **文档**：在本节的分层图与模块地图里登记新模块。

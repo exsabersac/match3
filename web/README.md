@@ -1,7 +1,7 @@
-# 网页版技术验证（GHC WebAssembly 后端）
+# 网页版（GHC WebAssembly 后端，唯一前端）
 
 目标：不改一行核心代码，把纯规则核心 `src/Engine/*` + `src/Match3/*` 用 GHC 的 wasm 后端编成 `.wasm`，
-在浏览器里用桌面版同一套美术（2x 精灵图集）把 49 关跑通。**所有规则判定和动画时间轴都来自 Haskell 核心**
+在浏览器里用 `assets/` 的美术（重新打包成 2x 精灵图集）把 49 关跑通。网页是**唯一前端**（安卓是网页套壳，PC 端以后同样套壳；原 SDL2 桌面版已于 `refactor/web-only` 移除）。**所有规则判定和动画时间轴都来自 Haskell 核心**
 （动画状态机 `app/pure/ComboFx.hs` 与表现表 `app/pure/UI/Presentation.hs` 也一起编进 wasm），JS 只负责加载、Canvas 2D 绘制、收指针事件。
 
 结构、取舍、部署与 TODO 的总览见 [`docs/web.md`](../docs/web.md)；本文是操作手册。
@@ -18,7 +18,7 @@ web/
 ├── match3-web.cabal      可执行 match3-web：hs/ + 直接引用 ../src（不复制核心源码）
 ├── hs/
 │   ├── Match3Web/Api.hs  纯接口层：经 Match3.Engine.match3Shell 的 gameStep 执行，Step / Played → JSON（无 JSFFI，原生 GHC 也能编）
-│   ├── Match3Web/Anim.hs 动画接口：Played → ComboFx 播放器（与桌面 withMovePlayback 同条件），逐帧 JSON
+│   ├── Match3Web/Anim.hs 动画接口：Played → ComboFx 播放器（同原桌面版 withMovePlayback 的条件），逐帧 JSON
 │   ├── Match3Web/Json.hs 极简 JSON 拼接（只输出整数，保证原生与 wasm 逐字节一致）
 │   └── WebMain.hs        JSFFI 导出 m3New / m3Swap / m3Undo / m3State / m3Levels / m3Meta / m3AnimStart / m3AnimTick，
 │                         以及迁自桌面的 m3Hammer / m3Cross / m3FreeSwap / m3Shuffle / m3Daily / m3Restart / m3Advance /
@@ -32,7 +32,7 @@ web/
 │   ├── main.js           加载 wasm + 图集、rAF 固定步长、输入、交换 / 连锁流程、m3debug 调试钩子
 │   ├── layout.js         自适应布局：竖排 / 横排取格子更大者，安全区，布局变换与命中检测
 │   ├── art.js            图集绘制：普通 / 着色（离屏缓存）/ 叠加 / 旋转翻转 / 九宫格面板
-│   ├── cells.js          桌面 CellTable 的 JS 移植（每种格子怎么画、地面层、传送带、传送门、飞碟、蔓延预告）
+│   ├── cells.js          原桌面 CellTable 的 JS 移植（每种格子怎么画、地面层、传送带、传送门、飞碟、蔓延预告）
 │   ├── render.js         盘面与动画：交换、逐轮 flash/pop/fall/rest、步末 tick/belt/spread/snail/shuffle、粒子、浮字、震屏
 │   ├── hud.js            HUD 面板、目标进度条、消息折行、按钮、结局遮罩（字号随格子缩放）
 │   ├── audio.js          音效与 BGM（各自开关，localStorage 键 m3-sfx / m3-bgm；WAV 由 build.sh 从 assets/sfx/ 复制到 dist/sfx/）
@@ -49,7 +49,7 @@ web/
 ## 0. 常用命令（make）
 
 仓库根目录的 `Makefile` 把下面各节的命令收成目标，**一律在仓库根目录运行 `make <目标>`**；
-`make`（即 `make help`）按分组列出：通用 / 桌面版 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境。
+`make`（即 `make help`）按分组列出：通用 / 原生核心 / 网页版构建与运行 / 网页版测试 / 打包与部署 / 清理 / 环境。
 
 ```sh
 make doctor          # 先看缺什么
@@ -63,14 +63,12 @@ make verify          # 合 main 前的验收：只跑 stack test（见 docs/test
 | 目标 | 作用 |
 | --- | --- |
 | `make` / `make help` | 按分组列出全部目标与当前变量（默认目标） |
-| `make desktop-build` | 桌面版：`stack build`（需系统 SDL2） |
-| `make run` | 桌面版：`stack run match3-sdl`（需显示器；环境变量原样传给游戏） |
 | `make doctor` | 检查 ghc-wasm、wasm-opt、node、playwright、Chrome、python3 + Pillow(WebP)、cwebp（可选）、stack + GHC 9.14.1、curl/gzip/tar、lsof（可选），缺什么给安装提示；必需项缺失退出码 1 |
 | `make toolchain` | 已安装则校验 ghc-wasm-meta（FLAVOUR=9.14）各组件；没装则检查依赖后跑官方 bootstrap 安装；`FORCE=1` 重跑安装 |
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心 464 个，桌面版与网页版共用） |
+| `make test-native` | `stack test`（核心规则与 `app/pure`，470 个） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子[:走法] …"` 可改，走法 `hint` / `combo` / `combo-bomb` 见 §4） |
 | `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
@@ -82,7 +80,7 @@ make verify          # 合 main 前的验收：只跑 stack test（见 docs/test
 | `make deploy-install [TGZ=…] [DEST=…]` | 在目标机上解包安装到 DEST（默认 `/Users/yubin/Documents/dev/haskell/match3-web`） |
 | `make deploy-start` / `deploy-stop` | 仅 macOS：launchd 常驻 / 停止（`DEST`、`PORT`、`BIND` 可改） |
 | `make deploy-status` | launchd 状态 + `lsof` 端口监听 + curl 自检 |
-| `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（桌面版用 `stack clean`） |
+| `make clean` | 只清网页版：`web/dist`、`web/dist-newstyle`、`web/.cache`、`web/*.tgz`；不碰 `~/.ghc-wasm` 和 `.stack-work`（原生侧用 `stack clean`） |
 
 ## 1. 安装工具链（一次性，约 6.4 GB，装在 ~/.ghc-wasm）
 
@@ -105,8 +103,8 @@ wasi-sdk、binaryen（`wasm-opt`）、wasmtime、node（自带 playwright-core�
 
 注意：
 - `~/.ghc-wasm/env` 会改写 `CC`/`AR`/`LD` 等变量。**不要把它 source 进日常 shell**，
-  否则桌面版 `stack build` 会拿 wasm 的 clang 去编 C 代码。`build.sh` 只在自己的子进程里 source。
-- 不影响桌面版的原生 GHC 9.14.1 / Stack，两者完全独立。
+  否则根目录原生的 `stack build` / `stack test` 会拿 wasm 的 clang 去编 C 代码。`build.sh` 只在自己的子进程里 source。
+- 不影响根目录原生的 GHC 9.14.1 / Stack（跑 `stack test` 与一致性测试原生侧），两者完全独立。
 - 首次构建前 `build.sh` 会自动走 `wasm32-wasi-cabal build`；如提示没有 Hackage 索引，先跑一次
   `bash -c 'source ~/.ghc-wasm/env && wasm32-wasi-cabal update'`。
 
@@ -129,15 +127,15 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名同桌面画这张图），
+图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名画这张图），
 1024×1730，WebP 约 488 KB（488,226 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-10-03，chore/audit-wrapup（审计整改第 1–8 项之后，基于 fa719fa），`make clean` 后全量重建的发布产物）：wasm 原始 5,442,572 B → `-Oz` 2,212,226 B ≈ 2.21 MB（gzip 817,932 B）；
 dist 合计 3,074,199 B ≈ 3.07 MB，逐文件 gzip 合计 1,467,127 B（约 1.47 MB）（WebP / WAV 已压缩或体积小，gzip 收益主要在 wasm 与 JS；`sfx/` 7 个 WAV 约 196 KB，其中 `bgm.wav` 127,052 B）。
 审计整改后 `-Oz` 后的 wasm 比上一版（96bd2d8）增加 5,242 B（gzip +1,807 B）；`cells.js` / `main.js` 换成 `web/www` 的现行版本（只差注释），图集与其余文件逐字节不变。
 
-随机数：`cabal.project` 把 `random` / `splitmix` 钉在与桌面版 `stack.yaml` 相同的版本
-（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5，桌面版为 GHC 9.14.1：lts-24.60 + `compiler: ghc-9.14.1`；两边都只放宽 splitmix 的 base 上界），因此**同关卡同种子，网页版与桌面版开局和每一步结果完全一致**
+随机数：`cabal.project` 把 `random` / `splitmix` 钉在与根目录 `stack.yaml` 相同的版本
+（`extra-deps` 的 random-1.2.1.1 / splitmix-0.1.0.5，原生为 GHC 9.14.1：lts-24.60 + `compiler: ghc-9.14.1`；两边都只放宽 splitmix 的 base 上界），因此**同关卡同种子，网页版（wasm）与原生 GHC 的开局和每一步结果完全一致**
 （`test/Parity.hs` 与 `test/node-parity.mjs` 已验证）。
 
 ## 3. 本地试玩
@@ -179,7 +177,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 - 换了不能消：换过去再换回，不扣步；过关 / 通关 / 步数用完时出现结局遮罩；
 - 常驻按钮：撤销（核心 `Engine.History`，最多 20 步）、提示（高亮核心 `findHint`）、菜单；
   菜单面板：锤子 / 自由交换 / 十字消（图标 + 剩余次数）、洗牌、重开本关、每日挑战、选关地图（进度存 localStorage）、上一关 / 下一关、本关说明、按键说明（暂停页）、音效 / 音乐开关、继续游戏；
-- 快捷键同桌面：`H` 提示、`1/2/3` 道具、`U`/`Z` 撤销、`S` 洗牌、`D` 每日、`M` 地图、`K`/`B` 音效 / BGM、`R` 重开、
+- 快捷键（迁自原桌面版，全表见 [docs/ui-controls.md](../docs/ui-controls.md)）：`H` 提示、`1/2/3` 道具、`U`/`Z` 撤销、`S` 洗牌、`D` 每日、`M` 地图、`K`/`B` 音效 / BGM、`R` 重开、
   `N`/回车/空格 加速或结局后前进、`P` 暂停、`?` 本关说明、`Esc` 关浮层；
 - URL 参数 `?level=0..48&seed=N`（关卡下标 0 起，共 49 关）、`?daily=YYYY-MM-DD`、`?showcase=1`；
 - HUD「目标 …」显示核心给的中文名（`state.goal.label`，如第 43 关「目标 毛球」），不显示内部名。
@@ -192,7 +190,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 - 安全区：用探针元素读 `env(safe-area-inset-*)`，布局避开；页面禁滚动 / 缩放 / 双击放大；
 - 输入：指针事件经同一布局变换反算到格子，点选、拖划都支持；按钮条在纵向有富余时加高到 ≥ 46 CSS px；
 - 精灵是 2x（112 px/格）：格子物理像素超过 112 时（dpr3 手机约 134、平板约 167）轻微放大，`imageSmoothingQuality = "high"`；
-- 文字用浏览器字体（HUD 关名除外：同桌面画预渲染文字图 `name_<i>`，缺图时才退回浏览器字体），字号随格子缩放。
+- 文字用浏览器字体（HUD 关名除外：画预渲染文字图 `name_<i>`，缺图时才退回浏览器字体），字号随格子缩放。
 
 实测格子尺寸（e2e）：
 
@@ -213,7 +211,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-10-03，chore/audit-wrapup，基于 fa719fa）：49 关，`stack test` 460 个用例全过，
+下面是各自的底层命令。当前（2026-10-05，refactor/web-only）：49 关，`stack test` 470 个用例全过，
 状态一致性 40 组、动画一致性 34 组（都含第 43–48 关与迁自桌面的道具 / 每日 / 前进走法），e2e 324 项全过（第 5 节 156 项为迁自桌面的功能与常驻按钮 / 菜单）。
 
 ```sh
@@ -289,9 +287,9 @@ wasm 导出 19 个 **同步** JSFFI 函数（`foreign export javascript "... syn
   没登记的名字退回元素名），HUD「目标 …」直接画它，`m3Levels` 的 `goal` 同样带 `label`；
   `boss` = 雪怪 Boss 血条 `{hp,max}`（视图模型 `gvBoss`，目标不是「击败 Boss」时为 `null`），`hud.js` 用它把目标条换成血条）；
 - `outcome.tag`：`MoveApplied | NoMatch | InvalidSwap | LevelClear | Won | Lost`；
-- 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（与桌面外壳 app/UI/Plugin.hs 相同），
+- 执行路径：`Api.hs` 只调通用接口 `gameStep match3Shell`（前端只走通用接口），
   表现数据全部取自 `stepReport`（`Played`），规则每步只算一次；
-- 状态 JSON（第 11 刀起）：`encodeState` / `apiLevels` / 盘面编码读视图模型 `Match3.View`（与桌面 HUD / 标题同一份读数），不再从 `GameState` 现算；
+- 状态 JSON（第 11 刀起）：`encodeState` / `apiLevels` / 盘面编码读视图模型 `Match3.View`（HUD / 标题都读这一份），不再从 `GameState` 现算；
 - `trace`：`pdTrace` 的逐轮快照 `start → waves[{before,cleared,drained,holes,after,score}] → end[] → final → shuffle`，
   前端按它逐轮播放；`end[i] = {afterWaves,before,after,effect}`，`effect` 为结构化步末效果：
   `{type:"tick",cells}` / `{type:"belt",pairs}` / `{type:"spread",kind:"vine|choco|steam",pairs}` / `{type:"snail",moves:[{from,to,dir,pushed}]}`；
@@ -301,10 +299,10 @@ wasm 导出 19 个 **同步** JSFFI 函数（`foreign export javascript "... syn
 - `events`：规则层效果事件 `pdEvents`（按时间顺序）`{kind,beat,subject,pairs:[[来源],[目标]],amount}`，
   `kind` ∈ `clear/hit/blast/drain/score/combo/tick/belt/spread/move/shuffle`（同 `Match3.Engine.eventKindTag`），
   `beat` 与 `end[].afterWaves` 同一时间轴、同 beat 同时播放；比通用 `Engine.Effect` 多保留来源格（爆炸方向、移动轨迹）；
-- `state.rules`：本关打开的规则开关角标 `[{name,text,icons}]`（视图模型 `gvRules` 查 `Match3.View.ruleBadge`，与桌面 HUD 同一张表；
+- `state.rules`：本关打开的规则开关角标 `[{name,text,icons}]`（视图模型 `gvRules` 查 `Match3.View.ruleBadge`，同一张表；
   如第 41 关 `[{"name":"bomb_shapes","text":"L/T 形出炸弹","icons":["bomb_glow","bomb_mark"]}]`，其余关卡与每日挑战为 `[]`）。
   前端 `hud.js` 在关卡面板「第 N 关」右侧逐个画「叠放图标 + 文字」小胶囊（文字用画布字体，图集里没有文字贴图），
-  竖屏 / 横屏同一套；放不下时先截断文字、再只留图标。新规则只要在 `ruleBadgeTable` 登记一行，两个前端自动显示；
+  竖屏 / 横屏同一套；放不下时先截断文字、再只留图标。新规则只要在 `ruleBadgeTable` 登记一行，HUD 自动显示；
 - `state` 另含关卡级元素：`belts`（皮带路径）、`portals`（传送门对）、`ufos[{p,c}]`、`carpets`、`carpetOpen`、`drops`（饼干掉落口格，视图模型 `bvDrops`；`cells.js` 的 `drawDrops` 在格子上沿画 `cookie_drop`）；
 - `board`：行 × 列（每关不同），结构化编码，每格都带 `"s"`（核心 show 文本）：
   宝石 `{"t":"G","c":1..5,"k":"N|H|V|B|R","i":冰层,"o":覆盖物名|null,"n":覆盖层数}`；
@@ -313,7 +311,7 @@ wasm 导出 19 个 **同步** JSFFI 函数（`foreign export javascript "... syn
   前端 `cells.js` 按 `t` 取精灵（`custom` 先按名字查 `CUSTOM_ART`）。
 
 ### 动画接口
-- 播放器就是桌面 `UI.ComboFx` 的状态机（同一份源码），建立条件与桌面 `withMovePlayback` 相同；前端每帧调一次 `m3AnimTick`，
+- 播放器就是 `app/pure/ComboFx.hs` 的状态机（同一份源码，原生 `AnimParity.hs` 也调它），建立条件与原桌面版 `withMovePlayback` 相同（`MoveFx` 为空不播）；前端每帧调一次 `m3AnimTick`，
   只负责按相位插值画图，帧数和事件序列由核心决定；
 - `boards`：本步用到的全部盘面，编号顺序为 `[trace.start] ++ 每轮 [before, after] ++ 每个步末 [before, after] ++ [trace.final, state.board]`；
   逐帧 JSON 里的 `b` / `s.b0` / `s.b1` 都是这个表的下标，所以单帧很小（≤ 约 140 B）；`base` = 静止时显示的盘面下标；
@@ -327,11 +325,11 @@ wasm 导出 19 个 **同步** JSFFI 函数（`foreign export javascript "... syn
 
 ## 6. 已知限制
 
-- 网页是唯一前端：桌面版功能已全部迁来（道具、洗牌、每日挑战、选关地图、暂停、结局后前进等，对照表与「可删桌面代码」见 docs/web.md §2.6）；PC 壳尚未做；
+- 网页是唯一前端：桌面版功能已全部迁来（道具、洗牌、每日挑战、选关地图、暂停、结局后前进等，对照表见 docs/web.md §2.6），SDL2 桌面版已移除；PC 壳尚未做；
 - 小屏触控：格子 iPhone SE 竖屏 43 CSS px、横屏手机 43.7，略低于 44 的建议值（8 列棋盘宽度受限；横屏是高度受限），拖划交换可弥补；
   按钮与菜单项都 ≥ 44 CSS px（常驻按钮最小约 46）；
 - 3x 图集：面积是 2x 的 2.25 倍，WebP 估计多约 400 KB，只对 dpr3 手机和平板（格子物理 130–170 px）有收益，
   目前放大后观感可接受，先不做，可作为可选项（按 dpr 选图集）；
-- 播放期间 HUD 的分数 / 装饰层显示的是结算后的状态（与桌面版一致），不逐轮递增；
+- 播放期间 HUD 的分数 / 装饰层显示的是结算后的状态（与原桌面版一致），不逐轮递增；
 - `m3Swap` 仍返回完整 JSON（中位数约 30 KB/步，长连锁可达约 120 KB），没做增量；
 - 真机（iOS Safari / Android Chrome）与 itch.io 上线尚未实测；TODO 列表见 [`docs/web.md` §9](../docs/web.md#9-todo)。

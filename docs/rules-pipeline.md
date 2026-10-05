@@ -140,7 +140,7 @@ spreadSteam (spreadChoco (spreadVines boardBeltCas))
 
 ## 8. 与前端的边界
 
-前端（`app/UI/Actions.hs` / `UI.Input`）经通用接口 `gameStep`（`Match3.Engine.match3Shell`）执行交换 / 道具（一次结算，结果与 `trySwap` / 道具 API 逐位相同）**之后**经 `UI.Playback` 播放交换/下落动画与粒子；规则结果不依赖帧。暂停（`P`）冻结动画并清拖拽，不改 `GameState` 规则字段。
+前端（网页 `web/hs/Match3Web/Api.hs`；原 SDL 桌面版 `app/UI/Actions.hs` / `UI.Input` 已移除）经通用接口 `gameStep`（`Match3.Engine.match3Shell`）执行交换 / 道具（一次结算，结果与 `trySwap` / 道具 API 逐位相同）**之后**由 `web/www/render.js` 按 `Match3Web.Anim` 的帧序列播放交换/下落动画与粒子；规则结果不依赖帧。暂停（`P`）冻结动画并清拖拽，不改 `GameState` 规则字段。
 
 **特效是边沿触发**：前端用 `moveFx before after outcome` 取本次操作的 `MoveFx`（`fxCombo` 连击波数、`fxCleared` 清除格），只有这次调用真正结算了一步才非空；`NoMatch` / `InvalidSwap` / 操作前已终局一律为空。闪光、粒子、连击弹字和 HUD 总结都只看 `MoveFx` 和本次操作的 `MoveTrace`，不再直接读持久字段 `gsCombo`——旧实现里无匹配回滚后 `gsCombo` 仍是上一步的值，会把上一步的连击特效再播一遍。
 

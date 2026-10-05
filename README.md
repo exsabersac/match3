@@ -1,30 +1,26 @@
-# Match-3 消消乐（Haskell + SDL2）
+# Match-3 消消乐（Haskell + WebAssembly 网页版）
 
-8×8、五色可玩三消，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`），SDL 前端为 `match3-sdl`。
+8×8、五色可玩三消，对标开心消消乐常见机制：特殊块、多层障碍、草/藤蔓/巧克力/迷雾/锁链/火箭冰冻/窗帘、蒸汽、蜗牛、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、果汁机、气球、饼干掉落收集、双面块、彩蛋惊喜盒、染色瓶、时间精灵、地毯、传送带、双向传送门、倒计时炸弹、飞碟、道具点选、多样目标、每日挑战、步数携带。纯规则在 library（`Match3.Core`）；**网页是唯一前端**（GHC wasm + Canvas，`web/`），安卓是网页套壳（[`docs/android.md`](docs/android.md)），PC 端以后同样给网页套壳。原 SDL2 桌面版 `match3-sdl` 已移除（`refactor/web-only`）。
 
 ![关卡 16「大师」截图](docs/images/screenshot-l16.png)
 
-**贴图**：宝石用「颜色 + 形状」双编码（红圆 / 绿方 / 蓝菱 / 黄星 / 紫三角），每种障碍都有独立图标，多层障碍会显示层数角标。美术说明、完整图例和重新生成方法见 [`docs/ui-art.md`](docs/ui-art.md)。贴图是 SDL2 核心可以直接读取的 32 位 BMP，macOS **不用装新的 brew 包**（不需要 sdl2_image）；缺少 `assets/` 时会自动退回几何图形渲染。
+**贴图**：宝石用「颜色 + 形状」双编码（红圆 / 绿方 / 蓝菱 / 黄星 / 紫三角），每种障碍都有独立图标，多层障碍会显示层数角标。美术说明、完整图例和重新生成方法见 [`docs/ui-art.md`](docs/ui-art.md)。源资源是 `tools/gen_assets.py` 生成的 32 位 BMP 图集（`assets/`），网页构建时由 `web/tools/gen_web_atlas.py` 重新打包成 2x WebP；缺图时逐格退回几何画法。
 
 ## 30 秒上手
 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
-# Linux 一次安装 SDL2 头文件；运行期依赖 libsdl2-2.0-0
-sudo apt-get install -y libsdl2-dev
-
-# macOS Apple Silicon（Homebrew SDL2）额外需要：
-# export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
-
-stack test                            # 库测，无需显示器；期望 461 通过
-stack build && stack exec match3-sdl
+make doctor                           # 检查工具链（GHC wasm、node、Pillow、stack）
+make toolchain                        # 首次：安装 GHC wasm 工具链到 ~/.ghc-wasm
+make build && make serve              # 构建 web/dist，浏览器打开 http://localhost:8080/
+stack test                            # 核心规则测试，无需显示器；期望 470 通过
 ```
 
-1. **左键**点两格相邻交换，或**拖拽**到相邻格；无三连会回滚
-2. 开局底部有键位条；**P** 暂停看完整键位（H 提示 / **1** 锤子 / **2** 任意交换 / **3** 十字清除 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关）
-3. 第一关会短暂黄框提示可消一手；达目标后按 **N** / 空格 / 点击继续
+1. 点两格相邻交换，或**拖划**到相邻格（鼠标或触摸）；无三连会弹回
+2. 常驻按钮 **撤销 / 提示 / 菜单**；道具、洗牌、每日挑战、选关地图、重开、音效等在菜单里；有键盘时同样有快捷键（H 提示 / **1** 锤子 / **2** 任意交换 / **3** 十字清除 / **M** 选关地图 / U 撤销 / S 洗牌 / D 每日 / R 重开 / N 过关 / P 按键说明）
+3. 第一关开局会亮提示可消一手；达目标后点棋盘或按 **N** / 空格继续
 
-无显示器冒烟：`xvfb-run -a stack exec match3-sdl`。`stack test` 不需要显示。合 main 前跑 `make verify`（即 `stack test`；流程见 [`docs/testing.md`](docs/testing.md#开发流程)）。
+合 main 前跑 `make verify`（即 `stack test`）和 `make check`（网页一致性 + e2e；流程见 [`docs/testing.md`](docs/testing.md#开发流程)）。网页版的构建、部署与测试细节见 [`web/README.md`](web/README.md)。
 
 更细的设计说明见 [`docs/`](docs/README.md)；想从头分析整个游戏的框架和实现过程，从[框架与实现分析导读 `docs/guide/`](docs/guide/README.md)读起（总览、数据模型、一步棋的生命周期、元素框架、前端、效果与撤销、测试、演进史、术语表）。键位表见 [`docs/ui-controls.md`](docs/ui-controls.md)。itch.io 文案见 [`ITCH.md`](ITCH.md)。
 
@@ -64,7 +60,7 @@ stack build && stack exec match3-sdl
 - **每日挑战**（`D`）：日期种子盘面 + **10** 种轮换目标；障碍类目标会自动补装饰；通关为 **Won**（不进战役 `LevelClear`/解锁）；三星按**关卡印制步数**剩余比例（携带不抬高分母）
 - **双层果冻**（地面层 `jelly`，段 5）：铺在格子下面，上方每被消除一次去一层（2 → 1 → 清掉），按层计目标；不占格、不随重力 / 洗牌移动
 - **气泡**（`Custom "bubble"`，段 5）：无色、挡交换、随重力下落；邻格有任意颜色的消除或被直接命中即破
-- **L / T 形出炸弹**（关卡规则开关 `bomb_shapes`，新玩法 1）：同色横竖两条连线交叉（L / T 形）时，交点生成炸弹；五连仍出彩虹，L / T 里带四连也出炸弹不出直线。只在打开开关的关卡生效（第 41 关「爆破」），HUD 关名右侧有炸弹角标「L/T 形出炸弹」（网页版 / 安卓版在关卡面板里同样显示）
+- **L / T 形出炸弹**（关卡规则开关 `bomb_shapes`，新玩法 1）：同色横竖两条连线交叉（L / T 形）时，交点生成炸弹；五连仍出彩虹，L / T 里带四连也出炸弹不出直线。只在打开开关的关卡生效（第 41 关「爆破」），HUD 关名右侧有炸弹角标「L/T 形出炸弹」
 - **魔法石**（`Custom "magic_stone"`，新玩法 2）：固定、打不动；旁边每轮有消除充能 1 格，满 3 格后在交换的步末发射，清掉所在整行和整列，然后归零；底部 3 个充能槽显示进度（第 42 关「魔石」）
 - **毛球**（`Custom "fuzzball"`，新玩法 3）：挡交换、随重力下落；旁边有消除或被特效 / 道具打到即被消灭；每次交换的步末跳到旁边一格普通宝石上（与之换位，选格按盘面散列，不影响其他关卡的随机序列）（第 43 关「毛球」）
 - **魔力鸟组合增强**（关卡规则开关 `rainbow_combos`，新玩法 4）：彩虹 × 直线 → 同色普通宝石全部变成直线（横竖交替）再一起引爆；彩虹 × 炸弹 → 全部变成炸弹再引爆；变身过程先播放再爆炸。只在打开开关的关卡生效（第 44 关「魔力鸟」），HUD 关名右侧有彩虹角标「彩虹组合变身」
@@ -84,7 +80,7 @@ stack build && stack exec match3-sdl
 - **得分浮字**：每一轮都会从消除的位置飘出本轮得分「+N」。
 - **连击总结**：连锁结束后，如果达到 2 连击以上，右下角面板显示「N 连击！」。
 - **回合末变化也有动画**：倒计时炸弹数字减一、传送带滑动、藤蔓 / 巧克力 / 蒸汽从相邻格「长」过来、蜗牛爬一格并推开宝石，按实际发生的顺序依次播放，同一时刻的这些变化合计不超过约 0.6 秒；棋盘无路可走时自动洗牌（单独约 0.4 秒）。
-- **想快点看完**：播放中点一下鼠标，或按空格 / 回车 / `N`，约 3 倍速播完，每一轮依然看得见。
+- **想快点看完**：播放中点一下棋盘，或按空格 / 回车 / `N`，约 3 倍速播完，每一轮依然看得见。
 - **播放期间锁定操作**：动画没播完时不能交换、用道具、撤销或洗牌；暂停、提示、选关地图、重开照常可用。过关 / 失败面板等动画播完才出现。
 - **无效交换不重播**：换了凑不成三连的两格只会弹回原位，不会把上一次的连击特效再放一遍。
 
@@ -147,9 +143,11 @@ stack build && stack exec match3-sdl
 
 ## 操作
 
+常驻按钮只有 撤销 / 提示 / 菜单，其余操作在菜单里；下表是键盘快捷键（触屏入口见 [`docs/ui-controls.md`](docs/ui-controls.md)）。
+
 | 输入 | 作用 |
 |------|------|
-| 左键 / 拖拽 | 相邻交换（动画播放中点击＝加速） |
+| 点击 / 拖划 | 相邻交换（动画播放中点棋盘＝加速） |
 | `1` 再点格 | 锤子清一格；再按 `1` 取消 |
 | `2` 再点两格 | 任意两格交换；再按 `2` 取消 |
 | `3` 再点格 | 十字清除（行+列）；再按 `3` 取消 |
@@ -161,8 +159,9 @@ stack build && stack exec match3-sdl
 | `M` | 选关地图；点已解锁节点 |
 | `N` / 空格 / 回车 | 叠层后下一关 / 重试；动画播放中＝约 3 倍加速 |
 | `R` | 重开关（暂停中也可用） |
-| `P` | 暂停 + 键位帮助（冻结动画；清掉进行中的拖拽） |
-| `Esc` / `Q` | 退出 |
+| `P` | 暂停 + 按键说明（冻结动画；清掉进行中的拖划） |
+| `K` / `B` | 开关音效 / 音乐 |
+| `Esc` | 关最上层浮层（菜单 / 暂停 / 地图 / 道具模式） |
 
 外观速查：红圆 / 绿方 / 蓝菱 / 黄星 / 紫三角＝五色宝石；白金箭头光带＝直线（方向即消除方向）；橙色光晕 + 黑炸弹标记＝炸弹；七彩旋涡＝彩虹；右下角数字＝剩余层数（果汁机为剩余次数）。每种障碍的图标见 [`docs/images/legend.png`](docs/images/legend.png)。
 
@@ -179,11 +178,12 @@ stack build && stack exec match3-sdl
 
 ```bash
 export PATH="$HOME/.ghcup/bin:$PATH"
-# macOS Apple Silicon：
-# export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
-
-stack build && stack test && stack exec match3-sdl
+make verify                     # stack test（核心库 + app/pure，原生 GHC）
+make build                      # 网页：wasm + 页面 + 图集 → web/dist
+make check                      # 网页：状态 / 动画一致性 + 无头 Chrome e2e
 ```
+
+原生 Stack 只编核心库、`app/pure` 纯前端模块与测试（无需显示器、不需要任何图形库）；网页版用 GHC wasm 工具链单独构建（`web/cabal.project`）。
 
 GHC **9.14.1**；Stackage 快照 **lts-24.60**（快照本身对应 GHC 9.10.3，`stack.yaml` 用 `compiler: ghc-9.14.1` 换成 9.14.1，
 少量依赖在 `extra-deps` 里钉了兼容版本）。`stack.yaml` 已 `system-ghc: true`，首次先 `ghcup install ghc 9.14.1`。
@@ -195,7 +195,7 @@ GHC **9.14.1**；Stackage 快照 **lts-24.60**（快照本身对应 GHC 9.10.3�
 src/Engine/   Game Effect Playback History GridUI Stream Optics（多游戏通用层：接口 / 通用效果 / 纯播放层 / 撤销历史 / 通用网格 UI 组件 / 无穷流 / 手写透镜；不依赖 Match3）
 src/Match3/   Types Counts Color Goal GoalLabel Core Engine View Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
-              （View = 第 11 刀的视图模型：从 GameState 算出 HUD / 目标 / 棋盘读数，桌面与网页都读）
+              （View = 第 11 刀的视图模型：从 GameState 算出 HUD / 目标 / 棋盘读数，网页经 Match3Web.Api 读）
               （Engine = 三消作为通用接口的第一个实现）
 src/Match3/Types/  Name Cell Overlay Optics Body Board Game（第 6 刀从 Types.hs 按职责拆出，Name 为第 6b 刀的 ElementName / CustomState；Types.hs 为再导出门面）
 src/Match3/Levels/ Level Campaign（关卡记录 / 49 关关卡表与 lookupLevel，第 6 刀）
@@ -203,24 +203,19 @@ src/Match3/Board/  Grid Match Clear Gravity Cascade Effect Phase Wave Hooks Refi
 src/Match3/Game/   State Tally Outcome Shuffle Level Trace EndPhase Resolve Move Boosters（EndPhase = 步末表）
 src/Match3/Element/ Types Ability Kind Layer Rules World Mechanic Special Builtin Event Level（元素框架：规则类型 / 六个能力类与原型包 / 类型级 Kind·Entity·GroundKind / 叠层 Layer·Layered / 规则通用驱动 / 元素世界（解码与全部 *With 查询）/ 关卡级机制类 Mechanic / 规则表解释器（第 8 刀）/ 内置元素汇总 / 效果事件 / 一局的关卡级机制与节拍折叠；Element.hs 为再导出外观；2026-10 元素类重构，见 docs/guide/04）
 src/Match3/Element/Builtin/ Gem Layer Obstacle Collectible Actor Ground Level Common（内置元素按功能分组的 instance；Builtin.hs 只汇总类型列表 builtinDefs）
-app/Main.hs   SDL2 前端入口（读环境变量 → runShell）
-app/Shell/    Loop（通用 SDL 外壳：窗口 / 固定步长主循环 / 插件钩子；不依赖 Match3）
-app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw Cascade EndStage
-              BoardArt BoardPrim CellTable Ground GoalStyle HudArt HudPrim HudBlocks TextArt Glyph LevelMap Audio
-              （HudBlocks = 第 10 刀从 drawHud 拆出的几何版 HUD 各区块）
-app/UI/Cell/  Prim Art PrimOverlay（每种元素一个几何 / 贴图渲染函数，经 CellTable 查表；PrimOverlay = 几何版覆盖层）
-app/Art.hs    贴图图集加载 / 九宫格面板 / 降级
-app/pure/     不依赖 SDL 的纯前端模块，内部库 match3-pure（桌面经内部库、测试与网页按源码编）：ComboFx（连锁逐轮回放 / 步末动画的纯阶段机与时间线）、
-              UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/Sound（回放事件 → 音效名）、UI/GoalIcon（目标 → 图标贴图名，网页共用）、
-              UI/MoveText（走步结果 → 桌面提示文案）、UI/Palette（调色板：五色 / 格子颜色）、
-              UI/CellFace（读元素自带的显示字段）、UI/WebMeta（网页启动时经 m3Meta 读的表现表）
-assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
+app/pure/     纯前端模块，内部库 match3-pure（原生 -Wall 编译；测试与网页 wasm 按源码编）：ComboFx（连锁逐轮回放 / 步末动画的纯阶段机与时间线）、
+              UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/GoalIcon（目标 → 图标贴图名）、
+              UI/MoveText（道具点选规则 keepsTool）、UI/Palette（调色板：五色 / 格子颜色）、UI/CellFace（读元素自带的显示字段）、
+              UI/WebMeta（网页启动时经 m3Meta 读的表现表）、UI/Chapters（选关地图章节）、UI/Showcase（元素展示盘）、UI/Restart（重开规则）
+web/          网页版（唯一前端）：hs/（wasm 导出与 JSON 接口 Match3Web.*）、www/（Canvas 渲染、输入、HUD、音频）、test/（一致性与 e2e）、
+              android-app/（安卓壳）；见 web/README.md
+assets/       生成的源贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格），网页图集由它重新打包
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；477 命名用例）
+test/Spec.hs  测试入口（只汇总；470 命名用例）
 test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Archetype / ElementAbility / ElementOracle / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
-docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
+docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术 / 网页 / 安卓）
 docs/guide/   框架与实现分析导读（把上面各篇串成一条阅读路线：总览 → 数据模型 → 一步棋 → 元素 → 前端 → 效果 → 测试 → 演进史 → 术语表）
 ```
 
@@ -229,5 +224,6 @@ docs/guide/   框架与实现分析导读（把上面各篇串成一条阅读路
 ## 发布状态
 
 - 战役：**49** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球，第 44 关「魔力鸟」是新玩法魔力鸟组合增强，第 45 关「雪怪」是新玩法雪怪 Boss，第 46 关「掉落口」是新玩法饼干掉落口，第 47 关「变色龙」是新玩法变色龙，第 48 关「魔法格」是新玩法魔法地格，第 49 关「宽域」是 6×9 矩形盘面），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **477**（Tasty + QuickCheck）
+- 前端：网页版（浏览器 / 安卓壳）；SDL2 桌面版已移除，PC 端以后给网页套壳
+- 测试：`stack test` **470**（Tasty + QuickCheck）；网页 `make check`：状态一致性 40 组、动画一致性 34 组、e2e 324 项
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

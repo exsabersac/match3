@@ -8,8 +8,8 @@ cd /path/to/match3
 stack test
 ```
 
-- 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**477** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 库测 **不需要** 显示器或任何图形库（原生只编核心库、`app/pure` 与测试；SDL2 桌面版已移除）。
+- 期望：**470** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -55,19 +55,10 @@ stack test
   - 可扩展性 P2 显示字段与 `m3Meta`：`WebColors` 删 JS 源码比对 5 个、加 `m3Meta` 核对 3 个（6 → 4），`View` +1（`view_cell_extras_from_elements`），`Extension` +1（`ext_element_display_fields`）→ 464（不变）
   - 元素类重构（2026-10，第 0–6 刀，见 [guide/08 阶段 12](guide/08-演进史.md)）：第 0 刀元素对照快照 +4（`ElementOracle`）→ 468；第 1 刀能力类 +6（`ElementAbility`）→ 474；第 2 刀 `Spec.Caps` 改写为 `Spec.Archetype`、删 `Cap` 幺半群测试（`RulesDedup` 6 → 4）、`ElementAbility` 改写 → 473；第 3 刀 +1（`ab_rule_methods_pinned`）→ 474；第 4、5 刀改写不增减（`ec_open_messages` 换成 `ec_mechanic_defaults_silent`）→ 474；第 6 刀 +2（`ab_cell_face_matches_legacy_zoo`、`qc_cell_face_matches_legacy`）→ 476
   - 元素命名清理（2026-10-05）：魔法石充能由逃生口改成方法 + 通用驱动，+1（`qc_magic_stone_charge_via_driver`，与留在测试里的旧整盘写法逐盘等价）→ 477；另有 16 个测试改名（registry / caps / message / slots → world / ability / beat / cells）
+  - 移除 SDL2 桌面前端（2026-10-05，`refactor/web-only`），−7 → 470：`MoveText` 删 5 个只钉桌面英文走步文案的用例（`move_text_boosters_pinned` / `move_text_drag_pinned` / `move_text_click_pinned` / `move_text_lost_reads_goal_of` / `move_text_tables_only_in_app_pure`，6 → 1）；`Presentation` 删 `cascade_sounds_follow_clear_and_special`（桌面音效钩子 `UI.Sound`）与 `draw_hud_and_prim_overlay_are_thin`（桌面几何 HUD / 覆盖层），10 → 8；`generic_every_constructor_has_world_face_and_ui` 去掉桌面 `UI.CellTable` 一段，改名 `generic_every_constructor_has_world_and_face`；源码扫描（`frontends_*`、`engine_frontend_steps_only_via_gameStep` 等）改扫 `app/pure` + `web/hs`
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
-可选完整链路：
-
-```bash
-stack build && stack test && stack exec match3-sdl
-```
-
-macOS Apple Silicon 构建 SDL 前端时：
-
-```bash
-export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
-```
+网页版的构建与测试（`make build` / `make check`）见下文「网页版测试」。
 
 若 Stack 镜像/签名异常，优先使用 `stack.yaml` 中 `system-ghc: true` 与本机 ghcup 装好的 GHC 9.14.1；Hackage 镜像报 root.json 签名不足时改用官方 Hackage 源（去掉全局配置里的 `package-index` 镜像设置）。
 
@@ -94,7 +85,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 测试套件**直接编译 `src/`**（`source-dirs` 含 `src`，不依赖 `match3` 库）：库模块对测试是同一组件里的模块，GHC 只重编真正用到改动内容的测试模块。改一个库模块导出时，`make verify` 从约 50–67 s 降到约 22–27 s；代价是全量构建多编一遍 `src`（约 +15 s）。
 - 内置内容的数量（关卡数、注册项数、本体 instance 数）集中在 `test/Spec/Support/Inventory.hs`，加元素 / 加关卡只改那里。
 - 每个用例默认 120 秒超时（`test/Spec.hs` 的 `defaultTimeout`，命令行 `--timeout` 优先），挂起会变成失败而不是卡住。
-- 目录（用例数合计 477）：
+- 目录（用例数合计 470）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -123,7 +114,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`；第 5 项起把 `Golden.goldenSections` 各段经 `Spec.Support.Parallel.parallelForce` 多核求值、按原顺序拼回再逐行比对） |
 | `test/Spec/Properties.hs` | 24 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条 + 第 7a 刀关卡级钩子 / 读数 2 条 + 第 7b 刀步末表 / 折叠回复 2 条 + 第 8 刀形状表 / 组合表 / 组合对称 / 补子策略 4 条，见「性质测试」） |
 | `test/Spec/Archetype.hs` | 3 | 元素类重构第 2 刀（取代第 9 刀的 `Spec.Caps`）：普通宝石 / `Obstacle` / `Fixed` / `Inert` 的缺省方法值（`abilityProbe` 字面量锁定）、内置本体 instance 清单、扩展障碍「荆棘」不改主流程接入（见「元素类重构验收」） |
-| `test/Spec/Presentation.hs` | 10 | 第 10 刀：前端表现表 `UI.Presentation` 与音效钩子 `UI.Sound`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效名（只有消除 `clear` / 爆炸 `special`，真实连锁里也只出这两种）、源码扫描（散落的表与颜色已收掉、`drawHud` / `primOverlay` 只剩分派） |
+| `test/Spec/Presentation.hs` | 8 | 第 10 刀：前端表现表 `UI.Presentation`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效名（只有消除 `clear` / 爆炸 `special`）、源码扫描（散落的表与颜色已收掉） |
 | `test/Spec/BombShapes.hs` | 6 | 新玩法 1：L / T 形出炸弹（规则开关 `bomb_shapes`）——只有第 41 关打开、原有 40 关 / 每日挑战 / 自由开局的形状表等于内置表、插表顺序、L 形交点出炸弹（第 1 关与去掉开关时是空洞）、五连仍出彩虹、带四连的 L 出炸弹不出直线、第 41 关实战会生成炸弹 |
 | `test/Spec/MagicStone.hs` | 6 | 新玩法 2：魔法石——能力（固定 / 挡交换 / 无色 / 洗牌保留 / 平时打不动、发射中命中归零）、邻格充能每轮 1 格且满 3 为止、满格在交换步末发射清整行整列并归零、不满不发射、道具不触发而下一次交换发射、第 42 关布局与实战（魔法石不动、发射过、石头有进度） |
 | `test/Spec/Fuzzball.hs` | 7 | 新玩法 3：毛球——能力（挡交换 / 下落 / 无色 / 洗牌保留 / 命中即灭）、邻格真消除即灭（斜角不算、直接命中不重复）、跳到相邻普通宝石并换位且结果确定、墙 / 避让格 / 非普通宝石 / 已占格不跳、交换步末的 `EvBelt "fuzzball"` 可重放、去掉毛球条目后前 42 关逐步相同（不耗 `gsGen`）、第 43 关布局与实战（跳过格、有消灭计数、能过关） |
@@ -141,11 +132,11 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Invariants.hs` | 5 | Haskell 特性第 6 项：规则不变量——交换是对合（自定义 `Arbitrary` 任意行列盘）、重力幂等且不留悬空、重力 + 补子后满盘、被拒操作什么都不改 / 被接受时步数最多少 1 且分数不降；撤销历史对列表模型的状态机测试（玩具计数器，上限 1–4，带 shrink） |
 | `test/Spec/RulesDedup.hs` | 5 | Haskell 特性第 9 项（规则去重）：占格障碍棱镜 `_Stone` … `_Safe` 的往返律与改色遍历 `cellColorT` 的遍历定律；`Match3.Obstacles` 邻消顺序的固定例子；`runEndRules` = 朴素折叠；步末规则智能构造器；魔法石充能的方法 + 通用驱动与旧整盘写法逐盘等价（`qc_magic_stone_charge_via_driver`，命名清理时加）（见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)；`Cap` 幺半群的两个测试随元素类重构第 2 刀删除） |
 | `test/Spec/GridGeometry.hs` | 5 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表与写死的坐标顺序逐格相同；带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`）是行主序；像素 newtype 下的 `gridCellAt` / `gridCellOrigin`（3 种几何的固定例子）；每日挑战 `Year` / `Month` / `Day`（7 个日期的种子与配置写死）（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
-| `test/Spec/DataBoundary.hs` | 10 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名 × 11 组参数 × 2 种格的放置结果写死比对，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组（固定例子含节拍倒序 `[2, 1, 0]`；性质：拼接还原输入、组的节拍号 = 组内首个效果的节拍、相邻组节拍不同）；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、元素世界（槽位、解码往返）、`cellFace` 标签、`UI.CellTable` 与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
-| `test/Spec/MoveText.hs` | 6 | 桌面走步提示文案 `UI.MoveText`（`app/pure`，测试直接编译）：拖拽 / 点击交换与锤子 / 十字 / 自由交换在六种结算结果下的整句逐字钉住（窗口标题「  \|  」之后与 HUD 提示行显示的就是它）；点击文案的连击（> 1 才写）/ 收集进度 / 自动洗牌后缀及顺序；`Lost` 的目标提示交换读走步前、道具读走步后的状态；只有自由交换换不掉时保持点选模式；源码扫描：`app/` 其余模块没有这些文案字面量 |
+| `test/Spec/DataBoundary.hs` | 10 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名 × 11 组参数 × 2 种格的放置结果写死比对，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组（固定例子含节拍倒序 `[2, 1, 0]`；性质：拼接还原输入、组的节拍号 = 组内首个效果的节拍、相邻组节拍不同）；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、元素世界（槽位、解码往返）、`cellFace` 标签与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
+| `test/Spec/MoveText.hs` | 1 | `UI.MoveText.keepsTool`（`app/pure`，网页 `Api` 用）：只有自由交换换不掉时保持点选模式。原桌面英文走步文案 `moveMsg` 的 5 个逐字用例随 SDL2 前端移除 |
 | `test/Spec/WebColors.hs` | 4 | 网页表现表 `m3Meta`（`UI.WebMeta`）与贴图生成器调色板：按 `cells.js` 的取色规则、只用 `m3Meta` 的表算每种格子的颜色 = `UI.Palette.cellRGB`（表里的标签都是真实标签、每个内置标签都归了类）；蔓延碎屑色 / 倒计时火星色 / 生长曲线 / 前沿缺省光与表现表一致；帧数常量与音效名齐全（表现表的音效名都在 `soundNames` 里）；`tools/gen_assets.py` 的 `GEMS` ↔ `UI.Palette.colorRGB`（唯一还解析源码的一张表）。JS 不再手抄这些表，原先读 JS 源码比对的 5 个用例删掉 |
 | `test/Spec/BoardSeed.hs` | 3 | 毛球跳格（第 43 关）与雪怪召唤（第 45 关）共用的选格散列 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`：写死两张固定小盘面的 `show` 字符串与散列值、第 43 / 45 关种子 1 开局盘面的散列值、三个坐标的 `posSeed`、第 43 关开局的 14 次毛球跳格与第 45 关开局的召唤格；性质：散列 = 标准 64 位 FNV-1a（与 `Word64` 参考实现逐值相同）作用于 `show`，`pickBy` = 下标（散列 mod 候选数）。失败信息说明「`Show Cell` / 散列改了会改变毛球 / 雪怪行为」 |
-| `test/Spec/View.hs` | 12 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（前端不再从 `GameState` 现算）；显示字段与目标中文名由元素条目提供（`view_cell_extras_from_elements`：雪怪 / 变色龙的 `cellExtras`、六个中文名，View / GoalLabel / Outcome / Api / 调色板不点名元素） |
+| `test/Spec/View.hs` | 12 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（网页 `Api.hs` 不从 `GameState` 现算）；显示字段与目标中文名由元素条目提供（`view_cell_extras_from_elements`：雪怪 / 变色龙的 `cellExtras`、六个中文名，View / GoalLabel / Outcome / Api / 调色板不点名元素） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
 | `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith world` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）、`digest`（字符串的 64 位 FNV-1a 十六进制摘要，固定例子用它锁定大批结果）等；并重新导出 `Spec.Support.Source` 与 `Spec.Support.Inventory` |
 | `test/Spec/Support/Parallel.hs` | — | 确定性并行批量求值 `parallelForce`（`forkIO` + STM：`TVar` 领任务、`TMVar` 结果槽、按原顺序取回、异常按顺序重抛）；`Spec.Golden` 用它并行求值金标准各段 |
@@ -398,15 +389,15 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `view_cell_face_and_level_list_match_legacy` | 全部样本盘面的格子与每种构造器 / 叠层组合：`cellFace` 与旧 `encodeCell` 的字段（`t` 在前、顺序相同）逐项相同；`levelViews` 与 `allLevels` 的序号 / 名字 / 步数 / 目标相同 |
 | `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
 | `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
-| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；HUD 三个模块不读道具字段 / `gsProgress` / `goalTarget` / `lookupLevel` / `levelCount`；`BoardPrim` / `BoardArt` 不读地毯 / 地面层 / 提示 / 皮带 / 传送门字段；标题只调 `titleLine`；`pixelToCell` / `cellOrigin` 经 `boardGrid`；点选 / 拖动经 `gridClick` / `gridDragRelease`；`UI.GoalStyle` 不再有文字标签表；规则开关角标：`UI.HudArt` 与 `Api.hs` 都读 `ruleBadges`（HudArt 不点名 `"bomb_shapes"` / `"zh_rule_bomb"`）、关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记、第 41 关角标 = `bomb_shapes`「L/T 形出炸弹」、第 1 关无角标、没登记的规则退回规则名、角标文字与 `tools/gen_assets.py` 的 ZH 表字面相同、图标是 gen_assets.py 生成的贴图；目标中文显示名：`Api.hs` 读 `goalLabel`（网页 `goal.label`）、全部关卡与每日挑战（2026 年每月 1–28 日）的目标标签不含 `[a-z_]`、第 43 关 =「毛球」、第 45 关 =「雪怪」、第 46 关 =「饼干」、没登记的名字目标退回元素名 |
-| `frontends_import_core_api` | 源码扫描：`app/` 与 `web/hs` 从库里只 import `Match3.Core` / `Match3.View` / `Match3.Engine` / `Match3.Element.Event` / `Engine.*`；`Match3.Core` 导出的函数与不带构造的类型都有前端在用（带 `(..)` 的类型不查，前端可能只用构造或字段） |
-| `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、桌面标题目标段 `goalLine`、提示后缀 `goalBracket` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（第 8 / 41 / 42 / 44 关曾写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
+| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；标题取自 `titleLine`；规则开关角标由 `Api.hs` 读 `ruleBadges`，`web/www/hud.js` 不点名 `bomb_shapes` / `rainbow_combos` / `zh_rule_bomb`；关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记。（原对桌面 HUD / `BoardPrim` / `BoardArt` / `Layout` / `Input` / `GoalStyle` 的检查随 SDL2 前端移除） |
+| `frontends_import_core_api` | 源码扫描：`app/pure` 与 `web/hs` 从库里只 import `Match3.Core` / `Match3.View` / `Match3.Engine` / `Match3.Element.Event` / `Engine.*`；`Match3.Core` 导出的函数与不带构造的类型都有前端在用（带 `(..)` 的类型不查，前端可能只用构造或字段）。SDL2 前端移除后 `Match3.Core` 删掉了只有桌面在用的 25 个导出（如 `boardSize` / `allLevels` / `defaultWorld` / `applyHint` / `dailySeed`），测试改从定义模块 import |
+| `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、标题目标段 `goalLine`、提示后缀 `goalBracket` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（第 8 / 41 / 42 / 44 关曾写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
 ## 前端表现表验收（第 10 刀）
 
-`test/Spec/Presentation.hs`；表结构见 [architecture.md](architecture.md#前端表现表第-10-刀)。测试套件的 `source-dirs` 含 `app/pure`，直接编译 `ComboFx` / `UI.Presentation` / `UI.Sound`（不依赖 SDL）。对照对象是本文件里第 10 刀前各处 case 与常量的字面副本。
+`test/Spec/Presentation.hs`；表结构见 [architecture.md](architecture.md#前端表现表第-10-刀)。测试套件的 `source-dirs` 含 `app/pure`，直接编译 `ComboFx` / `UI.Presentation`（纯模块；原 `UI.Sound` 随 SDL2 前端删除）。对照对象是本文件里第 10 刀前各处 case 与常量的字面副本。
 
 | 用例 | 断言 |
 |------|------|
@@ -416,10 +407,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `presentation_spread_curves_match_legacy` | vine / choco / steam / 未知名字 / 空名 × 106 个采样点（含区间外）：`curveAt (spreadCurveFor n) t` 与旧 `spreadProgress`（缺省 `t`）逐位相等 |
 | `presentation_combo_style_matches_legacy` | 连击等级 −1..9 × 相位 0..80、399、4000：`comboStyle` 四个字段与 `styleRGB` 与旧定义（含 `hsv`）相同 |
 | `presentation_extension_defaults` | `defaultPresentation` = 蔓延段 18 帧、无颜色 / 贴图 / 碎屑 / 音效；空表查询全部落到缺省；未知元素名匀速、白光、不迸碎屑；`EvMove`（扩展 `hopper`）→ 蜗牛段 |
-| `effect_sound_names_clear_and_special` | `effectSound EvClear` = `"clear"`、`EvBlast` = `"special"`，其余事件与 `defaultPresentation` 都是 `Nothing`；纯模块的 `playSounds` 仍是空操作（桌面真正播放在 `UI.Audio`） |
-| `cascade_sounds_follow_clear_and_special` | 第 8 关 7 轮连锁与第 16 关倒计时一步完整回放：阶段事件覆盖 EvClear / EvScore / EvCombo / EvTick，`cascadeSounds` 只出 `clear` / `special` |
-| `presentation_scattered_cases_removed` | 源码扫描 `app/`：除 `UI.Presentation` 外不再定义 `endStageTable` / `spreadProgress` / `endCrumbTable` / `elementRGBTable` / `comboStyle` / `styleRGB` / `hsv` / `smoothT` / `easeOutT`，也不再出现搬走的颜色字面量与 `"zh_combo"`；`UI.Presentation` 不 import SDL；EndStage / Playback 确实读表 |
-| `draw_hud_and_prim_overlay_are_thin` | `drawHud` ≤ 10 行、依次调用 8 个 `hud*` 区块、自身不画；`primOverlay` ≤ 10 行、分派到 8 个 `overlay*` 函数、自身不画；`UI.Cell.Prim` 不再定义 `primOverlay` |
+| `effect_sound_names_clear_and_special` | `effectSound EvClear` = `"clear"`、`EvBlast` = `"special"`，其余事件与 `defaultPresentation` 都是 `Nothing`（网页按同样的规则选音效） |
+| `presentation_scattered_cases_removed` | 源码扫描 `app/pure`：除 `UI.Presentation` 外不再定义 `endStageTable` / `spreadProgress` / `endCrumbTable` / `elementRGBTable` / `comboStyle` / `styleRGB` / `hsv` / `smoothT` / `easeOutT`，也不再出现搬走的颜色字面量与 `"zh_combo"`；`UI.Presentation` 不 import SDL（原「桌面 EndStage / Playback 确实读表」随 SDL2 前端移除） |
 
 画面等价性依据：22 个静态场景、6 个步末动画场景与连击逐轮高亮 / 特殊块爆炸 / 特殊块组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同（AE=0），窗口标题逐字相同。
 
@@ -451,10 +440,10 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | 用例 | 断言 |
 |------|------|
 | `engine_toy_counter_game` | 玩具实现 `test/Toy.hs`（一维计数器，**只 import `Engine.*`**）：种子决定目标；`runActions` 遇到胜局即停（其后动作不执行）；非法 `Inc 9` 被拒、状态不变、没有事件；超出目标 / 步数用完判负；结局后 `gameActions` 为空、`gameStep` 拒绝；`gameStatus`；效果按节拍排成两个提示（6 帧 / 20 帧），通用播放器总帧数 26、只在进入第二个提示时触发其事件，加速后 9 帧，3 帧后进度 0.5；自定义阶段机（倒数 3 → 0）事件与帧数 |
-| `engine_layer_is_game_agnostic` | `src/Engine/` 与 `app/Shell/` 下全部模块（按目录列出）和 `test/Toy.hs` 都不 import `Match3` / `Match3.*`（`importsOf`，依赖方向单向） |
+| `engine_layer_is_game_agnostic` | `src/Engine/` 下全部模块（按目录列出）和 `test/Toy.hs`（原还扫 `app/Shell/`，已随 SDL2 前端移除） 都不 import `Match3` / `Match3.*`（`importsOf`，依赖方向单向） |
 | `engine_match3_instance_matches_direct_api` | 4 关 × 2 种子：`gameNew` = `newGameAtLevel`；前 3 个候选交换经 `gameStep` 的状态 / 结局 / 事件与 `trySwap` / `traceEvents (traceSwap …)` 逐位相同，`toEffect` 不丢事件、score 效果之和 = 得分增量，`play` 的 `MoveFx` / `Outcome` 与 `moveFx` 相同；经 `match3Shell` 走同一步、历史深度 1，`Undo` 回到走步前快照（清本步特效 / 提示 / 洗牌标记）；锤子 / 十字 = `useHammer` / `useCrossClear`；非相邻交换被拒且无事件；开局撤销（`match3Shell` 无历史）被拒；洗牌 = `shuffleGame` 且只有一个 shuffle 效果；提示 = `applyHint`；`gameStatus` 的 combo = `gsCombo`；只剩 1 步时 `runActions` 在第一步之后停下、终局后没有候选动作且拒绝一切 |
 | `engine_undo_after_terminal_matches_legacy_play` | 段 3：6 个场景（第 1 / 7 / 13 / 28 关判负，第 5 / 21 关把目标改成 1 分后过关），经 `match3Shell` 的 `gameStep` 按 `findHint` 走到终局，再连撤三次：终局后第一次撤销被接受、清掉终局标记；终局态与三次撤销后的状态投影（与 `13094d1` 共有的全部字段 + 历史深度，FNV-1a；`gsOver` 经 `fromTerminal` 按 `Outcome` 打印）及是否被接受，与 `13094d1` 上直接调 `Match3.Engine.play Undo`（当时的 `gsHistory`）逐位相同。期望值由 `13094d1` 上同一段投影程序生成后写进测试 |
-| `engine_frontend_steps_only_via_gameStep` | 段 3：递归扫描 `app/` 下全部 `.hs`（去掉注释与字符串），没有标识符 `play` / `playWith` / `undoMove`（含限定名 `M3E.play`）；且前端确有 `gameStep M3E.match3Shell` 调用 |
+| `engine_frontend_steps_only_via_gameStep` | 段 3：递归扫描前端 `app/pure` + `web/hs` 下全部 `.hs`（去掉注释与字符串），没有标识符 `play` / `playWith` / `undoMove`（含限定名 `M3E.play`）；且前端确有 `gameStep match3Shell` 调用（`Match3Web.Api`；原扫描 `app/` 桌面代码） |
 
 ## 终局类型 Terminal（审计第 7 项）
 
@@ -477,8 +466,8 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 门禁细则（第三刀起）：
 
 - 每个提交都要 `stack test` 全绿、`golden_behaviour_snapshot` 逐行相等（`golden.txt` 不许改）。
-- 通用层 `Engine.*` / `Shell.Loop` 不得 import `Match3`（`engine_layer_is_game_agnostic`）；三消实例与直接调用旧入口逐位相同（`engine_match3_instance_matches_direct_api`）。
-- 动到前端绘制 / 回放时，另做截图比对：新旧二进制在 Xvfb 下的 6 个场景（展示盘、L16、L28 @2x、L5 暂停、L1 地图、L36 提示），贴图与几何降级两种模式都要能找到 `compare -metric AE` = 0 的帧配对（呼吸光随时钟变化，所以连拍找配对）。
+- 通用层 `Engine.*`（原还有 `Shell.Loop`）不得 import `Match3`（`engine_layer_is_game_agnostic`）；三消实例与直接调用旧入口逐位相同（`engine_match3_instance_matches_direct_api`）。
+- （历史，SDL2 桌面版已移除）动到前端绘制 / 回放时，曾另做截图比对：新旧二进制在 Xvfb 下的 6 个场景（展示盘、L16、L28 @2x、L5 暂停、L1 地图、L36 提示），贴图与几何降级两种模式都要能找到 `compare -metric AE` = 0 的帧配对。现在网页前端的画面由 `make check` 的 e2e 截图与真实绘制检查守着。
 - 元组兼容层（`runCascade*` / `resolveCountdowns` / `runPostBeltCascade` / `traceCascade*` / `toTuple*`）与门面 `Match3.Board` / `Match3.Game` 已删除；测试与 Golden 直接用 `CascadeRun` 记录和子模块。
 
 ## 网页版测试（`make check`）
@@ -505,20 +494,20 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
   `make android-check` 的服务器用端口 0（系统分配空闲端口）。
 - **贴图护栏（每关）**：`cells.js` 按元素名统计走几何降级（`drawCellPrim` 与缩放画法的色块分支）的次数，`m3debug.fallbacks` 暴露。
   e2e 对全部关卡（当前 49 关；第 45 关「雪怪」按象限画，多格护栏见下；第 46 关掉落口标记 `cookie_drop` 缺图走几何版时计入 `fallbacks`；第 47 关变色龙见下；地面层表外名字或缺贴图时按 `<名字>#地面层` 计入，第 48 关魔法地格接入前就是表外名字的淡灰框、护栏查不出）逐关开局、按提示走 3 步（空格加速），贴图加载后 `fallbacks` 必须为空；失败信息列出关卡与元素名。
-  **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART`，贴图名要在网页图集里；颜色表经 `m3Meta` 取自桌面，不用改 JS），
+  **每个新元素合入 main 后都要跟进 `web/www/cells.js`**（`primarySprite` / `CELL_ART`，贴图名要在网页图集里；颜色表经 `m3Meta` 取自 `app/pure` 的表现表，不用改 JS），
   漏了这条护栏会把 `make check` 拦下来（魔法石合入时网页画成「custom」灰块，就是它要防的情况）。另截第 42 关魔法石 0–3 格充能：
   `magic-stone-charges-0123.png`（四块同盘）与 `magic-stone-charge-<v>.png`。`report.json` 的 `fallbacksByLevel` 逐关记录计数，
   第 43–48 关（毛球、彩虹组合、雪怪、掉落口、变色龙、魔法格）另有单独的「fallbacks 为空」检查项。
   同一轮逐关开局用真实绘制钩子（见下）再查两项：每个地面层格（第 39 关 16 格果冻、第 48 关 4 格魔法地格）都画了表内贴图
-  （`jelly` / `jelly_2` / `magic`，测试侧自己的一份 `GROUND_SPRITE`，同桌面 `UI.Ground.groundTable`），56 × 56 在该格、调用序在该格底格之后、
-  棋子之前（`report.json` 的 `groundByLevel`）；HUD 关名真实画了且只画了一张 `name_<关卡下标>`（同桌面 `HudArt`），矩形 = 关名槽
+  （`jelly` / `jelly_2` / `magic`，测试侧自己的一份 `GROUND_SPRITE`，同原桌面版 `UI.Ground.groundTable`），56 × 56 在该格、调用序在该格底格之后、
+  棋子之前（`report.json` 的 `groundByLevel`）；HUD 关名真实画了且只画了一张 `name_<关卡下标>`（同原桌面版 `HudArt`），矩形 = 关名槽
   （`levelNames`；当前 49 关都有文字图，没有关卡退回浏览器字体）。截关名 `level-name-l01.png` / `level-name-l41.png` / `level-name-l48.png`。
 - **HUD 目标中文标签（每关）**：同一轮逐关检查 `m3debug.hud.goal`（HUD 实际画出的目标标签）= 「目标 」+ `state.goal.label`，
   且 `goal.label` 不含 `[a-z_]`（不漏出 `fuzzball` / `GoalNamed` 这类内部名）；逐关结果在 `report.json` 的 `goalLabels`。
   `goal.label` 来自视图模型 `Match3.View.goalLabel`（名字目标查 `namedGoalLabelTable`），`stack test` 的 `frontends_read_view_model` 也核对全部关卡与每日挑战。
   同一轮还逐关核对失败提示 `state.loseHint`（失败面板副标题的前半）：全部关卡不含「箱子」与 `[a-z_]`，碎石目标关（第 8 / 41 / 42 / 44 / 48 关）
   =「用邻消或特效砸开碎石，目标 <target> 个」（核心 39dde8e 修正，原为「砸箱子」；逐关结果在 `report.json` 的 `loseHints`）。
-- **第 43 关毛球**：静止时冻结在浮动偏移 −2 与 +2 设计像素的两帧（同桌面 `sprBob`），截 `fuzzball-float-a-up.png` / `fuzzball-float-b-down.png`，
+- **第 43 关毛球**：静止时冻结在浮动偏移 −2 与 +2 设计像素的两帧（同原桌面版 `sprBob`），截 `fuzzball-float-a-up.png` / `fuzzball-float-b-down.png`，
   并在页面里对两帧格内像素做纵向平移搜索，最佳平移须在 4 设计像素 × `u` × dpr（1280×800 dpr2 下 12.8 物理像素）±2.5 以内；
   步末跳格冻结在皮带段中间（`trace.end` 的 belt 项从毛球格出发），截 `fuzzball-jump-mid-l43-*.png`；HUD「目标 毛球」竖屏 / 横屏截 `goal-label-l43-*.png`。
 - **第 44 关彩虹组合**：`state.rules` = `[{name:"rainbow_combos", text:"彩虹组合变身", icons:["rainbow"]}]`，竖屏 / 横屏角标完整画在关卡面板里
@@ -536,7 +525,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 - **真实绘制钩子**：每个页面 `addInitScript` 注入，包住 `CanvasRenderingContext2D.prototype.drawImage`，对画到 `#board` 的每次调用按**调用序**
   记下序号 `seq`、是否图集、源矩形（按 `atlas.json` 反查贴图名）、变换后的屏幕矩形与旋转角；`__captureFrame()` 取完整一帧。
   格子网格从真实画出的 `tile_a` / `tile_b` 推出（不读 `m3debug.layout`），检查只看「真的画了什么、画在哪、先后顺序」：
-  第 46 / 47 关竖屏 / 横屏的静止帧与交换补间帧（`swap` 段第 4 帧以后）里 `cookie_drop` = 桌面 `drawDropsArt` 的 `(16+56c, 16+56r−6)`；
+  第 46 / 47 关竖屏 / 横屏的静止帧与交换补间帧（`swap` 段第 4 帧以后）里 `cookie_drop` = 原桌面版 `drawDropsArt` 的 `(16+56c, 16+56r−6)`；
   第 47 关每个变色龙格恰好一张 `gem_c<v+1>`（不旋转）且它的 `seq` 小于同格环 `chameleon` 的 `seq`（先宝石后环）。
 - **变色龙（第 47 关）**：竖屏 390×844 与横屏 1280×800 下关名「变色龙」、`c = v + 1`、HUD「目标 变色龙」且目标图标 `chameleon_icon`、真实绘制核对，
   截 `chameleon-l47-*.png`；通用画法反证：页面里 `forceGeneric.add("chameleon")` 后真实绘制核对必须失败、`fallbacks` 出现
@@ -711,7 +700,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ### 第 43 关加难（2026-09-30）
 
-网页端反映第 43 关种子 1 走 3 步就过关；桌面核心复现：原布局 10 个毛球挤在上三行，按提示走（`findHintWith`）种子 1 三步过关（第一步连锁灭 6 个），种子 1–30 里 26 局过关、种子 9 / 30 两步过关。改为 14 个毛球分散在全盘（隔行错开）、目标 14：种子 1 要 14 步，种子 1–30 里 19 局过关（其余 11 局 22 步用完）。快照变化只来自第 43 关：金标准第 43 关一段（原 2725–2800 行 76 行 → 新 2725–2809 行 85 行，`L43` / `G43` 行，目标 `namedfuzzball:10` → `:14`），前后各段逐字不变（第 42 关过关结局仍是 `LevelClear>42`）；元素查询快照只有 `M 43 1` / `M 43 2` 两行。`fz_level43_layout_and_play` 改为 14 个毛球并加难度护栏（种子 1–3 按提示 8 步内过不了关）。
+网页端反映第 43 关种子 1 走 3 步就过关；原生核心复现：原布局 10 个毛球挤在上三行，按提示走（`findHintWith`）种子 1 三步过关（第一步连锁灭 6 个），种子 1–30 里 26 局过关、种子 9 / 30 两步过关。改为 14 个毛球分散在全盘（隔行错开）、目标 14：种子 1 要 14 步，种子 1–30 里 19 局过关（其余 11 局 22 步用完）。快照变化只来自第 43 关：金标准第 43 关一段（原 2725–2800 行 76 行 → 新 2725–2809 行 85 行，`L43` / `G43` 行，目标 `namedfuzzball:10` → `:14`），前后各段逐字不变（第 42 关过关结局仍是 `LevelClear>42`）；元素查询快照只有 `M 43 1` / `M 43 2` 两行。`fz_level43_layout_and_play` 改为 14 个毛球并加难度护栏（种子 1–3 按提示 8 步内过不了关）。
 
 ### 测试辅助 findMatchPair（2026-09-30 修正）
 

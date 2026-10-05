@@ -1,31 +1,24 @@
 # itch.io 上传清单
 
-## 构建（Linux）
+## 构建
+
+网页版是唯一要上传的游戏本体（SDL2 桌面版已于 2026-10-05 移除，`refactor/web-only`），作为 itch.io 的 HTML5 项目上传。
+完整步骤见 [docs/web.md §5.2](docs/web.md#52-itchio静态托管可选)。
 
 ```bash
-export PATH="$HOME/.ghcup/bin:$PATH"
-sudo apt-get install -y libsdl2-dev
-stack build
-stack exec match3-sdl   # 冒烟
-```
-
-运行期需要 `libsdl2-2.0-0`。无显示器：`xvfb-run -a stack exec match3-sdl`。
-
-macOS Apple Silicon 额外：
-
-```bash
-export PATH="$HOME/.ghcup/bin:$PATH"
-export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
-stack build && stack exec match3-sdl
+make doctor && make toolchain   # 首次：检查 / 安装 GHC wasm 工具链
+make build                      # 产物在 web/dist
+make check                      # 状态 / 动画一致性 + 无头 Chrome e2e
+cd web/dist && zip -r ../match3-web-itch.zip .   # index.html 必须在 zip 根目录
 ```
 
 ## 打包
 
-- [ ] 附带 `match3-sdl` 二进制，并注明依赖系统 SDL2
+- [ ] 上传 `web/match3-web-itch.zip`，项目类型选 HTML，勾选「This file will be played in the browser」
 - [x] 包含仓库根目录的 `README.md` 与 `LICENSE`（BSD-3-Clause）
 - [ ] 短 GIF / 截图：交换、连锁连击（逐轮回放 + 连击 x2…x5 弹字，可参考 `docs/images/combo-strip.png`）、步末动画（巧克力 / 藤蔓蔓延、蜗牛、传送带、倒计时、自动洗牌，可参考 `docs/images/end-of-step-strip.png`）、巧克力、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、锁链、火箭冰冻、窗帘、双面块、彩蛋、染色瓶、时间精灵、蒸汽、地毯、蜗牛、果汁机、传送门、气球、饼干、飞碟、选关（`M`）
 - [ ] 封面图 630×500（itch）：棋盘 + 标题
-- [x] 页面文案草稿就绪（见下方 **页面文案**）：8×8 / 五色三消，灵感来自开心消消乐；Haskell + SDL2
+- [x] 页面文案草稿就绪（见下方 **页面文案**）：8×8 / 五色三消，灵感来自开心消消乐；Haskell（GHC wasm）+ 浏览器 Canvas
 
 ## 页面文案（短）
 
@@ -43,11 +36,11 @@ stack build && stack exec match3-sdl
 
 ## 标签
 
-`puzzle` `match-3` `casual` `sdl2` `haskell` `indie`
+`puzzle` `match-3` `casual` `html5` `haskell` `indie`
 
 ## 上传后
 
-- [ ] 在干净机器 / 容器上下载试玩
+- [ ] 在桌面与手机浏览器各试玩一次（确认 wasm 正常加载）
 - [ ] 按需设置价格 / 捐赠
 - [x] GitHub 链接就绪：https://github.com/exsabersac/match3
 

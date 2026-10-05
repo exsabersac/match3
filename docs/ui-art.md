@@ -1,6 +1,8 @@
 # UI 美术与贴图
 
-本文说明 `match3-sdl` 的美术风格、贴图清单、生成方式，以及运行时如何加载和降级。规则层（`src/Match3/*`）完全不受影响；贴图只在 `app/` 里使用。
+本文说明游戏的美术风格、贴图清单与生成方式。规则层（`src/Match3/*`）完全不受影响。`tools/gen_assets.py` 生成 `assets/`，网页版再由 `web/tools/gen_web_atlas.py` 把它重新打包成 2x WebP 图集（只收棋盘 / HUD 贴图与关卡名，文字用浏览器字体画），见 [web.md §2.5 资源管线](web.md#25-资源管线)。
+
+> **SDL2 桌面版已于 2026-10-05 移除**（`refactor/web-only`），网页是唯一前端。下文「加载与降级」「开发用环境变量」「复现 / 截图」「高分屏 / Retina」各节，以及「连击表现」里提到的 `app/UI/*` 模块、`MATCH3_*` 环境变量、Xvfb 截图做法，描述的都是原桌面版（`match3-sdl`）的实现，留作历史记录；时间线、帧数、颜色等数值仍是现行规格（来自 `app/pure` 的 `ComboFx` / `UI.Presentation`，网页经 `m3Meta` 读同一份）。`assets/` 里只有原桌面版用到的 `zh_*` / `g_*` 文字贴图与部分 `@` 尺寸变体暂时保留未删（网页图集不收）。
 
 ![关卡 16「大师」](images/screenshot-l16.png)
 
@@ -112,9 +114,9 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 图形采用 4 倍超采样再缩小；**文字不超采样**，而是按目标像素字号直接用 FreeType 渲染（带 hinting，笔画对齐像素格）。随机种子固定，所以同一台机器上多次运行结果一致。关卡名从 `src/Match3/Types.hs` 解析，新增关卡后重新跑一次即可。字体按顺序查找：拉丁字形用 Barlow Condensed / DejaVu / Arial，中文用 Noto Sans CJK / 文泉驿 / 苹方 / 华文黑体。
 
-## 加载与降级
+## 加载与降级（原桌面版，已移除）
 
-实现见 `app/Art.hs`。
+实现原在 `app/Art.hs`（已删除）。网页版的加载见 [web.md §2.5](web.md#25-资源管线)。
 
 1. **格式**：BMP V4 头（`BI_BITFIELDS` + alpha 掩码；多页时按 `atlas.txt` 最大页号依次加载 `atlas.bmp`、`atlas1.bmp`……，任何一页缺失都整体降级），用 SDL2 核心的 `SDL.loadBMP` 就能保留透明度，**不需要 SDL_image / SDL_ttf**。macOS 只要已有的 `brew install sdl2`，**不用装任何新的 brew 包**。新增的 Haskell 依赖只有 GHC 自带的 `containers`、`directory`、`filepath`。
 2. **路径查找**（找到第一个同时包含 `atlas.bmp` 和 `atlas.txt` 的目录就用它）：
@@ -123,7 +125,9 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
    3. 可执行文件所在目录，以及它向上最多 12 层父目录里的 `assets/`（从 `.stack-work/.../bin` 也能找到仓库里的资源）
 3. **降级**：找不到资源或加载失败时，只会在 stderr 打印一行警告，然后使用原来的纯色方块 / 几何图形渲染，游戏照常运行。单个贴图缺失时，只有对应的格子退回原来的几何绘制。`background.bmp` 可选，缺了就用纯色背景。
 
-## 开发用环境变量
+## 开发用环境变量（原桌面版，已移除）
+
+网页版的对应开关是 URL 参数（如 `?showcase=1`），见 [web.md](web.md)。
 
 | 变量 | 作用 |
 |------|------|
@@ -193,7 +197,7 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 - 测试：`trace_end_steps_replay_to_trySwap_final` 对全部关卡 × 3 个种子的每个成功交换按时间线重放（轮 → 步末 → 轮……），要求每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，最后等于 `trySwap` 的终盘，并且抽样必须覆盖全部六种效果；`trace_end_steps_boosters_replay`、`trace_end_snail_push_and_turn`、`trace_end_spread_from_adjacent_source` 分别覆盖道具、蜗牛推 / 掉头、蔓延来源方向。
 
 - **点击加速**：回放期间点击鼠标，或按空格 / 回车 / `N`，阶段机改为每帧推进 `fastStep` = 3 帧（整体约快 3 倍，包括步末各段和自动洗牌段），各轮和各步末段依旧逐个可见；标题栏提示 `Fast-forward combo`。开头 10 帧的交换动画照常播放（在交换中按下，加速从第 1 轮开始生效）。
-- **播放锁定**：回放期间（含步末阶段）不接受新的交换、道具、撤销或洗牌输入，过关 / 失败叠层也等播完才画；提示、地图、重开、暂停仍可用。完整的键位表见 [`ui-controls.md` 播放锁定](ui-controls.md#播放锁定animbusy)。
+- **播放锁定**：回放期间（含步末阶段）不接受新的交换、道具、撤销或洗牌输入，过关 / 失败叠层也等播完才画；提示、地图、重开、暂停仍可用。完整的键位表见 [`ui-controls.md` 播放锁定](ui-controls.md#播放锁定)。
 - **不会重播**：回放只由本次调用返回的 `MoveTrace` / `MoveFx` 驱动。`NoMatch` / `InvalidSwap` / 被拒的道具返回空脚本，此时会清掉旧的弹字和 HUD 总结，不播任何东西（`failed_swap_resets_combo_feedback`、`trace_rejected_move_is_empty`、`undo_shuffle_reset_combo_feedback` 锁定）。撤销 / 洗牌也会清空弹字、总结、粒子和震屏，并且不会重播任何步末动画。
 
 ### 连击等级样式（`comboStyle`）
@@ -225,14 +229,14 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 | 蔓延生长曲线、前沿柔光色 | `spreadCurveFor` / `spreadGlowFor`（按元素名，缺省匀速 / 白） | `UI.EndStage.spreadProgress` |
 | 步末碎屑 | `prCrumbs`（倒计时来源格火星、蔓延按元素色） | `UI.Playback.endCrumbTable` |
 
-表里的值与第 10 刀前逐一相同（测试 `presentation_*` 对照旧 case 的字面副本；22 个静态场景、6 个步末场景与连击 / 特殊块爆炸 / 组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同）。**给新元素加表现**：步末效果选一个已有事件种类即可按那一行播放；蔓延类在 `elementRGBTable` / `spreadCurves` 各加一行定颜色与生长节奏（不加就是白光、匀速、不迸碎屑）。**音效**：每行有 `prSound` 钩子（内置全部 `Nothing`，前端不引入音频依赖、不播放），填上名字后由 `UI.Sound.playSounds` 接收（现为空操作）。
+表里的值与第 10 刀前逐一相同（测试 `presentation_*` 对照旧 case 的字面副本；22 个静态场景、6 个步末场景与连击 / 特殊块爆炸 / 组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同）。**给新元素加表现**：步末效果选一个已有事件种类即可按那一行播放；蔓延类在 `elementRGBTable` / `spreadCurves` 各加一行定颜色与生长节奏（不加就是白光、匀速、不迸碎屑）。**音效**：每行有 `prSound` 钩子（内置全部 `Nothing`，前端不引入音频依赖、不播放），（此句是第 10 刀时的状态；现在内置表有 `clear` / `special` 两个音效名，网页经 `m3Meta` 取音效名播放，原桌面钩子 `UI.Sound` 已随桌面版移除。）
 
 ### 贴图与降级
 
 - 新增 / 扩充的文字贴图（`tools/gen_assets.py`，全部 2x 烘焙）：`zh_combo` 增加 `@48 / @88 / @128` 变体（弹字用，原有 `@36 / @68`）；新增 `zh_combo_end`「连击！」（20 / 28 px，对应 `@40 / @56`）；数字 `0-9`、`x`、`+` 增加 7 / 9 / 12 号大字形（`g_<码点>@84 / @108 / @144`），弹字放大到峰值时也不会发糊。
 - 缺图时的退回画法：弹字用像素字「COMBO」加数字、同样的等级色和缩放；得分用像素数字；HUD 徽章在回放中显示当前轮，结束后显示「N COMBO!」。
 
-### 复现 / 截图
+### 复现 / 截图（原桌面版，已移除）
 
 第 5 关（进阶，目标 700 分，不会被一次连锁直接过关挡住画面），种子 10，交换 (4,2)↔(5,2)，会触发 5 连锁（x2…x5 全部出现）。格子中心的逻辑坐标是 `x = 16 + c·56 + 28`、`y = 124 + r·56 + 28`，`MATCH3_SCALE=2` 时再乘 2，最后加上窗口在屏幕上的偏移（`xwininfo -root -tree` 查看）：
 
@@ -261,7 +265,9 @@ xdotool mousemove 532 814 click 1; sleep 0.15; xdotool mousemove 532 926 click 1
 
 本节两张拼图 `docs/images/combo-strip.png`、`docs/images/end-of-step-strip.png` 是按上面的复现组合在 Xvfb 下（`MATCH3_SCALE=2`）逐帧截取后拼接的，缩放到宽 1100 px 并量化为 256 色（各约 0.7 MB），**不由** `gen_assets.py` 生成；回放表现改动后需要手工重拍。
 
-## 高分屏 / Retina
+## 高分屏 / Retina（原桌面版，已移除）
+
+网页版按 `devicePixelRatio` 缩放画布，见 [web.md §2.4 自适应布局](web.md#24-自适应布局layoutjs)。以下是原 SDL 桌面版的做法。
 
 ### 倍率怎么检测
 

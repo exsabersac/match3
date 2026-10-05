@@ -13,7 +13,7 @@ module Spec.ElementClass
   ) where
 
 import Control.Monad (forM_)
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, nub)
 import Data.Maybe (isJust, isNothing)
 import qualified ElementQueries
 import Match3.Board.Grid (setCell)
@@ -54,6 +54,7 @@ tests =
   , testCase "ec_mechanic_defaults_silent" ec_mechanic_defaults_silent
   , testCase "ec_flat_record_removed" ec_flat_record_removed
   , testCase "ec_entity_wires_damage" ec_entity_wires_damage
+  , testCase "ec_mechanic_names_unique" ec_mechanic_names_unique
   , testCase "ec_mechanics_by_beat" ec_mechanics_by_beat
   , testCase "ec_mechanic_stateful_extension" ec_mechanic_stateful_extension
   , testCase "ec_custom_matchable_gem" ec_custom_matchable_gem
@@ -258,6 +259,14 @@ ec_entity_wires_damage = do
   snow <- readFile "src/Match3/Element/Builtin/Obstacle.hs"
   assertBool "SnowBoss boardPasses no longer inlines entityDamage"
     (not ("boardPasses _ = [AdjacentPass 200 (entityDamage" `isInfixOf` snow))
+
+
+-- | 内置关卡级机制的 mechName 两两不同（beatIn / registerMechanic 按名合并；撞名会静默覆盖）。
+ec_mechanic_names_unique :: Assertion
+ec_mechanic_names_unique = do
+  let names = map mechNameOf builtinMechanics
+  assertEqual "builtin mechanic names unique" (length names) (length (nub names))
+  assertEqual "expected builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] names
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（onRefilled）吸走盘上第一颗 C1 宝石；
 -- 不改主流程，只 registerMechanic（无状态：开局没有它时用注册的原型值）。第 7 刀 7b 起节拍折叠所有回复者：

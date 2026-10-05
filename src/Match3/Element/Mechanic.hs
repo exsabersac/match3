@@ -48,6 +48,7 @@ data Morph = Morph
 
 -- | 关卡级机制：一个类型 + 一个 instance，自己的状态放在值里。每个节拍方法的缺省都是「不回复」。
 class (Typeable m, Eq m, Show m) => Mechanic m where
+  -- | 机制身份键（registerMechanic / beatIn 写回按名合并）；内置名两两不同（ec_mechanic_names_unique），扩展时不可撞名。
   mechName :: m -> ElementName
   -- | 开局状态：由关卡记录（lvlGoal 已换成本局目标）给出；缺省 = 原样（没有状态的机制）。
   mechStart :: Level -> m -> m

@@ -10,6 +10,7 @@
 --
 -- except 参数 = 本轮已被直接命中、不再邻消的格。只导出元素定义（Match3.Element.Builtin.*）要用的版本；
 -- 测试用的无 except 写法（except = []）在 test/Spec/Support/Obstacles.hs。
+-- 本模块是多 Builtin 共用的邻格几何 / 触发算法；元素能力与注册仍在 Builtin.*（审计 P2-7）。
 module Match3.Obstacles
   ( orthoNeighbors
   , adjacentWhere

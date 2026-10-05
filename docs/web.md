@@ -118,6 +118,8 @@ SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表
   - **要改**：① 新的 `Cell` 构造器（同时给它的元素写 `Renders.faceBase`）；② 要专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
     在 `CUSTOM_ART` / `primarySprite` 补画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 `Renders.face` 里给出字段（`Api` 不用改）、
     `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时只在 `UI.Presentation.elementRGBTable` 补一项（网页经 `m3Meta` 读同一张表）。
+  - **双轨维护（Haskell `Renders` ↔ JS `CUSTOM_ART`）**：显示字段由元素 `face` / `faceBase` 提供，画法分派仍在 `web/www/cells.js` 按 `cell.name` 字符串表。
+    加专门画法的元素时**必须同时**改 Haskell instance 与 `CUSTOM_ART`（及贴图）；漏改一侧时 e2e 降级护栏 / `m3debug.fallbacks` 会报，类型系统抓不到。
   - **回归护栏**：漏了画法或贴图的格子会走几何降级（色块 + 类型名，如魔法石合入时的「custom」灰块），③ 类走了通用画法也会记一笔；
     `cells.js` 按元素名统计，`m3debug.fallbacks` 暴露；e2e 对**每一关**开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡
     （见 [testing.md](testing.md#网页版测试make-check)）；颜色表、格子取色规则、步末碎屑色、生长曲线、帧数、音效名

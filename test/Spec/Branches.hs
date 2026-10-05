@@ -13,6 +13,7 @@
 module Spec.Branches
   ( tests
   ) where
+import Data.Proxy (Proxy(..))
 
 import Control.Monad (forM_)
 import Data.List (sort)
@@ -30,6 +31,7 @@ import Match3.Levels.Campaign (allLevels)
 import Match3.Types (boardSize)
 import Match3.Element
 import Match3.Element.Ability
+import Match3.Element.Phase
 import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
@@ -80,6 +82,28 @@ instance Movable NoRecolorGem where
 instance Countable NoRecolorGem
 instance Renders NoRecolorGem
 
+instance Phase NoRecolorGem where
+  codec = Codec
+    { cName = "gem"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind NoRecolorGem where
   kindName _ = "gem"
   fromCell cell = case cell of
@@ -99,6 +123,28 @@ instance Movable NoPushGem where
 instance Countable NoPushGem
 instance Renders NoPushGem
 
+instance Phase NoPushGem where
+  codec = Codec
+    { cName = "gem"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind NoPushGem where
   kindName _ = "gem"
   fromCell cell = case cell of
@@ -117,6 +163,28 @@ instance Hittable Lever where
   fires _ = False
 instance Countable Lever
 instance Renders Lever
+
+instance Phase Lever where
+  codec = Codec
+    { cName = "lever"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Lever where
   kindName _ = "lever"
@@ -159,6 +227,28 @@ instance Cellular Pod where
   nameOf _ = "pod"
 instance Countable Pod
 instance Renders Pod
+
+instance Phase Pod where
+  codec = Codec
+    { cName = "pod"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Pod where
   kindName _ = "pod"
@@ -240,6 +330,28 @@ instance Movable Cart where
   pushable _ = True
 instance Countable Cart
 instance Renders Cart
+
+instance Phase Cart where
+  codec = Codec
+    { cName = "cart"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Cart where
   kindName _ = "cart"

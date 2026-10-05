@@ -25,6 +25,7 @@ import Data.Proxy (Proxy(..))
 import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE, balloonPop)
 import Match3.Element.Kind (Kind)
+import Match3.Element.Phase (Phase)
 import Match3.Element.Rules (kindNeighbour)
 import Match3.Element.Types (AdjCtx(..), AdjOut(..))
 import Match3.Obstacles
@@ -36,7 +37,7 @@ import Match3.Obstacles
 import Match3.Types (Board, CellContents(..), Pos, boardPositions)
 
 -- | 用通用驱动跑一种本体的邻格规则：真消除 = gems，直接命中 = except；返回（新盘面, 打碎的位置）。
-viaDriver :: Kind e => Proxy e -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
+viaDriver :: (Kind e, Phase e) => Proxy e -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
 viaDriver p b gems except =
   let out = kindNeighbour p (AdjCtx gems except [] (const True)) b
   in (aoBoard out, aoDead out)

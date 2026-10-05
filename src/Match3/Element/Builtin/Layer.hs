@@ -36,10 +36,10 @@ instance Layer Ice where
   putOn (Ice n) cell = case cell of
     Gem c k _ ov -> Gem c k n ov
     _ -> cell
-  layerFires (Ice n) = Just (n <= 1)
-  layerHit (Ice n)
-    | n > 1 = Keep (Ice (n - 1))
-    | otherwise = Shatter
+  layerCover (Ice n) = defaultCover
+    { lcFires = Just (n <= 1)
+    , lcHit = if n > 1 then Keep (Ice (n - 1)) else Shatter
+    }
   -- 放置：设冰层数（精确一个整数参数）；原格不是宝石时不放
   layerPlace _ args cell = case cell of
     Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
@@ -61,7 +61,7 @@ instance Layer GrassL where
     Gem c k i (Just Grass) -> Just (GrassL, Gem c k i Nothing)
     _ -> Nothing
   putOn _ = putOverlay Grass
-  layerStripsOnClear _ = True
+  layerCover _ = defaultCover { lcStripsOnClear = True }
   layerPlace _ = overlayPlace Grass
 
 -- | 藤：真消除时随格清掉；步末向相邻裸宝石蔓延。
@@ -74,7 +74,7 @@ instance Layer VineL where
     Gem c k i (Just Vine) -> Just (VineL, Gem c k i Nothing)
     _ -> Nothing
   putOn _ = putOverlay Vine
-  layerStripsOnClear _ = True
+  layerCover _ = defaultCover { lcStripsOnClear = True }
   spreads _ = Just (10, VineL)
   layerPlace _ = overlayPlace Vine
 
@@ -88,7 +88,7 @@ instance Layer ChocoL where
     Gem c k i (Just Choco) -> Just (ChocoL, Gem c k i Nothing)
     _ -> Nothing
   putOn _ = putOverlay Choco
-  layerStripsOnClear _ = True
+  layerCover _ = defaultCover { lcStripsOnClear = True }
   layerNeighbourPrio _ = Just 150
   layerReach _ = AllNeighbours
   onLayerNeighbourClear _ cell = Becomes (stripOverlay cell)
@@ -105,7 +105,7 @@ instance Layer FogL where
     Gem c k i (Just (Fog n)) -> Just (FogL n, Gem c k i Nothing)
     _ -> Nothing
   putOn (FogL n) = putOverlay (Fog n)
-  layerBlocksMatch _ = True
+  layerCover _ = defaultCover { lcBlocksMatch = True }
   layerNeighbourPrio _ = Just 70
   onLayerNeighbourClear (FogL n) = chipLayer n FogL
   layerPlace _ = layeredPlace Fog
@@ -120,10 +120,12 @@ instance Layer ChainL where
     Gem c k i (Just (Chain n)) -> Just (ChainL n, Gem c k i Nothing)
     _ -> Nothing
   putOn (ChainL n) = putOverlay (Chain n)
-  layerBlocksMatch _ = True
-  layerBlocksSwap _ = True
-  layerFires _ = Just False
-  layerHit (ChainL n) = peelHit n ChainL
+  layerCover (ChainL n) = defaultCover
+    { lcBlocksMatch = True
+    , lcBlocksSwap = True
+    , lcFires = Just False
+    , lcHit = peelHit n ChainL
+    }
   layerNeighbourPrio _ = Just 80
   onLayerNeighbourClear (ChainL n) = chipLayer n ChainL
   layerPlace _ = layeredPlace Chain
@@ -138,7 +140,7 @@ instance Layer FreezeL where
     Gem c k i (Just (Freeze n)) -> Just (FreezeL n, Gem c k i Nothing)
     _ -> Nothing
   putOn (FreezeL n) = putOverlay (Freeze n)
-  layerBlocksSwap _ = True
+  layerCover _ = defaultCover { lcBlocksSwap = True }
   layerNeighbourPrio _ = Just 90
   onLayerNeighbourClear (FreezeL n) = chipLayer n FreezeL
   layerPlace _ = layeredPlace Freeze
@@ -153,9 +155,11 @@ instance Layer CurtainL where
     Gem c k i (Just (Curtain n)) -> Just (CurtainL n, Gem c k i Nothing)
     _ -> Nothing
   putOn (CurtainL n) = putOverlay (Curtain n)
-  layerBlocksMatch _ = True
-  layerFires _ = Just False
-  layerHit (CurtainL n) = peelHit n CurtainL
+  layerCover (CurtainL n) = defaultCover
+    { lcBlocksMatch = True
+    , lcFires = Just False
+    , lcHit = peelHit n CurtainL
+    }
   layerNeighbourPrio _ = Just 100
   onLayerNeighbourClear (CurtainL n) = chipLayer n CurtainL
   layerPlace _ = layeredPlace Curtain
@@ -170,7 +174,7 @@ instance Layer SteamL where
     Gem c k i (Just Steam) -> Just (SteamL, Gem c k i Nothing)
     _ -> Nothing
   putOn _ = putOverlay Steam
-  layerBlocksMatch _ = True
+  layerCover _ = defaultCover { lcBlocksMatch = True }
   layerNeighbourPrio _ = Just 160
   layerReach _ = AllNeighbours
   onLayerNeighbourClear _ cell = Becomes (stripOverlay cell)

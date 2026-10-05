@@ -30,6 +30,8 @@ import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, Gr
 import Match3.Element.Builtin.Obstacle (BalloonE, CakeE, ChestE, HoneyE, MagicStone, SafeE, StoneE, balloonPop, balloonPopLegacy)
 import Match3.Element.Rules (kindRules, layerRules)
 import Match3.Element.Kind
+import Match3.Element.Phase
+import Match3.Element.Near
 import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.Element.World
@@ -71,6 +73,28 @@ instance Movable GemV
 instance Countable GemV
 instance Renders GemV
 
+instance Phase GemV where
+  codec = Codec
+    { cName = "gem"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind GemV where
   kindName _ = "gem"
   fromCell cell = case cell of
@@ -94,6 +118,28 @@ instance Movable LineHV where
 
 instance Countable LineHV
 instance Renders LineHV
+
+instance Phase LineHV where
+  codec = Codec
+    { cName = "line_h"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind LineHV where
   kindName _ = "line_h"
@@ -122,14 +168,27 @@ instance Countable StoneV where
 instance Renders StoneV where
   faceBase (StoneV n) = Just ("stone", [("n", FieldInt n)])
 
+instance Phase StoneV where
+  codec = Codec
+    { cName = "stone"
+    , cToCell = toCell
+    , cFromCell = \cell -> case cell of Stone n -> Just (StoneV n); _ -> Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta { metaCounter = Just CountStones }
+    , cNear = Just (NearRule 10 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (StoneV n) = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind StoneV where
   kindName _ = "stone"
   fromCell cell = case cell of
     Stone n -> Just (StoneV n)
     _ -> Nothing
   place _ args _ = Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
-  neighbourPrio _ = Just 10
-  onNear (StoneV n) _ = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
 
 data FlipV = FlipV Color Color
   deriving (Eq, Show)
@@ -150,6 +209,28 @@ instance Movable FlipV where
 
 instance Countable FlipV
 instance Renders FlipV
+
+instance Phase FlipV where
+  codec = Codec
+    { cName = "flip"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind FlipV where
   kindName _ = "flip"
@@ -172,6 +253,28 @@ instance Countable BubbleV where
   counter _ = Just (CountNamed "bubble")
 
 instance Renders BubbleV
+
+instance Phase BubbleV where
+  codec = Codec
+    { cName = "bubble"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind BubbleV where
   kindName _ = "bubble"
@@ -202,6 +305,28 @@ instance Countable BossV where
 instance Renders BossV where
   face (BossV hp mx t q) = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)]
 
+instance Phase BossV where
+  codec = Codec
+    { cName = "snow_boss"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind BossV where
   kindName _ = "snow_boss"
   fromCell cell = case cell of
@@ -228,8 +353,10 @@ instance Layer IceV where
   putOn (IceV n) cell = case cell of
     Gem c k _ ov -> Gem c k n ov
     _ -> cell
-  layerFires (IceV n) = Just (n <= 1)
-  layerHit (IceV n) = if n > 1 then Keep (IceV (n - 1)) else Shatter
+  layerCover (IceV n) = defaultCover
+    { lcFires = Just (n <= 1)
+    , lcHit = if n > 1 then Keep (IceV (n - 1)) else Shatter
+    }
   layerPlace _ args cell = case cell of
     Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
     _ -> Nothing
@@ -243,7 +370,7 @@ instance Layer ChocoV where
     Gem c k i (Just Choco) -> Just (ChocoV, Gem c k i Nothing)
     _ -> Nothing
   putOn _ = putOverlay Choco
-  layerStripsOnClear _ = True
+  layerCover _ = defaultCover { lcStripsOnClear = True }
   layerPlace _ _ cell = case cell of
     Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
     _ -> Nothing
@@ -263,10 +390,12 @@ instance Layer ChainV where
     Gem c k i (Just (Chain n)) -> Just (ChainV n, Gem c k i Nothing)
     _ -> Nothing
   putOn (ChainV n) = putOverlay (Chain n)
-  layerBlocksMatch _ = True
-  layerBlocksSwap _ = True
-  layerFires _ = Just False
-  layerHit (ChainV n) = if n <= 1 then Peel else Keep (ChainV (n - 1))
+  layerCover (ChainV n) = defaultCover
+    { lcBlocksMatch = True
+    , lcBlocksSwap = True
+    , lcFires = Just False
+    , lcHit = if n <= 1 then Peel else Keep (ChainV (n - 1))
+    }
   layerPlace _ args cell = case cell of
     Gem col kind ice _ -> (\n -> Gem col kind ice (Just (Chain n))) <$> exactArgs argInt args
     _ -> Nothing
@@ -464,11 +593,11 @@ ab_rule_methods_pinned :: Assertion
 ab_rule_methods_pinned = do
   assertEqual "kind neighbourPrio"
     [Just 10, Just 20, Just 30, Just 40, Just 50, Just 60, Just 110, Just 120, Just 130, Just 140, Nothing, Just 180, Nothing, Nothing]
-    [ neighbourPrio (Proxy @StoneE), neighbourPrio (Proxy @ChestE), neighbourPrio (Proxy @HoneyE)
-    , neighbourPrio (Proxy @CakeE), neighbourPrio (Proxy @BalloonE), neighbourPrio (Proxy @MagicHatE)
-    , neighbourPrio (Proxy @SafeE), neighbourPrio (Proxy @TimeSpiritE), neighbourPrio (Proxy @MakerE)
-    , neighbourPrio (Proxy @BottleE), neighbourPrio (Proxy @Bubble), neighbourPrio (Proxy @MagicStone)
-    , neighbourPrio (Proxy @Fuzzball), neighbourPrio (Proxy @SnowBoss) ]
+    [ phaseNearPrio @StoneE, phaseNearPrio @ChestE, phaseNearPrio @HoneyE
+    , phaseNearPrio @CakeE, phaseNearPrio @BalloonE, phaseNearPrio @MagicHatE
+    , phaseNearPrio @SafeE, phaseNearPrio @TimeSpiritE, phaseNearPrio @MakerE
+    , phaseNearPrio @BottleE, phaseNearPrio @Bubble, phaseNearPrio @MagicStone
+    , phaseNearPrio @Fuzzball, phaseNearPrio @SnowBoss ]
   assertEqual "layer neighbourPrio"
     [Just 70, Just 80, Just 90, Just 100, Just 150, Just 160, Nothing, Nothing]
     [ layerNeighbourPrio (Proxy @FogL), layerNeighbourPrio (Proxy @ChainL), layerNeighbourPrio (Proxy @FreezeL)

@@ -64,10 +64,6 @@ instance Phase PlainGem where
 
 instance Kind PlainGem where
   place _ = cPlace (codec @PlainGem)
-  neighbourPrio _ = phaseNearPrio @PlainGem
-  reach _ = phaseReach @PlainGem
-  dieOrder _ = phaseDieOrder @PlainGem
-  onNear = phaseOnNear
 
 -- | 特殊块（直线 / 炸弹 / 彩虹）：种类在类型里（@SpecialGem 'LineH@ …），值只是颜色。
 -- 洗牌保留；直线 / 炸弹有爆炸范围；彩虹不进普通匹配提示，挂彩虹取色（先于特殊合成 = 组合表的次序 20）。

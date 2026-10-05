@@ -2,22 +2,30 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 -- | 叠层（冰、草 / 藤 / 巧 / 雾 / 锁链 / 冻结 / 窗帘 / 蒸汽）：对应 xmonad 的 LayoutModifier。
--- 一种叠层 = 一个类型 + 一个 'Layer' instance，只覆盖要改的方法；包在本体外面的通用包装 'Layered'
--- 把叠层和里面的元素合成一个元素，合成规则**只在 'Layered' 的各 instance 里写一次**：
+-- slim-4：值级挡匹配 / 命中 / 点火 / 随清 收成 'layerCover'；'Layered' 同时是 Ability 与 Phase 的修饰器，
+-- 不再在 Layer 类上重复声明五个值级方法。
+--
+-- 合成规则只在 'Layered' 的 Ability / Phase instance 里写一次：
 --
 -- * 挡匹配 / 挡交换：本层 OR 里层；
--- * 点火：本层有意见（'layerFires' = Just）就听本层，否则问里层；
--- * 直接命中：本层先回答（'layerHit'）——穿透时问里层，里层吃掉命中就把本层盖回去；
+-- * 点火：本层有意见（'lcFires' = Just）就听本层，否则问里层；
+-- * 直接命中：本层先回答（'lcHit'）——穿透时问里层，里层吃掉命中就把本层盖回去；
 -- * 洗牌保留：有任何一层就保留；
 -- * 名字 / 颜色 / 下落 / 穿门 / 计数 / 显示等本体属性：取里层。
 --
--- 规则是类型级的，与格子值无关：邻格揭层 / 清掉（'layerNeighbourPrio' / 'layerReach' / 'onLayerNeighbourClear'）
--- 与步末蔓延（'spreads'）是方法，由通用驱动（Match3.Element.Rules.layerNeighbour / layerSpread）执行；其余走
--- 逃生口 'layerPasses'。
+-- 邻格揭层 / 清掉与步末蔓延仍是类型级方法（'layerNeighbourPrio' 等），由 Rules 驱动。
 module Match3.Element.Layer
   ( Layer(..)
   , LayerHit(..)
+  , LayerCover(..)
+  , defaultCover
+  , layerBlocksMatch
+  , layerBlocksSwap
+  , layerFires
+  , layerHit
+  , layerStripsOnClear
   , Layered(..)
   , SomeLayer(..)
   , someLayer
@@ -31,6 +39,7 @@ import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
 import Match3.Element.Ability
 import Match3.Element.Kind (BoardPass, Nudge(..), Reach(..))
+import Match3.Element.Phase
 import Match3.Element.Types (Placer)
 import Match3.Types
 
@@ -42,45 +51,56 @@ data LayerHit l
   | Shatter  -- ^ 本格被消除（末层冰随宝石一起碎）
   deriving (Eq, Show)
 
+-- | 值级覆盖（slim-4：五个旧方法合成一包，由 'Layered' 的 Phase / Ability 读取）。
+data LayerCover l = LayerCover
+  { lcBlocksMatch :: Bool
+  , lcBlocksSwap :: Bool
+  , lcFires :: Maybe Bool
+  , lcHit :: LayerHit l
+  , lcStripsOnClear :: Bool
+  }
+  deriving (Eq, Show)
+
+defaultCover :: LayerCover l
+defaultCover = LayerCover False False Nothing Pierce False
+
 -- | 叠在本体之上的一层。
 class (Show l, Eq l, Typeable l) => Layer l where
   layerName :: proxy l -> ElementName
-  -- | 从格子拆出本层与里面的格子（Nothing = 这格没有本层）。
   peel :: Cell -> Maybe (l, Cell)
-  -- | 把本层写回格子。
   putOn :: l -> Cell -> Cell
-  -- | 盖住的格子不参与匹配。
-  layerBlocksMatch :: l -> Bool
-  layerBlocksMatch _ = False
-  layerBlocksSwap :: l -> Bool
-  layerBlocksSwap _ = False
-  -- | 点火意见：Nothing = 没意见（问里面）。
-  layerFires :: l -> Maybe Bool
-  layerFires _ = Nothing
-  layerHit :: l -> LayerHit l
-  layerHit _ = Pierce
-  -- | 本格真消除时随格清掉（草 / 藤 / 巧）。
-  layerStripsOnClear :: l -> Bool
-  layerStripsOnClear _ = False
-  -- | 关卡放置（缺省不放）。
+  -- | 值级覆盖（挡匹配 / 命中 / 点火 / 随清）；缺省全穿透、不挡、不随清。
+  layerCover :: l -> LayerCover l
+  layerCover _ = defaultCover
   layerPlace :: proxy l -> Placer
   layerPlace _ _ _ = Nothing
-  -- | 邻格规则的优先级（Nothing = 没有）。内置：迷雾 70 / 锁链 80 / 火箭冰冻 90 / 窗帘 100 / 巧克力 150 / 蒸汽 160。
   layerNeighbourPrio :: proxy l -> Maybe Int
   layerNeighbourPrio _ = Nothing
   layerReach :: proxy l -> Reach
   layerReach _ = SkipDirect
-  -- | 与本轮真消除格正交相邻时这一格（整格，含本层）怎么变。
   onLayerNeighbourClear :: l -> Cell -> Nudge
   onLayerNeighbourClear _ _ = Untouched
-  -- | 步末蔓延（PhaseSpread）：(次序, 种到相邻裸宝石上的本层值)；Nothing = 不蔓延。
   spreads :: proxy l -> Maybe (Int, l)
   spreads _ = Nothing
-  -- | 逃生口：本层自带的整盘趟。
   layerPasses :: proxy l -> [BoardPass]
   layerPasses _ = []
 
--- | 修饰过的元素（同 xmonad 的 ModifiedLayout）：叠层在外，被修饰的元素（本体或更内层的叠层）在里。
+layerBlocksMatch :: Layer l => l -> Bool
+layerBlocksMatch = lcBlocksMatch . layerCover
+
+layerBlocksSwap :: Layer l => l -> Bool
+layerBlocksSwap = lcBlocksSwap . layerCover
+
+layerFires :: Layer l => l -> Maybe Bool
+layerFires = lcFires . layerCover
+
+layerHit :: Layer l => l -> LayerHit l
+layerHit = lcHit . layerCover
+
+layerStripsOnClear :: Layer l => l -> Bool
+layerStripsOnClear = lcStripsOnClear . layerCover
+
+-- | 修饰过的元素（同 xmonad 的 ModifiedLayout）：叠层在外，被修饰的元素在里。
 data Layered l e = Layered l e
   deriving (Eq, Show)
 
@@ -122,20 +142,50 @@ instance Element e => Renders (Layered l e) where
   face (Layered _ e) = face e
   faceBase (Layered _ e) = faceBase e
 
--- | 装箱的叠层种类（元素世界里的一项）。
+-- | Phase 修饰器：与 Ability 'Layered' 同语义（生产值级仍可走 Ability，对照走 Phase）。
+instance (Layer l, Phase e) => Phase (Layered l e) where
+  codec = Codec
+    { cName = cName (codec @e)
+    , cToCell = \(Layered l e) -> putOn l (cToCell (codec @e) e)
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = cMeta (codec @e)
+    , cNear = Nothing
+    }
+  onSwap (Layered _ e) = onSwap e
+  onMatch (Layered l e) =
+    let m = onMatch e
+     in m
+          { mBlockMatch = layerBlocksMatch l || mBlockMatch m
+          , mBlockSwap = layerBlocksSwap l || mBlockSwap m
+          }
+  onHit h (Layered l e) = case layerHit l of
+    Pierce ->
+      let HitOut st fi bl nx = onHit h e
+          st' = case st of
+            Absorb inner -> Absorb (putOn l inner)
+            r -> r
+          nx' = fmap (Layered l) nx
+       in HitOut st' (fromMaybe fi (layerFires l)) bl nx'
+    Keep l' -> HitOut (Absorb (putOn l' (cToCell (codec @e) e))) False Nothing Nothing
+    Peel -> HitOut (Absorb (cToCell (codec @e) e)) False Nothing Nothing
+    Shatter -> HitOut Destroy (fromMaybe True (layerFires l)) Nothing Nothing
+  physics (Layered _ e) =
+    let p = physics e
+     in p { pKeepShuffle = True }
+  onNear r ctx (Layered _ e) = onNear r ctx e
+  view (Layered _ e) = view e
+
 data SomeLayer = forall l. Layer l => SomeLayer (Proxy l)
 
 someLayer :: forall l. Layer l => SomeLayer
 someLayer = SomeLayer (Proxy :: Proxy l)
 
--- | 装箱的叠层值（解码一格得到的各层）。
 data SomeLayerValue = forall l. Layer l => SomeLayerValue l
 
--- | 按 proxy 指定类型拆层。
 peelAs :: Layer l => proxy l -> Cell -> Maybe (l, Cell)
 peelAs _ = peel
 
--- | 叠层值的名字。
 layerValueName :: SomeLayerValue -> ElementName
 layerValueName (SomeLayerValue l) = layerName (proxyOf l)
   where

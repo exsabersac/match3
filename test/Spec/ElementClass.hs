@@ -11,6 +11,7 @@
 module Spec.ElementClass
   ( tests
   ) where
+import Data.Proxy (Proxy(..))
 
 import Control.Monad (forM_)
 import Data.List (isInfixOf, isPrefixOf, nub)
@@ -24,6 +25,7 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Ability
+import Match3.Element.Phase
 import Match3.Element.Mechanic
   ( Mechanic(..)
   , SomeMechanic(..)
@@ -31,7 +33,7 @@ import Match3.Element.Mechanic
   , mechNameOf
   )
 import Match3.Element.Kind (Kind(..), customPlace, fromCustom)
-import Match3.Element.Layer (Layer(..), LayerHit(..), Layered(..))
+import Match3.Element.Layer (Layer(..), LayerHit(..), Layered(..), layerHit)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame, newGameAtLevelWith)
@@ -179,6 +181,28 @@ instance Hittable Nest where
 instance Countable Nest where
   counter _ = Just (CountNamed "nest")
 instance Renders Nest
+
+instance Phase Nest where
+  codec = Codec
+    { cName = "nest"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Nest where
   kindName _ = "nest"
@@ -379,6 +403,28 @@ instance Countable Star where
   counter _ = Just (CountNamed "star")
 instance Renders Star
 
+instance Phase Star where
+  codec = Codec
+    { cName = "star"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind Star where
   kindName _ = "star"
   fromCell = fromCustom "star" (Star . colorAt)
@@ -417,6 +463,28 @@ instance Movable OtherGem
 instance Countable OtherGem
 instance Renders OtherGem
 
+instance Phase OtherGem where
+  codec = Codec
+    { cName = "gem"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind OtherGem where
   kindName _ = "other_gem"
   fromCell cell = case cell of
@@ -432,6 +500,28 @@ instance Cellular Stray where
   nameOf _ = "stray"
 instance Countable Stray
 instance Renders Stray
+
+instance Phase Stray where
+  codec = Codec
+    { cName = "stray"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Stray where
   kindName _ = "stray"

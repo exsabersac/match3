@@ -72,10 +72,6 @@ instance Phase CookieE where
 
 instance Kind CookieE where
   place _ = cPlace (codec @CookieE)
-  neighbourPrio _ = phaseNearPrio @CookieE
-  reach _ = phaseReach @CookieE
-  dieOrder _ = phaseDieOrder @CookieE
-  onNear = phaseOnNear
 
 -- | 时间精灵：命中 / 邻消即破，按个数差每个奖励 2 步。
 data TimeSpiritE = TimeSpiritE
@@ -110,10 +106,6 @@ instance Phase TimeSpiritE where
 
 instance Kind TimeSpiritE where
   place _ = cPlace (codec @TimeSpiritE)
-  neighbourPrio _ = phaseNearPrio @TimeSpiritE
-  reach _ = phaseReach @TimeSpiritE
-  dieOrder _ = phaseDieOrder @TimeSpiritE
-  onNear = phaseOnNear
   diffCounter _ = Just CountSpirits
   bonusMoves _ = 2
 

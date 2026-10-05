@@ -9,6 +9,7 @@
 module Spec.Extension
   ( tests
   ) where
+import Data.Proxy (Proxy(..))
 
 import Data.List (isPrefixOf)
 import Engine.Game (Game(..), Step(..))
@@ -21,6 +22,7 @@ import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Def, groundDef, inertDef, kindDef, register)
 import Match3.Element.Ability
+import Match3.Element.Phase
 import Match3.Element.Kind (BoardPass(..), GroundKind(..), Kind(..), customPlace, fromCustom)
 import Match3.Element.World (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
@@ -154,6 +156,28 @@ instance Countable Kite where
   counter _ = Just (CountNamed "kite")
 instance Renders Kite
 
+instance Phase Kite where
+  codec = Codec
+    { cName = "kite"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind Kite where
   kindName _ = "kite"
   fromCell = fromCustom "kite" Kite
@@ -190,6 +214,28 @@ instance Cellular Sinkhole where
   nameOf _ = "sinkhole"
 instance Countable Sinkhole
 instance Renders Sinkhole
+
+instance Phase Sinkhole where
+  codec = Codec
+    { cName = "sinkhole"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Sinkhole where
   kindName _ = "sinkhole"
@@ -240,6 +286,28 @@ instance Movable Dust where
 instance Countable Dust
 instance Renders Dust
 
+instance Phase Dust where
+  codec = Codec
+    { cName = "dust"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
+
 instance Kind Dust where
   kindName _ = "dust"
   fromCell = fromCustom "dust" Dust
@@ -272,6 +340,28 @@ instance Cellular Hopper where
   nameOf _ = "hopper"
 instance Countable Hopper
 instance Renders Hopper
+
+instance Phase Hopper where
+  codec = Codec
+    { cName = "hopper"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Hopper where
   kindName _ = "hopper"
@@ -464,6 +554,28 @@ instance Countable Lantern where
   counter _ = Just (CountNamed "lantern")
 instance Renders Lantern where
   face (Lantern k) = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]
+
+instance Phase Lantern where
+  codec = Codec
+    { cName = "lantern"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Lantern where
   kindName _ = "lantern"

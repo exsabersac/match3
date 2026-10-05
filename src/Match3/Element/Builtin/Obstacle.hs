@@ -99,10 +99,6 @@ instance Phase StoneE where
 
 instance Kind StoneE where
   place _ = cPlace (codec @StoneE)
-  neighbourPrio _ = phaseNearPrio @StoneE
-  reach _ = phaseReach @StoneE
-  dieOrder _ = phaseDieOrder @StoneE
-  onNear = phaseOnNear
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
@@ -141,10 +137,6 @@ instance Phase ChestE where
 
 instance Kind ChestE where
   place _ = cPlace (codec @ChestE)
-  neighbourPrio _ = phaseNearPrio @ChestE
-  reach _ = phaseReach @ChestE
-  dieOrder _ = phaseDieOrder @ChestE
-  onNear = phaseOnNear
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
@@ -183,10 +175,6 @@ instance Phase HoneyE where
 
 instance Kind HoneyE where
   place _ = cPlace (codec @HoneyE)
-  neighbourPrio _ = phaseNearPrio @HoneyE
-  reach _ = phaseReach @HoneyE
-  dieOrder _ = phaseDieOrder @HoneyE
-  onNear = phaseOnNear
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
@@ -225,10 +213,6 @@ instance Phase CakeE where
 
 instance Kind CakeE where
   place _ = cPlace (codec @CakeE)
-  neighbourPrio _ = phaseNearPrio @CakeE
-  reach _ = phaseReach @CakeE
-  dieOrder _ = phaseDieOrder @CakeE
-  onNear = phaseOnNear
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
@@ -266,10 +250,6 @@ instance Phase BalloonE where
 
 instance Kind BalloonE where
   place _ = cPlace (codec @BalloonE)
-  neighbourPrio _ = phaseNearPrio @BalloonE
-  reach _ = phaseReach @BalloonE
-  dieOrder _ = phaseDieOrder @BalloonE
-  onNear = phaseOnNear
 
 -- | 气球邻格：委托 'kindNeighbour'（onNear + DieAppend）；保留旧列表写法供性质对照。
 balloonPop :: AdjCtx -> Board -> AdjOut
@@ -315,10 +295,6 @@ instance Phase SafeE where
 
 instance Kind SafeE where
   place _ = cPlace (codec @SafeE)
-  neighbourPrio _ = phaseNearPrio @SafeE
-  reach _ = phaseReach @SafeE
-  dieOrder _ = phaseDieOrder @SafeE
-  onNear = phaseOnNear
   diffCounter _ = Just CountSafes
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
@@ -359,10 +335,6 @@ instance Phase FlipE where
 
 instance Kind FlipE where
   place _ = cPlace (codec @FlipE)
-  neighbourPrio _ = phaseNearPrio @FlipE
-  reach _ = phaseReach @FlipE
-  dieOrder _ = phaseDieOrder @FlipE
-  onNear = phaseOnNear
 
 -- | 彩蛋：占格障碍；命中即破；开启规则 = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
 -- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
@@ -396,10 +368,6 @@ instance Phase SurpriseEgg where
 
 instance Kind SurpriseEgg where
   place _ = cPlace (codec @SurpriseEgg)
-  neighbourPrio _ = phaseNearPrio @SurpriseEgg
-  reach _ = phaseReach @SurpriseEgg
-  dieOrder _ = phaseDieOrder @SurpriseEgg
-  onNear = phaseOnNear
   boardPasses _ = [OpenPass (OpenRule openSurprises)]
 
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
@@ -442,10 +410,6 @@ instance Phase MagicStone where
 
 instance Kind MagicStone where
   place _ = cPlace (codec @MagicStone)
-  neighbourPrio _ = phaseNearPrio @MagicStone
-  reach _ = phaseReach @MagicStone
-  dieOrder _ = phaseDieOrder @MagicStone
-  onNear = phaseOnNear
   label _ = Just "魔法石"
   boardPasses _ = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
@@ -540,10 +504,6 @@ instance Phase SnowBoss where
 
 instance Kind SnowBoss where
   place _ = cPlace (codec @SnowBoss)
-  neighbourPrio _ = phaseNearPrio @SnowBoss
-  reach _ = phaseReach @SnowBoss
-  dieOrder _ = phaseDieOrder @SnowBoss
-  onNear = phaseOnNear
   label _ = Just "雪怪"
   loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
   diffCounter _ = Just (CountNamed snowBossName)

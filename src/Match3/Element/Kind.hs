@@ -8,8 +8,8 @@
 -- 'Kind' 的方法都带 @proxy e@ 参数（解码、放置、标签、按差计数、规则），不需要「原型值」。
 -- 地面层元素（不占格，层数在 GameState.gsGround 里）是 'GroundKind'；叠层见 Match3.Element.Layer。
 --
--- 规则：邻格波及是 'neighbourPrio' / 'reach' / 'dieOrder' / 'onNear'（'NearCtx' 能看触发消除格颜色，'NearOut'
--- 能改邻格或自变），由 'kindNeighbour' 驱动。多格实体扣血经 'entityHit'。步末 / 交换 / 开启等仍可走 'boardPasses'。
+-- 规则：邻格波及走 Phase（cNear / onNear），由 'kindNeighbour' 驱动。多格实体扣血经 'entityHit'。
+-- 步末 / 交换 / 开启等仍可走 'boardPasses'。
 module Match3.Element.Kind
   ( -- * 本体
     Kind(..)
@@ -72,16 +72,6 @@ class Element e => Kind e where
   -- | 按差计数时每少一个奖励的步数。
   bonusMoves :: proxy e -> Int
   bonusMoves _ = 0
-  -- | 邻格规则的优先级（小的先；Nothing = 没有邻格规则）。内置：石头 10 / 宝箱 20 / 蜂蜜 30 / 蛋糕 40 /
-  -- 保险箱 110 / 时间精灵 120 / 魔法石 180。
-  neighbourPrio :: proxy e -> Maybe Int
-  neighbourPrio _ = Nothing
-  reach :: proxy e -> Reach
-  reach _ = SkipDirect
-  dieOrder :: proxy e -> DieOrder
-  dieOrder _ = DiePrepend
-  onNear :: e -> NearCtx -> NearOut
-  onNear _ _ = NearIdle
   -- | 逃生口：元素自带的整盘趟（不要把 'entityDamage' 写在这里；多格扣血用 'entityHit'）。
   boardPasses :: proxy e -> [BoardPass]
   boardPasses _ = []
@@ -110,10 +100,10 @@ class Kind e => Entity e where
   entityHitOrder _ = 200
 
 -- | 装箱的本体种类（元素世界里的一项）。
-data SomeKind = forall e. Kind e => SomeKind (Proxy e)
+data SomeKind = forall e. (Kind e, Phase e) => SomeKind (Proxy e)
 
 -- | @someKind \@StoneE@。
-someKind :: forall e. Kind e => SomeKind
+someKind :: forall e. (Kind e, Phase e) => SomeKind
 someKind = SomeKind (Proxy :: Proxy e)
 
 -- | 按 proxy 指定类型解码。

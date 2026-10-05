@@ -10,12 +10,14 @@
 module Spec.Archetype
   ( tests
   ) where
+import Data.Proxy (Proxy(..))
 
 import Match3.Core (GameState(..))
 import Match3.Board.Grid (getCell, setCell)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Ability
+import Match3.Element.Phase
 import Match3.Element.Kind (Kind(..), customPlace, fromCustom)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame)
@@ -153,6 +155,28 @@ instance Countable Thorn where
   counter _ = Just (CountNamed "thorn")
 
 instance Renders Thorn
+
+instance Phase Thorn where
+  codec = Codec
+    { cName = "thorn"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Thorn where
   kindName _ = "thorn"

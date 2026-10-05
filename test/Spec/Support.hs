@@ -46,6 +46,7 @@ module Spec.Support
     -- * 源码扫描
   , module Spec.Support.Source
   ) where
+import Data.Proxy (Proxy(..))
 
 import Control.Monad (foldM)
 import Data.Bits (xor)
@@ -60,6 +61,7 @@ import Numeric (showHex)
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
+import Match3.Element.Phase
 import Match3.Board.Grid (adjacent)
 import Match3.Element.Builtin (defaultWorld)
 import Match3.Game.Level (newGameAtLevel)
@@ -68,7 +70,7 @@ import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Element (Def, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
-import Match3.Element.Ability (Cellular(..), Countable(counter), Fixed(..), Hittable(fires, struck), Matchable, Movable, Renders, Strike(..))
+import Match3.Element.Ability (Cellular(..), Countable(counter), Fixed(..), Hittable(..), Matchable, Movable(..), Renders, Strike(..))
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
@@ -362,6 +364,28 @@ instance Countable Crate where
   counter _ = Just (CountNamed "crate")
 
 instance Renders Crate
+
+instance Phase Crate where
+  codec = Codec
+    { cName = "crate"
+    , cToCell = toCell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
+  physics e = Physics
+    { pFixed = not (falls e)
+    , pFalls = falls e
+    , pPortal = portal e
+    , pRecolor = recolorable e
+    , pPush = pushable e
+    , pKeepShuffle = keepOnShuffle e
+    , pDrains = drains e
+    }
+  view e = emptyFace (unElementName (nameOf e))
 
 instance Kind Crate where
   kindName _ = "crate"

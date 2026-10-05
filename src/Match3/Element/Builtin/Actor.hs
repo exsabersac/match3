@@ -110,10 +110,6 @@ instance Phase MagicHatE where
 
 instance Kind MagicHatE where
   place _ = cPlace (codec @MagicHatE)
-  neighbourPrio _ = phaseNearPrio @MagicHatE
-  reach _ = phaseReach @MagicHatE
-  dieOrder _ = phaseDieOrder @MagicHatE
-  onNear = phaseOnNear
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
@@ -150,10 +146,6 @@ instance Phase MakerE where
 
 instance Kind MakerE where
   place _ = cPlace (codec @MakerE)
-  neighbourPrio _ = phaseNearPrio @MakerE
-  reach _ = phaseReach @MakerE
-  dieOrder _ = phaseDieOrder @MakerE
-  onNear = phaseOnNear
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
@@ -219,10 +211,6 @@ instance Phase BottleE where
 
 instance Kind BottleE where
   place _ = cPlace (codec @BottleE)
-  neighbourPrio _ = phaseNearPrio @BottleE
-  reach _ = phaseReach @BottleE
-  dieOrder _ = phaseDieOrder @BottleE
-  onNear = phaseOnNear
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int

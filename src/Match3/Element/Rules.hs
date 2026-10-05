@@ -1,3 +1,6 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 -- | 规则的通用驱动（元素类重构第 3 刀）：只调 'Kind' / 'Layer' / 'Entity' 的方法，把「找邻格、去重、跳过直接命中、
 -- 按顺序写回」这些样板各写一次（以前散在 Match3.Obstacles / Match3.Grass 里，每种障碍 / 叠层一份）。
 --
@@ -21,21 +24,24 @@ module Match3.Element.Rules
   ) where
 
 import Data.List (nub)
+import Data.Proxy (Proxy(..))
 import Data.Maybe (isJust)
 import Match3.Board.Grid (getCell, inBounds, neighborsInBounds, setCell)
 import Match3.Element.Ability (toCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
+import Match3.Element.Near
+import Match3.Element.Phase (Phase(..), phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
 import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.Types
 
 -- | 一种本体的全部规则：方法邻格 → 'entityHit' 扣血 → 逃生口 'boardPasses'（之后按优先级稳定排序）。
-kindRules :: Kind e => proxy e -> [BoardPass]
-kindRules p =
-  [AdjacentPass o (kindNeighbour p) | Just o <- [neighbourPrio p]]
-    ++ [AdjacentPass o f | Just (o, f) <- [entityHit p]]
-    ++ boardPasses p
+kindRules :: forall e proxy. (Kind e, Phase e) => proxy e -> [BoardPass]
+kindRules _ =
+  [AdjacentPass o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
+    ++ [AdjacentPass o f | Just (o, f) <- [entityHit (Proxy @e)]]
+    ++ boardPasses (Proxy @e)
 
 -- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerPasses'。
 layerRules :: Layer l => proxy l -> [BoardPass]
@@ -71,15 +77,15 @@ triggerColors ctx b self =
   ]
 
 -- | 本体的邻格波及：目标格逐个问 'onNear'。
-kindNeighbour :: Kind e => proxy e -> AdjCtx -> Board -> AdjOut
-kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (reach p) (isJust . fromCellAs p) ctx b0)
+kindNeighbour :: forall e proxy. (Kind e, Phase e) => proxy e -> AdjCtx -> Board -> AdjOut
+kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (phaseReach @e) (isJust . fromCellAs p) ctx b0)
   where
-    order = dieOrder p
+    order = phaseDieOrder @e
     one out@(AdjOut b dead sit) q = case fromCellAs p (getCell b q) of
       Nothing -> out
       Just e ->
         let nctx = NearCtx (triggerColors ctx b0 q) q ctx b
-         in case onNear e nctx of
+         in case phaseOnNear e nctx of
               NearIdle -> out
               NearNudge n -> nudge order out q n
               NearEdit b' d s -> AdjOut b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s ++ sit))

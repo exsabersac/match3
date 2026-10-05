@@ -27,7 +27,9 @@ import Match3.Board.Gravity (applyGravityWith)
 import Match3.Board.Grid (inBounds, swapCells, toM)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith, matchCodesWith)
 import Match3.Core
-import Match3.Types (boardNCols, boardNRows)
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Levels.Campaign (levelCount)
+import Match3.Types (boardNCols, boardNRows, boardPositions)
 import Match3.Element.World (World, blocksSwapWith, colorOfWith, hintableWith)
 import qualified Spec.Support.LegacyPerf as Old
 import System.CPUTime (getCPUTime)

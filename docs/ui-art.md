@@ -74,9 +74,9 @@
 | `time_spirit` | `TimeSpirit` | 带光环的小精灵，标着「+2」，会上下浮动 |
 | `countdown_1..9` | `Countdown c n` | 宝石上叠一个红色倒计时炸弹，中间写剩余步数 |
 | `ufo_c1..c5` | 飞碟 `Ufo` | 对应颜色的飞碟，悬停在格子上方 |
-| `bubble` | 气泡 `Custom "bubble" 1`（段 5） | 透明水泡：蓝青边缘 + 虹彩 + 高光，无颜色徽记，轻微上下浮动。按 Custom 名字经 `UI.CellTable.customTable` 分派（不画层数角标）；几何降级版 `primBubble`：浅蓝方块 + 亮边 + 左上高光 |
-| `snow_boss_0..3` / `snow_boss_hurt_0..3` | 雪怪 Boss `Custom "snow_boss" v`（新玩法 5，2×2） | 冰蓝雪怪：一整只按 2 格（224 px）画好再切成四块，每格画自己的象限（0 左上 / 1 右上 / 2 左下 / 3 右下，读 `UI.CellFace.bossPart`，字段由元素自带），拼起来是一只：毛茸茸的雪白身体 + 冰蓝阴影、冰角、两只眼睛（怒眉）与獠牙；血量 ≤ 满血一半时换 `snow_boss_hurt_*`（皱眉 + 裂纹 + 创可贴 + 汗滴）；右下块底部三个小点显示召唤进度（每 3 步召唤一块雪块，雪块就是 1 层石头 `stone_1`）。按 Custom 名字经 `UI.CellTable.customTable` 分派；`snow_boss`（整只缩到一格）只给 HUD 血条当头像。几何降级版 `primSnowBoss`：每格一块浅冰蓝方块，四块之间不留缝、外缘深蓝描边，上两块画白眼红瞳（受伤时左眼变一道横线），下两块画嘴和獠牙，右下块另画召唤进度点 |
-| `chameleon` / `chameleon_icon` | 变色龙 `Custom "chameleon" k`（新玩法 7，k = 当前颜色下标 0..4） | 底下照常画当前颜色的宝石 `gem_c{k+1}`（颜色读 `Match3.Element.Builtin.chameleonColor`），上面叠 `chameleon`：五色分段环 + 绿色卷尾 + 一点闪光，随 `pulse` 慢慢转动；换色是步末 `EvTick "chameleon"`，按事件类型复用倒计时段 `StTick`（前半段旧颜色、后半段新颜色）。`chameleon_icon` 是 HUD / 地图目标图标（`gem_c4` + 环合成一张）。按 Custom 名字经 `UI.CellTable.customTable` 分派；几何降级版 `primChameleon`：当前颜色的几何宝石 + 20 段五色描边；消除粒子颜色 = 当前颜色（`UI.Layout.cellRGB`） |
+| `bubble` | 气泡 `Custom "bubble" 1`（段 5） | 透明水泡：蓝青边缘 + 虹彩 + 高光，无颜色徽记，轻微上下浮动。网页 `cells.js` 按 Custom 名字画（不画层数角标；原桌面版经 `UI.CellTable.customTable` 分派，几何降级版 `primBubble` 已随桌面版移除） |
+| `snow_boss_0..3` / `snow_boss_hurt_0..3` | 雪怪 Boss `Custom "snow_boss" v`（新玩法 5，2×2） | 冰蓝雪怪：一整只按 2 格（224 px）画好再切成四块，每格画自己的象限（0 左上 / 1 右上 / 2 左下 / 3 右下，读 `UI.CellFace.bossPart`，字段由元素自带），拼起来是一只：毛茸茸的雪白身体 + 冰蓝阴影、冰角、两只眼睛（怒眉）与獠牙；血量 ≤ 满血一半时换 `snow_boss_hurt_*`（皱眉 + 裂纹 + 创可贴 + 汗滴）；右下块底部三个小点显示召唤进度（每 3 步召唤一块雪块，雪块就是 1 层石头 `stone_1`）。网页 `cells.js` 的 `CUSTOM_ART` 按 Custom 名字分派（`drawSnowBoss`；原桌面版 `UI.CellTable.customTable`）；`snow_boss`（整只缩到一格）只给 HUD 血条当头像。（原桌面几何降级版 `primSnowBoss` 已随桌面版移除；网页缺图时逐格退回纯色块。） |
+| `chameleon` / `chameleon_icon` | 变色龙 `Custom "chameleon" k`（新玩法 7，k = 当前颜色下标 0..4） | 底下照常画当前颜色的宝石 `gem_c{k+1}`（颜色读 `Match3.Element.Builtin.chameleonColor`），上面叠 `chameleon`：五色分段环 + 绿色卷尾 + 一点闪光，随 `pulse` 慢慢转动；换色是步末 `EvTick "chameleon"`，按事件类型复用倒计时段 `StTick`（前半段旧颜色、后半段新颜色）。`chameleon_icon` 是 HUD / 地图目标图标（`gem_c4` + 环合成一张）。网页 `cells.js` 的 `CUSTOM_ART` 按 Custom 名字分派（`drawChameleon`；原桌面版 `UI.CellTable.customTable`，几何降级版 `primChameleon` 已随桌面版移除）；消除粒子颜色 = 当前颜色（`UI.Palette.cellRGB`，网页 `cells.js` 的 `cellRGB` 同规则） |
 
 ### 地砖（宝石之下）
 
@@ -86,15 +86,15 @@
 | `carpet_open` / `carpet_covered` | 地毯目标格：虚线品红框表示未铺，编织纹品红地毯表示已铺 |
 | `belt` | 传送带：青色边轨 + 箭头，箭头朝向就是移动方向 |
 | `portal` | 紫色旋转传送门环 |
-| `cookie_drop` | 饼干掉落口（新玩法 6）：金色漏斗（上宽下窄 + 深色口沿 + 两颗铆钉）+ 白色向下箭头，只占格子上部四分之一。和其它地砖不同，画在**棋子之上**、掉落口格上沿（上移 6 px 压在棋盘框上），不随下落动画偏移（`UI.BoardArt.drawDropsArt`，读 `Match3.View.bvDrops`）；几何降级版 `drawDropMark`：三级金色台阶 + 白色箭头。网页版 `web/www/cells.js` 的 `drawDrops` 读 `state.drops` 同样画（位置、上移 6、几何降级都同桌面） |
-| `jelly_2` / `jelly` | 双层果冻（地面层 `gsGround`，段 5）：双层为深粉果冻块 + 一道白色层线；单层为淡粉半透明。经 `UI.Ground.groundTable` 按名字分派，画在棋盘格之上、棋子之下。几何降级版画在**棋子之上**（整格色块会盖住底层）：双层粗粉框 + 内框，单层细框 |
-| `magic` | 魔法地格（地面层 `gsGround` 里的 `("magic", 1)`，新玩法 8）：紫色符文地砖——径向紫光底、发光描边、中央淡八角星底纹、四角菱形符点；永久存在，不随消除变化（值恒为 1，不按层换图）。和果冻一样经 `UI.Ground.groundTable` 按名字分派，画在棋盘格之上、棋子之下，所以棋子盖住中间，露出边框与四角。几何降级版 `primMagic` 画在**棋子之上**：紫色双线框 + 淡紫内框 + 四角小方点。扩大的爆炸没有新贴图 / 新动画：Engine 的 `EvBlast` 覆盖格已含扩出来的一圈，直线 / 炸弹的高亮与清除动画按覆盖格原样画（直线从一行变成三行、炸弹 3×3 变 5×5） |
+| `cookie_drop` | 饼干掉落口（新玩法 6）：金色漏斗（上宽下窄 + 深色口沿 + 两颗铆钉）+ 白色向下箭头，只占格子上部四分之一。和其它地砖不同，画在**棋子之上**、掉落口格上沿（上移 6 px 压在棋盘框上），不随下落动画偏移。网页 `web/www/cells.js` 的 `drawDrops` 读 `state.drops`（`Match3.View.bvDrops`）画；缺图时退回几何画法：三级金色台阶 + 白色箭头（位置、上移 6、几何画法都同原桌面版 `UI.BoardArt.drawDropsArt` / `drawDropMark`） |
+| `jelly_2` / `jelly` | 双层果冻（地面层 `gsGround`，段 5）：双层为深粉果冻块 + 一道白色层线；单层为淡粉半透明。网页 `cells.js` 的 `GROUND` 表按名字分派（原桌面版 `UI.Ground.groundTable`），画在棋盘格之上、棋子之下；表里没有的名字或缺图时画淡灰框并计入 `fallbacks`（原桌面几何降级版已移除） |
+| `magic` | 魔法地格（地面层 `gsGround` 里的 `("magic", 1)`，新玩法 8）：紫色符文地砖——径向紫光底、发光描边、中央淡八角星底纹、四角菱形符点；永久存在，不随消除变化（值恒为 1，不按层换图）。和果冻一样经网页 `cells.js` 的 `GROUND` 表按名字分派，画在棋盘格之上、棋子之下，所以棋子盖住中间，露出边框与四角（原桌面几何降级版 `primMagic` 已移除）。扩大的爆炸没有新贴图 / 新动画：Engine 的 `EvBlast` 覆盖格已含扩出来的一圈，直线 / 炸弹的高亮与清除动画按覆盖格原样画（直线从一行变成三行、炸弹 3×3 变 5×5） |
 
 ### 交互 / HUD
 
 `sel_ring`（选中框，颜色随道具模式变化）、`hint_glow`（提示呼吸光）、`spark`（消除闪光）、`star_on/off`、`medal`、`node_cur/done/lock`（地图节点）、`icon_*`（锤子 / 交换 / 十字 / 步数 / 分数 / 多色）、`badge_1..9`、`name_*`（关卡名）。魔法石（新玩法 2）：`magic_stone_<充能>`，满 3 格的贴图外发光并轻微浮动。毛球（新玩法 3）：`fuzzball`（灰粉色毛团 + 大眼睛，轻微浮动；步末跳格借用皮带的平移动画）。魔力鸟组合增强（新玩法 4）：没有新棋子贴图，变身段借用蔓延的「长出新格」动画（第一轮之前，同色宝石从格子中心长成直线 / 炸弹；与彩虹格恰好差一行或一列的目标沿蔓延方向擦出，是 `drawEndSpread` 按来源方向分支的结果）。网页版（`web/www/cells.js` / `render.js`）画法相同：毛球用同一个浮动公式 `round(2·sin(pulse/9))`（网页逻辑帧 1/60 s、桌面 16 ms，周期约 0.94 s 对 0.90 s），跳格走皮带段，变身走蔓延段的同一组分支（匀速、白色前沿光、不迸碎屑）。规则开关角标：打开 `bomb_shapes` 的关卡，画 `bomb_glow` + `bomb_mark` 图标和文字「L/T 形出炸弹」；打开 `rainbow_combos` 的关卡画 `rainbow` 图标 +「彩虹组合变身」。角标表在 `Match3.View.ruleBadgeTable`（规则名 → 文字、叠放图标），网页版按它通用地画：关卡面板「第 N 关」右侧画图标 + 画布字体文字（小胶囊）。新增规则开关的角标：`ruleBadgeTable` 加一行即可（图标须是生成器里已有的贴图，`stack test` 核对）。
 
-**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随 `appPulse` 呼吸闪烁。几何版 `UI.HudBlocks.hudBoss` 在目标条位置画同样的红条和两个数字。网页版同样画（`web/www/cells.js` 按象限取 `snow_boss[_hurt]_<q>` + 召唤进度点，`hud.js` 读 `state.boss` 画血条，头像 / 着色 / 过半闪烁同桌面；头像用 `snow_boss` 缩放）。
+**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随呼吸计数闪烁。网页 `web/www/cells.js` 按象限取 `snow_boss[_hurt]_<q>` + 召唤进度点，`hud.js` 读 `state.boss` 画血条，头像用 `snow_boss` 缩放（头像 / 着色 / 过半闪烁同原桌面版 `UI.HudArt`；原几何版 `UI.HudBlocks.hudBoss` 已移除）。
 
 ## 重新生成贴图
 
@@ -114,7 +114,7 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 ## 连击表现（逐轮回放）
 
-实现：纯逻辑在 `app/pure/ComboFx.hs`（阶段机、时间线常量、下落映射）与 `app/pure/UI/Presentation.hs`（第 10 刀：效果事件 → 表现的**表现表**，帧数 / 颜色 / 碎屑 / 音效名、连击等级样式、蔓延生长曲线都在这一张表里，见下文「表现表」），表现编排在 `app/UI/Playback.hs`（`withMovePlayback`、阶段事件 → 弹字 / 粒子 / 震屏 / 音效队列），绘制在 `app/UI/Cascade.hs`（`drawCascade` 与各轮阶段）、`app/UI/EndStage.hs`（步末阶段）、`app/UI/HudArt.hs` / `HudPrim.hs`（`drawPopsArt` / `drawPopsPrim`、`drawComboSummaryArt`），`AnimCascade` 定义在 `app/UI/Types.hs`（持有通用播放器 `Engine.Playback.Player Cascade`：帧号与加速在播放器里，阶段机是 `ComboFx.cascadeStages`；波次级的高亮 / 消失 / 粒子 / 得分浮字读 `WaveView` 里本轮的效果事件）。核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Move` / `Match3.Game.Boosters`，底层是 `Match3.Board.Cascade` 记录版连锁的 `crWaves`；前端经通用接口 `gameStep` 的整步报告一次拿到），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep] }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
+实现：纯逻辑在 `app/pure/ComboFx.hs`（阶段机、时间线常量、下落映射）与 `app/pure/UI/Presentation.hs`（第 10 刀：效果事件 → 表现的**表现表**，帧数 / 颜色 / 碎屑 / 音效名、连击等级样式、蔓延生长曲线都在这一张表里，见下文「表现表」）；回放器是通用播放器 `Engine.Playback.Player Cascade`（帧号与加速在播放器里，阶段机是 `ComboFx.cascadeStages`），网页由 `web/hs/Match3Web/Anim.hs`（`m3AnimTick`）推进并把阶段、帧号与阶段事件编码给 JS；`web/www/main.js` 按阶段事件放弹字 / 粒子 / 震屏 / 音效，`render.js` 画各轮阶段与步末段，`hud.js` 画连击徽章与「N 连击！」总结；波次级的高亮 / 消失 / 粒子 / 得分浮字读 `WaveView` 里本轮的效果事件。（原桌面版的 `app/UI/Playback.hs` / `Cascade.hs` / `EndStage.hs` / `HudArt.hs` / `Types.hs` 已随 SDL2 前端移除，网页 JS 逐项迁自它们。）核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Move` / `Match3.Game.Boosters`，底层是 `Match3.Board.Cascade` 记录版连锁的 `crWaves`；前端经通用接口 `gameStep` 的整步报告一次拿到），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep] }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
 
 ### 时间线（60 fps，1 帧 ≈ 16.7 ms）
 

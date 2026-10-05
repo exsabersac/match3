@@ -40,7 +40,7 @@ export function cellRGB(cell) {
   return FALLBACK_RGB;
 }
 
-// 主贴图名（缺图检测与缩放绘制用；UI.CellTable.primarySprite）
+// 主贴图名（缺图检测与缩放绘制用；原桌面版 UI.CellTable.primarySprite）
 export function primarySprite(cell) {
   if (cell.t === "custom" && cell.name === "snow_boss" && !forceGeneric.has("snow_boss")) return `snow_boss_${cell.q}`;   // 雪怪 Boss：本格象限（同原桌面版 customTable）
   switch (cell.t) {
@@ -80,7 +80,7 @@ export function snailPose(dr, dc) {
 function badgeAt(ctx, art, x, y, n) { art.draw(ctx, `badge_${clamp(1, 9, n)}`, x + CELL - 23, y + CELL - 23, 23, 23); }
 function layerBadge(ctx, art, x, y, n) { if (n >= 2) badgeAt(ctx, art, x, y, n); }
 
-// 元素 → 贴图画法（UI.Cell.Art 的 artGem / artStone / …）。参数：画布、贴图集、呼吸计数、格左上角、格子。
+// 元素 → 贴图画法（原桌面版 UI.Cell.Art 的 artGem / artStone / …）。参数：画布、贴图集、呼吸计数、格左上角、格子。
 const OVERLAY_SPRITE = {
   grass: () => "grass", vine: () => "vine", choco: () => "choco", steam: () => "steam",
   fog: (n) => `fog_${clamp(1, 2, n)}`, chain: (n) => `chain_${clamp(1, 2, n)}`,
@@ -206,7 +206,7 @@ function drawCellPrim(ctx, x, y, cell) {
   ctx.fillText(cell.t === "G" ? cell.k : cell.t.slice(0, 6), x + CELL / 2, y + CELL / 2);
 }
 
-// 单格：按元素查表画贴图；闪白统一叠一层柔光（UI.BoardArt.drawCellArt）
+// 单格：按元素查表画贴图；闪白统一叠一层柔光（原桌面版 UI.BoardArt.drawCellArt）
 export function drawCell(ctx, art, pulse, x, y, cell, flashing = false) {
   if (!cell) return;
   const f = (cell.t === "custom" && !forceGeneric.has(cell.name) && CUSTOM_ART[cell.name]) || CELL_ART[cell.t];
@@ -215,7 +215,7 @@ export function drawCell(ctx, art, pulse, x, y, cell, flashing = false) {
   if (flashing) art.add(ctx, "spark", x - 10, y - 10, CELL + 20, CELL + 20, [255, 255, 230], 210);
 }
 
-// 以中心 (cx,cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记；UI.BoardArt.drawCellScaled）
+// 以中心 (cx,cy) 按比例 s、透明度 a 画一格（缩放用简化贴图：主贴图 + 特殊标记；原桌面版 UI.BoardArt.drawCellScaled）
 export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
   if (!cell || s <= 0.03 || a <= 0) return;
   const sz = Math.max(1, Math.round(CELL * s)), x = cx - sz / 2, y = cy - sz / 2, name = primarySprite(cell);
@@ -232,7 +232,7 @@ export function drawCellScaled(ctx, art, cx, cy, s, a, cell) {
   }
 }
 
-// 传送带每格的朝向角度（右 0 / 下 90 / 左 180 / 上 270；UI.BoardArt.beltAngles）
+// 传送带每格的朝向角度（右 0 / 下 90 / 左 180 / 上 270；原桌面版 UI.BoardArt.beltAngles）
 export function beltAngles(belt) {
   const out = [];
   let prev = null;
@@ -263,7 +263,7 @@ function drawGround(ctx, art, x, y, g) {
   ctx.strokeStyle = "rgba(170,170,180,.8)"; ctx.lineWidth = 1; ctx.strokeRect(x + 2.5, y + 2.5, CELL - 5, CELL - 5);
 }
 
-// 棋盘底层：圆角框 → 棋盘格 → 地毯 → 地面层（果冻）→ 传送带 → 传送门（都在棋子下面；UI.BoardArt.drawBoardBgArt）
+// 棋盘底层：圆角框 → 棋盘格 → 地毯 → 地面层（果冻）→ 传送带 → 传送门（都在棋子下面；原桌面版 UI.BoardArt.drawBoardBgArt）
 // 整屏背景图由 main.js 在屏幕坐标里按 cover 铺满，不在这里画。
 export function drawBoardBase(ctx, art, st, pulse) {
   art.panel(ctx, "panel_dark", PAD - 8, PAD - 8, boardW() + 16, boardH() + 16, 16);
@@ -297,7 +297,7 @@ export function drawUfos(ctx, art, st, pulse, yOff = 0) {
 }
 
 // 饼干掉落口标记（新玩法 6，state.drops = 视图模型 bvDrops）：同原桌面版 UI.BoardArt.drawDropsArt——画在棋子之上、掉落口格上沿
-// （上移 6 压在棋盘框上），固定不随下落偏移；缺图时退回几何画法（同 UI.BoardPrim.drawDropMark：三级金色台阶 + 白色箭头），
+// （上移 6 压在棋盘框上），固定不随下落偏移；缺图时退回几何画法（同原桌面版 UI.BoardPrim.drawDropMark：三级金色台阶 + 白色箭头），
 // 并按 "cookie_drop" 计进 fallbacks（e2e 逐关护栏）。
 // dropMarks 记下最近一次画的标记（格子与棋盘设计坐标，seq 每画一次加 1），main.js 以 m3debug.dropMarks 暴露，
 // e2e 用它核对交换补间中 / 补间结束后的标记格 = state.drops（bvDrops）、坐标 = 原桌面版 drawDropsArt 的 (cellOrigin, y − 6)。
@@ -317,7 +317,7 @@ export function drawDrops(ctx, art, st) {
   }
 }
 
-// 藤蔓 / 巧克力下一步可能蔓延到的格（与 UI.BoardArt.spreadTargets 相同的判定）
+// 藤蔓 / 巧克力下一步可能蔓延到的格（与原桌面版 UI.BoardArt.spreadTargets 相同的判定）
 export function spreadTargets(board, overlay) {
   const out = [];
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {

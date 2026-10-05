@@ -391,7 +391,7 @@ data GameView = GameView
 | `titleLine gv` | 标题（不含 `"  \|  "` 与消息） | `Match3Web.Api`（原桌面窗口标题） |
 | `goalLine` | 标题目标段 | `titleLine` |
 | `bvDrops bv` | 新玩法 6：掉落口格（`Element.Level.levelDrops`；没有掉落口为空） | 网页 `state.drops`（原桌面 `drawDropsArt` / `drawDropMark`） |
-| `levelDots cur maxReached` | 各关进度点 `DotCurrent` / `DotDone` / `DotUnlocked` / `DotLocked`（贴图版传夹紧下标与最高解锁；几何版传原值与 −1） | 网页 `m3Progress` 的 `dots`（原桌面 `UI.HudArt` / `UI.HudBlocks.hudLevel`） |
+| `levelDots cur maxReached` | 各关进度点 `DotCurrent` / `DotDone` / `DotUnlocked` / `DotLocked`（网页传夹紧下标与最高解锁；原桌面几何版传原值与 −1） | 网页 `m3Progress` 的 `dots`（原桌面 `UI.HudArt` / `UI.HudBlocks.hudLevel`） |
 | `scoreBadge replay summaryLeft best gv` | 右下角：`BadgeCombo n`（回放中连击 ≥2）/ `BadgeRolling 分`（回放中）/ `BadgeSummary n`（播完后的总结）/ `BadgeScore 洗牌? 分`；回放状态由前端从 `Cascade` 换成 `ReplayView{rvCombo, rvShownScore}` | 网页 `m3Badge`（原桌面 `UI.HudArt` / `UI.HudBlocks.hudComboBadge`） |
 | `levelViews` | 关卡列表（序号 / 名字 / 步数 / 目标） | 网页 `apiLevels` |
 | `cellFace cell` | 单格结构化描述（类型标签 + 按固定顺序的 `CellField` 字段） | 网页 `encodeCell` |

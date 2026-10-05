@@ -73,11 +73,11 @@ presentation_frames_colors_match_legacy_constants = do
   (waveFlashFrames, scorePopLife, comboPopLife) @?= (12, 48, 54)
   -- 第 1 轮高亮柔白 (255, 250, 220)、得分浮字 (255, 244, 200)（原 UI.BoardArt.waveTint / UI.HudArt 的字面量）
   (presentationRGB (presentationFor EvClear), presentationRGB (presentationFor EvScore)) @?= ((255, 250, 220), (255, 244, 200))
-  -- UI.EndStage：倒计时红光 (255, 90, 60)；洗牌 (200, 150, 255)
+  -- 原 UI.EndStage：倒计时红光 (255, 90, 60)；洗牌 (200, 150, 255)
   let st = stagePresentation
   presentationRGB (st StTick) @?= (255, 90, 60)
   presentationRGB (st StShuffle) @?= (200, 150, 255)
-  -- UI.Playback.endCrumbTable：蔓延按元素名取色、倒计时 (255, 110, 70)，其余不迸
+  -- 原 UI.Playback.endCrumbTable：蔓延按元素名取色、倒计时 (255, 110, 70)，其余不迸
   map (prCrumbs . st) [minBound .. maxBound]
     @?= [CrumbsAtSources (255, 110, 70), NoCrumbs, CrumbsByElement, NoCrumbs, NoCrumbs]
   -- elementRGBTable：前五行是搬来时的逐字副本；magic_stone / fuzzball 是审计第 8 项按网页 ELEMENT_RGB 补上的

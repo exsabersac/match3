@@ -45,7 +45,7 @@ export function styleRGB(st, pulse) { return st.rainbow ? hsv(Math.floor(((pulse
 const waveTint = (k, pulse) => (k <= 1 ? [255, 250, 220] : styleRGB(comboStyle(k), pulse));
 
 // ---------------------------------------------------------------------------
-// 静止盘面：底层 → 提示光 → 棋子 → 选中框 → 蔓延预告（仅静止时）→ 飞碟 → 掉落口（UI.BoardArt.drawStaticArt）
+// 静止盘面：底层 → 提示光 → 棋子 → 选中框 → 蔓延预告（仅静止时）→ 飞碟 → 掉落口（原桌面版 UI.BoardArt.drawStaticArt）
 export function drawStatic(ctx, art, v, board, yOff = 0) {
   drawBoardBase(ctx, art, v.st, v.pulse);
   const hintA = Math.round(120 + 135 * breathe(v.pulse, 60));
@@ -88,7 +88,7 @@ export function drawSwap(ctx, art, v, board, a, b, t) {
   drawCell(ctx, art, v.pulse, lerp(x2, x1, t), lerp(y2, y1, t), board[b[0]][b[1]]);
 }
 
-// 轻落：整盘从上方约 0.35 格处落下（洗牌与回放兜底；UI.Cascade.drawFall）
+// 轻落：整盘从上方约 0.35 格处落下（洗牌与回放兜底；原桌面版 UI.Cascade.drawFall）
 export function drawLightFall(ctx, art, v, board, t) {
   const ease = 1 - (1 - t) * (1 - t);
   drawStatic(ctx, art, v, board, Math.round(CELL * (1 - ease) * -0.35));
@@ -254,7 +254,7 @@ function drawEndStage(ctx, art, v, cas, s, t) {
 }
 
 // ---------------------------------------------------------------------------
-// 粒子 / 浮字 / 震屏（UI.Playback；随机数用 JS 自己的，只影响观感）
+// 粒子 / 浮字 / 震屏（迁自原桌面版 UI.Playback；随机数用 JS 自己的，只影响观感）
 export class Fx {
   constructor() { this.parts = []; this.pops = []; this.shake = 0; this.amp = 0; }
   clear() { this.parts = []; this.pops = []; this.shake = 0; }

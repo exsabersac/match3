@@ -94,7 +94,7 @@ export class Art {
     return true;
   }
 
-  // 九宫格：源图四角各取 1/4 边长，目标角半径 c，中间拉伸（同 Art.drawPanelMod）；rgb 给出时先着色（同 drawPanelTint）
+  // 九宫格：源图四角各取 1/4 边长，目标角半径 c，中间拉伸（同原桌面版 Art.drawPanelMod）；rgb 给出时先着色（同原 drawPanelTint）
   panel(ctx, name, x, y, w, h, c, rgb = null) {
     const s = this.S[name];
     if (!s) return false;

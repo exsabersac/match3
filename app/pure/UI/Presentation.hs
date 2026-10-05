@@ -189,7 +189,7 @@ spreadCurveFor n = fromMaybe defaultSpreadCurve (lookup n spreadCurves)
 
 -- | 按元素名取色：步末效果（事件 evElement / endEffectElement 的键）藤 / 巧 / 蒸汽的蔓延色与碎屑色；
 -- 也给名字目标与自定义格取色（果冻 / 气泡 / 魔法石 / 毛球，见 UI.Palette.namedRGB / cellRGB，各自有缺省色）。
--- 魔法石 / 毛球 = 几何版 UI.Cell.Prim 的主体色。网页 web/www/cells.js 的 ELEMENT_RGB 是同一张表（test/Spec/WebColors.hs 比对）。
+-- 魔法石 / 毛球取自原桌面版几何画法（UI.Cell.Prim，已随 SDL2 前端移除）的主体色。网页 web/www/cells.js 的 ELEMENT_RGB 是同一张表（test/Spec/WebColors.hs 比对）。
 elementRGBTable :: [(ElementName, RGB)]
 elementRGBTable =
   [ ("vine", (110, 220, 90))

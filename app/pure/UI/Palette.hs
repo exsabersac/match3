@@ -3,7 +3,7 @@
 --
 -- 网页版有对应的 JS 副本（web/www/cells.js 的 COLOR_RGB / ELEMENT_RGB / cellRGB、web/www/main.js 的步末碎屑色），
 -- 两边由 test/Spec/WebColors.hs 逐项比对；colorRGB 与 tools/gen_assets.py 的 GEMS 调色板也在那里比对。
--- 依赖：Match3.Core、UI.CellFace、UI.Presentation。UI.Layout 再导出本模块的全部函数。
+-- 依赖：Match3.Core、UI.CellFace、UI.Presentation。网页经 UI.WebMeta（m3Meta）读这些表（原桌面版 UI.Layout 曾再导出本模块，已随 SDL2 前端移除）。
 module UI.Palette
   ( colorRGB
   , namedRGB

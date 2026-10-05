@@ -1,12 +1,12 @@
 // 自适应布局：按可用空间（视口减去安全区）为「棋盘 + HUD」算出唯一的缩放 u（设计单位 → CSS 像素；格 = 56 单位），
-// 竖屏（手机）HUD 在棋盘上方、两行按钮条在下方；横屏（桌面 / 平板 / 横持手机）HUD 在棋盘右侧（侧栏至少 SIDE_MIN_H 高，
-// 棋盘在其中竖直居中）。两种都算一遍，取格子更大的。
+// 竖屏（手机）HUD 在棋盘上方、一行按钮条在下方；横屏（桌面 / 平板 / 横持手机）HUD 在棋盘右侧（侧栏与棋盘等高）。
+// 两种都算一遍，取格子更大的。几何与加道具按钮之前（33e65bf）相同，所以格子大小不变；常驻按钮只有 撤销 / 提示 / 菜单，
+// 其余（道具、洗牌、重开、每日、地图、选关、说明、音效 / 音乐）收进菜单面板（panels.js 的 menuLayout）。
 // 棋盘尺寸按关卡行列数（rows×cols）计算，不假设正方形。所有绘制与指针命中都走同一个变换（toUnits / fromUnits）。
 import { CELL, PAD } from "./cells.js";
 
-export const TOP_H = 124, BAR_H = 64, SIDE_W = 236, GAP = 10;   // HUD 各块的设计单位尺寸（BAR_H = 竖排按钮条每行）
-export const SIDE_MIN_H = 520;                                   // 横排侧栏最小高度：四行按钮 + 至少两行提示文字
-export const MIN_TOUCH_CSS = 46;                                  // 按钮目标最小触控尺寸（CSS 像素，≥ 44 的建议值）
+export const TOP_H = 124, BAR_H = 64, SIDE_W = 236, GAP = 10;   // HUD 各块的设计单位尺寸
+export const MIN_TOUCH_CSS = 46;                                  // 按钮目标最小触控尺寸（CSS 像素，≥ 44 的建议值，留 2 px 余量）
 export const MAX_CELL_CSS = 112;                                 // 格子最大 CSS 像素（大屏上不再放大，居中留白）
 
 // 读 CSS env(safe-area-inset-*)：用一个固定定位的探针元素的 padding 取值
@@ -26,8 +26,8 @@ export function safeInsets() {
 export function computeLayout(W, H, rows, cols, ins = { t: 0, r: 0, b: 0, l: 0 }) {
   const aw = Math.max(1, W - ins.l - ins.r), ah = Math.max(1, H - ins.t - ins.b);
   const VW = cols * CELL + 2 * PAD, VH = rows * CELL + 2 * PAD;
-  const portrait = { mode: "portrait", w: VW, h: TOP_H + VH + 2 * BAR_H - 4 };
-  const landscape = { mode: "landscape", w: VW + GAP + SIDE_W, h: Math.max(VH, SIDE_MIN_H) };
+  const portrait = { mode: "portrait", w: VW, h: TOP_H + VH + BAR_H };
+  const landscape = { mode: "landscape", w: VW + GAP + SIDE_W, h: VH };
   // 四周留白：竖排左右只留 4 单位（手机上宽度最紧），其余 GAP
   const fit = (m) => Math.min(aw / (m.w + (m.mode === "portrait" ? 8 : 2 * GAP)), ah / (m.h + 2 * GAP));
   const up = fit(portrait), ul = fit(landscape);
@@ -38,16 +38,14 @@ export function computeLayout(W, H, rows, cols, ins = { t: 0, r: 0, b: 0, l: 0 }
   if (m.mode === "portrait") {
     // 竖排通常是宽度受限、纵向有富余：把按钮条加高到至少 MIN_TOUCH_CSS（不挤占棋盘）
     const spare = ah / u - 2 * GAP - m.h;
-    // 两行按钮各自加高到至少 MIN_TOUCH_CSS（富余按两行平分）
-    const rowH = Math.round(Math.max(BAR_H, Math.min(MIN_TOUCH_CSS / u + 10, BAR_H + Math.max(0, spare) / 2)));
-    const barH = 2 * rowH - 4;
+    const barH = Math.round(Math.max(BAR_H, Math.min(MIN_TOUCH_CSS / u + 10, BAR_H + Math.max(0, spare))));
     L.h = TOP_H + VH + barH;
     L.oy = ins.t + (ah - L.h * u) / 2;
     L.board = { x: 0, y: TOP_H };
     L.hud = { x: 0, y: 0, w: VW, h: TOP_H };
-    L.bar = { x: 0, y: TOP_H + VH, w: VW, h: barH, rowH };
+    L.bar = { x: 0, y: TOP_H + VH, w: VW, h: barH };
   } else {
-    L.board = { x: 0, y: Math.round((m.h - VH) / 2) };
+    L.board = { x: 0, y: 0 };
     L.hud = { x: VW + GAP, y: 0, w: SIDE_W, h: m.h };
     L.bar = null;   // 按钮放在侧栏底部
   }
@@ -55,46 +53,21 @@ export function computeLayout(W, H, rows, cols, ins = { t: 0, r: 0, b: 0, l: 0 }
   return L;
 }
 
-// 按钮（设计单位矩形）。第一组：本关说明 ?、选关 ‹ ›、重开、提示、撤销；第二组是从桌面版迁来的按键（键盘之外的触屏入口）：
-// 三种道具（锤子 1 / 自由交换 2 / 十字消 3，按钮上画图标 + 剩余次数，当前点选模式金框）、洗牌 S、选关地图 M、每日挑战 D、暂停 P。
-// 问号跟按钮条走，不压在棋盘格子上。booster：道具按钮对应的 state.boosters 字段 / 图标。
+// 常驻按钮（设计单位矩形）：撤销、提示、菜单。其余操作在菜单面板里（panels.js MENU_ITEMS），键盘快捷键不变。
+// BOOSTERS：道具菜单项对应的 state.boosters 字段 / 图标。
 export const BOOSTERS = { hammer: { key: "hammer", icon: "icon_hammer" }, swap: { key: "swap", icon: "icon_swap" }, cross: { key: "cross", icon: "icon_cross" } };
-const ROW_A = [["help", "?"], ["prev", "‹"], ["next", "›"], ["restart", "重开"], ["hint", "提示"], ["undo", "撤销"]];
-const ROW_B = [["hammer", "锤"], ["swap", "换"], ["cross", "十"], ["shuffle", "洗牌"], ["map", "地图"], ["daily", "每日"], ["pause", "暂停"]];
-const SMALL_BTN = new Set(["help", "prev", "next"]);
-const btn = (id, label, x, y, w, h) => ({ id, label, x, y, w, h, ...(BOOSTERS[id] ? { booster: BOOSTERS[id] } : {}) });
-// 一行等宽排开（small 里的按钮固定宽 small，其余平分）
-function row(out, items, x, y, w, h, gap, small = 0) {
-  const nSmall = small ? items.filter(([id]) => SMALL_BTN.has(id)).length : 0;
-  const big = (w - nSmall * small - gap * (items.length - 1)) / (items.length - nSmall);
-  let cx = x;
-  for (const [id, label] of items) {
-    const bw = small && SMALL_BTN.has(id) ? small : big;
-    out.push(btn(id, label, cx, y, bw, h));
-    cx += bw + gap;
-  }
-}
+const BAR = [["undo", "撤销"], ["hint", "提示"], ["menu", "菜单"]];
 function layoutButtons(L) {
-  const out = [];
-  if (L.bar) {
-    // 竖排：棋盘下方两行
-    const { x, y, w, rowH } = L.bar;
-    row(out, ROW_A, x, y + 6, w, rowH - 10, 8, 48);
-    row(out, ROW_B, x, y + rowH - 4 + 6, w, rowH - 10, 6);
-  } else {
-    // 横排：侧栏底部四行按钮，高度至少 MIN_TOUCH_CSS（消息区相应变矮）
-    const { x, y, w, h } = L.hud, gap = 8, bh = Math.round(Math.max(54, Math.min(72, MIN_TOUCH_CSS / L.u)));
-    const r4 = y + h - bh, r3 = r4 - gap - bh, r2 = r3 - gap - bh, r1 = r2 - gap - bh;
-    const third = (w - 2 * gap) / 3, nav = 54;
-    row(out, ROW_B.slice(0, 3), x, r1, w, bh, gap);
-    row(out, ROW_B.slice(3), x, r2, w, bh, gap);
-    out.push(btn("prev", "‹", x, r3, nav, bh));
-    out.push(btn("next", "›", x + nav + gap, r3, nav, bh));
-    out.push(btn("restart", "重开", x + 2 * (nav + gap), r3, w - 2 * (nav + gap), bh));
-    out.push(btn("hint", "提示", x, r4, third, bh));
-    out.push(btn("undo", "撤销", x + third + gap, r4, third, bh));
-    out.push(btn("help", "?", x + 2 * (third + gap), r4, third, bh));
+  const out = [], gap = 8, n = BAR.length;
+  let x, y, w, h;
+  if (L.bar) ({ x, w } = L.bar, y = L.bar.y + 6, h = L.bar.h - 10);
+  else {
+    // 横排：侧栏底部一行，高度至少 MIN_TOUCH_CSS（消息区在它上面）
+    h = Math.round(Math.max(54, MIN_TOUCH_CSS / L.u));
+    ({ x, w } = L.hud); y = L.hud.y + L.hud.h - h;
   }
+  const bw = (w - gap * (n - 1)) / n;
+  BAR.forEach(([id, label], i) => out.push({ id, label, x: x + i * (bw + gap), y, w: bw, h }));
   return out;
 }
 

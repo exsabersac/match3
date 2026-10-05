@@ -12,7 +12,7 @@ import { CELL, PAD, dropMarks, fallbacks, setDims, setPalette } from "./cells.js
 import { Fx, SWAP_FRAMES, FALL_FRAMES, comboStyle, drawCascade, drawLightFall, drawStatic, drawSwap, setAnimMeta, styleRGB } from "./render.js";
 import { buttonAtUnits, cellAtUnits, cellCenterCss, computeLayout, safeInsets, toUnits } from "./layout.js";
 import { FONT, drawBanner, drawHelpStrip, drawHud, drawOverlay } from "./hud.js";
-import { drawMap, drawPause, mapHit, mapLayout } from "./panels.js";
+import { drawMap, drawMenu, drawPause, mapHit, mapLayout, menuHit, menuLayout } from "./panels.js";
 import { drawGuide, guideEntries, noteSpecials } from "./guide.js";
 import { unlock, play, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, startBgm, setSoundNames } from "./audio.js";
 
@@ -84,11 +84,12 @@ const fx = new Fx();
 // 从桌面版（app/UI/Types.hs 的 App）迁来的界面状态：
 let tool = null, swapFirst = null;          // 道具点选模式 "hammer" | "swap" | "cross"（appTool）；自由交换已点的第一格
 let paused = false, mapOpen = false;        // 暂停说明（appPaused）、选关地图（appMapOpen）
+let menuOpen = false;                       // 菜单面板（网页自有：常驻按钮之外的全部操作；打开时冻结回放）
 let startMoves = 0;                         // 开局步数（appStartMoves：三星分母、每日挑战重开用）
 let tipFrames = 0, helpFrames = 0;          // 首关提示横幅（appTipFrames，240 帧）、按键条（appHelpFrames，300 帧）
 let comboLeft = 0, comboBest = 0;           // 本步连击总结剩余帧（appComboShow）与本步最高连击（appComboBest）
 let dailyDate = null;                       // 当前每日挑战的日期 [年, 月, 日]（战役关为 null）
-let drawnExtra = { banner: null, help: null, pause: null, map: null };   // 上一帧各浮层画出的内容（e2e 用）
+let drawnExtra = { banner: null, help: null, pause: null, map: null, menu: null };   // 上一帧各浮层画出的内容（e2e 用）
 // 选关进度（appMaxReached）：桌面只在内存里，网页存 localStorage「m3-reached」，刷新 / 重开浏览器后保留
 const REACHED_KEY = "m3-reached";
 let reached = (() => { try { return Math.max(0, parseInt(localStorage.getItem(REACHED_KEY) ?? "0", 10) || 0); } catch { return 0; } })();
@@ -118,7 +119,7 @@ function begin(st, text, sm = st.moves) {
   pending = null; anim = null; busy = false; fastReq = false; sel = null; showHint = null; drag = null;
   showGuide = false; seenSpecials = new Set(); noteSpecials(state, seenSpecials);
   shownScore = state.score; fx.clear();
-  tool = null; swapFirst = null; paused = false; mapOpen = false; comboLeft = 0; comboBest = 0;
+  tool = null; swapFirst = null; paused = false; mapOpen = false; menuOpen = false; comboLeft = 0; comboBest = 0;
   if (!state.daily) dailyDate = null;
   startMoves = sm;
   tipFrames = state.level === 0 ? 240 : 0;
@@ -224,7 +225,7 @@ function toggleTool(k) {
   if (k !== "swap" && sel && boostersLeft(k) > 0) { applyBooster(k, sel); return; }
   if (k === "swap" && boostersLeft(k) <= 0) { tool = null; swapFirst = null; msg = T.empty; return; }
   tool = k; swapFirst = null; sel = null; drag = null;
-  msg = boostersLeft(k) <= 0 ? T.empty : `${T.banner}（再点「${{ hammer: "锤", swap: "换", cross: "十" }[k]}」或按 ${T.key} 取消）`;
+  msg = boostersLeft(k) <= 0 ? T.empty : `${T.banner}（菜单里再点「${T.name}」或按 ${T.key} 取消）`;
 }
 // 点选模式下点中一格（同桌面 cellClick 的道具分支；自由交换两步点选同 Engine.GridUI.gridClick）
 function toolClick(p) {
@@ -321,7 +322,7 @@ function finishMove(best = 0) {
 // 固定步长的一帧（60 fps）：呼吸计数、粒子 / 浮字 / 震屏、当前动画。暂停 / 地图打开时冻结（同桌面）
 function stepFrame() {
   pulse++; frames++;
-  if (paused || mapOpen) return;
+  if (paused || mapOpen || menuOpen) return;
   if (tipFrames > 0) tipFrames--;
   if (helpFrames > 0) helpFrames--;
   if (comboLeft > 0 && !busy) comboLeft--;
@@ -374,6 +375,11 @@ function overlayAction(tag) {
   if (tag === "Won") return k ? "点棋盘或按 N 从第 1 关重新开始" : "点棋盘从第 1 关重新开始";
   return k ? "点棋盘或按 R 重试 · U 撤销一步" : "点棋盘重试 · 「撤销」退一步";
 }
+let menuCache = null;
+function curMenuLayout() {
+  if (!menuCache || menuCache.L !== L) menuCache = { L, ml: menuLayout({ x: 0, y: 0, w: L.w, h: L.h }) };
+  return menuCache.ml;
+}
 let mapCache = null;
 function curMapLayout() {
   const a = { x: 0, y: 0, w: L.w, h: L.h };
@@ -399,18 +405,18 @@ function render() {
   fx.draw(ctx, art, pulse, FONT);
   noteSpecials(v.st, seenSpecials);
   const boardRect = { x: PAD, y: PAD, w: L.cols * CELL, h: L.rows * CELL };
-  drawnExtra = { banner: null, help: null, pause: null, map: null };
+  drawnExtra = { banner: null, help: null, pause: null, map: null, menu: null };
   if (!anim && state.over) {
     const o = state.over;
     const title = { LevelClear: "过关！", Won: "通关！", Lost: "步数用完了" }[o.tag] || o.tag;
-    const sub = o.tag === "Lost" ? `${state.loseHint}。可「撤销」或「重开」` : `得分 ${o.score}` + (o.tag === "LevelClear" ? `，点「›」进入第 ${o.next + 1} 关` : "");
+    const sub = o.tag === "Lost" ? `${state.loseHint}。可「撤销」或「重开」` : `得分 ${o.score}` + (o.tag === "LevelClear" ? `，进入第 ${o.next + 1} 关` : "");
     const stars = o.tag === "Lost" ? null : prog.stars, action = overlayAction(o.tag);
     const d = drawOverlay(ctx, art, boardRect, title, sub, stars, action);
     overlayDrawn = { title, sub, stars, action, panel: d.panel, starSprites: d.stars.map((s) => (s.on ? "star_on" : "star_off")) };
   } else {
     overlayDrawn = null;
     // 棋盘上沿横幅：道具点选模式（桌面 drawToolBannerArt）优先，其次第 1 关的提示（drawTipBannerArt）
-    if (!paused && !mapOpen) {
+    if (!paused && !mapOpen && !menuOpen) {
       if (tool) drawnExtra.banner = drawBanner(ctx, art, boardRect, TOOL[tool].banner, { icon: TOOL[tool].icon });
       else if (tipFrames > 0 && state.level === 0)
         drawnExtra.banner = drawBanner(ctx, art, boardRect, finePointer() ? "按 H 查看提示" : "点「提示」查看提示", { key: finePointer() ? "H" : null });
@@ -427,6 +433,11 @@ function render() {
     drawnExtra.map = drawMap(ctx, art, a, ml, levels, prog.dots, pulse, finePointer() ? "点击关卡进入 · M 关闭" : "点击关卡进入 · 点空白处关闭");
   }
   if (paused) drawnExtra.pause = drawPause(ctx, art, { x: 0, y: 0, w: L.w, h: L.h }, pulse);
+  if (menuOpen) {
+    const s = pending ? pending.state : state;
+    drawnExtra.menu = drawMenu(ctx, art, { x: 0, y: 0, w: L.w, h: L.h }, curMenuLayout(),
+      { boosters: s.boosters, tool, over: !!state.over, busy, sfx: sfxEnabled(), bgm: bgmEnabled(), keys: finePointer() });
+  }
   // 窗口标题（桌面 updateTitle：Match3.View.titleLine + 「  |  」+ 最近提示）；PC 壳一般把它显示在标题栏
   const title = `${(pending ? pending.state : state).title}  |  ${msg}`;
   if (document.title !== title) document.title = title;
@@ -459,9 +470,7 @@ canvas.addEventListener("pointerdown", (ev) => {
   ev.preventDefault();
   unlock();
   const [x, y] = unitsOf(ev);
-  const hitChip = (c) => c && x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h;
-  if (!paused && !mapOpen && hitChip(hudDrawn && hudDrawn.sfx)) { toggleSfx(); return; }
-  if (!paused && !mapOpen && hitChip(hudDrawn && hudDrawn.bgm)) { toggleBgm(); return; }
+  if (menuOpen) { menuClick(x, y); return; }
   if (paused) { togglePause(); return; }
   if (mapOpen) { mapClick(x, y); return; }
   const b = buttonAtUnits(L, x, y);
@@ -496,15 +505,29 @@ canvas.addEventListener("pointercancel", () => { drag = null; pressed = null; })
 for (const t of ["gesturestart", "dblclick", "contextmenu"]) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
 document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
+// 菜单（常驻「菜单」按钮）：打开时冻结回放、清拖划 / 按下；与暂停 / 地图互斥
+function toggleMenu() {
+  menuOpen = !menuOpen; paused = false; mapOpen = false; drag = null; pressed = null;
+  msg = menuOpen ? "菜单：点一项执行，点空白处继续" : "继续游戏";
+}
+// 菜单里点一项：先关菜单再执行（同按对应的键）；点空白处只关菜单
+function menuClick(x, y) {
+  const it = menuHit(curMenuLayout(), x, y);
+  menuOpen = false;
+  if (!it || it.id === "close") { msg = "继续游戏"; return; }
+  if (it.id === "sfx") toggleSfx();
+  else if (it.id === "bgm") toggleBgm();
+  else onButton(it.id);
+}
 // 暂停（桌面 P：全屏按键说明，冻结动画，清掉拖划 / 选中；取消暂停后按键条再显示 240 帧）
 function togglePause() {
-  paused = !paused; mapOpen = false; drag = null; sel = null; swapFirst = null; pressed = null;
+  paused = !paused; mapOpen = false; menuOpen = false; drag = null; sel = null; swapFirst = null; pressed = null;
   msg = paused ? "已暂停：R 重开 · P / Esc / 点任意处继续" : "继续游戏";
   if (!paused) helpFrames = 240;
 }
 // 选关地图（桌面 M）
 function toggleMap() {
-  mapOpen = !mapOpen; paused = false; drag = null; pressed = null;
+  mapOpen = !mapOpen; paused = false; menuOpen = false; drag = null; pressed = null;
   msg = mapOpen ? "选关地图：点已解锁的关卡进入" : "已关闭选关地图";
 }
 // 地图上的点击（桌面 mapClick）：已解锁的别的关 → 跳过去；当前关 / 未解锁 / 节点外 → 关地图、保留当前进度
@@ -517,9 +540,10 @@ function mapClick(x, y) {
   newGame(r.jump, newSeed());
   msg = `选关：第 ${r.jump + 1} 关 ${state.name}`;
 }
-// Esc：关掉最上层的浮层（暂停 → 地图 → 本关说明 → 道具模式 → 选中）；退出程序是 PC 壳的事，网页不处理
+// Esc：关掉最上层的浮层（菜单 → 暂停 → 地图 → 本关说明 → 道具模式 → 选中）；退出程序是 PC 壳的事，网页不处理
 function closeTop() {
-  if (paused) togglePause();
+  if (menuOpen) toggleMenu();
+  else if (paused) togglePause();
   else if (mapOpen) toggleMap();
   else if (showGuide) showGuide = false;
   else if (tool) { msg = `已取消${TOOL[tool].name}`; tool = null; swapFirst = null; sel = null; }
@@ -535,6 +559,8 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (k === " " || k === "Enter" || k === "Escape") e.preventDefault();
   unlock();
+  // 菜单开着时按快捷键：先关菜单再照常处理（Esc 只关菜单）
+  if (menuOpen && k !== "Escape" && k.length === 1) menuOpen = false;
   // 任何时候都响应：Esc / P / K / B / R（暂停中也能重开，同桌面 handleKey）
   if (k === "Escape") return closeTop();
   if (k === "p") return togglePause();
@@ -554,6 +580,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 function onButton(id) {
+  if (id === "menu") return toggleMenu();
   if (id === "pause") return togglePause();
   if (id === "map") return toggleMap();
   if (id === "restart" && paused) return restart();
@@ -565,7 +592,7 @@ function onButton(id) {
     else newGame((state.level + 1) % levels.length, newSeed());
   } else if (id === "restart") restart();
   else if (id === "help") showGuide = !showGuide;
-  else if (id === "hint") { showHint = state.hint; msg = showHint ? "提示：交换高亮的两格" : "没有可走的步：点「洗牌」（S）"; }
+  else if (id === "hint") { showHint = state.hint; msg = showHint ? "提示：交换高亮的两格" : "没有可走的步：菜单 → 洗牌（S）"; }
   else if (id === "undo") {
     // 撤销：历史在核心的 Engine.History（最多 20 步，终局后也能撤销）
     const res = call("m3Undo");
@@ -603,11 +630,13 @@ window.m3debug = {
   get frozen() { return frozen; }, set frozen(v) { frozen = v; },
   // 迁自桌面版的界面状态（e2e 用）
   get ui() {
-    return { tool, swapFirst, sel, hint: showHint, paused, mapOpen, showGuide, startMoves, reached, progress: { ...prog }, tipFrames, helpFrames, comboLeft, comboBest,
+    return { tool, swapFirst, sel, hint: showHint, paused, mapOpen, menuOpen, showGuide, startMoves, reached, progress: { ...prog }, tipFrames, helpFrames, comboLeft, comboBest,
       daily: dailyLabel(dailyDate), msg, title: document.title, badge, drawn: drawnExtra, fine: finePointer() };
   },
   cellCenter: (r, c) => cellCenterCss(L, [r, c]),
   buttonCenter: (id) => { const b = L.buttons.find((x) => x.id === id); return [L.ox + (b.x + b.w / 2) * L.u, L.oy + (b.y + b.h / 2) * L.u]; },
+  // 菜单项中心（菜单要先打开；返回 CSS 坐标）
+  menuItemCenter: (id) => { const it = curMenuLayout().items.find((x) => x.id === id); return [L.ox + (it.x + it.w / 2) * L.u, L.oy + (it.y + it.h / 2) * L.u]; },
   mapNodeCenter: (i) => { const nd = curMapLayout().ml.nodes.find((d) => d.i === i); return [L.ox + nd.x * L.u, L.oy + nd.y * L.u]; },
 };
 requestAnimationFrame((ts) => { last = ts; loop(ts); });

@@ -240,7 +240,7 @@ const clampHp = (hp, mx) => Math.max(0, Math.min(mx, hp));
 function button(ctx, art, b, enabled, pressed, left = null, active = false) {
   ctx.save();
   ctx.globalAlpha = enabled || active ? 1 : 0.45;
-  const name = active || b.id === "hint" || b.id === "undo" || b.id === "restart" || b.id === "help" ? "panel_gold" : "panel_chip";
+  const name = active || b.id === "hint" || b.id === "undo" ? "panel_gold" : "panel_chip";
   const dy = pressed ? 2 : 0;
   if (!art.panel(ctx, name, b.x, b.y + dy, b.w, b.h, 14)) { ctx.fillStyle = "#554"; ctx.fillRect(b.x, b.y, b.w, b.h); }
   if (active) { ctx.lineWidth = 3; ctx.strokeStyle = "#ffd65a"; roundPath(ctx, b.x + 1.5, b.y + dy + 1.5, b.w - 3, b.h - 3, 12); ctx.stroke(); }
@@ -259,7 +259,8 @@ function button(ctx, art, b, enabled, pressed, left = null, active = false) {
   ctx.restore();
 }
 
-// 音效 / BGM 开关芯片：同桌面 UI.HudArt.drawSoundChipsArt——46 × 28 的 panel_chip（圆角 10）+ 18 高的单字（效 / 乐，关掉为 静），
+// 音效 / BGM 状态芯片：同桌面 UI.HudArt.drawSoundChipsArt——46 × 28 的 panel_chip（圆角 10）+ 18 高的单字（效 / 乐，关掉为 静），
+// 只显示状态、不接点击（太小，够不到 44 CSS px 触控尺寸；开关在菜单里与 K / B 键），
 // 字号固定 18 设计单位（不走 button 的单字大号 32：那是给 ‹ › 用的，放进 28 高的芯片会溢出、压到提示行）。
 const SOUND_W = 46, SOUND_H = 28, SOUND_GAP = 4, SOUND_FONT = 18;
 function soundChip(ctx, art, r, label) {
@@ -311,12 +312,10 @@ export function drawHud(ctx, art, L, info, pressed) {
     const lines = !rest ? [first] : maxLines > 1 ? [first, ...wrap(ctx, rest, h.w - 4, maxLines - 1)] : [fit(ctx, info.msg.split("\n")[0], h.w - 4 - SOUND_SPAN)];
     lines.forEach((ln, i) => { msg.push(msgBox(ctx, ln, h.x + 2, top + 11 + i * 22)); text(ctx, ln, h.x + 2, top + 11 + i * 22, 16, "#fff8e1", "left", 600); });
   }
+  // 常驻按钮：撤销 / 提示 / 菜单（菜单播放中也能开；道具点选模式中菜单按钮加金框，提示「再点菜单里的同一项取消」）
   for (const b of L.buttons) {
-    const left = b.booster && info.boosters ? info.boosters[b.booster.key] : null;
-    // 结局后道具 / 洗牌无效（核心拒绝），画成灰的
-    const locked = info.over && (b.booster || b.id === "shuffle");
-    const enabled = (b.id === "pause" || b.id === "map" || !info.busy) && (b.id !== "undo" || info.undo > 0) && (left === null || left > 0) && !locked;
-    button(ctx, art, b, enabled, pressed === b.id, left, info.tool === b.id);
+    const enabled = (b.id === "menu" || !info.busy) && (b.id !== "undo" || info.undo > 0);
+    button(ctx, art, b, enabled, pressed === b.id, null, b.id === "menu" && !!info.tool);
   }
   const bgm = { ...sfx, x: sfx.x + SOUND_W + SOUND_GAP };
   soundChip(ctx, art, sfx, info.sfx === false ? "静" : "效");

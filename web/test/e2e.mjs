@@ -248,7 +248,15 @@ function makeOps(page) {
       await page.mouse.move(pb[0], pb[1], { steps: 6 }); await page.mouse.up();
     } else { await page.mouse.click(pa[0], pa[1]); await page.mouse.click(pb[0], pb[1]); }
   }
-  async function button(id) { const [x, y] = await page.evaluate((i) => window.m3debug.buttonCenter(i), id); await page.mouse.click(x, y); }
+  // 点按钮：常驻按钮（撤销 / 提示 / 菜单）直接点；其余先点「菜单」打开菜单面板再点对应项
+  async function button(id) {
+    const has = await page.evaluate((i) => window.m3debug.layout.buttons.some((b) => b.id === i), id);
+    if (!has && !(await page.evaluate(() => window.m3debug.ui.menuOpen))) {
+      const [mx, my] = await page.evaluate(() => window.m3debug.buttonCenter("menu")); await page.mouse.click(mx, my); await sleep(40);
+    }
+    const [x, y] = await page.evaluate((i) => (window.m3debug.layout.buttons.some((b) => b.id === i) ? window.m3debug.buttonCenter(i) : window.m3debug.menuItemCenter(i)), id);
+    await page.mouse.click(x, y);
+  }
   return { st, center, shot, idle, breakAt, clearBreak, frozenOrIdle, isFrozen, resume, info, swap, button };
 }
 
@@ -1008,7 +1016,7 @@ try {
   // -------------------------------------------------------------------------
   // 3k. 音效 / BGM 开关芯片（效 / 乐）：竖屏 390×844、横屏 1280×800、横持手机 844×390 下第 1 / 45 / 48 / 49 关开局，
   //     真实绘制（fillText 外框）核对：字形在芯片里、芯片不大于 HUD 最小按钮、不压提示行（soundChipCheck）；
-  //     第 1 关竖屏点一下「效」→ 画成「静」、仍满足同样条件
+  //     第 1 关竖屏点芯片不切换（芯片只显示状态），经菜单「音效」关掉 → 画成「静」、仍满足同样条件
   {
     report.soundChips = [];
     for (const vp of [{ w: 390, h: 844, dpr: 2, tag: "portrait-390x844" }, { w: 1280, h: 800, dpr: 1, tag: "landscape-1280x800" }, { w: 844, h: 390, dpr: 2, tag: "landscape-844x390" }]) {
@@ -1019,11 +1027,14 @@ try {
         report.soundChips.push({ level: li + 1, vp: vp.tag, ...sc });
         check(`第 ${li + 1} 关音效 / BGM 开关：字形在芯片内、不大于 HUD 按钮、不压提示行：${vp.tag}`, sc.ok, sc);
         if (li === 0 && vp.tag === "portrait-390x844") {
+          // 芯片只显示状态（太小，不当触控目标）：点芯片不切换；经菜单「音效」关掉后芯片画成「静」
           const r = sc.chips[0].rect, L = await P.page.evaluate(() => window.m3debug.layout);
-          await P.page.mouse.click(L.ox + (r.x + r.w / 2) * L.u, L.oy + (r.y + r.h / 2) * L.u); await sleep(200);
+          await P.page.mouse.click(L.ox + (r.x + r.w / 2) * L.u, L.oy + (r.y + r.h / 2) * L.u); await sleep(100);
+          const still = await P.page.evaluate(() => localStorage.getItem("m3-sfx"));
+          await P.button("sfx"); await sleep(200);
           const s2 = await soundChipCheck(P);
           report.soundChips.push({ level: 1, vp: vp.tag, toggled: true, ...s2 });
-          check("第 1 关点「效」后画成「静」，仍在芯片内、不压提示行：portrait-390x844", s2.ok && s2.chips[0].glyph?.text === "静" && s2.chips[1].glyph?.text === "乐", s2);
+          check("第 1 关点芯片不切换；菜单「音效」关掉后芯片画成「静」，仍在芯片内、不压提示行：portrait-390x844", still !== "off" && s2.ok && s2.chips[0].glyph?.text === "静" && s2.chips[1].glyph?.text === "乐", s2);
         }
         if ([0, 47, 48].includes(li) && vp.tag !== "landscape-844x390") await P.shot(`sound-chips-l${String(li + 1).padStart(2, "0")}-${vp.tag}`);
         await P.ctx.close();
@@ -1225,7 +1236,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  // 5. 桌面版功能迁移（web-sdl-parity，网页将是唯一前端）：新按钮布局、道具（锤子 / 自由交换 / 十字消，含 keepTool 与次数用完）、
+  // 5. 桌面版功能迁移（web-sdl-parity，网页将是唯一前端）：HUD 常驻按钮 + 菜单（格子不小于 33e65bf、触控 ≥ 44 px、菜单逐项可用）、道具（锤子 / 自由交换 / 十字消，含 keepTool 与次数用完）、
   //    手动洗牌、每日挑战、选关地图（跳关 / 未解锁 / localStorage 进度）、暂停（冻结动画、R 可重开、点任意处继续）、按键表与 Esc、
   //    结局后前进（过关带入剩余步数 / 失败重开）与星级、分数徽章（连击 / 总结）、首关提示与按键条、窗口标题、元素展示盘。
   //    每个功能竖屏 390×844 与横屏 1280×800 各截一张 sdl-<功能>-<竖屏|横屏>.png。
@@ -1269,23 +1280,101 @@ try {
     }
     report.sdlParity = { layout: [] };
 
-    // 5a. 新按钮布局：13 个按钮齐全、互不重叠、不压棋盘、都在布局内、不小于最小触控；横竖屏与手机横屏 / 小屏
-    for (const vp of [...VPS, { tag: "横屏手机844x390", w: 844, h: 390, dpr: 3, touch: true, mobile: true }, { tag: "小屏375x667", w: 375, h: 667, dpr: 2, touch: true, mobile: true }]) {
-      const P = await openPage(vp, 3, 7);
-      await sleep(150);
-      const L = await P.page.evaluate(() => window.m3debug.layout);
-      const ids = L.buttons.map((b) => b.id), want = ["help", "prev", "next", "restart", "hint", "undo", "hammer", "swap", "cross", "shuffle", "map", "daily", "pause"];
-      const pairs = [];
+    // 5a. HUD 常驻按钮 + 菜单（yu 2026-10-05：新增按钮收进菜单，保住格子大小与 44 px 触控）：
+    //     5 种视口 × 第 39 关（8×8，分辨率矩阵同一关）/ 第 49 关（6×9）：格子不小于加按钮之前（33e65bf）——8×8 对照当时 e2e 实测值，
+    //     两种盘面都对照测试侧照抄的 33e65bf 布局公式；常驻按钮恰好 撤销 / 提示 / 菜单，每个 ≥ 44×44 CSS px、互不重叠、
+    //     不压棋盘、不压提示行与音效芯片、在布局内；点「菜单」打开菜单：14 项齐全、每项 ≥ 44×44 CSS px、互不重叠、在面板内、
+    //     道具项显示的次数 = state.boosters；点空白处关闭、再打开按 Esc 关闭
+    const BASE_CELL_8x8 = { "竖屏390x844": 44.8, "小屏375x667": 43.0, "横屏1280x800": 89.6, "横屏手机844x390": 43.7, "平板768x1024": 83.3 };
+    const baseCell = (W, H, rows, cols) => {   // 33e65bf 的 computeLayout（竖排 TOP 124 + 盘 + 按钮条 64；横排 盘 + 10 + 侧栏 236、与盘等高）
+      const VW = cols * 56 + 32, VH = rows * 56 + 32;
+      const up = Math.min(W / (VW + 8), H / (124 + VH + 64 + 20)), ul = Math.min(W / (VW + 10 + 236 + 20), H / (VH + 20));
+      return Math.min(ul > up * 1.02 ? ul : up, 2) * 56;
+    };
+    const MENU_IDS = ["hammer", "swap", "cross", "shuffle", "restart", "daily", "map", "prev", "next", "help", "pause", "sfx", "bgm", "close"];
+    const VP5A = [{ tag: "竖屏390x844", w: 390, h: 844, dpr: 2 }, { tag: "小屏375x667", w: 375, h: 667, dpr: 2, touch: true, mobile: true },
+      { tag: "横屏1280x800", w: 1280, h: 800, dpr: 1 }, { tag: "横屏手机844x390", w: 844, h: 390, dpr: 3, touch: true, mobile: true },
+      { tag: "平板768x1024", w: 768, h: 1024, dpr: 2, touch: true, mobile: true }];
+    report.menu = { layouts: [] };
+    for (const vp of VP5A) for (const li of [38, 48]) {
+      const tag = `${vp.tag} 第 ${li + 1} 关`;
+      const P = await openPage(vp, li, 7);
+      await sleep(200);
+      const L = await P.page.evaluate(() => window.m3debug.layout), hud = await P.page.evaluate(() => window.m3debug.hud);
+      const base = baseCell(vp.w, vp.h, L.rows, L.cols), fixed = L.rows === 8 && L.cols === 8 ? BASE_CELL_8x8[vp.tag] : null;
+      check(`格子不小于加按钮之前（33e65bf）：${tag}`, L.cellCss >= base - 0.01 && (fixed === null || L.cellCss >= fixed - 0.05), { cellCss: L.cellCss, base, fixed });
+      const css = (b) => ({ w: b.w * L.u, h: b.h * L.u });
+      const ids = L.buttons.map((b) => b.id), pairs = [];
       L.buttons.forEach((a, i) => L.buttons.slice(i + 1).forEach((b) => { if (overlap(a, b)) pairs.push([a.id, b.id]); }));
       const board = { x: L.board.x, y: L.board.y, w: L.VW, h: L.VH };
-      const onBoard = L.buttons.filter((b) => overlap(b, board)).map((b) => b.id);
+      const avoid = [...(hud.msg || []).filter((m) => m.text), hud.sfx, hud.bgm].filter(Boolean);
+      const hits = L.buttons.flatMap((b) => [...(overlap(b, board) ? [[b.id, "棋盘"]] : []), ...avoid.filter((m) => overlap(b, m)).map((m) => [b.id, m.text ?? "音效芯片"])]);
       const inside = L.buttons.every((b) => b.x >= -0.5 && b.y >= -0.5 && b.x + b.w <= L.w + 0.5 && b.y + b.h <= L.h + 0.5);
-      const minW = Math.min(...L.buttons.map((b) => b.w)), minH = Math.min(...L.buttons.map((b) => b.h));
-      const fits = L.ox >= -0.5 && L.oy >= -0.5 && L.ox + L.w * L.u <= L.W + 0.5 && L.oy + L.h * L.u <= L.H + 0.5;
-      check(`新按钮齐全、互不重叠、不压棋盘、在布局内、宽 ≥ 48 高 ≥ 28 设计单位：${vp.tag}`,
-        want.every((i) => ids.includes(i)) && ids.length === want.length && !pairs.length && !onBoard.length && inside && minW >= 48 && minH >= 28 && fits, { ids, pairs, onBoard, minW, minH, fits });
-      report.sdlParity.layout.push({ vp: vp.tag, mode: L.mode, cellCss: +L.cellCss.toFixed(1), minW: +minW.toFixed(1), minH: +minH.toFixed(1) });
-      if (!vp.touch) await P.shot(`sdl-buttons-${vp.tag}`);
+      const minTouch = Math.min(...L.buttons.map((b) => Math.min(css(b).w, css(b).h)));
+      check(`常驻按钮 = 撤销 / 提示 / 菜单，≥ 44×44 CSS px、互不重叠、不压棋盘 / 提示行 / 芯片、在布局内：${tag}`,
+        same(ids, ["undo", "hint", "menu"]) && minTouch >= 44 && !pairs.length && !hits.length && inside, { ids, minTouch, pairs, hits, inside });
+      if (li === 38 && (vp.tag === "竖屏390x844" || vp.tag === "横屏1280x800")) await P.shot(`menu-hud-${vp.tag.startsWith("竖") ? "竖屏" : "横屏"}`);
+      await P.button("menu"); await sleep(150);
+      const st = await P.st(), m = await P.page.evaluate(() => ({ open: window.m3debug.ui.menuOpen, d: window.m3debug.ui.drawn.menu }));
+      const items = m.d ? m.d.items : [], ipairs = [];
+      items.forEach((a, i) => items.slice(i + 1).forEach((b) => { if (overlap(a, b)) ipairs.push([a.id, b.id]); }));
+      const minItem = items.length ? Math.min(...items.map((b) => Math.min(css(b).w, css(b).h))) : 0;
+      const inPanel = items.every((b) => b.x >= m.d.panel.x - 0.5 && b.y >= m.d.panel.y - 0.5 && b.x + b.w <= m.d.panel.x + m.d.panel.w + 0.5 && b.y + b.h <= m.d.panel.y + m.d.panel.h + 0.5);
+      const counts = Object.fromEntries(items.filter((b) => ["hammer", "swap", "cross"].includes(b.id)).map((b) => [b.id, b.value]));
+      const countsOk = same(counts, { hammer: `×${st.boosters.hammer}`, swap: `×${st.boosters.swap}`, cross: `×${st.boosters.cross}` });
+      check(`点「菜单」打开菜单：14 项齐全、每项 ≥ 44×44 CSS px、互不重叠、在面板内、道具次数 = state.boosters：${tag}`,
+        m.open && same(items.map((b) => b.id), MENU_IDS) && minItem >= 44 && !ipairs.length && inPanel && countsOk, { open: m.open, ids: items.map((b) => b.id), minItem, ipairs, inPanel, counts, boosters: st.boosters });
+      if (li === 38 && (vp.tag === "竖屏390x844" || vp.tag === "横屏1280x800")) await P.shot(`menu-open-${vp.tag.startsWith("竖") ? "竖屏" : "横屏"}`);
+      // 点面板标题处（不是任何一项）关闭；再打开后 Esc 关闭；关闭后局面没变
+      const [hx, hy] = [L.ox + (m.d.panel.x + m.d.panel.w / 2) * L.u, L.oy + (m.d.panel.y + 8) * L.u];
+      await P.page.mouse.click(hx, hy); await sleep(80);
+      const c1 = await P.page.evaluate(() => window.m3debug.ui.menuOpen);
+      await P.button("menu"); await sleep(60);
+      const o2 = await P.page.evaluate(() => window.m3debug.ui.menuOpen);
+      await press(P, "Escape");
+      const c2 = await P.page.evaluate(() => window.m3debug.ui.menuOpen), st2 = await P.st();
+      check(`菜单：点空白处关闭、再打开按 Esc 关闭、局面不变：${tag}`, !c1 && o2 && !c2 && same(st2.board, st.board) && st2.moves === st.moves, { c1, o2, c2 });
+      report.menu.layouts.push({ vp: vp.tag, level: li + 1, mode: L.mode, cellCss: +L.cellCss.toFixed(1), base: +base.toFixed(1), minButtonCss: +minTouch.toFixed(1), minMenuItemCss: +minItem.toFixed(1) });
+      await P.ctx.close();
+    }
+    // 菜单里每一项都能用（竖屏 / 横屏）：逐项打开菜单 → 点该项 → 核对效果；另核对菜单打开时冻结回放
+    for (const vp of VPS) {
+      const t = vp.tag;
+      const P = await openPage(vp, 3, 7);
+      await sleep(150);
+      const ui = () => P.page.evaluate(() => window.m3debug.ui);
+      const lsGet = (k) => P.page.evaluate((key) => localStorage.getItem(key), k);
+      const closeAll = async () => { await press(P, "Escape"); await press(P, "Escape"); await press(P, "Escape"); };
+      const res = {};
+      let s0 = await P.st();
+      await P.button("hammer"); await sleep(40); res.hammer = (await ui()).tool === "hammer"; await closeAll();
+      await P.button("swap"); await sleep(40); res.swap = (await ui()).tool === "swap"; await closeAll();
+      await P.button("cross"); await sleep(40); res.cross = (await ui()).tool === "cross"; await closeAll();
+      await P.button("shuffle"); await P.idle(); let s1 = await P.st(); res.shuffle = !same(s1.board, s0.board) && s1.moves === s0.moves && (await ui()).msg === "已洗牌";
+      await P.swap(s1.hint[0], s1.hint[1]); await P.idle();
+      await P.button("restart"); await sleep(60); s1 = await P.st(); res.restart = s1.level === 3 && s1.moves === s0.moves && s1.undo === 0;
+      await P.button("next"); await sleep(60); res.next = (await P.st()).level === 4;
+      await P.button("prev"); await sleep(60); res.prev = (await P.st()).level === 3;
+      await P.button("help"); await sleep(60); res.help = (await ui()).showGuide === true; await closeAll();
+      await P.button("pause"); await sleep(60); res.pause = (await ui()).paused === true; await closeAll();
+      await P.button("map"); await sleep(60); res.map = (await ui()).mapOpen === true; await closeAll();
+      const sfx0 = await lsGet("m3-sfx"); await P.button("sfx"); await sleep(40); const sfx1 = await lsGet("m3-sfx");
+      res.sfx = sfx0 !== "off" && sfx1 === "off" && (await P.page.evaluate(() => window.m3debug.hud.sfx && true)); await P.button("sfx"); await sleep(40); res.sfx = res.sfx && (await lsGet("m3-sfx")) === "on";
+      const bgm0 = await lsGet("m3-bgm"); await P.button("bgm"); await sleep(40); const bgm1 = await lsGet("m3-bgm");
+      res.bgm = bgm0 !== "off" && bgm1 === "off"; await P.button("bgm"); await sleep(40); res.bgm = res.bgm && (await lsGet("m3-bgm")) === "on";
+      await P.button("close"); await sleep(40); res.close = (await ui()).menuOpen === false;
+      await P.button("daily"); await sleep(80); res.daily = (await P.st()).daily === true;
+      const label = { hammer: "进入锤子模式", swap: "进入自由交换模式", cross: "进入十字消模式", shuffle: "洗牌（步数不变）", restart: "重开本关", next: "下一关", prev: "上一关",
+        help: "本关说明", pause: "暂停与按键说明", map: "选关地图", sfx: "音效开关", bgm: "音乐开关", close: "继续游戏（关菜单）", daily: "每日挑战" };
+      for (const id of MENU_IDS) check(`菜单「${id}」可用：${label[id]}：${t}`, res[id] === true, { id, got: res[id] });
+      // 冻结：走一步、回放中打开菜单，400 ms 内帧号不变；关菜单后继续播完
+      await P.page.evaluate(() => window.m3debug.state); await P.idle();
+      const s2 = await P.st();
+      await P.swap(s2.hint[0], s2.hint[1]); await sleep(60);
+      const [mx, my] = await P.page.evaluate(() => window.m3debug.buttonCenter("menu")); await P.page.mouse.click(mx, my);
+      const a1 = await P.info(); await sleep(400); const a2 = await P.info(), busy = await P.page.evaluate(() => window.m3debug.busy);
+      await press(P, "Escape"); await P.idle();
+      check(`菜单打开时冻结回放（400 ms 内帧号不变）、关闭后播完：${t}`, busy && a1.p === a2.p && a1.fr === a2.fr && (await P.st()).moves === s2.moves - 1, { a1, a2, busy });
       await P.ctx.close();
     }
 
@@ -1299,7 +1388,7 @@ try {
         check(`道具初始次数 锤子 2 / 自由交换 1 / 十字消 1：${t}`, same(s0.boosters, { hammer: 2, swap: 1, cross: 1 }), s0.boosters);
         await P.button("hammer"); await sleep(60);
         let u = await ui(P);
-        check(`点「锤」进入锤子模式、棋盘上沿横幅「锤子：点一格」、按钮金框：${t}`, u.tool === "hammer" && u.drawn.banner?.text === "锤子：点一格", { tool: u.tool, banner: u.drawn.banner });
+        check(`菜单 → 锤子：进入锤子模式、棋盘上沿横幅「锤子：点一格」：${t}`, u.tool === "hammer" && u.drawn.banner?.text === "锤子：点一格", { tool: u.tool, banner: u.drawn.banner });
         await P.shot(`sdl-hammer-${t}`);
         const [hx, hy] = await P.center([4, 4]); await P.page.mouse.click(hx, hy); await sleep(30); await P.idle();
         let s1 = await P.st(); u = await ui(P);

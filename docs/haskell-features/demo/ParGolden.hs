@@ -2,7 +2,7 @@
 --
 -- 编译运行（仓库根目录；必须 -threaded，核数由 +RTS -N 决定）：
 --
--- > b=$(mktemp -d); stack exec -- ghc -O1 -threaded -rtsopts -package match3 -package stm -itest -itest/golden -outputdir "$b" -o "$b/p" docs/haskell-features/demo/ParGolden.hs
+-- > b=$(mktemp -d); stack exec -- ghc -O1 -threaded -rtsopts -Wall -package-id "$(stack exec -- ghc-pkg --simple-output field match3 id)" -package stm -itest -itest/golden -outputdir "$b" -o "$b/p" docs/haskell-features/demo/ParGolden.hs
 -- > time "$b/p" serial +RTS -N1
 -- > time "$b/p" par +RTS -N8
 --

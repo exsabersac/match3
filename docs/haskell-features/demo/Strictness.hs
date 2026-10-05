@@ -5,7 +5,7 @@
 --
 -- 编译（在仓库根目录；-O0 / -O1 各编一份对比）：
 --
--- > b=$(mktemp -d); stack exec -- ghc -O1 -rtsopts -package match3 -outputdir "$b" -o "$b/s" docs/haskell-features/demo/Strictness.hs
+-- > b=$(mktemp -d); stack exec -- ghc -O1 -rtsopts -Wall -package-id "$(stack exec -- ghc-pkg --simple-output field match3 id)" -outputdir "$b" -o "$b/s" docs/haskell-features/demo/Strictness.hs
 -- > "$b/s" player-old 100000 +RTS -s      # 看 "maximum residency" 一行
 --
 -- 实验（第一个参数）：

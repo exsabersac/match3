@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Haskell 特性第 9 项：规则去重（docs/haskell-features/09-规则去重.md）。
 --
@@ -7,7 +8,8 @@
 -- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（第 3 刀起是 onNeighbourClear + 通用驱动 kindNeighbour）的结果顺序写成固定例子；
 -- * 规则折叠：runEndRules = 逐条 erRun 再丢掉空效果；
 -- * （能力声明 Cap 的幺半群在元素类重构第 2 刀随 Caps 一起删除，原型包的缺省方法见 Spec.Archetype）；
--- * 阶段智能构造器 tickRule / spreadRule / moveRule。
+-- * 阶段智能构造器 tickRule / spreadRule / moveRule；
+-- * 魔法石充能：方法 + 通用驱动与留在这里的旧整盘写法逐盘等价（命名清理时局部化）。
 --
 -- 固定例子的期望值由现实现生成，生成时与删除前的逐字旧副本核对过。
 module Spec.RulesDedup
@@ -15,9 +17,13 @@ module Spec.RulesDedup
   ) where
 
 import Data.Functor.Identity (Identity(..))
+import Data.Proxy (Proxy(..))
 import Engine.Optics
 import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, boardPositions, getCell)
+import Match3.Board.Grid (inBounds)
 import Match3.Element (defaultWorld)
+import Match3.Element.Builtin.Obstacle (MagicStone, magicStoneFull)
+import Match3.Element.Rules (kindNeighbour)
 import Match3.Element.World (endRules, pushableWith)
 import Match3.Element.Types
 import qualified Match3.Obstacles as New
@@ -36,6 +42,7 @@ tests =
   , testCase "dedup_obstacle_orders_pinned" dedup_obstacle_orders_pinned
   , testProperty "qc_run_end_rules_is_fold" (withMaxSuccess 300 qc_run_end_rules_is_fold)
   , testCase "end_rule_smart_constructors" end_rule_smart_constructors
+  , testProperty "qc_magic_stone_charge_via_driver" (withMaxSuccess 500 qc_magic_stone_charge_via_driver)
   ]
 
 --------------------------------------------------------------------------------
@@ -178,3 +185,35 @@ end_rule_smart_constructors = do
   assertEqual "builtin end rules (phase, order)" [(PhaseTick, [10, 20]), (PhaseSpread, [10, 20, 30]), (PhaseMove, [10, 20, 30, 40])] [(ph, map erOrder (endRules world ph)) | ph <- phases]
   assertEqual "builtin holes all empty" [] [erOrder r | ph <- phases, r <- endRules world ph, not (null (erHoles r b))]
   assertEqual "only tick rules seed" [] [erOrder r | ph <- [PhaseSpread, PhaseMove], r <- endRules world ph, not (null (erSeeds r b))]
+
+--------------------------------------------------------------------------------
+-- 魔法石充能：局部化前后等价
+
+-- | 局部化之前的整盘写法（Element.Builtin.Obstacle 的 magicStoneCharge，逐字留作参照）：盘上每块魔法石，
+-- 未满、不在直接命中格、正交邻格里有真消除格的充能 1 格。
+magicStoneChargeReference :: AdjCtx -> Board -> AdjOut
+magicStoneChargeReference ctx b =
+  let near p = any (`elem` acTrue ctx) (filter (inBounds b) (New.orthoNeighbors p))
+      charged = [(p, Custom "magic_stone" (NewB.CustomState (k + 1))) | (p, k) <- stones, k < magicStoneFull, p `notElem` acDirect ctx, near p]
+  in AdjOut (foldl (\bd (p, cell) -> NewB.boardSet bd p cell) b charged) [] []
+  where
+    stones = NewB.ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (NewB.CustomState k) <- [cell]]) b
+
+-- | 魔法石（状态 -1–5，含满格 3 与发射中 4）混在宝石 / 任意格里的随机盘，随机真消除格与直接命中格（可重复）：
+-- 方法 + 通用驱动 kindNeighbour 与旧整盘写法给出相同的盘面，都不打碎、不坐住格。
+qc_magic_stone_charge_via_driver :: Property
+qc_magic_stone_charge_via_driver =
+  forAll genStoneBoard $ \b -> forAll (genSomePos b) $ \trues -> forAll (genSomePos b) $ \direct ->
+    let ctx = AdjCtx trues direct [] (const True)
+        new = kindNeighbour (Proxy @MagicStone) ctx b
+        old = magicStoneChargeReference ctx b
+    in counterexample (show (trues, direct))
+         (aoBoard new == aoBoard old .&&. aoDead new === aoDead old .&&. aoSit new === aoSit old)
+  where
+    genStoneBoard = do
+      rows <- choose (1, 7)
+      cols <- choose (1, 7)
+      cells <- vectorOf rows (vectorOf cols (frequency [(3, stone), (3, genGem), (1, genCell)]))
+      pure (boardFromRows cells)
+    stone = (\k -> Custom "magic_stone" (NewB.CustomState k)) <$> choose (-1, 5)
+

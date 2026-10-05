@@ -128,7 +128,7 @@ valueLine world cell =
       , show (fallsWith world cell)
       , show (portalWith world cell)
       , show (drainEdgesWith world cell)
-      , "Hit" ++ show (directHitWith world cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
+      , strikeColumn (directHitWith world cell)
       , show (hitImmuneWith world cell)
       , show (counterWith world cell)
       , show (vacatesCarpetWith world cell)
@@ -275,3 +275,8 @@ oracleLines = oracleLinesWith defaultWorld
 -- | 同一套投影，换一张元素世界（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
 oracleLinesWith :: World -> [String]
 oracleLinesWith world = map (valueLine world) valueCells ++ nameLines world ++ placeLines world ++ ruleLines world
+
+-- | 直接命中一列的文本。对照文件的格式固定为第 4 刀前的构造子名（HitAbsorb / HitDestroy / HitImmune），
+-- 即 "Hit" ++ show Strike；旧名只收在这一处，改对照文件的输出格式要另报。
+strikeColumn :: Strike -> String
+strikeColumn s = "Hit" ++ show s

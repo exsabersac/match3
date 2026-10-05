@@ -287,7 +287,8 @@ instance Kind SurpriseEgg where
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
 -- 状态 k = 充能格数 0–3；4 = 发射中（只在步末那一轮存在）。
 --
--- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（'magicStoneCharge'，邻格规则 180）；本轮被直接命中的不充能；
+-- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（方法 'onNeighbourClear' + 通用驱动，邻格规则 180；
+--   本轮被直接命中的不充能 = 缺省的 SkipDirect）；
 -- * 玩家交换的步末（PhaseTick 20，倒计时之后）：满 3 格的魔法石转为发射中（记一条 EvTick 步末效果），
 --   以它所在的整行 + 整列为种子引爆（和倒计时爆炸同一轮，种子里的特殊块照常点火、障碍照常受击）；
 -- * 发射中的魔法石被自己的种子命中后归零（Absorb → 0 格），平时打不动（Immune）。
@@ -311,7 +312,11 @@ instance Kind MagicStone where
   fromCell = fromCustom "magic_stone" MagicStone
   place _ args _ = Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
   label _ = Just "魔法石"
-  boardPasses _ = [AdjacentPass 180 magicStoneCharge, EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
+  -- 充能：命名清理时由逃生口（整盘扫魔法石、看邻格是否真消除）改成方法；与旧整盘写法逐盘等价（Spec.RulesDedup
+  -- qc_magic_stone_charge_via_driver 对照留在测试里的旧实现：盘面相同、都不打碎 / 不坐住格）。
+  neighbourPrio _ = Just 180
+  onNeighbourClear (MagicStone k) = if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched
+  boardPasses _ = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
 -- | 满格（可发射）的充能数。
 magicStoneFull :: Int
@@ -324,14 +329,6 @@ magicStoneFiring = 4
 -- | 盘上魔法石的位置与状态（行优先）。
 magicStones :: Board -> [(Pos, Int)]
 magicStones = ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (CustomState k) <- [cell]])
-
--- | 邻格规则：与本轮真消除格正交相邻的每块魔法石充能 1 格（每轮最多 1 格，满 3 为止）。
--- 本轮被直接命中的魔法石不充能——发射那一轮它被自己的种子命中，所以不会被自己清掉的邻格充能。
-magicStoneCharge :: AdjCtx -> Board -> AdjOut
-magicStoneCharge ctx b =
-  let near p = any (`elem` acTrue ctx) (filter (inBounds b) (orthoNeighbors p))
-      charged = [(p, Custom "magic_stone" (CustomState (k + 1))) | (p, k) <- magicStones b, k < magicStoneFull, p `notElem` acDirect ctx, near p]
-  in AdjOut (foldl (\bd (p, cell) -> boardSet bd p cell) b charged) [] []
 
 -- | 步末（PhaseTick）：满格的魔法石转为发射中；记一条 EvTick "magic_stone" 效果（逐块）。
 magicStoneArm :: EndCtx -> Board -> (Maybe EndEffect, Board)

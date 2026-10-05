@@ -80,7 +80,7 @@ class Element e => Kind e where
   bonusMoves :: proxy e -> Int
   bonusMoves _ = 0
   -- | 邻格规则的优先级（小的先；Nothing = 没有邻格规则）。内置：石头 10 / 宝箱 20 / 蜂蜜 30 / 蛋糕 40 /
-  -- 保险箱 110 / 时间精灵 120。
+  -- 保险箱 110 / 时间精灵 120 / 魔法石 180。
   neighbourPrio :: proxy e -> Maybe Int
   neighbourPrio _ = Nothing
   reach :: proxy e -> Reach

@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或 SDL 运行库参与链接执行路径上的窗口。
-- 期望：**476** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**477** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -54,6 +54,7 @@ stack test
   - 可扩展性 P2（2026-10）：完整关卡记录开局 `LevelSetup` +1（`Engine`：`engine_level_setup_matches_campaign`）、胜负节拍 `Judging` +2（`Extension`：`ext_judging_level_element`、`judge_default_no_replier`）→ 464
   - 可扩展性 P2 显示字段与 `m3Meta`：`WebColors` 删 JS 源码比对 5 个、加 `m3Meta` 核对 3 个（6 → 4），`View` +1（`view_cell_extras_from_elements`），`Extension` +1（`ext_element_display_fields`）→ 464（不变）
   - 元素类重构（2026-10，第 0–6 刀，见 [guide/08 阶段 12](guide/08-演进史.md)）：第 0 刀元素对照快照 +4（`ElementOracle`）→ 468；第 1 刀能力类 +6（`ElementAbility`）→ 474；第 2 刀 `Spec.Caps` 改写为 `Spec.Archetype`、删 `Cap` 幺半群测试（`RulesDedup` 6 → 4）、`ElementAbility` 改写 → 473；第 3 刀 +1（`ab_rule_methods_pinned`）→ 474；第 4、5 刀改写不增减（`ec_open_messages` 换成 `ec_mechanic_defaults_silent`）→ 474；第 6 刀 +2（`ab_cell_face_matches_legacy_zoo`、`qc_cell_face_matches_legacy`）→ 476
+  - 元素命名清理（2026-10-05）：魔法石充能由逃生口改成方法 + 通用驱动，+1（`qc_magic_stone_charge_via_driver`，与留在测试里的旧整盘写法逐盘等价）→ 477；另有 16 个测试改名（registry / caps / message / slots → world / ability / beat / cells）
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 可选完整链路：
@@ -93,7 +94,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 - 测试套件**直接编译 `src/`**（`source-dirs` 含 `src`，不依赖 `match3` 库）：库模块对测试是同一组件里的模块，GHC 只重编真正用到改动内容的测试模块。改一个库模块导出时，`make verify` 从约 50–67 s 降到约 22–27 s；代价是全量构建多编一遍 `src`（约 +15 s）。
 - 内置内容的数量（关卡数、注册项数、本体 instance 数）集中在 `test/Spec/Support/Inventory.hs`，加元素 / 加关卡只改那里。
 - 每个用例默认 120 秒超时（`test/Spec.hs` 的 `defaultTimeout`，命令行 `--timeout` 优先），挂起会变成失败而不是卡住。
-- 目录（用例数合计 476）：
+- 目录（用例数合计 477）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -138,7 +139,7 @@ export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 | `test/Spec/Perf.hs` | 3 | Haskell 特性第 5 项（性能与并发）：一万多张真实盘面（全部关卡 × 种子 1–3 的开局盘、全部相邻交换、沿提示走 12 手）上匹配码版 `findMatchRunsWith` / `hasAnyMatchWith` / `findHintWith` 的结果折成一个摘要锁定、码与逐格 `matchColorWith` 一致；588 个挖空盘上 ST 版重力的结果折成摘要锁定（含固定格分段）；`parallelForce` 在 1 / 2 / 3 / 8 / 1000 个工人下与串行逐项相同、空表、按顺序报第一个出错的任务（见 [haskell-features/05-性能与并发.md](haskell-features/05-性能与并发.md)） |
 | `test/Spec/Optics.hs` | 5 | Haskell 特性第 6 项（测试与光学）：透镜三定律（`cellAt`、GameState 的字段与五个派生读数，局中状态）；派生读数的 get-put 只在「元素恰好一份」时成立（`expectFailure` 固定反例）；遍历恒等律 / 合成律（Writer × Maybe）/ `over` 合成；棱镜两条往返律（`Match3.Grass` / `Match3.Types.Overlay` 本身的行为由叠层单元测试、金标准与元素查询快照守着）（见 [haskell-features/06-测试与光学.md](haskell-features/06-测试与光学.md)） |
 | `test/Spec/Invariants.hs` | 5 | Haskell 特性第 6 项：规则不变量——交换是对合（自定义 `Arbitrary` 任意行列盘）、重力幂等且不留悬空、重力 + 补子后满盘、被拒操作什么都不改 / 被接受时步数最多少 1 且分数不降；撤销历史对列表模型的状态机测试（玩具计数器，上限 1–4，带 shrink） |
-| `test/Spec/RulesDedup.hs` | 4 | Haskell 特性第 9 项（规则去重）：占格障碍棱镜 `_Stone` … `_Safe` 的往返律与改色遍历 `cellColorT` 的遍历定律；`Match3.Obstacles` 邻消顺序的固定例子；`runEndRules` = 朴素折叠；步末规则智能构造器（见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)；`Cap` 幺半群的两个测试随元素类重构第 2 刀删除） |
+| `test/Spec/RulesDedup.hs` | 5 | Haskell 特性第 9 项（规则去重）：占格障碍棱镜 `_Stone` … `_Safe` 的往返律与改色遍历 `cellColorT` 的遍历定律；`Match3.Obstacles` 邻消顺序的固定例子；`runEndRules` = 朴素折叠；步末规则智能构造器；魔法石充能的方法 + 通用驱动与旧整盘写法逐盘等价（`qc_magic_stone_charge_via_driver`，命名清理时加）（见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)；`Cap` 幺半群的两个测试随元素类重构第 2 刀删除） |
 | `test/Spec/GridGeometry.hs` | 5 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表与写死的坐标顺序逐格相同；带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`）是行主序；像素 newtype 下的 `gridCellAt` / `gridCellOrigin`（3 种几何的固定例子）；每日挑战 `Year` / `Month` / `Day`（7 个日期的种子与配置写死）（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
 | `test/Spec/DataBoundary.hs` | 10 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名 × 11 组参数 × 2 种格的放置结果写死比对，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组（固定例子含节拍倒序 `[2, 1, 0]`；性质：拼接还原输入、组的节拍号 = 组内首个效果的节拍、相邻组节拍不同）；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、元素世界（槽位、解码往返）、`cellFace` 标签、`UI.CellTable` 与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
 | `test/Spec/MoveText.hs` | 6 | 桌面走步提示文案 `UI.MoveText`（`app/pure`，测试直接编译）：拖拽 / 点击交换与锤子 / 十字 / 自由交换在六种结算结果下的整句逐字钉住（窗口标题「  \|  」之后与 HUD 提示行显示的就是它）；点击文案的连击（> 1 才写）/ 收集进度 / 自动洗牌后缀及顺序；`Lost` 的目标提示交换读走步前、道具读走步后的状态；只有自由交换换不掉时保持点选模式；源码扫描：`app/` 其余模块没有这些文案字面量 |
@@ -471,7 +472,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 ## 与 CI 的关系
 
-仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 476，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
+仓库可能另有工作流配置；**本地以 `stack test` 全绿（当前 477，含金标准与元素查询快照比对）为合并门禁**。本文不依赖未跟踪的 `.github/` 内容。
 
 门禁细则（第三刀起）：
 

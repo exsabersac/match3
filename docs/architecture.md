@@ -326,7 +326,7 @@ instance Kind StoneE where
 | 70 | fog | 150 | choco |
 | 80 | chain | 160 | steam |
 |  |  | 170 | bubble（段 5：邻格真消除即破） |
-|  |  | 180 | magic_stone（新玩法 2：邻格真消除充能，本轮被直接命中的不充） |
+|  |  | 180 | magic_stone（新玩法 2：邻格真消除充能，本轮被直接命中的不充；命名清理起是方法 `onNeighbourClear` + 通用驱动） |
 |  |  | 190 | fuzzball（新玩法 3：邻格真消除即消灭，本轮已被直接命中的不重复算） |
 |  |  | 200 | snow_boss（新玩法 5：身外一圈的真消除 + 直接命中的 Boss 格各扣 1 血，四格同改；归零四格并入清除格） |
 

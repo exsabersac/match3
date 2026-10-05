@@ -44,7 +44,7 @@ NEED_DIST = @[ -f "$(WEB)/dist/match3-web.wasm" ] || { echo "没有 web/dist，�
 NATIVE_ENV = env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP
 
 .PHONY: android-sync apk apk-release aab android-check
-.PHONY: help verify test-native build atlas serve parity anim-parity e2e test check lint-sh size pack \
+.PHONY: help verify test-native build atlas serve parity anim-parity e2e screenshots test check lint-sh size pack \
         deploy-install deploy-start deploy-stop deploy-status clean toolchain doctor
 
 ##@ 通用
@@ -96,6 +96,13 @@ e2e: ## 无头 Chrome 端到端测试，截图与 report.json 写到 SHOTS（服
 	$(NEED_DIST)
 	@[ -x "$(CHROME)" ] || { echo "找不到 Chrome：$(CHROME)；设 CHROME=/path/to/chromium" >&2; exit 1; }
 	E2E_PORT="$(E2E_PORT)" NODE_PATH="$(dir $(NODE))../lib/node_modules" "$(NODE)" "$(WEB)/test/e2e.mjs" "$(SHOTS)"
+
+DOC_SHOTS ?= /tmp/match3-doc-shots
+screenshots: ## 重拍文档截图（docs/images/*.webp）：无头 Chrome 截帧到 DOC_SHOTS，再用 Pillow 拼图（端口 E2E_PORT）
+	$(NEED_DIST)
+	@[ -x "$(CHROME)" ] || { echo "找不到 Chrome：$(CHROME)；设 CHROME=/path/to/chromium" >&2; exit 1; }
+	E2E_PORT="$(E2E_PORT)" NODE_PATH="$(dir $(NODE))../lib/node_modules" "$(NODE)" "$(WEB)/test/screenshots.mjs" "$(DOC_SHOTS)"
+	python3 "$(WEB)/tools/compose_screenshots.py" "$(DOC_SHOTS)" docs/images
 
 test: test-native parity anim-parity e2e ## 全部测试（stack test + 网页两组一致性 + e2e）
 	@echo "== 全部测试通过"

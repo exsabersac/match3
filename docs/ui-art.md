@@ -2,9 +2,9 @@
 
 本文说明游戏的美术风格、贴图清单与生成方式。规则层（`src/Match3/*`）完全不受影响。`tools/gen_assets.py` 生成 `assets/`，网页版再由 `web/tools/gen_web_atlas.py` 把它重新打包成 2x WebP 图集（只收棋盘 / HUD 贴图与关卡名，文字用浏览器字体画），见 [web.md §2.5 资源管线](web.md#25-资源管线)。
 
-> **SDL2 桌面版已于 2026-10-05 移除**（`refactor/web-only`），网页是唯一前端。原桌面版的「加载与降级」「开发用环境变量」「复现 / 截图」「高分屏 / Retina」（含 SDF 字体设想）各节已删除，桌面专用的 `zh_*` / `g_*` 文字贴图与 `@` 尺寸变体也已从生成器与 `assets/` 删除（`refactor/web-only-2`；旧内容见 git 历史）。「连击表现」里提到的 `app/UI/*` 模块描述的是原桌面版实现，留作历史记录；时间线、帧数、颜色等数值仍是现行规格（来自 `app/pure` 的 `ComboFx` / `UI.Presentation`，网页经 `m3Meta` 读同一份）。本页三张截图（`screenshot-l16.png`、`combo-strip.png`、`end-of-step-strip.png`）是原桌面版拍的，棋盘画法与网页版相同。
+> **SDL2 桌面版已于 2026-10-05 移除**（`refactor/web-only`），网页是唯一前端。原桌面版的「加载与降级」「开发用环境变量」「复现 / 截图」「高分屏 / Retina」（含 SDF 字体设想）各节已删除，桌面专用的 `zh_*` / `g_*` 文字贴图与 `@` 尺寸变体也已从生成器与 `assets/` 删除（`refactor/web-only-2`；旧内容见 git 历史）。「连击表现」里提到的 `app/UI/*` 模块描述的是原桌面版实现，留作历史记录；时间线、帧数、颜色等数值仍是现行规格（来自 `app/pure` 的 `ComboFx` / `UI.Presentation`，网页经 `m3Meta` 读同一份）。本页三张截图（`screenshot-l16.webp`、`combo-strip.webp`、`end-of-step-strip.webp`）由 `make screenshots E2E_PORT=8831` 用无头 Chrome 从网页版截取并拼接（脚本 `web/test/screenshots.mjs` + `web/tools/compose_screenshots.py`，关卡与种子写在脚本里，可复现）。
 
-![关卡 16「大师」](images/screenshot-l16.png)
+![关卡 16「大师」](images/screenshot-l16.webp)
 
 ## 风格
 
@@ -129,9 +129,9 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 每轮约 30～36 帧（0.5～0.6 s），实测 4 连锁全程约 2.2 s，5 连锁约 2.8 s（从松开鼠标到最后一轮落定，不含步末阶段）。
 
-![5 连锁逐轮回放：每行一轮，四列依次是高亮停留、消失、下落补子、本轮落定；左下角是时间戳](images/combo-strip.png)
+![4 轮连锁逐轮回放：每行一轮，四列依次是高亮停留、消失、下落补子、本轮落定](images/combo-strip.webp)
 
-上图：第 5 关、种子 10、交换 (4,2)↔(5,2)（原桌面版截图），第 2～5 轮依次出现 x2 浅金、x3 橙、x4 红、x5 紫的「连击」弹字和「+N」得分浮字。
+上图：第 5 关、种子 10，按提示走到第 13 步的 4 轮连锁（网页版竖屏 390×844 截取棋盘区域），第 2～4 轮依次出现 x2 浅金、x3 橙、x4 红的「连击」弹字和「+N」得分浮字（x5 紫同理）。
 
 ### 步末阶段（`PhEnd`）
 
@@ -150,9 +150,9 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 - **时长控制**：同一时刻连续的步末段（1～4）合计不超过 `endBudgetFrames` = 36 帧（≈0.6 s），超出时按比例压缩，每段至少 8 帧。常见情况：只有巧克力或藤蔓一段 0.3 s；蔓延 + 蜗牛 0.6 s；终章那种倒计时 + 皮带 + 蔓延 + 蜗牛全都有时压成 8 + 8 + 10 + 10 帧 = 0.6 s。自动洗牌很少出现、又需要让玩家看清，所以不计入预算，单独 0.37 s。
 - 道具（锤子 / 十字 / 自由交换）按规则只有蔓延，没有倒计时 / 皮带 / 蜗牛；无效交换 / `NoMatch` / 被拒道具规则上什么都不发生，`mtEnd` 为空，不会播任何步末动画（`trace_rejected_move_is_empty` 锁定）。
 - 回放期间（包括步末阶段）HUD 的步数已经是结算后的值；倒计时数字在 `StTick` 段的中点从旧值变成新值，和盘面一致。「下一步可能蔓延到的格子」的呼吸光预告只在静止时画，避免跟正在长出来的格子混在一起。
-![步末阶段逐段截图：每行一种效果，四列依次是起始、1/3、2/3、落定](images/end-of-step-strip.png)
+![步末阶段逐段截图：每行一种效果，四列依次是起始、1/3、2/3、末帧](images/end-of-step-strip.webp)
 
-上图从上到下：巧克力蔓延、藤蔓蔓延、蜗牛爬行、传送带移位、倒计时减一、蒸汽 + 自动洗牌、同一步里四种效果齐全（终章），每行左侧标了复现用的关卡 / 种子 / 交换。两张拼图是原桌面版逐帧截取后拼接的，**不由** `gen_assets.py` 生成。
+上图从上到下：巧克力蔓延（第 5 关）、藤蔓蔓延（第 10 关）、蜗牛爬行（第 28 关）、传送带移位（第 14 关）、倒计时减一（第 12 关）、自动洗牌（第 36 关，第 2 步），种子均为 1，都是按提示走到第一次出现该段的那一步。两张拼图由 `make screenshots` 从网页版逐帧截取后拼接，**不由** `gen_assets.py` 生成。
 
 - 测试：`trace_end_steps_replay_to_trySwap_final` 对全部关卡 × 3 个种子的每个成功交换按时间线重放（轮 → 步末 → 轮……），要求每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，最后等于 `trySwap` 的终盘，并且抽样必须覆盖全部六种效果；`trace_end_steps_boosters_replay`、`trace_end_snail_push_and_turn`、`trace_end_spread_from_adjacent_source` 分别覆盖道具、蜗牛推 / 掉头、蔓延来源方向。
 

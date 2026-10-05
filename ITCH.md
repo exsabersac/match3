@@ -16,7 +16,7 @@ cd web/dist && zip -r ../match3-web-itch.zip .   # index.html 必须在 zip 根�
 
 - [ ] 上传 `web/match3-web-itch.zip`，项目类型选 HTML，勾选「This file will be played in the browser」
 - [x] 包含仓库根目录的 `README.md` 与 `LICENSE`（BSD-3-Clause）
-- [ ] 短 GIF / 截图：交换、连锁连击（逐轮回放 + 连击 x2…x5 弹字，可参考 `docs/images/combo-strip.png`）、步末动画（巧克力 / 藤蔓蔓延、蜗牛、传送带、倒计时、自动洗牌，可参考 `docs/images/end-of-step-strip.png`）、巧克力、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、锁链、火箭冰冻、窗帘、双面块、彩蛋、染色瓶、时间精灵、蒸汽、地毯、蜗牛、果汁机、传送门、气球、饼干、飞碟、选关（`M`）
+- [ ] 短 GIF / 截图：交换、连锁连击（逐轮回放 + 连击 x2…x5 弹字，可参考 `docs/images/combo-strip.webp`）、步末动画（巧克力 / 藤蔓蔓延、蜗牛、传送带、倒计时、自动洗牌，可参考 `docs/images/end-of-step-strip.webp`）、巧克力、宝箱、保险箱、蜂蜜罐、蛋糕、魔法帽、锁链、火箭冰冻、窗帘、双面块、彩蛋、染色瓶、时间精灵、蒸汽、地毯、蜗牛、果汁机、传送门、气球、饼干、飞碟、选关（`M`）
 - [ ] 封面图 630×500（itch）：棋盘 + 标题
 - [x] 页面文案草稿就绪（见下方 **页面文案**）：8×8 / 五色三消，灵感来自开心消消乐；Haskell（GHC wasm）+ 浏览器 Canvas
 

@@ -114,8 +114,7 @@ SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表
 - `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
 - **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成（元素类重构第 6 刀起由元素的 `Renders.faceBase` 给出类型标签与基本字段，缺省时），`Custom` 元素统一是
   `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素的 `Renders.face`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
-  - **不用改**：单格、不带颜色、没有专门画法的 `Custom`——网页 `CELL_ART.custom` 的通用画法画「贴图名 = 元素名 + 层数角标」；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 只跳过文字图
-    `g_*` / `zh_*` 与 `@` 变体；关名文字图 `name_*` 要收）。降级色缺省是灰色。
+  - **不用改**：单格、不带颜色、没有专门画法的 `Custom`——网页 `CELL_ART.custom` 的通用画法画「贴图名 = 元素名 + 层数角标」；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 收 `assets/` 的全部贴图）。降级色缺省是灰色。
   - **要改**：① 新的 `Cell` 构造器（同时给它的元素写 `Renders.faceBase`）；② 要专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
     在 `CUSTOM_ART` / `primarySprite` 补画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 `Renders.face` 里给出字段（`Api` 不用改）、
     `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时只在 `UI.Presentation.elementRGBTable` 补一项（网页经 `m3Meta` 读同一张表）。
@@ -165,9 +164,9 @@ SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表
 - **HUD 关名**：同原桌面版 `UI.HudArt`（`zhA ren art ("name_" ++ show li) 66 11 24`），全部关卡画预渲染文字图 `name_<关卡下标>`
   （第 N 关 = `name_<N−1>`，`tools/gen_assets.py` 按关卡表烘焙，与原桌面版同一张图；如第 47 关 `name_46`「变色龙」、第 48 关 `name_47`「魔法格」）。
   `hud.js` 的 `levelName` 按原图宽高比画在原来 21 设计单位高的关名槽里（规则角标布局不变），超出槽宽时等比缩小；图集里没有对应文字图时
-  退回浏览器字体画 `state.name`（当前 49 关都有文字图，没有关卡走降级）。网页图集因此收了 `name_*`（仍不收 `g_*` / `zh_*`）。
+  退回浏览器字体画 `state.name`（当前 49 关都有文字图，没有关卡走降级）。网页图集因此收了 `name_*`（它是生成器里唯一的文字贴图）。
 - **音效 / BGM 开关**（`audio.js`，偏好存 localStorage `m3-sfx` / `m3-bgm`）：HUD 两枚芯片同原桌面版 `UI.HudArt.drawSoundChipsArt`——
-  46 × 28 的 `panel_chip`（圆角 10）+ 18 设计单位的单字（效 / 乐，关掉为 静；网页图集不收 `zh_*`，字用浏览器字体），两枚间隔 4。
+  46 × 28 的 `panel_chip`（圆角 10）+ 18 设计单位的单字（效 / 乐，关掉为 静；字用浏览器字体），两枚间隔 4。
   竖屏放在目标条（或雪怪血条）这一行的右端，目标条让出 104 单位；横屏放在提示区第一行右端（目标条下方），提示第一行让出 104、其余行整宽。
   `drawHud` 返回芯片矩形 `sfx` / `bgm` 与提示行外框 `msg`。2026-10-05 起芯片只显示状态、不接点击（太小，够不到 44 CSS px 触控尺寸），开关在菜单「音效 / 音乐」与 `K` / `B` 键。修正前（38724d2 起）芯片走 `button` 的单字大号（32，给 ‹ › 用），
   字形溢出 28 高的芯片，且芯片压在提示行上；e2e 3k 用真实绘制的 `fillText` 外框核对（见 testing.md）。
@@ -195,7 +194,7 @@ SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表
 | 元素展示盘 | 环境变量 `MATCH3_SHOWCASE`（`UI.Env`） | **已迁**：`?showcase=1`（`UI.Showcase` 移进 `app/pure`） | 已删（`UI.Showcase` 留） |
 | 小项：步数 ≤ 5 闪烁、加速提示、无步时提示洗牌 | `drawHudArt` / `speedUp` / `keyHint` | **已迁** | 可删 |
 | 交换（点选 / 拖划）、回放加速、撤销、提示、重开、本关说明、音效 / BGM、结算遮罩、粒子 / 浮字 / 震屏 | `UI.Input`、`UI.Cascade`、`UI.Playback`、`UI.Audio` 等 | 早已有 | 已删（`ComboFx`、`UI.Presentation` 等 `app/pure` 模块留；`UI.Sound` 只给桌面用，已删） |
-| 窗口缩放 / HiDPI | `MATCH3_SCALE`、`Art` 的 `@` 尺寸变体 | 早已有：自适应布局 + dpr（PC 壳改窗口大小即重排，动画不断） | 可删 |
+| 窗口缩放 / HiDPI | `MATCH3_SCALE`、`Art` 的 `@` 尺寸变体 | 早已有：自适应布局 + dpr（PC 壳改窗口大小即重排，动画不断） | 已删（`@` 变体随 `refactor/web-only-2` 从生成器删除） |
 | **不补**：SDL 初始化与窗口参数（`MATCH3_SCALE`、渲染器标志）、BMP 读图（`Art.loadArt`）、整套几何降级 UI（`UI.Draw` / `HudPrim` / `HudBlocks` / `Cell.Prim*`；网页是逐格降级 + 护栏）、`Esc` / `Q` 退出（归 PC 壳）、16 ms 帧长（网页 1/60 s） | `app/Main.hs`、`app/Shell/*`、`app/Art.hs`、`app/UI/*` | 不补（SDL 实现本身的东西） | 已删（`tools/gen_assets.py` 生成的 `assets/` 仍是网页图集的来源，留） |
 
 触屏：每个按键都有触屏入口（暂停页第三列列出）：`H` / `U` 是常驻按钮，其余在菜单里（`K` / `B` = 菜单「音效 / 音乐」），`N` 对应点结算面板。
@@ -239,7 +238,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 ```
 
 - 由 `web/build.sh` 第 3b 步调用，结果缓存在 `web/.cache/art`，`assets/` 或生成器变动才重新生成；
-- 不收文字图 `g_` / `zh_`（网页用浏览器字体）和 `@` 变体，保留角标 `badge_*`；收关名文字图 `name_<i>`（49 张，HUD 关名同原桌面版画这张图）；
+- 收 `assets/` 的全部 174 张贴图，含角标 `badge_*` 与关名文字图 `name_<i>`（49 张，HUD 关名同原桌面版画这张图）；原桌面版的文字图 `g_` / `zh_` 与 `@` 变体已从生成器删除（`refactor/web-only-2`），网页其余文字用浏览器字体；
 - 着色 / 加色在 JS 里用离屏画布缓存（对应原桌面版 `Art` 的染色 / 加色绘制）；
 - 格子物理像素超过 112（dpr3 手机约 134、平板约 167）时轻微放大，`imageSmoothingQuality = "high"`，观感可接受。
 
@@ -269,7 +268,7 @@ web/tools/gen_web_atlas.py（Pillow）─────┘→ atlas.webp（174 张
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心规则与 `app/pure`，470 个） |
+| `make test-native` | `stack test`（核心规则与 `app/pure`，466 个） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子 …"` 可改） |
 | `make e2e [SHOTS=目录]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器） |
 | `make test` | 以上四组测试依次跑 |
@@ -365,7 +364,7 @@ itch.io 文案见 [`ITCH.md`](../ITCH.md)；网页版就是要上传的游戏本
 
 | 测试 | 守什么 | 怎么跑 |
 | --- | --- | --- |
-| `stack test` | 核心规则（470 个） | `make test-native` |
+| `stack test` | 核心规则（466 个） | `make test-native` |
 | 状态一致性 `Parity.hs` ↔ `node-parity.mjs` | 同关卡同种子，原生与 wasm 每步 `m3Swap` / `m3Undo` 输出逐字节相同 | `make parity`（40 组，含迁自桌面的 `boost` / `daily` / `advance` 走法 7 组（道具、洗牌、每日挑战、结局后前进，并比较 `m3Progress` / `m3Badge` / `m3MapJump` / `m3Restart` / `m3Showcase`），含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关种子 1 / 2 与种子 140 的 `cham-rainbow` 走法、第 48 关种子 2–5 的 `fix-…` 固定走法——第 3 步在魔法地格上引爆扩圈爆炸）；第 44 关 3 组用 `combo` / `combo-bomb` 走法走到变身步） |
 | 动画一致性 `AnimParity.hs` ↔ `node-anim-parity.mjs` | 每步全部帧 JSON 逐字节相同（含加速），并与 ComboFx `runPlayer` 核对帧数 | `make anim-parity`（34 组，含 `boost` 走法 3 组，含第 41–48 关（第 45 关种子 1–3、第 46 关种子 1 / 28 / 30、第 47 关同上 3 组、第 48 关同上 4 组）；第 43 关 3 组覆盖毛球跳格，第 44 关 3 组覆盖彩虹 × 直线 / 炸弹变身，第 47 关覆盖步末换色与彩虹 × 变色龙，第 48 关覆盖扩圈爆炸） |
 | e2e `web/test/e2e.mjs` | 无头 Chrome：真实指针交换、无效交换退回、连锁、撤销、特殊块、步末、果冻 / 气泡、7 种视口、动画中途改尺寸、第 41 / 44 关规则角标（不出框不重叠）与第 42 关无角标、逐关贴图护栏与 HUD 目标中文标签、第 43 关毛球浮动（像素测平移）/ 跳格、第 44 关变身段、第 45 关雪怪 Boss（四格贴图、血条、多格护栏反证、扣血 / 召唤 / 受伤截图）、第 46 关掉落口（标记、补下饼干的下落段、补间结束后标记格 = bvDrops）、真实绘制钩子（`drawImage` 按调用序记录：第 46 / 47 关掉落口画在桌面坐标、第 47 关变色龙先画 `gem_c<v+1>` 再叠环、换色段前 / 后半段颜色）、第 47 关 HUD 目标图标与通用画法反证、逐关地面层贴图与 HUD 关名 `name_<i>` 的真实绘制、第 48 关魔法地格（贴图位置与像素、4 组扩圈爆炸的真实绘制格数 = EvBlast 格数）、终章（第 47、48 关过关进入下一关，第 49 关「宽域」Won）、音效 / BGM 开关芯片（真实绘制的字形在芯片内、不大于按钮、不压提示行）、逐关失败提示（无「箱子」/ 内部名，碎石关「砸开碎石」）、第 8 / 39–45 / 47 / 48 关玩到失败的结算文字、serve.py 的 Content-Type、无控制台错误 | `make e2e`（端口 `E2E_PORT`，默认 8765） |

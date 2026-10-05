@@ -67,7 +67,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
-| `Match3.GoalLabel` | 目标的中文显示名（合 main 9f5504e 后从 `Match3.View` 下移）：`goalViewLabel :: GoalView -> String`、`countLabel`、`colorLabel`、`namedGoalLabelTable`（名字目标的中文名，由 `Kind.label` / `GroundKind.groundLabel` 推出：果冻 / 气泡 / 魔法石 / 毛球 / 雪怪 / 变色龙）、`namedLoseHint`（`Kind.loseHint`，雪怪）。`Match3.View` 重新导出并用它定义 `goalLabel`（对外 API 不变）；`Game.Outcome.loseHint` 与桌面标题目标段 `goalLine` / `goalBracket` 也读它，所以放在 `Game.*` 之下、`View` 之上 |
+| `Match3.GoalLabel` | 目标的中文显示名（合 main 9f5504e 后从 `Match3.View` 下移）：`goalViewLabel :: GoalView -> String`、`countLabel`、`colorLabel`、`namedGoalLabelTable`（名字目标的中文名，由 `Kind.label` / `GroundKind.groundLabel` 推出：果冻 / 气泡 / 魔法石 / 毛球 / 雪怪 / 变色龙）、`namedLoseHint`（`Kind.loseHint`，雪怪）。`Match3.View` 重新导出并用它定义 `goalLabel`（对外 API 不变）；`Game.Outcome.loseHint` 与标题目标段 `goalLine` 也读它，所以放在 `Game.*` 之下、`View` 之上 |
 | `Match3.Element` | 门面：再导出 `Types` / `World` / `Builtin` / `Event` / `Level`、`Special` / `Board.Refill`（第 8 刀）；能力类 `Ability`、类型级 `Kind` / `Layer`、关卡级 `Mechanic` 单独 import（方法名 `color` / `pushable` / `falls` 等较通用，避免与使用方撞名） | 自身无实现 |
 | `Match3.Element.Types` | 规则与查询结果的数据类型：`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、第 8 刀的特殊块形状规则 `ShapeRule { shapeName, shapeSpawn :: ShapeCtx -> MatchRun -> Maybe [(Pos, Cell)] }`（上下文 `ShapeCtx { scPrefer, scRuns, scClearable }`）与组合规则 `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`、连线 `MatchRun`（第 8 刀从 `Board.Match` 移来，原处再导出）、`CounterKey`（再导出自 `Match3.Counts`，第 4 刀前叫 `Counter`）、`Arg` / `Placement`、放置参数解析器 `ArgP`（Applicative / Alternative；`argInt` / `argColor`，跑法 `exactArgs` 精确匹配 / `prefixArgs` 前缀匹配，Haskell 特性第 8 项）、`cellSlot`；Haskell 特性第 9 项：步末规则的智能构造器 `tickRule` / `spreadRule` / `moveRule` 与共用折叠 `runEndRules`（`mapAccumL`），见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md) | 调用顺序 |
 | `Match3.Element.Ability` | 元素类重构第 1 刀：值级能力的六个小类 `Cellular` / `Matchable` / `Hittable` / `Movable` / `Countable` / `Renders`（每个方法带「普通宝石」缺省；`Renders.faceBase` 第 6 刀）、类同义词 `Element`、装箱 `SomeElement`（逐类转发）、命中结果 `Strike`、DerivingVia 原型包 `Obstacle` / `Fixed`、惰性占格 `Inert`、`abilityProbe`（逐方法取值，透明性测试用）、`sameTypeEq` | 具体元素 |
@@ -124,7 +124,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Match3.Boosters` | 锤子/十字**种子位置**（纯几何） | 扣次数与连锁（`Game.Boosters`） |
 | `Match3.Daily` | 日期种子、每日配置、三星公式；第 7 项起年 / 月 / 日是 newtype `Year` / `Month` / `Day`（`dailySeed :: Year -> Month -> Day -> Int`，月日写反是类型错误） | 每日盘面装饰（`Game.Level`） |
 | `Match3.Engine` | 三消作为通用接口的实现：`Action`（交换 / 锤子 / 自由交换 / 十字 / 提示 / 洗牌）、`Setup`、`play`（一次结算得到 `Played`：状态 / `Outcome` / `MoveTrace` / `MoveFx` / 事件 / 提示，作为 `gameStep` 的 `stepReport`；通用接口的结局类型 `o = Terminal`，`stepOutcome` / `gameOutcome` 是 `Maybe Terminal`；新玩法 8 起效果事件按本步世界 `levelWorldIn` 展开，`EvBlast` 含魔法地格扩出来的一圈）、`match3Game`、撤销规则 `match3History`、外壳实例 `match3Shell = withHistory match3History match3Game`、`toEffect` | 帧与绘制、撤销历史的存放 |
-| `Match3.View` | 第 11 刀：视图模型（纯函数）。`gameView :: GameState -> GameView`（关卡 / 夹紧下标 / 关名、每日、分数、步数与步数上限、道具 `Boosters`、连击（经 `gameStatus`）、洗牌 / 结局 / `PlayStatus`、目标 `GoalInfo`、棋盘 `BoardView`）、`titleLine` / `goalLine` / `goalBracket`（标题与提示文字）、`carpetAt` / `groundAtView`（逐格底层）、`levelDots`（进度点）、`scoreBadge`（回放 / 连击总结 / 得分徽章）、`levelViews`（关卡列表）、`cellFace` / `cellFaceWith`（单格结构化描述，元素类重构第 6 刀起由 `Renders.faceBase` 给出，宝石格按存储编码）、文字标签 `colorTag`；新玩法 5 起 `gvBoss :: Maybe BossView`（目标是「击败 Boss」时的剩余 / 满血）；`cellExtras`（单格的显示附加字段，元素的 `Renders.face` 给出，如雪怪的 q / hurt / turn / every、变色龙的 c，View 不点名元素）；桌面版与网页版都读它，见[视图模型](#视图模型第-11-刀) | 坐标、颜色、贴图（前端） |
+| `Match3.View` | 第 11 刀：视图模型（纯函数）。`gameView :: GameState -> GameView`（关卡 / 夹紧下标 / 关名、每日、分数、步数、道具 `Boosters`、连击（经 `gameStatus`）、洗牌 / 结局 / `PlayStatus`、目标 `GoalInfo`、棋盘 `BoardView`）、`titleLine` / `goalLine`（标题文字）、`levelDots`（进度点）、`scoreBadge`（回放 / 连击总结 / 得分徽章）、`levelViews`（关卡列表）、`cellFace` / `cellFaceWith`（单格结构化描述，元素类重构第 6 刀起由 `Renders.faceBase` 给出，宝石格按存储编码）；新玩法 5 起 `gvBoss :: Maybe BossView`（目标是「击败 Boss」时的剩余 / 满血）；`cellExtras`（单格的显示附加字段，元素的 `Renders.face` 给出，如雪怪的 q / hurt / turn / every、变色龙的 c，View 不点名元素）；网页读它（原桌面专用的 `goalBracket` / `carpetAt` / `groundAtView` / `colorTag`、`gvMoveCap` / `bvHint` 等已于 `refactor/web-only-2` 删除），见[视图模型](#视图模型第-11-刀) | 坐标、颜色、贴图（前端） |
 
 ### 通用层（`src/Engine/`）
 
@@ -133,7 +133,6 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Engine.Game` | 通用游戏接口 `Game cfg s a e o r`（record-of-functions；`r` 是整步报告）、`Step`（含 `stepReport :: Maybe r`）、`runActions` / `finalState` / `stepEffects` / `rejectedStep`、种子约定 | 任何具体规则 |
 | `Engine.History` | 段 3：通用撤销历史 `History{histNow, histPast}`、`Undoable a = Act a \| Undo`、`HistoryPolicy{hpLimit, hpRecord, hpSnapshot, hpRestore}`、`withHistory`（给任意 `Game` 套一层撤销；终局后仍可撤销）、`pushHistory` / `replaceNow` / `undoHistory` / `commitStep` | 哪些动作算走步（由游戏的 policy 给出） |
 | `Engine.Effect` | 通用效果事件 `Effect{efBeat, efKind, efSubject, efSpots, efAmount}`、按节拍分组 `beats`（第 8 项起每组是 `NonEmpty Effect`） | 帧数与样式 |
-| `Engine.GridUI` | 第 11 刀：通用网格 UI 组件（不绑定三消）：网格几何 `GridGeom{ggLeft, ggTop, ggCell, ggRows, ggCols}` 与 `gridCellAt`（像素 → 格）/ `gridCellOrigin`（格 → 像素）/ `gridCells`（行优先）/ `orthoAdjacent`；两步点选 `gridClick :: Maybe c -> c -> Click c`（`ClickSelect` / `ClickDeselect` / `ClickPair`）；拖动松手 `gridDragRelease adj from mTo`；高亮集合 `Highlight{hlSelected, hlHint, hlFlash, hlPinned}` 与 `isSelected` / `isHinted` / `isFlashing`；Haskell 特性第 7 项起像素分量是 newtype `PxX` / `PxY`：`gridCellAt :: GridGeom a -> PxX a -> PxY a -> Maybe (Int, Int)`、`gridCellOrigin :: GridGeom a -> (Int, Int) -> (PxX a, PxY a)`，`pxXY` 拆回二元组 | 什么算合法交换（由游戏传入相邻判定）、绘制 |
 | `Engine.Stream` | Haskell 特性第 4 项：没有空构造器的惰性无穷流 `Stream a = a :> Stream a`（`unfoldS` / `iterateS` / `draws` / `headS` / `takeS` / `splitAtS` / `findS`，全是全函数）；拒绝采样（`Board.Random`）与自动洗牌的有限重试（`Game.Shuffle.ensurePlayableWith`）用它 | 采样什么、何时算合格 |
 | `Engine.Optics` | Haskell 特性第 6 项：手写 van Laarhoven 光学（只依赖 base）：`Lens` / `Traversal` / `Prism`（最小的 `Choice` profunctor）、`lens` / `prism` / `prism'` / `only` / `ignored` / `_Just`、`view` / `over` / `set` / `preview` / `has` / `toListOf` / `review` 与中缀 `^.` / `%~` / `.~` / `^?` / `^..` / `&`；定律在 `test/Spec/Optics.hs` | 具体游戏的光学（`Match3.Types.Optics`、`Match3.Game.State`） |
 | `Engine.Playback` | 纯播放层：阶段机 `Stages`、播放器 `Player`（帧号 / 加速）、`stepPlayer` / `playerProgress` / `runPlayer`（第 4 项起帧计数严格、空事件表不入累积器）；固定队列 `Cue` / `cueStages` / `effectCues` | 阶段内容（由游戏给出）、SDL |
@@ -325,7 +324,7 @@ instance Kind StoneE where
 | `EvTick` / `EvBelt` / `EvSpread` / `EvMove` | `mtEnd` 的每个 `EndStep` | countdown / belt / vine·choco·steam / snail | 原格 → 新格 |
 | `EvShuffle` | `mtShuffle` | — | — |
 
-前端按事件种类查**表现表** `UI.Presentation.presentationTable`（第 10 刀起的唯一一张表，取代原来的 `ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.spreadProgress`（生长曲线）以及散在 `UI.BoardArt.waveTint` / `UI.HudArt` / `UI.HudPrim` / `UI.EndStage` 的颜色与贴图常量；这些桌面模块已随 SDL2 前端移除）；步末阶段怎么画由网页 `web/www/render.js` 的 `drawEndStage`（阶段 → 绘制）分派，元素名 → 颜色在 `UI.Presentation.elementRGBTable`。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
+前端按事件种类查**表现表** `UI.Presentation.presentationTable`（第 10 刀起的唯一一张表，取代原来的 `ComboFx.endStageTable`（种类 → 阶段与基础时长）、`UI.Playback.endCrumbTable`（阶段 → 粒子）、`UI.EndStage.spreadProgress`（生长曲线）以及散在 `UI.BoardArt.waveTint` / `UI.HudArt` / `UI.HudPrim` / `UI.EndStage` 的颜色常量；这些桌面模块已随 SDL2 前端移除）；步末阶段怎么画由网页 `web/www/render.js` 的 `drawEndStage`（阶段 → 绘制）分派，元素名 → 颜色在 `UI.Presentation.elementRGBTable`。波次级的高亮 / 消失 / 粒子 / 得分浮字读 `ComboFx.WaveView` 里本轮的效果事件（`wvCleared` = EvClear 格、`wvScore` = EvScore 之和）；底图快照（消除前 / 挖洞 / 落定盘面）与下落映射仍取自 `CascadeWave`（事件是差量描述，不含整盘快照）。护栏：`trace_events_consistent_with_trace`（含逐轮严格相等：EvClear 格序 = `cwCleared`、EvScore 和 = `cwScore`）。
 
 ### 前端表现表（第 10 刀）
 
@@ -336,27 +335,26 @@ data Presentation = Presentation
   { prLook   :: Look              -- LookClear | LookScore | LookCombo | LookWithClear | LookStage StageKind
   , prFrames :: Int               -- 基础帧数（1 帧 ≈ 16.7 ms；0 = 不单独占时长）
   , prColor  :: Maybe RGB         -- 固定主色（Nothing = 按格子 / 连击等级 / 元素名取色）
-  , prSprite :: Maybe SpriteName  -- 贴图版用到的光效 / 精灵
   , prCrumbs :: Crumbs            -- NoCrumbs | CrumbsAtSources RGB | CrumbsByElement
   , prSound  :: Maybe SoundName   -- 音效名（内置：EvClear = "clear"、EvBlast = "special"，其余 Nothing）
   }
 ```
 
-「读取方」一列是第 10 刀时的读表位置；其中 `UI.*`（`app/UI`）是原 SDL2 桌面版模块，已随桌面版移除，网页经 `m3Meta`（`UI.WebMeta`）读同一张表、在 `web/www/render.js` / `hud.js` 里画。
+「读取方」一列是第 10 刀时的读表位置；其中 `UI.*`（`app/UI`）是原 SDL2 桌面版模块，已随桌面版移除，网页经 `m3Meta`（`UI.WebMeta`）读同一张表、在 `web/www/render.js` / `hud.js` 里画。原桌面贴图版专用的贴图名列 `prSprite`（`spark` / `snail` / `zh_combo`）与 `clearTint` / `scorePopRGB` / `clearSprite` / `comboPopSprite` 已于 `refactor/web-only-2` 删除。
 
-| 事件 | 表现方式 | 帧数 | 主色 | 贴图 | 碎屑 | 读取方 |
-|------|----------|------|------|------|------|--------|
-| `EvClear` | `LookClear`（高亮 → 消失） | 12 | (255,250,220)（第 1 轮；连击轮用等级色） | `spark` | — | `ComboFx.waveFlashFrames`、`UI.BoardArt.waveTint`（`clearTint`）、`UI.Cascade`（`clearSprite`） |
-| `EvHit` / `EvBlast` / `EvDrain` | `LookWithClear`（随消除一起表现） | 0 | — | — | — | — |
-| `EvScore` | `LookScore`（得分浮字） | 48 | (255,244,200)（第 1 轮；连击轮用等级色） | — | — | `ComboFx.scorePopLife`、`UI.HudArt` / `UI.HudPrim`（`scorePopRGB`） |
-| `EvCombo` | `LookCombo`（「连击 xN」弹字 + 震屏） | 54 | 等级色 | `zh_combo` | — | `ComboFx.comboPopLife`、`UI.HudArt`（`comboPopSprite`） |
-| `EvTick` | `LookStage StTick` | 10 | (255,90,60) | `spark` | 来源格 (255,110,70) | `ComboFx.endStageBase`、`UI.EndStage.drawEndTick`、`UI.Playback.endCrumbs` |
-| `EvBelt` | `LookStage StBelt` | 14 | — | — | — | 同上 |
-| `EvSpread` | `LookStage StSpread` | 18 | 按元素名（`spreadGlowFor`） | `spark` | 按元素名（`CrumbsByElement`） | 同上；生长曲线 `spreadCurveFor`（vine 分 4 段、choco 先快后慢、steam 匀速） |
-| `EvMove` | `LookStage StSnail` | 18 | — | `snail` | — | 同上 |
-| `EvShuffle` | `LookStage StShuffle` | 22 | (200,150,255) | `spark` | — | 同上 |
+| 事件 | 表现方式 | 帧数 | 主色 | 碎屑 | 读取方 |
+|------|----------|------|------|------|--------|
+| `EvClear` | `LookClear`（高亮 → 消失） | 12 | (255,250,220)（第 1 轮；连击轮用等级色） | — | `ComboFx.waveFlashFrames`、`UI.BoardArt.waveTint` |
+| `EvHit` / `EvBlast` / `EvDrain` | `LookWithClear`（随消除一起表现） | 0 | — | — | — |
+| `EvScore` | `LookScore`（得分浮字） | 48 | (255,244,200)（第 1 轮；连击轮用等级色） | — | `ComboFx.scorePopLife`、`UI.HudArt` / `UI.HudPrim` |
+| `EvCombo` | `LookCombo`（「连击 xN」弹字 + 震屏） | 54 | 等级色 | — | `ComboFx.comboPopLife`、`UI.HudArt` |
+| `EvTick` | `LookStage StTick` | 10 | (255,90,60) | 来源格 (255,110,70) | `ComboFx.endStageBase`、`UI.EndStage.drawEndTick`、`UI.Playback.endCrumbs` |
+| `EvBelt` | `LookStage StBelt` | 14 | — | — | 同上 |
+| `EvSpread` | `LookStage StSpread` | 18 | 按元素名（`spreadGlowFor`） | 按元素名（`CrumbsByElement`） | 同上；生长曲线 `spreadCurveFor`（vine 分 4 段、choco 先快后慢、steam 匀速） |
+| `EvMove` | `LookStage StSnail` | 18 | — | — | 同上 |
+| `EvShuffle` | `LookStage StShuffle` | 22 | (200,150,255) | — | 同上 |
 
-查询函数：`presentationFor`（查内置表）/ `presentationIn`（查给定的表）、`stageKindOf`（事件 → 步末段，非步末种类按蔓延段）、`stagePresentation` / `stageFrames`（段 → 那一行 / 基础帧数）、`presentationRGB`、`effectSound`。几何版不用贴图，只用颜色与帧数。
+查询函数：`presentationFor`（查内置表）/ `presentationIn`（查给定的表）、`stageKindOf`（事件 → 步末段，非步末种类按蔓延段）、`stagePresentation` / `stageFrames`（段 → 那一行 / 基础帧数）、`presentationRGB`、`effectSound`。
 
 **缺省表现（扩展元素）**：`EventKind` 是封闭的，扩展元素的步末效果也落在某个已有种类上（例如测试里的 `hopper` 产出 `EvMove`，按蜗牛段播放）；按元素名细分的表里没有的名字用明确的缺省——生长曲线 `defaultSpreadCurve = CurveLinear`（匀速）、前沿柔光 `defaultSpreadGlow = (255,255,255)`（白）、`CrumbsByElement` 查不到颜色时不迸碎屑。整张表里查不到的种类（将来新增 `EventKind` 忘了加行）用 `defaultPresentation`：蔓延段、18 帧、无颜色 / 贴图 / 碎屑 / 音效（与第 10 刀前 `stageKindFor` / `endStageBase` 的缺省相同）。测试 `presentation_extension_defaults` 锁定这些缺省。
 
@@ -375,30 +373,30 @@ data Presentation = Presentation
 
 ```haskell
 data GameView = GameView
-  { gvLevel, gvLevelIndex :: Int      -- gsLevel 原值（标题 / 网页 / 几何版进度点）；夹紧下标（贴图版徽章、步数上限）
+  { gvLevel, gvLevelIndex :: Int      -- gsLevel 原值（标题 / 网页）；夹紧下标（关名图、进度点）
   , gvLevelName, gvRawName :: String  -- 夹紧下标的关名（标题）；原下标关名，无此关 "?"（网页）
-  , gvDaily :: Bool, gvScore, gvMoves, gvMoveCap :: Int
+  , gvDaily :: Bool, gvRules :: [String], gvScore, gvMoves :: Int
   , gvBoosters :: Boosters            -- bHammers / bFreeSwaps / bCrossClears
   , gvCombo :: Int                    -- 经通用接口 gameStatus 取
   , gvShuffled :: Bool, gvOver :: Maybe Terminal
   , gvStatus :: PlayStatus            -- PlayWon s | PlayCleared s n | PlayLost s | PlayShuffled | PlayOn
   , gvGoal :: GoalInfo                -- giGoal / giView / giProgress / giTarget / giKind / giText / giName / giLoseHint
-  , gvBoard :: BoardView              -- bvBoard / bvHint（gsHint）/ bvFoundHint（findHint，网页）/ bvLastCleared / bvGround
-  }                                   --   / bvBelts / bvPortals / bvUfos / bvCarpets / bvCarpetOpen
+  , gvBoss :: Maybe BossView          -- 雪怪血条（新玩法 5）
+  , gvBoard :: BoardView              -- bvBoard / bvFoundHint（findHint）/ bvLastCleared / bvGround
+  }                                   --   / bvBelts / bvPortals / bvUfos / bvCarpets / bvCarpetOpen / bvDrops
 ```
 
 | 函数 | 用途 | 读取方 |
 |------|------|--------|
 | `titleLine gv` | 标题（不含 `"  \|  "` 与消息） | `Match3Web.Api`（原桌面窗口标题） |
-| `goalLine` / `goalBracket` | 标题目标段 / 提示消息里的收集进度 `[RED 3/20]` | `titleLine`（原桌面 `UI.Input.collectMsg`，已移除） |
-| `carpetAt bv pos` / `groundAtView bv pos` | 逐格地毯标记（`CarpetNone` / `CarpetCovered` / `CarpetOpen`）/ 地面层 | 网页 `encodeState`（原桌面 `UI.BoardPrim` / `UI.BoardArt`） |
+| `goalLine` | 标题目标段 | `titleLine` |
 | `bvDrops bv` | 新玩法 6：掉落口格（`Element.Level.levelDrops`；没有掉落口为空） | 网页 `state.drops`（原桌面 `drawDropsArt` / `drawDropMark`） |
-| `levelDots cur maxReached` | 各关进度点 `DotCurrent` / `DotDone` / `DotUnlocked` / `DotLocked`（贴图版传夹紧下标与最高解锁；几何版传原值与 −1） | 原桌面 `UI.HudArt` / `UI.HudBlocks.hudLevel`（已移除；网页自己画进度） |
-| `scoreBadge replay summaryLeft best gv` | 右下角：`BadgeCombo n`（回放中连击 ≥2）/ `BadgeRolling 分`（回放中）/ `BadgeSummary n`（播完后的总结）/ `BadgeScore 洗牌? 分`；回放状态由前端从 `Cascade` 换成 `ReplayView{rvCombo, rvShownScore}` | 原桌面 `UI.HudArt` / `UI.HudBlocks.hudComboBadge`（已移除） |
+| `levelDots cur maxReached` | 各关进度点 `DotCurrent` / `DotDone` / `DotUnlocked` / `DotLocked`（贴图版传夹紧下标与最高解锁；几何版传原值与 −1） | 网页 `m3Progress` 的 `dots`（原桌面 `UI.HudArt` / `UI.HudBlocks.hudLevel`） |
+| `scoreBadge replay summaryLeft best gv` | 右下角：`BadgeCombo n`（回放中连击 ≥2）/ `BadgeRolling 分`（回放中）/ `BadgeSummary n`（播完后的总结）/ `BadgeScore 洗牌? 分`；回放状态由前端从 `Cascade` 换成 `ReplayView{rvCombo, rvShownScore}` | 网页 `m3Badge`（原桌面 `UI.HudArt` / `UI.HudBlocks.hudComboBadge`） |
 | `levelViews` | 关卡列表（序号 / 名字 / 步数 / 目标） | 网页 `apiLevels` |
 | `cellFace cell` | 单格结构化描述（类型标签 + 按固定顺序的 `CellField` 字段） | 网页 `encodeCell` |
 
-网格交互在通用层 `Engine.GridUI`（见[模块地图](#通用层srcengine)）：原 SDL 桌面版用它做像素 ↔ 格（`GridGeom`）、点选（`gridClick`）、拖动交换（`gridDragRelease adjacent`）与本帧高亮（`Highlight`）。桌面版移除后它暂无前端调用（网页的命中判定在 `web/www/main.js`），作为通用层保留，行为由 `grid_ui_*` 测试钉住。
+网格交互（像素 ↔ 格、点选 / 拖划、高亮）在网页 `web/www/main.js` / `layout.js` 里；原通用层组件 `Engine.GridUI` 只给 SDL 桌面版用，已于 `refactor/web-only-2` 删除。
 
 **加一个要显示的读数**：在 `GameView`（或 `GoalInfo` / `BoardView`）加字段并在 `gameView` 里算，网页 `Match3Web.Api` 从视图读；不要在前端再从 `GameState` 现算（`frontends_read_view_model` 扫描网页 API）。
 
@@ -509,7 +507,6 @@ data GameView = GameView
 │ src/Engine/History.hs   History / Undoable / withHistory：通用撤销历史（段 3）              │
 │ src/Engine/Effect.hs    Effect（节拍 / 种类 / 主体 / 格 / 数量）、beats                      │
 │ src/Engine/Playback.hs  Stages / Player / Tick：帧节拍、分段推进、加速、进度；Cue 队列        │
-│ src/Engine/GridUI.hs    GridGeom / gridCellAt / gridClick / gridDragRelease / Highlight：网格 UI│
 └──────────────▲───────────────────────────────▲──────────────────────────▲────────────────┘
                │ 实现 Game                      │ 用 Player + 自己的 Stages  │ 只调 gameStep match3Shell
 ┌──────────────┴─────────────┐  ┌──────────────┴──────────────┐  ┌────────┴──────────────────┐
@@ -569,7 +566,7 @@ data GameView = GameView
 2. **写 `Game` 值**：`gameNew`（只在这里用种子）、`gameStep`（纯；非法动作返回 `rejectedStep` 式的结果）、`gameOutcome`、`gameActions`、`gameStatus`、`gameEffect`。
 3. **纯测试**：参照 `test/Toy.hs` 与 `engine_toy_counter_game`——`runActions` 走到胜 / 负、非法动作被拒且不改状态、结局后拒绝一切、`gameActions` 全部被接受、效果按节拍播放的帧数（含加速）。
 4. **回放**：时间线简单就用 `effectCues` + `cueStages`；复杂时间线自己写 `Stages`（参照 `ComboFx.cascadeStages`），交给 `Player`，绘制时用 `playerProgress` 取进度。
-5. **前端**：网格类游戏直接用 `Engine.GridUI`（`GridGeom` 做像素 ↔ 格、`gridClick` / `gridDragRelease` 做点选 / 拖动、`Highlight` 做高亮）；前端要画的读数写成一个纯的视图模型模块（参照 `Match3.View`），前端只读它。
+5. **前端**：前端要画的读数写成一个纯的视图模型模块（参照 `Match3.View`），前端只读它。
 6. **外壳**：参照 `web/hs/Match3Web/Api.hs` 写接口层：把输入映射成动作并调 `gameStep`（要撤销就用 `withHistory` 套一层，历史不要放进游戏状态；前端要的额外数据放进 `stepReport`），状态与回放帧编码给 JS 绘制。
 7. **依赖检查**：新游戏与通用层之间只允许「新游戏 → Engine.*」；需要时把新的通用文件加入 `engine_layer_is_game_agnostic` 的检查列表。
 8. **文档**：在本节的分层图与模块地图里登记新模块。

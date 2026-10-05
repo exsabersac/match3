@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或任何图形库（原生只编核心库、`app/pure` 与测试；SDL2 桌面版已移除）。
-- 期望：**470** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**466** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -56,6 +56,7 @@ stack test
   - 元素类重构（2026-10，第 0–6 刀，见 [guide/08 阶段 12](guide/08-演进史.md)）：第 0 刀元素对照快照 +4（`ElementOracle`）→ 468；第 1 刀能力类 +6（`ElementAbility`）→ 474；第 2 刀 `Spec.Caps` 改写为 `Spec.Archetype`、删 `Cap` 幺半群测试（`RulesDedup` 6 → 4）、`ElementAbility` 改写 → 473；第 3 刀 +1（`ab_rule_methods_pinned`）→ 474；第 4、5 刀改写不增减（`ec_open_messages` 换成 `ec_mechanic_defaults_silent`）→ 474；第 6 刀 +2（`ab_cell_face_matches_legacy_zoo`、`qc_cell_face_matches_legacy`）→ 476
   - 元素命名清理（2026-10-05）：魔法石充能由逃生口改成方法 + 通用驱动，+1（`qc_magic_stone_charge_via_driver`，与留在测试里的旧整盘写法逐盘等价）→ 477；另有 16 个测试改名（registry / caps / message / slots → world / ability / beat / cells）
   - 移除 SDL2 桌面前端（2026-10-05，`refactor/web-only`），−7 → 470：`MoveText` 删 5 个只钉桌面英文走步文案的用例（`move_text_boosters_pinned` / `move_text_drag_pinned` / `move_text_click_pinned` / `move_text_lost_reads_goal_of` / `move_text_tables_only_in_app_pure`，6 → 1）；`Presentation` 删 `cascade_sounds_follow_clear_and_special`（桌面音效钩子 `UI.Sound`）与 `draw_hud_and_prim_overlay_are_thin`（桌面几何 HUD / 覆盖层），10 → 8；`generic_every_constructor_has_world_face_and_ui` 去掉桌面 `UI.CellTable` 一段，改名 `generic_every_constructor_has_world_and_face`；源码扫描（`frontends_*`、`engine_frontend_steps_only_via_gameStep` 等）改扫 `app/pure` + `web/hs`
+  - 桌面遗留清理（2026-10-05，`refactor/web-only-2`），−4 → 466：随 `Engine.GridUI` 删除 `View` 的 `grid_ui_geometry_matches_legacy_layout` / `grid_ui_click_drag_highlight` 与 `GridGeometry` 的 `grid_ui_px_pinned`；随桌面地毯标记 `carpetAt` 删除 `view_carpet_marks_match_legacy`（`View` 12 → 9，`GridGeometry` 5 → 4）；`view_title_and_bracket_match_legacy` 去掉 `goalBracket` 部分，改名 `view_title_matches_legacy`；`Presentation` 用例数不变，去掉对 `prSprite` / `clearTint` / `scorePopRGB` / `clearSprite` / `comboPopSprite` 的断言
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 网页版的构建与测试（`make build` / `make check`）见下文「网页版测试」。
@@ -85,7 +86,7 @@ stack test
 - 测试套件**直接编译 `src/`**（`source-dirs` 含 `src`，不依赖 `match3` 库）：库模块对测试是同一组件里的模块，GHC 只重编真正用到改动内容的测试模块。改一个库模块导出时，`make verify` 从约 50–67 s 降到约 22–27 s；代价是全量构建多编一遍 `src`（约 +15 s）。
 - 内置内容的数量（关卡数、注册项数、本体 instance 数）集中在 `test/Spec/Support/Inventory.hs`，加元素 / 加关卡只改那里。
 - 每个用例默认 120 秒超时（`test/Spec.hs` 的 `defaultTimeout`，命令行 `--timeout` 优先），挂起会变成失败而不是卡住。
-- 目录（用例数合计 470）：
+- 目录（用例数合计 466）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -114,7 +115,7 @@ stack test
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`；第 5 项起把 `Golden.goldenSections` 各段经 `Spec.Support.Parallel.parallelForce` 多核求值、按原顺序拼回再逐行比对） |
 | `test/Spec/Properties.hs` | 24 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条 + 第 7a 刀关卡级钩子 / 读数 2 条 + 第 7b 刀步末表 / 折叠回复 2 条 + 第 8 刀形状表 / 组合表 / 组合对称 / 补子策略 4 条，见「性质测试」） |
 | `test/Spec/Archetype.hs` | 3 | 元素类重构第 2 刀（取代第 9 刀的 `Spec.Caps`）：普通宝石 / `Obstacle` / `Fixed` / `Inert` 的缺省方法值（`abilityProbe` 字面量锁定）、内置本体 instance 清单、扩展障碍「荆棘」不改主流程接入（见「元素类重构验收」） |
-| `test/Spec/Presentation.hs` | 8 | 第 10 刀：前端表现表 `UI.Presentation`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 贴图 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效名（只有消除 `clear` / 爆炸 `special`）、源码扫描（散落的表与颜色已收掉） |
+| `test/Spec/Presentation.hs` | 8 | 第 10 刀：前端表现表 `UI.Presentation`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效名（只有消除 `clear` / 爆炸 `special`）、源码扫描（散落的表与颜色已收掉） |
 | `test/Spec/BombShapes.hs` | 6 | 新玩法 1：L / T 形出炸弹（规则开关 `bomb_shapes`）——只有第 41 关打开、原有 40 关 / 每日挑战 / 自由开局的形状表等于内置表、插表顺序、L 形交点出炸弹（第 1 关与去掉开关时是空洞）、五连仍出彩虹、带四连的 L 出炸弹不出直线、第 41 关实战会生成炸弹 |
 | `test/Spec/MagicStone.hs` | 6 | 新玩法 2：魔法石——能力（固定 / 挡交换 / 无色 / 洗牌保留 / 平时打不动、发射中命中归零）、邻格充能每轮 1 格且满 3 为止、满格在交换步末发射清整行整列并归零、不满不发射、道具不触发而下一次交换发射、第 42 关布局与实战（魔法石不动、发射过、石头有进度） |
 | `test/Spec/Fuzzball.hs` | 7 | 新玩法 3：毛球——能力（挡交换 / 下落 / 无色 / 洗牌保留 / 命中即灭）、邻格真消除即灭（斜角不算、直接命中不重复）、跳到相邻普通宝石并换位且结果确定、墙 / 避让格 / 非普通宝石 / 已占格不跳、交换步末的 `EvBelt "fuzzball"` 可重放、去掉毛球条目后前 42 关逐步相同（不耗 `gsGen`）、第 43 关布局与实战（跳过格、有消灭计数、能过关） |
@@ -131,12 +132,12 @@ stack test
 | `test/Spec/Optics.hs` | 5 | Haskell 特性第 6 项（测试与光学）：透镜三定律（`cellAt`、GameState 的字段与五个派生读数，局中状态）；派生读数的 get-put 只在「元素恰好一份」时成立（`expectFailure` 固定反例）；遍历恒等律 / 合成律（Writer × Maybe）/ `over` 合成；棱镜两条往返律（`Match3.Grass` / `Match3.Types.Overlay` 本身的行为由叠层单元测试、金标准与元素查询快照守着）（见 [haskell-features/06-测试与光学.md](haskell-features/06-测试与光学.md)） |
 | `test/Spec/Invariants.hs` | 5 | Haskell 特性第 6 项：规则不变量——交换是对合（自定义 `Arbitrary` 任意行列盘）、重力幂等且不留悬空、重力 + 补子后满盘、被拒操作什么都不改 / 被接受时步数最多少 1 且分数不降；撤销历史对列表模型的状态机测试（玩具计数器，上限 1–4，带 shrink） |
 | `test/Spec/RulesDedup.hs` | 5 | Haskell 特性第 9 项（规则去重）：占格障碍棱镜 `_Stone` … `_Safe` 的往返律与改色遍历 `cellColorT` 的遍历定律；`Match3.Obstacles` 邻消顺序的固定例子；`runEndRules` = 朴素折叠；步末规则智能构造器；魔法石充能的方法 + 通用驱动与旧整盘写法逐盘等价（`qc_magic_stone_charge_via_driver`，命名清理时加）（见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md)；`Cap` 幺半群的两个测试随元素类重构第 2 刀删除） |
-| `test/Spec/GridGeometry.hs` | 5 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表与写死的坐标顺序逐格相同；带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`）是行主序；像素 newtype 下的 `gridCellAt` / `gridCellOrigin`（3 种几何的固定例子）；每日挑战 `Year` / `Month` / `Day`（7 个日期的种子与配置写死）（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
+| `test/Spec/GridGeometry.hs` | 4 | Haskell 特性第 7 项（网格几何）：`Dir` / `stepDir` / `dirBetween` 的基本性质与四种具名邻格顺序（写死）；邻消 / 蔓延 / 飞碟 / 提示搜索 / 合法动作的邻格列表与写死的坐标顺序逐格相同；带坐标的折叠（`ifoldMap` / `ifoldr` / `ifoldl'` / `positionsWhere`）是行主序；每日挑战 `Year` / `Month` / `Day`（7 个日期的种子与配置写死）（见 [haskell-features/07-网格几何.md](haskell-features/07-网格几何.md)） |
 | `test/Spec/DataBoundary.hs` | 10 | Haskell 特性第 8 项（数据边界）：关卡 Applicative 校验——全部关卡与每日关通过 `validateLevel`、坏关一次列出全部 `LevelIssue`（只坏行列时文字与 `checkLevelDims` 相同）、`Validation` 的 Applicative 定律与错误累积；放置参数解析器 `ArgP`——21 个元素名 × 11 组参数 × 2 种格的放置结果写死比对，精确 / 前缀匹配与 `<|>` 缺省值的语义；`beats` 的 `NonEmpty` 分组（固定例子含节拍倒序 `[2, 1, 0]`；性质：拼接还原输入、组的节拍号 = 组内首个效果的节拍、相邻组节拍不同）；Generic（`conName` + DeriveAnyClass）列出 `Color` / `GemKind` / `CellOverlay` / `CellContents` / `Outcome` 的全部构造器，检查 `genCell` 等生成器、元素世界（槽位、解码往返）、`cellFace` 标签与 `encodeOutcome`（源码扫描）的覆盖（见 [haskell-features/08-数据边界.md](haskell-features/08-数据边界.md)） |
 | `test/Spec/MoveText.hs` | 1 | `UI.MoveText.keepsTool`（`app/pure`，网页 `Api` 用）：只有自由交换换不掉时保持点选模式。原桌面英文走步文案 `moveMsg` 的 5 个逐字用例随 SDL2 前端移除 |
 | `test/Spec/WebColors.hs` | 4 | 网页表现表 `m3Meta`（`UI.WebMeta`）与贴图生成器调色板：按 `cells.js` 的取色规则、只用 `m3Meta` 的表算每种格子的颜色 = `UI.Palette.cellRGB`（表里的标签都是真实标签、每个内置标签都归了类）；蔓延碎屑色 / 倒计时火星色 / 生长曲线 / 前沿缺省光与表现表一致；帧数常量与音效名齐全（表现表的音效名都在 `soundNames` 里）；`tools/gen_assets.py` 的 `GEMS` ↔ `UI.Palette.colorRGB`（唯一还解析源码的一张表）。JS 不再手抄这些表，原先读 JS 源码比对的 5 个用例删掉 |
 | `test/Spec/BoardSeed.hs` | 3 | 毛球跳格（第 43 关）与雪怪召唤（第 45 关）共用的选格散列 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`：写死两张固定小盘面的 `show` 字符串与散列值、第 43 / 45 关种子 1 开局盘面的散列值、三个坐标的 `posSeed`、第 43 关开局的 14 次毛球跳格与第 45 关开局的召唤格；性质：散列 = 标准 64 位 FNV-1a（与 `Word64` 参考实现逐值相同）作用于 `show`，`pickBy` = 下标（散列 mod 候选数）。失败信息说明「`Show Cell` / 散列改了会改变毛球 / 雪怪行为」 |
-| `test/Spec/View.hs` | 12 | 第 11 刀：视图模型 `Match3.View` 与通用网格组件 `Engine.GridUI`——整局 / 目标 / 棋盘读数、窗口标题、收集进度后缀、地毯标记、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本；网格几何对照旧 `pixelToCell` / `cellOrigin`、点选 / 拖动 / 高亮；源码扫描（网页 `Api.hs` 不从 `GameState` 现算）；显示字段与目标中文名由元素条目提供（`view_cell_extras_from_elements`：雪怪 / 变色龙的 `cellExtras`、六个中文名，View / GoalLabel / Outcome / Api / 调色板不点名元素） |
+| `test/Spec/View.hs` | 9 | 第 11 刀：视图模型 `Match3.View`——整局 / 目标 / 棋盘读数、窗口标题、进度点、分数徽章、单格描述、关卡列表对照第 11 刀前各前端现算式的字面副本（原通用网格组件 `Engine.GridUI` 与桌面专用的收集进度后缀、地毯标记随 `refactor/web-only-2` 删除）；源码扫描（网页 `Api.hs` 不从 `GameState` 现算）；显示字段与目标中文名由元素条目提供（`view_cell_extras_from_elements`：雪怪 / 变色龙的 `cellExtras`、六个中文名，View / GoalLabel / Outcome / Api / 调色板不点名元素） |
 | `test/Spec/SourceScan.hs` | 1 | 源码扫描工具自测 `support_source_scanner`（注释剥离、import 解析、标识符匹配） |
 | `test/Spec/Support.hs` | — | 多个模块共用的辅助：`allPos` / `setCells` / `customsOn` / `isCustomNamed`、`tripleBoard` / `tripleMove`（第 1 行 C5 四连局面）、`isWin`、`firstLevel`、`levelAt` / `levelGame`（第 6 刀：按下标取关 / 开局，没有这一关时报错，取代测试里的 `allLevels !! i`）、`firstWave`（没有连锁轮时断言失败，代替 `head . mtWaves`）、`stepThenUndo`（经 `match3ShellWith world` 走一步再 `Undo`，段 3）、`findMatchPair` / `findNoMatchPair` / `stuckNoMoveBoard` / `stableBoard`、连击反馈局面、回放逐轮检查、事件细节检查、测试专用木箱 `Crate`（条目 `crateDef`）、`digest`（字符串的 64 位 FNV-1a 十六进制摘要，固定例子用它锁定大批结果）等；并重新导出 `Spec.Support.Source` 与 `Spec.Support.Inventory` |
 | `test/Spec/Support/Parallel.hs` | — | 确定性并行批量求值 `parallelForce`（`forkIO` + STM：`TVar` 领任务、`TMVar` 结果槽、按原顺序取回、异常按顺序重抛）；`Spec.Golden` 用它并行求值金标准各段 |
@@ -184,7 +185,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `qc_default_caps_match_legacy_defaults`（Caps） | 改为 `default_caps_pinned`（8 个 `newSig` 例子） | 缺省能力只有扩展元素用得到（内置元素都显式声明），快照不覆盖 |
 | `qc_argp_placers_match_legacy`（DataBoundary） | 改为 `argp_placers_pinned`（21 个元素名 × 11 组参数 × 2 种格） | 抓到过 `prefixArgs` / `exactArgs` 的变异（08 §3.5）；参数边界值（−2、255、256、300 等）的直接覆盖 |
 | `qc_beats_nonempty_matches_legacy`（DataBoundary） | 改为 `beats_examples_pinned` + `qc_beats_nonempty_groups` | `NE.groupAllWith` 的变异原先只有它抓到（08 §3.5）；固定例子含节拍倒序 `[2, 1, 0]` |
-| `qc_grid_ui_px_same_as_legacy`（GridGeometry） | 改为 `grid_ui_px_pinned`（3 种几何） | 抓到过 `gridCellOrigin` 的 (行, 列) 写反（07 §3.4） |
+| `qc_grid_ui_px_same_as_legacy`（GridGeometry） | 改为 `grid_ui_px_pinned`（3 种几何）；`refactor/web-only-2` 随 `Engine.GridUI` 删除 | 抓到过 `gridCellOrigin` 的 (行, 列) 写反（07 §3.4） |
 | `daily_date_newtypes_same_as_legacy`（GridGeometry） | 改为 `daily_date_pinned`（7 个日期的种子与配置） | 每日种子 / 配置的直接覆盖 |
 | `effects_entries_same_as_legacy`（Effects） | 改为 `effects_entries_pinned`（7 个入口各一个摘要，另有倒计时步末记录与单轮） | 空种子、皮带后、带空洞的步末等入口的逐入口覆盖；末层逆序的变异它也抓到 |
 | `lazy_samplers_same_as_legacy`（Lazy） | 改为 `lazy_samplers_pinned`（按尺寸的摘要，内外两层重抽的断言保留） | 拒绝采样（含生成器状态）在 7 种行列上的直接覆盖 |
@@ -381,17 +382,14 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 | 用例 | 断言 |
 |------|------|
-| `view_fields_match_legacy_reads` | 每个样本（终局样本是 `TWon` / `TLevelClear` / `TLost` 三种，`gsOver` 只能存终局值）：关卡号 / 夹紧下标 / 原下标关名（无此关 `"?"`）、步数上限 `max 步数 印制步数`、分数 / 步数 / 每日、三种道具、连击（经 `gameStatus` = `gsCombo`）、洗牌 / 结局、结局色条分支、目标进度 / 目标值 / kind / text / 名字 / 失败提示、`gsHint` 与 `findHint`、盘面、清除格 / 地面层 / 皮带 / 传送门 / 地毯 / 已铺地毯 / 飞碟、逐格地面层，与旧读法相同 |
-| `view_title_and_bracket_match_legacy` | `titleLine` 与旧 `updateTitle` 的标题串（不含 `"  \|  "` 与消息）逐字相同；`goalBracket` 与旧 `collectMsg` 相同（合 main 9f5504e 后两份旧副本的目标标签同步换成 `goalLabel` 的中文名，数字与其余字段不变） |
-| `view_carpet_marks_match_legacy` | 有地毯的关卡（含已铺开的局面）逐格：`carpetAt` 与几何版（带 `not null` 的旧式子）、贴图版旧式子都一致 |
+| `view_fields_match_legacy_reads` | 每个样本（终局样本是 `TWon` / `TLevelClear` / `TLost` 三种，`gsOver` 只能存终局值）：关卡号 / 夹紧下标 / 原下标关名（无此关 `"?"`）、分数 / 步数 / 每日、三种道具、连击（经 `gameStatus` = `gsCombo`）、洗牌 / 结局、结局色条分支、目标进度 / 目标值 / kind / text / 名字 / 失败提示、`findHint`、盘面、清除格 / 地面层 / 皮带 / 传送门 / 地毯 / 已铺地毯 / 飞碟，与旧读法相同（步数上限、`gsHint`、逐格地面层三项随桌面专用字段删除） |
+| `view_title_matches_legacy` | `titleLine` 与旧 `updateTitle` 的标题串（不含 `"  \|  "` 与消息）逐字相同（合 main 9f5504e 后旧副本的目标标签换成 `goalLabel` 的中文名，数字与其余字段不变；原 `goalBracket` 对照随该字段删除，用例由 `view_title_and_bracket_match_legacy` 改名） |
 | `view_level_dots_match_legacy` | 当前关 −1..levelCount+1 × 已解锁 6 种：`levelDots` 共 levelCount 个，与贴图版四档、几何版三档（传 −1）旧分支相同 |
 | `view_score_badge_matches_legacy` | 回放有无 / 连击 0,1,2,5 / 显示分 × 总结剩余帧 × 最高连击 × 洗牌：`scoreBadge` 与贴图版右下角、几何版 `hudComboBadge` 的旧分支相同 |
 | `view_cell_face_and_level_list_match_legacy` | 全部样本盘面的格子与每种构造器 / 叠层组合：`cellFace` 与旧 `encodeCell` 的字段（`t` 在前、顺序相同）逐项相同；`levelViews` 与 `allLevels` 的序号 / 名字 / 步数 / 目标相同 |
-| `grid_ui_geometry_matches_legacy_layout` | 棋盘几何（16, 124, 56, 8×8）下 `gridCellAt` 与旧 `pixelToCell` 在两组扫描线（含边界 ±1 像素）上相同；`gridCellOrigin` 与旧 `cellOrigin` 相同且往返；`gridCells` 行优先；非正方网格行列不混；`orthoAdjacent` = `adjacent` |
-| `grid_ui_click_drag_highlight` | `gridClick` 三种结果；`gridDragRelease adjacent` 与旧 `Just p2 \| p1 /= p2 && adjacent p1 p2` 在全部落点（含棋盘外）上相同；`Highlight` 的三个查询、`noHighlight` 为空 |
-| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；标题取自 `titleLine`；规则开关角标由 `Api.hs` 读 `ruleBadges`，`web/www/hud.js` 不点名 `bomb_shapes` / `rainbow_combos` / `zh_rule_bomb`；关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记。（原对桌面 HUD / `BoardPrim` / `BoardArt` / `Layout` / `Input` / `GoalStyle` 的检查随 SDL2 前端移除） |
+| `frontends_read_view_model` | 源码扫描：`web/hs/Match3Web/Api.hs` 不再读 `gsLevel` / `gsGoal` / `gsBoard` / `findHint` / `levelCarpets` / `allLevels` 等；标题取自 `titleLine`；规则开关角标由 `Api.hs` 读 `ruleBadges`，`web/www/hud.js` 不点名 `bomb_shapes` / `rainbow_combos`；关卡表里出现的每个规则开关都在 `ruleBadgeTable` 登记。（原对桌面 HUD / `BoardPrim` / `BoardArt` / `Layout` / `Input` / `GoalStyle` 的检查随 SDL2 前端移除） |
 | `frontends_import_core_api` | 源码扫描：`app/pure` 与 `web/hs` 从库里只 import `Match3.Core` / `Match3.View` / `Match3.Engine` / `Match3.Element.Event` / `Engine.*`；`Match3.Core` 导出的函数与不带构造的类型都有前端在用（带 `(..)` 的类型不查，前端可能只用构造或字段）。SDL2 前端移除后 `Match3.Core` 删掉了只有桌面在用的 25 个导出（如 `boardSize` / `allLevels` / `defaultWorld` / `applyHint` / `dailySeed`），测试改从定义模块 import |
-| `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、标题目标段 `goalLine`、提示后缀 `goalBracket` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（第 8 / 41 / 42 / 44 关曾写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
+| `outcome_lose_hint_no_internal_names` | 合 main 9f5504e 后：全部关卡与每日挑战（2026 年 12 × 28 天）的失败提示 `loseHint`（及视图字段 `giLoseHint`）、标题目标段 `goalLine` 都不含 `[a-z_]`（不露出元素内部名，也不再有 `score` / `stone` 等英文标签）；第 39 / 40 / 43 / 45 / 47 关（果冻 / 气泡 / 毛球 / 雪怪 Boss / 变色龙）的失败提示与第 47 关标题段逐字核对；碎石目标（第 8 / 41 / 42 / 44 关曾写成「砸箱子」，2026-09-30 改为读 `countLabel CountStones`）：第 8 / 48 关逐字核对「用邻消或特效砸开碎石，目标 8 个」，全部关卡与每日挑战里的碎石目标失败提示都含 `goalLabel` 的「碎石」、不含「箱子」；`Outcome.hs` 读共用的 `countLabel` |
 
 画面等价性依据：按 yu 的精简验收，第 11 刀只做编译 0 警告 + `stack test` 全过（含上表与金标准 / 元素查询快照）+ `make check`（改了 `web/hs`，网页 JSON 对照在里面），桌面版拍 1 张图肉眼确认。
 
@@ -403,12 +401,12 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 |------|------|
 | `presentation_table_covers_every_event_kind` | 表的键 = `[minBound .. maxBound] :: [EventKind]`（每种恰一行、按定义顺序）；每个 `StageKind` 恰被一行使用；帧数非负 |
 | `presentation_stage_rows_match_legacy_end_stage_table` | 全部事件种类的 `stageKindOf` / `ComboFx.stageKindFor`、全部段的 `stageFrames` / `endStageBase` 与旧 `endStageTable`（含缺省：非步末种类 → 蔓延段、缺省 18 帧）相同 |
-| `presentation_frames_colors_match_legacy_constants` | 高亮 12 / 得分浮字 48 / 连击弹字 54 帧；`clearTint`（旧 `waveTint`）、`scorePopRGB`（旧 HudArt / HudPrim 的分支）在各等级与相位下相同；倒计时 / 洗牌主色与贴图、蔓延 / 蜗牛贴图、碎屑方式（旧 `endCrumbTable`）、`elementRGBTable`、缓动逐项相同 |
+| `presentation_frames_colors_match_legacy_constants` | 高亮 12 / 得分浮字 48 / 连击弹字 54 帧；第 1 轮高亮柔白、得分浮字暖白、倒计时 / 洗牌主色（旧 `waveTint` / HudArt / EndStage 的字面量）、碎屑方式（旧 `endCrumbTable`）、`elementRGBTable`、缓动逐项相同 |
 | `presentation_spread_curves_match_legacy` | vine / choco / steam / 未知名字 / 空名 × 106 个采样点（含区间外）：`curveAt (spreadCurveFor n) t` 与旧 `spreadProgress`（缺省 `t`）逐位相等 |
 | `presentation_combo_style_matches_legacy` | 连击等级 −1..9 × 相位 0..80、399、4000：`comboStyle` 四个字段与 `styleRGB` 与旧定义（含 `hsv`）相同 |
-| `presentation_extension_defaults` | `defaultPresentation` = 蔓延段 18 帧、无颜色 / 贴图 / 碎屑 / 音效；空表查询全部落到缺省；未知元素名匀速、白光、不迸碎屑；`EvMove`（扩展 `hopper`）→ 蜗牛段 |
+| `presentation_extension_defaults` | `defaultPresentation` = 蔓延段 18 帧、无颜色 / 碎屑 / 音效；空表查询全部落到缺省；未知元素名匀速、白光、不迸碎屑；`EvMove`（扩展 `hopper`）→ 蜗牛段 |
 | `effect_sound_names_clear_and_special` | `effectSound EvClear` = `"clear"`、`EvBlast` = `"special"`，其余事件与 `defaultPresentation` 都是 `Nothing`（网页按同样的规则选音效） |
-| `presentation_scattered_cases_removed` | 源码扫描 `app/pure`：除 `UI.Presentation` 外不再定义 `endStageTable` / `spreadProgress` / `endCrumbTable` / `elementRGBTable` / `comboStyle` / `styleRGB` / `hsv` / `smoothT` / `easeOutT`，也不再出现搬走的颜色字面量与 `"zh_combo"`；`UI.Presentation` 不 import SDL（原「桌面 EndStage / Playback 确实读表」随 SDL2 前端移除） |
+| `presentation_scattered_cases_removed` | 源码扫描 `app/pure`：除 `UI.Presentation` 外不再定义 `endStageTable` / `spreadProgress` / `endCrumbTable` / `elementRGBTable` / `comboStyle` / `styleRGB` / `hsv` / `smoothT` / `easeOutT`，也不再出现搬走的颜色字面量；`UI.Presentation` 不 import SDL（原「桌面 EndStage / Playback 确实读表」随 SDL2 前端移除） |
 
 画面等价性依据：22 个静态场景、6 个步末动画场景与连击逐轮高亮 / 特殊块爆炸 / 特殊块组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同（AE=0），窗口标题逐字相同。
 

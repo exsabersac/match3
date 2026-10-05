@@ -260,7 +260,7 @@
 | 接入 | 地面层种类的 `groundWiden`（缺省 `Nothing`；元素类重构前是能力 `widens`）；每步结算开始时 `Element.Level.levelWorldIn` 把地面层里带扩爆规则的格写进世界的本步上下文 `StepCtx`（缺省 `noStep`；没有这种格时世界原样返回），`World.blastWith` 在引爆格是扩爆格时改写范围；`Engine.playWith` 展开事件也用这个本步世界，`EvBlast` 的覆盖格含扩出来的一圈 |
 | 随机 | 不消耗 `gsGen`；地面层在每步开始时取一次（魔法地格不变，与逐轮取相同） |
 | 关卡 | 第 48 关「魔法格」：18 步，目标碎石 8 块；底行 8 块三层碎石（`Place "stone" [AInt 3]`）；魔法地格 4 格 (6,2) / (6,5) / (5,3) / (5,4)；打开 `bomb_shapes`（L / T 形出炸弹） |
-| 视图 / 前端 | 视图模型照旧（`bvGround` / `groundAtView` 给出 `("magic", 1)`；网页 Api `state.ground` 里 `{p, name:"magic", layers:1}`）；贴图 `magic`（紫色符文地砖，画在棋子下面；原桌面几何版 `primMagic` 已移除）；扩大的爆炸没有新动画，按 `EvBlast` / 清除格原样高亮；HUD 目标仍是碎石 |
+| 视图 / 前端 | 视图模型照旧（`bvGround` 给出 `("magic", 1)`；网页 Api `state.ground` 里 `{p, name:"magic", layers:1}`）；贴图 `magic`（紫色符文地砖，画在棋子下面；原桌面几何版 `primMagic` 已移除）；扩大的爆炸没有新动画，按 `EvBlast` / 清除格原样高亮；HUD 目标仍是碎石 |
 
 取舍说明（backlog 只写了「特效在魔法地格上引爆时范围扩一圈」，下面几条是补的细节）：
 - **永久、不计数**：原作的魔法地格不会被消耗；这里没有地面反应规则，所以不需要给它计数或目标，关卡目标交给它帮忙打到的东西（第 48 关是碎石）。

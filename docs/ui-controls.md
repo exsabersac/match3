@@ -2,7 +2,7 @@
 
 网页（`web/www/`）是本项目唯一的前端：浏览器直接玩，安卓是网页套壳（[android.md](android.md)），PC 端以后同样给网页套壳。原 SDL2 桌面版（`match3-sdl`）已于 `refactor/web-only` 移除，它的交互在移除前已全部迁到网页（[web.md §2.6](web.md#26-桌面版功能迁移featweb-sdl-parity)）。
 
-前端：`web/www/main.js`（指针事件 `pointerdown` / `pointerup` 点选与拖划、`keydown` 按键表、常驻按钮与菜单的 `onButton`）。规则一律在 Haskell 核心里经通用接口 `gameStep`（`Match3Web.Api` → `Match3.Engine.match3Shell`；撤销历史在 `Engine.History`），JS 不做任何规则判断。点选与拖动松手的判定规则与通用网格组件 `Engine.GridUI` 的 `gridClick` / `gridDragRelease` 相同（网页在 JS 里做命中）。
+前端：`web/www/main.js`（指针事件 `pointerdown` / `pointerup` 点选与拖划、`keydown` 按键表、常驻按钮与菜单的 `onButton`）。规则一律在 Haskell 核心里经通用接口 `gameStep`（`Match3Web.Api` → `Match3.Engine.match3Shell`；撤销历史在 `Engine.History`），JS 不做任何规则判断。点选与拖动松手的判定（两步点选、松手格与起点相邻才交换）在 JS 里做，同原桌面版（原通用网格组件 `Engine.GridUI` 已于 `refactor/web-only-2` 删除）。
 
 ## 基本操作
 
@@ -68,6 +68,6 @@
 - 连锁回放中右下角分数芯片显示当前轮「连击 xN」（第 1 轮显示滚动上涨的分数），全部播完后若最高连击 ≥ 2 显示「N 连击！」。
 - 窗口标题（`document.title`）= `Match3.View.titleLine` + 最近提示；PC 壳一般把它显示在标题栏。
 
-弹字 / 浮字 / 连击徽章的颜色与贴图名、各动画的帧数读表现表 `UI.Presentation`（经 `m3Meta` 下发，见 [ui-art.md「表现表」](ui-art.md#表现表第-10-刀)）；音效由 `web/www/audio.js` 按独立的音效与 BGM 开关播放。
+弹字 / 浮字 / 连击徽章的颜色、各动画的帧数读表现表 `UI.Presentation`（经 `m3Meta` 下发，见 [ui-art.md「表现表」](ui-art.md#表现表第-10-刀)）；音效由 `web/www/audio.js` 按独立的音效与 BGM 开关播放。
 
 更完整的功能与关卡表见根 [`README.md`](../README.md)，网页版的构建、部署与测试见 [web.md](web.md)。

@@ -22,7 +22,7 @@
 | 8 | `0e91565` | 规则表：补子策略 `RefillPolicy`（`Match3.Board.Refill`）、特殊块形状表与特殊块组合表（`Match3.Element.Special`），都挂在注册表上 | 307 |
 | 9 | `ac211d8` | 元素类只剩 `name` / `toCell` / `caps`；能力分成五组带缺省值的记录（`Caps`），简写在 `Match3.Element.Caps`；内置 instance 平均从 7.21 行降到 4.63 行 | 312 |
 | 10 | `0230893` | 前端表现表 `UI.Presentation`（效果事件 → 表现方式 / 帧数 / 颜色 / 贴图 / 碎屑 / 音效）与音效钩子 `UI.Sound`（预留）；新目录 `app/pure/`（桌面 / 测试 / 网页共用的纯前端模块）；`drawHud` 拆成 `UI.HudBlocks` 各区块，`primOverlay` 拆到 `UI.Cell.PrimOverlay` | 322 |
-| 11 | `8f153c7` | 视图模型 `Match3.View`（`GameView` / `GoalInfo` / `BoardView`、标题、进度点、分数徽章、关卡列表、单格描述），桌面 HUD / 标题 / 棋盘底层和网页 JSON 都读它；通用网格 UI 组件 `Engine.GridUI`（像素 ↔ 格、点选、拖动、高亮） | 331 |
+| 11 | `8f153c7` | 视图模型 `Match3.View`（`GameView` / `GoalInfo` / `BoardView`、标题、进度点、分数徽章、关卡列表、单格描述），桌面 HUD / 标题 / 棋盘底层和网页 JSON 都读它；通用网格 UI 组件 `Engine.GridUI`（像素 ↔ 格、点选、拖动、高亮；随桌面版于 `refactor/web-only-2` 删除） | 331 |
 
 ## 怎样验收的
 
@@ -50,7 +50,7 @@
 ## 现在的结构
 
 ```
-src/Engine/          通用层（不 import Match3）：Game（接口）、History（撤销）、Effect、Playback（播放器）、Stream（无穷流）、Optics（透镜）、GridUI（网格 UI）
+src/Engine/          通用层（不 import Match3）：Game（接口）、History（撤销）、Effect、Playback（播放器）、Stream（无穷流）、Optics（透镜）；原 GridUI（网格 UI）已于 `refactor/web-only-2` 删除
 src/Match3/          三消规则库：Types.* / Counts / Goal / Color / Levels.* / Board.* / Game.* / Element.*
                      Engine（三消 = 通用接口的实现）、View（视图模型）、Core（再导出门面）
 app/Shell/Loop.hs    通用 SDL 外壳
@@ -98,8 +98,8 @@ web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match
 - 效果事件的播放方式、帧数、颜色、贴图、碎屑、音效：改 `app/pure/UI/Presentation.hs` 的 `presentationTable`（按 `EventKind` 一行）；蔓延类元素的节奏和颜色在 `spreadCurves` / `elementRGBTable` 里配。确实需要新的步末段时，才加 `StageKind` 并在 `UI.EndStage.endStageDrawers` 里加绘制函数。
 - 音效：填表项的 `prSound`（按事件种类），在 `assets/sfx/` 放同名 `.wav` 并加进 `UI.Audio` 的加载表；桌面由 `UI.Audio.cue` 播放。
 - HUD 或网页要显示新读数：在 `Match3.View` 的 `GameView` / `GoalInfo` / `BoardView` 里加字段，桌面和网页都从视图读，不要在前端再从 `GameState` 现算（`frontends_read_view_model` 会扫描）。几何版 HUD 新区块：在 `UI.HudBlocks` 写一个 `hudXxx`，在 `drawHud` 里加一行。
-- 网格交互（其他网格类游戏也能用）：`Engine.GridUI` 提供 `GridGeom` / `gridCellAt` / `gridCellOrigin`、`gridClick`（两步点选）、`gridDragRelease`（拖动松手）、`Highlight`（高亮）。
+- 网格交互（其他网格类游戏也能用；**已于 `refactor/web-only-2` 删除**，只有桌面版用过）：`Engine.GridUI` 提供 `GridGeom` / `gridCellAt` / `gridCellOrigin`、`gridClick`（两步点选）、`gridDragRelease`（拖动松手）、`Highlight`（高亮）。
 
 ### 接入另一个游戏
 
-按 [architecture.md § 接入一个新游戏的步骤清单](architecture.md#接入一个新游戏的步骤清单)：实现 `Engine.Game`，要撤销就用 `withHistory` 套一层，回放用 `Engine.Playback`，网格交互用 `Engine.GridUI`，写一个纯视图模型，再写一个 `Shell.Loop` 插件。新游戏只能依赖 `Engine.*` / `Shell.Loop`，不能 import `Match3.*`。
+按 [architecture.md § 接入一个新游戏的步骤清单](architecture.md#接入一个新游戏的步骤清单)：实现 `Engine.Game`，要撤销就用 `withHistory` 套一层，回放用 `Engine.Playback`，写一个纯视图模型，再写一个 `Shell.Loop` 插件。新游戏只能依赖 `Engine.*` / `Shell.Loop`，不能 import `Match3.*`。

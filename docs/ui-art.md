@@ -2,17 +2,17 @@
 
 本文说明游戏的美术风格、贴图清单与生成方式。规则层（`src/Match3/*`）完全不受影响。`tools/gen_assets.py` 生成 `assets/`，网页版再由 `web/tools/gen_web_atlas.py` 把它重新打包成 2x WebP 图集（只收棋盘 / HUD 贴图与关卡名，文字用浏览器字体画），见 [web.md §2.5 资源管线](web.md#25-资源管线)。
 
-> **SDL2 桌面版已于 2026-10-05 移除**（`refactor/web-only`），网页是唯一前端。下文「加载与降级」「开发用环境变量」「复现 / 截图」「高分屏 / Retina」各节，以及「连击表现」里提到的 `app/UI/*` 模块、`MATCH3_*` 环境变量、Xvfb 截图做法，描述的都是原桌面版（`match3-sdl`）的实现，留作历史记录；时间线、帧数、颜色等数值仍是现行规格（来自 `app/pure` 的 `ComboFx` / `UI.Presentation`，网页经 `m3Meta` 读同一份）。`assets/` 里只有原桌面版用到的 `zh_*` / `g_*` 文字贴图与部分 `@` 尺寸变体暂时保留未删（网页图集不收）。
+> **SDL2 桌面版已于 2026-10-05 移除**（`refactor/web-only`），网页是唯一前端。原桌面版的「加载与降级」「开发用环境变量」「复现 / 截图」「高分屏 / Retina」（含 SDF 字体设想）各节已删除，桌面专用的 `zh_*` / `g_*` 文字贴图与 `@` 尺寸变体也已从生成器与 `assets/` 删除（`refactor/web-only-2`；旧内容见 git 历史）。「连击表现」里提到的 `app/UI/*` 模块描述的是原桌面版实现，留作历史记录；时间线、帧数、颜色等数值仍是现行规格（来自 `app/pure` 的 `ComboFx` / `UI.Presentation`，网页经 `m3Meta` 读同一份）。本页三张截图（`screenshot-l16.png`、`combo-strip.png`、`end-of-step-strip.png`）是原桌面版拍的，棋盘画法与网页版相同。
 
 ![关卡 16「大师」](images/screenshot-l16.png)
 
 ## 风格
 
 - **糖果宝石风**：深紫夜空背景，棋盘格是圆角深蓝半透明方砖（棋盘格交替两种深浅）。宝石有高光、渐变和柔和投影。
-- **统一规格**：棋盘贴图按 **112×112**（格子 56 px 的 2 倍）绘制；HUD 面板、图标、星星、角标、背景和全部文字也都按**逻辑尺寸的 2 倍**烘焙。窗口开启 HiDPI 后在 Retina 上 1 个贴图像素 = 1 个物理像素（见下文「高分屏 / Retina」）。
+- **统一规格**：棋盘贴图按 **112×112**（格子 56 px 的 2 倍）绘制；HUD 面板、图标、星星、角标、背景和关卡名文字也都按**逻辑尺寸的 2 倍**烘焙。网页按 `devicePixelRatio` 放大画布后备缓冲，2x 屏上 1 个贴图像素 = 1 个物理像素（见 [web.md §2.4 自适应布局](web.md#24-自适应布局layoutjs)）。
 - **颜色 + 形状双编码**：每种颜色同时对应一种轮廓，色弱玩家或灰度截图也能一眼区分（见下表）。
 - **层数可读**：多层障碍的外观会随层数变化（裂纹、层数、厚度），层数 ≥ 2 时右下角还有**数字角标**。
-- **HUD**：九宫格圆角面板（`panel_*`），金色描边表示强调/选中；数字用描边字形，中文标签预渲染成贴图，所以运行时不需要字体库（无 SDL_ttf）。字形和标签按游戏内实际使用的字号分别烘焙（2x），不会被非整数倍缩放。
+- **HUD**：九宫格圆角面板（`panel_*`），金色描边表示强调/选中；网页的数字与中文标签用浏览器字体画，只有关卡名 `name_*` 是预渲染的文字贴图。
 
 ## 颜色 → 形状
 
@@ -92,11 +92,9 @@
 
 ### 交互 / HUD
 
-`sel_ring`（选中框，颜色随道具模式变化）、`hint_glow`（提示呼吸光）、`spark`（消除闪光）、`star_on/off`、`medal`、`node_cur/done/lock`（地图节点）、`icon_*`（锤子 / 交换 / 十字 / 步数 / 分数 / 多色）、`badge_1..9`、`g_*`（字形）、`zh_*`（中文标签）、`name_*`（关卡名）。魔法石（新玩法 2）：`magic_stone_<充能>`，满 3 格的贴图外发光并轻微浮动。毛球（新玩法 3）：`fuzzball`（灰粉色毛团 + 大眼睛，轻微浮动；步末跳格借用皮带的平移动画）。魔力鸟组合增强（新玩法 4）：没有新棋子贴图，变身段借用蔓延的「长出新格」动画（第一轮之前，同色宝石从格子中心长成直线 / 炸弹；与彩虹格恰好差一行或一列的目标沿蔓延方向擦出，是 `drawEndSpread` 按来源方向分支的结果）。网页版（`web/www/cells.js` / `render.js`）画法相同：毛球用同一个浮动公式 `round(2·sin(pulse/9))`（网页逻辑帧 1/60 s、桌面 16 ms，周期约 0.94 s 对 0.90 s），跳格走皮带段，变身走蔓延段的同一组分支（匀速、白色前沿光、不迸碎屑）。规则开关角标：打开 `bomb_shapes` 的关卡，关名右侧画 `bomb_glow` + `bomb_mark`（22 px）和 `zh_rule_bomb`（18 px）；打开 `rainbow_combos` 的关卡画 `rainbow`（22 px）+ `zh_rule_rainbow`「彩虹组合变身」（18 px）。角标表在 `Match3.View.ruleBadgeTable`（规则名 → 文字、叠放图标、文字贴图），桌面 `UI.HudArt` 与网页版都按它通用地画；网页图集不含 `zh_*`，网页版在关卡面板「第 N 关」右侧画同样的图标 + 画布字体文字（小胶囊）。新增规则开关的角标：`ruleBadgeTable` 加一行 + gen_assets.py 的 `ZH` / `ZH_SIZES` 加文字贴图（`stack test` 核对两边文字一致）。
+`sel_ring`（选中框，颜色随道具模式变化）、`hint_glow`（提示呼吸光）、`spark`（消除闪光）、`star_on/off`、`medal`、`node_cur/done/lock`（地图节点）、`icon_*`（锤子 / 交换 / 十字 / 步数 / 分数 / 多色）、`badge_1..9`、`name_*`（关卡名）。魔法石（新玩法 2）：`magic_stone_<充能>`，满 3 格的贴图外发光并轻微浮动。毛球（新玩法 3）：`fuzzball`（灰粉色毛团 + 大眼睛，轻微浮动；步末跳格借用皮带的平移动画）。魔力鸟组合增强（新玩法 4）：没有新棋子贴图，变身段借用蔓延的「长出新格」动画（第一轮之前，同色宝石从格子中心长成直线 / 炸弹；与彩虹格恰好差一行或一列的目标沿蔓延方向擦出，是 `drawEndSpread` 按来源方向分支的结果）。网页版（`web/www/cells.js` / `render.js`）画法相同：毛球用同一个浮动公式 `round(2·sin(pulse/9))`（网页逻辑帧 1/60 s、桌面 16 ms，周期约 0.94 s 对 0.90 s），跳格走皮带段，变身走蔓延段的同一组分支（匀速、白色前沿光、不迸碎屑）。规则开关角标：打开 `bomb_shapes` 的关卡，画 `bomb_glow` + `bomb_mark` 图标和文字「L/T 形出炸弹」；打开 `rainbow_combos` 的关卡画 `rainbow` 图标 +「彩虹组合变身」。角标表在 `Match3.View.ruleBadgeTable`（规则名 → 文字、叠放图标），网页版按它通用地画：关卡面板「第 N 关」右侧画图标 + 画布字体文字（小胶囊）。新增规则开关的角标：`ruleBadgeTable` 加一行即可（图标须是生成器里已有的贴图，`stack test` 核对）。
 
-**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随 `appPulse` 呼吸闪烁。几何版 `UI.HudBlocks.hudBoss` 在目标条位置画同样的红条和两个数字。网页版同样画（`web/www/cells.js` 按象限取 `snow_boss[_hurt]_<q>` + 召唤进度点，`hud.js` 读 `state.boss` 画血条，头像 / 着色 / 过半闪烁同桌面；网页图集不含 `@56` 变体，头像用 `snow_boss` 缩放）。
-
-名字里带 `@` 的是同一贴图的**尺寸变体**（`基名@像素高`），例如 `zh_combo@68`（「连击」34 px 大字版）、`g_48@60`（5 号字形「0」）、`gem_c1@56`（半尺寸宝石，给 HUD 小图标用）、`panel_gold@80`（小圆角面板）。代码里始终只写基名，运行时自动挑变体。
+**Boss 血条**（新玩法 5）：目标是「击败 Boss」时（`Match3.View.gvBoss` 为 `Just`），HUD 目标条换成血条：左边 `snow_boss` 头像，红色进度条长度 = 剩余血量 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后进度条变深红并随 `appPulse` 呼吸闪烁。几何版 `UI.HudBlocks.hudBoss` 在目标条位置画同样的红条和两个数字。网页版同样画（`web/www/cells.js` 按象限取 `snow_boss[_hurt]_<q>` + 召唤进度点，`hud.js` 读 `state.boss` 画血条，头像 / 着色 / 过半闪烁同桌面；头像用 `snow_boss` 缩放）。
 
 ## 重新生成贴图
 
@@ -107,54 +105,16 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 脚本会生成：
 
-- `assets/atlas.bmp`、`assets/atlas1.bmp`：图集第 0、1 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页；目前 2 页（1024×2002 + 1024×1010），共 492 个贴图（含尺寸变体；第 49 关新增关卡名 `name_48`「宽域」；音效与 BGM 开关新增文字 `zh_sfx` / `zh_bgm` / `zh_mute`；新玩法 8 新增魔法地格 `magic` 及其 `@56`、关卡名 `name_47`「魔法格」；新玩法 7 新增变色龙环 `chameleon`、目标图标 `chameleon_icon` 及其 `@56`、关卡名 `name_46`「变色龙」；新玩法 6 新增掉落口 `cookie_drop` 及其 `@56`、关卡名 `name_45`「掉落口」；新玩法 5 新增雪怪 `snow_boss`、`snow_boss_0..3`、`snow_boss_hurt_0..3` 及其 `@56`、关卡名 `name_44`「雪怪」；新玩法 4 新增关卡名 `name_43`「魔力鸟」与角标文字 `zh_rule_rainbow`；新玩法 3 新增毛球 `fuzzball` 及其 `@56`、关卡名 `name_42`「毛球」；新玩法 2 新增魔法石 `magic_stone_0..3` 及其 `@56`、关卡名 `name_41`「魔石」；新玩法 1 新增关卡名 `name_40`「爆破」与 HUD 角标文字 `zh_rule_bomb`「L/T 形出炸弹」；段 5 新增 `jelly` / `jelly_2` / `bubble` 及其 `@56`，另有第 39 / 40 关的关卡名 `name_38` / `name_39`）
+- `assets/atlas.bmp`：图集第 0 页（32 位 BGRA，带透明通道）。每页最大 1024×2048，放不下自动开新页（`atlas1.bmp`……）；目前 1 页（1024×1730），共 174 个贴图，与网页图集同一组（原桌面版的 `zh_*` / `g_*` 文字贴图与 `@` 尺寸变体共 318 张已于 `refactor/web-only-2` 删除，此前是 2 页 492 张）
 - `assets/atlas.txt`：索引文件，每行 `name x y w h page`（第 6 列页号；旧的 5 列格式视为第 0 页）
-- `assets/background.bmp`：窗口背景（960×1176，即 480×588 的 2 倍，24 位不透明）
+- `assets/background.bmp`：页面背景（960×1176，即 480×588 的 2 倍，24 位不透明）
 - `docs/images/legend.png`：图例
 
-图形采用 4 倍超采样再缩小；**文字不超采样**，而是按目标像素字号直接用 FreeType 渲染（带 hinting，笔画对齐像素格）。随机种子固定，所以同一台机器上多次运行结果一致。关卡名从 `src/Match3/Types.hs` 解析，新增关卡后重新跑一次即可。字体按顺序查找：拉丁字形用 Barlow Condensed / DejaVu / Arial，中文用 Noto Sans CJK / 文泉驿 / 苹方 / 华文黑体。
-
-## 加载与降级（原桌面版，已移除）
-
-实现原在 `app/Art.hs`（已删除）。网页版的加载见 [web.md §2.5](web.md#25-资源管线)。
-
-1. **格式**：BMP V4 头（`BI_BITFIELDS` + alpha 掩码；多页时按 `atlas.txt` 最大页号依次加载 `atlas.bmp`、`atlas1.bmp`……，任何一页缺失都整体降级），用 SDL2 核心的 `SDL.loadBMP` 就能保留透明度，**不需要 SDL_image / SDL_ttf**。macOS 只要已有的 `brew install sdl2`，**不用装任何新的 brew 包**。新增的 Haskell 依赖只有 GHC 自带的 `containers`、`directory`、`filepath`。
-2. **路径查找**（找到第一个同时包含 `atlas.bmp` 和 `atlas.txt` 的目录就用它）：
-   1. 环境变量 `MATCH3_ASSETS`
-   2. 当前目录下的 `./assets`（在仓库根目录运行 `stack exec match3-sdl` 时就是这个）
-   3. 可执行文件所在目录，以及它向上最多 12 层父目录里的 `assets/`（从 `.stack-work/.../bin` 也能找到仓库里的资源）
-3. **降级**：找不到资源或加载失败时，只会在 stderr 打印一行警告，然后使用原来的纯色方块 / 几何图形渲染，游戏照常运行。单个贴图缺失时，只有对应的格子退回原来的几何绘制。`background.bmp` 可选，缺了就用纯色背景。
-
-## 开发用环境变量（原桌面版，已移除）
-
-网页版的对应开关是 URL 参数（如 `?showcase=1`），见 [web.md](web.md)。
-
-| 变量 | 作用 |
-|------|------|
-| `MATCH3_ASSETS=/path/to/assets` | 指定资源目录 |
-| `MATCH3_LEVEL=16` | 从第 N 关开始（从 1 开始计数，方便截图） |
-| `MATCH3_SHOWCASE=1` | 展示盘面：一屏摆出所有宝石、特殊块、覆盖物、障碍、地砖（仅用于预览美术，不影响规则） |
-| `MATCH3_SEED=1` | 固定首局随机种子（只影响开局，重开 / 下一关仍随机），配合 xdotool 按固定坐标复现问题 |
-| `MATCH3_SCALE=2` | **测试用**：窗口按 N 倍（1..4）逻辑尺寸创建，在没有 HiDPI 的环境（Linux / Xvfb）里模拟 Retina；真 Mac 上不需要设置 |
-
-截图示例（无显示器）：
-
-```bash
-MATCH3_SHOWCASE=1 xvfb-run -a stack exec match3-sdl
-```
-
-![展示盘面](images/showcase.png)
-
-模拟 Retina 截图（窗口 960×1176，渲染倍率 2）：
-
-```bash
-Xvfb :98 -screen 0 1400x1300x24 &
-DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
-```
+图形采用 4 倍超采样再缩小；关卡名文字不超采样，而是按目标像素字号直接用 FreeType 渲染（带 hinting，笔画对齐像素格）。随机种子固定，所以同一环境里多次运行结果一致；但换了 Pillow / numpy / 字体版本，少数贴图会有像素级差异（`refactor/web-only-2` 时在另一台机器上重跑未改动的生成器，保留的 174 张里有 21 张不同）。所以只删贴图、不改画法时，应从已提交的 `assets/` 里裁出原贴图重新打包（同一个 `pack`），保证网页图集逐像素不变。关卡名从 `src/Match3/Levels/Campaign.hs` 解析，新增关卡后重新跑一次即可。字体按顺序查找：拉丁字形用 Barlow Condensed / DejaVu / Arial，中文用 Noto Sans CJK / 文泉驿 / 苹方 / 华文黑体。
 
 ## 连击表现（逐轮回放）
 
-实现：纯逻辑在 `app/pure/ComboFx.hs`（阶段机、时间线常量、下落映射）与 `app/pure/UI/Presentation.hs`（第 10 刀：效果事件 → 表现的**表现表**，帧数 / 颜色 / 贴图 / 碎屑 / 音效名、连击等级样式、蔓延生长曲线都在这一张表里，见下文「表现表」），表现编排在 `app/UI/Playback.hs`（`withMovePlayback`、阶段事件 → 弹字 / 粒子 / 震屏 / 音效队列），绘制在 `app/UI/Cascade.hs`（`drawCascade` 与各轮阶段）、`app/UI/EndStage.hs`（步末阶段）、`app/UI/HudArt.hs` / `HudPrim.hs`（`drawPopsArt` / `drawPopsPrim`、`drawComboSummaryArt`），`AnimCascade` 定义在 `app/UI/Types.hs`（持有通用播放器 `Engine.Playback.Player Cascade`：帧号与加速在播放器里，阶段机是 `ComboFx.cascadeStages`；波次级的高亮 / 消失 / 粒子 / 得分浮字读 `WaveView` 里本轮的效果事件）。核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Move` / `Match3.Game.Boosters`，底层是 `Match3.Board.Cascade` 记录版连锁的 `crWaves`；前端经通用接口 `gameStep` 的整步报告一次拿到），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep] }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
+实现：纯逻辑在 `app/pure/ComboFx.hs`（阶段机、时间线常量、下落映射）与 `app/pure/UI/Presentation.hs`（第 10 刀：效果事件 → 表现的**表现表**，帧数 / 颜色 / 碎屑 / 音效名、连击等级样式、蔓延生长曲线都在这一张表里，见下文「表现表」），表现编排在 `app/UI/Playback.hs`（`withMovePlayback`、阶段事件 → 弹字 / 粒子 / 震屏 / 音效队列），绘制在 `app/UI/Cascade.hs`（`drawCascade` 与各轮阶段）、`app/UI/EndStage.hs`（步末阶段）、`app/UI/HudArt.hs` / `HudPrim.hs`（`drawPopsArt` / `drawPopsPrim`、`drawComboSummaryArt`），`AnimCascade` 定义在 `app/UI/Types.hs`（持有通用播放器 `Engine.Playback.Player Cascade`：帧号与加速在播放器里，阶段机是 `ComboFx.cascadeStages`；波次级的高亮 / 消失 / 粒子 / 得分浮字读 `WaveView` 里本轮的效果事件）。核心只新增了纯函数 `traceSwap` / `traceFreeSwap` / `traceHammer` / `traceCrossClear`（`Match3.Game.Move` / `Match3.Game.Boosters`，底层是 `Match3.Board.Cascade` 记录版连锁的 `crWaves`；前端经通用接口 `gameStep` 的整步报告一次拿到），返回 `MoveTrace { mtStart, mtWaves :: [CascadeWave], mtFinal, mtEnd :: [EndStep] }`。每个 `CascadeWave` 记录这一轮消除前的盘面、被消格、消除后留下的空洞、下落补子后的盘面和本轮得分。测试保证它的最终态、总分、清除格并集、轮数和 `trySwap` / 道具 API 的结果完全一致（`trace_*` 系列），所以前端只是把同一个结果**拆开播放**，规则没有任何改动。
 
 ### 时间线（60 fps，1 帧 ≈ 16.7 ms）
 
@@ -171,7 +131,7 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 
 ![5 连锁逐轮回放：每行一轮，四列依次是高亮停留、消失、下落补子、本轮落定；左下角是时间戳](images/combo-strip.png)
 
-上图：第 5 关、种子 10、交换 (4,2)↔(5,2)（复现方法见下文「复现 / 截图」），第 2～5 轮依次出现 x2 浅金、x3 橙、x4 红、x5 紫的「连击」弹字和「+N」得分浮字。
+上图：第 5 关、种子 10、交换 (4,2)↔(5,2)（原桌面版截图），第 2～5 轮依次出现 x2 浅金、x3 橙、x4 红、x5 紫的「连击」弹字和「+N」得分浮字。
 
 ### 步末阶段（`PhEnd`）
 
@@ -192,7 +152,7 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 - 回放期间（包括步末阶段）HUD 的步数已经是结算后的值；倒计时数字在 `StTick` 段的中点从旧值变成新值，和盘面一致。「下一步可能蔓延到的格子」的呼吸光预告只在静止时画，避免跟正在长出来的格子混在一起。
 ![步末阶段逐段截图：每行一种效果，四列依次是起始、1/3、2/3、落定](images/end-of-step-strip.png)
 
-上图从上到下：巧克力蔓延、藤蔓蔓延、蜗牛爬行、传送带移位、倒计时减一、蒸汽 + 自动洗牌、同一步里四种效果齐全（终章），每行左侧标了复现用的关卡 / 种子 / 交换，对应下文「复现 / 截图」的表。
+上图从上到下：巧克力蔓延、藤蔓蔓延、蜗牛爬行、传送带移位、倒计时减一、蒸汽 + 自动洗牌、同一步里四种效果齐全（终章），每行左侧标了复现用的关卡 / 种子 / 交换。两张拼图是原桌面版逐帧截取后拼接的，**不由** `gen_assets.py` 生成。
 
 - 测试：`trace_end_steps_replay_to_trySwap_final` 对全部关卡 × 3 个种子的每个成功交换按时间线重放（轮 → 步末 → 轮……），要求每段首尾相接、`applyEndEffect esEffect esBefore == esAfter`，最后等于 `trySwap` 的终盘，并且抽样必须覆盖全部六种效果；`trace_end_steps_boosters_replay`、`trace_end_snail_push_and_turn`、`trace_end_spread_from_adjacent_source` 分别覆盖道具、蜗牛推 / 掉头、蔓延来源方向。
 
@@ -217,88 +177,20 @@ DISPLAY=:98 MATCH3_SCALE=2 stack exec match3-sdl
 
 ### 表现表（第 10 刀）
 
-上面各表里的帧数、颜色和光效贴图，第 10 刀起全部来自 `app/pure/UI/Presentation.hs` 的 `presentationTable`（每种效果事件一行；结构与完整的行见 [architecture.md「前端表现表」](architecture.md#前端表现表第-10-刀)）。读表的地方：
+上面各表里的帧数和颜色，第 10 刀起全部来自 `app/pure/UI/Presentation.hs` 的 `presentationTable`（每种效果事件一行；结构与完整的行见 [architecture.md「前端表现表」](architecture.md#前端表现表第-10-刀)）。读表的地方：
 
 | 画面 | 读表 | 原来写在 |
 |------|------|----------|
-| 高亮 / 消失的光圈色（第 1 轮柔白，连击轮等级色）、`spark` 光效 | `clearTint` / `clearSprite`（`EvClear` 行） | `UI.BoardArt.waveTint`、`UI.Cascade` 的字面量 |
+| 高亮 / 消失的光圈色（第 1 轮柔白，连击轮等级色） | `EvClear` 行的 `prColor`（连击轮用 `comboStyle`） | `UI.BoardArt.waveTint`、`UI.Cascade` 的字面量 |
 | 高亮帧数、得分浮字 / 连击弹字寿命 | `prFrames`（`EvClear` / `EvScore` / `EvCombo` 行） | `ComboFx` 常量 |
-| 得分浮字色、「连击」贴图 | `scorePopRGB` / `comboPopSprite` | `UI.HudArt` / `UI.HudPrim` 的 `if k >= 2 …` |
+| 得分浮字色 | `EvScore` 行的 `prColor`（连击轮用 `comboStyle`） | `UI.HudArt` / `UI.HudPrim` 的 `if k >= 2 …` |
 | 步末段种类与基础帧数 | `stageKindOf` / `stageFrames` | `ComboFx.endStageTable` |
-| 倒计时红光、洗牌紫光、蔓延前沿与蜗牛的贴图 | `stagePresentation 段` 的 `prColor` / `prSprite` | `UI.EndStage` 的字面量 |
+| 倒计时红光、洗牌紫光 | `stagePresentation 段` 的 `prColor` | `UI.EndStage` 的字面量 |
 | 蔓延生长曲线、前沿柔光色 | `spreadCurveFor` / `spreadGlowFor`（按元素名，缺省匀速 / 白） | `UI.EndStage.spreadProgress` |
 | 步末碎屑 | `prCrumbs`（倒计时来源格火星、蔓延按元素色） | `UI.Playback.endCrumbTable` |
 
-表里的值与第 10 刀前逐一相同（测试 `presentation_*` 对照旧 case 的字面副本；22 个静态场景、6 个步末场景与连击 / 特殊块爆炸 / 组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同）。**给新元素加表现**：步末效果选一个已有事件种类即可按那一行播放；蔓延类在 `elementRGBTable` / `spreadCurves` 各加一行定颜色与生长节奏（不加就是白光、匀速、不迸碎屑）。**音效**：每行有 `prSound` 钩子（内置全部 `Nothing`，前端不引入音频依赖、不播放），（此句是第 10 刀时的状态；现在内置表有 `clear` / `special` 两个音效名，网页经 `m3Meta` 取音效名播放，原桌面钩子 `UI.Sound` 已随桌面版移除。）
+表里的值与第 10 刀前逐一相同（测试 `presentation_*` 对照旧 case 的字面副本；22 个静态场景、6 个步末场景与连击 / 特殊块爆炸 / 组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同）。**给新元素加表现**：步末效果选一个已有事件种类即可按那一行播放；蔓延类在 `elementRGBTable` / `spreadCurves` 各加一行定颜色与生长节奏（不加就是白光、匀速、不迸碎屑）。**音效**：每行有 `prSound` 钩子（内置全部 `Nothing`，前端不引入音频依赖、不播放），（此句是第 10 刀时的状态；现在内置表有 `clear` / `special` 两个音效名，网页经 `m3Meta` 取音效名播放，原桌面钩子 `UI.Sound` 已随桌面版移除。） 原桌面版专用的贴图名列 `prSprite` 与取色函数 `clearTint` / `scorePopRGB`、贴图名 `clearSprite` / `comboPopSprite` 已于 `refactor/web-only-2` 删除。
 
 ### 贴图与降级
 
-- 新增 / 扩充的文字贴图（`tools/gen_assets.py`，全部 2x 烘焙）：`zh_combo` 增加 `@48 / @88 / @128` 变体（弹字用，原有 `@36 / @68`）；新增 `zh_combo_end`「连击！」（20 / 28 px，对应 `@40 / @56`）；数字 `0-9`、`x`、`+` 增加 7 / 9 / 12 号大字形（`g_<码点>@84 / @108 / @144`），弹字放大到峰值时也不会发糊。
-- 缺图时的退回画法：弹字用像素字「COMBO」加数字、同样的等级色和缩放；得分用像素数字；HUD 徽章在回放中显示当前轮，结束后显示「N COMBO!」。
-
-### 复现 / 截图（原桌面版，已移除）
-
-第 5 关（进阶，目标 700 分，不会被一次连锁直接过关挡住画面），种子 10，交换 (4,2)↔(5,2)，会触发 5 连锁（x2…x5 全部出现）。格子中心的逻辑坐标是 `x = 16 + c·56 + 28`、`y = 124 + r·56 + 28`，`MATCH3_SCALE=2` 时再乘 2，最后加上窗口在屏幕上的偏移（`xwininfo -root -tree` 查看）：
-
-```bash
-Xvfb :98 -screen 0 1400x1300x24 &
-export DISPLAY=:98
-MATCH3_LEVEL=5 MATCH3_SEED=10 MATCH3_SCALE=2 stack exec match3-sdl &
-# 窗口在 +220+62 时：
-ffmpeg -f x11grab -framerate 60 -video_size 960x1176 -i :98.0+220,62 -t 6 rec.mkv &
-xdotool mousemove 532 814 click 1; sleep 0.15; xdotool mousemove 532 926 click 1
-```
-
-其他候选（第 1 关）：`MATCH3_SEED=4` 交换 (1,4)↔(1,5) 是 4 连锁（但会直接达成 300 分目标，弹出过关面板）；可以用 `test/Spec/ReplayUndo.hs` 里 `trace_multi_wave_each_round_visible` 的查找方式换关卡或种子。
-
-步末效果的复现组合（`MATCH3_SCALE=2` 下截图，交换的两格用上面的坐标公式换算）：
-
-| 效果 | 环境变量 | 交换 |
-|------|----------|------|
-| 巧克力蔓延 | `MATCH3_LEVEL=5 MATCH3_SEED=1` | (3,1)↔(3,2) |
-| 藤蔓蔓延 | `MATCH3_LEVEL=10 MATCH3_SEED=1` | (3,1)↔(3,2) |
-| 蜗牛爬行（6 只） | `MATCH3_LEVEL=29 MATCH3_SEED=1` | (3,1)↔(3,2) |
-| 传送带移位 | `MATCH3_LEVEL=8 MATCH3_SEED=1` | (3,1)↔(3,2) |
-| 倒计时减一 | `MATCH3_LEVEL=12 MATCH3_SEED=1` | (3,1)↔(3,2) |
-| 蒸汽 + 巧克力 + 自动洗牌 | `MATCH3_LEVEL=36 MATCH3_SEED=1` | (5,3)↔(5,4) |
-| 同一步里倒计时 + 皮带 + 藤 / 巧 + 蜗牛 | `MATCH3_LEVEL=28 MATCH3_SEED=3` | (4,4)↔(4,5) |
-
-本节两张拼图 `docs/images/combo-strip.png`、`docs/images/end-of-step-strip.png` 是按上面的复现组合在 Xvfb 下（`MATCH3_SCALE=2`）逐帧截取后拼接的，缩放到宽 1100 px 并量化为 256 色（各约 0.7 MB），**不由** `gen_assets.py` 生成；回放表现改动后需要手工重拍。
-
-## 高分屏 / Retina（原桌面版，已移除）
-
-网页版按 `devicePixelRatio` 缩放画布，见 [web.md §2.4 自适应布局](web.md#24-自适应布局layoutjs)。以下是原 SDL 桌面版的做法。
-
-### 倍率怎么检测
-
-1. 窗口创建时打开 `windowHighDPI = True`（即 `SDL_WINDOW_ALLOW_HIGHDPI`）。macOS 上这样窗口大小仍是 480×588 **点**，但绘制表面是 960×1176 **物理像素**。不设置 `SDL_HINT_VIDEO_HIGHDPI_DISABLED`。
-2. 每帧查询两个尺寸（很便宜，所以窗口拖到另一块不同 DPI 的显示器上会立刻跟上，不依赖特定窗口事件）：
-   - 渲染器输出尺寸 `SDL_GetRendererOutputSize` → **渲染倍率** = 输出像素 / 逻辑尺寸（普通屏 1，Retina 2）
-   - 窗口尺寸 `SDL_GetWindowSize` → **鼠标倍率** = 窗口坐标 / 逻辑尺寸
-   - 宽高比不一致时取较小的倍率，保证整个逻辑画面放得下。
-3. 倍率变化时：`SDL_RenderSetScale(倍率)`，同时把倍率写进 `Art.artScale`（挑贴图变体用），并在 stderr 打印一行，例如：
-   `match3-sdl: render scale 2.0 (output 960x1176, window 480x588, logical 480x588)`
-
-### 倍率怎么应用
-
-- **游戏布局和所有绘制坐标仍是 480×588 逻辑单位**，代码里没有任何地方手动乘倍率；SDL 的渲染缩放把目标矩形乘到物理像素。
-- **贴图选择**：`Art` 按「目标逻辑高度 × 倍率」在同名变体里挑最小的够用尺寸。文字 / 标签按实际使用高度烘焙了 2x 版本（如「连击」在 HUD 里 18 px、弹字 24 / 34 / 44 / 64 px，对应 36～128 px 的贴图），所以 Retina 上是精确的 1:1 或从更大的变体线性缩小，不会放大发糊。
-- **纹理过滤**：创建渲染器 / 纹理前设置 `HintRenderScaleQuality = ScaleLinear`，2x 贴图在 1x 屏上按 2:1 线性缩小，边缘平滑、没有锯齿。缩小超过 2 倍的地方（HUD 目标小图标、双面块角标）有 `@56` 半尺寸变体，九宫格面板小圆角有 `@80` 变体。
-- **鼠标**：SDL 给的鼠标坐标是**窗口坐标**。macOS Retina 上窗口坐标就是逻辑点（鼠标倍率 1，原样使用）；`MATCH3_SCALE=N` 时窗口本身放大了 N 倍，窗口坐标 = 物理像素，事件在进入处理逻辑之前统一除以 N。换算只在 `foldEvents` 一处完成，所以点选、拖拽交换、道具点格、选关地图节点、结算面板点击都自动正确。
-
-### 模拟 Retina：`MATCH3_SCALE`
-
-Xvfb 没有 HiDPI，所以加了测试开关 `MATCH3_SCALE=N`：窗口按 N 倍逻辑尺寸创建，渲染倍率和鼠标倍率都变成 N，走的是和 Retina 完全相同的渲染路径（渲染缩放 + 变体选择），另外还额外覆盖了鼠标坐标换算。真 Mac 上**不要**设置它（设置后窗口会变成 960×1176 点，也就是 4 倍物理像素）。
-
-### 为什么现在不用 SDF 字体
-
-SDF（有向距离场）字体的优点是一张小图任意缩放都锐利，但它需要在**片元着色器**里对距离值做 `smoothstep` 阈值。SDL2 的 2D 渲染 API（`SDL_Renderer`）**不支持自定义着色器**，只能做固定的纹理拷贝 + 颜色 / alpha 调制；直接把 SDF 图当普通纹理画，只会得到一团模糊的灰度渐变。要用 SDF 必须绕开 `SDL_Renderer`，改走 OpenGL（或 Metal）路径。
-
-本游戏的文字是固定的一组 UI 标签和数字，字号也是固定的几档，所以「按实际字号 × 2 预烘焙」已经能在 Retina 上做到像素级清晰，成本最低，也不需要任何新依赖（Mac 上仍然只要 `brew install sdl2`）。
-
-### 以后如果要做 SDF，大致是这样
-
-1. `tools/gen_assets.py` 为每个字（或整条标签）生成单通道距离场图（例如 32 px/em、扩散半径 4 px；多通道 MSDF 可以保住尖角），打进一张灰度图集，索引里再记字宽 / 基线等度量。
-2. 前端改用 OpenGL 3.3 core 上下文（`SDL_GL_CreateContext`，Haskell 端用 `gl` 或 `OpenGL` 包），自己管理顶点缓冲、正交投影矩阵和纹理；所有精灵绘制也要一并迁到 GL（不能和 `SDL_Renderer` 混用同一个窗口）。
-3. 片元着色器：`a = smoothstep(0.5 - w, 0.5 + w, texture(sdf, uv).r)`，`w` 取 `fwidth(dist)`，这样在任何倍率下边缘都约 1 个物理像素宽；描边 / 发光 / 阴影用第二个阈值即可，不必再单独烘焙描边。
-4. 好处：字可以任意缩放、做动画（连击数字弹跳放大）；代价：要维护一整套 GL 渲染层。
+原桌面版为弹字烘焙的 `zh_combo` / `g_*` 大字形贴图与缺图时的像素字退回画法已随桌面版删除；网页的弹字、浮字和 HUD 徽章都用画布字体画（见 [web.md](web.md)）。

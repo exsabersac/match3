@@ -13,7 +13,7 @@ export PATH="$HOME/.ghcup/bin:$PATH"
 make doctor                           # 检查工具链（GHC wasm、node、Pillow、stack）
 make toolchain                        # 首次：安装 GHC wasm 工具链到 ~/.ghc-wasm
 make build && make serve              # 构建 web/dist，浏览器打开 http://localhost:8080/
-stack test                            # 核心规则测试，无需显示器；期望 470 通过
+stack test                            # 核心规则测试，无需显示器；期望 466 通过
 ```
 
 1. 点两格相邻交换，或**拖划**到相邻格（鼠标或触摸）；无三连会弹回
@@ -192,7 +192,7 @@ GHC **9.14.1**；Stackage 快照 **lts-24.60**（快照本身对应 GHC 9.10.3�
 ## 目录结构
 
 ```
-src/Engine/   Game Effect Playback History GridUI Stream Optics（多游戏通用层：接口 / 通用效果 / 纯播放层 / 撤销历史 / 通用网格 UI 组件 / 无穷流 / 手写透镜；不依赖 Match3）
+src/Engine/   Game Effect Playback History Stream Optics（多游戏通用层：接口 / 通用效果 / 纯播放层 / 撤销历史 / 无穷流 / 手写透镜；不依赖 Match3）
 src/Match3/   Types Counts Color Goal GoalLabel Core Engine View Obstacles Rainbow Combos Ice
               Daily Countdown Conveyor Boosters Grass Ufo Snail Carpet
               （View = 第 11 刀的视图模型：从 GameState 算出 HUD / 目标 / 棋盘读数，网页经 Match3Web.Api 读）
@@ -211,7 +211,7 @@ web/          网页版（唯一前端）：hs/（wasm 导出与 JSON 接口 Mat
               android-app/（安卓壳）；见 web/README.md
 assets/       生成的源贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格），网页图集由它重新打包
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；470 命名用例）
+test/Spec.hs  测试入口（只汇总；466 命名用例）
 test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Archetype / ElementAbility / ElementOracle / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
@@ -225,5 +225,5 @@ docs/guide/   框架与实现分析导读（把上面各篇串成一条阅读路
 
 - 战役：**49** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球，第 44 关「魔力鸟」是新玩法魔力鸟组合增强，第 45 关「雪怪」是新玩法雪怪 Boss，第 46 关「掉落口」是新玩法饼干掉落口，第 47 关「变色龙」是新玩法变色龙，第 48 关「魔法格」是新玩法魔法地格，第 49 关「宽域」是 6×9 矩形盘面），批量可构造 / 可玩 / 装饰与目标对齐
 - 前端：网页版（浏览器 / 安卓壳）；SDL2 桌面版已移除，PC 端以后给网页套壳
-- 测试：`stack test` **470**（Tasty + QuickCheck）；网页 `make check`：状态一致性 40 组、动画一致性 34 组、e2e 324 项
+- 测试：`stack test` **466**（Tasty + QuickCheck）；网页 `make check`：状态一致性 40 组、动画一致性 34 组、e2e 324 项
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

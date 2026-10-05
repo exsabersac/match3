@@ -68,7 +68,7 @@ make verify          # 合 main 前的验收：只跑 stack test（见 docs/test
 | `make build` | `web/build.sh`：wasm + 页面 + 图集 → `web/dist` |
 | `make atlas` | 强制重新生成网页图集（有 dist 时同步进去） |
 | `make serve [PORT=8080] [BIND=0.0.0.0]` | 用 `serve.py` 起服务器（不自动构建） |
-| `make test-native` | `stack test`（核心规则与 `app/pure`，470 个） |
+| `make test-native` | `stack test`（核心规则与 `app/pure`，466 个） |
 | `make parity` / `make anim-parity` | 状态 / 动画一致性（`web/test/parity.sh`；`STEPS=`、`CASES="关卡:种子[:走法] …"` 可改，走法 `hint` / `combo` / `combo-bomb` 见 §4） |
 | `make e2e [SHOTS=目录] [E2E_PORT=8765]` | 无头 Chrome 端到端测试（`CHROME=` 可改浏览器；`E2E_PORT` = 临时 serve.py 的端口，默认 8765，见 §4） |
 | `make test` | 以上四组测试依次跑 |
@@ -127,7 +127,7 @@ make size            # 事后单独看体积
    缓存在 `web/.cache/art`，只有 `assets/` 或生成器变动时才重新生成；
 5. 输出到 `web/dist/`，并打印 wasm 原始 / 优化后 / gzip 后的体积，以及 dist 总大小。
 
-图集：174 张 2x 精灵（每格 112 px；不含 `g_`/`zh_` 文字图和 `@` 变体，保留 `badge_*`；收 49 张关名文字图 `name_<i>`，HUD 关名画这张图），
+图集：174 张 2x 精灵（每格 112 px；即 `assets/` 的全部贴图，含 `badge_*` 与 49 张关名文字图 `name_<i>`，HUD 关名画这张图），
 1024×1730，WebP 约 488 KB（488,226 B）；`atlas.json` 约 5.0 KB；背景 WebP 约 17 KB。
 
 当前体积（2026-10-03，chore/audit-wrapup（审计整改第 1–8 项之后，基于 fa719fa），`make clean` 后全量重建的发布产物）：wasm 原始 5,442,572 B → `-Oz` 2,212,226 B ≈ 2.21 MB（gzip 817,932 B）；
@@ -211,7 +211,7 @@ bash deploy-mac.sh install match3-web-dist.tgz && bash deploy-mac.sh run   # 前
 ## 4. 测试
 
 一般在仓库根目录直接 `make test`（或分别 `make test-native` / `make parity` / `make anim-parity` / `make e2e`）；
-下面是各自的底层命令。当前（2026-10-05，refactor/web-only）：49 关，`stack test` 470 个用例全过，
+下面是各自的底层命令。当前（2026-10-05，refactor/web-only-2）：49 关，`stack test` 466 个用例全过，
 状态一致性 40 组、动画一致性 34 组（都含第 43–48 关与迁自桌面的道具 / 每日 / 前进走法），e2e 324 项全过（第 5 节 156 项为迁自桌面的功能与常驻按钮 / 菜单）。
 
 ```sh

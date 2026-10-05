@@ -61,6 +61,9 @@ web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match
 
 ## 现在怎样扩展
 
+> 2026-10 的元素类重构（第 0–6 刀）改了下面的写法：能力记录 `Caps`、`Modifier`、`LevelElement` 与开放消息、注册表 `Registry` 都已删除，
+> 现在的写法是能力类 + `Kind` / `Layer` / `Mechanic` instance + `kindDef @T`，见 [guide/04-元素框架.md](guide/04-元素框架.md) 与 [architecture.md「新增一种元素的步骤」](architecture.md#新增一种元素的步骤)。以下保留第 9 刀时的原文。
+
 ### 新增一种元素（格子里的东西）
 
 1. 写一个类型和 `instance Element`：只写 `name`、`toCell`、`caps`，例如 `caps (Thorn n) = blocker [hit …, counts (CountNamed "thorn")]`（原型选 `piece` / `blocker` / `fixed`，能力简写在 `Match3.Element.Caps`）。内置元素放进 `src/Match3/Element/Builtin/` 下最接近的分组文件；测试 / 扩展元素放在自己的模块里。叠层写 `instance Modifier`。

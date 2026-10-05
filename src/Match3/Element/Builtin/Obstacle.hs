@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 打破型障碍：占格本体，被直接命中或邻格真消除时削层 / 打碎 / 变成别的元素。
 --
@@ -8,6 +9,8 @@
 -- 雪怪 Boss（新玩法 5，Custom "snow_boss"）是占 2×2 的固定格：邻格真消除 / 直接命中扣血，血量归零整只消除；
 -- 每 3 次交换在身边召唤一块雪块（1 层石头）。
 -- 邻格规则顺序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
+-- 多层障碍 / 保险箱的邻消是方法 onNeighbourClear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity（驱动 entityDamage）；
+-- 气球（同色）、魔法石、雪怪召唤读整盘，走逃生口 boardPasses。
 -- 步末：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
 module Match3.Element.Builtin.Obstacle
   ( StoneE(..)
@@ -30,39 +33,24 @@ module Match3.Element.Builtin.Obstacle
   , snowBossHp
   , snowBossSpawn
   , decodeBoss
-  , stoneEntry
-  , chestEntry
-  , honeyEntry
-  , cakeEntry
-  , balloonEntry
-  , safeEntry
-  , flipEntry
-  , surpriseEntry
-  , magicStoneEntry
-  , snowBossEntry
   ) where
 
 import Control.Applicative ((<|>))
 import Control.Monad (guard)
 import Data.Bits (xor)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Proxy (Proxy(..))
 
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
-import Match3.Element.Builtin.Collectible (CookieE(..))
-import Match3.Element.Builtin.Common (boardSeed, colorPlace, deadRule, pickBy, plainGem, posSeed)
-import Match3.Element.Builtin.Gem (PlainGem(..))
-import Match3.Element.Caps
-import Match3.Element.Registry
+import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, deadRule, nField, pickBy, plainGem, posSeed)
+import Match3.Element.Ability
+import Match3.Element.Kind
 import Match3.Element.Types
+import Match3.Element.Rules (entityDamage)
 import Match3.Obstacles
   ( chipAdjacentBalloonsExcept
-  , chipAdjacentCakesExcept
-  , chipAdjacentChestsExcept
-  , chipAdjacentHoneyExcept
-  , chipAdjacentSafesExcept
-  , chipAdjacentStonesExcept
   , openSurprises
   , orthoNeighbors
   )
@@ -71,81 +59,223 @@ import Match3.Types
 -- | 石头：直接命中削一层、末层消除；邻消同样削层。
 newtype StoneE = StoneE Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle StoneE)
 
-instance Element StoneE where
-  name _ = "stone"
+instance Cellular StoneE where
+  nameOf _ = "stone"
   toCell (StoneE n) = Stone n
-  caps (StoneE n) = blocker [hit (chip n StoneE), onAdjacent 10 (deadRule chipAdjacentStonesExcept), counts CountStones]
+
+instance Hittable StoneE where
+  struck (StoneE n) = chip n Stone
+  fires _ = False
+
+instance Countable StoneE where
+  counter _ = Just CountStones
+
+instance Renders StoneE where
+  faceBase (StoneE k) = Just ("stone", [nField k])
+
+instance Kind StoneE where
+  kindName _ = "stone"
+  fromCell cell = case cell of
+    Stone n -> Just (StoneE n)
+    _ -> Nothing
+  place _ = layersPlace Stone
+  neighbourPrio _ = Just 10
+  onNeighbourClear (StoneE n) = chipNudge n Stone
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle ChestE)
 
-instance Element ChestE where
-  name _ = "chest"
+instance Cellular ChestE where
+  nameOf _ = "chest"
   toCell (ChestE n) = Chest n
-  caps (ChestE n) = blocker [hit (chip n ChestE), onAdjacent 20 (deadRule chipAdjacentChestsExcept), counts CountChests]
+
+instance Hittable ChestE where
+  struck (ChestE n) = chip n Chest
+  fires _ = False
+
+instance Countable ChestE where
+  counter _ = Just CountChests
+
+instance Renders ChestE where
+  faceBase (ChestE k) = Just ("chest", [nField k])
+
+instance Kind ChestE where
+  kindName _ = "chest"
+  fromCell cell = case cell of
+    Chest n -> Just (ChestE n)
+    _ -> Nothing
+  place _ = layersPlace Chest
+  neighbourPrio _ = Just 20
+  onNeighbourClear (ChestE n) = chipNudge n Chest
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle HoneyE)
 
-instance Element HoneyE where
-  name _ = "honey"
+instance Cellular HoneyE where
+  nameOf _ = "honey"
   toCell (HoneyE n) = Honey n
-  caps (HoneyE n) = blocker [hit (chip n HoneyE), onAdjacent 30 (deadRule chipAdjacentHoneyExcept), counts CountHoney]
+
+instance Hittable HoneyE where
+  struck (HoneyE n) = chip n Honey
+  fires _ = False
+
+instance Countable HoneyE where
+  counter _ = Just CountHoney
+
+instance Renders HoneyE where
+  faceBase (HoneyE k) = Just ("honey", [nField k])
+
+instance Kind HoneyE where
+  kindName _ = "honey"
+  fromCell cell = case cell of
+    Honey n -> Just (HoneyE n)
+    _ -> Nothing
+  place _ = layersPlace Honey
+  neighbourPrio _ = Just 30
+  onNeighbourClear (HoneyE n) = chipNudge n Honey
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle CakeE)
 
-instance Element CakeE where
-  name _ = "cake"
+instance Cellular CakeE where
+  nameOf _ = "cake"
   toCell (CakeE n) = Cake n
-  caps (CakeE n) = blocker [hit (chip n CakeE), onAdjacent 40 (deadRule chipAdjacentCakesExcept), counts CountCakes]
+
+instance Hittable CakeE where
+  struck (CakeE n) = chip n Cake
+  fires _ = False
+
+instance Countable CakeE where
+  counter _ = Just CountCakes
+
+instance Renders CakeE where
+  faceBase (CakeE k) = Just ("cake", [nField k])
+
+instance Kind CakeE where
+  kindName _ = "cake"
+  fromCell cell = case cell of
+    Cake n -> Just (CakeE n)
+    _ -> Nothing
+  place _ = layersPlace Cake
+  neighbourPrio _ = Just 40
+  onNeighbourClear (CakeE n) = chipNudge n Cake
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle BalloonE)
 
-instance Element BalloonE where
-  name _ = "balloon"
+instance Cellular BalloonE where
+  nameOf _ = "balloon"
   toCell (BalloonE c) = Balloon c
-  caps _ = blocker [breaks, onAdjacent 50 (deadRule chipAdjacentBalloonsExcept), counts CountBalloons]
+
+instance Hittable BalloonE where
+  fires _ = False
+
+instance Countable BalloonE where
+  counter _ = Just CountBalloons
+
+instance Renders BalloonE where
+  faceBase (BalloonE c) = Just ("balloon", [colorField c])
+
+instance Kind BalloonE where
+  kindName _ = "balloon"
+  fromCell cell = case cell of
+    Balloon c -> Just (BalloonE c)
+    _ -> Nothing
+  place _ = colorPlace Balloon
+  boardPasses _ = [AdjacentPass 50 (deadRule chipAdjacentBalloonsExcept)]
 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle SafeE)
 
-instance Element SafeE where
-  name _ = "safe"
+instance Cellular SafeE where
+  nameOf _ = "safe"
   toCell (SafeE n) = Safe n
-  caps (SafeE n) =
-    blocker
-      [ hit (Absorb (if n <= 1 then SomeElement CookieE else SomeElement (SafeE (n - 1))))
-      , onAdjacent 110 (\ctx b -> AdjOut (fst (chipAdjacentSafesExcept b (acTrue ctx) (acDirect ctx))) [] [])
-      , countsDiff CountSafes
-      , vacates
-      ]
+
+instance Hittable SafeE where
+  struck (SafeE n) = Absorb (if n <= 1 then Cookie else Safe (n - 1))
+  fires _ = False
+
+instance Countable SafeE where
+  vacatesCarpet _ = True
+
+instance Renders SafeE where
+  faceBase (SafeE k) = Just ("safe", [nField k])
+
+instance Kind SafeE where
+  kindName _ = "safe"
+  fromCell cell = case cell of
+    Safe n -> Just (SafeE n)
+    _ -> Nothing
+  place _ = layersPlace Safe
+  diffCounter _ = Just CountSafes
+  neighbourPrio _ = Just 110
+  -- 末层原地开成饼干（不并入清除格）
+  onNeighbourClear (SafeE n) = Becomes (if n <= 1 then Cookie else Safe (n - 1))
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
   deriving (Eq, Show)
 
-instance Element FlipE where
-  name _ = "flip"
+instance Cellular FlipE where
+  nameOf _ = "flip"
   toCell (FlipE f b) = Flip f b
-  caps (FlipE f back) = blocker [colorIs f, swappable, teleports, pushes, recolors, hit (Absorb (SomeElement (PlainGem back)))]
+
+instance Matchable FlipE where
+  color (FlipE f _) = Just f
+
+instance Hittable FlipE where
+  struck (FlipE _ back) = Absorb (Gem back Normal 0 Nothing)
+  fires _ = False
+
+instance Movable FlipE where
+  keepOnShuffle _ = True
+
+instance Countable FlipE
+instance Renders FlipE where
+  faceBase (FlipE f b) = Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])
+
+instance Kind FlipE where
+  kindName _ = "flip"
+  fromCell cell = case cell of
+    Flip f b -> Just (FlipE f b)
+    _ -> Nothing
+  place _ args _ = exactArgs (Flip <$> argColor <*> argColor) args
 
 -- | 彩蛋：占格障碍；命中即破；开启规则 = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
 -- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
 data SurpriseEgg = SurpriseEgg
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle SurpriseEgg)
 
-instance Element SurpriseEgg where
-  name _ = "surprise"
+instance Cellular SurpriseEgg where
+  nameOf _ = "surprise"
   toCell _ = Surprise
-  caps _ = blocker [breaks, opens openSurprises]
+
+instance Hittable SurpriseEgg where
+  fires _ = False
+
+instance Countable SurpriseEgg
+instance Renders SurpriseEgg
+
+instance Kind SurpriseEgg where
+  kindName _ = "surprise"
+  fromCell cell = case cell of
+    Surprise -> Just SurpriseEgg
+    _ -> Nothing
+  place _ _ _ = Just Surprise
+  boardPasses _ = [OpenPass (OpenRule openSurprises)]
 
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
 -- 状态 k = 充能格数 0–3；4 = 发射中（只在步末那一轮存在）。
@@ -157,18 +287,24 @@ instance Element SurpriseEgg where
 -- 道具（锤子 / 自由交换 / 十字）没有 PhaseTick 步末，充满的魔法石等到下一次交换的步末再发射。
 newtype MagicStone = MagicStone Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Fixed MagicStone)
 
-instance Element MagicStone where
-  name _ = "magic_stone"
-  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps (MagicStone k) =
-    fixed
-      [ hit (if k >= magicStoneFiring then Absorb (SomeElement (MagicStone 0)) else Immune)
-      , colorless
-      , onAdjacent 180 magicStoneCharge
-      , atEnd (tickRule 20 magicStoneArm magicStoneSeeds)
-      , labelled "魔法石"
-      ]
+instance Cellular MagicStone where
+  nameOf _ = "magic_stone"
+
+instance Hittable MagicStone where
+  struck (MagicStone k) = if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune
+  fires _ = False
+
+instance Countable MagicStone
+instance Renders MagicStone
+
+instance Kind MagicStone where
+  kindName _ = "magic_stone"
+  fromCell = fromCustom "magic_stone" MagicStone
+  place _ args _ = Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
+  label _ = Just "魔法石"
+  boardPasses _ = [AdjacentPass 180 magicStoneCharge, EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
 -- | 满格（可发射）的充能数。
 magicStoneFull :: Int
@@ -226,27 +362,49 @@ data SnowBoss = SnowBoss
   , sbQuad :: Int
   }
   deriving (Eq, Show)
+  deriving (Movable) via (Fixed SnowBoss)
 
-instance Element SnowBoss where
-  name _ = snowBossName
+instance Cellular SnowBoss where
+  nameOf _ = snowBossName
   toCell (SnowBoss hp mx t q) = Custom snowBossName (CustomState (((clamp mx * 256 + clamp hp) * 4 + t `mod` 4) * 4 + q `mod` 4))
     where
       clamp = max 0 . min 255
-  caps b =
-    fixed
-      [ hit (Absorb (SomeElement b))
-      , colorless
-      , notHintable
-      , onAdjacent 200 snowBossDamage
-      , countsDiff (CountNamed snowBossName)
-      , weighs (if sbQuad b == 0 then sbHp b else 0)
-      , atEnd (moveRule 30 snowBossRun)
-      , labelled "雪怪"
-      , loseHintIs (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
-        -- 一格怎么画：象限（0 左上 / 1 右上 / 2 左下 / 3 右下，贴图 snow_boss[_hurt]_<象限>）、是否受伤（血量 ≤ 满血一半）、
-        -- 召唤计数与周期（右下格画进度小点）
-      , displays [("q", FaceInt (sbQuad b)), ("hurt", FaceBool (sbHp b * 2 <= sbMax b)), ("turn", FaceInt (sbTurn b)), ("every", FaceInt snowBossEvery)]
-      ]
+
+instance Matchable SnowBoss where
+  blocksSwap _ = True
+  hintable _ = False
+
+instance Hittable SnowBoss where
+  struck b = Absorb (toCell b)
+  fires _ = False
+
+instance Countable SnowBoss where
+  diffWeight b = if sbQuad b == 0 then sbHp b else 0
+
+instance Renders SnowBoss where
+  face b = [("q", FaceInt (sbQuad b)), ("hurt", FaceBool (sbHp b * 2 <= sbMax b)), ("turn", FaceInt (sbTurn b)), ("every", FaceInt snowBossEvery)]
+
+instance Kind SnowBoss where
+  kindName _ = snowBossName
+  fromCell cell = case cell of
+    Custom n s | n == snowBossName -> Just (decodeBoss s)
+    _ -> Nothing
+  -- 放置：[AInt 血量, AInt 象限]（关卡按象限 0..3 放满一只的四格；血量 1..255，上限 = 血量）
+  place _ args _ = do
+    (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
+    guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
+    Just (toCell (SnowBoss hp hp 0 q))
+  label _ = Just "雪怪"
+  loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
+  diffCounter _ = Just (CountNamed snowBossName)
+  boardPasses _ = [AdjacentPass 200 (entityDamage (Proxy :: Proxy SnowBoss)), EndPass (moveRule 30 snowBossRun)]
+
+-- | 2×2 多格实体：扣血由通用驱动 'entityDamage' 算（邻格规则 200）。
+instance Entity SnowBoss where
+  footprint _ = snowBossCells
+  partNo = sbQuad
+  hitPoints = sbHp
+  withHp hp b = b {sbHp = hp}
 
 snowBossName :: ElementName
 snowBossName = "snow_boss"
@@ -286,20 +444,6 @@ bossRing b anchor =
   let body = snowBossCells anchor
   in foldr (\q acc -> if q `elem` acc then acc else q : acc) [] [q | x <- body, q <- orthoNeighbors x, inBounds b q, q `notElem` body]
 
--- | 邻格规则：每只 Boss 按本轮伤害扣血；归零的四格并入清除格。
-snowBossDamage :: AdjCtx -> Board -> AdjOut
-snowBossDamage ctx b0 = foldl one (AdjOut b0 [] []) (snowBosses b0)
-  where
-    one out@(AdjOut b dead sit) (anchor, s) =
-      let parts = bossParts b anchor
-          dmg = length [q | q <- bossRing b anchor, q `elem` acTrue ctx] + length [p | (p, _) <- parts, p `elem` acDirect ctx]
-          hp' = max 0 (sbHp s - dmg)
-      in if dmg == 0
-           then out
-           else if hp' == 0
-             then AdjOut b (dead ++ map fst parts) sit
-             else AdjOut (foldl (\bd (p, x) -> setCell bd p (toCell x {sbHp = hp'})) b parts) dead sit
-
 -- | 召唤选格（纯函数，测试直接调用）：避让格 / 墙之外、身外一圈里的普通宝石（无冰无叠层）按盘面散列选一格
 -- （'boardSeed' 依赖 @show board@，见 Element.Builtin.Common）。
 snowBossSpawn :: [Pos] -> [Pos] -> Board -> Pos -> Maybe Pos
@@ -325,34 +469,21 @@ snowBossRun ctx b0 =
           b1 = foldl (\bd (p, cell) -> setCell bd p cell) b changes
       in (acc ++ [EndItem p p cell Nothing | (p, cell) <- changes], b1)
 
+-- | 多层障碍被邻格真消除：削一层，末层打碎（并入清除格）。
+chipNudge :: Int -> (Int -> Cell) -> Nudge
+chipNudge n con
+  | n <= 1 = Dies
+  | otherwise = Becomes (con (n - 1))
+
 -- | 多层障碍受直接命中：削一层，末层消除。
-chip :: Element e => Int -> (Int -> e) -> Hit
+chip :: Int -> (Int -> Cell) -> Strike
 chip n con
   | n <= 1 = Destroy
-  | otherwise = Absorb (SomeElement (con (n - 1)))
+  | otherwise = Absorb (con (n - 1))
 
 -- | 放置：层数（缺省 1，至少 1）。精确匹配：只接受 @[]@ 或 @[AInt n]@。
 layersPlace :: (Int -> Cell) -> Placer
 layersPlace con args _ = con <$> exactArgs (max 1 <$> argInt <|> pure 1) args
 
 --------------------------------------------------------------------------------
--- 条目（槽位由原型推导 = cellSlot (toCell 原型)）
-
-stoneEntry, chestEntry, honeyEntry, cakeEntry, balloonEntry, safeEntry, flipEntry, surpriseEntry, magicStoneEntry, snowBossEntry :: Entry
-stoneEntry = bodyEntry (StoneE 1) (\cell -> case cell of Stone n -> Just (StoneE n); _ -> Nothing) (layersPlace Stone)
-chestEntry = bodyEntry (ChestE 1) (\cell -> case cell of Chest n -> Just (ChestE n); _ -> Nothing) (layersPlace Chest)
-honeyEntry = bodyEntry (HoneyE 1) (\cell -> case cell of Honey n -> Just (HoneyE n); _ -> Nothing) (layersPlace Honey)
-balloonEntry = bodyEntry (BalloonE C1) (\cell -> case cell of Balloon c -> Just (BalloonE c); _ -> Nothing) (colorPlace Balloon)
-cakeEntry = bodyEntry (CakeE 1) (\cell -> case cell of Cake n -> Just (CakeE n); _ -> Nothing) (layersPlace Cake)
-safeEntry = bodyEntry (SafeE 1) (\cell -> case cell of Safe n -> Just (SafeE n); _ -> Nothing) (layersPlace Safe)
-flipEntry = bodyEntry (FlipE C1 C2) (\cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing) $ \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
-surpriseEntry = bodyEntry SurpriseEgg (\cell -> case cell of Surprise -> Just SurpriseEgg; _ -> Nothing) (\_ _ -> Just Surprise)
--- 魔法石：Custom 本体，放置参数 = 初始充能（缺省 0，夹到 0–3；前缀匹配，多出的参数忽略）。
-magicStoneEntry = customEntryWith (MagicStone 0) (MagicStone . unCustomState) $ \args _ ->
-  Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
--- 雪怪 Boss：Custom 本体，放置参数 = [血量（= 满血，1–255）, 象限]（象限 0 左上 / 1 右上 / 2 左下 / 3 右下；关卡表用 Campaign 的 bossAt 一次放四格）。
--- 精确匹配两个整数，再检查范围。
-snowBossEntry = customEntryWith (SnowBoss 1 1 0 0) decodeBoss $ \args _ -> do
-  (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
-  guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
-  Just (toCell (SnowBoss hp hp 0 q))
+-- 条目（注册项的分派编号由 World 的解码探针推导）

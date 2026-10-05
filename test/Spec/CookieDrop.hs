@@ -16,9 +16,9 @@ import Match3.Board.Match (findHintWith)
 import Match3.Board.Refill (RefillPolicy(..), defaultRefill, refillWith)
 import Match3.Counts (countOf)
 import Match3.Daily (dailyConfig)
-import Match3.Element (dropRefill, removeLevel)
+import Match3.Element (dropRefill, removeMechanic)
 import Match3.Element.Level (levelDrops)
-import Match3.Element.Registry (Registry)
+import Match3.Element.World (World)
 import Match3.Game.Level (newGameAtLevelWith)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.State (gsCount)
@@ -59,7 +59,7 @@ cookiesM :: MBoard -> Int
 cookiesM mb = length (filter (== Just Cookie) (toList mb))
 
 -- | 按提示走 n 步（注册表 reg），记下每步之后的状态。
-hintPlay :: Registry -> GameState -> Int -> [GameState]
+hintPlay :: World -> GameState -> Int -> [GameState]
 hintPlay reg gs n
   | n <= 0 || gsOver gs /= Nothing = []
   | otherwise = case findHintWith reg (gsBoard gs) of
@@ -73,7 +73,7 @@ greedyPlay gs
   | otherwise =
       case [ (key g', g')
            | (i, (p, q)) <- zip [0 :: Int ..] [((r, c), d) | r <- [0 .. 7], c <- [0 .. 7], d <- [(r, c + 1), (r + 1, c)], fst d >= 0 && fst d < boardSize && snd d >= 0 && snd d < boardSize]
-           , let (g', o, _) = resolveSwapWith defaultRegistry p q gs
+           , let (g', o, _) = resolveSwapWith defaultWorld p q gs
            , o `notElem` [NoMatch, InvalidSwap]
            , let key g = (negate (gsCount CountCookies g), negate (sum (map fst (cookiesOn (gsBoard g)))), negate (gsScore g), i) ] of
         [] -> []
@@ -151,7 +151,7 @@ cd_level46_start_no_goal_decor = do
     )
     [21, 22]
   -- 掉落口开局与注册表无关：去掉 cookie_drop 条目开局相同（只是之后不再掉）
-  let off = removeLevel "cookie_drop" defaultRegistry
+  let off = removeMechanic "cookie_drop" defaultWorld
       l46 = levelAt dropLevel
   assertEqual "start board independent of the entry" (gsBoard (levelGame dropLevel 2)) (gsBoard (newGameAtLevelWith off dropLevel (levelConfig l46) 2))
 
@@ -177,7 +177,7 @@ cd_drops_and_collects_in_play = do
           (zip states (drop 1 states))
     )
     [1 .. 6]
-  let off = removeLevel "cookie_drop" defaultRegistry
+  let off = removeMechanic "cookie_drop" defaultWorld
       noDrop = hintPlay off (levelGame dropLevel 1) 26
   assertBool "without the entry: never more than the starting 4" (all (\g -> length (cookiesOn (gsBoard g)) + gsCount CountCookies g <= 4) noDrop)
   assertEqual "counts via drains" (gsCount CountCookies (last (levelGame dropLevel 1 : greedyPlay (levelGame dropLevel 1)))) (countOf CountCookies (gsCounts (last (levelGame dropLevel 1 : greedyPlay (levelGame dropLevel 1)))))
@@ -185,20 +185,20 @@ cd_drops_and_collects_in_play = do
 -- | 去掉 cookie_drop 条目的注册表：前 45 关与每日挑战按提示各走 6 步，盘面、分数、计数、步数、gsGen 逐关相同。
 cd_other_levels_unchanged :: Assertion
 cd_other_levels_unchanged = do
-  let off = removeLevel "cookie_drop" defaultRegistry
+  let off = removeMechanic "cookie_drop" defaultWorld
       key gs = (gsBoard gs, gsScore gs, gsCounts gs, gsMoves gs, show (gsGen gs))
       run reg gs = key (last (gs : hintPlay reg gs 6))
-  mapM_ (\li -> assertEqual ("level " ++ show (li + 1)) (run off (levelGame li 3)) (run defaultRegistry (levelGame li 3))) [0 .. dropLevel - 1]
-  mapM_ (\d -> assertEqual ("daily " ++ show d) (run off (dailyGame d)) (run defaultRegistry (dailyGame d))) [(2026, 9, 30), (2026, 10, 1), (2026, 10, 2)]
+  mapM_ (\li -> assertEqual ("level " ++ show (li + 1)) (run off (levelGame li 3)) (run defaultWorld (levelGame li 3))) [0 .. dropLevel - 1]
+  mapM_ (\d -> assertEqual ("daily " ++ show d) (run off (dailyGame d)) (run defaultWorld (dailyGame d))) [(2026, 9, 30), (2026, 10, 1), (2026, 10, 2)]
   -- 第 46 关两者不同（确实经这个条目生效；按提示要收走过饼干才会掉，所以走满 26 步、看 30 个种子）
   let runAll reg gs = key (last (gs : hintPlay reg gs 26))
-  assertBool "level 46 differs" (any (\s -> runAll off (levelGame dropLevel s) /= runAll defaultRegistry (levelGame dropLevel s)) [1 .. 30])
+  assertBool "level 46 differs" (any (\s -> runAll off (levelGame dropLevel s) /= runAll defaultWorld (levelGame dropLevel s)) [1 .. 30])
 
 -- | 难度（backlog 标准：按提示 30 局赢超过 25 局算太容易）：按提示走种子 1–30 赢不超过 25 局；
 -- 一步贪心能过关（种子 1 过关），说明关卡可玩。
 cd_level46_difficulty :: Assertion
 cd_level46_difficulty = do
-  let hintWins = length [() | s <- [1 .. 30], let st = hintPlay defaultRegistry (levelGame dropLevel s) 26, not (null st), isWin (gsOver (last st))]
+  let hintWins = length [() | s <- [1 .. 30], let st = hintPlay defaultWorld (levelGame dropLevel s) 26, not (null st), isWin (gsOver (last st))]
   assertBool ("hint wins " ++ show hintWins ++ "/30 <= 25") (hintWins <= 25)
   let g1 = last (levelGame dropLevel 1 : greedyPlay (levelGame dropLevel 1))
   assertBool "greedy clears seed 1" (isWin (gsOver g1))

@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 会动或会生成东西的元素：在邻格真消除时改动周围的格子，或在步末自己行动。
 --
@@ -16,12 +17,6 @@ module Match3.Element.Builtin.Actor
   , Fuzzball(..)
   , fuzzballJumps
   , traceSnails
-  , magicHatEntry
-  , makerEntry
-  , snailEntry
-  , bottleEntry
-  , countdownEntry
-  , fuzzballEntry
   ) where
 
 import Control.Applicative ((<|>))
@@ -29,10 +24,10 @@ import Data.Bits (xor)
 import Data.List.NonEmpty (NonEmpty (..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
-import Match3.Element.Builtin.Common (boardSeed, colorPlace, pickBy, plainGem, posSeed)
-import Match3.Element.Caps
+import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
+import Match3.Element.Ability
 import Match3.Element.Event
-import Match3.Element.Registry
+import Match3.Element.Kind
 import Match3.Element.Types
 import Match3.Obstacles (chargeAdjacentMakersSit, orthoNeighbors, triggerAdjacentBottlesBy, triggerAdjacentHatsBy)
 import qualified Match3.Snail as Snail
@@ -42,47 +37,119 @@ import Match3.Types
 -- | 魔法帽（固定格）：邻格真消除时给相邻宝石换色。
 data MagicHatE = MagicHatE
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Fixed MagicHatE)
 
-instance Element MagicHatE where
-  name _ = "magic_hat"
+instance Cellular MagicHatE where
+  nameOf _ = "magic_hat"
   toCell _ = MagicHat
-  caps _ = fixed [onAdjacent 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
+
+instance Countable MagicHatE
+instance Renders MagicHatE where
+  faceBase _ = Just ("hat", [])
+
+instance Kind MagicHatE where
+  kindName _ = "magic_hat"
+  fromCell cell = case cell of
+    MagicHat -> Just (MagicHatE)
+    _ -> Nothing
+  place _ = \_ _ -> Just MagicHat
+  boardPasses _ = [AdjacentPass 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Fixed MakerE)
 
-instance Element MakerE where
-  name _ = "maker"
+instance Cellular MakerE where
+  nameOf _ = "maker"
   toCell (MakerE c n) = Maker c n
-  caps _ = fixed [onAdjacent 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit)]
+
+instance Countable MakerE
+instance Renders MakerE where
+  faceBase (MakerE c k) = Just ("maker", [colorField c, nField k])
+
+instance Kind MakerE where
+  kindName _ = "maker"
+  fromCell cell = case cell of
+    Maker c n -> Just (MakerE c n)
+    _ -> Nothing
+  place _ = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
+  boardPasses _ = [AdjacentPass 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit)]
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Fixed SnailE)
 
-instance Element SnailE where
-  name _ = "snail"
+instance Cellular SnailE where
+  nameOf _ = "snail"
   toCell (SnailE dr dc) = Snail dr dc
-  caps _ = fixed [atEnd (moveRule 10 snailRun)]
+
+instance Countable SnailE
+instance Renders SnailE where
+  faceBase (SnailE dr dc) = Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])
+
+instance Kind SnailE where
+  kindName _ = "snail"
+  fromCell cell = case cell of
+    Snail dr dc -> Just (SnailE dr dc)
+    _ -> Nothing
+  place _ = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
+  boardPasses _ = [EndPass (moveRule 10 snailRun)]
 
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
 newtype BottleE = BottleE Color
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Fixed BottleE)
 
-instance Element BottleE where
-  name _ = "bottle"
+instance Cellular BottleE where
+  nameOf _ = "bottle"
   toCell (BottleE c) = Bottle c
-  caps _ = fixed [onAdjacent 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
+
+instance Countable BottleE
+instance Renders BottleE where
+  faceBase (BottleE c) = Just ("bottle", [colorField c])
+
+instance Kind BottleE where
+  kindName _ = "bottle"
+  fromCell cell = case cell of
+    Bottle c -> Just (BottleE c)
+    _ -> Nothing
+  place _ = colorPlace Bottle
+  boardPasses _ = [AdjacentPass 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
   deriving (Eq, Show)
 
-instance Element CountdownE where
-  name _ = "countdown"
+instance Cellular CountdownE where
+  nameOf _ = "countdown"
   toCell (CountdownE c n) = Countdown c n
-  caps (CountdownE c _) = blocker [colorIs c, swappable, teleports, pushes, recolors, breaks, atEnd (tickRule 10 tickRun explodeSeedsFor)]
+
+instance Matchable CountdownE where
+  color (CountdownE c _) = Just c
+
+instance Hittable CountdownE where
+  fires _ = False
+
+instance Movable CountdownE where
+  keepOnShuffle _ = True
+
+instance Countable CountdownE
+instance Renders CountdownE where
+  faceBase (CountdownE c k) = Just ("countdown", [colorField c, nField k])
+
+instance Kind CountdownE where
+  kindName _ = "countdown"
+  fromCell cell = case cell of
+    Countdown c n -> Just (CountdownE c n)
+    _ -> Nothing
+  -- 放置：[AInt 回合数]，颜色取原格（宝石 / 倒计时）
+  place _ args cell = case cell of
+    Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
+    Countdown col _ -> mkCountdown col <$> exactArgs argInt args
+    _ -> Nothing
+  boardPasses _ = [EndPass (tickRule 10 tickRun explodeSeedsFor)]
 
 -- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，原型 Blocker（挡交换、无色、随重力下落、洗牌原地保留）。
 --
@@ -93,11 +160,25 @@ instance Element CountdownE where
 -- 步末效果记为 EvBelt "fuzzball"（前端按皮带的平移动画播放：毛球与宝石互换位置）。
 newtype Fuzzball = Fuzzball Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle Fuzzball)
 
-instance Element Fuzzball where
-  name _ = "fuzzball"
-  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps _ = blocker [breaks, onAdjacent 190 fuzzballAdjacent, counts (CountNamed "fuzzball"), atEnd (moveRule 20 fuzzballRun), labelled "毛球"]
+instance Cellular Fuzzball where
+  nameOf _ = "fuzzball"
+
+instance Hittable Fuzzball where
+  fires _ = False
+
+instance Countable Fuzzball where
+  counter _ = Just (CountNamed "fuzzball")
+
+instance Renders Fuzzball
+
+instance Kind Fuzzball where
+  kindName _ = "fuzzball"
+  fromCell = fromCustom "fuzzball" Fuzzball
+  place _ = customPlace "fuzzball"
+  label _ = Just "毛球"
+  boardPasses _ = [AdjacentPass 190 fuzzballAdjacent, EndPass (moveRule 20 fuzzballRun)]
 
 isFuzzball :: Cell -> Bool
 isFuzzball cell = case cell of
@@ -161,7 +242,7 @@ snailRun ctx b =
 traceSnails :: [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnails = traceSnailsBy Snail.pushable
 
--- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 注册表的 pushable）。
+-- | traceSnails，可推动谓词由调用方给出（步末上下文 ecPushable = 元素世界的 pushable）。
 traceSnailsBy :: (Cell -> Bool) -> [Pos] -> [Pos] -> Board -> ([EndItem], Board)
 traceSnailsBy canPush avoid walls b0 =
   let (movesRev, b1) = foldl one ([], b0) [p | p <- snailPositions b0, p `notElem` avoid]
@@ -179,18 +260,4 @@ traceSnailsBy canPush avoid walls b0 =
       _ -> (acc, board)
 
 --------------------------------------------------------------------------------
--- 条目（槽位由原型推导 = cellSlot (toCell 原型)）
-
-magicHatEntry, makerEntry, snailEntry, bottleEntry, countdownEntry, fuzzballEntry :: Entry
-magicHatEntry = bodyEntry MagicHatE (\cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing) (\_ _ -> Just MagicHat)
-makerEntry = bodyEntry (MakerE C1 3) (\cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing) $ \args _ ->
-  exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
-snailEntry = bodyEntry (SnailE 0 1) (\cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing) $ \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
-bottleEntry = bodyEntry (BottleE C1) (\cell -> case cell of Bottle c -> Just (BottleE c); _ -> Nothing) (colorPlace Bottle)
--- 倒计时：放置参数 = 初值（精确匹配一个整数），颜色取自原格（宝石或倒计时）。
-countdownEntry = bodyEntry (CountdownE C1 1) (\cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing) $ \args cell -> case cell of
-  Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
-  Countdown col _ -> mkCountdown col <$> exactArgs argInt args
-  _ -> Nothing
--- 毛球：Custom 本体（状态值不用，放置参数缺省 1）。
-fuzzballEntry = customEntry (Fuzzball 1) (Fuzzball . unCustomState)
+-- 条目（注册项的分派编号由 World 的解码探针推导）

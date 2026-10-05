@@ -56,7 +56,7 @@ qc_inv_swap_is_involution =
 qc_inv_gravity_idempotent_no_floating :: Property
 qc_inv_gravity_idempotent_no_floating =
   property $ \(HoledBoard mb) ->
-    let reg = defaultRegistry
+    let reg = defaultWorld
         mb' = applyGravityWith reg mb
         fixed = maybe False (gravityFixedCellWith reg)
         ((r0, c0), (r1, c1)) = boundsOf mb
@@ -80,7 +80,7 @@ qc_inv_gravity_idempotent_no_floating =
 qc_inv_settle_fills_board :: Int -> Property
 qc_inv_settle_fills_board seed =
   property $ \(HoledBoard mb) ->
-    let fallen = applyGravityWith defaultRegistry mb
+    let fallen = applyGravityWith defaultWorld mb
         (b, _) = refill (mkStdGen seed) fallen
         ok p = case atM fallen p of
           Just x -> getCell b p == x

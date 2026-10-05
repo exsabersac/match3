@@ -14,6 +14,7 @@ campaignLevelCount = 49
 builtinEntryCount :: Int
 builtinEntryCount = 36
 
--- | 内置本体元素的 instance 个数（'Spec.Caps.caps_element_class_is_thin' 在 Element/Builtin 源码里数出来的）。
+-- | 内置本体的 Kind instance 个数（'Spec.Archetype.archetype_builtin_kind_inventory' 在 Element/Builtin 源码里
+-- 数出来的；SpecialGem 一个 instance 覆盖四种特殊块）。
 builtinBodyInstanceCount :: Int
-builtinBodyInstanceCount = 24
+builtinBodyInstanceCount = 22

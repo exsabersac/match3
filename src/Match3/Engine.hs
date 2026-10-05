@@ -40,10 +40,10 @@ import Engine.Game (Game(..), Step(..))
 import Engine.History (History, HistoryPolicy(..), Undoable, withHistory)
 import Match3.Board.Grid (neighborsInBounds)
 import Match3.Daily (Day, Month, Year, dailyConfig, dailySeed)
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Element.Event (Event(..), EventKind(..))
-import Match3.Element.Level (levelRegistryIn)
-import Match3.Element.Registry (Registry)
+import Match3.Element.Level (levelWorldIn)
+import Match3.Element.World (World)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveFreeSwapWith, resolveHammerWith)
 import Match3.Game.Level (campaignGame, newDailyGame, newGame, newGameAtLevel, newGameForLevelWith)
 import Match3.Levels.Level (Level)
@@ -68,7 +68,7 @@ data Setup
   = Campaign Int          -- ^ 战役第 n 关（0 起）
   | CustomLevel GameConfig     -- ^ 任意配置（不带战役装饰）
   | Daily Year Month Day  -- ^ 每日挑战（年 月 日；种子由日期决定，gameNew 的种子参数不用）
-  | LevelSetup Level      -- ^ 任意完整关卡记录（装饰、关卡级元素、行列都按记录；用本实例的注册表开局）
+  | LevelSetup Level      -- ^ 任意完整关卡记录（装饰、关卡级元素、行列都按记录；用本实例的元素世界开局）
   deriving (Eq, Show)
 
 -- | 一个动作的完整结果（三消外壳需要的全部数据）。
@@ -86,12 +86,12 @@ data Played = Played
 rejectedPlayed :: GameState -> Played
 rejectedPlayed s = Played s Nothing (emptyTrace s) (MoveFx 0 []) [] Nothing False
 
--- | 用内置注册表执行一个动作。
+-- | 用内置元素世界执行一个动作。
 play :: Action -> GameState -> Played
-play = playWith defaultRegistry
+play = playWith defaultWorld
 
--- | 用指定注册表执行一个动作。
-playWith :: Registry -> Action -> GameState -> Played
+-- | 用指定元素世界执行一个动作。
+playWith :: World -> Action -> GameState -> Played
 playWith reg act gs = case act of
   Swap p q -> move (resolveSwapWith reg p q gs)
   Hammer p -> move (resolveHammerWith reg p gs)
@@ -107,18 +107,18 @@ playWith reg act gs = case act of
     move (gs', out, mt) =
       let fx = moveFx gs gs' out
           ok = out /= NoMatch && out /= InvalidSwap
-      -- 事件按本步结算用的注册表展开（levelRegistryIn：新玩法 8 魔法地格的扩爆格要算进 EvBlast 的范围；
+      -- 事件按本步结算用的元素世界展开（levelWorldIn：新玩法 8 魔法地格的扩爆格要算进 EvBlast 的范围；
       -- 其余关卡它只可能换形状表，而事件展开不读形状表，与用 reg 逐项相同）
-      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelRegistryIn reg (gsLevelElems gs)) mt else []) Nothing ok
+      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelWorldIn reg (gsLevelElems gs)) mt else []) Nothing ok
     other gs' evs ok = Played gs' Nothing (emptyTrace gs') (MoveFx 0 []) evs Nothing ok
 
--- | 通用接口实例（内置注册表）。
+-- | 通用接口实例（内置元素世界）。
 match3Game :: Game Setup GameState Action Event Terminal Played
-match3Game = match3GameWith defaultRegistry
+match3Game = match3GameWith defaultWorld
 
--- | 通用接口实例（指定注册表）。
+-- | 通用接口实例（指定元素世界）。
 -- 终局后拒绝一切走步 / 洗牌；提示除外（只写 gsHint、不推进对局，与原前端「终局后按 H 仍给提示」一致）。
-match3GameWith :: Registry -> Game Setup GameState Action Event Terminal Played
+match3GameWith :: World -> Game Setup GameState Action Event Terminal Played
 match3GameWith reg =
   Game
     { gameName = "match3"
@@ -168,12 +168,12 @@ match3History =
       Hint -> False
       Shuffle -> False
 
--- | 外壳用的实例：内置注册表 + 撤销历史。
+-- | 外壳用的实例：内置元素世界 + 撤销历史。
 match3Shell :: Game Setup (History GameState) (Undoable Action) Event Terminal Played
-match3Shell = match3ShellWith defaultRegistry
+match3Shell = match3ShellWith defaultWorld
 
--- | 外壳用的实例（指定注册表）。
-match3ShellWith :: Registry -> Game Setup (History GameState) (Undoable Action) Event Terminal Played
+-- | 外壳用的实例（指定元素世界）。
+match3ShellWith :: World -> Game Setup (History GameState) (Undoable Action) Event Terminal Played
 match3ShellWith reg = withHistory match3History (match3GameWith reg)
 
 -- | 外壳用的具名数值（标题栏 / HUD）。

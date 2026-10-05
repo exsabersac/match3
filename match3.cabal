@@ -84,7 +84,7 @@ library
       Match3.Carpet
       Match3.Element
       Match3.Element.Types
-      Match3.Element.Registry
+      Match3.Element.Rules
       Match3.Element.Special
       Match3.Element.Builtin
       Match3.Element.Builtin.Common
@@ -96,9 +96,11 @@ library
       Match3.Element.Builtin.Ground
       Match3.Element.Builtin.Level
       Match3.Element.Event
-      Match3.Element.Class
-      Match3.Element.Caps
-      Match3.Element.Message
+      Match3.Element.Mechanic
+      Match3.Element.Ability
+      Match3.Element.Kind
+      Match3.Element.Layer
+      Match3.Element.World
       Match3.Element.Level
   other-modules:
       Paths_match3
@@ -195,6 +197,7 @@ test-suite match3-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Spec.Archetype
       Spec.BoardSeed
       Spec.BombShapes
       Spec.Boosters
@@ -204,7 +207,6 @@ test-suite match3-test
       Spec.Builtin.Layer
       Spec.Builtin.Level
       Spec.Builtin.Obstacle
-      Spec.Caps
       Spec.Cascade
       Spec.Chameleon
       Spec.Classes
@@ -212,7 +214,9 @@ test-suite match3-test
       Spec.DataBoundary
       Spec.Effects
       Spec.Element
+      Spec.ElementAbility
       Spec.ElementClass
+      Spec.ElementOracle
       Spec.Engine
       Spec.Extension
       Spec.Fuzzball
@@ -242,6 +246,7 @@ test-suite match3-test
       Spec.Support
       Spec.Support.Arbitrary
       Spec.Support.Inventory
+      Spec.Support.Layers
       Spec.Support.Obstacles
       Spec.Support.Parallel
       Spec.Support.Source
@@ -249,6 +254,7 @@ test-suite match3-test
       Spec.View
       Spec.WebColors
       Toy
+      ElementOracle
       ElementQueries
       Golden
       ComboFx
@@ -291,6 +297,7 @@ test-suite match3-test
       Match3.Counts
       Match3.Daily
       Match3.Element
+      Match3.Element.Ability
       Match3.Element.Builtin
       Match3.Element.Builtin.Actor
       Match3.Element.Builtin.Collectible
@@ -300,14 +307,15 @@ test-suite match3-test
       Match3.Element.Builtin.Layer
       Match3.Element.Builtin.Level
       Match3.Element.Builtin.Obstacle
-      Match3.Element.Caps
-      Match3.Element.Class
       Match3.Element.Event
+      Match3.Element.Kind
+      Match3.Element.Layer
       Match3.Element.Level
-      Match3.Element.Message
-      Match3.Element.Registry
+      Match3.Element.Mechanic
+      Match3.Element.Rules
       Match3.Element.Special
       Match3.Element.Types
+      Match3.Element.World
       Match3.Engine
       Match3.Game.Boosters
       Match3.Game.EndPhase

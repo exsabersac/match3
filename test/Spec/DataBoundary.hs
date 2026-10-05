@@ -27,14 +27,17 @@ import Control.Applicative ((<|>))
 import Data.Proxy (Proxy (..))
 import Data.String (fromString)
 import GHC.Generics
-import Match3.Element.Class (toCell)
+import Data.Maybe (isJust)
+import Match3.Element.Ability (toCell)
+import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
+import Match3.Element.Layer (Layer(layerName), SomeLayer(..), peelAs)
+import Match3.Element.World (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)
 import Data.Foldable (toList)
 import Data.List (isInfixOf, isPrefixOf, nub, sort, tails)
 import Engine.Effect (Effect (..), beats)
 import Match3.Core
-import Match3.Element.Registry (elementOf, entryName, entrySlot, placeWith, registryDefs, topLayerName)
-import Match3.Element.Types (Slot (..), cellSlot, overlaySlot)
+import Match3.Element.World (elementOf, placeWith, worldDefs, topLayerName)
 import Match3.Types (goalScore)
 import Match3.Ufo (mkUfo)
 import Match3.View (cellFace)
@@ -167,7 +170,7 @@ argp_placers_pinned = do
         sequence_ [assertEqual (show (n, args, cell)) e a | ((cell, args), e, a) <- zip3 inputs expected actual]
     | (n, expected) <- pinnedPlacements
     , let inputs = [(cell, args) | cell <- argpCells, args <- argpArgs]
-          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultRegistry (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
+          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultWorld (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
     ]
 
 -- | argp_placers_pinned 的期望（由现实现生成，生成时与删除前的手写 case 副本核对过）。
@@ -332,8 +335,8 @@ generic_generators_cover_constructors = do
 
 -- | 每个构造器在各张表里都有对应项：
 --
--- * 注册表：本体名落在槽位一致的条目上（内置本体 SlotCell (cellSlot 格)；Custom 用已注册的名字 → SlotCustom），
---   每种宝石种类 / 每种叠层的名字互不相同且槽位一致；解码往返（toCell . elementOf = id）；
+-- * 注册表：本体名落在认这个（拆掉叠层后的）格子的本体种类上（Custom 用已注册的名字），
+--   每种宝石种类 / 每种叠层的名字互不相同、最上层落在 peel 认这个格子的叠层种类上；解码往返（toCell . elementOf = id）；
 -- * Match3.View.cellFace：每个本体构造器的类型标签互不相同（网页 JSON 的 "t"），每种叠层的 "o" 互不相同，
 --   每种宝石种类的 "k" 互不相同；
 -- * 桌面 UI.CellTable（源码扫描，app/ 不在测试的源码目录里）：每个内置本体名、每种宝石种类名都是 cellTable 的键，
@@ -342,10 +345,12 @@ generic_generators_cover_constructors = do
 generic_every_constructor_has_registry_face_and_ui :: Assertion
 generic_every_constructor_has_registry_face_and_ui = do
   cells <- cellSamples
-  let reg = defaultRegistry
-      entries = registryDefs reg
-      slotOf n = [entrySlot e | e <- entries, entryName e == n]
-      customNames = [entryName e | e <- entries, entrySlot e == SlotCustom]
+  let reg = defaultWorld
+      entries = worldDefs reg
+      kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- entries, kindName p == n]
+      layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- entries, layerName p == n]
+      inner = snd . decodeLayers reg
+      customNames = [kindName p | KindDef (SomeKind p) <- entries, any (\k -> isJust (fromCellAs p (Custom (kindName p) (CustomState k)))) [0 .. 20]]
       reps = representatives ([c | c <- cells, notUnregistered c] ++ [Custom n (CustomState 0) | n <- customNames])
       notUnregistered c = case c of
         Custom n _ -> n `elem` customNames
@@ -358,12 +363,13 @@ generic_every_constructor_has_registry_face_and_ui = do
   assertEqual "每个本体构造器都有代表" (length (conNamesOf (Proxy :: Proxy CellContents))) (length (nub (map fst reps)))
   -- 注册表
   sequence_
-    [ assertEqual ("registry slot " ++ k) [SlotCell (cellSlot c)] (slotOf (elementName reg c)) | (k, c) <- builtinReps ++ map ((,) "Gem") kinds ]
-  sequence_ [assertEqual ("custom slot " ++ show n) [SlotCustom] (slotOf n) | n <- customNames]
+    [ assertBool ("registry claims " ++ k) (kindAccepts (elementName reg c) (inner c)) | (k, c) <- builtinReps ++ map ((,) "Gem") kinds ]
+  sequence_ [assertEqual ("custom name " ++ show n) n (elementName reg (Custom n (CustomState 0))) | n <- customNames]
+  assertEqual "custom kinds" ["bubble", "magic_stone", "fuzzball", "snow_boss", "chameleon"] customNames
   assertBool "gem kind names distinct" (distinct (map (elementName reg) kinds))
   sequence_
-    [ assertEqual ("overlay slot " ++ show c) [SlotOverlay (overlaySlot o)] (slotOf (topLayerName reg c))
-    | c@(Gem _ _ _ (Just o)) <- overlays
+    [ assertBool ("overlay claimed " ++ show c) (layerAccepts (topLayerName reg c) c)
+    | c <- overlays
     ]
   assertBool "overlay names distinct" (distinct (map (topLayerName reg) overlays))
   sequence_ [assertEqual ("roundtrip " ++ show c) c (toCell (elementOf reg c)) | c <- map snd reps ++ kinds ++ overlays]

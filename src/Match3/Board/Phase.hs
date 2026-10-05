@@ -31,7 +31,7 @@
 -- 运行时代价：'Stage' 只是给 Board / MBoard 套一层构造器，转换函数内部调用的仍是原来的
 -- clear* / settleDrainWith / refillWith，计算与随机数消耗逐字不变（金标准锁定）。
 --
--- 依赖：Board.Grid、Board.Gravity（沉降 settleDrainWith）、Board.Refill（补子 refillWith）、Board.Hooks、元素注册表。
+-- 依赖：Board.Grid、Board.Gravity（沉降 settleDrainWith）、Board.Refill（补子 refillWith）、Board.Hooks、元素元素世界。
 -- 被 Board.Cascade（每一轮 settleRound）与 Game.Resolve / Move / Boosters（一步棋的起手盘面）使用。
 module Match3.Board.Phase
   ( -- * 阶段与带阶段的盘面
@@ -55,7 +55,7 @@ import Match3.Board.Gravity (settleDrainWith)
 import Match3.Board.Grid (MBoard, setManyM, swapCells, toM)
 import Match3.Board.Hooks (LevelHooks)
 import Match3.Board.Refill (RefillPolicy, refillWith)
-import Match3.Element.Registry (Registry)
+import Match3.Element.World (World)
 import Match3.Types
 import System.Random (RandomGen)
 
@@ -121,7 +121,7 @@ digHoles holes (AtFull b) = AtCleared (setManyM (toM b) [(p, Nothing) | p <- hol
 
 -- | 下落：有空洞 → 空洞在上方。即 'settleDrainWith'（重力 → 边缘收集 → 传送门 → 再重力 / 收集），
 -- 另返回被边缘收走的 (位置, 原格)。
-fallStage :: Registry -> LevelHooks -> Stage 'Cleared -> (Stage 'Fallen, [(Pos, Cell)])
+fallStage :: World -> LevelHooks -> Stage 'Cleared -> (Stage 'Fallen, [(Pos, Cell)])
 fallStage reg hooks (AtCleared mb) =
   let (settled, drained) = settleDrainWith reg hooks mb
   in (AtFallen settled, drained)

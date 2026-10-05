@@ -19,7 +19,7 @@
 --   （'CascadeLog'：补了哪些格、吸收节拍吸走了什么、发出了哪一轮），结果与纯解释器完全相同。
 --
 -- 依赖：transformers（State / StateT）、Board.Phase（阶段标签）、Board.Refill、Board.Hooks、Board.Wave。
--- 本模块不依赖注册表与具体元素。
+-- 本模块不依赖元素世界与具体元素。
 module Match3.Board.Effect
   ( -- * 能力
     MonadRefill(..)

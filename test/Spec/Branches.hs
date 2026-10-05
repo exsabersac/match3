@@ -1,10 +1,12 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 -- | 段 4：原先写死在主流程里的专门分支收进元素框架后的行为锁定。
 --
 -- * 成对交换规则（swapRule）：内置彩虹取色 / 特殊合成；测试专用「拉杆」只靠 swapRule 就能让无匹配的交换生效、进提示。
 -- * 开启规则（openRule）：内置彩蛋；测试专用「豆荚」被邻格真消除时开出直线，本轮坐住不引爆。
 -- * 可改色 / 可推动谓词（recolorable / pushable）：魔法帽 / 染色瓶、蜗牛只看注册表，内置取值与原写死的 isGem / pushable 相同。
--- * 关卡级元素（LevelElement：飞碟 / 皮带 / 传送门 / 地毯 / 地面层）：状态在元素值里，按消息回复，removeLevel 之后该机制不生效（地面层是核心元素）。
+-- * 关卡级元素（Mechanic：飞碟 / 皮带 / 传送门 / 地毯 / 地面层）：状态在元素值里，按消息回复，removeMechanic 之后该机制不生效（地面层是核心元素）。
 -- * 源码扫描：主流程模块不再点名这些元素的专门函数。
 --
 -- 样例元素（拉杆、豆荚、小车）只定义在这里，主流程源码里没有它们的名字。
@@ -24,7 +26,9 @@ import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
 import Match3.Element
-import Match3.Element.Caps (Element(..), SomeLevelElement(..), blocker, breaks, levelNameOf, noPush, noRecolor, onSwap, opens, piece, pushes, swappable)
+import Match3.Element.Ability
+import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
+import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Level (newGame)
@@ -59,35 +63,73 @@ tests =
 allCells :: Board -> [Cell]
 allCells b = map (getCell b) allPos
 
--- | 替换内置「gem」的测试版本：原型同普通宝石，只关掉可改色 / 可推动（原先写成旧记录的字段更新）。
-data TweakedGem = TweakedGem Bool Bool Color
+-- | 替换内置「gem」的测试版本：同普通宝石（缺省方法），只关掉可改色（'NoRecolorGem'）或可推动（'NoPushGem'）。
+newtype NoRecolorGem = NoRecolorGem Color
   deriving (Eq, Show)
 
-instance Element TweakedGem where
-  name _ = "gem"
-  toCell (TweakedGem _ _ c) = Gem c Normal 0 Nothing
-  caps (TweakedGem r p _) = piece ([noRecolor | not r] ++ [noPush | not p])
+instance Cellular NoRecolorGem where
+  nameOf _ = "gem"
+  toCell (NoRecolorGem c) = Gem c Normal 0 Nothing
+instance Matchable NoRecolorGem
+instance Hittable NoRecolorGem
+instance Movable NoRecolorGem where
+  recolorable _ = False
+instance Countable NoRecolorGem
+instance Renders NoRecolorGem
 
-tweakedGem :: Bool -> Bool -> Entry
-tweakedGem r p = bodyEntry (TweakedGem r p C1) (\cell -> case cell of Gem c _ _ _ -> Just (TweakedGem r p c); _ -> Nothing) (\_ _ -> Nothing)
+instance Kind NoRecolorGem where
+  kindName _ = "gem"
+  fromCell cell = case cell of
+    Gem c _ _ _ -> Just (NoRecolorGem c)
+    _ -> Nothing
 
--- | 测试专用「拉杆」：可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
+newtype NoPushGem = NoPushGem Color
+  deriving (Eq, Show)
+
+instance Cellular NoPushGem where
+  nameOf _ = "gem"
+  toCell (NoPushGem c) = Gem c Normal 0 Nothing
+instance Matchable NoPushGem
+instance Hittable NoPushGem
+instance Movable NoPushGem where
+  pushable _ = False
+instance Countable NoPushGem
+instance Renders NoPushGem
+
+instance Kind NoPushGem where
+  kindName _ = "gem"
+  fromCell cell = case cell of
+    Gem c _ _ _ -> Just (NoPushGem c)
+    _ -> Nothing
+
+-- | 测试专用「拉杆」：占格障碍原型包，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
 newtype Lever = Lever Int
   deriving (Eq, Show)
+  deriving (Movable) via (Obstacle Lever)
 
-instance Element Lever where
-  name _ = "lever"
-  toCell (Lever k) = Custom "lever" (CustomState k)
-  caps _ = blocker [swappable, breaks, onSwap (SwapRule 5 fires (\_ p1 p2 -> [p1, p2]))]
-    where
-      fires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
+instance Cellular Lever where
+  nameOf _ = "lever"
+instance Matchable Lever
+instance Hittable Lever where
+  fires _ = False
+instance Countable Lever
+instance Renders Lever
 
-leverDef :: Entry
-leverDef = customEntry (Lever 1) (Lever . unCustomState)
+instance Kind Lever where
+  kindName _ = "lever"
+  fromCell = fromCustom "lever" Lever
+  place _ = customPlace "lever"
+  boardPasses _ = [SwapPass (SwapRule 5 leverFires (\_ p1 p2 -> [p1, p2]))]
+
+leverFires :: Board -> Pos -> Pos -> Bool
+leverFires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
+
+leverDef :: Def
+leverDef = kindDef @Lever
 
 br_swap_rule_test_element :: Assertion
 br_swap_rule_test_element = do
-  let reg = register leverDef defaultRegistry
+  let reg = register leverDef defaultWorld
       board0 = setCell stableBoard (4, 4) (Custom "lever" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (gs1, o1, mt1) = resolveSwapWith reg (4, 4) (4, 5) gs0
@@ -99,23 +141,30 @@ br_swap_rule_test_element = do
   assertBool "rule is listed by the registry" (swapFiresWith reg board0 (4, 4) (4, 5))
   -- 提示也经同一条规则：无普通匹配的盘上只有拉杆能走
   let stuck = setCell stuckNoMoveBoard (0, 0) (Custom "lever" (CustomState 1))
-  assertEqual "no hint without the rule" Nothing (findHintWith defaultRegistry stuck)
+  assertEqual "no hint without the rule" Nothing (findHintWith defaultWorld stuck)
   assertBool "hint via the rule" (maybe False (\(a, b) -> (0, 0) `elem` [a, b]) (findHintWith reg stuck))
   -- 内置表：拉杆是惰性占格，挡交换
-  let (_, oD, _) = resolveSwapWith defaultRegistry (4, 4) (4, 5) gs0
+  let (_, oD, _) = resolveSwapWith defaultWorld (4, 4) (4, 5) gs0
   assertBool "default registry rejects" (not (moveApplied oD))
 
 -- | 测试专用「豆荚」：被命中或邻格在本批前沿里时开出 C2 直线（本轮坐住，不在本轮清除）。
 newtype Pod = Pod Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable, Movable) via (Obstacle Pod)
 
-instance Element Pod where
-  name _ = "pod"
-  toCell (Pod k) = Custom "pod" (CustomState k)
-  caps _ = blocker [opens openPods]
+instance Cellular Pod where
+  nameOf _ = "pod"
+instance Countable Pod
+instance Renders Pod
 
-podDef :: Entry
-podDef = customEntry (Pod 1) (Pod . unCustomState)
+instance Kind Pod where
+  kindName _ = "pod"
+  fromCell = fromCustom "pod" Pod
+  place _ = customPlace "pod"
+  boardPasses _ = [OpenPass (OpenRule openPods)]
+
+podDef :: Def
+podDef = kindDef @Pod
 
 openPods :: Board -> [Pos] -> (Board, [Pos], [Pos])
 openPods b front =
@@ -126,7 +175,7 @@ openPods b front =
 
 br_open_rule_test_element :: Assertion
 br_open_rule_test_element = do
-  let reg = register podDef defaultRegistry
+  let reg = register podDef defaultWorld
       board0 = setCell tripleBoard (0, 1) (Custom "pod" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
@@ -142,7 +191,7 @@ br_open_rule_test_element = do
   assertBool "surprise opened too" (getCell (cwAfter w2) (1, 0) /= Surprise && (0, 0) `notElem` [p | p <- [(1, 0)], getCell (cwAfter w2) p == Surprise])
   assertEqual "pod still opened" (Gem C2 LineH 0 Nothing) (getCell (cwAfter w2) (1, 1))
   -- 内置表：豆荚是惰性占格，原样下落
-  let (_, _, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0
+  let (_, _, mtD) = resolveSwapWith defaultWorld p1 p2 gs0
   wD <- firstWave mtD
   assertBool "default registry: pod stays a pod" (isCustomNamed "pod" (getCell (cwAfter wD) (1, 1)))
 
@@ -155,20 +204,20 @@ br_builtin_predicates_match_legacy = do
         , mkSnail 0 1, Safe 1, Surprise, Bottle C4, TimeSpirit, Custom "x" (CustomState 1)
         ]
   forM_ samples $ \cell -> do
-    assertEqual ("recolorable " ++ show cell) (isGem cell) (recolorableWith defaultRegistry cell)
-    assertEqual ("pushable " ++ show cell) (Snail.pushable cell) (pushableWith defaultRegistry cell)
+    assertEqual ("recolorable " ++ show cell) (isGem cell) (recolorableWith defaultWorld cell)
+    assertEqual ("pushable " ++ show cell) (Snail.pushable cell) (pushableWith defaultWorld cell)
 
 -- | 魔法帽只给注册表里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
 br_recolorable_from_registry :: Assertion
 br_recolorable_from_registry = do
-  let regNoRecolor = register (tweakedGem False True) defaultRegistry
+  let regNoRecolor = register (kindDef @NoRecolorGem) defaultWorld
       board0 = setCell tripleBoard (0, 1) MagicHat
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       afterWave reg = let (_, _, mt) = resolveSwapWith reg p1 p2 gs0 in cwAfter <$> firstWave mt
   -- (0,0) C1 与 (0,2) C3 是帽子的两个未消除邻格。第 1 行实际是四连（(1,3) 也是 C5），(1,2) 生成直线坐住，
   -- 所以 (0,0) 落到 (1,0)、(0,2) 留在原处
-  bDef <- afterWave defaultRegistry
+  bDef <- afterWave defaultWorld
   bNo <- afterWave regNoRecolor
   assertEqual "default: hat swapped the two colors" (mkGem C3, mkGem C1) (getCell bDef (1, 0), getCell bDef (0, 2))
   assertEqual "not recolorable: colors kept" (mkGem C1, mkGem C3) (getCell bNo (1, 0), getCell bNo (0, 2))
@@ -176,14 +225,26 @@ br_recolorable_from_registry = do
 -- | 蜗牛只推注册表里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
 newtype Cart = Cart Int
   deriving (Eq, Show)
+  deriving (Matchable, Hittable) via (Obstacle Cart)
 
-instance Element Cart where
-  name _ = "cart"
-  toCell (Cart k) = Custom "cart" (CustomState k)
-  caps _ = blocker [pushes]
+instance Cellular Cart where
+  nameOf _ = "cart"
+-- 占格障碍原型包的移动方法，只把可推动打开
+instance Movable Cart where
+  portal _ = False
+  keepOnShuffle _ = True
+  recolorable _ = False
+  pushable _ = True
+instance Countable Cart
+instance Renders Cart
 
-cartDef :: Entry
-cartDef = customEntry (Cart 1) (Cart . unCustomState)
+instance Kind Cart where
+  kindName _ = "cart"
+  fromCell = fromCustom "cart" Cart
+  place _ = customPlace "cart"
+
+cartDef :: Def
+cartDef = kindDef @Cart
 
 br_pushable_from_registry :: Assertion
 br_pushable_from_registry = do
@@ -191,13 +252,13 @@ br_pushable_from_registry = do
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
       final reg b = let (gs1, _, _) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b} in gsBoard gs1
-      bCart = final (register cartDef defaultRegistry) board0
+      bCart = final (register cartDef defaultWorld) board0
   assertBool "cart pushed back, snail advanced" (isCustomNamed "cart" (getCell bCart (7, 1)) && isSnail (getCell bCart (7, 2)))
-  let bD = final defaultRegistry board0
+  let bD = final defaultWorld board0
   assertBool "default registry: snail turns around" (isSnail (getCell bD (7, 1)) && isCustomNamed "cart" (getCell bD (7, 2)))
   let boardG = setCell tripleBoard (7, 1) (mkSnail 0 1)
-      bG = final defaultRegistry boardG
-      bNoPush = final (register (tweakedGem True False) defaultRegistry) boardG
+      bG = final defaultWorld boardG
+      bNoPush = final (register (kindDef @NoPushGem) defaultWorld) boardG
   assertBool "default: gem pushed" (isSnail (getCell bG (7, 2)))
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 
@@ -205,42 +266,42 @@ br_pushable_from_registry = do
 -- 去掉后各自退化为「不生效」（状态原样）。地面层是核心元素：去掉同名注册也照常按注册表的地面层规则命中。
 br_level_hooks_builtin_and_removable :: Assertion
 br_level_hooks_builtin_and_removable = do
-  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map levelNameOf (levelDefs defaultRegistry))
+  assertEqual "builtin level defs" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf (mechanicDefs defaultWorld))
   let b0 = fst (randomStableBoard (mkStdGen 101))
       ufos = [mkUfo (3, 3) C1, mkUfo (0, 0) C2]
-      noUfo = removeLevel "ufo" defaultRegistry
-      absorb reg = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith reg [SomeLevelElement (UfoLevel ufos)]) b0)
-  assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorb defaultRegistry)
+      noUfo = removeMechanic "ufo" defaultWorld
+      absorb reg = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith reg [SomeMechanic (UfoLevel ufos)]) b0)
+  assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorb defaultWorld)
   assertEqual "ufo removed: no absorb, ufos stay" ([], ufos) (absorb noUfo)
   let belts = [[(2, 0), (2, 1), (2, 2), (3, 2)]]
-      beltEl = [SomeLevelElement (BeltLevel belts)]
-  assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (fst <$> beltShiftIn defaultRegistry beltEl)
-  assertEqual "belt cells avoided" (concat belts) (avoidCellsIn defaultRegistry beltEl)
-  assertBool "belt removed" (isNothing (beltShiftIn (removeLevel "belt" defaultRegistry) beltEl))
-  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultRegistry [SomeLevelElement (BeltLevel [])])
+      beltEl = [SomeMechanic (BeltLevel belts)]
+  assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (fst <$> beltShiftIn defaultWorld beltEl)
+  assertEqual "belt cells avoided" (concat belts) (avoidCellsIn defaultWorld beltEl)
+  assertBool "belt removed" (isNothing (beltShiftIn (removeMechanic "belt" defaultWorld) beltEl))
+  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultWorld [SomeMechanic (BeltLevel [])])
   let mb = setM (toM b0) (0, 5) Nothing
       portals = [((7, 0), (0, 5))]
-      settle reg = onSettle (levelHooksWith reg [SomeLevelElement (PortalLevel portals)]) mb
-  assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultRegistry) portals mb) (settle defaultRegistry)
-  assertBool "portal hook moves something here" (settle defaultRegistry /= mb)
-  assertEqual "portal removed: no teleport" mb (settle (removeLevel "portal" defaultRegistry))
-  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultRegistry [SomeLevelElement (PortalLevel portals)])
+      settle reg = onSettle (levelHooksWith reg [SomeMechanic (PortalLevel portals)]) mb
+  assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultWorld) portals mb) (settle defaultWorld)
+  assertBool "portal hook moves something here" (settle defaultWorld /= mb)
+  assertEqual "portal removed: no teleport" mb (settle (removeMechanic "portal" defaultWorld))
+  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultWorld [SomeMechanic (PortalLevel portals)])
   let open0 = [(3, 0), (3, 1), (4, 4)]
       hit = [(3, 0), (3, 1), (5, 5)]
-      cover reg = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn reg hit [SomeLevelElement (CarpetLevel open0)])
-  assertEqual "carpet hook = coverCarpets" (coverCarpets open0 hit) (cover defaultRegistry)
-  assertEqual "carpet removed: nothing covered" (open0, 0) (cover (removeLevel "carpet" defaultRegistry))
+      cover reg = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn reg hit [SomeMechanic (CarpetLevel open0)])
+  assertEqual "carpet hook = coverCarpets" (coverCarpets open0 hit) (cover defaultWorld)
+  assertEqual "carpet removed: nothing covered" (open0, 0) (cover (removeMechanic "carpet" defaultWorld))
   let ground0 = [((3, 0), ("jelly", 2)), ((5, 5), ("jelly", 1)), ((6, 6), ("jelly", 1))]
-      groundHit reg = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn reg hit [SomeLevelElement (GroundLayer ground0)])
-  assertEqual "ground hook = hitGroundWith" (hitGroundWith defaultRegistry hit ground0) (groundHit defaultRegistry)
-  assertEqual "ground is core" (groundHit defaultRegistry) (groundHit (removeLevel "ground" defaultRegistry))
-  assertBool "ground hit something here" (fst (groundHit defaultRegistry) /= ground0)
+      groundHit reg = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn reg hit [SomeMechanic (GroundLayer ground0)])
+  assertEqual "ground hook = hitGroundWith" (hitGroundWith defaultWorld hit ground0) (groundHit defaultWorld)
+  assertEqual "ground is core" (groundHit defaultWorld) (groundHit (removeMechanic "ground" defaultWorld))
+  assertBool "ground hit something here" (fst (groundHit defaultWorld) /= ground0)
 
 -- | 38 关 × 前 6 手（种子 1，走提示）：四个关卡级元素都去掉后，飞碟不动不吸、皮带不移位、地毯不覆盖；
 -- 内置表下同样的对局里这三件事都真的发生过（证明扫描覆盖到了）。
 br_level_hooks_removed_in_play :: Assertion
 br_level_hooks_removed_in_play = do
-  let bare = foldr removeLevel defaultRegistry ["ufo", "belt", "portal", "carpet"]
+  let bare = foldr removeMechanic defaultWorld ["ufo", "belt", "portal", "carpet"]
       play reg li = go (6 :: Int) (levelGame li 1) []
         where
           go 0 gs acc = (gs, reverse acc)
@@ -261,13 +322,13 @@ br_level_hooks_removed_in_play = do
     assertEqual ("L" ++ show li ++ " bare: ufos unchanged") (gsUfos gs0) (gsUfos gsE)
     assertEqual ("L" ++ show li ++ " bare: no ufo absorb") 0 (gsCount CountUfo gsE)
     assertBool ("L" ++ show li ++ " bare: played") (not (null steps))
-  assertBool "default: some ufo moved" (or [gsUfos gsE /= gsUfos (levelGame li 1) | li <- ufoLv, let gsE = fst (play defaultRegistry li)])
+  assertBool "default: some ufo moved" (or [gsUfos gsE /= gsUfos (levelGame li 1) | li <- ufoLv, let gsE = fst (play defaultWorld li)])
   forM_ beltLv $ \li ->
     assertEqual ("L" ++ show li ++ " bare: no belt shift") 0 (length (beltShifts (snd (play bare li))))
-  assertBool "default: belts shifted" (sum [length (beltShifts (snd (play defaultRegistry li))) | li <- beltLv] > 0)
+  assertBool "default: belts shifted" (sum [length (beltShifts (snd (play defaultWorld li))) | li <- beltLv] > 0)
   forM_ carpetLv $ \li ->
     assertEqual ("L" ++ show li ++ " bare: nothing covered") 0 (gsCount CountCarpets (fst (play bare li)))
-  assertBool "default: carpets covered" (sum [gsCount CountCarpets (fst (play defaultRegistry li)) | li <- carpetLv] > 0)
+  assertBool "default: carpets covered" (sum [gsCount CountCarpets (fst (play defaultWorld li)) | li <- carpetLv] > 0)
 
 -- | 主流程不再点名这些元素的专门函数：结算流水线（Board/*、Game/*，不含关卡数据与回放记录层，见
 -- Spec.Support.Source.pipelineSources）不 import 彩虹 / 特殊合成 / 障碍 / 地毯的实现模块，
@@ -303,8 +364,8 @@ br_rule_tables_out_of_main_flow = do
     , mentionsIdent w s
     ]
   -- 元素声明的成对交换规则：彩虹取色 10 + 彩虹 × 变色龙 15（新玩法 7，挂在变色龙上）
-  assertEqual "element-declared swap rules: rainbow 10 + chameleon 15" [10, 15] (map srOrder (elementSwapRules defaultRegistry))
-  assertEqual "the combo table joins as order 20" [10, 15, 20] (map srOrder (swapRules defaultRegistry))
+  assertEqual "element-declared swap rules: rainbow 10 + chameleon 15" [10, 15] (map srOrder (elementSwapRules defaultWorld))
+  assertEqual "the combo table joins as order 20" [10, 15, 20] (map srOrder (swapRules defaultWorld))
 
 -- | 第 7 刀（7a）：Board 层（连锁 / 沉降）只收关卡级钩子 LevelHooks，不 import 飞碟 / 皮带 / 地毯的实现模块、
 -- 也不碰 GameState；结算流水线不读第 7 刀前的五个关卡字段（它们在 Game/State.hs 里只是派生读数）；
@@ -346,7 +407,7 @@ br_end_phase_table_order = do
   map (map stageName . endTableFor) [KindSwap, KindHammer, KindFreeSwap, KindCross]
     @?= map stageName swapEndTable : replicate 3 (map stageName boosterEndTable)
   let gs = levelGame 4 1
-      reg = defaultRegistry
+      reg = defaultWorld
       hint = findHintWith reg (gsBoard gs)
       (a, b) = fromMaybe ((0, 0), (0, 1)) hint
       seg0 = cascadeMatchesWith reg (Just b) (levelHooksWith reg (gsLevelElems gs)) (gsGen gs) (swapCells (gsBoard gs) a b)

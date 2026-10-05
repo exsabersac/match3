@@ -21,13 +21,15 @@ import qualified Spec.Extension
 import qualified Spec.Branches
 import qualified Spec.JellyBubble
 import qualified Spec.ElementClass
+import qualified Spec.ElementOracle
+import qualified Spec.ElementAbility
 import qualified Spec.Engine
 import qualified Spec.UIEvents
 import qualified Spec.ReplayUndo
 import qualified Spec.Golden
 import qualified Spec.Properties
 import qualified Spec.SourceScan
-import qualified Spec.Caps
+import qualified Spec.Archetype
 import qualified Spec.Presentation
 import qualified Spec.View
 import qualified Spec.BombShapes
@@ -82,12 +84,14 @@ tests =
         , Spec.Branches.tests
         , Spec.JellyBubble.tests
         , Spec.ElementClass.tests
+        , Spec.ElementOracle.tests
+        , Spec.ElementAbility.tests
         , Spec.Engine.tests
         , Spec.UIEvents.tests
         , Spec.ReplayUndo.tests
         , Spec.Golden.tests
         , Spec.Properties.tests
-        , Spec.Caps.tests
+        , Spec.Archetype.tests
         , Spec.Presentation.tests
         , Spec.View.tests
         , Spec.BombShapes.tests

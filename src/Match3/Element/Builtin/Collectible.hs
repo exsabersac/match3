@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 收集与计数类：离开盘面（被收走 / 打破）时按计数键记一笔，常作关卡目标。
 --
@@ -16,51 +17,97 @@ module Match3.Element.Builtin.Collectible
   , chameleonColor
   , chameleonNext
   , chameleonShift
-  , cookieEntry
-  , timeSpiritEntry
-  , bubbleEntry
-  , chameleonEntry
   ) where
 
 import Control.Applicative ((<|>))
 import Data.List (nub)
 import Match3.Board.Grid (getCell, inBounds, setCell)
-import Match3.Element.Builtin.Common (deadRule)
-import Match3.Element.Caps
+import Match3.Element.Ability
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
-import Match3.Element.Registry
+import Match3.Element.Kind
 import Match3.Element.Types
-import Match3.Obstacles (chipAdjacentTimeSpiritsExcept, orthoNeighbors)
+import Match3.Obstacles (orthoNeighbors)
 import Match3.Rainbow (isRainbow, rainbowClearSeeds)
 import Match3.Types
 
 -- | 饼干：打不动；随重力下落、可过传送门，落到底边被收走；离格也算覆盖地毯。
 data CookieE = CookieE
   deriving (Eq, Show)
+  deriving (Matchable, Hittable) via (Obstacle CookieE)
 
-instance Element CookieE where
-  name _ = "cookie"
+instance Cellular CookieE where
+  nameOf _ = "cookie"
   toCell _ = Cookie
-  caps _ = blocker [teleports, drainsAt [EdgeBottom], counts CountCookies, vacates]
+
+instance Movable CookieE where
+  drains _ = [EdgeBottom]
+  keepOnShuffle _ = True
+  recolorable _ = False
+  pushable _ = False
+
+instance Countable CookieE where
+  counter _ = Just CountCookies
+  vacatesCarpet _ = True
+
+instance Renders CookieE
+
+instance Kind CookieE where
+  kindName _ = "cookie"
+  fromCell cell = case cell of
+    Cookie -> Just CookieE
+    _ -> Nothing
+  place _ _ _ = Just Cookie
 
 -- | 时间精灵：命中 / 邻消即破，按个数差每个奖励 2 步。
 data TimeSpiritE = TimeSpiritE
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle TimeSpiritE)
 
-instance Element TimeSpiritE where
-  name _ = "time_spirit"
+instance Cellular TimeSpiritE where
+  nameOf _ = "time_spirit"
   toCell _ = TimeSpirit
-  caps _ = blocker [breaks, onAdjacent 120 (deadRule chipAdjacentTimeSpiritsExcept), countsDiff CountSpirits, bonus 2]
+
+instance Hittable TimeSpiritE where
+  fires _ = False
+
+instance Countable TimeSpiritE
+instance Renders TimeSpiritE where
+  faceBase _ = Just ("spirit", [])
+
+instance Kind TimeSpiritE where
+  kindName _ = "time_spirit"
+  fromCell cell = case cell of
+    TimeSpirit -> Just TimeSpiritE
+    _ -> Nothing
+  place _ _ _ = Just TimeSpirit
+  diffCounter _ = Just CountSpirits
+  bonusMoves _ = 2
+  neighbourPrio _ = Just 120
+  onNeighbourClear _ = Dies
 
 -- | 气泡：占格本体 Custom "bubble" k。无色、挡交换、随重力下落、不穿传送门、洗牌保留；
 -- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。
 newtype Bubble = Bubble Int
   deriving (Eq, Show)
+  deriving (Matchable, Movable) via (Obstacle Bubble)
 
-instance Element Bubble where
-  name _ = "bubble"
-  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps _ = blocker [breaks, onAdjacent 170 bubbleAdjacent, counts (CountNamed "bubble"), labelled "气泡"]
+instance Cellular Bubble where
+  nameOf _ = "bubble"
+
+instance Hittable Bubble where
+  fires _ = False
+
+instance Countable Bubble where
+  counter _ = Just (CountNamed "bubble")
+
+instance Renders Bubble
+
+instance Kind Bubble where
+  kindName _ = "bubble"
+  fromCell = fromCustom "bubble" Bubble
+  place _ = customPlace "bubble"
+  label _ = Just "气泡"
+  boardPasses _ = [AdjacentPass 170 bubbleAdjacent]
 
 bubbleAdjacent :: AdjCtx -> Board -> AdjOut
 bubbleAdjacent ctx b =
@@ -111,20 +158,35 @@ chameleonColor cell = case cell of
 chameleonNext :: Color -> Color
 chameleonNext c = colorAt (fromEnum c + 1)
 
-instance Element Chameleon where
-  name _ = chameleonName
-  -- toCell：缺省实现（Int newtype → Custom (name e) (CustomState n)，见 Element 类）
-  caps (Chameleon k) =
-    piece
-      [ colorIs (colorAt k)
-      , keepsOnShuffle
-      , noRecolor
-      , counts (CountNamed "chameleon")
-      , onSwap (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds)
-      , atEnd (moveRule 40 chameleonRun)
-      , labelled "变色龙"
-      , displays [("c", FaceColor (colorAt k))]  -- 当前颜色（网页格子 JSON 的 "c"，同宝石；前端不自己换算 v）
-      ]
+instance Cellular Chameleon where
+  nameOf _ = chameleonName
+
+instance Matchable Chameleon where
+  color (Chameleon k) = Just (colorAt k)
+
+instance Hittable Chameleon
+
+instance Movable Chameleon where
+  keepOnShuffle _ = True
+  recolorable _ = False
+
+instance Countable Chameleon where
+  counter _ = Just (CountNamed "chameleon")
+
+instance Renders Chameleon where
+  face (Chameleon k) = [("c", FaceColor (colorAt k))]  -- 当前颜色（网页格子 JSON 的 "c"，同宝石；前端不自己换算 v）
+
+instance Kind Chameleon where
+  kindName _ = chameleonName
+  fromCell = fromCustom chameleonName Chameleon
+  -- 放置：颜色取参数，没有参数时取原格宝石的颜色
+  place _ args cell = chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
+    where
+      gemColor c = case c of
+        Gem col _ _ _ -> Just col
+        _ -> Nothing
+  label _ = Just "变色龙"
+  boardPasses _ = [SwapPass (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds), EndPass (moveRule 40 chameleonRun)]
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。
 -- 每只变色龙（行优先，在逐只换过的盘面上）按固定顺序从下一种颜色试起（五种里最后一种是原色），取第一种不会让它
@@ -178,17 +240,3 @@ chameleonRainbowSeeds b p1 p2 = case [(q, col) | q <- [p1, p2], Just col <- [cha
 
 --------------------------------------------------------------------------------
 -- 条目
-
-cookieEntry, timeSpiritEntry, bubbleEntry, chameleonEntry :: Entry
-cookieEntry = bodyEntry CookieE (\cell -> case cell of Cookie -> Just CookieE; _ -> Nothing) (\_ _ -> Just Cookie)
-timeSpiritEntry = bodyEntry TimeSpiritE (\cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing) (\_ _ -> Just TimeSpirit)
--- 气泡：Custom 本体，放置参数 = 值（缺省 1）。
-bubbleEntry = customEntry (Bubble 1) (Bubble . unCustomState)
--- 变色龙：Custom 本体；放置参数头一个是颜色 = 指定颜色（前缀匹配，多出的参数忽略），否则取原格宝石的颜色
--- （开局不会凭空连成三消）；原格不是宝石且没给颜色时不放。
-chameleonEntry = customEntryWith (Chameleon 0) (Chameleon . unCustomState) $ \args cell ->
-  chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
-  where
-    gemColor cell = case cell of
-      Gem c _ _ _ -> Just c
-      _ -> Nothing

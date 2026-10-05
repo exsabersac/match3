@@ -49,10 +49,10 @@ import Data.Maybe (isJust)
 import Engine.Optics (Lens', lens)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
-import Match3.Element.Class (LevelElement, SomeLevelElement, fromLevelElement)
+import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultWorld)
+import Match3.Element.Mechanic (Mechanic, SomeMechanic, fromMechanic)
 import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
-import Match3.Element.Registry (Registry)
+import Match3.Element.World (World)
 import Match3.Ufo (Ufo(..))
 import Match3.Conveyor (Belt)
 import Match3.Types
@@ -78,7 +78,7 @@ data GameState = GameState
   , gsCrossClears   :: Int    -- cross-clear booster charges
   , gsLastCleared   :: [Pos]  -- cells cleared last move (UI particles; not belt/snail noise)
   , gsDaily         :: Bool   -- True for date-seeded daily challenge (通关≠战役推进)
-  , gsLevelElems    :: [SomeLevelElement]
+  , gsLevelElems    :: [SomeMechanic]
     -- ^ 一局的全部关卡级元素（状态在元素值里；内置 = 飞碟 / 皮带 / 传送门 / 地毯 / 地面层，
     -- 读数 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround 由它派生）。
     -- 开局见 Match3.Element.Level.startLevelsWith，节拍与写回见同模块。
@@ -105,7 +105,7 @@ gsGround :: GameState -> Ground
 gsGround = levelGround . gsLevelElems
 
 -- | 写入一个关卡级元素的状态（同名替换，没有则追加）。
-setLevelElem :: LevelElement l => l -> GameState -> GameState
+setLevelElem :: Mechanic l => l -> GameState -> GameState
 setLevelElem l gs = gs {gsLevelElems = putLevel l (gsLevelElems gs)}
 
 -- | 写入飞碟（替换 'UfoLevel'）。
@@ -166,16 +166,16 @@ gsGroundL :: Lens' GameState Ground
 gsGroundL = lens gsGround (flip setGround)
 
 -- | 内置关卡级元素之一（Show 按固定字段名打印它们的状态，不进 extras）。
-builtinLevel :: SomeLevelElement -> Bool
+builtinLevel :: SomeMechanic -> Bool
 builtinLevel e =
-  isJust (fromLevelElement e :: Maybe UfoLevel)
-    || isJust (fromLevelElement e :: Maybe BeltLevel)
-    || isJust (fromLevelElement e :: Maybe PortalLevel)
-    || isJust (fromLevelElement e :: Maybe CarpetLevel)
-    || isJust (fromLevelElement e :: Maybe GroundLayer)
-    || isJust (fromLevelElement e :: Maybe BombShapes)
-    || isJust (fromLevelElement e :: Maybe RainbowCombos)
-    || isJust (fromLevelElement e :: Maybe CookieDrop)
+  isJust (fromMechanic e :: Maybe UfoLevel)
+    || isJust (fromMechanic e :: Maybe BeltLevel)
+    || isJust (fromMechanic e :: Maybe PortalLevel)
+    || isJust (fromMechanic e :: Maybe CarpetLevel)
+    || isJust (fromMechanic e :: Maybe GroundLayer)
+    || isJust (fromMechanic e :: Maybe BombShapes)
+    || isJust (fromMechanic e :: Maybe RainbowCombos)
+    || isJust (fromMechanic e :: Maybe CookieDrop)
 
 -- | 文本固定的 Show（元素查询快照与测试指纹对 show 取散列，格式不能变）：按派生 Show 的记录格式打印，
 -- 皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影、各计数按固定字段名与位置打印，gsOver 经 'fromTerminal' 按 Outcome 打印。
@@ -297,10 +297,10 @@ moveFx before after out
 
 -- | 计算一手可走的交换并记在 gsHint（不改盘面）。
 applyHint :: GameState -> (GameState, Maybe (Pos, Pos))
-applyHint = applyHintWith defaultRegistry
+applyHint = applyHintWith defaultWorld
 
--- | applyHint（指定注册表）：可走判定用这张表里的挡交换 / 匹配色定义。
-applyHintWith :: Registry -> GameState -> (GameState, Maybe (Pos, Pos))
+-- | applyHint（指定元素世界）：可走判定用这张表里的挡交换 / 匹配色定义。
+applyHintWith :: World -> GameState -> (GameState, Maybe (Pos, Pos))
 applyHintWith reg gs =
   let h = findHintWith reg (gsBoard gs)
   in (gs { gsHint = h }, h)

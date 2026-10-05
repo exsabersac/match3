@@ -1,28 +1,20 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | 占格障碍与邻消触发：石头/宝箱/蜂蜜/蛋糕/保险箱/气球/彩蛋/染色瓶/时间精灵/魔法帽/果汁机。
--- 一般不可匹配、挡交换；邻消削一层或触发效果。不负责连锁循环本身。
+-- | 占格障碍的整盘邻消触发：气球/彩蛋/染色瓶/魔法帽/果汁机（走元素的逃生口 boardPasses）。
+-- 一般不可匹配、挡交换；邻消触发效果。不负责连锁循环本身。
 --
--- 五种带层数障碍的邻消揭层是同一个 'chipAdjacentLayeredExcept'（障碍种类 = 棱镜参数，保险箱末层变饼干 = 另一个参数），
--- 「相邻的某种格」都是 'adjacentWhere'，魔法帽 / 染色瓶的改色用遍历 'cellColorT'
--- （docs/haskell-features/09-规则去重.md）。结果的列表顺序由金标准与 Spec.RulesDedup 的固定例子
--- （dedup_obstacle_orders_pinned）锁定。
+-- 石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 时间精灵的邻消削层自元素类重构第 3 刀起是元素方法 onNeighbourClear +
+-- 通用驱动（Match3.Element.Rules.kindNeighbour），不在这里。「相邻的某种格」都是 'adjacentWhere'，
+-- 魔法帽 / 染色瓶的改色用遍历 'cellColorT'（docs/haskell-features/09-规则去重.md）。结果的列表顺序由金标准与
+-- Spec.RulesDedup 的固定例子（dedup_obstacle_orders_pinned）锁定。
 --
 -- except 参数 = 本轮已被直接命中、不再邻消的格。只导出元素定义（Match3.Element.Builtin.*）要用的版本；
 -- 测试用的无 except 写法（except = []）在 test/Spec/Support/Obstacles.hs。
 module Match3.Obstacles
   ( orthoNeighbors
   , adjacentWhere
-    -- * 带层数的占格障碍
-  , chipAdjacentLayeredExcept
-  , chipAdjacentStonesExcept
-  , chipAdjacentChestsExcept
-  , chipAdjacentHoneyExcept
-  , chipAdjacentCakesExcept
-  , chipAdjacentSafesExcept
-    -- * 气球 / 时间精灵 / 彩蛋
+    -- * 气球 / 彩蛋
   , chipAdjacentBalloonsExcept
-  , chipAdjacentTimeSpiritsExcept
   , openSurprises
     -- * 魔法帽 / 染色瓶 / 果汁机
   , hatsAdjacentTo
@@ -35,7 +27,7 @@ module Match3.Obstacles
   ) where
 
 import Data.List (nub, sort)
-import Engine.Optics (Prism', has, (%~), (&), (.~), (^?))
+import Engine.Optics (has, (%~), (&), (.~), (^?))
 import Match3.Board.Grid (inBounds)
 import Match3.Types
   ( Board
@@ -49,8 +41,6 @@ import Match3.Types
   , isMagicHat
   , isSurprise
   , isBottle
-  , isTimeSpirit
-  , mkCookie
   , CellContents(..)
   , balloonColor
   , makerColor
@@ -60,7 +50,7 @@ import Match3.Types
   , colorAt
   , isGem
   )
-import Match3.Types.Optics (cellAt, cellColorT, _Cake, _Chest, _Honey, _Safe, _Stone)
+import Match3.Types.Optics (cellAt, cellColorT)
 
 at :: Board -> Pos -> Cell
 at = boardAt
@@ -88,42 +78,6 @@ adjacentWhere ok b cleared =
 -- | Magic hat positions orthogonally adjacent to cleared gems.
 hatsAdjacentTo :: Board -> [Pos] -> [Pos]
 hatsAdjacentTo = adjacentWhere isMagicHat
-
--- | 带层数占格障碍的邻消（石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱共用，只差棱镜）：
--- 与 clearedGems 正交相邻、不在 except 里（本轮已被直接命中）的这种障碍各削一层。
---
--- * @layer@：哪种障碍（棱镜 '_Stone' / '_Chest' / … ，焦点是层数）；
--- * @onLast@：最后一层被削掉时这一格变成什么——Nothing = 原样留着，由清除管线随本轮清除格移走（石头等）；
---   @Just mkCookie@ = 原地变成饼干（保险箱开启，饼干不在这里移走）。
---
--- 返回（新盘面, 最后一层被削掉的位置）。次序：按 'adjacentWhere' 的顺序 foldl，
--- 末层位置用 @nub (p : dead)@ 前插（即逆序），金标准与测试 dedup_obstacle_orders_pinned 逐项锁定。
-chipAdjacentLayeredExcept :: Prism' Cell Int -> Maybe Cell -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentLayeredExcept layer onLast b clearedGems except =
-  foldl hitOne (b, []) [p | p <- adjacentWhere (has layer) b clearedGems, p `notElem` except]
-  where
-    hitOne (board, dead) p =
-      case at board p ^? layer of
-        Just n
-          | n <= 1 -> (maybe board (setAt board p) onLast, nub (p : dead))
-          | otherwise -> (board & cellAt p . layer .~ n - 1, dead)
-        Nothing -> (board, dead)
-
--- | 石头 / 宝箱 / 蜂蜜 / 蛋糕：末层原样留着，随本轮清除格移走。保险箱：末层原地变饼干。
-chipAdjacentStonesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentStonesExcept = chipAdjacentLayeredExcept _Stone Nothing
-
-chipAdjacentChestsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentChestsExcept = chipAdjacentLayeredExcept _Chest Nothing
-
-chipAdjacentHoneyExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentHoneyExcept = chipAdjacentLayeredExcept _Honey Nothing
-
-chipAdjacentCakesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentCakesExcept = chipAdjacentLayeredExcept _Cake Nothing
-
-chipAdjacentSafesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentSafesExcept = chipAdjacentLayeredExcept _Safe (Just mkCookie)
 
 -- | Balloon positions orthogonally adjacent to a same-color cleared gem.
 balloonsAdjacentSameColor :: Board -> [Pos] -> [Pos]
@@ -156,7 +110,7 @@ cycleColor c = colorAt (fromEnum c + 1)
 triggerAdjacentHatsExcept :: Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsExcept = triggerAdjacentHatsBy isGem
 
--- | 可改色谓词由调用方给出（元素框架里 = 注册表的 recolorable；内置等于 isGem）。
+-- | 可改色谓词由调用方给出（元素框架里 = 元素世界的 recolorable；内置等于 isGem）。
 triggerAdjacentHatsBy :: (Cell -> Bool) -> Board -> [Pos] -> [Pos] -> Board
 triggerAdjacentHatsBy recolorable b cleared protected =
   foldl triggerOne b (hatsAdjacentTo b cleared)
@@ -298,17 +252,3 @@ triggerAdjacentBottlesBy recolorable b cleared protected =
           in foldl (\bd p -> bd & cellAt p . cellColorT .~ col) board (nub nbrs)
         _ -> board
 
-
--- | Time spirit positions orthogonally adjacent to cleared gems.
-spiritsAdjacentTo :: Board -> [Pos] -> [Pos]
-spiritsAdjacentTo = adjacentWhere isTimeSpirit
-
--- | Remove adjacent time spirits (时间精灵), skipping cells in 'except'. Dead positions cleared with the wave.
-chipAdjacentTimeSpiritsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentTimeSpiritsExcept b clearedGems except =
-  foldl hitOne (b, []) [p | p <- spiritsAdjacentTo b clearedGems, p `notElem` except]
-  where
-    hitOne (board, dead) p =
-      case at board p of
-        TimeSpirit -> (board, nub (p : dead))
-        _ -> (board, dead)

@@ -70,7 +70,7 @@ undo_restores = do
   case findMatchPair (gsBoard gs0) of
     Nothing -> assertFailure "need move"
     Just (p1, p2) -> do
-      case stepThenUndo defaultRegistry gs0 (M3E.Swap p1 p2) of
+      case stepThenUndo defaultWorld gs0 (M3E.Swap p1 p2) of
         Nothing -> assertFailure "undo should work"
         Just gsU -> do
           gsBoard gsU @?= gsBoard gs0
@@ -187,7 +187,7 @@ undo_restores_carry_moves = do
     Just (p1, p2) -> do
       let (gs1, _) = trySwap p1 p2 gs0
       assertEqual "spent one" (6 :: Int) (gsMoves gs1)
-      case stepThenUndo defaultRegistry gs0 (M3E.Swap p1 p2) of
+      case stepThenUndo defaultWorld gs0 (M3E.Swap p1 p2) of
         Nothing -> assertFailure "undo"
         Just gsU -> do
           assertEqual "moves restored" (7 :: Int) (gsMoves gsU)

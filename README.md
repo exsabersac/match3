@@ -201,8 +201,8 @@ src/Match3/Types/  Name Cell Overlay Optics Body Board Game（第 6 刀从 Types
 src/Match3/Levels/ Level Campaign（关卡记录 / 49 关关卡表与 lookupLevel，第 6 刀）
 src/Match3/Board/  Grid Match Clear Gravity Cascade Effect Phase Wave Hooks Refill Random Default（Effect = 连锁的能力类与解释器；Phase = 一轮的阶段标签；Wave = 回放轮次；Hooks = 第 7 刀的关卡级钩子记录；Refill = 第 8 刀的补子策略；Default = 不带 With 的内置表便捷入口）
 src/Match3/Game/   State Tally Outcome Shuffle Level Trace EndPhase Resolve Move Boosters（EndPhase = 步末表）
-src/Match3/Element/ Types Class Caps Message Registry Special Builtin Event Level（元素框架：规则类型 / 元素类与能力记录 / 能力声明简写（第 9 刀）/ 消息 / 注册表 / 规则表解释器（第 8 刀：特殊块形状、特殊块组合）/ 内置元素汇总 / 效果事件 / 一局的关卡级元素（第 7 刀）；Element.hs 为再导出外观）
-src/Match3/Element/Builtin/ Gem Layer Obstacle Collectible Actor Ground Level Common（内置元素按功能分组的 instance；Builtin.hs 只汇总条目）
+src/Match3/Element/ Types Ability Kind Layer Rules World Mechanic Special Builtin Event Level（元素框架：规则类型 / 六个能力类与原型包 / 类型级 Kind·Entity·GroundKind / 叠层 Layer·Layered / 规则通用驱动 / 元素世界（解码与全部 *With 查询）/ 关卡级机制类 Mechanic / 规则表解释器（第 8 刀）/ 内置元素汇总 / 效果事件 / 一局的关卡级机制与节拍折叠；Element.hs 为再导出外观；2026-10 元素类重构，见 docs/guide/04）
+src/Match3/Element/Builtin/ Gem Layer Obstacle Collectible Actor Ground Level Common（内置元素按功能分组的 instance；Builtin.hs 只汇总类型列表 builtinDefs）
 app/Main.hs   SDL2 前端入口（读环境变量 → runShell）
 app/Shell/    Loop（通用 SDL 外壳：窗口 / 固定步长主循环 / 插件钩子；不依赖 Match3）
 app/UI/       三消插件：Plugin Types Layout Env Input Actions Playback Draw Cascade EndStage
@@ -216,8 +216,8 @@ app/pure/     不依赖 SDL 的纯前端模块，内部库 match3-pure（桌面�
               UI/CellFace（读元素自带的显示字段）、UI/WebMeta（网页启动时经 m3Meta 读的表现表）
 assets/       生成的贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格）
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
-test/Spec.hs  测试入口（只汇总；464 命名用例）
-test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Caps / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
+test/Spec.hs  测试入口（只汇总；476 命名用例）
+test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Archetype / ElementAbility / ElementOracle / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术）
@@ -229,5 +229,5 @@ docs/guide/   框架与实现分析导读（把上面各篇串成一条阅读路
 ## 发布状态
 
 - 战役：**49** 关（地图 CH1–CH7；第 39 / 40 关是段 5 追加的果冻 / 气泡，第 41 关「爆破」是新玩法 L / T 形出炸弹，第 42 关「魔石」是新玩法魔法石，第 43 关「毛球」是新玩法毛球，第 44 关「魔力鸟」是新玩法魔力鸟组合增强，第 45 关「雪怪」是新玩法雪怪 Boss，第 46 关「掉落口」是新玩法饼干掉落口，第 47 关「变色龙」是新玩法变色龙，第 48 关「魔法格」是新玩法魔法地格，第 49 关「宽域」是 6×9 矩形盘面），批量可构造 / 可玩 / 装饰与目标对齐
-- 测试：`stack test` **464**（Tasty + QuickCheck）
+- 测试：`stack test` **476**（Tasty + QuickCheck）
 - 许可证：BSD-3-Clause（见 `LICENSE`，英文法律文本保持原文）

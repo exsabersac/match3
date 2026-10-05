@@ -1,19 +1,17 @@
--- | 元素框架的词汇类型：层（Slot）、命中结果、邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数；
+-- | 元素框架的词汇类型：邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数、格子的分派编号（cellSlot）；
 -- 特殊块形状规则（ShapeRule，连同连线 MatchRun）与组合规则（ComboRule）。
--- 元素本身是类型类（Match3.Element.Class 的 Element / Modifier / LevelElement），主流程（匹配、挡交换、
--- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经注册表
--- （Match3.Element.Registry）问它们，不按构造器写死分支。
+-- 元素本身是类型类（Match3.Element.Ability / Kind / Layer；命中结果是 Ability 的 Strike），主流程（匹配、挡交换、
+-- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经元素世界
+-- （Match3.Element.World）问它们，不按构造器写死分支。
 --
 -- 依赖：Match3.Types、Element.Event（步末规则产出 EndEffect）。不含具体元素（见 Element.Builtin）。
 --
 -- 一个格子最多三层，自上而下：冰层（宝石的 ice Int）→ 叠层（CellOverlay）→ 本体（CellContents 构造器 /
--- 宝石种类 / Custom 名字）。冰层与叠层是修饰器（Modifier），本体是元素（Element）；命中与挡匹配等
--- 按层自上而下组合（见 Class 的 Modified 与 Registry）。
+-- 宝石种类 / Custom 名字）。冰层与叠层是叠层种类（Match3.Element.Layer 的 Layer），本体是本体种类（Kind）；
+-- 命中与挡匹配等按层自上而下组合（见 Layer 的 Layered 与 World 的解码）。
 module Match3.Element.Types
   ( ElementName(..)
   , CustomState(..)
-  , Slot(..)
-  , HitResult(..)
   , AdjCtx(..)
   , AdjOut(..)
   , AdjacentRule(..)
@@ -34,7 +32,9 @@ module Match3.Element.Types
   , exactArgs
   , prefixArgs
   , Placement(..)
+  , Placer
   , FaceValue(..)
+  , CellField(..)
   , SwapRule(..)
   , OpenRule(..)
   , MatchRun(..)
@@ -53,27 +53,9 @@ import Match3.Counts (CounterKey(..))
 import Match3.Element.Event (EndEffect)
 import Match3.Types
 
--- | 注册表条目接管格子的哪一层。
-data Slot
-  = SlotCell Int     -- ^ 内置本体（cellSlot 编号；宝石按种类各占一个编号）
-  | SlotOverlay Int  -- ^ 宝石叠层（overlaySlot 编号）
-  | SlotIce          -- ^ 宝石冰层
-  | SlotCustom       -- ^ 自定义本体：Custom 名字 == 元素名
-  | SlotGround       -- ^ 地面层：GameState.gsGround 里名字 == 元素名的格
-  | SlotNone         -- ^ 原型推不出内置槽位（构造器用错）：mkRegistryChecked 报错，mkRegistry 不为它分派
-  deriving (Eq, Show)
-
--- | 直接命中（匹配 / 特殊块 / 道具种子落在本格）时这一层的反应。
-data HitResult
-  = HitPierce       -- ^ 这一层不管，继续问下一层（只对冰层 / 叠层有意义）
-  | HitAbsorb Cell  -- ^ 这一层吃掉命中：格子变成给出的新内容，本格不消除
-  | HitDestroy      -- ^ 本格被消除（进入清除格）
-  | HitImmune       -- ^ 打不动：格子原样，不消除（锤子对它拒绝且不扣次数）
-  deriving (Eq, Show)
-
 -- | 邻格波及的上下文：acTrue = 本轮真消除格；acDirect = 本轮已被直接命中的格（不再重复波及）；
 -- acProtect = 本轮刚生成、必须原样坐住的格（彩蛋开出的特殊块 + 之前各轮次产出的 aoSit）；
--- acRecolor = 注册表给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格；内置等于 isGem）。
+-- acRecolor = 元素世界给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格；内置等于 isGem）。
 data AdjCtx = AdjCtx
   { acTrue    :: [Pos]
   , acDirect  :: [Pos]
@@ -101,7 +83,7 @@ data EndPhase = PhaseTick | PhaseSpread | PhaseMove
   deriving (Eq, Ord, Show)
 
 -- | 步末规则的上下文：ecAvoid = 本步已被皮带移动过的格；ecWalls = 传送门端点（会走的元素当墙）；
--- ecPushable = 注册表给出的「本体可被推动」谓词（蜗牛只推这类格；内置等于 Snail.pushable）。
+-- ecPushable = 元素世界给出的「本体可被推动」谓词（蜗牛只推这类格；内置等于 Snail.pushable）。
 data EndCtx = EndCtx
   { ecAvoid    :: [Pos]
   , ecWalls    :: [Pos]
@@ -209,6 +191,9 @@ exactArgs p as = case runArgP p as of
 prefixArgs :: ArgP a -> [Arg] -> Maybe a
 prefixArgs p = fmap fst . runArgP p
 
+-- | 关卡放置：给出参数与原格，返回新格（Nothing = 不放）。
+type Placer = [Arg] -> Cell -> Maybe Cell
+
 -- | 关卡放置表的一项：把元素（按名字）以给定参数放到若干格（按列表顺序逐格）。
 data Placement = Place ElementName [Arg] [Pos]
   deriving (Eq, Show)
@@ -304,8 +289,13 @@ overlaySlot ov = case ov of
   Curtain _ -> 6
   Steam -> 7
 
--- | 元素自带的显示附加字段的值（'Match3.Element.Class.ViewCaps' 的 vwFace）：网页格子 JSON 里按出现顺序
+-- | 元素自带的显示附加字段的值（Match3.Element.Ability 的 Renders.face）：网页格子 JSON 里按出现顺序
 -- 追加在 cellFace 字段之后（FaceInt / FaceColor → 数字（颜色取 1..5），FaceBool → true / false），桌面按名字读。
+-- | 前端格子的基本字段的值（网页 JSON 的 c / k / i / o / n …；元素类重构第 6 刀从 Match3.View 移来，
+-- 元素经 'Match3.Element.Ability.Renders' 的 faceBase 给出自己的标签与字段）。
+data CellField = FieldInt Int | FieldText String | FieldNull
+  deriving (Eq, Show)
+
 data FaceValue
   = FaceInt Int
   | FaceBool Bool

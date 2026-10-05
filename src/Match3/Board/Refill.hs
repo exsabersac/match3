@@ -3,13 +3,13 @@
 --
 -- 旧实现（Gravity.refill）把「逐个空洞随机选一色、补一颗普通宝石」写死在主流程里；现在补子的格子来自一个
 -- 'RefillPolicy' 记录，主流程（Gravity.settleRefillWith / Cascade 的每轮沉降）只调 'refillWith'。
--- 策略的来源（见 Gravity.activeRefill）：关卡级元素对 'Match3.Element.Message.Refilling' 的回复
--- （LevelHooks.hookRefill）优先，否则注册表的策略（Registry.refillPolicyWith，缺省 'defaultRefill'）。
+-- 策略的来源（见 Gravity.activeRefill）：关卡级机制的 refillPolicy 回复
+-- （LevelHooks.hookRefill）优先，否则元素世界的策略（World.refillPolicyWith，缺省 'defaultRefill'）。
 --
 -- 不变量：'refillWith' 按行优先顺序逐个空洞问策略，每个空洞恰好调一次 'refillCell'；
 -- 'defaultRefill' 每个空洞恰好消耗一次 randomR (0, numColors - 1)，与旧 refill 逐字相同（盘面与生成器状态都相同）。
 --
--- 依赖：Board.Grid（MBoard、randomColor）、Match3.Types。不依赖注册表。
+-- 依赖：Board.Grid（MBoard、randomColor）、Match3.Types。不依赖元素世界。
 module Match3.Board.Refill
   ( RefillCtx(..)
   , RefillPolicy(..)

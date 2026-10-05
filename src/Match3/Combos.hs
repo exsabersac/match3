@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | 特殊×特殊合成：Line×Bomb、Rainbow×Line、Bomb×Bomb、Line×Line。第 8 刀起组合效果是一张有序的组合表
--- （'builtinComboRules'，解释器见 Match3.Element.Special；注册表 Registry.comboRules 持有、并成一条成对交换规则），
+-- （'builtinComboRules'，解释器见 Match3.Element.Special；元素世界 World.comboRules 持有、并成一条成对交换规则），
 -- isSpecialCombo / comboClearSeeds 是这张表的判定与清种子；另有各组合的种类谓词与爆炸几何（扩展组合用）。
 -- 两端须 specialActivates（软锁不发火）。普通三消与彩虹单端交换见 Board / Rainbow。
 module Match3.Combos
@@ -94,7 +94,7 @@ comboClearSeeds :: Board -> Pos -> Pos -> [Pos]
 comboClearSeeds = comboSeedsFor builtinComboRules
 
 -- | 魔力鸟组合增强（新玩法 4，开心消消乐的「魔力鸟 + 特效」）：只在打开规则开关 "rainbow_combos" 的关卡里用
--- （关卡级元素 RainbowCombos 回复 Morphing）。b0 = 交换前盘面、swapped = 交换后；一端彩虹、另一端直线 / 炸弹，
+-- （关卡级机制 RainbowCombos 的 morph）。b0 = 交换前盘面、swapped = 交换后；一端彩虹、另一端直线 / 炸弹，
 -- 两端都能点火（软锁不算）时成立，给出 (元素名, 变身格, 起手种子)：
 --
 -- * 彩虹 × 直线（"rainbow_line"）：盘上与直线**同色的普通宝石**（无冰、无叠层）全部变成直线，

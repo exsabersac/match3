@@ -15,7 +15,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Maybe (isJust)
 import Engine.Optics
 import Match3.Core
-import Match3.Element.Class (levelNameOf)
+import Match3.Element.Mechanic (mechNameOf)
 import Match3.Game.State (gsBeltsL, gsBoardL, gsCarpetOpenL, gsCrossClearsL, gsFreeSwapsL, gsGroundL, gsHammersL, gsMovesL, gsPortalsL, gsUfosL)
 import Match3.Types (boardCells, cellOverlay, isGem)
 import Match3.Types.Optics
@@ -98,8 +98,8 @@ qc_optics_level_field_get_put_needs_invariant :: Property
 qc_optics_level_field_get_put_needs_invariant =
   expectFailure $
     forAllBlind genState $ \gs ->
-      let s = gs {gsLevelElems = filter ((/= "ufo") . levelNameOf) (gsLevelElems gs)}
-          names = map levelNameOf . gsLevelElems
+      let s = gs {gsLevelElems = filter ((/= "ufo") . mechNameOf) (gsLevelElems gs)}
+          names = map mechNameOf . gsLevelElems
       in -- Show 只按旧字段名打印读数，看不出差别；Eq 比较 gsLevelElems，能看出多了一个空的 ufo 元素
          counterexample (show (names s) ++ " -> " ++ show (names (set gsUfosL (view gsUfosL s) s))) $
            set gsUfosL (view gsUfosL s) s == s

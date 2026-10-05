@@ -72,7 +72,7 @@ data CellContents
   | Bottle Color  -- dye bottle (染色瓶): adjacent clear dyes ortho gems to bottle color
   | TimeSpirit   -- time spirit (时间精灵): adjacent clear awards +2 moves
   | Countdown Color Int
-  | Custom ElementName CustomState  -- ^ 元素框架的开放槽：注册表里按名字查定义的自定义元素（名字, 状态值；第 6b 刀起都是 newtype，Show 不变）。
+  | Custom ElementName CustomState  -- ^ 元素框架的开放槽：元素世界里按名字查定义的自定义元素（名字, 状态值；第 6b 刀起都是 newtype，Show 不变）。
                        -- 只放在末尾，已有构造器的 Show / Ord 不变；内置关卡不使用。
   deriving (Eq, Ord, Show, Generic)
 

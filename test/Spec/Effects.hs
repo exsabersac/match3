@@ -26,12 +26,12 @@ import Match3.Board.Grid (swapCells)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Phase (Phase(..), Stage, refillStage)
 import Match3.Board.Random (randomBoardSized)
-import Match3.Element.Class (SomeLevelElement)
+import Match3.Element.Mechanic (SomeMechanic)
 import Match3.Types (boardAt)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Core
-import Match3.Element.Level (levelHooksWith, levelRegistryIn)
-import Match3.Element.Registry (Registry)
+import Match3.Element.Level (levelHooksWith, levelWorldIn)
+import Match3.Element.World (World)
 import Spec.Support (digest, findMatchPair)
 import System.Random (RandomGen, StdGen, mkStdGen)
 import Test.Tasty
@@ -48,7 +48,7 @@ tests =
 -- 用例
 
 -- | 用例：(标签, 本关注册表, 本关钩子, 起始盘面, 生成器)。
-data Case = Case String Registry LevelHooks Board StdGen
+data Case = Case String World LevelHooks Board StdGen
 
 cases :: [Case]
 cases =
@@ -57,7 +57,7 @@ cases =
   , seed <- [1, 2]
   , Just gs <- [campaignGame li seed]
   , let elems = gsLevelElems gs
-        reg = levelRegistryIn defaultRegistry elems
+        reg = levelWorldIn defaultWorld elems
         hooks = levelHooksWith reg elems
         b0 = gsBoard gs
         (nr, nc) = boardDims b0
@@ -86,7 +86,7 @@ entries (Case _ reg hooks b g) =
     holes = [(0, 1), (nr - 1, 2)]
 
 -- | CascadeRun 的全部可比内容（钩子是函数记录，比它背后的关卡级元素；生成器比 show）。
-type RunView = (Board, CascadeTally, [CascadeWave], [SomeLevelElement], String)
+type RunView = (Board, CascadeTally, [CascadeWave], [SomeMechanic], String)
 
 view :: CascadeRun StdGen -> RunView
 view r = (crBoard r, crTally r, crWaves r, hookLevel (crHooks r), show (crGen r))

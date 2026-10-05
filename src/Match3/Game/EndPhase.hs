@@ -6,7 +6,7 @@
 -- + 执行函数（读写累积器 'EndAcc'）：
 --
 -- * @tick@（PhaseTick）：倒计时减一 / 归零引爆，接倒计时连锁（新的一段连锁）。
--- * @belt@：皮带节拍，问关卡级元素 EndTicked；有人回复时移位并接皮带后连锁，没人回复时是一段空连锁。
+-- * @belt@：皮带节拍，问关卡级机制 onEndTick；有人回复时移位并接皮带后连锁，没人回复时是一段空连锁。
 -- * @spread@（PhaseSpread）：藤 → 巧 → 蒸汽蔓延（不开新段）。
 -- * @move@（PhaseMove）：会走的元素（蜗牛），避让格 / 墙问关卡级元素（不开新段）。
 -- * @settle@：步末补结算（步末规则声明的空洞挖空 → 沉降补子 → 成消再连锁；新的一段连锁）。
@@ -17,7 +17,7 @@
 --   道具     'boosterEndTable' = vacate → spread → settle
 --
 -- 随机数：只有开新段的阶段（tick / belt / settle）经连锁消耗生成器，顺序即表的顺序，与旧实现相同。
--- 依赖：Board.Cascade（记录版连锁）、Board.Hooks、Element.Level（关卡级元素节拍）、注册表、Game.Trace（EndStep）。
+-- 依赖：Board.Cascade（记录版连锁）、Board.Hooks、Element.Level（关卡级元素节拍）、元素世界、Game.Trace（EndStep）。
 module Match3.Game.EndPhase
   ( EndStage(..)
   , EndAcc(..)
@@ -49,7 +49,7 @@ import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Level (avoidCellsIn, beltShiftIn, levelHooksWith, wallCellsIn)
-import Match3.Element.Registry (Registry, pushableWith)
+import Match3.Element.World (World, pushableWith)
 import Match3.Element.Types (EndCtx(..), EndPhase(..))
 import Match3.Game.Trace (EndStep(..), runPhaseSteps, traceSpreadsWith)
 import Match3.Types
@@ -67,7 +67,7 @@ data EndAcc = EndAcc
 data EndStage = EndStage
   { stageName  :: String
   , stagePhase :: Maybe EndPhase  -- ^ 这一行跑的元素步末规则阶段（皮带 / 补结算 / 腾空记录没有）
-  , stageRun   :: Registry -> EndAcc -> EndAcc
+  , stageRun   :: World -> EndAcc -> EndAcc
   }
 
 instance Show EndStage where
@@ -82,7 +82,7 @@ boosterEndTable :: [EndStage]
 boosterEndTable = [vacateStage, spreadStage, settleStage]
 
 -- | 按表执行：返回 (各段连锁（主连锁在前）, 步末记录, 终盘, 地毯腾空比较用的盘面（表里没有 vacate 时 = 终盘）)。
-runEndTable :: Registry -> [EndStage] -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+runEndTable :: World -> [EndStage] -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
 runEndTable reg table seg0 =
   let acc = foldl (\a st -> stageRun st reg a) (EndAcc (seg0 :| []) [] (crBoard seg0) Nothing) table
   in (NE.reverse (eaSegsRev acc), eaEnds acc, eaBoard acc, maybe (eaBoard acc) id (eaVacate acc))
@@ -110,7 +110,7 @@ tickStage = EndStage "tick" (Just PhaseTick) $ \reg a ->
       k = wavesSoFar a
   in pushSeg [EndStep k before after e | (before, after, e) <- tickSteps] seg1 a
 
--- | 皮带节拍：关卡级元素（EndTicked）给出移位；没人回复时当作没有皮带（空连锁、不记录）。
+-- | 皮带节拍：关卡级机制（onEndTick）给出移位；没人回复时当作没有皮带（空连锁、不记录）。
 beltStage :: EndStage
 beltStage = EndStage "belt" Nothing $ \reg a ->
   let seg = lastSeg a
@@ -151,5 +151,5 @@ vacateStage = EndStage "vacate" Nothing $ \_ a -> a {eaVacate = Just (eaBoard a)
 
 -- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
 -- （第 9 项起 = Game.Trace 的 runPhaseSteps，与蔓延共用同一个 runEndRules；第 9 项前这里另有一份 foldl + reverse。）
-runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
+runPhase :: World -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
 runPhase = runPhaseSteps

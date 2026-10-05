@@ -44,8 +44,8 @@ data Level = Level
   , lvlUfos       :: [Ufo]         -- ^ 飞碟初始位置
   , lvlCarpets    :: [Pos]         -- ^ 未铺的地毯格
   , lvlGround     :: Ground        -- ^ 地面层
-  , lvlRules      :: [ElementName] -- ^ 本关打开的规则开关（按名字，关卡级元素在 levelStart 里读；如 "bomb_shapes" = L / T 形生成炸弹）
-  , lvlDrops      :: [DropSpec]    -- ^ 掉落口（新玩法 6，关卡级元素 CookieDrop 在 levelStart 里读）；空 = 没有掉落口
+  , lvlRules      :: [ElementName] -- ^ 本关打开的规则开关（按名字，关卡级元素在 mechStart 里读；如 "bomb_shapes" = L / T 形生成炸弹）
+  , lvlDrops      :: [DropSpec]    -- ^ 掉落口（新玩法 6，关卡级元素 CookieDrop 在 mechStart 里读）；空 = 没有掉落口
   , lvlRows       :: Int           -- ^ 盘面行数（缺省 8；允许 minBoardDim..maxBoardDim）
   , lvlCols       :: Int           -- ^ 盘面列数（缺省 8；允许 minBoardDim..maxBoardDim；可与行数不同）
   } deriving (Eq, Show)

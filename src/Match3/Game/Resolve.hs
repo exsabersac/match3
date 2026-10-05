@@ -11,8 +11,8 @@
 -- trySwap 与三种道具的入口只负责「校验 + 选择起手方式」，结算与回放脚本全部在这里，只写一次。
 --
 -- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、EndPhase（步末表）、
--- 元素注册表（按差计数、地毯腾空都查注册表）、Element.Level（
--- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经节拍消息）。
+-- 元素元素世界（按差计数、地毯腾空都查元素世界）、Element.Level（
+-- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经 Mechanic 的节拍方法）。
 -- 不变量（金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
 --     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛（写成 EndPhase 表，见 endTableFor）；
@@ -47,11 +47,11 @@ import Match3.Board.Cascade
   , cascadeMatchesWith
   , cascadeSeedsWith
   )
-import Match3.Element.Builtin (defaultRegistry)
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Board.Phase (IsFull, Phase(..), Stage, stageBoard)
-import Match3.Element.Level (coverIn, hitGroundIn, judgeIn, levelHooksWith, levelRegistryIn)
-import Match3.Element.Registry (Registry)
+import Match3.Element.Level (coverIn, hitGroundIn, judgeIn, levelHooksWith, levelWorldIn)
+import Match3.Element.World (World)
 import Match3.Counts (CounterKey(..), countsFromList, singleCount)
 import Match3.Game.EndPhase (EndStage, boosterEndTable, runEndTable, swapEndTable)
 import Match3.Types
@@ -108,7 +108,7 @@ data Opening (p :: Phase) where
   OpenMatch :: Maybe Pos -> Opening 'Swapped
   -- | 种子起手（彩虹 / 特殊合成 / 锤子 / 十字）
   OpenSeeds :: Maybe Pos -> [Pos] -> Opening p
-  -- | 先变身再种子起手（新玩法 4：关卡级元素回复 Morphing）：变身记成第 0 轮之前的步末效果（esAfterWaves = 0），
+  -- | 先变身再种子起手（新玩法 4：关卡级机制的 morph）：变身记成第 0 轮之前的步末效果（esAfterWaves = 0），
   -- mtStart 仍是交换后的盘面，第一轮从变身后的盘面开始
   OpenMorph :: Maybe Pos -> EndEffect -> [Pos] -> Opening 'Swapped
 
@@ -127,19 +127,19 @@ combineCombo (t0 : ts) = foldl step (ctMaxWave t0) ts
 resolveMove
   :: IsFull (StartPhase k)
   => SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
-resolveMove = resolveMoveWith defaultRegistry
+resolveMove = resolveMoveWith defaultWorld
 
--- | 公共结算（指定注册表）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
+-- | 公共结算（指定元素世界）：主连锁、步末规则、计数、洗牌都用这张表里的元素定义。
 -- 三个参数的类型都由同一个 k 决定：操作种类、起手盘面的阶段、起手方式必须彼此吻合。
 -- 约束 IsFull (StartPhase k) 在调用处 k 已知时自动成立（起手阶段只有 'Swapped / 'Full，都是满盘）。
 resolveMoveWith
   :: IsFull (StartPhase k)
-  => Registry -> SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
+  => World -> SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
 resolveMoveWith reg0 sk startS opening gs =
   let kind = moveKind sk
       start = stageBoard startS
-      -- 本关的注册表：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
-      reg = levelRegistryIn reg0 (gsLevelElems gs)
+      -- 本关的元素世界：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
+      reg = levelWorldIn reg0 (gsLevelElems gs)
       hooks0 = levelHooksWith reg (gsLevelElems gs)
       -- 变身起手（OpenMorph）：第一轮之前先把变身写进盘面，并记一条 esAfterWaves = 0 的步末效果
       (startW, preEnds) = case opening of
@@ -166,7 +166,7 @@ resolveMoveWith reg0 sk startS opening gs =
       -- 按前后盘面差计数（保险箱开启、时间精灵 +2 步、自定义）
       diffs = diffCountsWith reg (gsBoard gs) board1
       bonusMoves = sum (map dcBonus diffs)
-      -- 地面层节拍（地面层是关卡级元素，发 GroundHit）：逐轮被上方消除命中（每轮每格一次）；
+      -- 地面层节拍（地面层是核心机制，onGroundHit）：逐轮被上方消除命中（每轮每格一次）；
       -- 内置关卡里只有第 39 关（双层果冻）有地面层
       -- （mapAccumL：累积量 = 关卡级元素、每轮输出 = 去层计数）
       (elemsG, groundCounts) =
@@ -176,7 +176,7 @@ resolveMoveWith reg0 sk startS opening gs =
                 elemsC
                 (concatMap crWaves (NE.toList segs))
         in (es', concat perWave)
-      -- 地毯节拍（Covering）
+      -- 地毯节拍（onCover）
       (carpetHit, elems') =
         coverIn reg (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter) elemsG
       -- 计数（全部进 gsCounts，颜色袋也在 ctCounts 里、目标进度由目标数据派生）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
@@ -202,7 +202,7 @@ resolveMoveWith reg0 sk startS opening gs =
             , gsLastCleared = nub clearedAll
             , gsLevelElems = elems'
             }
-      -- 胜负：内置规则先判，再交关卡级元素复核（胜负节拍 Judging；没人回复时原样）
+      -- 胜负：内置规则先判，再交关卡级元素复核（胜负节拍 judge；没人回复时原样）
       outcome = judgeIn reg elems' board1 (gsScore gs') (gsMoves gs') (decideOutcome gs' gained)
       gs'' = case terminalOf outcome of
         Just t -> gs' {gsOver = Just t}

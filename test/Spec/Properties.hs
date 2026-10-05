@@ -31,8 +31,7 @@ import Match3.Board.Cascade (AfterEntry(..), CascadeRun(..), cascadeAfterWith, c
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty(..))
 import Match3.Conveyor (applyBeltMoves)
-import Match3.Element.Class (LevelElement(..), SomeLevelElement(..), SomeMessage(..))
-import Match3.Element.Message (Message, fromMessage)
+import Match3.Element.Mechanic (Mechanic(mechName, onEndTick), SomeMechanic(..))
 import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
 import Match3.Game.Level (newGame)
 import Match3.Game.State
@@ -86,7 +85,10 @@ import Match3.Counts
   , plusCounts
   )
 import Match3.Element
-import Match3.Element.Class (levelNameOf, toCell)
+import Match3.Element.Ability (toCell)
+import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
+import Match3.Element.Layer (Layer(layerName), SomeLayer(..), layerValueName, peelAs)
+import Match3.Element.Mechanic (mechNameOf)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
 import System.Random (mkStdGen)
@@ -117,7 +119,7 @@ tests =
       , testProperty "qc_level_hooks_match_legacy" (withMaxSuccess 500 qc_level_hooks_match_legacy)
       , testProperty "qc_level_elems_readers_roundtrip" (withMaxSuccess 100 qc_level_elems_readers_roundtrip)
       , testProperty "qc_end_table_matches_legacy" (withMaxSuccess 300 qc_end_table_matches_legacy)
-      , testProperty "qc_ask_levels_folds_in_order" (withMaxSuccess 300 qc_ask_levels_folds_in_order)
+      , testProperty "qc_beat_folds_in_order" (withMaxSuccess 300 qc_beat_folds_in_order)
       , testProperty "qc_shape_table_matches_legacy" (withMaxSuccess 1000 (checkCoverage qc_shape_table_matches_legacy))
       , testProperty "qc_combo_table_matches_legacy" (withMaxSuccess 3000 (checkCoverage qc_combo_table_matches_legacy))
       , testProperty "qc_combo_table_symmetric" (withMaxSuccess 3000 qc_combo_table_symmetric)
@@ -212,7 +214,7 @@ column mb c = [atM mb (r, c) | r <- [0 .. boardSize - 1]]
 qc_gravity_keeps_cells_and_column_order :: Property
 qc_gravity_keeps_cells_and_column_order =
   forAll genMBoard $ \mb ->
-    let reg = defaultRegistry
+    let reg = defaultWorld
         mb' = applyGravityWith reg mb
         fixed = gravityFixedCellWith reg
         isFixedM = maybe False fixed
@@ -590,43 +592,48 @@ qc_goal_progress_bounded =
 --------------------------------------------------------------------------------
 -- 元素注册表
 
--- | 解码往返：任意格解码成元素值（修饰器包着本体）再编码回去，得到原格；本体的元素名落在注册表的条目上，
--- 且条目的槽位与格子的编号一致（内置本体 = SlotCell (cellSlot 格)，已注册的自定义 = SlotCustom），
--- 最上层的叠层 / 冰层同样落在槽位一致的条目上。未注册的自定义名字解码成惰性占格，编码仍是原格。
+-- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在注册表的本体条目上、
+-- 且那个种类的 fromCell 认这个（拆掉叠层后的）格子；最上层的叠层 / 冰层同样落在 peel 认这个格子的叠层条目上。
+-- 未注册的自定义名字解码成惰性占格（名字照旧），编码仍是原格。
 qc_registry_decode_roundtrip :: Property
 qc_registry_decode_roundtrip =
   forAll genCell $ \cell ->
-    let reg = defaultRegistry
-        entries = registryDefs reg
-        slotOf n = [entrySlot e | e <- entries, entryName e == n]
+    let reg = defaultWorld
+        w = reg
+        defs = worldDefs reg
+        (layers, inner) = decodeLayers w cell
+        kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- defs, kindName p == n]
+        layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- defs, layerName p == n]
         bodyName = elementName reg cell
-        bodyOk = case cell of
+        bodyOk = case inner of
           Custom n _
-            | n `elem` map entryName entries -> bodyName == n && slotOf n == [SlotCustom]
-            | otherwise -> bodyName == n && null (slotOf n)
-          _ -> slotOf bodyName == [SlotCell (cellSlot cell)]
+            | n `notElem` map defName defs -> bodyName == n
+          _ -> kindAccepts bodyName inner
         topName = topLayerName reg cell
-        topOk = case cell of
-          Gem _ _ ice ov
-            | ice > 0 -> slotOf topName == [SlotIce]
-            | Just o <- ov -> slotOf topName == [SlotOverlay (overlaySlot o)]
+        topOk = case (cell, layers) of
+          (Gem _ _ ice _, _) | ice > 0 -> topName == "ice" && layerAccepts topName cell
+          (_, l : _) -> topName == layerValueName l && layerAccepts topName cell
           _ -> topName == bodyName
-    in counterexample (show (bodyName, topName, slotOf bodyName, slotOf topName)) $
+    in counterexample (show (bodyName, topName, map layerValueName layers, inner)) $
          toCell (elementOf reg cell) === cell .&&. bodyOk .&&. topOk
 
--- | 内置条目表（去重之前的原始列表）：名字互不相同；内置本体 / 叠层的槽号互不相同；冰层只有一个；
--- 全部内置本体槽号 0..19 与叠层槽号 0..7 都有条目。
+-- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
+-- 8 种叠层各由一个叠层种类认领，冰层只有一个。
 qc_registry_names_slots_unique :: Property
 qc_registry_names_slots_unique =
-  let names = map entryName builtinDefs
-      cells = sort [i | SlotCell i <- map entrySlot builtinDefs]
-      ovs = sort [i | SlotOverlay i <- map entrySlot builtinDefs]
-      ices = [() | SlotIce <- map entrySlot builtinDefs]
+  let names = map defName builtinDefs
+      reg = defaultWorld
+      bodyCells =
+        [Gem C1 k 0 Nothing | k <- [Normal, LineH, LineV, Bomb, Rainbow]]
+          ++ [Stone 1, Chest 1, Honey 1, Balloon C1, Cookie, Cake 1, MagicHat, Maker C1 1, Snail 0 1, Safe 1, Flip C1 C2, Surprise, Bottle C1, TimeSpirit, Countdown C1 1]
+      bodyNames = map (elementName reg) bodyCells
+      ovNames = [topLayerName reg (Gem C1 Normal 0 (Just o)) | o <- [Grass, Vine, Choco, Fog 1, Chain 1, Freeze 1, Curtain 1, Steam]]
+      ices = [n | LayerDef (SomeLayer p) <- builtinDefs, let n = layerName p, isJust (peelAs p (Gem C1 Normal 1 Nothing))]
   in conjoin
        [ counterexample "names unique" (length (nub names) === length names)
-       , counterexample "body slots unique and complete" (cells === [0 .. 19])
-       , counterexample "overlay slots unique and complete" (ovs === [0 .. 7])
-       , counterexample "one ice entry" (length ices === 1)
+       , counterexample "body cells claimed, one kind each" (length (nub bodyNames) === 20 .&&. notElem "?" bodyNames)
+       , counterexample "overlays claimed, one layer each" (length (nub ovNames) === 8 .&&. notElem "gem" ovNames)
+       , counterexample "one ice entry" (ices === ["ice"])
        ]
 
 --------------------------------------------------------------------------------
@@ -702,7 +709,7 @@ qc_counts_monotone_legacy_view =
 -- 提示
 
 -- | 第 3 刀之前的 findHintWith（整盘 hasAnyMatchWith (swapCells b p1 p2)），留作参照实现。
-findHintReference :: Registry -> Board -> Maybe (Pos, Pos)
+findHintReference :: World -> Board -> Maybe (Pos, Pos)
 findHintReference reg b =
   case matchHints ++ concatMap ruleHints (swapRules reg) of
     (x : _) -> Just x
@@ -738,7 +745,7 @@ findHintReference reg b =
 qc_find_hint_local_matches_reference :: Property
 qc_find_hint_local_matches_reference =
   forAll genHintBoard $ \b ->
-    findHintWith defaultRegistry b === findHintReference defaultRegistry b
+    findHintWith defaultWorld b === findHintReference defaultWorld b
   where
     genHintBoard =
       oneof
@@ -791,7 +798,7 @@ qc_level_hooks_match_legacy =
               (ps, hooks') = onAbsorb hooks b
           in conjoin
                [ (ps, levelUfos (hookLevel hooks')) === stepUfos b ufos
-               , onSettle hooks mb === portalTeleport (portalWith defaultRegistry) portals mb
+               , onSettle hooks mb === portalTeleport (portalWith defaultWorld) portals mb
                , onSettle hooks' mb === onSettle hooks mb
                ]
 
@@ -805,7 +812,7 @@ qc_level_elems_readers_roundtrip =
      let gs = levelGame li seed
          same gs' = gs' == gs .&&. show gs' === show gs
      in conjoin
-         [ map levelNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "ground"]
+         [ map mechNameOf (gsLevelElems gs) === ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "ground"]
          , same (setUfos (gsUfos gs) gs)
          , same (setBelts (gsBelts gs) gs)
          , same (setPortals (gsPortals gs) gs)
@@ -830,7 +837,7 @@ qc_end_table_matches_legacy =
           (nr, nc) = boardDims (gsBoard gs0)
       in forAll ((,) <$> choose (0, nr - 1) <*> choose (0, nc - 1)) $ \seedPos ->
         let gs = gs0
-            reg = defaultRegistry
+            reg = defaultWorld
             hooks0 = levelHooksWith reg (gsLevelElems gs)
             summary (segs, ends, board, vacate) =
               ( [(crBoard r, crWaves r, crTally r, show (crGen r), hookLevel (crHooks r)) | r <- NE.toList segs]
@@ -846,7 +853,7 @@ qc_end_table_matches_legacy =
                .&&. summary (runEndTable reg boosterEndTable segB) === summary (legacyBoosterEnd reg segB)
 
 -- | 第 7 刀前 Resolve.swapEnd 的逐字副本（皮带效果改为通用形状）。
-legacySwapEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+legacySwapEnd :: World -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
 legacySwapEnd reg seg0 =
   let ws0 = crWaves seg0
       board0' = crBoard seg0
@@ -880,43 +887,39 @@ legacySwapEnd reg seg0 =
   in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
 
 -- | 第 7 刀前 Resolve.boosterEnd 的逐字副本。
-legacyBoosterEnd :: Registry -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+legacyBoosterEnd :: World -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
 legacyBoosterEnd reg seg0 =
   let boardH = crBoard seg0
       (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
       seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crHooks seg0) (crGen seg0) boardSp
   in (seg0 :| [seg1], ends, crBoard seg1, boardH)
 
--- | 第 7 刀（7b）：askLevels / askLevelsIn 折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的问题；
--- 用若干个「加常数」的测试元素随机注册（可含重复的数），结果 = 起始值 + 各回复者的数按注册顺序依次作用。
--- | 测试元素：名字由编号决定（adder1、adder5 …），状态是被问的次数。
+-- | 第 7 刀（7b）起节拍折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的输入（第 5 刀起节拍是 Mechanic 的
+-- 有类型方法，折叠是 Element.Level.beatIn）；用若干个「追加编号」的测试机制随机注册，结果 = 各回复者的编号按注册顺序。
+-- | 测试机制：名字由编号决定（adder1、adder5 …），状态是被问的次数；回复步末移位节拍（onEndTick）。
 data Adder = Adder Int Int
   deriving (Eq, Show)
 
-newtype AdderMsg = AdderMsg [Int]
+instance Mechanic Adder where
+  mechName (Adder k _) = ElementName ("adder" ++ show k)
+  onEndTick (Adder k n) acc = Just (acc ++ [((k, k), (k, k))], Adder k (n + 1))
 
-instance Message AdderMsg
-
-instance LevelElement Adder where
-  levelName (Adder k _) = ElementName ("adder" ++ show k)
-  levelReply (Adder k n) msg = case fromMessage msg of
-    Just (AdderMsg acc) -> Just (SomeMessage (AdderMsg (acc ++ [k])), Adder k (n + 1))
-    Nothing -> Nothing
-
-qc_ask_levels_folds_in_order :: Property
-qc_ask_levels_folds_in_order =
+qc_beat_folds_in_order :: Property
+qc_beat_folds_in_order =
   forAll (choose (0, 5) >>= \n -> vectorOf n (choose (1, 9 :: Int))) $ \ks0 ->
     let ks = nub ks0
-        reg = foldl (\r k -> registerLevel (SomeLevelElement (Adder k 0)) r) defaultRegistry ks
-        elems = [SomeLevelElement (Adder k 5) | k <- ks]
-        viaReg = fmap (\(AdderMsg xs) -> xs) (askLevels reg (AdderMsg []))
-        viaIn = fmap (\(AdderMsg xs, es) -> (xs, es)) (askLevelsIn reg elems (AdderMsg []))
-        expected = if null ks then Nothing else Just ks
+        reg = foldl (\r k -> registerMechanic (SomeMechanic (Adder k 0)) r) defaultWorld ks
+        elems = [SomeMechanic (Adder k 5) | k <- ks]
+        viaProto = beatIn reg [] [] onEndTick
+        viaIn = beatIn reg elems [] onEndTick
+        expected = if null ks then Nothing else Just [((k, k), (k, k)) | k <- ks]
     in conjoin
-         [ viaReg === expected
+         [ fmap fst viaProto === expected
+         -- 原型值（不在 gsLevelElems 里）推进后状态变了：追加
+         , fmap snd viaProto === (if null ks then Nothing else Just [SomeMechanic (Adder k 1) | k <- ks])
          , fmap fst viaIn === expected
          -- 每个回复者推进后的状态都写回（同名替换，顺序不变）
-         , fmap snd viaIn === (if null ks then Nothing else Just [SomeLevelElement (Adder k 6) | k <- ks])
+         , fmap snd viaIn === (if null ks then Nothing else Just [SomeMechanic (Adder k 6) | k <- ks])
          ]
 
 --------------------------------------------------------------------------------
@@ -1003,7 +1006,7 @@ genPos = (,) <$> choose (0, boardSize - 1) <*> choose (0, boardSize - 1)
 genShapeCase :: Gen (Board, Maybe Pos, [Pos])
 genShapeCase = do
   b <- boardFromRows <$> vectorOf boardSize (vectorOf boardSize (frequency [(12, mkGem <$> elements [C1, C2, C3]), (2, genGem), (1, genCell)]))
-  let ps = nub (concatMap runPos (findMatchRunsWith defaultRegistry b))
+  let ps = nub (concatMap runPos (findMatchRunsWith defaultWorld b))
   clearable <- filterM (const (frequency [(4, pure True), (1, pure False)])) ps
   prefer <- oneof ([pure Nothing, Just <$> genPos] ++ [Just <$> elements ps | not (null ps)])
   pure (b, prefer, clearable)
@@ -1012,13 +1015,13 @@ genShapeCase = do
 qc_shape_table_matches_legacy :: Property
 qc_shape_table_matches_legacy =
   forAll genShapeCase $ \(b, prefer, clearable) ->
-    let runs = findMatchRunsWith defaultRegistry b
+    let runs = findMatchRunsWith defaultWorld b
         legacy = legacySpawnSpecials prefer runs clearable
     in cover 20 (not (null legacy)) "spawns a special" $
        cover 3 (length legacy >= 2) "spawns two or more" $
        conjoin
-         [ map shapeName (shapeRules defaultRegistry) === ["line5→rainbow", "line4h→line_h", "line4v→line_v"]
-         , spawnSpecialsWith defaultRegistry prefer runs clearable === legacySpawnSpecials prefer runs clearable
+         [ map shapeName (shapeRules defaultWorld) === ["line5→rainbow", "line4h→line_h", "line4v→line_v"]
+         , spawnSpecialsWith defaultWorld prefer runs clearable === legacySpawnSpecials prefer runs clearable
          , spawnByShapes builtinShapeRules prefer runs clearable === legacySpawnSpecials prefer runs clearable
          -- 空表不生成
          , spawnByShapes [] prefer runs clearable === []
@@ -1046,21 +1049,21 @@ qc_combo_table_matches_legacy :: Property
 qc_combo_table_matches_legacy =
   forAll genComboCase $ \(b, p1, p2) ->
     let swapped = swapCells b p1 p2
-        rules = comboRules defaultRegistry
+        rules = comboRules defaultWorld
         legacyOpening =
           listToMaybe ([rainbowClearSeeds swapped p1 p2 | isRainbowSwap b p1 p2] ++ [legacyComboClearSeeds swapped p1 p2 | legacyIsSpecialCombo b p1 p2])
     in cover 5 (legacyIsSpecialCombo b p1 p2) "combo fires" $
        cover 5 (not (null (legacyComboClearSeeds b p1 p2)) && not (legacyIsSpecialCombo b p1 p2)) "kinds match but soft-locked" $
        conjoin
          [ map comboName rules === ["bomb×bomb", "line×line", "line×bomb", "rainbow×line"]
-         , map srOrder (swapRules defaultRegistry) === [10, 15, 20]
-         , map srOrder (elementSwapRules defaultRegistry) === [10, 15]
+         , map srOrder (swapRules defaultWorld) === [10, 15, 20]
+         , map srOrder (elementSwapRules defaultWorld) === [10, 15]
          , comboFires rules b p1 p2 === legacyIsSpecialCombo b p1 p2
          , Combos.isSpecialCombo b p1 p2 === legacyIsSpecialCombo b p1 p2
          , conjoin [comboSeedsFor rules bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]
          , conjoin [Combos.comboClearSeeds bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]
-         , swapOpeningWith defaultRegistry b swapped p1 p2 === legacyOpening
-         , swapFiresWith defaultRegistry b p1 p2 === (isRainbowSwap b p1 p2 || legacyIsSpecialCombo b p1 p2)
+         , swapOpeningWith defaultWorld b swapped p1 p2 === legacyOpening
+         , swapFiresWith defaultWorld b p1 p2 === (isRainbowSwap b p1 p2 || legacyIsSpecialCombo b p1 p2)
          ]
 
 -- | 组合表对称：交换两端（p1 ↔ p2）后，每条规则是否对得上、整张表是否成立不变，清种子的格集合不变。
@@ -1068,7 +1071,7 @@ qc_combo_table_symmetric :: Property
 qc_combo_table_symmetric =
   forAll genComboCase $ \(b, p1, p2) ->
     let swapped = swapCells b p1 p2
-        rules = comboRules defaultRegistry
+        rules = comboRules defaultWorld
         matched r q1 q2 = isJust (comboMatch [r] b q1 q2)
         seedSet bb q1 q2 = sort (nub (comboSeedsFor rules bb q1 q2))
     in conjoin
@@ -1085,13 +1088,13 @@ qc_refill_policy_default_matches_legacy seed =
     let g = mkStdGen seed
         (b0, g0) = legacyRefill g mb
         same (b1, g1) = b1 === b0 .&&. show g1 === show g0
-        builtinPolicy = activeRefill defaultRegistry (builtinHooks [] [])
+        builtinPolicy = activeRefill defaultWorld (builtinHooks [] [])
     in conjoin
          [ same (refillWith defaultRefill g mb)
          , same (refillWith (colorsRefill numColors) g mb)
          , same (refill g mb)
-         , same (refillWith (activeRefill defaultRegistry noHooks) g mb)
+         , same (refillWith (activeRefill defaultWorld noHooks) g mb)
          , same (refillWith builtinPolicy g mb)
          , refillName builtinPolicy === "random-gem"
-         , refillName (refillPolicyWith defaultRegistry) === "random-gem"
+         , refillName (refillPolicyWith defaultWorld) === "random-gem"
          ]

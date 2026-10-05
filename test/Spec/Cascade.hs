@@ -16,7 +16,7 @@ import Match3.Core
 import Match3.Counts (countOf)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
-import Match3.Grass (spreadSteam)
+import Spec.Support.Layers (spreadSteam)
 import Match3.Snail (stepSnails)
 import Match3.Types (goalScore, hasSteam, isSnail, isTimeSpirit)
 import System.Random (mkStdGen)

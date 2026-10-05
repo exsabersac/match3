@@ -16,7 +16,7 @@ import Match3.Board.Default (findHint)
 import Match3.Core
 import Match3.Daily (dailyConfig)
 import Match3.Element.Builtin (SnowBoss(..), chameleonCell)
-import Match3.Element.Class (toCell)
+import Match3.Element.Ability (toCell)
 import Match3.Game.Move (trySwap)
 import Match3.Game.State (gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress)
 import Match3.Levels.Campaign (levelCarpets)

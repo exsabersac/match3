@@ -12,19 +12,19 @@ import Match3.Board.Grid (setCell)
 import Match3.Core
 import Match3.Counts (namedCounts)
 import Match3.Element
-  ( HitResult(HitAbsorb, HitDestroy)
+  ( Strike(Absorb, Destroy)
   , activatesWith
   , blocksSwapWith
   , directHitWith
   , hitImmuneWith
   , keepOnShuffleWith
-  , lookupElement
+  , lookupDef
   , matchColorWith
   , register
-  , registryDefs
+  , worldDefs
   )
 import Match3.Element.Event (EventKind(..), Event(..))
-import Match3.Element.Registry (swapBlockedWith)
+import Match3.Element.World (swapBlockedWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (resolveSwapWith, trySwap, trySwapWith)
@@ -62,11 +62,11 @@ tests =
 -- | 扩展性验收：测试专用元素只经注册表接入，跑一局并断言它按定义起作用；同时证明主流程没有为它改动。
 element_registry_custom_crate_extensibility :: Assertion
 element_registry_custom_crate_extensibility = do
-  let reg = register crateDef defaultRegistry
+  let reg = register crateDef defaultWorld
       gs0 = (newGame defaultConfig 1) {gsBoard = crateBoard 2}
   -- 注册表里有它，内置定义一个不少
-  assertBool "registered" (isJust (lookupElement reg "crate"))
-  assertEqual "builtins kept" (length (registryDefs defaultRegistry) + 1) (length (registryDefs reg))
+  assertBool "registered" (isJust (lookupDef reg "crate"))
+  assertEqual "builtins kept" (length (worldDefs defaultWorld) + 1) (length (worldDefs reg))
   -- 挡交换（固定格原型），不可匹配
   let (gsB, oB) = trySwapWith reg (0, 1) (0, 2) gs0
   assertEqual "crate blocks swap" NoMatch oB
@@ -100,7 +100,7 @@ element_registry_custom_crate_extensibility = do
   let (gsD, oD) = trySwap (1, 2) (2, 2) gs0
   assertBool "default applied" (moveApplied oD)
   assertEqual "unregistered: inert, untouched" [Custom "crate" (CustomState 2)] (map snd (cratesOn (gsBoard gsD)))
-  assertBool "unregistered: hammer immune" (hitImmuneWith defaultRegistry (Custom "crate" (CustomState 2)))
+  assertBool "unregistered: hammer immune" (hitImmuneWith defaultWorld (Custom "crate" (CustomState 2)))
   assertEqual "unregistered: not counted" [] (namedCounts (gsCounts gsD))
   -- 主流程没有为它改动：src/ 与 app/ 下全部源码（含注释）里都没有这个元素名的字面量 "crate" 或「木箱」
   coreFiles <- sourcesUnderAll ["src", "app"]
@@ -112,7 +112,7 @@ element_registry_custom_crate_extensibility = do
 -- | 注册表的查询与第二刀之前按构造器写死的谓词逐格等价（对所有内置本体 × 冰层 × 叠层）。
 element_registry_matches_legacy_predicates :: Assertion
 element_registry_matches_legacy_predicates = do
-  let reg = defaultRegistry
+  let reg = defaultWorld
       overlays = Nothing : map Just [Grass, Vine, Choco, Fog 1, Fog 2, Chain 1, Chain 2, Freeze 1, Freeze 2, Curtain 1, Curtain 2, Steam]
       gems = [Gem col k ice ov | col <- [C1, C4], k <- [Normal, LineH, LineV, Bomb, Rainbow], ice <- [0, 1, 2], ov <- overlays]
       others =
@@ -142,16 +142,16 @@ element_registry_matches_legacy_predicates = do
       board c = setCell stableBoard (0, 0) c
       check name f g = assertEqual name [] [show c | c <- cells, f c /= g c]
   check "blocksSwap" (blocksSwapWith reg) legacyBlock
-  check "swapBlockedWith" (\c -> swapBlockedWith defaultRegistry (board c) (0, 0) (0, 1)) legacyBlock
+  check "swapBlockedWith" (\c -> swapBlockedWith defaultWorld (board c) (0, 0) (0, 1)) legacyBlock
   check "hitImmune" (hitImmuneWith reg) legacyImmune
   check "gravityFixed" gravityFixedCell legacyFixed
   check "activates" (activatesWith reg) specialActivates
   check "matchColor" (matchColorWith reg) legacyMatch
   check "keepOnShuffle" (keepOnShuffleWith reg) legacyKeep
   -- 直接命中与第二刀之前的 chipIceOnClear 口径一致（逐格对照几条代表）
-  assertEqual "ice2 absorbs" (HitAbsorb (Gem C1 Normal 1 Nothing)) (directHitWith reg (Gem C1 Normal 2 Nothing))
-  assertEqual "ice1 destroys under chain" HitDestroy (directHitWith reg (Gem C1 Normal 1 (Just (Chain 2))))
-  assertEqual "chain2 peels" (HitAbsorb (Gem C1 Normal 0 (Just (Chain 1)))) (directHitWith reg (Gem C1 Normal 0 (Just (Chain 2))))
-  assertEqual "safe opens" (HitAbsorb Cookie) (directHitWith reg (Safe 1))
-  assertEqual "flip flips" (HitAbsorb (mkGem C3)) (directHitWith reg (Flip C1 C3))
-  assertEqual "stone2 chips" (HitAbsorb (Stone 1)) (directHitWith reg (Stone 2))
+  assertEqual "ice2 absorbs" (Absorb (Gem C1 Normal 1 Nothing)) (directHitWith reg (Gem C1 Normal 2 Nothing))
+  assertEqual "ice1 destroys under chain" Destroy (directHitWith reg (Gem C1 Normal 1 (Just (Chain 2))))
+  assertEqual "chain2 peels" (Absorb (Gem C1 Normal 0 (Just (Chain 1)))) (directHitWith reg (Gem C1 Normal 0 (Just (Chain 2))))
+  assertEqual "safe opens" (Absorb Cookie) (directHitWith reg (Safe 1))
+  assertEqual "flip flips" (Absorb (mkGem C3)) (directHitWith reg (Flip C1 C3))
+  assertEqual "stone2 chips" (Absorb (Stone 1)) (directHitWith reg (Stone 2))

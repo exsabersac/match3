@@ -18,7 +18,7 @@ module Match3.Core
   , hasChoco
   , chameleonColor
   , elementName
-  , defaultRegistry
+  , defaultWorld
     -- ** 构造（图例、几何版示意格）
   , mkGem
   , mkIceGem
@@ -123,8 +123,8 @@ import Match3.Board.Default (gravityFixedCell)
 import Match3.Board.Grid (adjacent, atM, getCell, mboardRows, neighborsInBounds)
 import Match3.Counts (CounterKey(..))
 import Match3.Daily (Day(..), Month(..), Year(..), dailyLevel, dailySeed, starRating)
-import Match3.Element.Builtin (chameleonColor, defaultRegistry)
-import Match3.Element.Registry (elementName)
+import Match3.Element.Builtin (chameleonColor, defaultWorld)
+import Match3.Element.World (elementName)
 import Match3.Game.Level (campaignGame, newDailyGame, newGameAtLevel, nextLevel, restartLevel)
 import Match3.Game.Outcome (loseHint, mapClickJump, unlockAfterOutcome)
 import Match3.Game.State (GameState(..), MoveFx(..), applyHint, gsUfos, setBelts, setCarpetOpen, setPortals, setUfos)

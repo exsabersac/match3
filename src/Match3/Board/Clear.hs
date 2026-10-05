@@ -4,12 +4,12 @@
 -- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecialsWith，查形状规则表）、彩蛋、
 -- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbedWith：吸走 ≠ 引爆）以及计分公式。
 --
--- 直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素注册表
--- （Match3.Element.Registry）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
--- 彩蛋开启走注册表的开启规则（openRule），彩虹取色 / 特殊合成是成对交换规则（swapRule，在 Game.Move）。
--- 本模块不依赖内置注册表，全部函数收 Registry；内置注册表的短名在 Match3.Board.Default。
+-- 直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素元素世界
+-- （Match3.Element.World）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
+-- 彩蛋开启走元素世界的开启规则（openRule），彩虹取色 / 特殊合成是成对交换规则（swapRule，在 Game.Move）。
+-- 本模块不依赖内置元素世界，全部函数收 World；内置元素世界的短名在 Match3.Board.Default。
 --
--- 依赖：Grid、Match、元素注册表。
+-- 依赖：Grid、Match、元素元素世界。
 -- 同步：这里的函数只被 Match3.Board.Cascade 的单一连锁实现调用（结算与回放同一次计算），
 -- 返回 (挖空后盘面, 清除数, 清除格)；Cascade 再按清除格在消除前盘面上统计障碍计数。
 module Match3.Board.Clear
@@ -27,15 +27,15 @@ module Match3.Board.Clear
   ) where
 
 import Data.List (nub)
-import Match3.Element.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, openWith, runAdjacentWith, shapeRules, stripOnClearWith)
+import Match3.Element.World (World, blastWith, chipOnHitWith, colorOfWith, openWith, runAdjacentWith, shapeRules, stripOnClearWith)
 import Match3.Element.Special (spawnByShapes)
 import Match3.Types
 import Match3.Board.Grid
 import Match3.Board.Match
 
--- | expandSpecials（指定注册表）：爆炸范围 = 本体定义的 blast，能否点火 = 各层 activates（软锁纪律）。
+-- | expandSpecials（指定元素世界）：爆炸范围 = 本体定义的 blast，能否点火 = 各层 activates（软锁纪律）。
 -- 彩虹没有 blast（只经 rainbowClearSeeds 按交换对象取色，否则彩虹 × 宝石会重复清两色）。
-expandSpecialsWith :: Registry -> Board -> [Pos] -> [Pos]
+expandSpecialsWith :: World -> Board -> [Pos] -> [Pos]
 expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
   where
     go acc [] = acc
@@ -44,20 +44,20 @@ expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
--- | 新特殊块（按注册表的有序形状规则表 shapeRules，解释器 Match3.Element.Special.spawnByShapes）：
+-- | 新特殊块（按元素世界的有序形状规则表 shapeRules，解释器 Match3.Element.Special.spawnByShapes）：
 -- 每条连线取第一条认领它的规则的产出（内置：长度 ≥5 彩虹，长度 4 按方向横 / 竖消）；只放在真正挖空的格上
 -- （Flip / ice>1 的格留在盘面上，落点退到连线里别的可清格，否则 4 连在这类格上会悄悄丢掉特殊块）。
-spawnSpecialsWith :: Registry -> Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
+spawnSpecialsWith :: World -> Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
 spawnSpecialsWith reg = spawnByShapes (shapeRules reg)
 
--- | countColor（指定注册表）：按本体颜色 color 计（不看叠层）。
-countColorWith :: Registry -> Board -> [Pos] -> Color -> Int
+-- | countColor（指定元素世界）：按本体颜色 color 计（不看叠层）。
+countColorWith :: World -> Board -> [Pos] -> Color -> Int
 countColorWith reg b ps col = length [p | p <- ps, colorOfWith reg (getCell b p) == Just col]
 
--- | 一轮内的多轮开启（通用的「开启类元素」流程：开启规则来自注册表的 openRule，内置只有彩蛋；
+-- | 一轮内的多轮开启（通用的「开启类元素」流程：开启规则来自元素世界的 openRule，内置只有彩蛋；
 -- 开出的格本轮坐住、屏蔽后再展开爆炸，新命中的格进入下一批前沿）。
 -- 返回 (盘面, 真消除格, 开启带来的直接命中格, 本轮坐住的格)。
-surpriseClearPassWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
+surpriseClearPassWith :: World -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
 surpriseClearPassWith reg b0 seeds0 =
   go b0 (nub seeds0) [] [] []
   where
@@ -84,8 +84,8 @@ surpriseClearPassWith reg b0 seeds0 =
                      front' = filter (`notElem` processed) free1
                  in go bChip front' (trueAcc ++ kept ++ free1) (directAcc ++ expanded) saved'
 
--- | 匹配清除一轮（指定注册表）：种子 = 全部匹配格。
-clearMatchesDetailedWith :: Registry -> Maybe Pos -> Board -> (MBoard, Int, [Pos])
+-- | 匹配清除一轮（指定元素世界）：种子 = 全部匹配格。
+clearMatchesDetailedWith :: World -> Maybe Pos -> Board -> (MBoard, Int, [Pos])
 clearMatchesDetailedWith reg prefer b =
   let runs = findMatchRunsWith reg b
   in clearWaveWith reg prefer runs b (nub (concatMap runPos runs))
@@ -99,7 +99,7 @@ clearMatchesDetailedWith reg prefer b =
 --   5. runAdjacentWith：按 arOrder 跑各元素的邻格波及（已被直接命中的格不再重复波及；
 --      彩蛋开出的特殊块与果汁机刚产出的炸弹本轮坐住，不被魔法帽 / 染色瓶改色）；
 --   6. 清除格 = 真消除 ∪ 波及打碎的格（按规则顺序）；挖空后在清除格上放新特殊块。
-clearWaveWith :: Registry -> Maybe Pos -> [MatchRun] -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearWaveWith :: World -> Maybe Pos -> [MatchRun] -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearWaveWith reg prefer runs b base =
   let expanded = expandSpecialsWith reg b base
       -- Ice chips first: iced gems stay, ice-free positions may clear.
@@ -141,19 +141,19 @@ maskUfoAbsorbSpecials b ps =
         _ -> board
 
 -- | 飞碟吸收一轮：吸收格上的特殊块先降级（'maskUfoAbsorbSpecials'），再以吸收格为种子做种子清除。
-clearUfoAbsorbedWith :: Registry -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearUfoAbsorbedWith :: World -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearUfoAbsorbedWith reg b absorbed =
   clearFromSeedsDetailedWith reg Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
 
--- | 种子清除一轮（指定注册表）：流水线同 clearMatchesDetailedWith，种子由调用方给出；
+-- | 种子清除一轮（指定元素世界）：流水线同 clearMatchesDetailedWith，种子由调用方给出；
 -- 新特殊块仍按本盘的匹配段生成。
-clearFromSeedsDetailedWith :: Registry -> Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
+clearFromSeedsDetailedWith :: World -> Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearFromSeedsDetailedWith reg prefer b seeds0 =
   clearWaveWith reg prefer (findMatchRunsWith reg b) b (nub seeds0)
 
--- | 只要「挖空后的盘面 + 清除数」的 clearMatchesDetailedWith 简化版（指定注册表）；
+-- | 只要「挖空后的盘面 + 清除数」的 clearMatchesDetailedWith 简化版（指定元素世界）；
 -- prefer 为新特殊块的优先生成位（交换目标格）。
-clearMatchesAtWith :: Registry -> Maybe Pos -> Board -> (MBoard, Int)
+clearMatchesAtWith :: World -> Maybe Pos -> Board -> (MBoard, Int)
 clearMatchesAtWith reg prefer b =
   let (mb, n, _) = clearMatchesDetailedWith reg prefer b
   in (mb, n)

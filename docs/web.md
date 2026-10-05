@@ -43,12 +43,11 @@
 
 ### 2.0 元素框架在 wasm 里
 
-main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class Element`（本体）/ `Modifier`（冰层、叠层）/
-`LevelElement`（飞碟、皮带、传送门、地毯、地面层等关卡级机制，第 7 刀起状态在元素值里）及对应的存在类型 `SomeElement` / `SomeModifier` / `SomeLevelElement`，
-`Match3.Element.Message` 是主流程发给元素的消息（xmonad 风格：`Refilled` / `EndTicked` / `Settling` / `Covering` …）；`Match3.Element.Level` 管一局的关卡级元素（`gsLevelElems`），`Match3.Board.Hooks` 是 Board 层收的钩子记录；
+元素是类型类（2026-10 元素类重构后，见 [guide/04](guide/04-元素框架.md)）：`Match3.Element.Ability` 的六个能力类（本体的值级能力，`SomeElement` 装箱）、
+`Match3.Element.Kind` / `Layer`（本体 / 叠层的类型级 API，`Layered` 合成）、`Match3.Element.Mechanic`（飞碟、皮带、传送门、地毯、地面层等关卡级机制，状态在值里，
+主流程的节拍是它的有类型方法）、`Match3.Element.World`（解码与全部 `*With` 查询）；`Match3.Element.Level` 管一局的关卡级元素（`gsLevelElems`），`Match3.Board.Hooks` 是 Board 层收的钩子记录；
 内置元素按功能分到 `Match3.Element.Builtin.{Gem,Layer,Obstacle,Collectible,Actor,Ground,Level,Common}`，
-`Match3.Element.Builtin` 仍导出 `builtinDefs` / `builtinLevelDefs` / `defaultRegistry`；注册表是「元素名 → 构造器」。
-第 9 刀起 `class Element` 只剩 `name` / `toCell` / `caps`，能力是带默认值的记录 `Caps`（声明简写在新模块 `Match3.Element.Caps`，已同步进 `web/match3-web.cabal`）；
+`Match3.Element.Builtin` 导出类型列表 `builtinDefs`、`builtinMechanics` 与 `defaultWorld`；新增模块都已同步进 `web/match3-web.cabal`；
 网页接口层（`web/hs`）不调元素类，签名与 JSON 都不变。
 
 对网页版的影响：
@@ -112,13 +111,13 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
 - 播放期间锁输入（与桌面 `animBusy` 一致），按钮 / 撤销在播完后可用；
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
 - `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
-- **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成，`Custom` 元素统一是
-  `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素 caps 里的 `displays`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
+- **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成（元素类重构第 6 刀起由元素的 `Renders.faceBase` 给出类型标签与基本字段，缺省时），`Custom` 元素统一是
+  `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素的 `Renders.face`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
   - **不用改**：单格、不带颜色、桌面版也没有专门画法（`UI.CellTable.customTable` 里没有它）的 `Custom`——桌面画「贴图名 = 元素名 + 层数角标」，
     网页 `CELL_ART.custom` 的通用画法一样；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 只跳过文字图
     `g_*` / `zh_*` 与 `@` 变体；关名文字图 `name_*` 要收）。降级色缺省是灰色。
-  - **要改**：① 新的 `Cell` 构造器（同时改 `cellFace`）；② 桌面在 `customTable` 有专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
-    在 `CUSTOM_ART` / `primarySprite` 补同样的画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 caps 里用 `displays` 给出字段（`Api` 不用改）、
+  - **要改**：① 新的 `Cell` 构造器（同时给它的元素写 `Renders.faceBase`）；② 桌面在 `customTable` 有专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
+    在 `CUSTOM_ART` / `primarySprite` 补同样的画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 `Renders.face` 里给出字段（`Api` 不用改）、
     `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时只在 `UI.Presentation.elementRGBTable` 补一项（网页经 `m3Meta` 读同一张表）。
   - **回归护栏**：漏了画法或贴图的格子会走几何降级（色块 + 类型名，如魔法石合入时的「custom」灰块），③ 类走了通用画法也会记一笔；
     `cells.js` 按元素名统计，`m3debug.fallbacks` 暴露；e2e 对**每一关**开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡
@@ -132,7 +131,7 @@ main 在 2121bf8 把元素改成类型类：`Match3.Element.Class` 定义 `class
   ComboFx 在第一轮之前插入蔓延段，`render.js` 按桌面 `drawEndSpread` 逐分支画：来源（彩虹格）与目标不相邻 → 变身后的直线 / 炸弹从格子中心的方块匀速长满，
   前沿白光、不迸碎屑（名字不在生长曲线 / 颜色表里，同桌面缺省）；目标恰好与彩虹差一行或一列（`dc = ±1` 或 `dr = ±1`）时桌面按方向擦出，网页相同。
 - **HUD 目标标签**：`state.goal.label`（视图模型 `Match3.View.goalLabel`，唯一来源），`main.js` 不再有「目标种类 → 中文」映射表；
-  新元素做成关卡目标时在元素的 caps 里写 `labelled "中文名"`（`namedGoalLabelTable` 由元素条目推出，定义在 `Match3.GoalLabel`，`Match3.View` 重新导出）（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
+  新元素做成关卡目标时在元素的 `Kind` instance 里写 `label _ = Just "中文名"`（`namedGoalLabelTable` 由元素世界推出，定义在 `Match3.GoalLabel`，`Match3.View` 重新导出）（`stack test` 的 `frontends_read_view_model` 与 e2e 都会查出漏登记的内部名）。
 - 第 45 关雪怪 Boss（2×2）`{t:"custom", name:"snow_boss", v, q, hurt, turn, every}`——`q/hurt/turn/every` 是元素自带的显示字段
   （`Match3.View.cellExtras`，前端不拆 v）；`cells.js` 的 `CUSTOM_ART`（同桌面 `customTable`）按象限画 `snow_boss_<q>`、
   血量过半画 `snow_boss_hurt_<q>`，右下格画召唤进度小点（同 `artSnowBoss`）；四块拼接处源矩形内收 1 像素 + 目标对齐整像素，

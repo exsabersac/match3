@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 收集与计数类：离开盘面（被收走 / 打破）时按计数键记一笔，常作关卡目标。
@@ -26,6 +28,8 @@ import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Ability
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
+import Match3.Element.Near
+import Match3.Element.Phase
 import Match3.Element.Types
 import Match3.Obstacles (orthoNeighbors)
 import Match3.Rainbow (isRainbow, rainbowClearSeeds)
@@ -52,12 +56,26 @@ instance Countable CookieE where
 
 instance Renders CookieE
 
+instance Phase CookieE where
+  codec = Codec
+    { cName = "cookie"
+    , cToCell = \_ -> Cookie
+    , cFromCell = \cell -> case cell of Cookie -> Just CookieE; _ -> Nothing
+    , cPlace = \_ _ -> Just Cookie
+    , cMeta = emptyMeta { metaCounter = Just CountCookies, metaVacatesCarpet = True }
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Immune False Nothing Nothing
+  physics _ = gemPhysics { pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom] }
+  view _ = emptyFace "cookie"
+
 instance Kind CookieE where
-  kindName _ = "cookie"
-  fromCell cell = case cell of
-    Cookie -> Just CookieE
-    _ -> Nothing
-  place _ _ _ = Just Cookie
+  place _ = cPlace (codec @CookieE)
+  neighbourPrio _ = phaseNearPrio @CookieE
+  reach _ = phaseReach @CookieE
+  dieOrder _ = phaseDieOrder @CookieE
+  onNear = phaseOnNear
 
 -- | 时间精灵：命中 / 邻消即破，按个数差每个奖励 2 步。
 data TimeSpiritE = TimeSpiritE
@@ -75,16 +93,29 @@ instance Countable TimeSpiritE
 instance Renders TimeSpiritE where
   faceBase _ = Just ("spirit", [])
 
+instance Phase TimeSpiritE where
+  codec = Codec
+    { cName = "time_spirit"
+    , cToCell = \_ -> TimeSpirit
+    , cFromCell = \cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing
+    , cPlace = \_ _ -> Just TimeSpirit
+    , cMeta = emptyMeta { metaDiffCounter = Just CountSpirits, metaBonusMoves = 2 }
+    , cNear = Just (NearRule 120 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ _ = NearNudge Dies
+  view _ = emptyFace "spirit"
+
 instance Kind TimeSpiritE where
-  kindName _ = "time_spirit"
-  fromCell cell = case cell of
-    TimeSpirit -> Just TimeSpiritE
-    _ -> Nothing
-  place _ _ _ = Just TimeSpirit
+  place _ = cPlace (codec @TimeSpiritE)
+  neighbourPrio _ = phaseNearPrio @TimeSpiritE
+  reach _ = phaseReach @TimeSpiritE
+  dieOrder _ = phaseDieOrder @TimeSpiritE
+  onNear = phaseOnNear
   diffCounter _ = Just CountSpirits
   bonusMoves _ = 2
-  neighbourPrio _ = Just 120
-  onNear _ _ = NearNudge Dies
 
 -- | 气泡：占格本体 Custom "bubble" k。无色、挡交换、随重力下落、不穿传送门、洗牌保留；
 -- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。
@@ -103,13 +134,24 @@ instance Countable Bubble where
 
 instance Renders Bubble
 
+instance Phase Bubble where
+  codec = Codec
+    { cName = "bubble"
+    , cToCell = toCell
+    , cFromCell = fromCustom "bubble" Bubble
+    , cPlace = customPlace "bubble"
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
+    , cNear = Nothing  -- 邻格逃生口 boardPasses
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = obstaclePhysics
+  view _ = emptyFace "bubble"
+
 instance Kind Bubble where
-  kindName _ = "bubble"
-  fromCell = fromCustom "bubble" Bubble
-  place _ = customPlace "bubble"
+  place _ = cPlace (codec @Bubble)
   label _ = Just "气泡"
-  -- 邻格打碎留在逃生口：bubbleAdjacent 用 foldr 去重（遇重复保留右侧先写入序），
-  -- 与 kindNeighbour 的 nub+DieAppend（保留首次）不等价，金标准 AR170 敏感。
+  -- 邻格打碎留在逃生口：foldr 去重序与 nub+DieAppend 不等价
   boardPasses _ = [AdjacentPass 170 bubbleAdjacent]
 
 -- | 气泡邻格：foldr 去重列表序（勿改成 nub，除非重录金标准）。
@@ -180,17 +222,26 @@ instance Countable Chameleon where
 instance Renders Chameleon where
   face (Chameleon k) = [("c", FaceColor (colorAt k))]  -- 当前颜色（网页格子 JSON 的 "c"，同宝石；前端不自己换算 v）
 
-instance Kind Chameleon where
-  kindName _ = chameleonName
-  fromCell = fromCustom chameleonName Chameleon
-  -- 放置：颜色取参数，没有参数时取原格宝石的颜色
-  place _ args cell = chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
+instance Phase Chameleon where
+  codec = Codec
+    { cName = chameleonName
+    , cToCell = toCell
+    , cFromCell = fromCustom chameleonName Chameleon
+    , cPlace = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed chameleonName) }
+    , cNear = Nothing
+    }
     where
-      gemColor c = case c of
-        Gem col _ _ _ -> Just col
-        _ -> Nothing
+      gemColor c = case c of Gem col _ _ _ -> Just col; _ -> Nothing
+  onMatch (Chameleon k) = gemMatch (Just (colorAt k))
+  onHit _ _ = gemHit
+  physics _ = gemPhysics { pKeepShuffle = True, pRecolor = False }
+  view _ = emptyFace "chameleon"
+
+instance Kind Chameleon where
+  place _ = cPlace (codec @Chameleon)
   label _ = Just "变色龙"
-  goalIconName _ = Just "chameleon_icon"  -- 环贴图单独看不出是宝石，HUD / 地图用合成图标
+  goalIconName _ = Just "chameleon_icon"
   boardPasses _ = [SwapPass (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds), EndPass (moveRule 40 chameleonRun)]
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。

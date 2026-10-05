@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 会动或会生成东西的元素：在邻格真消除时改动周围的格子，或在步末自己行动。
@@ -31,6 +33,8 @@ import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField,
 import Match3.Element.Ability
 import Match3.Element.Event
 import Match3.Element.Kind
+import Match3.Element.Near
+import Match3.Element.Phase
 import Match3.Element.Types
 import Match3.Obstacles (orthoNeighbors)
 import qualified Match3.Snail as Snail
@@ -86,18 +90,30 @@ instance Countable MagicHatE
 instance Renders MagicHatE where
   faceBase _ = Just ("hat", [])
 
-instance Kind MagicHatE where
-  kindName _ = "magic_hat"
-  fromCell cell = case cell of
-    MagicHat -> Just (MagicHatE)
-    _ -> Nothing
-  place _ = \_ _ -> Just MagicHat
-  neighbourPrio _ = Just 60
-  reach _ = AllNeighbours
-  onNear _ ctx =
+instance Phase MagicHatE where
+  codec = Codec
+    { cName = "magic_hat"
+    , cToCell = \_ -> MagicHat
+    , cFromCell = \cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing
+    , cPlace = \_ _ -> Just MagicHat
+    , cMeta = emptyMeta
+    , cNear = Just (NearRule 60 AllNeighbours DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = fixedPhysics
+  onNear _ ctx _ =
     let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
         b' = hatTriggerOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx)
      in NearEdit b' [] []
+  view _ = emptyFace "hat"
+
+instance Kind MagicHatE where
+  place _ = cPlace (codec @MagicHatE)
+  neighbourPrio _ = phaseNearPrio @MagicHatE
+  reach _ = phaseReach @MagicHatE
+  dieOrder _ = phaseDieOrder @MagicHatE
+  onNear = phaseOnNear
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
@@ -112,20 +128,32 @@ instance Countable MakerE
 instance Renders MakerE where
   faceBase (MakerE c k) = Just ("maker", [colorField c, nField k])
 
-instance Kind MakerE where
-  kindName _ = "maker"
-  fromCell cell = case cell of
-    Maker c n -> Just (MakerE c n)
-    _ -> Nothing
-  place _ = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
-  neighbourPrio _ = Just 130
-  reach _ = AllNeighbours
-  onNear (MakerE c n) ctx =
+instance Phase MakerE where
+  codec = Codec
+    { cName = "maker"
+    , cToCell = \(MakerE c n) -> Maker c n
+    , cFromCell = \cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing
+    , cPlace = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
+    , cMeta = emptyMeta
+    , cNear = Just (NearRule 130 AllNeighbours DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = fixedPhysics
+  onNear _ ctx (MakerE c n) =
     if not (any (\(_, mc) -> mc == Just c) (ncTriggers ctx))
       then NearIdle
       else if n <= 1
         then NearEdit (setCell (ncBoard ctx) (ncSelf ctx) (Gem c Bomb 0 Nothing)) [] [ncSelf ctx]
         else NearNudge (Becomes (Maker c (n - 1)))
+  view _ = emptyFace "maker"
+
+instance Kind MakerE where
+  place _ = cPlace (codec @MakerE)
+  neighbourPrio _ = phaseNearPrio @MakerE
+  reach _ = phaseReach @MakerE
+  dieOrder _ = phaseDieOrder @MakerE
+  onNear = phaseOnNear
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
@@ -140,12 +168,22 @@ instance Countable SnailE
 instance Renders SnailE where
   faceBase (SnailE dr dc) = Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])
 
+instance Phase SnailE where
+  codec = Codec
+    { cName = "snail"
+    , cToCell = \(SnailE dr dc) -> Snail dr dc
+    , cFromCell = \cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing
+    , cPlace = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = fixedPhysics
+  view _ = emptyFace "snail"
+
 instance Kind SnailE where
-  kindName _ = "snail"
-  fromCell cell = case cell of
-    Snail dr dc -> Just (SnailE dr dc)
-    _ -> Nothing
-  place _ = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
+  place _ = cPlace (codec @SnailE)
   boardPasses _ = [EndPass (moveRule 10 snailRun)]
 
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
@@ -161,18 +199,30 @@ instance Countable BottleE
 instance Renders BottleE where
   faceBase (BottleE c) = Just ("bottle", [colorField c])
 
-instance Kind BottleE where
-  kindName _ = "bottle"
-  fromCell cell = case cell of
-    Bottle c -> Just (BottleE c)
-    _ -> Nothing
-  place _ = colorPlace Bottle
-  neighbourPrio _ = Just 140
-  reach _ = AllNeighbours
-  onNear (BottleE c) ctx =
+instance Phase BottleE where
+  codec = Codec
+    { cName = "bottle"
+    , cToCell = \(BottleE c) -> Bottle c
+    , cFromCell = \cell -> case cell of Bottle c -> Just (BottleE c); _ -> Nothing
+    , cPlace = colorPlace Bottle
+    , cMeta = emptyMeta
+    , cNear = Just (NearRule 140 AllNeighbours DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = fixedPhysics
+  onNear _ ctx (BottleE c) =
     let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
         b' = bottleDyeOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx) c
      in NearEdit b' [] []
+  view _ = emptyFace "bottle"
+
+instance Kind BottleE where
+  place _ = cPlace (codec @BottleE)
+  neighbourPrio _ = phaseNearPrio @BottleE
+  reach _ = phaseReach @BottleE
+  dieOrder _ = phaseDieOrder @BottleE
+  onNear = phaseOnNear
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
@@ -195,16 +245,25 @@ instance Countable CountdownE
 instance Renders CountdownE where
   faceBase (CountdownE c k) = Just ("countdown", [colorField c, nField k])
 
+instance Phase CountdownE where
+  codec = Codec
+    { cName = "countdown"
+    , cToCell = \(CountdownE c n) -> Countdown c n
+    , cFromCell = \cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing
+    , cPlace = \args cell -> case cell of
+        Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
+        Countdown col _ -> mkCountdown col <$> exactArgs argInt args
+        _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch (CountdownE c _) = gemMatch (Just c)
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = gemPhysics { pKeepShuffle = True }
+  view _ = emptyFace "countdown"
+
 instance Kind CountdownE where
-  kindName _ = "countdown"
-  fromCell cell = case cell of
-    Countdown c n -> Just (CountdownE c n)
-    _ -> Nothing
-  -- 放置：[AInt 回合数]，颜色取原格（宝石 / 倒计时）
-  place _ args cell = case cell of
-    Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
-    Countdown col _ -> mkCountdown col <$> exactArgs argInt args
-    _ -> Nothing
+  place _ = cPlace (codec @CountdownE)
   boardPasses _ = [EndPass (tickRule 10 tickRun explodeSeedsFor)]
 
 -- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，原型 Blocker（挡交换、无色、随重力下落、洗牌原地保留）。
@@ -229,12 +288,23 @@ instance Countable Fuzzball where
 
 instance Renders Fuzzball
 
+instance Phase Fuzzball where
+  codec = Codec
+    { cName = "fuzzball"
+    , cToCell = toCell
+    , cFromCell = fromCustom "fuzzball" Fuzzball
+    , cPlace = customPlace "fuzzball"
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "fuzzball") }
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = obstaclePhysics
+  view _ = emptyFace "fuzzball"
+
 instance Kind Fuzzball where
-  kindName _ = "fuzzball"
-  fromCell = fromCustom "fuzzball" Fuzzball
-  place _ = customPlace "fuzzball"
+  place _ = cPlace (codec @Fuzzball)
   label _ = Just "毛球"
-  -- 邻格打碎留在逃生口：fuzzballAdjacent 的 foldr 去重序与 kindNeighbour nub+DieAppend 不等价。
   boardPasses _ = [AdjacentPass 190 fuzzballAdjacent, EndPass (moveRule 20 fuzzballRun)]
 
 isFuzzball :: Cell -> Bool

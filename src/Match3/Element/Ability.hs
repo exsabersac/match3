@@ -1,4 +1,7 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -24,7 +27,7 @@ module Match3.Element.Ability
   , Matchable(..)
   , matchColor
   , Hittable(..)
-  , Strike(..)
+  , Strike(..)  -- re-export from Phase
   , Movable(..)
   , Countable(..)
   , Renders(..)
@@ -44,6 +47,7 @@ module Match3.Element.Ability
 import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Counts (CounterKey)
+import Match3.Element.Phase (Strike(..))
 import Match3.Element.Types (CellField, Edge, FaceValue)
 import Match3.Types
 
@@ -54,24 +58,19 @@ import Match3.Types
 class Cellular e where
   -- | 元素名：关卡放置表、计数键、前端贴图的键（与该类型 'Match3.Element.Kind.kindName' 相同）。
   nameOf :: e -> ElementName
-  -- | 把元素值写回格子（盘面的存储编码）。缺省（DefaultSignatures）：状态就是一个 Int 的 newtype 元素
-  -- 写成 @Custom (nameOf e) (CustomState n)@；表示不是 Int 的元素不写 toCell 就是编译错误。
+  -- | 把元素值写回格子。缺省：Int newtype → Custom（有 Phase 时实例可省略，见 slim 迁入）。
   toCell :: e -> Cell
   default toCell :: Coercible e Int => e -> Cell
   toCell e = Custom (nameOf e) (CustomState (coerce e))
 
 -- | 匹配与交换（缺省 = 普通宝石：颜色取写回的宝石格、不挡匹配、可交换、进普通提示）。
 class Cellular e => Matchable e where
-  -- | 本体颜色（参与匹配与颜色袋计数）。
   color :: e -> Maybe Color
   color = cellGemColor . toCell
-  -- | 不参与匹配（叠层挡住；本体缺省 False）。
   blocksMatch :: e -> Bool
   blocksMatch _ = False
-  -- | 本格不能被交换。
   blocksSwap :: e -> Bool
   blocksSwap _ = False
-  -- | 普通匹配提示是否试这个格（彩虹 = False：它只经成对交换规则给提示）。
   hintable :: e -> Bool
   hintable _ = True
 
@@ -81,54 +80,38 @@ matchColor e
   | blocksMatch e = Nothing
   | otherwise = color e
 
--- | 直接命中（匹配 / 特殊块 / 道具种子落在本格）时的反应。
-data Strike
-  = Absorb Cell  -- ^ 吃掉命中：格子变成给出的新内容，本格不消除
-  | Destroy      -- ^ 本格被消除（进入清除格）
-  | Immune       -- ^ 打不动：格子原样，不消除（锤子对它拒绝且不扣次数）
-  deriving (Eq, Show)
+-- Strike 定义在 Match3.Element.Phase（Ability 再导出）。
 
 -- | 受击（缺省 = 普通宝石：命中即消、能点火、没有爆炸范围）。
 class Hittable e where
   struck :: e -> Strike
   struck _ = Destroy
-  -- | 被消除时能否点火（特殊块引爆的前提；叠层可以否决，见 Layer 的 layerFires）。
   fires :: e -> Bool
   fires _ = True
-  -- | 被消除且能点火时的爆炸范围（由盘面行列决定）。
   blast :: e -> Maybe (Board -> Pos -> [Pos])
   blast _ = Nothing
 
 -- | 重力与移动（缺省 = 普通宝石）。
 class Movable e where
-  -- | 随重力下落。
   falls :: e -> Bool
   falls _ = True
-  -- | 可过传送门。
   portal :: e -> Bool
   portal _ = True
-  -- | 到达这些边时被收走（缺省不收）。
   drains :: e -> [Edge]
   drains _ = []
-  -- | 洗牌时原样放回。
   keepOnShuffle :: e -> Bool
   keepOnShuffle _ = False
-  -- | 可被魔法帽 / 染色瓶改色。
   recolorable :: e -> Bool
   recolorable _ = True
-  -- | 可被蜗牛推动。
   pushable :: e -> Bool
   pushable _ = True
 
 -- | 计数（缺省：不计数、按差计数时算 1 个、离格不算覆盖地毯）。
 class Countable e where
-  -- | 本体进入清除格时的计数键。
   counter :: e -> Maybe CounterKey
   counter _ = Nothing
-  -- | 按差计数时这一格算几个（雪怪：左上格 = 血量，其余 0）。
   diffWeight :: e -> Int
   diffWeight _ = 1
-  -- | 离开格子（不进清除格）也算覆盖地毯。
   vacatesCarpet :: e -> Bool
   vacatesCarpet _ = False
 
@@ -136,8 +119,7 @@ class Countable e where
 class Renders e where
   face :: e -> [(String, FaceValue)]
   face _ = []
-  -- | 前端格子的类型标签与基本字段（网页 JSON 的 t 与其后的字段，Match3.View.cellFace）。Nothing = 缺省：
-  -- Custom 格 = ("custom", name / v)，其余 = (元素名, 无字段)；宝石格（含冰层 / 叠层）由 View 按存储编码给出。
+  -- | 前端格子的类型标签与基本字段。slim-7 前仍手写；Phase.view 并行。
   faceBase :: e -> Maybe (String, [(String, CellField)])
   faceBase _ = Nothing
 

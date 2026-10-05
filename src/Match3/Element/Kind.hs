@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -36,6 +37,8 @@ module Match3.Element.Kind
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Match3.Element.Ability (Element)
+import Match3.Element.Near
+import Match3.Element.Phase (Phase(..), cFromCell, cName, codec)
 import Match3.Element.Types
 import Match3.Types
 
@@ -46,45 +49,15 @@ data BoardPass
   | SwapPass SwapRule                              -- ^ 成对交换规则
   | OpenPass OpenRule                              -- ^ 开启规则（彩蛋类）
 
--- | 邻格波及跳不跳过本轮被直接命中的格（直接命中已经结算过一次）。
-data Reach
-  = SkipDirect     -- ^ 跳过（石头 / 宝箱 / 迷雾 …）
-  | AllNeighbours  -- ^ 不跳过（巧克力 / 蒸汽）
-  deriving (Eq, Show)
-
--- | 邻格有真消除时，这一格怎么变。
-data Nudge
-  = Untouched     -- ^ 不变
-  | Becomes Cell  -- ^ 原地变成别的格（削一层 / 揭叠层 / 保险箱开成饼干）
-  | Dies          -- ^ 打碎：并入本轮清除格（格子原样留着，由清除管线移走）
-  deriving (Eq, Show)
-
--- | 打碎格写入 'aoDead' 的次序（气球等旧逃生口用后插对齐列表序；石头等保持前插）。
-data DieOrder = DiePrepend | DieAppend
-  deriving (Eq, Show)
-
--- | 邻格反应上下文：触发消除格及其颜色（宝石色；非宝石为 Nothing）、本格位置、底层 AdjCtx 与当前盘面。
-data NearCtx = NearCtx
-  { ncTriggers :: [(Pos, Maybe Color)]
-  , ncSelf :: Pos
-  , ncAdj :: AdjCtx
-  , ncBoard :: Board
-  }
-
--- | 邻格反应结果：不动 / 本格 Nudge / 改盘（新盘面、追加打碎、坐住）。
-data NearOut
-  = NearIdle
-  | NearNudge Nudge
-  | NearEdit Board [Pos] [Pos]
-  deriving (Eq, Show)
-
 -- | 一种本体元素（类型级）。
 class Element e => Kind e where
-  -- | 元素名（元素世界的键；与值级 'Match3.Element.Ability.nameOf' 相同）。
+  -- | 元素名（元素世界的键；与值级 nameOf 相同）。有 Phase 时默认 codec。
   kindName :: proxy e -> ElementName
-  -- | 从格子解码出元素值（Nothing = 这格不是本元素）。
+  default kindName :: Phase e => proxy e -> ElementName
+  kindName _ = cName (codec @e)
   fromCell :: Cell -> Maybe e
-  -- | 关卡放置（缺省不放）。
+  default fromCell :: Phase e => Cell -> Maybe e
+  fromCell = cFromCell (codec @e)
   place :: proxy e -> Placer
   place _ _ _ = Nothing
   -- | 按元素名计数的目标（CountNamed）的中文名（HUD / 网页 / 失败提示）。
@@ -105,10 +78,8 @@ class Element e => Kind e where
   neighbourPrio _ = Nothing
   reach :: proxy e -> Reach
   reach _ = SkipDirect
-  -- | 打碎格写入次序（缺省前插，与第 3 刀驱动一致）。
   dieOrder :: proxy e -> DieOrder
   dieOrder _ = DiePrepend
-  -- | 与本轮真消除格正交相邻时的反应（可看触发色、可改邻格）。
   onNear :: e -> NearCtx -> NearOut
   onNear _ _ = NearIdle
   -- | 逃生口：元素自带的整盘趟（不要把 'entityDamage' 写在这里；多格扣血用 'entityHit'）。

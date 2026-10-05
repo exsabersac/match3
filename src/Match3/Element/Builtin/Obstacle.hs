@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 打破型障碍：占格本体，被直接命中或邻格真消除时削层 / 打碎 / 变成别的元素。
@@ -49,6 +51,8 @@ import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField,
 import Match3.Element.Ability
 import Data.Proxy (Proxy(..))
 import Match3.Element.Kind
+import Match3.Element.Near
+import Match3.Element.Phase
 import Match3.Element.Types
 import Match3.Element.Rules (entityDamage, kindNeighbour)
 import Match3.Obstacles
@@ -77,14 +81,28 @@ instance Countable StoneE where
 instance Renders StoneE where
   faceBase (StoneE k) = Just ("stone", [nField k])
 
+instance Phase StoneE where
+  codec = Codec
+    { cName = "stone"
+    , cToCell = \(StoneE n) -> Stone n
+    , cFromCell = \cell -> case cell of Stone n -> Just (StoneE n); _ -> Nothing
+    , cPlace = layersPlace Stone
+    , cMeta = emptyMeta { metaCounter = Just CountStones }
+    , cNear = Just (NearRule 10 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (StoneE n) = HitOut (chip n Stone) False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (StoneE n) = NearNudge (chipNudge n Stone)
+  view _ = emptyFace "stone"
+
+
 instance Kind StoneE where
-  kindName _ = "stone"
-  fromCell cell = case cell of
-    Stone n -> Just (StoneE n)
-    _ -> Nothing
-  place _ = layersPlace Stone
-  neighbourPrio _ = Just 10
-  onNear (StoneE n) _ = NearNudge (chipNudge n Stone)
+  place _ = cPlace (codec @StoneE)
+  neighbourPrio _ = phaseNearPrio @StoneE
+  reach _ = phaseReach @StoneE
+  dieOrder _ = phaseDieOrder @StoneE
+  onNear = phaseOnNear
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
@@ -105,14 +123,28 @@ instance Countable ChestE where
 instance Renders ChestE where
   faceBase (ChestE k) = Just ("chest", [nField k])
 
+instance Phase ChestE where
+  codec = Codec
+    { cName = "chest"
+    , cToCell = \(ChestE n) -> Chest n
+    , cFromCell = \cell -> case cell of Chest n -> Just (ChestE n); _ -> Nothing
+    , cPlace = layersPlace Chest
+    , cMeta = emptyMeta { metaCounter = Just CountChests }
+    , cNear = Just (NearRule 20 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (ChestE n) = HitOut (chip n Chest) False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (ChestE n) = NearNudge (chipNudge n Chest)
+  view _ = emptyFace "chest"
+
+
 instance Kind ChestE where
-  kindName _ = "chest"
-  fromCell cell = case cell of
-    Chest n -> Just (ChestE n)
-    _ -> Nothing
-  place _ = layersPlace Chest
-  neighbourPrio _ = Just 20
-  onNear (ChestE n) _ = NearNudge (chipNudge n Chest)
+  place _ = cPlace (codec @ChestE)
+  neighbourPrio _ = phaseNearPrio @ChestE
+  reach _ = phaseReach @ChestE
+  dieOrder _ = phaseDieOrder @ChestE
+  onNear = phaseOnNear
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
@@ -133,14 +165,28 @@ instance Countable HoneyE where
 instance Renders HoneyE where
   faceBase (HoneyE k) = Just ("honey", [nField k])
 
+instance Phase HoneyE where
+  codec = Codec
+    { cName = "honey"
+    , cToCell = \(HoneyE n) -> Honey n
+    , cFromCell = \cell -> case cell of Honey n -> Just (HoneyE n); _ -> Nothing
+    , cPlace = layersPlace Honey
+    , cMeta = emptyMeta { metaCounter = Just CountHoney }
+    , cNear = Just (NearRule 30 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (HoneyE n) = HitOut (chip n Honey) False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (HoneyE n) = NearNudge (chipNudge n Honey)
+  view _ = emptyFace "honey"
+
+
 instance Kind HoneyE where
-  kindName _ = "honey"
-  fromCell cell = case cell of
-    Honey n -> Just (HoneyE n)
-    _ -> Nothing
-  place _ = layersPlace Honey
-  neighbourPrio _ = Just 30
-  onNear (HoneyE n) _ = NearNudge (chipNudge n Honey)
+  place _ = cPlace (codec @HoneyE)
+  neighbourPrio _ = phaseNearPrio @HoneyE
+  reach _ = phaseReach @HoneyE
+  dieOrder _ = phaseDieOrder @HoneyE
+  onNear = phaseOnNear
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
@@ -161,14 +207,28 @@ instance Countable CakeE where
 instance Renders CakeE where
   faceBase (CakeE k) = Just ("cake", [nField k])
 
+instance Phase CakeE where
+  codec = Codec
+    { cName = "cake"
+    , cToCell = \(CakeE n) -> Cake n
+    , cFromCell = \cell -> case cell of Cake n -> Just (CakeE n); _ -> Nothing
+    , cPlace = layersPlace Cake
+    , cMeta = emptyMeta { metaCounter = Just CountCakes }
+    , cNear = Just (NearRule 40 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (CakeE n) = HitOut (chip n Cake) False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (CakeE n) = NearNudge (chipNudge n Cake)
+  view _ = emptyFace "cake"
+
+
 instance Kind CakeE where
-  kindName _ = "cake"
-  fromCell cell = case cell of
-    Cake n -> Just (CakeE n)
-    _ -> Nothing
-  place _ = layersPlace Cake
-  neighbourPrio _ = Just 40
-  onNear (CakeE n) _ = NearNudge (chipNudge n Cake)
+  place _ = cPlace (codec @CakeE)
+  neighbourPrio _ = phaseNearPrio @CakeE
+  reach _ = phaseReach @CakeE
+  dieOrder _ = phaseDieOrder @CakeE
+  onNear = phaseOnNear
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
@@ -188,17 +248,28 @@ instance Countable BalloonE where
 instance Renders BalloonE where
   faceBase (BalloonE c) = Just ("balloon", [colorField c])
 
-instance Kind BalloonE where
-  kindName _ = "balloon"
-  fromCell cell = case cell of
-    Balloon c -> Just (BalloonE c)
-    _ -> Nothing
-  place _ = colorPlace Balloon
-  neighbourPrio _ = Just 50
-  dieOrder _ = DieAppend  -- 对齐旧 balloonPop 列表序（后插）
-  -- 只对「与同色真消除宝石相邻」的气球致死；keys 仍是全部气球邻格，颜色不对则 NearIdle。
-  onNear (BalloonE c) ctx =
+instance Phase BalloonE where
+  codec = Codec
+    { cName = "balloon"
+    , cToCell = \(BalloonE c) -> Balloon c
+    , cFromCell = \cell -> case cell of Balloon c -> Just (BalloonE c); _ -> Nothing
+    , cPlace = colorPlace Balloon
+    , cMeta = emptyMeta { metaCounter = Just CountBalloons }
+    , cNear = Just (NearRule 50 SkipDirect DieAppend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ ctx (BalloonE c) =
     if any (\(_, mc) -> mc == Just c) (ncTriggers ctx) then NearNudge Dies else NearIdle
+  view _ = emptyFace "balloon"
+
+instance Kind BalloonE where
+  place _ = cPlace (codec @BalloonE)
+  neighbourPrio _ = phaseNearPrio @BalloonE
+  reach _ = phaseReach @BalloonE
+  dieOrder _ = phaseDieOrder @BalloonE
+  onNear = phaseOnNear
 
 -- | 气球邻格：委托 'kindNeighbour'（onNear + DieAppend）；保留旧列表写法供性质对照。
 balloonPop :: AdjCtx -> Board -> AdjOut
@@ -227,16 +298,28 @@ instance Countable SafeE where
 instance Renders SafeE where
   faceBase (SafeE k) = Just ("safe", [nField k])
 
+instance Phase SafeE where
+  codec = Codec
+    { cName = "safe"
+    , cToCell = \(SafeE n) -> Safe n
+    , cFromCell = \cell -> case cell of Safe n -> Just (SafeE n); _ -> Nothing
+    , cPlace = layersPlace Safe
+    , cMeta = emptyMeta { metaVacatesCarpet = True, metaDiffCounter = Just CountSafes }
+    , cNear = Just (NearRule 110 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (SafeE n) = HitOut (Absorb (if n <= 1 then Cookie else Safe (n - 1))) False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (SafeE n) = NearNudge (Becomes (if n <= 1 then Cookie else Safe (n - 1)))
+  view _ = emptyFace "safe"
+
 instance Kind SafeE where
-  kindName _ = "safe"
-  fromCell cell = case cell of
-    Safe n -> Just (SafeE n)
-    _ -> Nothing
-  place _ = layersPlace Safe
+  place _ = cPlace (codec @SafeE)
+  neighbourPrio _ = phaseNearPrio @SafeE
+  reach _ = phaseReach @SafeE
+  dieOrder _ = phaseDieOrder @SafeE
+  onNear = phaseOnNear
   diffCounter _ = Just CountSafes
-  neighbourPrio _ = Just 110
-  -- 末层原地开成饼干（不并入清除格）
-  onNear (SafeE n) _ = NearNudge (Becomes (if n <= 1 then Cookie else Safe (n - 1)))
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
@@ -260,12 +343,26 @@ instance Countable FlipE
 instance Renders FlipE where
   faceBase (FlipE f b) = Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])
 
+instance Phase FlipE where
+  codec = Codec
+    { cName = "flip"
+    , cToCell = \(FlipE f b) -> Flip f b
+    , cFromCell = \cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing
+    , cPlace = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch (FlipE f _) = gemMatch (Just f)
+  onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) True Nothing Nothing
+  physics _ = gemPhysics
+  view _ = emptyFace "flip"
+
 instance Kind FlipE where
-  kindName _ = "flip"
-  fromCell cell = case cell of
-    Flip f b -> Just (FlipE f b)
-    _ -> Nothing
-  place _ args _ = exactArgs (Flip <$> argColor <*> argColor) args
+  place _ = cPlace (codec @FlipE)
+  neighbourPrio _ = phaseNearPrio @FlipE
+  reach _ = phaseReach @FlipE
+  dieOrder _ = phaseDieOrder @FlipE
+  onNear = phaseOnNear
 
 -- | 彩蛋：占格障碍；命中即破；开启规则 = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
 -- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
@@ -283,12 +380,26 @@ instance Hittable SurpriseEgg where
 instance Countable SurpriseEgg
 instance Renders SurpriseEgg
 
+instance Phase SurpriseEgg where
+  codec = Codec
+    { cName = "surprise"
+    , cToCell = \_ -> Surprise
+    , cFromCell = \cell -> case cell of Surprise -> Just SurpriseEgg; _ -> Nothing
+    , cPlace = \_ _ -> Just Surprise
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = obstaclePhysics
+  view _ = emptyFace "surprise"
+
 instance Kind SurpriseEgg where
-  kindName _ = "surprise"
-  fromCell cell = case cell of
-    Surprise -> Just SurpriseEgg
-    _ -> Nothing
-  place _ _ _ = Just Surprise
+  place _ = cPlace (codec @SurpriseEgg)
+  neighbourPrio _ = phaseNearPrio @SurpriseEgg
+  reach _ = phaseReach @SurpriseEgg
+  dieOrder _ = phaseDieOrder @SurpriseEgg
+  onNear = phaseOnNear
   boardPasses _ = [OpenPass (OpenRule openSurprises)]
 
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
@@ -314,15 +425,28 @@ instance Hittable MagicStone where
 instance Countable MagicStone
 instance Renders MagicStone
 
+instance Phase MagicStone where
+  codec = Codec
+    { cName = "magic_stone"
+    , cToCell = toCell
+    , cFromCell = fromCustom "magic_stone" MagicStone
+    , cPlace = \args _ -> Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
+    , cMeta = emptyMeta
+    , cNear = Just (NearRule 180 SkipDirect DiePrepend)
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (MagicStone k) = HitOut (if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune) False Nothing Nothing
+  physics _ = fixedPhysics
+  onNear _ _ (MagicStone k) = NearNudge (if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched)
+  view _ = emptyFace "magic_stone"
+
 instance Kind MagicStone where
-  kindName _ = "magic_stone"
-  fromCell = fromCustom "magic_stone" MagicStone
-  place _ args _ = Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
+  place _ = cPlace (codec @MagicStone)
+  neighbourPrio _ = phaseNearPrio @MagicStone
+  reach _ = phaseReach @MagicStone
+  dieOrder _ = phaseDieOrder @MagicStone
+  onNear = phaseOnNear
   label _ = Just "魔法石"
-  -- 充能：命名清理时由逃生口（整盘扫魔法石、看邻格是否真消除）改成方法；与旧整盘写法逐盘等价（Spec.RulesDedup
-  -- qc_magic_stone_charge_via_driver 对照留在测试里的旧实现：盘面相同、都不打碎 / 不坐住格）。
-  neighbourPrio _ = Just 180
-  onNear (MagicStone k) _ = NearNudge (if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched)
   boardPasses _ = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
 -- | 满格（可发射）的充能数。
@@ -395,16 +519,31 @@ instance Countable SnowBoss where
 instance Renders SnowBoss where
   face b = [("q", FaceInt (sbQuad b)), ("hurt", FaceBool (sbHp b * 2 <= sbMax b)), ("turn", FaceInt (sbTurn b)), ("every", FaceInt snowBossEvery)]
 
+instance Phase SnowBoss where
+  codec = Codec
+    { cName = snowBossName
+    , cToCell = toCell
+    , cFromCell = \cell -> case cell of
+        Custom n s | n == snowBossName -> Just (decodeBoss s)
+        _ -> Nothing
+    , cPlace = \args _ -> do
+        (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
+        guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
+        Just (toCell (SnowBoss hp hp 0 q))
+    , cMeta = emptyMeta { metaDiffCounter = Just (CountNamed snowBossName) }
+    , cNear = Nothing
+    }
+  onMatch _ = MatchRule Nothing True True False
+  onHit _ _ = HitOut Immune False Nothing Nothing
+  physics _ = fixedPhysics
+  view _ = emptyFace (unElementName snowBossName)
+
 instance Kind SnowBoss where
-  kindName _ = snowBossName
-  fromCell cell = case cell of
-    Custom n s | n == snowBossName -> Just (decodeBoss s)
-    _ -> Nothing
-  -- 放置：[AInt 血量, AInt 象限]（关卡按象限 0..3 放满一只的四格；血量 1..255，上限 = 血量）
-  place _ args _ = do
-    (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
-    guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
-    Just (toCell (SnowBoss hp hp 0 q))
+  place _ = cPlace (codec @SnowBoss)
+  neighbourPrio _ = phaseNearPrio @SnowBoss
+  reach _ = phaseReach @SnowBoss
+  dieOrder _ = phaseDieOrder @SnowBoss
+  onNear = phaseOnNear
   label _ = Just "雪怪"
   loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
   diffCounter _ = Just (CountNamed snowBossName)

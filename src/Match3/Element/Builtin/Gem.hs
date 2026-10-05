@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -25,6 +27,7 @@ import Data.Typeable (Typeable)
 import Match3.Board.Grid (inBounds)
 import Match3.Element.Ability
 import Match3.Element.Kind
+import Match3.Element.Phase
 import Match3.Element.Special (runShape)
 import Match3.Element.Types
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
@@ -45,11 +48,26 @@ instance Movable PlainGem
 instance Countable PlainGem
 instance Renders PlainGem
 
+instance Phase PlainGem where
+  codec = Codec
+    { cName = "gem"
+    , cToCell = \(PlainGem c) -> Gem c Normal 0 Nothing
+    , cFromCell = \cell -> case cell of Gem c Normal _ _ -> Just (PlainGem c); _ -> Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch (PlainGem c) = gemMatch (Just c)
+  onHit _ _ = gemHit
+  physics _ = gemPhysics
+  view _ = emptyFace "gem"
+
 instance Kind PlainGem where
-  kindName _ = "gem"
-  fromCell cell = case cell of
-    Gem c Normal _ _ -> Just (PlainGem c)
-    _ -> Nothing
+  place _ = cPlace (codec @PlainGem)
+  neighbourPrio _ = phaseNearPrio @PlainGem
+  reach _ = phaseReach @PlainGem
+  dieOrder _ = phaseDieOrder @PlainGem
+  onNear = phaseOnNear
 
 -- | 特殊块（直线 / 炸弹 / 彩虹）：种类在类型里（@SpecialGem 'LineH@ …），值只是颜色。
 -- 洗牌保留；直线 / 炸弹有爆炸范围；彩虹不进普通匹配提示，挂彩虹取色（先于特殊合成 = 组合表的次序 20）。
@@ -100,17 +118,26 @@ instance Movable (SpecialGem k) where
 instance Countable (SpecialGem k)
 instance Renders (SpecialGem k)
 
+instance forall k. SpecialKind k => Phase (SpecialGem k) where
+  codec = Codec
+    { cName = specialName (specialKind (Proxy :: Proxy k))
+    , cToCell = \g@(SpecialGem c) -> Gem c (kindOf g) 0 Nothing
+    , cFromCell = \cell -> case cell of
+        Gem c k' _ _ | k' == specialKind (Proxy :: Proxy k) -> Just (SpecialGem c)
+        _ -> Nothing
+    , cPlace = \_ cell -> case cell of
+        Gem c _ _ _ -> Just (Gem c (specialKind (Proxy :: Proxy k)) 0 Nothing)
+        _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch g@(SpecialGem c) = (gemMatch (Just c)) { mHintable = kindOf g /= Rainbow }
+  onHit _ g = gemHit { hBlast = specialBlast (kindOf g) }
+  physics _ = gemPhysics { pKeepShuffle = True }
+  view g = emptyFace (unElementName (specialName (kindOf g)))
+
 instance forall k. SpecialKind k => Kind (SpecialGem k) where
-  kindName _ = specialName k
-    where
-      k = specialKind (Proxy :: Proxy k)
-  fromCell cell = case cell of
-    Gem c k' _ _ | k' == specialKind (Proxy :: Proxy k) -> Just (SpecialGem c)
-    _ -> Nothing
-  -- 放置（新玩法 4 起）：把原格的宝石变成该种特殊块，颜色取原格（关卡放置表 Place "rainbow" [] 格 等）；原格不是宝石时不放。
-  place _ _ cell = case cell of
-    Gem c _ _ _ -> Just (Gem c (specialKind (Proxy :: Proxy k)) 0 Nothing)
-    _ -> Nothing
+  place _ = cPlace (codec @(SpecialGem k))
   boardPasses _ = [SwapPass (SwapRule 10 isRainbowSwap rainbowClearSeeds) | specialKind (Proxy :: Proxy k) == Rainbow]
 
 -- | 内置特殊块形状规则表（顺序即优先级）：每条连线取第一条认领它的规则——

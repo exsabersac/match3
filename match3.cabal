@@ -84,6 +84,7 @@ library
       Match3.Element
       Match3.Element.Types
       Match3.Element.Rules
+      Match3.Element.Near
       Match3.Element.Phase
       Match3.Element.Special
       Match3.Element.Builtin
@@ -260,6 +261,7 @@ test-suite match3-test
       Match3.Element.Layer
       Match3.Element.Level
       Match3.Element.Mechanic
+      Match3.Element.Near
       Match3.Element.Phase
       Match3.Element.Rules
       Match3.Element.Special

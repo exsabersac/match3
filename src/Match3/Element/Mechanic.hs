@@ -70,7 +70,7 @@ emptyLayout n = MechLayout n False Nothing Nothing Nothing Nothing Nothing Nothi
 
 -- | 关卡级机制：slim-5 起主 API 是 'onBeat' + 'layout'；下列旧方法缺省转发过去。
 class (Typeable m, Eq m, Show m) => Mechanic m where
-  -- | 身份：覆盖 'mechName' 或 'layout'（layout 缺省 = emptyLayout (mechName m)）。
+  -- | 身份与读数（slim-5/6）：覆盖 'layout'，或只写 'mechName'（layout 缺省 emptyLayout）。
   mechName :: m -> ElementName
   mechName = mlName . layout
   layout :: m -> MechLayout
@@ -80,45 +80,10 @@ class (Typeable m, Eq m, Show m) => Mechanic m where
   mechCore :: m -> Bool
   mechCore = mlCore . layout
 
+  -- | 流水线节拍（slim-5/6 唯一钩子）。
   onBeat :: Beat r -> m -> Maybe (r, m)
   onBeat _ _ = Nothing
 
-  onRefilled :: m -> Board -> [Pos] -> Maybe ([Pos], m)
-  onRefilled m b acc = onBeat (Refilled b acc) m
-  onEndTick :: m -> [(Pos, Pos)] -> Maybe ([(Pos, Pos)], m)
-  onEndTick m acc = onBeat (EndTick acc) m
-  onSettling :: m -> (Cell -> Bool) -> MBoard -> Maybe (MBoard, m)
-  onSettling m canPass mb = onBeat (Settling canPass mb) m
-  onCover :: m -> [Pos] -> Int -> Maybe (Int, m)
-  onCover m hit n = onBeat (Covering hit n) m
-  onGroundHit :: m -> GroundRule -> [Pos] -> [(ElementName, Int)] -> Maybe ([(ElementName, Int)], m)
-  onGroundHit m hitG hits acc = onBeat (GroundHit hitG hits acc) m
-
-  refillPolicy :: m -> RefillPolicy -> Maybe RefillPolicy
-  refillPolicy m p = fmap fst (onBeat (AskRefill p) m)
-  shapes :: m -> [ShapeRule] -> Maybe [ShapeRule]
-  shapes m rs = fmap fst (onBeat (AskShapes rs) m)
-  avoidCells :: m -> [Pos] -> Maybe [Pos]
-  avoidCells m acc = fmap fst (onBeat (AskAvoid acc) m)
-  wallCells :: m -> [Pos] -> Maybe [Pos]
-  wallCells m acc = fmap fst (onBeat (AskWall acc) m)
-  morph :: m -> Board -> Board -> Pos -> Pos -> Maybe Morph
-  morph m b0 swapped p1 p2 = fmap fst (onBeat (AskMorph b0 swapped p1 p2) m)
-  judge :: m -> Board -> Score -> MovesLeft -> Outcome -> Maybe Outcome
-  judge m b score moves out = fmap fst (onBeat (AskJudge b score moves out) m)
-
-  ufos :: m -> Maybe [Ufo]
-  ufos = mlUfos . layout
-  belts :: m -> Maybe [Belt]
-  belts = mlBelts . layout
-  portals :: m -> Maybe [(Pos, Pos)]
-  portals = mlPortals . layout
-  carpetOpen :: m -> Maybe [Pos]
-  carpetOpen = mlCarpetOpen . layout
-  ground :: m -> Maybe Ground
-  ground = mlGround . layout
-  drops :: m -> Maybe [Pos]
-  drops = mlDrops . layout
 
 data SomeMechanic = forall m. Mechanic m => SomeMechanic m
 

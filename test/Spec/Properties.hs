@@ -31,7 +31,7 @@ import Match3.Board.Cascade (AfterEntry(..), CascadeRun(..), cascadeAfterWith, c
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty(..))
 import Match3.Conveyor (applyBeltMoves)
-import Match3.Element.Mechanic (Mechanic(mechName, onEndTick), SomeMechanic(..))
+import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..))
 import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
 import Match3.Game.Level (newGame)
 import Match3.Game.State
@@ -905,7 +905,8 @@ data Adder = Adder Int Int
 
 instance Mechanic Adder where
   mechName (Adder k _) = ElementName ("adder" ++ show k)
-  onEndTick (Adder k n) acc = Just (acc ++ [((k, k), (k, k))], Adder k (n + 1))
+  onBeat (EndTick acc) (Adder k n) = Just (acc ++ [((k, k), (k, k))], Adder k (n + 1))
+  onBeat _ _ = Nothing
 
 qc_beat_folds_in_order :: Property
 qc_beat_folds_in_order =
@@ -913,8 +914,8 @@ qc_beat_folds_in_order =
     let ks = nub ks0
         world = foldl (\r k -> registerMechanic (SomeMechanic (Adder k 0)) r) defaultWorld ks
         elems = [SomeMechanic (Adder k 5) | k <- ks]
-        viaProto = beatIn world [] [] onEndTick
-        viaIn = beatIn world elems [] onEndTick
+        viaProto = beatIn world [] [] (\m acc -> onBeat (EndTick acc) m)
+        viaIn = beatIn world elems [] (\m acc -> onBeat (EndTick acc) m)
         expected = if null ks then Nothing else Just [((k, k), (k, k)) | k <- ks]
     in conjoin
          [ fmap fst viaProto === expected

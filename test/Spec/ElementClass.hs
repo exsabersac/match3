@@ -27,7 +27,8 @@ import Match3.Element
 import Match3.Element.Ability
 import Match3.Element.Phase
 import Match3.Element.Mechanic
-  ( Mechanic(..)
+  ( Beat(..)
+  , Mechanic(..)
   , SomeMechanic(..)
   , fromMechanic
   , mechNameOf
@@ -242,8 +243,8 @@ ec_mechanic_defaults_silent :: Assertion
 ec_mechanic_defaults_silent = do
   let world = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultWorld (map mechNameOf builtinMechanics))
       es = [SomeMechanic (Quiet ())]
-  assertBool "no beat reply" (isNothing (beatIn world es [] onEndTick) && isNothing (queryIn world es [] avoidCells) && isNothing (queryIn world es [] wallCells))
-  assertBool "no query reply" (isNothing (queryIn world es [] shapes) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
+  assertBool "no beat reply" (isNothing (beatIn world es [] (\m acc -> onBeat (EndTick acc) m)) && isNothing (queryIn world es [] (\m acc -> fst <$> onBeat (AskAvoid acc) m)) && isNothing (queryIn world es [] (\m acc -> fst <$> onBeat (AskWall acc) m)))
+  assertBool "no query reply" (isNothing (queryIn world es [] (\m rs -> fst <$> onBeat (AskShapes rs) m)) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
   assertEqual "no readings" ([], []) (levelUfos es, levelBelts es)
   assertBool "fromMechanic type check" (fromMechanic (SomeMechanic (Quiet ())) == Just (Quiet ()))
 
@@ -307,15 +308,19 @@ data Doubler = Doubler
 
 instance Mechanic Magnet where
   mechName _ = "magnet"
-  onRefilled m b acc = Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
+  onBeat (Refilled b acc) m =
+    Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
+  onBeat _ _ = Nothing
 
 instance Mechanic Pinger where
   mechName _ = "pinger"
-  avoidCells _ acc = Just (acc ++ [(0, 0)])
+  onBeat (AskAvoid acc) m = Just (acc ++ [(0, 0)], m)
+  onBeat _ _ = Nothing
 
 instance Mechanic Doubler where
   mechName _ = "doubler"
-  avoidCells _ acc = Just (acc ++ acc)
+  onBeat (AskAvoid acc) m = Just (acc ++ acc, m)
+  onBeat _ _ = Nothing
 
 ec_mechanics_by_beat :: Assertion
 ec_mechanics_by_beat = do
@@ -325,7 +330,7 @@ ec_mechanics_by_beat = do
       (p1, p2) = ((1, 2), (2, 2))
       (_, o, mt) = resolveSwapWith world p1 p2 gs0 {gsBoard = b1}
       (_, oD, mtD) = resolveSwapWith defaultWorld p1 p2 gs0 {gsBoard = b1}
-      ping r = length <$> queryIn r [] (replicate 7 (0, 0)) avoidCells
+      ping r = length <$> queryIn r [] (replicate 7 (0, 0)) (\m acc -> fst <$> onBeat (AskAvoid acc) m)
       withPinger = registerMechanic (SomeMechanic Pinger) world
   assertBool "applied" (moveApplied o && moveApplied oD)
   assertBool "magnet adds an absorb wave (ufo also answers)" (length (mtWaves mt) > length (mtWaves mtD))
@@ -345,11 +350,12 @@ newtype Siphon = Siphon Int
 
 instance Mechanic Siphon where
   mechName _ = "siphon"
-  onRefilled (Siphon k) b acc
+  onBeat (Refilled b acc) (Siphon k)
     | k > 0
     , p : _ <- reverse [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell b q == mkGem C2] =
         Just (acc ++ [p], Siphon (k - 1))
     | otherwise = Nothing
+  onBeat _ _ = Nothing
   mechStart _ _ = Siphon 2
 
 ec_mechanic_stateful_extension :: Assertion

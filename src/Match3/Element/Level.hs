@@ -118,27 +118,27 @@ reading f elems = maybe [] id (listToMaybe [xs | SomeMechanic m <- elems, Just x
 
 -- | 飞碟。
 levelUfos :: [SomeMechanic] -> [Ufo]
-levelUfos = reading ufos
+levelUfos = reading (mlUfos . layout)
 
 -- | 传送带路径。
 levelBelts :: [SomeMechanic] -> [Belt]
-levelBelts = reading belts
+levelBelts = reading (mlBelts . layout)
 
 -- | 传送门对。
 levelPortals :: [SomeMechanic] -> [(Pos, Pos)]
-levelPortals = reading portals
+levelPortals = reading (mlPortals . layout)
 
 -- | 未覆盖的地毯格。
 levelCarpetOpen :: [SomeMechanic] -> [Pos]
-levelCarpetOpen = reading carpetOpen
+levelCarpetOpen = reading (mlCarpetOpen . layout)
 
 -- | 地面层。
 levelGround :: [SomeMechanic] -> Ground
-levelGround = reading ground
+levelGround = reading (mlGround . layout)
 
 -- | 掉落口格（新玩法 6；没有掉落口的关卡为空）：前端画掉落口标记用。
 levelDrops :: [SomeMechanic] -> [Pos]
-levelDrops = reading drops
+levelDrops = reading (mlDrops . layout)
 
 -- | Board 层的钩子：沉降节拍 'onSettling'（可穿门谓词 = 世界的本体定义），补子之后 'onRefilled'，
 -- 补子策略问 'refillPolicy'（初值 = 世界的策略）。没人回复时不传送 / 不吸收 / 用世界的补子策略。
@@ -148,11 +148,11 @@ levelHooksWith world elems = hooks
     canPass = portalWith world
     hooks =
       LevelHooks
-        { onSettle = \mb -> maybe mb fst (beatIn world elems mb (\m q -> onSettling m canPass q))
-        , onAbsorb = \b -> case beatIn world elems [] (\m acc -> onRefilled m b acc) of
+        { onSettle = \mb -> maybe mb fst (beatIn world elems mb (\m q -> onBeat (Settling canPass q) m))
+        , onAbsorb = \b -> case beatIn world elems [] (\m acc -> onBeat (Refilled b acc) m) of
             Just (ps, elems') -> (ps, levelHooksWith world elems')
             Nothing -> ([], hooks)
-        , hookRefill = queryIn world elems (refillPolicyWith world) refillPolicy
+        , hookRefill = queryIn world elems (refillPolicyWith world) (\m p -> fst <$> onBeat (AskRefill p) m)
         , hookLevel = elems
         }
 
@@ -161,7 +161,7 @@ levelHooksWith world elems = hooks
 -- 新玩法 8：地面层里有带扩爆规则的格（魔法地格）时，再把它们写进本步上下文（'StepCtx'，'setWidening'）；
 -- 没有这种格时世界原样（其余关卡与每日挑战不受影响）。
 levelWorldIn :: World -> [SomeMechanic] -> World
-levelWorldIn world elems = widened (maybe world (\rs -> setShapeRules rs world) (queryIn world elems (shapeRules world) shapes))
+levelWorldIn world elems = widened (maybe world (\rs -> setShapeRules rs world) (queryIn world elems (shapeRules world) (\m rs -> fst <$> onBeat (AskShapes rs) m)))
   where
     widened r = case groundWideningWith r (levelGround elems) of
       [] -> r
@@ -171,29 +171,29 @@ levelWorldIn world elems = widened (maybe world (\rs -> setShapeRules rs world) 
 -- 内置关卡里只有规则开关 RainbowCombos（"rainbow_combos"）打开时回复。
 morphIn :: World -> [SomeMechanic] -> Board -> Board -> Pos -> Pos -> Maybe Morph
 morphIn world elems b0 swapped p1 p2 =
-  queryIn world elems Nothing (\m acc -> maybe (Just <$> morph m b0 swapped p1 p2) (const Nothing) acc) >>= id
+  queryIn world elems Nothing (\m acc -> maybe (fmap Just (fst <$> onBeat (AskMorph b0 swapped p1 p2) m)) (const Nothing) acc) >>= id
 
 -- | 皮带节拍（'onEndTick'）：Just (移位, 推进后的机制)；没人回复时 Nothing（没有皮带，也没有皮带后的再连锁）。
 beltShiftIn :: World -> [SomeMechanic] -> Maybe ([(Pos, Pos)], [SomeMechanic])
-beltShiftIn world elems = beatIn world elems [] onEndTick
+beltShiftIn world elems = beatIn world elems [] (\m acc -> onBeat (EndTick acc) m)
 
 -- | 会走的元素要跳过的格（'avoidCells'，内置 = 皮带格）。
 avoidCellsIn :: World -> [SomeMechanic] -> [Pos]
-avoidCellsIn world elems = maybe [] id (queryIn world elems [] avoidCells)
+avoidCellsIn world elems = maybe [] id (queryIn world elems [] (\m acc -> fst <$> onBeat (AskAvoid acc) m))
 
 -- | 会走的元素当墙的格（'wallCells'，内置 = 传送门端点）。
 wallCellsIn :: World -> [SomeMechanic] -> [Pos]
-wallCellsIn world elems = maybe [] id (queryIn world elems [] wallCells)
+wallCellsIn world elems = maybe [] id (queryIn world elems [] (\m acc -> fst <$> onBeat (AskWall acc) m))
 
 -- | 地毯节拍（'onCover'）：(新覆盖数, 推进后的机制)；没人回复时不覆盖。
 coverIn :: World -> [Pos] -> [SomeMechanic] -> (Int, [SomeMechanic])
-coverIn world hit elems = maybe (0, elems) id (beatIn world elems 0 (\m n -> onCover m hit n))
+coverIn world hit elems = maybe (0, elems) id (beatIn world elems 0 (\m n -> onBeat (Covering hit n) m))
 
 -- | 地面层节拍（'onGroundHit'，规则 = 世界的 hitGroundWith）：(按名字的去层数, 推进后的机制)。
 hitGroundIn :: World -> [Pos] -> [SomeMechanic] -> ([(ElementName, Int)], [SomeMechanic])
-hitGroundIn world hits elems = maybe ([], elems) id (beatIn world elems [] (\m acc -> onGroundHit m (hitGroundWith world) hits acc))
+hitGroundIn world hits elems = maybe ([], elems) id (beatIn world elems [] (\m acc -> onBeat (GroundHit (hitGroundWith world) hits acc) m))
 
 -- | 胜负节拍（'judge'）：内置规则判出的结局交给关卡级机制复核，有回复就用回复里的结局。
 -- 内置关卡级机制都不回复，所以内置关卡与每日挑战的结局与原来逐字相同（judge_default_no_replier）。
 judgeIn :: World -> [SomeMechanic] -> Board -> Score -> MovesLeft -> Outcome -> Outcome
-judgeIn world elems b score moves out = maybe out id (queryIn world elems out (\m o -> judge m b score moves o))
+judgeIn world elems b score moves out = maybe out id (queryIn world elems out (\m o -> fst <$> onBeat (AskJudge b score moves o) m))

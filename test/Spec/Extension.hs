@@ -41,7 +41,7 @@ import Match3.Board.Grid (mboardFromRows)
 import Match3.Element
   ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
   , levelHooksWith, registerMechanic, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
-import Match3.Element.Mechanic (Mechanic(..), SomeMechanic(..))
+import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..))
 import Match3.Element.Level (judgeIn)
 import qualified Match3.Combos as Combos
 import Match3.Types (goalCount, goalScore)
@@ -478,7 +478,8 @@ data CoinRain = CoinRain
 
 instance Mechanic CoinRain where
   mechName _ = "coin_rain"
-  refillPolicy _ _ = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)))
+  onBeat (AskRefill _) m = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)), m)
+  onBeat _ _ = Nothing
 
 -- | 补子策略扩展（关卡级元素）：注册 CoinRain 之后，交换出的 4 连（横消落在交换点 (1,2)）挖出的 3 个洞补成金币，
 -- 金币无色不再连锁；其余什么都不改。元素世界缺省策略下同一步不出金币。
@@ -513,9 +514,10 @@ data TimeLimit = TimeLimit
 
 instance Mechanic TimeLimit where
   mechName _ = "time_limit"
-  judge _ _ score moves (MoveApplied _)
-    | moves <= 3 = Just (Lost score)
-  judge _ _ _ _ _ = Nothing
+  onBeat (AskJudge _ score moves (MoveApplied _)) m
+    | moves <= 3 = Just (Lost score, m)
+  onBeat (AskJudge {}) _ = Nothing
+  onBeat _ _ = Nothing
 
 ext_judging_level_element :: Assertion
 ext_judging_level_element = do

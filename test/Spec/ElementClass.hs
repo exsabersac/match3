@@ -53,6 +53,7 @@ tests =
   , testCase "ec_state_lives_in_element_value" ec_state_lives_in_element_value
   , testCase "ec_mechanic_defaults_silent" ec_mechanic_defaults_silent
   , testCase "ec_flat_record_removed" ec_flat_record_removed
+  , testCase "ec_entity_wires_damage" ec_entity_wires_damage
   , testCase "ec_mechanics_by_beat" ec_mechanics_by_beat
   , testCase "ec_mechanic_stateful_extension" ec_mechanic_stateful_extension
   , testCase "ec_custom_matchable_gem" ec_custom_matchable_gem
@@ -238,6 +239,25 @@ ec_flat_record_removed = do
   assertEqual "main flow does not call level element implementations" [] [(f, w) | (f, s) <- zip flowFiles flow, w <- ["stepUfos", "beltMoves", "coverCarpets"], mentionsIdent w s]
   assertEqual "builtin entries" builtinEntryCount (length builtinDefs)
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf builtinMechanics)
+
+-- | 凡 'instance Entity' 必须经 Kind.'entityHit' 挂上扣血（通常调用 'entityDamage'）；不得只写 Entity 却漏挂。
+ec_entity_wires_damage :: Assertion
+ec_entity_wires_damage = do
+  srcFiles <- sourcesUnderAll ["src/Match3/Element"]
+  pairs <- mapM (\f -> (,) f <$> readFile f) srcFiles
+  let entityFiles =
+        [ (f, s)
+        | (f, s) <- pairs
+        , "instance Entity" `isInfixOf` s
+        , f /= "src/Match3/Element/Kind.hs"
+        ]
+  assertBool "at least one Entity instance (SnowBoss)" (not (null entityFiles))
+  assertEqual "Entity modules wire entityHit" [] [f | (f, s) <- entityFiles, not ("entityHit" `isInfixOf` s)]
+  assertEqual "Entity modules mention entityDamage" [] [f | (f, s) <- entityFiles, not ("entityDamage" `isInfixOf` s)]
+  -- 扣血应在 entityHit / kindRules 路径，不应再塞进 boardPasses 列表里（否则 kindRules 会挂两次）
+  snow <- readFile "src/Match3/Element/Builtin/Obstacle.hs"
+  assertBool "SnowBoss boardPasses no longer inlines entityDamage"
+    (not ("boardPasses _ = [AdjacentPass 200 (entityDamage" `isInfixOf` snow))
 
 -- | 关卡级元素是开放的：测试专用「磁铁」在补子之后的节拍（onRefilled）吸走盘上第一颗 C1 宝石；
 -- 不改主流程，只 registerMechanic（无状态：开局没有它时用注册的原型值）。第 7 刀 7b 起节拍折叠所有回复者：

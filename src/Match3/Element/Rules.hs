@@ -30,9 +30,12 @@ import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.Types
 
--- | 一种本体的全部规则：方法给出的邻格规则在前，逃生口 'boardPasses' 在后（之后按优先级稳定排序）。
+-- | 一种本体的全部规则：方法邻格 → 'entityHit' 扣血 → 逃生口 'boardPasses'（之后按优先级稳定排序）。
 kindRules :: Kind e => proxy e -> [BoardPass]
-kindRules p = [AdjacentPass o (kindNeighbour p) | Just o <- [neighbourPrio p]] ++ boardPasses p
+kindRules p =
+  [AdjacentPass o (kindNeighbour p) | Just o <- [neighbourPrio p]]
+    ++ [AdjacentPass o f | Just (o, f) <- [entityHit p]]
+    ++ boardPasses p
 
 -- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerPasses'。
 layerRules :: Layer l => proxy l -> [BoardPass]

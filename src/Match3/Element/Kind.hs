@@ -9,8 +9,8 @@
 --
 -- 规则（元素类重构第 3 刀起）：能写成「邻格真消除时这一格怎么变」的邻格规则是方法（'neighbourPrio' / 'reach' /
 -- 'onNeighbourClear'），由通用驱动（Match3.Element.Rules.kindNeighbour）统一找邻格、跳过直接命中、按顺序写回；
--- 多格实体（'Entity'）的扣血同样由驱动 entityDamage 算。其余读整盘、按自己的顺序写回的规则（步末 / 成对交换 /
--- 开启 / 同色邻消 / 改色 …）走逃生口 'boardPasses'。
+-- 多格实体（'Entity'）的扣血由驱动 entityDamage 算，经 Kind 方法 'entityHit' 挂进 'kindRules'（勿再塞进 'boardPasses'，
+-- 否则会打两次）。其余读整盘、按自己的顺序写回的规则（步末 / 成对交换 / 开启 / 同色邻消 / 改色 …）走逃生口 'boardPasses'。
 module Match3.Element.Kind
   ( -- * 本体
     Kind(..)
@@ -88,17 +88,26 @@ class Element e => Kind e where
   -- | 与本轮真消除格正交相邻时这一格怎么变。
   onNeighbourClear :: e -> Nudge
   onNeighbourClear _ = Untouched
-  -- | 逃生口：元素自带的整盘趟。
+  -- | 逃生口：元素自带的整盘趟（不要把 'entityDamage' 写在这里；多格扣血用 'entityHit'）。
   boardPasses :: proxy e -> [BoardPass]
   boardPasses _ = []
+  -- | 多格实体扣血：'Just (顺序号, 驱动)' 时由 'kindRules' 自动挂成 'AdjacentPass'。
+  -- 写了 'Entity' 的类型必须覆盖（通常 @entityHit p = Just (entityHitOrder p, entityDamage p)@）；
+  -- 护栏 'ec_entity_wires_damage' 按源码核对。缺省 Nothing = 不是多格实体。
+  entityHit :: proxy e -> Maybe (Int, AdjCtx -> Board -> AdjOut)
+  entityHit _ = Nothing
 
 -- | 多格实体（雪怪 Boss）：各部件仍是独立的格子，'Entity' 告诉驱动锚点怎么认（'partNo' == 0）、部件在哪
--- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。伤害由 Match3.Element.Rules.entityDamage 统一算。
+-- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。伤害由 Match3.Element.Rules.entityDamage 统一算，
+-- 并经 Kind.'entityHit' 挂进规则表（顺序缺省 'entityHitOrder' = 200）。
 class Kind e => Entity e where
   footprint :: proxy e -> Pos -> [Pos]
   partNo :: e -> Int
   hitPoints :: e -> Int
   withHp :: Int -> e -> e
+  -- | 扣血邻格规则的顺序号（与其它 AdjacentPass 一起排序）。
+  entityHitOrder :: proxy e -> Int
+  entityHitOrder _ = 200
 
 -- | 装箱的本体种类（元素世界里的一项）。
 data SomeKind = forall e. Kind e => SomeKind (Proxy e)

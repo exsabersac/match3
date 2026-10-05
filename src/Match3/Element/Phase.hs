@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 按引擎阶段收缩的元素 API：生产行为的唯一来源（slim-3 起 Ability/Kind 邻格薄封装到此）。
--- Meta 并进 'Codec'；'NearEdit' 在 slim-7 收成白名单组合子。
+-- Meta 并进 'Codec'；邻格编辑优先 Match3.Element.Near 白名单组合子（nearSelf* / nearLocalEdit）。
 module Match3.Element.Phase
   ( Physics(..)
   , fixedPhysics

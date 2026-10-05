@@ -105,7 +105,7 @@ instance Phase MagicHatE where
   onNear _ ctx _ =
     let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
         b' = hatTriggerOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx)
-     in NearEdit b' [] []
+     in nearLocalEdit b' [] []  -- 白名单：hatTriggerOne 只改邻接可改色格
   view _ = emptyFace "hat"
 
 instance Kind MagicHatE where
@@ -140,7 +140,7 @@ instance Phase MakerE where
     if not (any (\(_, mc) -> mc == Just c) (ncTriggers ctx))
       then NearIdle
       else if n <= 1
-        then NearEdit (setCell (ncBoard ctx) (ncSelf ctx) (Gem c Bomb 0 Nothing)) [] [ncSelf ctx]
+        then nearSelfSits ctx (Gem c Bomb 0 Nothing)
         else NearNudge (Becomes (Maker c (n - 1)))
   view _ = emptyFace "maker"
 
@@ -206,7 +206,7 @@ instance Phase BottleE where
   onNear _ ctx (BottleE c) =
     let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
         b' = bottleDyeOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx) c
-     in NearEdit b' [] []
+     in nearLocalEdit b' [] []  -- 白名单：bottleTriggerOne 只改邻接可改色格
   view _ = emptyFace "bottle"
 
 instance Kind BottleE where

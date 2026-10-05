@@ -63,21 +63,22 @@ web/hs/              网页接口层：gameStep match3Shell → JSON（读 Match
 
 ## 现在怎样扩展
 
-> 2026-10 的元素类重构（第 0–6 刀）改了下面的写法：能力记录 `Caps`、`Modifier`、`LevelElement` 与开放消息、注册表 `Registry` 都已删除，
-> 现在的写法是能力类 + `Kind` / `Layer` / `Mechanic` instance + `kindDef @T`，见 [guide/04-元素框架.md](guide/04-元素框架.md) 与 [architecture.md「新增一种元素的步骤」](architecture.md#新增一种元素的步骤)。以下保留第 9 刀时的原文。
+> **勿照做本节步骤。** 2026-10 的元素类重构（第 0–6 刀）已删除能力记录 `Caps`、`Modifier`、`LevelElement` 与开放消息、注册表 `Registry`；
+> 现行写法是能力类 + `Kind` / `Layer` / `Mechanic` instance + `kindDef @T`，扩展步骤以 [guide/04-元素框架.md](guide/04-元素框架.md) 与 [architecture.md「新增一种元素的步骤」](architecture.md#新增一种元素的步骤) 为准。
+> 以下整节是第 9 刀时的**历史原文**（含 `defaultRegistry` / `UI.CellTable.customTable` 等已删除 API），只供对照演进，不要复制进新代码。
 
-### 新增一种元素（格子里的东西）
+### 新增一种元素（格子里的东西）（历史）
 
 1. 写一个类型和 `instance Element`：只写 `name`、`toCell`、`caps`，例如 `caps (Thorn n) = blocker [hit …, counts (CountNamed "thorn")]`（原型选 `piece` / `blocker` / `fixed`，能力简写在 `Match3.Element.Caps`）。内置元素放进 `src/Match3/Element/Builtin/` 下最接近的分组文件；测试 / 扩展元素放在自己的模块里。叠层写 `instance Modifier`。
 2. 注册：内置的在 `Element.Builtin.builtinDefs` 末尾加一行；扩展的用 `register (customEntry 原型 解码) defaultRegistry`，再把注册表传给各个 `*With` 入口，或直接用 `match3GameWith reg`。
 3. 放进关卡：在关卡记录的 `lvlPlacements` 里写 `Place "名字" [参数] [坐标]`。
 4. 计数与目标：`counts (CountNamed "名字")` + 目标 `goalCount (CountNamed "名字") n`，HUD、标题、网页自动显示（经 `Match3.View`）。
-5. 表现：贴图名就是元素名；需要专门画法的在 `UI.CellTable.customTable` 加一行；颜色在 `UI.Presentation.elementRGBTable` 加一行。网页端：单格、不带颜色、桌面也没有专门画法的 `Custom` 不用改 `web/www/cells.js`（通用画法 = 元素名贴图 + 层数角标，重新生成网页图集即可）；新的 `Cell` 构造器、桌面 `customTable` 里有专门画法的元素、占多格或带颜色的元素、要专门降级色的元素才要改 `cells.js`（详见 [web.md §2.3](web.md#23-js-渲染器)；e2e 的逐关降级护栏会报漏掉的）。
+5. 表现：（历史）贴图名就是元素名；需要专门画法的原在 `UI.CellTable.customTable` 加一行（该模块已随桌面版移除；现行改 `web/www/cells.js` 的 `CUSTOM_ART`）；颜色在 `UI.Presentation.elementRGBTable` 加一行。网页端：单格、不带颜色、桌面也没有专门画法的 `Custom` 不用改 `web/www/cells.js`（通用画法 = 元素名贴图 + 层数角标，重新生成网页图集即可）；新的 `Cell` 构造器、桌面 `customTable` 里有专门画法的元素、占多格或带颜色的元素、要专门降级色的元素才要改 `cells.js`（详见 [web.md §2.3](web.md#23-js-渲染器)；e2e 的逐关降级护栏会报漏掉的）。
 6. 测试：照 `ext_caps_element_plugs_in`（`test/Spec/Caps.hs`）的写法。
 
 详见 [architecture.md § 新增一种元素的步骤](architecture.md#新增一种元素的步骤)。
 
-### 新增关卡级元素（不在格子里的机制：皮带 / 传送门 / 飞碟 / 地毯 这类）
+### 新增关卡级元素（历史；机制现为 Mechanic）
 
 写一个带状态的 `instance LevelElement`：用 `levelStart` 从关卡记录取开局状态，用 `levelReply` 回复流水线的节拍消息（`Refilled` / `EndTicked` / `Settling` / `Covering` / `GroundHit` / `AvoidCells` / `WallCells` / `Refilling`，也可以自定义消息）。然后用 `registerLevel (SomeLevelElement 原型值)` 注册（内置的加进 `builtinLevelDefs`）。状态存在 `gsLevelElems` 里，撤销、`Show`、`Eq` 自动覆盖；同一条消息有多个回复者时按顺序折叠。需要主流程发出**新节拍**时才动主流程。例子：`ec_level_element_stateful_extension`（虹吸）、`ext_refill_policy_level_element`（金币雨）。
 

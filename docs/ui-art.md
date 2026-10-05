@@ -179,15 +179,15 @@ python3 tools/gen_assets.py     # 约 40 秒；加 --preview 另存 /tmp/atlas_p
 
 上面各表里的帧数和颜色，第 10 刀起全部来自 `app/pure/UI/Presentation.hs` 的 `presentationTable`（每种效果事件一行；结构与完整的行见 [architecture.md「前端表现表」](architecture.md#前端表现表第-10-刀)）。读表的地方：
 
-| 画面 | 读表 | 原来写在 |
+| 画面 | 读表 | 现行 / 原桌面（已移除） |
 |------|------|----------|
-| 高亮 / 消失的光圈色（第 1 轮柔白，连击轮等级色） | `EvClear` 行的 `prColor`（连击轮用 `comboStyle`） | `UI.BoardArt.waveTint`、`UI.Cascade` 的字面量 |
-| 高亮帧数、得分浮字 / 连击弹字寿命 | `prFrames`（`EvClear` / `EvScore` / `EvCombo` 行） | `ComboFx` 常量 |
-| 得分浮字色 | `EvScore` 行的 `prColor`（连击轮用 `comboStyle`） | `UI.HudArt` / `UI.HudPrim` 的 `if k >= 2 …` |
-| 步末段种类与基础帧数 | `stageKindOf` / `stageFrames` | `ComboFx.endStageTable` |
-| 倒计时红光、洗牌紫光 | `stagePresentation 段` 的 `prColor` | `UI.EndStage` 的字面量 |
-| 蔓延生长曲线、前沿柔光色 | `spreadCurveFor` / `spreadGlowFor`（按元素名，缺省匀速 / 白） | `UI.EndStage.spreadProgress` |
-| 步末碎屑 | `prCrumbs`（倒计时来源格火星、蔓延按元素色） | `UI.Playback.endCrumbTable` |
+| 高亮 / 消失的光圈色（第 1 轮柔白，连击轮等级色） | `EvClear` 行的 `prColor`（连击轮用 `comboStyle`） | 网页 `render.js`；原 `UI.BoardArt.waveTint`、`UI.Cascade` 字面量（已移除） |
+| 高亮帧数、得分浮字 / 连击弹字寿命 | `prFrames`（`EvClear` / `EvScore` / `EvCombo` 行） | `ComboFx` 常量（未变） |
+| 得分浮字色 | `EvScore` 行的 `prColor`（连击轮用 `comboStyle`） | 网页 `hud.js`；原 `UI.HudArt` / `UI.HudPrim`（已移除） |
+| 步末段种类与基础帧数 | `stageKindOf` / `stageFrames` | `ComboFx.endStageTable`（并入表现表后的查询） |
+| 倒计时红光、洗牌紫光 | `stagePresentation 段` 的 `prColor` | 网页 `render.js`；原 `UI.EndStage`（已移除） |
+| 蔓延生长曲线、前沿柔光色 | `spreadCurveFor` / `spreadGlowFor`（按元素名，缺省匀速 / 白） | 经 `m3Meta`；原 `UI.EndStage.spreadProgress`（已移除） |
+| 步末碎屑 | `prCrumbs`（倒计时来源格火星、蔓延按元素色） | 经 `m3Meta`；原 `UI.Playback.endCrumbTable`（已移除） |
 
 表里的值与第 10 刀前逐一相同（测试 `presentation_*` 对照旧 case 的字面副本；22 个静态场景、6 个步末场景与连击 / 特殊块爆炸 / 组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同）。**给新元素加表现**：步末效果选一个已有事件种类即可按那一行播放；蔓延类在 `elementRGBTable` / `spreadCurves` 各加一行定颜色与生长节奏（不加就是白光、匀速、不迸碎屑）。**音效**：每行有 `prSound` 钩子（内置全部 `Nothing`，前端不引入音频依赖、不播放），（此句是第 10 刀时的状态；现在内置表有 `clear` / `special` 两个音效名，网页经 `m3Meta` 取音效名播放，原桌面钩子 `UI.Sound` 已随桌面版移除。） 原桌面版专用的贴图名列 `prSprite` 与取色函数 `clearTint` / `scorePopRGB`、贴图名 `clearSprite` / `comboPopSprite` 已于 `refactor/web-only-2` 删除。
 

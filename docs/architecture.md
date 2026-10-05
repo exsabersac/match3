@@ -340,15 +340,15 @@ data Presentation = Presentation
   }
 ```
 
-「读取方」一列是第 10 刀时的读表位置；其中 `UI.*`（`app/UI`）是原 SDL2 桌面版模块，已随桌面版移除，网页经 `m3Meta`（`UI.WebMeta`）读同一张表、在 `web/www/render.js` / `hud.js` 里画。原桌面贴图版专用的贴图名列 `prSprite`（`spark` / `snail` / `zh_combo`）与 `clearTint` / `scorePopRGB` / `clearSprite` / `comboPopSprite` 已于 `refactor/web-only-2` 删除。
+「读取方」一列：现行实现写在前面；括号内「原桌面 …」是第 10 刀时的读表位置（`app/UI` 的 `UI.*`），已随 SDL2 桌面版移除。网页经 `m3Meta`（`UI.WebMeta`）读同一张表、在 `web/www/render.js` / `hud.js` 里画。原桌面贴图版专用的贴图名列 `prSprite`（`spark` / `snail` / `zh_combo`）与 `clearTint` / `scorePopRGB` / `clearSprite` / `comboPopSprite` 已于 `refactor/web-only-2` 删除。
 
 | 事件 | 表现方式 | 帧数 | 主色 | 碎屑 | 读取方 |
 |------|----------|------|------|------|--------|
-| `EvClear` | `LookClear`（高亮 → 消失） | 12 | (255,250,220)（第 1 轮；连击轮用等级色） | — | `ComboFx.waveFlashFrames`、`UI.BoardArt.waveTint` |
+| `EvClear` | `LookClear`（高亮 → 消失） | 12 | (255,250,220)（第 1 轮；连击轮用等级色） | — | `ComboFx.waveFlashFrames`；网页 `render.js`（原桌面 `UI.BoardArt.waveTint`，已移除） |
 | `EvHit` / `EvBlast` / `EvDrain` | `LookWithClear`（随消除一起表现） | 0 | — | — | — |
-| `EvScore` | `LookScore`（得分浮字） | 48 | (255,244,200)（第 1 轮；连击轮用等级色） | — | `ComboFx.scorePopLife`、`UI.HudArt` / `UI.HudPrim` |
-| `EvCombo` | `LookCombo`（「连击 xN」弹字 + 震屏） | 54 | 等级色 | — | `ComboFx.comboPopLife`、`UI.HudArt` |
-| `EvTick` | `LookStage StTick` | 10 | (255,90,60) | 来源格 (255,110,70) | `ComboFx.endStageBase`、`UI.EndStage.drawEndTick`、`UI.Playback.endCrumbs` |
+| `EvScore` | `LookScore`（得分浮字） | 48 | (255,244,200)（第 1 轮；连击轮用等级色） | — | `ComboFx.scorePopLife`；网页 `hud.js`（原桌面 `UI.HudArt` / `UI.HudPrim`，已移除） |
+| `EvCombo` | `LookCombo`（「连击 xN」弹字 + 震屏） | 54 | 等级色 | — | `ComboFx.comboPopLife`；网页 `hud.js`（原桌面 `UI.HudArt`，已移除） |
+| `EvTick` | `LookStage StTick` | 10 | (255,90,60) | 来源格 (255,110,70) | `ComboFx.endStageBase`；网页 `render.js` `drawEndStage`（原桌面 `UI.EndStage` / `UI.Playback.endCrumbs`，已移除） |
 | `EvBelt` | `LookStage StBelt` | 14 | — | — | 同上 |
 | `EvSpread` | `LookStage StSpread` | 18 | 按元素名（`spreadGlowFor`） | 按元素名（`CrumbsByElement`） | 同上；生长曲线 `spreadCurveFor`（vine 分 4 段、choco 先快后慢、steam 匀速） |
 | `EvMove` | `LookStage StSnail` | 18 | — | — | 同上 |
@@ -421,7 +421,7 @@ data GameView = GameView
 1. 选层：本体用 `Custom "名字" (CustomState 值)`（值自定义，例如耐久；存储编码只能是一个 `Int`，在元素的 `toCell` / `fromCell` 这一处转换；元素类型就是 `newtype X = X Int` 时可以不写 `toCell`，缺省实现写成 `Custom (nameOf x) (CustomState n)`，解码用 `fromCustom "名字" X`，见 [haskell-features/02 §1.2](haskell-features/02-类型类与抽象.md#12-defaultsignatures)）；格子下面的层写 `GroundKind`（层数放进地面层状态）；需要新的内置层时才动 `Types`。
 2. 写 instance：定义一个类型（状态放在值里），写能力 instance 与 `instance Kind`（测试 / 扩展元素写在自己的模块里；新的**内置**元素放进 `src/Match3/Element/Builtin/` 下功能最接近的分组文件——宝石 `Gem`、冰 / 叠层 `Layer`、打破型障碍 `Obstacle`、收集计数 `Collectible`、会动 / 会生成的 `Actor`、地面层 `Ground`、关卡级 `Level`——跨分组共用的辅助放 `Common`）。`Cellular` 必写（`nameOf`，非 `Int` 表示时还有 `toCell`）；其余能力类只覆盖与普通宝石不同的方法，障碍类用 `deriving (Matchable, Movable) via (Obstacle 类型)`（不下落用 `Fixed`），没有要覆盖的写空 instance（`instance Renders X`）。`Kind` 写 `kindName`（与 `nameOf` 相同，测试钉住）/ `fromCell` / `place`（`Custom` 用 `customPlace "名字"`），做成目标时 `label` / `loseHint`。邻格规则：能写成「邻格真消除时这一格怎么变」的用方法 `neighbourPrio`（选一个不和现有次序冲突的数，见上文「邻格规则顺序」）/ `reach` / `onNeighbourClear`；其余规则（步末、成对交换、开启、读整盘的邻格规则）挂在 `boardPasses`。步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层写 `instance Layer`；不在格子里的机制写 `instance Mechanic`，实现需要的节拍方法。
    - 只经元素世界即可接入的类别：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留，也可以是按颜色匹配的有色棋子：覆盖 `color`，见 `ec_custom_matchable_gem`）、叠层与冰的命中规则、地面层、任意方向的边缘收集物（`drains`）、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素、成对交换规则（`SwapPass`）、开启类元素（`OpenPass`）、可被改色 / 推动（`recolorable` / `pushable`）、不进普通匹配提示（`hintable`）、在已有节拍上反应的关卡级机制（`Mechanic`，见 `ec_mechanics_by_beat`）；第 8 刀起还有特殊块形状规则（`setShapeRules`，见 `ext_shape_rule_lt_bomb`）、特殊块组合规则（`setComboRules`，见 `ext_combo_rule_line_gem`）、补子策略（`setRefillPolicy` 或机制的 `refillPolicy` 节拍，见 `ext_refill_policy_level_colors` / `ext_refill_policy_level_element`）。
-   - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：`GroundKind`，`groundHit` 去层、`groundCounter = CountNamed "jelly"`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` 障碍，命中即碎、邻消 170、`counter = CountNamed "bubble"`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。新玩法 2 的魔法石（`MagicStone`，`Fixed` 原型包，命中反应随状态变：平时 `Immune`、发射中 `Absorb` 归零；邻格充能 180、步末 `tickRule 20`）、新玩法 3 的毛球（`Fuzzball`，`Obstacle` 原型包，`boardPasses = [AdjacentPass 190 …, EndPass (moveRule 20 …)]`）同样只加 instance 与类型列表一项；前端在 `UI.CellTable.customTable` 加一行。
+   - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：`GroundKind`，`groundHit` 去层、`groundCounter = CountNamed "jelly"`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` 障碍，命中即碎、邻消 170、`counter = CountNamed "bubble"`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。新玩法 2 的魔法石（`MagicStone`，`Fixed` 原型包，命中反应随状态变：平时 `Immune`、发射中 `Absorb` 归零；邻格充能 180、步末 `tickRule 20`）、新玩法 3 的毛球（`Fuzzball`，`Obstacle` 原型包，`boardPasses = [AdjacentPass 190 …, EndPass (moveRule 20 …)]`）同样只加 instance 与类型列表一项；要专门画法时在网页 `web/www/cells.js` 的 `CUSTOM_ART` 加一项（见下文步骤 5 与 [web.md §2.3](web.md#23-js-渲染器)）。
    - 新玩法 5 的雪怪 Boss（`SnowBoss`，在 `Element.Builtin.Obstacle`）：多格元素用四个固定格表达，元素类重构第 3 刀起写成 `Entity`（`footprint` / `partNo` / `hitPoints` / `withHp`），扣血由通用驱动 `entityDamage` 算；主流程唯一的改动是通用的差计权重（`Countable.diffWeight`，`Game.Tally.diffCountsWith` 求加权和；缺省 1 时与原来的个数差相同）
    - 新玩法 6 的饼干掉落口（`CookieDrop`，在 `Element.Builtin.Level`）：机制实现补子策略节拍 `refillPolicy`（第 8 刀），把策略包一层「掉落口格补收集物」（`dropRefill`，随机数照常消耗）；配置在关卡记录的新字段 `lvlDrops`（缺省 `[]`）。主流程只多一个条件：有掉落口的关卡开局跳过目标补齐（`Game.Level.newGameAtLevelWith`）
    - 新玩法 7 的变色龙（`Chameleon`，在 `Element.Builtin.Collectible`）：`Custom` 本体，覆盖 `color` / `keepOnShuffle` / `recolorable` / `counter`，`boardPasses = [SwapPass (SwapRule 15 …), EndPass (moveRule 40 …)]`，主流程不改；第 47 关用新玩法 6 的掉落口在补子时补进变色龙

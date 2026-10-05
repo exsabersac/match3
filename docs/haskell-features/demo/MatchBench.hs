@@ -61,7 +61,7 @@ timeIt name reps f bs = do
 -- 匹配码 thaw 进一张 STUArray，每个候选「就地换过去、查交换触及的行 / 列、再换回来」；
 -- 未触及的行 / 列仍用原盘的结论（与现行纯函数写法相同）。
 hintST :: World -> Board -> Maybe (Pos, Pos)
-hintST reg b = runST $ do
+hintST world b = runST $ do
   m <- thaw codes
   let tryPair :: forall s. STUArray s Pos Int -> (Pos, Pos) -> ST s Bool
       tryPair arr (p1@(r1, c1), p2@(r2, c2)) = do
@@ -85,13 +85,13 @@ hintST reg b = runST $ do
   where
     rows = boardRowIndices b
     cols = boardColIndices b
-    codes = matchCodesWith reg b
-    hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
+    codes = matchCodesWith world b
+    hintable cell = isJust (colorOfWith world cell) && not (blocksSwapWith world cell)
     candidates =
       [ (p1, p2)
       | r <- rows, c <- cols, let p1 = (r, c), hintable (getCell b p1)
       , p2 <- [(r, c + 1), (r + 1, c)], inBounds b p2, hintable (getCell b p2)
-      , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2) ]
+      , hintableWith world (getCell b p1) && hintableWith world (getCell b p2) ]
     rowHas = A.listArray (0, boardNRows b - 1) [codesHaveRun [codes U.! (r, c) | c <- cols] | r <- rows] :: A.Array Int Bool
     colHas = A.listArray (0, boardNCols b - 1) [codesHaveRun [codes U.! (r, c) | r <- rows] | c <- cols] :: A.Array Int Bool
     orM [] = pure False
@@ -110,25 +110,25 @@ codesHaveRun = go (-1) (0 :: Int)
 main :: IO ()
 main = do
   let bs = boards
-      reg = defaultWorld
+      world = defaultWorld
       holed b = toM b A.// [((r, c), Nothing) | (r, c) <- boardPositions b, (r * 7 + c * 3) `mod` 5 == 0]
       mbs = map holed (take 3000 bs)
   printf "盘面数 %d\n" (length bs)
-  _ <- timeIt "runs-old" 5 (length . Old.oldFindMatchRunsWith reg) bs
-  _ <- timeIt "runs-new" 5 (length . findMatchRunsWith reg) bs
-  _ <- timeIt "any-old" 5 (fromEnum . Old.oldHasAnyMatchWith reg) bs
-  _ <- timeIt "any-new" 5 (fromEnum . hasAnyMatchWith reg) bs
-  _ <- timeIt "hint-old" 3 (maybe 0 (fst . fst) . Old.oldFindHintWith reg) bs
-  _ <- timeIt "hint-new" 3 (maybe 0 (fst . fst) . findHintWith reg) bs
-  _ <- timeIt "hint-st（未采用）" 3 (maybe 0 (fst . fst) . hintST reg) bs
+  _ <- timeIt "runs-old" 5 (length . Old.oldFindMatchRunsWith world) bs
+  _ <- timeIt "runs-new" 5 (length . findMatchRunsWith world) bs
+  _ <- timeIt "any-old" 5 (fromEnum . Old.oldHasAnyMatchWith world) bs
+  _ <- timeIt "any-new" 5 (fromEnum . hasAnyMatchWith world) bs
+  _ <- timeIt "hint-old" 3 (maybe 0 (fst . fst) . Old.oldFindHintWith world) bs
+  _ <- timeIt "hint-new" 3 (maybe 0 (fst . fst) . findHintWith world) bs
+  _ <- timeIt "hint-st（未采用）" 3 (maybe 0 (fst . fst) . hintST world) bs
   -- 正确性顺带核对
   printf "hint-st 与现行一致（普通匹配提示能找到时）：%s\n"
-    (show (and [hintST reg b == findHintWith reg b | b <- bs, isJust (hintST reg b)]))
-  printf "gravity-st 与 gravity-list 一致：%s\n" (show (and [applyGravityWith reg mb == Old.oldApplyGravityWith reg mb | mb <- mbs]))
+    (show (and [hintST world b == findHintWith world b | b <- bs, isJust (hintST world b)]))
+  printf "gravity-st 与 gravity-list 一致：%s\n" (show (and [applyGravityWith world mb == Old.oldApplyGravityWith world mb | mb <- mbs]))
   t0 <- getCPUTime
-  let !g1 = length (filter isJust (concatMap A.elems [Old.oldApplyGravityWith reg mb | _ <- [1 .. 5 :: Int], mb <- mbs]))
+  let !g1 = length (filter isJust (concatMap A.elems [Old.oldApplyGravityWith world mb | _ <- [1 .. 5 :: Int], mb <- mbs]))
   t1 <- getCPUTime
-  let !g2 = length (filter isJust (concatMap A.elems [applyGravityWith reg mb | _ <- [1 .. 5 :: Int], mb <- mbs]))
+  let !g2 = length (filter isJust (concatMap A.elems [applyGravityWith world mb | _ <- [1 .. 5 :: Int], mb <- mbs]))
   t2 <- getCPUTime
   printf "%-22s %8.2f µs / 盘\n" "gravity-list" (fromIntegral (t1 - t0) / 1e6 / fromIntegral (5 * length mbs) :: Double)
   printf "%-22s %8.2f µs / 盘\n" "gravity-st" (fromIntegral (t2 - t1) / 1e6 / fromIntegral (5 * length mbs) :: Double)

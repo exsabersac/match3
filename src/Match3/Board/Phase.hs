@@ -122,8 +122,8 @@ digHoles holes (AtFull b) = AtCleared (setManyM (toM b) [(p, Nothing) | p <- hol
 -- | 下落：有空洞 → 空洞在上方。即 'settleDrainWith'（重力 → 边缘收集 → 传送门 → 再重力 / 收集），
 -- 另返回被边缘收走的 (位置, 原格)。
 fallStage :: World -> LevelHooks -> Stage 'Cleared -> (Stage 'Fallen, [(Pos, Cell)])
-fallStage reg hooks (AtCleared mb) =
-  let (settled, drained) = settleDrainWith reg hooks mb
+fallStage world hooks (AtCleared mb) =
+  let (settled, drained) = settleDrainWith world hooks mb
   in (AtFallen settled, drained)
 
 -- | 补子：空洞在上方 → 满盘（下一轮又从 @'Full@ 开始）。即 'refillWith'，随机数消耗不变。
@@ -135,7 +135,7 @@ refillStage pol g (AtFallen mb) =
 -- 编译器能挡住的写法（这些都编译不过；test/Spec/Phase.hs 用延迟类型错误把它们变成了测试，报错摘自 GHC 9.14）：
 --
 -- > refillStage pol g cleared   -- 没下落就补子：      Couldn't match type ‘Cleared’ with ‘Fallen’
--- > fallStage reg hooks fallen  -- 下落两次：          Couldn't match type ‘Fallen’ with ‘Cleared’
+-- > fallStage world hooks fallen  -- 下落两次：          Couldn't match type ‘Fallen’ with ‘Cleared’
 -- > clearStage f cleared        -- 有空洞还要消：      Couldn't match type ‘Cleared’ with ‘Full’
 -- > swapStage p1 p2 swapped     -- 交换两次：          Couldn't match type ‘Swapped’ with ‘Full’
 -- > stageBoard cleared          -- 把有空洞的盘当满盘：Couldn't match type ‘Array Pos (Maybe Cell)’ with ‘Board’

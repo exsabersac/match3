@@ -83,8 +83,8 @@ boosterEndTable = [vacateStage, spreadStage, settleStage]
 
 -- | 按表执行：返回 (各段连锁（主连锁在前）, 步末记录, 终盘, 地毯腾空比较用的盘面（表里没有 vacate 时 = 终盘）)。
 runEndTable :: World -> [EndStage] -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-runEndTable reg table seg0 =
-  let acc = foldl (\a st -> stageRun st reg a) (EndAcc (seg0 :| []) [] (crBoard seg0) Nothing) table
+runEndTable world table seg0 =
+  let acc = foldl (\a st -> stageRun st world a) (EndAcc (seg0 :| []) [] (crBoard seg0) Nothing) table
   in (NE.reverse (eaSegsRev acc), eaEnds acc, eaBoard acc, maybe (eaBoard acc) id (eaVacate acc))
 
 -- 累积器的小工具 ---------------------------------------------------------------
@@ -104,46 +104,46 @@ pushSeg steps seg a = a {eaSegsRev = NE.cons seg (eaSegsRev a), eaEnds = eaEnds 
 
 -- | 倒计时（PhaseTick 规则只跑一遍：同时得到连锁与步末记录）。
 tickStage :: EndStage
-tickStage = EndStage "tick" (Just PhaseTick) $ \reg a ->
+tickStage = EndStage "tick" (Just PhaseTick) $ \world a ->
   let seg = lastSeg a
-      (tickSteps, seg1) = cascadeCountdownsTracedWith reg (crHooks seg) (crGen seg) (eaBoard a)
+      (tickSteps, seg1) = cascadeCountdownsTracedWith world (crHooks seg) (crGen seg) (eaBoard a)
       k = wavesSoFar a
   in pushSeg [EndStep k before after e | (before, after, e) <- tickSteps] seg1 a
 
 -- | 皮带节拍：关卡级机制（onEndTick）给出移位；没人回复时当作没有皮带（空连锁、不记录）。
 beltStage :: EndStage
-beltStage = EndStage "belt" Nothing $ \reg a ->
+beltStage = EndStage "belt" Nothing $ \world a ->
   let seg = lastSeg a
       board = eaBoard a
       k = wavesSoFar a
-  in case beltShiftIn reg (hookLevel (crHooks seg)) of
+  in case beltShiftIn world (hookLevel (crHooks seg)) of
        Nothing -> pushSeg [] (stillRun board (crHooks seg) (crGen seg)) a
        Just (mv, es) ->
          let board' = applyBeltMoves board mv
              eff = EndEffect EvBelt "belt" [EndItem o d (getCell board o) Nothing | (o, d) <- mv]
              steps = [EndStep k board board' eff | not (null mv)]
-         in pushSeg steps (cascadeAfterWith reg AfterBelt (levelHooksWith reg es) (crGen seg) board') a
+         in pushSeg steps (cascadeAfterWith world AfterBelt (levelHooksWith world es) (crGen seg) board') a
 
 -- | 蔓延（PhaseSpread 规则按 erOrder）。
 spreadStage :: EndStage
-spreadStage = EndStage "spread" (Just PhaseSpread) $ \reg a ->
-  let (steps, b') = traceSpreadsWith reg (wavesSoFar a) (eaBoard a)
+spreadStage = EndStage "spread" (Just PhaseSpread) $ \world a ->
+  let (steps, b') = traceSpreadsWith world (wavesSoFar a) (eaBoard a)
   in a {eaEnds = eaEnds a ++ steps, eaBoard = b'}
 
 -- | 会走的元素（PhaseMove）：跳过关卡级元素给的避让格（皮带格），把墙格（传送门端点）当墙。
 moveStage :: EndStage
-moveStage = EndStage "move" (Just PhaseMove) $ \reg a ->
+moveStage = EndStage "move" (Just PhaseMove) $ \world a ->
   let elems = hookLevel (crHooks (lastSeg a))
-      ctx = EndCtx (nub (avoidCellsIn reg elems)) (nub (wallCellsIn reg elems)) (pushableWith reg)
-      (steps, b') = runPhase reg PhaseMove ctx (wavesSoFar a) (eaBoard a)
+      ctx = EndCtx (nub (avoidCellsIn world elems)) (nub (wallCellsIn world elems)) (pushableWith world)
+      (steps, b') = runPhase world PhaseMove ctx (wavesSoFar a) (eaBoard a)
   in a {eaEnds = eaEnds a ++ steps, eaBoard = b'}
 
 -- | 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁。
 settleStage :: EndStage
-settleStage = EndStage "settle" Nothing $ \reg a ->
+settleStage = EndStage "settle" Nothing $ \world a ->
   let seg = lastSeg a
       board = eaBoard a
-  in pushSeg [] (cascadeAfterWith reg (AfterEnd (endHolesWith reg board)) (crHooks seg) (crGen seg) board) a
+  in pushSeg [] (cascadeAfterWith world (AfterEnd (endHolesWith world board)) (crHooks seg) (crGen seg) board) a
 
 -- | 记下地毯腾空比较用的盘面。
 vacateStage :: EndStage

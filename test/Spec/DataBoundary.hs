@@ -345,11 +345,11 @@ generic_generators_cover_constructors = do
 generic_every_constructor_has_registry_face_and_ui :: Assertion
 generic_every_constructor_has_registry_face_and_ui = do
   cells <- cellSamples
-  let reg = defaultWorld
-      entries = worldDefs reg
+  let world = defaultWorld
+      entries = worldDefs world
       kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- entries, kindName p == n]
       layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- entries, layerName p == n]
-      inner = snd . decodeLayers reg
+      inner = snd . decodeLayers world
       customNames = [kindName p | KindDef (SomeKind p) <- entries, any (\k -> isJust (fromCellAs p (Custom (kindName p) (CustomState k)))) [0 .. 20]]
       reps = representatives ([c | c <- cells, notUnregistered c] ++ [Custom n (CustomState 0) | n <- customNames])
       notUnregistered c = case c of
@@ -363,16 +363,16 @@ generic_every_constructor_has_registry_face_and_ui = do
   assertEqual "每个本体构造器都有代表" (length (conNamesOf (Proxy :: Proxy CellContents))) (length (nub (map fst reps)))
   -- 注册表
   sequence_
-    [ assertBool ("registry claims " ++ k) (kindAccepts (elementName reg c) (inner c)) | (k, c) <- builtinReps ++ map ((,) "Gem") kinds ]
-  sequence_ [assertEqual ("custom name " ++ show n) n (elementName reg (Custom n (CustomState 0))) | n <- customNames]
+    [ assertBool ("world claims " ++ k) (kindAccepts (elementName world c) (inner c)) | (k, c) <- builtinReps ++ map ((,) "Gem") kinds ]
+  sequence_ [assertEqual ("custom name " ++ show n) n (elementName world (Custom n (CustomState 0))) | n <- customNames]
   assertEqual "custom kinds" ["bubble", "magic_stone", "fuzzball", "snow_boss", "chameleon"] customNames
-  assertBool "gem kind names distinct" (distinct (map (elementName reg) kinds))
+  assertBool "gem kind names distinct" (distinct (map (elementName world) kinds))
   sequence_
-    [ assertBool ("overlay claimed " ++ show c) (layerAccepts (topLayerName reg c) c)
+    [ assertBool ("overlay claimed " ++ show c) (layerAccepts (topLayerName world c) c)
     | c <- overlays
     ]
-  assertBool "overlay names distinct" (distinct (map (topLayerName reg) overlays))
-  sequence_ [assertEqual ("roundtrip " ++ show c) c (toCell (elementOf reg c)) | c <- map snd reps ++ kinds ++ overlays]
+  assertBool "overlay names distinct" (distinct (map (topLayerName world) overlays))
+  sequence_ [assertEqual ("roundtrip " ++ show c) c (toCell (elementOf world c)) | c <- map snd reps ++ kinds ++ overlays]
   -- cellFace
   assertBool "cellFace 标签互不相同" (distinct [fst (cellFace c) | (_, c) <- reps])
   assertBool "cellFace k 互不相同" (distinct (map (faceField "k") kinds))
@@ -381,7 +381,7 @@ generic_every_constructor_has_registry_face_and_ui = do
   table <- readFile "app/UI/CellTable.hs"
   let keys = tableKeys table
   sequence_
-    [ assertBool ("UI.CellTable 缺 " ++ show (elementName reg c)) (unElementName (elementName reg c) `elem` keys)
+    [ assertBool ("UI.CellTable 缺 " ++ show (elementName world c)) (unElementName (elementName world c) `elem` keys)
     | c <- map snd builtinReps ++ kinds ++ [Custom n (CustomState 0) | n <- customNames]
     ]
   -- 网页 encodeOutcome

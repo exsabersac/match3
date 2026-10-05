@@ -56,12 +56,12 @@ fuzzAt = customsOn "fuzzball"
 -- | 能力：挡交换、随重力下落、无色、洗牌保留；命中即消灭。
 fz_caps_blocker_falls_breaks :: Assertion
 fz_caps_blocker_falls_breaks = do
-  let reg = defaultWorld
-  assertBool "blocks swap" (blocksSwapWith reg fuzz)
-  assertBool "falls" (fallsWith reg fuzz)
-  assertEqual "colorless" Nothing (colorOfWith reg fuzz)
-  assertBool "kept on shuffle" (keepOnShuffleWith reg fuzz)
-  assertEqual "hit destroys" Destroy (directHitWith reg fuzz)
+  let world = defaultWorld
+  assertBool "blocks swap" (blocksSwapWith world fuzz)
+  assertBool "falls" (fallsWith world fuzz)
+  assertEqual "colorless" Nothing (colorOfWith world fuzz)
+  assertBool "kept on shuffle" (keepOnShuffleWith world fuzz)
+  assertEqual "hit destroys" Destroy (directHitWith world fuzz)
 
 -- | 邻格规则：与真消除格正交相邻的毛球进入死亡格；斜角不算；本轮已被直接命中的不重复算。
 fz_adjacent_clear_kills :: Assertion
@@ -130,11 +130,11 @@ fz_other_levels_unchanged = do
   let noFz :: World
       noFz = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
         foldl (flip registerMechanic) (mkWorld (filter ((/= "fuzzball") . defName) builtinDefs)) builtinMechanics
-      play reg gs n
+      play world gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
-        | otherwise = case findHintWith reg (gsBoard gs) of
+        | otherwise = case findHintWith world (gsBoard gs) of
             Nothing -> gs
-            Just (p, q) -> let (gs', _, _) = resolveSwapWith reg p q gs in play reg gs' (n - 1)
+            Just (p, q) -> let (gs', _, _) = resolveSwapWith world p q gs in play world gs' (n - 1)
       key gs = (gsBoard gs, gsScore gs, show (gsGen gs))
   assertEqual "older levels have none" [] [li | li <- [0 .. fuzzLevel - 1], not (null (fuzzAt (gsBoard (levelGame li 1))))]
   mapM_

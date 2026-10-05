@@ -50,16 +50,16 @@ phase_round_same_as_untyped :: Assertion
 phase_round_same_as_untyped =
   mapM_ one [1 .. 40]
   where
-    reg = defaultWorld
+    world = defaultWorld
     one seed = do
       let (b, g) = randomBoard (mkStdGen seed)
           -- 带阶段标签
-          (cleared, n, pos) = clearStage (clearMatchesDetailedWith reg Nothing) (fullStage b)
-          (fallen, drained) = fallStage reg noHooks cleared
+          (cleared, n, pos) = clearStage (clearMatchesDetailedWith world Nothing) (fullStage b)
+          (fallen, drained) = fallStage world noHooks cleared
           (filled, g1) = refillStage defaultRefill g fallen
           -- 改动前的写法（三个 MBoard / Board 之间没有阶段区分）
-          (mb, n', pos') = clearMatchesDetailedWith reg Nothing b
-          (mb2, drained') = settleDrainWith reg noHooks mb
+          (mb, n', pos') = clearMatchesDetailedWith world Nothing b
+          (mb2, drained') = settleDrainWith world noHooks mb
           (b', g1') = refillWith defaultRefill g mb2
           tag = "seed " ++ show seed
       assertEqual (tag ++ ": cleared") (rows mb) (rows (stageGrid cleared))

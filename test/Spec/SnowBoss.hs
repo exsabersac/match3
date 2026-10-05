@@ -86,15 +86,15 @@ hpOf b = [sbHp s | (_, s) <- snowBosses b]
 -- | 能力：固定（挡交换、不下落）、无色、洗牌保留；直接命中原样吃掉（不免疫，锤子可打）；左上格按血量加权计差。
 sb_caps_fixed_blocker :: Assertion
 sb_caps_fixed_blocker = do
-  let reg = defaultWorld
+  let world = defaultWorld
   mapM_
     ( \q -> do
         let c = boss 12 1 q
-        assertBool "blocks swap" (blocksSwapWith reg c)
-        assertBool "does not fall" (not (fallsWith reg c))
-        assertEqual "colorless" Nothing (colorOfWith reg c)
-        assertBool "kept on shuffle" (keepOnShuffleWith reg c)
-        assertEqual "hit absorbed as itself" (Absorb c) (directHitWith reg c)
+        assertBool "blocks swap" (blocksSwapWith world c)
+        assertBool "does not fall" (not (fallsWith world c))
+        assertEqual "colorless" Nothing (colorOfWith world c)
+        assertBool "kept on shuffle" (keepOnShuffleWith world c)
+        assertEqual "hit absorbed as itself" (Absorb c) (directHitWith world c)
     )
     [0 .. 3]
   assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [diffWeight (SnowBoss 12 40 1 q) | q <- [0 .. 3]]
@@ -105,8 +105,8 @@ sb_caps_fixed_blocker = do
 -- | 放置参数 [血量, 象限]；第 45 关开局四格在 (2,3)–(3,4)、满血 = 目标值；其余内置元素的差计权重都是 1。
 sb_placement_and_weight :: Assertion
 sb_placement_and_weight = do
-  let reg = defaultWorld
-      placed args = fmap (\b -> getCell b (4, 4)) (placeWith reg "snow_boss" args stableBoard [(4, 4)])
+  let world = defaultWorld
+      placed args = fmap (\b -> getCell b (4, 4)) (placeWith world "snow_boss" args stableBoard [(4, 4)])
   assertEqual "place [40, 2]" (Just (boss 40 0 2)) (either (const Nothing) Just (placed [AInt 40, AInt 2]))
   assertEqual "bad args: cell unchanged" [] [a | a <- [[], [AInt 40], [AInt 0, AInt 0], [AInt 5, AInt 4]], placed a /= Right (getCell stableBoard (4, 4))]
   mapM_
@@ -117,7 +117,7 @@ sb_placement_and_weight = do
         assertEqual ("seed " ++ show s ++ " quadrants") [boss 40 0 q | q <- [0 .. 3]] (map (getCell b) body)
         assertEqual "one boss at (2,3)" [anchor] (map fst (snowBosses b))
         assertEqual "hp = goal target" (goalTarget (gsGoal gs)) (snowBossHp b)
-        assertEqual "weighted count = hp" 40 (weighElementWith reg "snow_boss" b)
+        assertEqual "weighted count = hp" 40 (weighElementWith world "snow_boss" b)
     )
     [1 .. 3]
   assertEqual "goal = defeat boss" (goalCount (CountNamed "snow_boss") 40) (gsGoal (levelGame bossLevel 1))
@@ -130,7 +130,7 @@ sb_placement_and_weight = do
   assertEqual "gem is not a boss part" Nothing (bossPart (mkGem C1))
   -- 权重缺省 1：没有 Boss 的盘面上，加权个数 = 格数（保险箱 / 时间精灵的差计不变）
   let b = setCells stableBoard [((0, 0), Safe 2), ((0, 1), Safe 1), ((5, 5), TimeSpirit)]
-  mapM_ (\n -> assertEqual (show n) (countElementWith reg n b) (weighElementWith reg n b)) ["safe", "time_spirit", "stone", "gem"]
+  mapM_ (\n -> assertEqual (show n) (countElementWith world n b) (weighElementWith world n b)) ["safe", "time_spirit", "stone", "gem"]
 
 -- | 邻格规则：身外一圈的真消除每格扣 1（斜角 / 远处不算），直接命中的 Boss 格每格扣 1；四格同血；归零四格并入清除格。
 sb_adjacent_and_direct_damage :: Assertion
@@ -211,11 +211,11 @@ sb_other_levels_unchanged = do
   let noBoss :: World
       noBoss = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
         foldl (flip registerMechanic) (mkWorld (filter ((/= "snow_boss") . defName) builtinDefs)) builtinMechanics
-      play reg gs n
+      play world gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
-        | otherwise = case findHintWith reg (gsBoard gs) of
+        | otherwise = case findHintWith world (gsBoard gs) of
             Nothing -> gs
-            Just (p, q) -> let (gs', _, _) = resolveSwapWith reg p q gs in play reg gs' (n - 1)
+            Just (p, q) -> let (gs', _, _) = resolveSwapWith world p q gs in play world gs' (n - 1)
       key gs = (gsBoard gs, gsScore gs, gsCounts gs, gsMoves gs, show (gsGen gs))
   assertEqual "older levels have none" [] [li | li <- [0 .. bossLevel - 1], not (null (customsOn "snow_boss" (gsBoard (levelGame li 1))))]
   mapM_

@@ -141,7 +141,7 @@ rc_old_levels_unchanged :: Assertion
 rc_old_levels_unchanged = do
   let off = removeMechanic "rainbow_combos" defaultWorld
       (a, b) = comboMove
-      key reg li k = let (gs, o, mt) = resolveSwapWith reg a b ((levelGame li 3) {gsBoard = comboBoard k}) in (gsBoard gs, gsScore gs, show (gsGen gs), show o, length (mtEnd mt), map cwCleared (mtWaves mt))
+      key world li k = let (gs, o, mt) = resolveSwapWith world a b ((levelGame li 3) {gsBoard = comboBoard k}) in (gsBoard gs, gsScore gs, show (gsGen gs), show o, length (mtEnd mt), map cwCleared (mtWaves mt))
   mapM_
     (\(li, k) -> assertEqual ("level " ++ show (li + 1) ++ " " ++ show k) (key off li k) (key defaultWorld li k))
     [(li, k) | li <- [0 .. rcLevel - 1], k <- [LineH, Bomb]]

@@ -83,13 +83,13 @@ data EndStep = EndStep
 -- | 蔓延（内置：藤 → 巧 → 蒸汽）的逐步快照：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
 -- 每条规则产出的非空效果记成一个 EndStep（esAfterWaves = k）。trySwap 与道具用的是同一组调用。
 traceSpreadsWith :: World -> Int -> Board -> ([EndStep], Board)
-traceSpreadsWith reg = runPhaseSteps reg PhaseSpread (EndCtx [] [] (pushableWith reg))
+traceSpreadsWith world = runPhaseSteps world PhaseSpread (EndCtx [] [] (pushableWith world))
 
 -- | 依次跑某阶段的步末规则（'runEndRules'），每条非空效果记成插入点 k 的一个 EndStep：返回 (步末记录, 终盘)。
 -- 蔓延（这里）与会走的元素（Match3.Game.EndPhase.runPhase）共用。
 runPhaseSteps :: World -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
-runPhaseSteps reg ph ctx k b0 =
-  let (recs, b1) = runEndRules ctx (endRules reg ph) b0
+runPhaseSteps world ph ctx k b0 =
+  let (recs, b1) = runEndRules ctx (endRules world ph) b0
   in ([EndStep k before after e | (before, after, e) <- recs], b1)
 
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。
@@ -109,7 +109,7 @@ traceEvents = traceEventsWith defaultWorld
 -- 波及（按最上层元素名分组）→
 -- 底收 → 得分 → 连击（本步第 2 次起有消除的轮）。
 traceEventsWith :: World -> MoveTrace -> [Event]
-traceEventsWith reg t =
+traceEventsWith world t =
   concat [endsAt k ++ waveEvents k w | (k, w) <- zip [0 ..] waves]
     ++ endsAt (length waves)
     ++ [Event EvShuffle (length waves) "shuffle" [] 0 | Just _ <- [mtShuffle t]]
@@ -136,11 +136,11 @@ traceEventsWith reg t =
             ]
           touched = cleared ++ hit
           blasts =
-            [ Event EvBlast k (elementName reg cell) [(p, q) | q <- fp] (length fp)
+            [ Event EvBlast k (elementName world cell) [(p, q) | q <- fp] (length fp)
             | p <- cleared
             , let cell = getCell before p
-            , activatesWith reg cell
-            , let fp = [q | q <- blastWith reg before cell p, q `elem` touched]
+            , activatesWith world cell
+            , let fp = [q | q <- blastWith world before cell p, q `elem` touched]
             , not (null fp)
             ]
           grouped kind nameOf ps =
@@ -155,8 +155,8 @@ traceEventsWith reg t =
             ]
           rank = comboRank k
       in blasts
-           ++ runs EvClear (elementName reg . getCell before) cleared
-           ++ grouped EvHit (topLayerName reg . getCell before) hit
+           ++ runs EvClear (elementName world . getCell before) cleared
+           ++ grouped EvHit (topLayerName world . getCell before) hit
            ++ [Event EvDrain k "cookie" [(p, p) | p <- cwDrained w] (length (cwDrained w)) | not (null (cwDrained w))]
            ++ [Event EvScore k "" [] (cwScore w) | cwScore w > 0]
            ++ [Event EvCombo k "" [] rank | not (null cleared), rank >= 2]

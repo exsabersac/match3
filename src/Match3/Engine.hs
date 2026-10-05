@@ -92,24 +92,24 @@ play = playWith defaultWorld
 
 -- | 用指定元素世界执行一个动作。
 playWith :: World -> Action -> GameState -> Played
-playWith reg act gs = case act of
-  Swap p q -> move (resolveSwapWith reg p q gs)
-  Hammer p -> move (resolveHammerWith reg p gs)
-  FreeSwap p q -> move (resolveFreeSwapWith reg p q gs)
-  CrossClear p -> move (resolveCrossClearWith reg p gs)
+playWith world act gs = case act of
+  Swap p q -> move (resolveSwapWith world p q gs)
+  Hammer p -> move (resolveHammerWith world p gs)
+  FreeSwap p q -> move (resolveFreeSwapWith world p q gs)
+  CrossClear p -> move (resolveCrossClearWith world p gs)
   Hint ->
-    let (gs', h) = applyHintWith reg gs
+    let (gs', h) = applyHintWith world gs
     in (other gs' [] True) {pdHint = h}
   Shuffle
     | isJust (gsOver gs) -> other gs [] False
-    | otherwise -> other (shuffleGameWith reg gs) [Event EvShuffle 0 (ElementName "shuffle") [] 0] True
+    | otherwise -> other (shuffleGameWith world gs) [Event EvShuffle 0 (ElementName "shuffle") [] 0] True
   where
     move (gs', out, mt) =
       let fx = moveFx gs gs' out
           ok = out /= NoMatch && out /= InvalidSwap
       -- 事件按本步结算用的元素世界展开（levelWorldIn：新玩法 8 魔法地格的扩爆格要算进 EvBlast 的范围；
-      -- 其余关卡它只可能换形状表，而事件展开不读形状表，与用 reg 逐项相同）
-      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelWorldIn reg (gsLevelElems gs)) mt else []) Nothing ok
+      -- 其余关卡它只可能换形状表，而事件展开不读形状表，与用 world 逐项相同）
+      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelWorldIn world (gsLevelElems gs)) mt else []) Nothing ok
     other gs' evs ok = Played gs' Nothing (emptyTrace gs') (MoveFx 0 []) evs Nothing ok
 
 -- | 通用接口实例（内置元素世界）。
@@ -119,7 +119,7 @@ match3Game = match3GameWith defaultWorld
 -- | 通用接口实例（指定元素世界）。
 -- 终局后拒绝一切走步 / 洗牌；提示除外（只写 gsHint、不推进对局，与原前端「终局后按 H 仍给提示」一致）。
 match3GameWith :: World -> Game Setup GameState Action Event Terminal Played
-match3GameWith reg =
+match3GameWith world =
   Game
     { gameName = "match3"
     , gameNew = newFrom
@@ -127,7 +127,7 @@ match3GameWith reg =
         if isJust (gsOver s) && a /= Hint
           then Step s [] (gsOver s) False (Just (rejectedPlayed s))
           else
-            let p = playWith reg a s
+            let p = playWith world a s
             in Step (pdState p) (pdEvents p) (gsOver (pdState p)) (pdAccepted p) (Just p)
     , gameOutcome = gsOver
     , gameActions = \s ->
@@ -136,7 +136,7 @@ match3GameWith reg =
         , let b = gsBoard s
         , p <- boardPositions b
         , q <- neighborsInBounds rightAndDown b p
-        , pdAccepted (playWith reg (Swap p q) s)
+        , pdAccepted (playWith world (Swap p q) s)
         ]
     , gameStatus = match3Status
     , gameEffect = toEffect
@@ -147,7 +147,7 @@ match3GameWith reg =
       Campaign li -> fromMaybe (newGameAtLevel li defaultConfig seed) (campaignGame li seed)
       CustomLevel cfg -> newGame cfg seed
       Daily y m d -> newDailyGame (dailyConfig y m d) (dailySeed y m d)
-      LevelSetup l -> newGameForLevelWith reg l seed
+      LevelSetup l -> newGameForLevelWith world l seed
 
 -- | 三消的撤销规则：交换与三种道具被接受时记快照（最多 20 份，与原 gsHistory 相同）；
 -- 快照去掉提示与洗牌标记，撤销回去时再清掉本步特效字段与终局标记（原 snapshot / undoMove 的逐字搬迁）。
@@ -174,7 +174,7 @@ match3Shell = match3ShellWith defaultWorld
 
 -- | 外壳用的实例（指定元素世界）。
 match3ShellWith :: World -> Game Setup (History GameState) (Undoable Action) Event Terminal Played
-match3ShellWith reg = withHistory match3History (match3GameWith reg)
+match3ShellWith world = withHistory match3History (match3GameWith world)
 
 -- | 外壳用的具名数值（标题栏 / HUD）。
 match3Status :: GameState -> [(String, Int)]

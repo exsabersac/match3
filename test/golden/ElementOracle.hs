@@ -117,50 +117,50 @@ boardText :: Board -> String
 boardText b = show (map (getCell b) allPos)
 
 valueLine :: World -> Cell -> String
-valueLine reg cell =
+valueLine world cell =
   "V " ++ show cell ++ " | "
     ++ unwords
-      [ show (matchColorWith reg cell)
-      , show (colorOfWith reg cell)
-      , show (blocksSwapWith reg cell)
-      , show (upperBlocksSwapWith reg cell)
-      , show (activatesWith reg cell)
-      , show (fallsWith reg cell)
-      , show (portalWith reg cell)
-      , show (drainEdgesWith reg cell)
-      , "Hit" ++ show (directHitWith reg cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
-      , show (hitImmuneWith reg cell)
-      , show (counterWith reg cell)
-      , show (vacatesCarpetWith reg cell)
-      , show (keepOnShuffleWith reg cell)
-      , show (hintableWith reg cell)
-      , show (recolorableWith reg cell)
-      , show (pushableWith reg cell)
-      , show (elementName reg cell)
-      , show (topLayerName reg cell)
-      , show (faceFieldsWith reg cell)
-      , show (weighElementWith reg (elementName reg cell) (setCell base (2, 2) cell))
-      , show (countElementWith reg (elementName reg cell) (setCell base (2, 2) cell))
-      , show (blastWith reg base cell (3, 3))
-      , show (blastWith reg base cell (0, 7))
-      , show (getCell (stripOnClearWith reg (setCell base (2, 2) cell) [(2, 2)]) (2, 2))
-      , show (swapBlockedWith reg (setCell base (2, 2) cell) (2, 2) (2, 3))
+      [ show (matchColorWith world cell)
+      , show (colorOfWith world cell)
+      , show (blocksSwapWith world cell)
+      , show (upperBlocksSwapWith world cell)
+      , show (activatesWith world cell)
+      , show (fallsWith world cell)
+      , show (portalWith world cell)
+      , show (drainEdgesWith world cell)
+      , "Hit" ++ show (directHitWith world cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
+      , show (hitImmuneWith world cell)
+      , show (counterWith world cell)
+      , show (vacatesCarpetWith world cell)
+      , show (keepOnShuffleWith world cell)
+      , show (hintableWith world cell)
+      , show (recolorableWith world cell)
+      , show (pushableWith world cell)
+      , show (elementName world cell)
+      , show (topLayerName world cell)
+      , show (faceFieldsWith world cell)
+      , show (weighElementWith world (elementName world cell) (setCell base (2, 2) cell))
+      , show (countElementWith world (elementName world cell) (setCell base (2, 2) cell))
+      , show (blastWith world base cell (3, 3))
+      , show (blastWith world base cell (0, 7))
+      , show (getCell (stripOnClearWith world (setCell base (2, 2) cell) [(2, 2)]) (2, 2))
+      , show (swapBlockedWith world (setCell base (2, 2) cell) (2, 2) (2, 3))
       ]
 
 names :: World -> [ElementName]
-names reg = map defName (worldDefs reg)
+names world = map defName (worldDefs world)
 
 nameLines :: World -> [String]
-nameLines reg =
-  [ "N " ++ show n ++ " " ++ show (displayLabelWith reg n) ++ " " ++ show (fmap ($ 7) (loseHintWith reg n))
-  | n <- names reg ++ ["unregistered", "ufo"]
+nameLines world =
+  [ "N " ++ show n ++ " " ++ show (displayLabelWith world n) ++ " " ++ show (fmap ($ 7) (loseHintWith world n))
+  | n <- names world ++ ["unregistered", "ufo"]
   ]
-    ++ ["N labels " ++ show (displayLabels reg), "N diff " ++ show (diffCountersWith reg)]
+    ++ ["N labels " ++ show (displayLabels world), "N diff " ++ show (diffCountersWith world)]
 
 placeLines :: World -> [String]
-placeLines reg =
-  [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ either show (show . (`getCell` (4, 4))) (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])
-  | n <- names reg ++ ["unregistered"]
+placeLines world =
+  [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ either show (show . (`getCell` (4, 4))) (placeWith world n args (setCell base (4, 4) cell) [(4, 4)])
+  | n <- names world ++ ["unregistered"]
   , args <- [[], [AInt 0], [AInt 1], [AInt 2], [AInt 4], [AInt 300], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 5, AInt 2], [AInt 0, AInt (-1)], [AInt 2, AColor C1]]
   , cell <- [mkGem C2, Gem C3 LineH 1 (Just Grass), Gem C4 Normal 0 (Just (Chain 2)), Stone 1, Countdown C4 2, custom "bubble" 1]
   ]
@@ -237,28 +237,28 @@ adjOutText :: Board -> AdjOut -> (Bool, String)
 adjOutText b0 out = (aoBoard out /= b0 || not (null (aoDead out)) || not (null (aoSit out)), show (boardText (aoBoard out), aoDead out, aoSit out))
 
 ruleLines :: World -> [String]
-ruleLines reg =
-  [ "AR " ++ show i ++ " " ++ show (arOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (arRun r (AdjCtx (smTrue s) (smDirect s) (smProtect s) (recolorableWith reg)) (smBoard s)))
-  | (i, r) <- zip [0 :: Int ..] (adjacentRules reg)
+ruleLines world =
+  [ "AR " ++ show i ++ " " ++ show (arOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (arRun r (AdjCtx (smTrue s) (smDirect s) (smProtect s) (recolorableWith world)) (smBoard s)))
+  | (i, r) <- zip [0 :: Int ..] (adjacentRules world)
   ]
     ++ [ "ER " ++ show ph ++ " " ++ show (erOrder r) ++ " " ++ ruleSummary (endOut r)
        | ph <- [PhaseTick, PhaseSpread, PhaseMove]
-       , r <- endRules reg ph
+       , r <- endRules world ph
        ]
     ++ [ "SR " ++ show (srOrder r) ++ " " ++ ruleSummary (\s -> let xs = [(srFires r (smBoard s) p q, srSeeds r (smBoard s) p q) | (p, q) <- smPairs s ++ rainbowPairs (smBoard s)] in (any fst xs, show xs))
-       | r <- swapRules reg
+       | r <- swapRules world
        ]
-    ++ [ "SO " ++ ruleSummary (\s -> let xs = [swapOpeningWith reg (smBoard s) (swapped (smBoard s) p q) p q | (p, q) <- smPairs s ++ rainbowPairs (smBoard s)] in (any (/= Nothing) xs, show xs)) ]
-    ++ [ "RA " ++ ruleSummary (\s -> let (b, d, st) = runAdjacentWith reg (smTrue s) (smDirect s) (smProtect s) (smBoard s) in (b /= smBoard s || not (null d) || not (null st), show (boardText b, d, st))) ]
-    ++ [ "OP " ++ ruleSummary (\s -> let (b, e, st) = openWith reg (smBoard s) (smTrue s) in (b /= smBoard s, show (boardText b, e, st))) ]
-    ++ [ "CH " ++ ruleSummary (\s -> let (b, d) = chipOnHitWith reg (smBoard s) (smTrue s ++ smDirect s) in (b /= smBoard s || not (null d), show (boardText b, d))) ]
-    ++ [ "ST " ++ ruleSummary (\s -> let b = stripOnClearWith reg (smBoard s) (smTrue s) in (b /= smBoard s, boardText b)) ]
-    ++ [ "BW " ++ ruleSummary (\s -> let ws = groundWideningWith reg (smGround s); r' = setWidening ws reg; xs = [blastWith r' (smBoard s) (getCell (smBoard s) p) p | p <- smTrue s] in (any (not . null) xs && not (null ws), show (map fst ws, xs))) ]
-    ++ [ "HG " ++ ruleSummary (\s -> let out = hitGroundWith reg (smTrue s) (smGround s) in (fst out /= smGround s, show out)) ]
-    ++ [ "CT " ++ ruleSummary (\s -> let xs = [(countElementWith reg n (smBoard s), weighElementWith reg n (smBoard s)) | n <- names reg] in (True, show xs)) ]
+    ++ [ "SO " ++ ruleSummary (\s -> let xs = [swapOpeningWith world (smBoard s) (swapped (smBoard s) p q) p q | (p, q) <- smPairs s ++ rainbowPairs (smBoard s)] in (any (/= Nothing) xs, show xs)) ]
+    ++ [ "RA " ++ ruleSummary (\s -> let (b, d, st) = runAdjacentWith world (smTrue s) (smDirect s) (smProtect s) (smBoard s) in (b /= smBoard s || not (null d) || not (null st), show (boardText b, d, st))) ]
+    ++ [ "OP " ++ ruleSummary (\s -> let (b, e, st) = openWith world (smBoard s) (smTrue s) in (b /= smBoard s, show (boardText b, e, st))) ]
+    ++ [ "CH " ++ ruleSummary (\s -> let (b, d) = chipOnHitWith world (smBoard s) (smTrue s ++ smDirect s) in (b /= smBoard s || not (null d), show (boardText b, d))) ]
+    ++ [ "ST " ++ ruleSummary (\s -> let b = stripOnClearWith world (smBoard s) (smTrue s) in (b /= smBoard s, boardText b)) ]
+    ++ [ "BW " ++ ruleSummary (\s -> let ws = groundWideningWith world (smGround s); r' = setWidening ws world; xs = [blastWith r' (smBoard s) (getCell (smBoard s) p) p | p <- smTrue s] in (any (not . null) xs && not (null ws), show (map fst ws, xs))) ]
+    ++ [ "HG " ++ ruleSummary (\s -> let out = hitGroundWith world (smTrue s) (smGround s) in (fst out /= smGround s, show out)) ]
+    ++ [ "CT " ++ ruleSummary (\s -> let xs = [(countElementWith world n (smBoard s), weighElementWith world n (smBoard s)) | n <- names world] in (True, show xs)) ]
   where
     endOut r s =
-      let ctxs = [EndCtx [] [] (pushableWith reg), EndCtx (smProtect s) (take 4 (smDirect s)) (pushableWith reg)]
+      let ctxs = [EndCtx [] [] (pushableWith world), EndCtx (smProtect s) (take 4 (smDirect s)) (pushableWith world)]
           outs = [(eff, boardText b', erSeeds r b', erHoles r b') | ctx <- ctxs, let (eff, b') = erRun r ctx (smBoard s)]
       in (any (\(eff, _, sd, _) -> eff /= Nothing || not (null sd)) outs, show outs)
     swapped b p q = setCell (setCell b p (getCell b q)) q (getCell b p)
@@ -274,4 +274,4 @@ oracleLines = oracleLinesWith defaultWorld
 
 -- | 同一套投影，换一张注册表（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
 oracleLinesWith :: World -> [String]
-oracleLinesWith reg = map (valueLine reg) valueCells ++ nameLines reg ++ placeLines reg ++ ruleLines reg
+oracleLinesWith world = map (valueLine world) valueCells ++ nameLines world ++ placeLines world ++ ruleLines world

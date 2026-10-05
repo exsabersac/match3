@@ -195,15 +195,15 @@ classes_board_stats_same_as_list_comprehension :: Assertion
 classes_board_stats_same_as_list_comprehension =
   sequence_
     [ do
-        assertEqual ("count " ++ show (li, n)) (length [() | cell <- boardCells b, elementName reg cell == n]) (countElementWith reg n b)
-        assertEqual ("weigh " ++ show (li, n)) (sum [diffWeight (bodyOf reg cell) | cell <- boardCells b, elementName reg cell == n]) (weighElementWith reg n b)
+        assertEqual ("count " ++ show (li, n)) (length [() | cell <- boardCells b, elementName world cell == n]) (countElementWith world n b)
+        assertEqual ("weigh " ++ show (li, n)) (sum [diffWeight (bodyOf world cell) | cell <- boardCells b, elementName world cell == n]) (weighElementWith world n b)
     | li <- [0 .. levelCount - 1]
     , Just gs <- [campaignGame li 7]
     , let b = gsBoard gs
-    , n <- "no_such_element" : nub (map (elementName reg) (boardCells b))
+    , n <- "no_such_element" : nub (map (elementName world) (boardCells b))
     ]
   where
-    reg = defaultWorld
+    world = defaultWorld
 
 -- | 「每格一份计数，foldMap 合起来」（Cascade.hitsOn / withDrained 的新写法）与旧的「foldl 逐个 bumpCount」相同。
 classes_foldMap_counts_same_as_foldl_bump :: Property

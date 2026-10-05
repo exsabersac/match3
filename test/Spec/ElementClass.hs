@@ -159,7 +159,7 @@ ec_ice_layer_composes = do
   assertEqual "layer hit" (Keep (Ice 1)) (layerHit (Ice 2))
   forM_ [(c, k, i, ov) | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \(c, k, i, ov) -> do
     let cell = Gem c k i ov
-    assertEqual ("registry directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultWorld cell)
+    assertEqual ("world directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultWorld cell)
 
 -- | 测试专用「鸟窝」：状态（剩余命中数）放在元素值里；受击返回新的元素值，写回 Custom "nest" k；
 -- 注册进注册表后，锤子每敲一次减一，最后一下才碎并计数。
@@ -183,20 +183,20 @@ instance Kind Nest where
 
 ec_state_lives_in_element_value :: Assertion
 ec_state_lives_in_element_value = do
-  let reg = register (kindDef @Nest) defaultWorld
+  let world = register (kindDef @Nest) defaultWorld
       p = (3, 3)
       gs0 = (newGame defaultConfig 7) {gsBoard = setCell stableBoard p (Custom "nest" (CustomState 3)), gsHammers = 5}
-      hammer gs = let (gs', _, _) = resolveHammerWith reg p gs in gs'
+      hammer gs = let (gs', _, _) = resolveHammerWith world p gs in gs'
       gs1 = hammer gs0
       gs2 = hammer gs1
       gs3 = hammer gs2
   assertEqual "struck returns the new state" (Absorb (Custom "nest" (CustomState 2))) (struck (Nest 3))
-  assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf reg (Custom "nest" (CustomState 3)))
+  assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf world (Custom "nest" (CustomState 3)))
   assertEqual "first hit" (Custom "nest" (CustomState 2)) (getCell (gsBoard gs1) p)
   assertEqual "second hit" (Custom "nest" (CustomState 1)) (getCell (gsBoard gs2) p)
   assertBool "third hit breaks it" (not (isNest (getCell (gsBoard gs3) p)))
   assertEqual "counted once" [("nest", 1)] (namedCounts (gsCounts gs3))
-  assertEqual "placed via the constructor" (Right (Custom "nest" (CustomState 2))) (getCell <$> placeWith reg "nest" [AInt 2] stableBoard [p] <*> pure p)
+  assertEqual "placed via the constructor" (Right (Custom "nest" (CustomState 2))) (getCell <$> placeWith world "nest" [AInt 2] stableBoard [p] <*> pure p)
   where
     isNest cell = case cell of
       Custom "nest" _ -> True
@@ -212,10 +212,10 @@ instance Mechanic Quiet where
 
 ec_mechanic_defaults_silent :: Assertion
 ec_mechanic_defaults_silent = do
-  let reg = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultWorld (map mechNameOf builtinMechanics))
+  let world = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultWorld (map mechNameOf builtinMechanics))
       es = [SomeMechanic (Quiet ())]
-  assertBool "no beat reply" (isNothing (beatIn reg es [] onEndTick) && isNothing (queryIn reg es [] avoidCells) && isNothing (queryIn reg es [] wallCells))
-  assertBool "no query reply" (isNothing (queryIn reg es [] shapes) && isNothing (morphIn reg es stableBoard stableBoard (0, 0) (0, 1)))
+  assertBool "no beat reply" (isNothing (beatIn world es [] onEndTick) && isNothing (queryIn world es [] avoidCells) && isNothing (queryIn world es [] wallCells))
+  assertBool "no query reply" (isNothing (queryIn world es [] shapes) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
   assertEqual "no readings" ([], []) (levelUfos es, levelBelts es)
   assertBool "fromMechanic type check" (fromMechanic (SomeMechanic (Quiet ())) == Just (Quiet ()))
 
@@ -264,22 +264,22 @@ instance Mechanic Doubler where
 
 ec_level_elements_by_message :: Assertion
 ec_level_elements_by_message = do
-  let reg = registerMechanic (SomeMechanic Magnet) defaultWorld
+  let world = registerMechanic (SomeMechanic Magnet) defaultWorld
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
       (p1, p2) = ((1, 2), (2, 2))
-      (_, o, mt) = resolveSwapWith reg p1 p2 gs0 {gsBoard = b1}
+      (_, o, mt) = resolveSwapWith world p1 p2 gs0 {gsBoard = b1}
       (_, oD, mtD) = resolveSwapWith defaultWorld p1 p2 gs0 {gsBoard = b1}
       ping r = length <$> queryIn r [] (replicate 7 (0, 0)) avoidCells
-      withPinger = registerMechanic (SomeMechanic Pinger) reg
+      withPinger = registerMechanic (SomeMechanic Pinger) world
   assertBool "applied" (moveApplied o && moveApplied oD)
   assertBool "magnet adds an absorb wave (ufo also answers)" (length (mtWaves mt) > length (mtWaves mtD))
-  assertEqual "magnet does not answer other beats" Nothing (ping reg)
+  assertEqual "magnet does not answer other beats" Nothing (ping world)
   assertEqual "beat folds the only replier" (Just 8) (ping withPinger)
   assertEqual "beat folds all repliers in registration order" (Just 16) (ping (registerMechanic (SomeMechanic Doubler) withPinger))
   assertEqual "other order" (Just 15) (ping (registerMechanic (SomeMechanic Pinger) (registerMechanic (SomeMechanic Doubler) defaultWorld)))
   assertEqual "nobody answers by default" Nothing (ping defaultWorld)
-  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "magnet"] (map mechNameOf (mechanicDefs reg))
+  assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "magnet"] (map mechNameOf (mechanicDefs world))
 
 -- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 mechStart 给 2 格电量，
 -- 每轮补子之后（onRefilled）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
@@ -299,15 +299,15 @@ instance Mechanic Siphon where
 
 ec_level_element_stateful_extension :: Assertion
 ec_level_element_stateful_extension = do
-  let reg = registerMechanic (SomeMechanic (Siphon 0)) defaultWorld
-      gs0 = newGameAtLevelWith reg 0 defaultConfig 7
+  let world = registerMechanic (SomeMechanic (Siphon 0)) defaultWorld
+      gs0 = newGameAtLevelWith world 0 defaultConfig 7
       charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
       play r n gs
         | n == (0 :: Int) || gsOver gs /= Nothing = [gs]
         | otherwise = case findHintWith r (gsBoard gs) of
             Nothing -> [gs]
             Just (a, b) -> let (gs', _, _) = resolveSwapWith r a b gs in gs : play r (n - 1) gs'
-      states = play reg 12 gs0
+      states = play world 12 gs0
       final = last states
   assertEqual "opened in registration order + core ground" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "siphon", "ground"] (map mechNameOf (gsLevelElems gs0))
   assertEqual "mechStart gives the charge" (Just 2) (charge gs0)
@@ -316,15 +316,15 @@ ec_level_element_stateful_extension = do
   assertEqual "charge only goes down, one per absorb" [2 - gsCount CountUfo g | g <- states] (map (maybe (-1) id . charge) states)
   assertEqual "depleted" (Just 0) (charge final)
   assertEqual "absorbed exactly two cells" 2 (gsCount CountUfo final)
-  let bare = removeMechanic "siphon" reg
+  let bare = removeMechanic "siphon" world
       finalBare = last (play bare 12 gs0)
   assertEqual "unregistered: state untouched" (Just 2) (charge finalBare)
   assertEqual "unregistered: nothing absorbed" 0 (gsCount CountUfo finalBare)
   -- 飞碟关（第 13 关）：一次 onRefilled 节拍 = 飞碟的吸收 ++ 虹吸的吸收，两者的状态都推进
-  let gsU = newGameAtLevelWith reg 12 defaultConfig 1
+  let gsU = newGameAtLevelWith world 12 defaultConfig 1
       gsUD = newGameAtLevel 12 defaultConfig 1
       bU = gsBoard gsU
-      (psBoth, hooksBoth) = onAbsorb (levelHooksWith reg (gsLevelElems gsU)) bU
+      (psBoth, hooksBoth) = onAbsorb (levelHooksWith world (gsLevelElems gsU)) bU
       (psUfo, hooksUfo) = onAbsorb (levelHooksWith defaultWorld (gsLevelElems gsUD)) bU
       lastC2 = last [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell bU q == mkGem C2]
   assertBool "ufo level has ufos" (not (null (levelUfos (gsLevelElems gsU))))
@@ -355,19 +355,19 @@ instance Kind Star where
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do
-  let reg = register (kindDef @Star) defaultWorld
+  let world = register (kindDef @Star) defaultWorld
       star = Custom "star" (CustomState (fromEnum C5))
       board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "star") 1)) 1) {gsBoard = board0}
       (p1, p2) = ((1, 2), (2, 2))
-      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
-  assertEqual "star matches as C5" (Just C5) (matchColorWith reg star)
-  assertBool "star can be swapped" (not (blocksSwapWith reg star))
+      (gs1, o1, mt1) = resolveSwapWith world p1 p2 gs0
+  assertEqual "star matches as C5" (Just C5) (matchColorWith world star)
+  assertBool "star can be swapped" (not (blocksSwapWith world star))
   assertBool "move applied" (moveApplied o1)
   w1 <- firstWave mt1
   assertBool "star cleared in the first wave" ((1, 1) `elem` cwCleared w1)
   assertEqual "counted by name" [("star", 1)] (namedCounts (gsCounts gs1))
-  assertBool "hint sees the star" (isJust (findHintWith reg board0))
+  assertBool "hint sees the star" (isJust (findHintWith world board0))
   let (_, oD) = trySwap p1 p2 gs0
   assertEqual "unregistered star is inert" Nothing (matchColorWith defaultWorld star)
   assertBool "unregistered: no match through it" (not (moveApplied oD) || namedCounts (gsCounts (fst (trySwap p1 p2 gs0))) == [])
@@ -414,5 +414,5 @@ ec_registry_checked_slots = do
   assertEqual "shared cell" (Just [SharedCell "cell 0" ["gem", "other_gem"]]) (errsOf (builtinDefs ++ [kindDef @OtherGem]))
   assertEqual "unclaimed" (Just [Unclaimed "stray"]) (errsOf [kindDef @Stray])
   -- 总函数：register 按名字替换仍可用；空注册表解码不崩
-  assertEqual "empty registry decodes to inert" "?" (elementName (mkWorld []) (mkGem C1))
-  assertEqual "empty registry: no upper layers" 0 (length (upperOf (mkWorld []) (mkIceGem C1 2)))
+  assertEqual "empty world decodes to inert" "?" (elementName (mkWorld []) (mkGem C1))
+  assertEqual "empty world: no upper layers" 0 (length (upperOf (mkWorld []) (mkIceGem C1 2)))

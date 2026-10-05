@@ -56,9 +56,9 @@ qc_inv_swap_is_involution =
 qc_inv_gravity_idempotent_no_floating :: Property
 qc_inv_gravity_idempotent_no_floating =
   property $ \(HoledBoard mb) ->
-    let reg = defaultWorld
-        mb' = applyGravityWith reg mb
-        fixed = maybe False (gravityFixedCellWith reg)
+    let world = defaultWorld
+        mb' = applyGravityWith world mb
+        fixed = maybe False (gravityFixedCellWith world)
         ((r0, c0), (r1, c1)) = boundsOf mb
         floating =
           [ (r, c)
@@ -70,7 +70,7 @@ qc_inv_gravity_idempotent_no_floating =
           ]
     in classify (mb' /= mb) "something fell" $
          conjoin
-           [ counterexample "idempotent" (applyGravityWith reg mb' === mb')
+           [ counterexample "idempotent" (applyGravityWith world mb' === mb')
            , counterexample ("floating cells " ++ show floating) (null floating)
            , counterexample "fixed cells stay" ([p | p <- positionsOf mb, fixed (atM mb p)] === [p | p <- positionsOf mb', fixed (atM mb' p)])
            , sort (catMaybes (elems mb')) === sort (catMaybes (elems mb))

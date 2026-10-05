@@ -78,19 +78,19 @@ stoneBoard = boardFromRows (replicate boardSize (replicate boardSize (Stone 1)))
 -- 消除计 CountNamed "chameleon"；放置取原格宝石颜色（或 AColor 指定），原格不是宝石时不放。
 ch_caps_piece_by_current_color :: Assertion
 ch_caps_piece_by_current_color = do
-  let reg = defaultWorld
-  mapM_ (\c -> assertEqual ("color " ++ show c) (Just c) (colorOfWith reg (cham c))) allColors
+  let world = defaultWorld
+  mapM_ (\c -> assertEqual ("color " ++ show c) (Just c) (colorOfWith world (cham c))) allColors
   assertEqual "state = colour index" (Custom "chameleon" (CustomState 2)) (cham C3)
-  assertBool "swappable" (not (blocksSwapWith reg (cham C1)))
-  assertBool "falls" (fallsWith reg (cham C1))
-  assertBool "hintable" (hintableWith reg (cham C1))
-  assertEqual "hit destroys" Destroy (directHitWith reg (cham C1))
-  assertBool "kept on shuffle" (keepOnShuffleWith reg (cham C1))
-  assertBool "not recolorable" (not (recolorableWith reg (cham C1)))
-  assertEqual "counter" (Just (CountNamed "chameleon")) (counterWith reg (cham C4))
-  assertEqual "place takes gem colour" (Right (getCell stableBoard (2, 2))) (fmap (\b -> maybe (getCell b (2, 2)) mkGem (chameleonColor (getCell b (2, 2)))) (placeWith reg "chameleon" [] stableBoard [(2, 2)]))
-  assertEqual "place with colour" (Right (cham C5)) (fmap (`getCell` (0, 0)) (placeWith reg "chameleon" [AColor C5] stableBoard [(0, 0)]))
-  assertEqual "not on stone" (Right (Stone 1)) (fmap (`getCell` (0, 0)) (placeWith reg "chameleon" [] stoneBoard [(0, 0)]))
+  assertBool "swappable" (not (blocksSwapWith world (cham C1)))
+  assertBool "falls" (fallsWith world (cham C1))
+  assertBool "hintable" (hintableWith world (cham C1))
+  assertEqual "hit destroys" Destroy (directHitWith world (cham C1))
+  assertBool "kept on shuffle" (keepOnShuffleWith world (cham C1))
+  assertBool "not recolorable" (not (recolorableWith world (cham C1)))
+  assertEqual "counter" (Just (CountNamed "chameleon")) (counterWith world (cham C4))
+  assertEqual "place takes gem colour" (Right (getCell stableBoard (2, 2))) (fmap (\b -> maybe (getCell b (2, 2)) mkGem (chameleonColor (getCell b (2, 2)))) (placeWith world "chameleon" [] stableBoard [(2, 2)]))
+  assertEqual "place with colour" (Right (cham C5)) (fmap (`getCell` (0, 0)) (placeWith world "chameleon" [AColor C5] stableBoard [(0, 0)]))
+  assertEqual "not on stone" (Right (Stone 1)) (fmap (`getCell` (0, 0)) (placeWith world "chameleon" [] stoneBoard [(0, 0)]))
 
 -- | 匹配按当前颜色：tripleBoard 的 (2,2)（C5）换成 C5 变色龙，交换后连成 C5 三消、变色龙被消除计数；
 -- 换成 C4 变色龙则这一对不成消。测试辅助 findMatchPair 也按当前颜色找到引擎接受的对。
@@ -197,11 +197,11 @@ ch_other_levels_unchanged = do
   let noCh :: World
       noCh = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
         foldl (flip registerMechanic) (mkWorld (filter ((/= "chameleon") . defName) builtinDefs)) builtinMechanics
-      play reg gs n
+      play world gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
-        | otherwise = case findHintWith reg (gsBoard gs) of
+        | otherwise = case findHintWith world (gsBoard gs) of
             Nothing -> gs
-            Just (p, q) -> let (gs', _, _) = resolveSwapWith reg p q gs in play reg gs' (n - 1)
+            Just (p, q) -> let (gs', _, _) = resolveSwapWith world p q gs in play world gs' (n - 1)
       key gs = (gsBoard gs, gsScore gs, gsCounts gs, gsMoves gs, show (gsGen gs))
       daily (y, m, d) = newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d))
   assertEqual "older levels have none" [] [li | li <- [0 .. chamLevel - 1], not (null (chamsOn (gsBoard (levelGame li 1))))]

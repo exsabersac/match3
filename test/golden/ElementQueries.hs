@@ -38,8 +38,8 @@ firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
 levelGame :: Int -> Int -> GameState
 levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
-reg :: World
-reg = defaultWorld
+world :: World
+world = defaultWorld
 
 hash :: String -> String
 hash s =
@@ -81,27 +81,27 @@ cellLine :: Cell -> String
 cellLine cell =
   "Q " ++ show cell ++ " | "
     ++ unwords
-      [ show (matchColorWith reg cell)
-      , show (colorOfWith reg cell)
-      , show (blocksSwapWith reg cell)
-      , show (upperBlocksSwapWith reg cell)
-      , show (activatesWith reg cell)
-      , show (fallsWith reg cell)
-      , show (portalWith reg cell)
-      , show (drainsWith reg cell)
-      , show (drainEdgesWith reg cell)
-      , "Hit" ++ show (directHitWith reg cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
-      , show (hitImmuneWith reg cell)
-      , show (counterWith reg cell)
-      , show (vacatesCarpetWith reg cell)
-      , show (keepOnShuffleWith reg cell)
-      , show (blastWith reg base cell (3, 3))
-      , show (blastWith reg base cell (0, 7))
-      , show (recolorableWith reg cell)
-      , show (pushableWith reg cell)
-      , show (elementName reg cell)
-      , show (topLayerName reg cell)
-      , show (getCell (stripOnClearWith reg (setCell base (2, 2) cell) [(2, 2)]) (2, 2))
+      [ show (matchColorWith world cell)
+      , show (colorOfWith world cell)
+      , show (blocksSwapWith world cell)
+      , show (upperBlocksSwapWith world cell)
+      , show (activatesWith world cell)
+      , show (fallsWith world cell)
+      , show (portalWith world cell)
+      , show (drainsWith world cell)
+      , show (drainEdgesWith world cell)
+      , "Hit" ++ show (directHitWith world cell)  -- 第 4 刀起是 Strike；行里仍写旧名 HitAbsorb / HitDestroy / HitImmune
+      , show (hitImmuneWith world cell)
+      , show (counterWith world cell)
+      , show (vacatesCarpetWith world cell)
+      , show (keepOnShuffleWith world cell)
+      , show (blastWith world base cell (3, 3))
+      , show (blastWith world base cell (0, 7))
+      , show (recolorableWith world cell)
+      , show (pushableWith world cell)
+      , show (elementName world cell)
+      , show (topLayerName world cell)
+      , show (getCell (stripOnClearWith world (setCell base (2, 2) cell) [(2, 2)]) (2, 2))
       ]
 
 -- | 底盘：无匹配的固定花色盘。
@@ -127,7 +127,7 @@ placeNames =
 
 placeLines :: [String]
 placeLines =
-  [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ show (getCell (either (error . show) id (placeWith reg n args (setCell base (4, 4) cell) [(4, 4)])) (4, 4))
+  [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ show (getCell (either (error . show) id (placeWith world n args (setCell base (4, 4) cell) [(4, 4)])) (4, 4))
   | n <- placeNames
   , args <- [[], [AInt 1], [AInt 3], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 0, AInt (-1)]]
   , cell <- [mkGem C2, Gem C3 LineH 1 (Just Grass), Stone 1, Countdown C4 2, Custom "bubble" (CustomState 1)]
@@ -135,32 +135,32 @@ placeLines =
 
 ruleLines :: [String]
 ruleLines =
-  [ "R adjacent " ++ show (map arOrder (adjacentRules reg))
-  , "R end " ++ show [(ph, map erOrder (endRules reg ph)) | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
-  , "R swap " ++ show (map srOrder (swapRules reg))
-  , "R names " ++ show (map defName (worldDefs reg))
-  , "R diff " ++ show [(n, Just k, bonus) | (n, k, bonus) <- diffCountersWith reg]
-  , "R level " ++ show (map mechNameOf (mechanicDefs reg))
+  [ "R adjacent " ++ show (map arOrder (adjacentRules world))
+  , "R end " ++ show [(ph, map erOrder (endRules world ph)) | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
+  , "R swap " ++ show (map srOrder (swapRules world))
+  , "R names " ++ show (map defName (worldDefs world))
+  , "R diff " ++ show [(n, Just k, bonus) | (n, k, bonus) <- diffCountersWith world]
+  , "R level " ++ show (map mechNameOf (mechanicDefs world))
   ]
-    ++ [ "A " ++ show off ++ " " ++ show tc ++ " " ++ hash (show (runAdjacentWith reg tc [(0, 0)] [(7, 7)] (zoo off)))
+    ++ [ "A " ++ show off ++ " " ++ show tc ++ " " ++ hash (show (runAdjacentWith world tc [(0, 0)] [(7, 7)] (zoo off)))
        | off <- [0, 60, 120, 180, 240]
        , tc <- [[(3, 3)], [(r, c) | r <- [2 .. 5], c <- [2 .. 5]], [(r, c) | r <- [0 .. 7], c <- [0 .. 7], even (r + c)]]
        ]
-    ++ [ "E " ++ show off ++ " " ++ show ph ++ " " ++ hash (show [(fst (erRun r (EndCtx [(1, 1)] [(6, 6)] (pushableWith reg)) (zoo off)), erSeeds r (zoo off), erHoles r (zoo off), boardText (snd (erRun r (EndCtx [] [] (pushableWith reg)) (zoo off)))) | r <- endRules reg ph])
+    ++ [ "E " ++ show off ++ " " ++ show ph ++ " " ++ hash (show [(fst (erRun r (EndCtx [(1, 1)] [(6, 6)] (pushableWith world)) (zoo off)), erSeeds r (zoo off), erHoles r (zoo off), boardText (snd (erRun r (EndCtx [] [] (pushableWith world)) (zoo off)))) | r <- endRules world ph])
        | off <- [0, 60, 120, 180, 240]
        , ph <- [PhaseTick, PhaseSpread, PhaseMove]
        ]
-    ++ [ "S " ++ show off ++ " " ++ hash (show [(p1, p2, map (\r -> (srFires r (zoo off) p1 p2, srSeeds r (zoo off) p1 p2)) (swapRules reg), swapOpeningWith reg (zoo off) (zoo off) p1 p2) | (p1, p2) <- pairs])
+    ++ [ "S " ++ show off ++ " " ++ hash (show [(p1, p2, map (\r -> (srFires r (zoo off) p1 p2, srSeeds r (zoo off) p1 p2)) (swapRules world), swapOpeningWith world (zoo off) (zoo off) p1 p2) | (p1, p2) <- pairs])
        | off <- [0, 60, 120, 180, 240]
        ]
-    ++ [ "O " ++ show off ++ " " ++ hash (show (let (b, e, s) = openWith reg (zoo off) front in (boardText b, e, s)))
+    ++ [ "O " ++ show off ++ " " ++ hash (show (let (b, e, s) = openWith world (zoo off) front in (boardText b, e, s)))
        | off <- [0, 60, 120, 180, 240]
        , front <- [[(r, c) | r <- [0 .. 7], c <- [0 .. 7]]]
        ]
-    ++ [ "C " ++ show off ++ " " ++ hash (show (chipOnHitWith reg (zoo off) [(r, c) | r <- [0 .. 7], c <- [0 .. 7]]))
+    ++ [ "C " ++ show off ++ " " ++ hash (show (chipOnHitWith world (zoo off) [(r, c) | r <- [0 .. 7], c <- [0 .. 7]]))
        | off <- [0, 60, 120, 180, 240]
        ]
-    ++ [ "G " ++ show (hitGroundWith reg [(1, 1), (2, 2)] [((1, 1), ("jelly", 2)), ((2, 2), ("jelly", 1)), ((3, 3), ("jelly", 2)), ((1, 1), ("moss", 1))]) ]
+    ++ [ "G " ++ show (hitGroundWith world [(1, 1), (2, 2)] [((1, 1), ("jelly", 2)), ((2, 2), ("jelly", 1)), ((3, 3), ("jelly", 2)), ((1, 1), ("moss", 1))]) ]
   where
     pairs = [((r, c), q) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], q <- [(r, c + 1), (r + 1, c)], inBounds base q]
 
@@ -180,13 +180,13 @@ playLines =
     go k gs
       | gsOver gs /= Nothing = []
       | otherwise =
-          let hint = findHintWith reg (gsBoard gs)
+          let hint = findHintWith world (gsBoard gs)
               hp = (k `mod` boardSize, (k * 3) `mod` boardSize)
-              probes = [show hint, show (resolveHammerWith reg hp gs), show (resolveCrossClearWith reg hp gs)]
+              probes = [show hint, show (resolveHammerWith world hp gs), show (resolveCrossClearWith world hp gs)]
           in case hint of
                Nothing -> probes
                Just (a, b) ->
-                 let r@(gs', _, _) = resolveSwapWith reg a b gs
+                 let r@(gs', _, _) = resolveSwapWith world a b gs
                  in probes ++ [show r] ++ go (k - 1) gs'
 
 queryLines :: [String]

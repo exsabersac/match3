@@ -142,9 +142,9 @@ qc_run_end_rules_is_fold =
   forAllShrink genRuleBoard shrinkBoard $ \b ->
     forAll (genSomePos b) $ \avoid -> forAll (genSomePos b) $ \walls ->
       forAll (listOf (choose (0, length allRules - 1))) $ \ixs ->
-        let reg = defaultWorld
+        let world = defaultWorld
             picked = map (allRules !!) ixs  -- 按下标挑（EndRule 没有 Show）
-            ctx = EndCtx avoid walls (pushableWith reg)
+            ctx = EndCtx avoid walls (pushableWith world)
             (recs, bEnd) = runEndRules ctx picked b
             naive = foldl (\(acc, bd) r -> let (e, bd') = erRun r ctx bd in (acc ++ [(bd, bd', x) | Just x <- [e]], bd')) ([], b) picked
         in classify (not (null recs)) "runEndRules recorded" ((recs, bEnd) === naive)
@@ -173,8 +173,8 @@ end_rule_smart_constructors = do
   assertEqual "seeds" [[(1, 1)], [], []] (map (`erSeeds` b) [t, sp, mv])
   assertEqual "holes" [[], [], []] (map (`erHoles` b) [t, sp, mv])
   assertEqual "run passes through" [b, b, b] [snd (erRun r (EndCtx [] [] (const True)) b) | r <- [t, sp, mv]]
-  let reg = defaultWorld
+  let world = defaultWorld
       phases = [PhaseTick, PhaseSpread, PhaseMove]
-  assertEqual "builtin end rules (phase, order)" [(PhaseTick, [10, 20]), (PhaseSpread, [10, 20, 30]), (PhaseMove, [10, 20, 30, 40])] [(ph, map erOrder (endRules reg ph)) | ph <- phases]
-  assertEqual "builtin holes all empty" [] [erOrder r | ph <- phases, r <- endRules reg ph, not (null (erHoles r b))]
-  assertEqual "only tick rules seed" [] [erOrder r | ph <- [PhaseSpread, PhaseMove], r <- endRules reg ph, not (null (erSeeds r b))]
+  assertEqual "builtin end rules (phase, order)" [(PhaseTick, [10, 20]), (PhaseSpread, [10, 20, 30]), (PhaseMove, [10, 20, 30, 40])] [(ph, map erOrder (endRules world ph)) | ph <- phases]
+  assertEqual "builtin holes all empty" [] [erOrder r | ph <- phases, r <- endRules world ph, not (null (erHoles r b))]
+  assertEqual "only tick rules seed" [] [erOrder r | ph <- [PhaseSpread, PhaseMove], r <- endRules world ph, not (null (erSeeds r b))]

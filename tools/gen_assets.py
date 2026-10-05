@@ -7,18 +7,17 @@ match3 美术资源生成器（程序化、可复现）。
   assets/atlas.bmp      32 位 BGRA 贴图集第 0 页（BITMAPV4 头 + alpha 掩码；网页图集由 web/tools/gen_web_atlas.py 从它重新打包）
   assets/atlas1.bmp ... 第 1 页起（单页超过 1024x2048 时自动分页）
   assets/atlas.txt      贴图索引：每行 `名字 x y w h 页号`
-  assets/background.bmp 窗口背景（960x1176 = 480x588 的 2x，24 位不透明）
+  assets/background.bmp 页面背景（960x1176 = 480x588 的 2x，24 位不透明）
   docs/images/legend.png 图例总表（中英文标注）
 
 用法：python3 tools/gen_assets.py   （依赖 Pillow + numpy）
 风格：2x 超采样绘制（格子 56px → 贴图 112px），光泽宝石 + 「颜色 × 形状」双编码。
 
-高分屏（Retina）约定：
-  - 所有 UI 贴图都按「逻辑尺寸 × 2」烘焙，Retina 上 1 个贴图像素 = 1 个物理像素。
-  - 文字（中文标签 / HUD 字形）按游戏内实际使用的逻辑高度 × TS 直接用 FreeType 渲染（带 hinting），
-    不再「超大字号 + 缩小」，笔画落在像素格上更锐利。
-  - 同一贴图可有多个尺寸变体，命名为 `基名@像素高`（如 `zh_combo@68`、`g_48@60`、`gem_c1@56`）；
-    原 SDL 桌面版（app/Art.hs，已移除）运行时按「目标物理高度」挑变体；网页图集只收基名（gen_web_atlas.py 跳过 @ 变体）。
+高分屏约定：
+  - 所有贴图都按「逻辑尺寸 × 2」烘焙，2x 屏上 1 个贴图像素 = 1 个物理像素。
+  - 唯一的文字贴图是关卡名 name_<i>（HUD 关名），按逻辑高度 × TS 直接用 FreeType 渲染（带 hinting）。
+  - 原 SDL 桌面版用的 HUD 字形 g_*、中文标签 zh_* 与 `基名@像素高` 尺寸变体已随桌面遗留清理删除
+    （refactor/web-only-2）；网页用浏览器字体画字、靠 Canvas 缩放出小尺寸，图集只需基名。
 """
 import math
 import os
@@ -38,8 +37,8 @@ DOCIMG = ROOT / "docs" / "images"
 S = 112          # 棋子贴图边长（游戏内按 56px 绘制，即 2x）
 SS = 4           # 超采样倍数
 N = S * SS       # 工作画布边长
-WIN_W, WIN_H = 480, 588   # 原 SDL 桌面版的窗口逻辑尺寸（背景图按它烘焙，网页仍用这张背景）
-TS = 2           # 文字 / UI 烘焙倍率：贴图像素 = 逻辑像素 × TS（Retina 2x 下 1:1）
+BG_W, BG_H = 480, 588     # 背景图的逻辑尺寸（按 2x 烘焙成 960×1176，即网页的 background.webp）
+TS = 2           # 关卡名文字贴图的烘焙倍率：贴图像素 = 逻辑像素 × TS（2x 屏下 1:1）
 PAGE_W, PAGE_H = 1024, 2048   # 单页图集上限（兼顾老 GPU 的 2048 纹理限制）
 
 # ---------------------------------------------------------------- 调色板
@@ -1313,8 +1312,7 @@ def map_node(kind, size=80):
 
 
 def panel(kind, size=144):
-    """九宫格面板（角 = size/4）。144 → 角 36px，覆盖逻辑角半径 18 的 2x；
-    另生成 @80 小变体（角 20px）给 7..10 的小角半径，避免大比例缩小时描边发虚 / 锯齿。"""
+    """九宫格面板（角 = size/4）。144 → 角 36px，覆盖逻辑角半径 18 的 2x。"""
     img = new()
     m = rrect_mask((U(0.03), U(0.03), U(0.97), U(0.97)), U(0.22))
     if kind == "dark":
@@ -1458,38 +1456,9 @@ def _probe():
     return ImageDraw.Draw(Image.new("RGBA", (8, 8)))
 
 
-def glyph(ch, px=3, ts=TS):
-    """HUD 字形：白色字 + 深色描边，运行时用 colorMod 着色。
-    游戏内每字占 4px × 6px 逻辑像素（px = 3/4/5），这里直接按物理像素 (4px·ts) × (6px·ts)
-    用 FreeType 渲染（带 hinting），不做超采样缩小，保证 Retina 下笔画锐利。
-    过宽的字（如 W、M）只做水平压缩，竖直方向保持 1:1，横笔依旧清晰。"""
-    W, H = 4 * px * ts, 6 * px * ts
-    probe = _probe()
-    size = H * 0.98
-    sw = max(1, round(H * 0.07))
-    f = font_latin(size)
-    while True:
-        ref = probe.textbbox((0, 0), "H", font=f, stroke_width=sw)
-        if ref[3] - ref[1] <= H * 0.92 or size < 6:
-            break
-        size *= 0.97
-        f = font_latin(size)
-    bb = probe.textbbox((0, 0), ch, font=f, stroke_width=sw)
-    gw = bb[2] - bb[0]
-    cw = max(W, gw + 2)
-    img = Image.new("RGBA", (cw, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    x = (cw - gw) // 2 - bb[0]
-    y = round((H - (ref[3] - ref[1])) / 2 - ref[1])
-    d.text((x, y), ch, font=f, fill=(255, 255, 255, 255), stroke_width=sw, stroke_fill=(16, 12, 36, 255))
-    if cw != W:
-        img = img.resize((W, H), Image.LANCZOS)
-    return img
-
-
-def zh_label(s, h=20, color=(255, 255, 255), outline=(16, 12, 36), ts=TS):
-    """中文标签：h 为游戏内逻辑高度，贴图高 h·ts，按目标字号直接渲染（FreeType hinting）。
-    宽度补齐到 ts 的整数倍，保证逻辑宽度为整数、Retina 下贴图像素与物理像素一一对应。"""
+def zh_label(s, h, color, outline, ts=TS):
+    """中文文字贴图（现只用于关卡名 name_<i>）：h 为逻辑高度，贴图高 h·ts，按目标字号直接渲染（FreeType hinting）。
+    宽度补齐到 ts 的整数倍，保证逻辑宽度为整数、2x 屏下贴图像素与物理像素一一对应。"""
     H = h * ts
     f = font_cjk(round(H * 0.8))
     sw = max(1, round(H * 0.07))
@@ -1504,40 +1473,7 @@ def zh_label(s, h=20, color=(255, 255, 255), outline=(16, 12, 36), ts=TS):
     return img
 
 
-GLYPH_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!+-/?:x"
-GLYPH_PX = (3, 4, 5)   # textA 用到的字号；3 为基名 g_<码点>，其余为 g_<码点>@<像素高>
-# 连击弹字「x2」「x5」、得分浮字「+120」、HUD 总结「4 连击！」要放大弹出（最高约 75 逻辑像素高），
-# 数字 / x / + 额外烘焙大号变体（同样 2x），运行时按目标高度自动挑选，放大时也不糊。
-BIG_GLYPH_CHARS = "0123456789x+"
-BIG_GLYPH_PX = (7, 9, 12)
-
-# 中文标签的逻辑高度（原 SDL 桌面版 app/Main.hs 的 zhA / zhAC 调用，已移除）；第一个是基名，其余生成 @变体。
-# 未列出的默认 20。网页不画 zh_* 文字贴图（用画布字体）；为保持资源逐字节不变，这张表原样保留。
-ZH_SIZES = {
-    "daily": [22], "combo": [18, 24, 34, 44, 64], "combo_end": [20, 28], "shuffle": [18], "score": [18], "help_more": [16],
-    "pause": [32], "clear": [38], "win": [38], "lose": [38], "next": [22], "retry": [26],
-    "map": [32], "map_hint": [18],
-    "ch1": [14], "ch2": [14], "ch3": [14], "ch4": [14], "ch5": [14], "ch6": [14], "ch7": [14],
-    "rule_bomb": [18], "rule_rainbow": [18],
-    "sfx": [18], "bgm": [18], "mute": [18],
-}
-NAME_SIZES = [24]      # 关卡名 name_<i>
-
-# 中文 UI 标签（键 → 文本）
-ZH = {
-    "moves": "步数", "goal": "目标", "score": "得分", "pause": "暂停", "map": "选关地图",
-    "clear": "过关！", "win": "胜利！", "lose": "失败", "next": "下一关", "retry": "按 R 重试",
-    "combo": "连击", "combo_end": "连击！", "tip": "按 H 查看提示", "daily": "每日挑战", "shuffle": "已洗牌",
-    "tool_hammer": "锤子：点一格", "tool_swap": "交换：点两格", "tool_cross": "十字：点一格",
-    "k_hint": "提示", "k_hammer": "锤子", "k_swap": "自由交换", "k_cross": "十字消", "k_undo": "撤销",
-    "k_shuffle": "洗牌", "k_daily": "每日挑战", "k_map": "选关地图", "k_retry": "重开本关", "k_next": "下一关",
-    "k_play": "继续游戏", "k_quit": "退出", "legend": "图例", "map_hint": "点击关卡进入 · M 关闭",
-    "help_more": "P：暂停并查看全部按键",
-    "ch1": "第一章", "ch2": "第二章", "ch3": "第三章", "ch4": "第四章", "ch5": "第五章", "ch6": "第六章", "ch7": "第七章",
-    # 关卡规则开关的 HUD 角标（关名右侧）
-    "rule_bomb": "L/T 形出炸弹", "rule_rainbow": "彩虹组合变身",
-    "sfx": "效", "bgm": "乐", "mute": "静",
-}
+NAME_H = 24      # 关卡名 name_<i> 的逻辑高度（网页 hud.js 按 24 逻辑像素高绘制）
 
 
 def level_names():
@@ -1548,8 +1484,8 @@ def level_names():
 
 
 # ---------------------------------------------------------------- 背景
-def background(w=WIN_W, h=WIN_H, k=1):
-    """窗口背景；k 为像素倍率（游戏用 k=2 生成 960x1176，图案几何按 k 等比放大，观感与 1x 相同）。"""
+def background(w=BG_W, h=BG_H, k=1):
+    """页面背景；k 为像素倍率（资源用 k=2 生成 960x1176，图案几何按 k 等比放大，观感与 1x 相同；图例用 k=1 的任意尺寸）。"""
     w, h = w * k, h * k
     rnd = random.Random(21)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
@@ -1570,7 +1506,7 @@ def background(w=WIN_W, h=WIN_H, k=1):
             d.polygon([(x + ox, y - dia), (x + ox + dia, y), (x + ox, y + dia), (x + ox - dia, y)], fill=255)
     img = Image.alpha_composite(img, fill_layer(pat, (255, 255, 255), 0.035))
     bok = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    area = w * h / (WIN_W * WIN_H * k * k)
+    area = w * h / (BG_W * BG_H * k * k)
     for i in range(int(26 * area)):
         x, y, r = rnd.uniform(0, w), rnd.uniform(0, h), rnd.uniform(6, 30) * k
         col = rnd.choice([(255, 120, 200), (120, 180, 255), (255, 220, 120), (180, 120, 255)])
@@ -1730,27 +1666,10 @@ def build_sprites():
         sp["node_" + k] = map_node(k)
     for k in ("dark", "gold", "chip", "bar", "fill"):
         sp["panel_" + k] = panel(k)
-        sp["panel_%s@80" % k] = panel(k, 80)
     for k in ("hammer", "swap", "cross", "moves", "score", "multi"):
         sp["icon_" + k] = icon(k)
-    for ch in GLYPH_CHARS:
-        for j, px in enumerate(GLYPH_PX):
-            im = glyph(ch, px)
-            sp["g_%d" % ord(ch) + ("" if j == 0 else "@%d" % im.size[1])] = im
-    for ch in BIG_GLYPH_CHARS:
-        for px in BIG_GLYPH_PX:
-            im = glyph(ch, px)
-            sp["g_%d@%d" % (ord(ch), im.size[1])] = im
-    for k, s in ZH.items():
-        for j, h in enumerate(ZH_SIZES.get(k, [20])):
-            sp["zh_" + k + ("" if j == 0 else "@%d" % (h * TS))] = zh_label(s, h)
     for i, n in level_names():
-        for j, h in enumerate(NAME_SIZES):
-            sp["name_%d" % i + ("" if j == 0 else "@%d" % (h * TS))] = zh_label(n, h, (255, 240, 200), (40, 20, 10))
-    # 112px 棋盘贴图再各出一个 @56 半尺寸变体：HUD 目标图标（26 / 18 逻辑像素）、
-    # 双面块小角标、以及 1x 屏上的棋盘格都用它，避免双线性一次缩小 2 倍以上产生锯齿。
-    for name in [n for n, im in sp.items() if im.size == (S, S)]:
-        sp[name + "@56"] = sp[name].resize((S // 2, S // 2), Image.LANCZOS)
+        sp["name_%d" % i] = zh_label(n, NAME_H, (255, 240, 200), (40, 20, 10))
     return sp
 
 
@@ -1864,12 +1783,12 @@ def main():
         save_bmp32(pg, ASSETS / page_file(i))
     with open(ASSETS / "atlas.txt", "w", encoding="utf-8") as fp:
         fp.write("# match3 sprite atlas index: name x y w h page  (generated by tools/gen_assets.py)\n")
-        fp.write("# page 0 = atlas.bmp, page n = atlas<n>.bmp; name@H = size variant of name (H px tall)\n")
+        fp.write("# page 0 = atlas.bmp, page n = atlas<n>.bmp\n")
         for name in sorted(rects):
             x, y, w, h, pg = rects[name]
             fp.write("%s %d %d %d %d %d\n" % (name, x, y, w, h, pg))
     background(k=2).convert("RGB").save(ASSETS / "background.bmp")
-    legend({k: v for k, v in sp.items() if "@" not in k}, DOCIMG / "legend.png")
+    legend(sp, DOCIMG / "legend.png")
     if "--preview" in sys.argv:
         for i, pg in enumerate(pages):
             pg.save("/tmp/atlas_preview%s.png" % ("" if i == 0 else i))

@@ -10,10 +10,9 @@
   background.webp 窗口背景（960x1176 = 480x588 的 2x，有损 WebP）
 
 取舍：
-  - 只收棋盘 / HUD 贴图的基名（2x 烘焙：格 56 逻辑像素 → 贴图 112 像素）；
-  - 不收预渲染文字 g_* 字形、zh_* 中文标签——网页用浏览器字体画字；关卡名 name_<i> 要收（HUD 关名同原桌面版画这张图，
-    第 N 关 = name_<N−1>，见 www/hud.js 的 levelName）；
-  - 不收 `名字@高度` 尺寸变体——Canvas drawImage 缩放 + dpr 放大后备缓冲已够清晰；
+  - 收 assets/ 的全部贴图（2x 烘焙：格 56 逻辑像素 → 贴图 112 像素）。原桌面版的 g_* 字形、zh_* 中文标签与
+    `名字@高度` 尺寸变体已从 gen_assets.py 删除（refactor/web-only-2），这里原先跳过它们的过滤随之去掉；
+    唯一的文字贴图是关卡名 name_<i>（第 N 关 = name_<N−1>，见 www/hud.js 的 levelName）；
   - 贴图之间留 2 像素透明缝，避免缩放采样串色。
 用法：python3 web/tools/gen_web_atlas.py [--assets assets] [--out web/.cache/art] [--quality 90]
 依赖：Pillow（需带 WebP 支持）。结果是确定的：同样的输入得到同样的布局。
@@ -25,7 +24,6 @@ import sys
 
 from PIL import Image, features
 
-TEXT_PREFIXES = ("g_", "zh_")
 GAP = 2
 WIDTH = 1024
 
@@ -40,10 +38,6 @@ def load_index(assets):
             name, x, y, w, h, page = line.split()
             entries.append((name, int(x), int(y), int(w), int(h), int(page)))
     return entries
-
-
-def keep(name):
-    return "@" not in name and not name.startswith(TEXT_PREFIXES)
 
 
 def main():
@@ -64,7 +58,7 @@ def main():
             pages[n] = Image.open(os.path.join(a.assets, fn)).convert("RGBA")
         return pages[n]
 
-    sprites = [(n, page(p).crop((x, y, x + w, y + h))) for (n, x, y, w, h, p) in load_index(a.assets) if keep(n)]
+    sprites = [(n, page(p).crop((x, y, x + w, y + h))) for (n, x, y, w, h, p) in load_index(a.assets)]
     # 货架式装箱：按高度降序、再按名字，行满换行
     sprites.sort(key=lambda s: (-s[1].size[1], s[0]))
     x = y = row = 0

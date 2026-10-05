@@ -3,10 +3,12 @@
 
 -- | 第 5 项文档 §4 的计时实验：匹配扫描 / 提示搜索 / 重力的新旧写法，以及一个没采用的对照变体（不在任何构建目标里）。
 --
--- 编译运行（仓库根目录）。旧写法的逐字副本 Spec.Support.LegacyPerf 已从测试里删除，先从提交 132553b 取回到临时目录：
+-- 编译运行（仓库根目录；旧写法的逐字副本在同目录的 LegacyPerf.hs，原 test/Spec/Support/LegacyPerf.hs）：
 --
--- > b=$(mktemp -d); mkdir -p "$b/old/Spec/Support"; git show 132553b:test/Spec/Support/LegacyPerf.hs > "$b/old/Spec/Support/LegacyPerf.hs"
--- > stack exec -- ghc -O1 -Wall -package match3 -i"$b/old" -outputdir "$b" -o "$b/m" docs/haskell-features/demo/MatchBench.hs
+-- > b=$(mktemp -d)
+-- > stack exec -- ghc -O1 -Wall -package-id "$(stack exec -- ghc-pkg --simple-output field match3 id)" -idocs/haskell-features/demo -outputdir "$b" -o "$b/m" docs/haskell-features/demo/MatchBench.hs
+--
+-- （用 -package-id 而不是 -package match3：内部库 match3-pure 的包名也是 match3，-package match3 会选中它、把主库藏起来。）
 -- > "$b/m"
 --
 -- 盘面：全部关卡 × 种子 1–3 的开局盘，加上每张开局盘的全部相邻交换（多数带现成的匹配），共一万多张；
@@ -31,7 +33,7 @@ import Match3.Element.Builtin (defaultWorld)
 import Match3.Levels.Campaign (levelCount)
 import Match3.Types (boardNCols, boardNRows, boardPositions)
 import Match3.Element.World (World, blocksSwapWith, colorOfWith, hintableWith)
-import qualified Spec.Support.LegacyPerf as Old
+import qualified LegacyPerf as Old
 import System.CPUTime (getCPUTime)
 import Text.Printf (printf)
 

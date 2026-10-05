@@ -3,8 +3,9 @@
 --
 -- 对照的旧实现是本文件里的字面副本：第 10 刀前散在 ComboFx（endStageTable / 帧数常量 / comboStyle）、
 -- UI.EndStage（spreadProgress、倒计时 / 洗牌颜色）、UI.Playback（endCrumbTable）、UI.BoardArt（waveTint）、
--- UI.HudArt / UI.HudPrim（得分浮字颜色）、UI.Layout（elementRGBTable / 缓动）里的 case 与常量。
--- 另有源码扫描：这些散落的表与颜色字面量已收进表现表，drawHud / primOverlay 只剩分派。
+-- UI.HudArt / UI.HudPrim（得分浮字颜色）、UI.Layout（elementRGBTable / 缓动）里的 case 与常量（这些桌面模块都已移除）。
+-- 只给原桌面版用的贴图名列（prSprite）与轮内取色函数（clearTint / scorePopRGB）随桌面遗留清理删除（refactor/web-only-2）。
+-- 另有源码扫描：这些散落的表与颜色字面量已收进表现表。
 module Spec.Presentation
   ( tests
   ) where
@@ -38,7 +39,7 @@ allKinds = [minBound .. maxBound]
 presentation_table_covers_every_event_kind :: Assertion
 presentation_table_covers_every_event_kind = do
   map fst presentationTable @?= allKinds
-  -- 每个步末表现段都恰好被一种事件使用（UI.EndStage 的绘制表按段查）
+  -- 每个步末表现段都恰好被一种事件使用（网页 render.js 的 drawEndStage 按段分派）
   [s | (_, p) <- presentationTable, LookStage s <- [prLook p]] @?= [minBound .. maxBound]
   mapM_ (\k -> assertBool ("frames >= 0: " ++ show k) (prFrames (presentationFor k) >= 0)) allKinds
 
@@ -65,31 +66,20 @@ presentation_stage_rows_match_legacy_end_stage_table = do
   mapM_ (\k -> (show k, stageKindOf k, stageKindFor k) @?= (show k, legacyStageKindFor k, legacyStageKindFor k)) allKinds
   mapM_ (\s -> (show s, stageFrames s, endStageBase s) @?= (show s, legacyEndStageBase s, legacyEndStageBase s)) [minBound .. maxBound]
 
--- | 帧数、颜色、贴图名与第 10 刀前的常量 / case 分支相同。
+-- | 帧数、颜色与第 10 刀前的常量 / case 分支相同。
 presentation_frames_colors_match_legacy_constants :: Assertion
 presentation_frames_colors_match_legacy_constants = do
   -- ComboFx：waveFlashFrames = 12、scorePopLife = 48、comboPopLife = 54
   (waveFlashFrames, scorePopLife, comboPopLife) @?= (12, 48, 54)
-  -- UI.BoardArt.waveTint：第 1 轮 V3 255 250 220，连击轮等级色
-  mapM_ (\pulse -> clearTint 1 pulse @?= (255, 250, 220)) [0, 7, 100]
-  mapM_ (\(k, pulse) -> clearTint k pulse @?= legacyStyleRGB (legacyComboStyle k) pulse) [(k, pulse) | k <- [2 .. 7], pulse <- [0, 13, 40, 399]]
-  -- UI.HudArt / UI.HudPrim：得分浮字 if k >= 2 then 等级色 else (255, 244, 200)
-  mapM_
-    ( \(k, pulse) ->
-        scorePopRGB k pulse @?= (if k >= 2 then legacyStyleRGB (legacyComboStyle k) pulse else (255, 244, 200))
-    )
-    [(k, pulse) | k <- [0 .. 7], pulse <- [0, 13, 40, 399]]
-  -- UI.EndStage：倒计时红光 (255, 90, 60) + "spark"；洗牌 (200, 150, 255) + "spark"；蔓延前沿 "spark"；蜗牛 "snail"
+  -- 第 1 轮高亮柔白 (255, 250, 220)、得分浮字 (255, 244, 200)（原 UI.BoardArt.waveTint / UI.HudArt 的字面量）
+  (presentationRGB (presentationFor EvClear), presentationRGB (presentationFor EvScore)) @?= ((255, 250, 220), (255, 244, 200))
+  -- UI.EndStage：倒计时红光 (255, 90, 60)；洗牌 (200, 150, 255)
   let st = stagePresentation
-  (presentationRGB (st StTick), prSprite (st StTick)) @?= ((255, 90, 60), Just "spark")
-  (presentationRGB (st StShuffle), prSprite (st StShuffle)) @?= ((200, 150, 255), Just "spark")
-  prSprite (st StSpread) @?= Just "spark"
-  prSprite (st StSnail) @?= Just "snail"
+  presentationRGB (st StTick) @?= (255, 90, 60)
+  presentationRGB (st StShuffle) @?= (200, 150, 255)
   -- UI.Playback.endCrumbTable：蔓延按元素名取色、倒计时 (255, 110, 70)，其余不迸
   map (prCrumbs . st) [minBound .. maxBound]
     @?= [CrumbsAtSources (255, 110, 70), NoCrumbs, CrumbsByElement, NoCrumbs, NoCrumbs]
-  -- UI.Cascade / UI.HudArt 的贴图名
-  (clearSprite, comboPopSprite) @?= ("spark", "zh_combo")
   -- elementRGBTable：前五行是搬来时的逐字副本；magic_stone / fuzzball 是审计第 8 项按网页 ELEMENT_RGB 补上的
   elementRGBTable
     @?= [ ("vine", (110, 220, 90))
@@ -177,8 +167,8 @@ presentation_combo_style_matches_legacy =
 -- | 扩展元素：事件种类封闭，扩展元素的步末效果落在已有种类的那一行；按元素名细分的表里没有的名字用明确的缺省。
 presentation_extension_defaults :: Assertion
 presentation_extension_defaults = do
-  -- 整张表查不到的种类（未来新增的 EventKind 忘了加行）：蔓延段、18 帧、无颜色 / 贴图 / 碎屑 / 音效
-  defaultPresentation @?= Presentation (LookStage StSpread) 18 Nothing Nothing NoCrumbs Nothing
+  -- 整张表查不到的种类（未来新增的 EventKind 忘了加行）：蔓延段、18 帧、无颜色 / 碎屑 / 音效
+  defaultPresentation @?= Presentation (LookStage StSpread) 18 Nothing NoCrumbs Nothing
   mapM_ (\k -> presentationIn [] k @?= defaultPresentation) allKinds
   mapM_ (\k -> presentationIn presentationTable k @?= presentationFor k) allKinds
   presentationRGB defaultPresentation @?= (255, 255, 255)
@@ -218,7 +208,7 @@ presentation_scattered_cases_removed = do
     codes
   let literals =
         [ "255, 90, 60", "255 90 60", "255, 110, 70", "200, 150, 255", "200 150 255"
-        , "255, 244, 200", "255, 250, 220", "255 250 220", "\"zh_combo\"", "\"snail\" (rect"
+        , "255, 244, 200", "255, 250, 220", "255 250 220", "\"snail\" (rect"
         ]
   mapM_
     (\(f, c) -> mapM_ (\lit -> assertBool (f ++ " still has " ++ lit) (not (lit `isInfixOf` c))) literals)

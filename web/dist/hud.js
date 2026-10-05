@@ -57,7 +57,7 @@ function chip(ctx, art, x, y, w, h, label, value, valueColor = "#ffe082") {
 // 图集里没有这张图时退回浏览器字体画 state.name。返回实际画出的矩形与贴图名 / 文字（e2e 检查每关画的是对应的 name_N）。
 const NAME_H = 21;
 function levelName(ctx, art, x, cy, maxW, info) {
-  // 每日挑战：同原桌面版 HudArt 的 zh_daily，画「每日挑战」（网页图集没有 zh_* 文字图，用画布字体）
+  // 每日挑战：同原桌面版 HudArt 的 zh_daily，画「每日挑战」（图集里没有中文标签贴图，用画布字体）
   if (info.daily) {
     ctx.font = `800 21px ${FONT}`;
     const t = fit(ctx, "每日挑战", maxW);

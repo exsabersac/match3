@@ -1,25 +1,20 @@
--- | 视图模型 Match3.View 与通用网格组件 Engine.GridUI。
+-- | 视图模型 Match3.View。
 --
--- 对照的旧实现是本文件里的字面副本：视图模型之前的 UI.Actions.updateTitle（标题）、UI.Input.collectMsg、
--- UI.HudArt / UI.HudBlocks（进度点、步数上限、道具、分数徽章、结局色条分支）、UI.BoardPrim / UI.BoardArt
--- （地毯标记）、web/hs/Match3Web/Api.hs（encodeState / encodeGoal / encodeCell / apiLevels 的现算式；结局分支读
--- fromTerminal <$> gsOver，即当时的 Outcome）、
--- UI.Layout.pixelToCell / cellOrigin / allCells、UI.Input 的点选 / 拖动判定。
--- 另有源码扫描：这些前端不从 GameState 现算（读视图模型 / 通用网格组件）。
+-- 对照的旧实现是本文件里的字面副本：视图模型之前的原桌面版 UI.Actions.updateTitle（标题）、
+-- UI.HudArt / UI.HudBlocks（进度点、道具、分数徽章、结局色条分支）、web/hs/Match3Web/Api.hs（encodeState /
+-- encodeGoal / encodeCell / apiLevels 的现算式；结局分支读 fromTerminal <$> gsOver，即当时的 Outcome）。
+-- 另有源码扫描：前端不从 GameState 现算（读视图模型）。
 module Spec.View
   ( tests
   ) where
 
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
-import Engine.GridUI
 import Match3.Board.Default (findHint)
 import Match3.Core
-import Match3.Board.Grid (adjacent)
 import Match3.Daily (dailySeed)
 import Match3.Game.Outcome (loseHint)
 import Match3.Game.State (gsUfos)
 import Match3.Levels.Campaign (allLevels, levelCount, lookupLevel)
-import Match3.Types (boardSize)
 import Match3.Daily (dailyConfig)
 import Match3.Element.Builtin (SnowBoss(..), chameleonCell)
 import Match3.Element.Ability (toCell)
@@ -36,13 +31,10 @@ import Test.Tasty.HUnit
 tests :: [TestTree]
 tests =
   [ testCase "view_fields_match_legacy_reads" view_fields_match_legacy_reads
-  , testCase "view_title_and_bracket_match_legacy" view_title_and_bracket_match_legacy
-  , testCase "view_carpet_marks_match_legacy" view_carpet_marks_match_legacy
+  , testCase "view_title_matches_legacy" view_title_matches_legacy
   , testCase "view_level_dots_match_legacy" view_level_dots_match_legacy
   , testCase "view_score_badge_matches_legacy" view_score_badge_matches_legacy
   , testCase "view_cell_face_and_level_list_match_legacy" view_cell_face_and_level_list_match_legacy
-  , testCase "grid_ui_geometry_matches_legacy_layout" grid_ui_geometry_matches_legacy_layout
-  , testCase "grid_ui_click_drag_highlight" grid_ui_click_drag_highlight
   , testCase "frontends_read_view_model" frontends_read_view_model
   , testCase "frontends_import_core_api" frontends_import_core_api
   , testCase "outcome_lose_hint_no_internal_names" outcome_lose_hint_no_internal_names
@@ -97,17 +89,6 @@ legacyTitle gs =
   in "L" ++ show (gsLevel gs + 1) ++ " " ++ levelName ++ "  " ++ goalBits ++ "  moves=" ++ show (gsMoves gs)
        ++ comboBits ++ "  Hm=" ++ show (gsHammers gs) ++ " Sw=" ++ show (gsFreeSwaps gs)
        ++ " Cr=" ++ show (gsCrossClears gs) ++ status
-
-legacyCollect :: GameState -> String
-legacyCollect gs' = case goalView (gsGoal gs') of
-  ViewCollect _ n -> bracket lbl n
-  ViewCollectMulti _ -> bracket lbl (goalTarget (gsGoal gs'))
-  ViewCount _ n -> bracket lbl n
-  _ -> ""
-  where
-    -- 合 main 9f5504e 后标签换成中文（原为 colorTag / "multi" / countTag）
-    lbl = goalLabel (goalInfo (gsGoal gs') (gsProgress gs'))
-    bracket tag n = " [" ++ tag ++ " " ++ show (gsProgress gs') ++ "/" ++ show n ++ "]"
 
 -- 几何版结局色条的分支（颜色换成标签）。
 legacyStatusStrip :: GameState -> String
@@ -173,7 +154,6 @@ view_fields_match_legacy_reads = do
       gvLevel gv @?= gsLevel gs
       assertEqual (tag ++ " index") li (gvLevelIndex gv)
       assertEqual (tag ++ " raw name") (maybe "?" lvlName (lookupLevel (gsLevel gs))) (gvRawName gv)
-      assertEqual (tag ++ " move cap") (max mv (maybe mv lvlMoves (lookupLevel li))) (gvMoveCap gv)
       assertEqual (tag ++ " score/moves/daily") (gsScore gs, mv, gsDaily gs) (gvScore gv, gvMoves gv, gvDaily gv)
       assertEqual (tag ++ " boosters") (gsHammers gs, gsFreeSwaps gs, gsCrossClears gs)
         (bHammers (gvBoosters gv), bFreeSwaps (gvBoosters gv), bCrossClears (gvBoosters gv))
@@ -184,49 +164,16 @@ view_fields_match_legacy_reads = do
       assertEqual (tag ++ " goal kind/text") (takeWhile (/= ' ') (show (gsGoal gs)), show (gsGoal gs)) (giKind gi, giText gi)
       assertEqual (tag ++ " goal name") [n | ViewCount (CountNamed n) _ <- [goalView (gsGoal gs)]] (maybe [] pure (giName gi))
       assertEqual (tag ++ " lose hint") (loseHint (gsGoal gs)) (giLoseHint gi)
-      assertEqual (tag ++ " hints") (gsHint gs, findHint (gsBoard gs)) (bvHint bv, bvFoundHint bv)
+      assertEqual (tag ++ " hint") (findHint (gsBoard gs)) (bvFoundHint bv)
       assertEqual (tag ++ " board") (boardRows (gsBoard gs)) (boardRows (bvBoard bv))
       assertEqual (tag ++ " level layer")
         (gsLastCleared gs, gsGround gs, gsBelts gs, gsPortals gs, levelCarpets (gsLevel gs), gsCarpetOpen gs)
         (bvLastCleared bv, bvGround bv, bvBelts bv, bvPortals bv, bvCarpets bv, bvCarpetOpen bv)
       assertEqual (tag ++ " ufos") (map (\u -> (ufoCell u, ufoColor u)) (gsUfos gs)) (map (\u -> (ufoCell u, ufoColor u)) (bvUfos bv))
-      assertEqual (tag ++ " ground cells") [lookup p (gsGround gs) | p <- allPos'] [groundAtView bv p | p <- allPos']
 
-allPos' :: [Pos]
-allPos' = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
-
-view_title_and_bracket_match_legacy :: Assertion
-view_title_and_bracket_match_legacy =
-  mapM_
-    ( \gs -> do
-        assertEqual "title" (legacyTitle gs) (titleLine (gameView gs))
-        assertEqual "collect bracket" (legacyCollect gs) (goalBracket (gvGoal (gameView gs)))
-    )
-    samples
-
-view_carpet_marks_match_legacy :: Assertion
-view_carpet_marks_match_legacy = do
-  let carpetSamples = [gs | gs <- samples, not (null (levelCarpets (gsLevel gs)))]
-  assertBool "has carpet levels" (not (null carpetSamples))
-  assertBool "some carpet opened" (any (not . null . gsCarpetOpen) carpetSamples)
-  mapM_
-    ( \gs -> do
-        let bv = boardView gs
-        mapM_
-          ( \pos -> do
-              -- 几何版（BoardPrim）的旧式子
-              let openP = pos `elem` gsCarpetOpen gs
-                  coveredP = pos `elem` levelCarpets (gsLevel gs) && not openP && not (null (levelCarpets (gsLevel gs)))
-                  -- 贴图版（BoardArt）的旧式子
-                  coveredA = pos `elem` levelCarpets (gsLevel gs) && not openP
-                  m = carpetAt bv pos
-              assertEqual "open" openP (m == CarpetOpen)
-              assertEqual "covered (prim)" coveredP (m == CarpetCovered)
-              assertEqual "covered (art)" coveredA (m == CarpetCovered)
-          )
-          allPos'
-    )
-    samples
+view_title_matches_legacy :: Assertion
+view_title_matches_legacy =
+  mapM_ (\gs -> assertEqual "title" (legacyTitle gs) (titleLine (gameView gs))) samples
 
 view_level_dots_match_legacy :: Assertion
 view_level_dots_match_legacy =
@@ -308,77 +255,6 @@ view_cell_face_and_level_list_match_legacy = do
     ]
 
 --------------------------------------------------------------------------------
--- 通用网格组件
-
--- 第 11 刀前 UI.Layout 的式子（padPx 16、hudH 108、cellPx 56、8×8）。
-legacyPixelToCell :: Int -> Int -> Maybe Pos
-legacyPixelToCell mx my =
-  let x = mx - 16
-      y = my - 16 - 108
-      boardPx = 56 * boardSize
-  in if x < 0 || y < 0 || x >= boardPx || y >= boardPx
-       then Nothing
-       else
-         let c = x `div` 56
-             r = y `div` 56
-         in if r >= 0 && r < boardSize && c >= 0 && c < boardSize then Just (r, c) else Nothing
-
-boardGeom :: GridGeom Int
-boardGeom = GridGeom {ggLeft = 16, ggTop = 16 + 108, ggCell = 56, ggRows = boardSize, ggCols = boardSize}
-
-grid_ui_geometry_matches_legacy_layout :: Assertion
-grid_ui_geometry_matches_legacy_layout = do
-  sequence_
-    [ assertEqual (show (x, y)) (legacyPixelToCell x y) (gridCellAt boardGeom (PxX x) (PxY y))
-    | x <- [-20 .. 500], y <- [-20, -1, 0, 100, 123, 124, 125, 179, 180, 181, 400, 571, 572, 579, 580, 581, 700]
-    ]
-  sequence_
-    [ assertEqual (show (x, y)) (legacyPixelToCell x y) (gridCellAt boardGeom (PxX x) (PxY y))
-    | x <- [0, 15, 16, 17, 71, 72, 463, 464, 479, 480, 481], y <- [-20 .. 700]
-    ]
-  sequence_
-    [ do
-        gridCellOrigin boardGeom (r, c) @?= (PxX (16 + c * 56), PxY (16 + 108 + r * 56))
-        let (x, y) = pxXY (gridCellOrigin boardGeom (r, c))
-        gridCellAt boardGeom (PxX x) (PxY y) @?= Just (r, c)
-        gridCellAt boardGeom (PxX (x + 55)) (PxY (y + 55)) @?= Just (r, c)
-    | (r, c) <- allPos'
-    ]
-  gridCells boardGeom @?= allPos'
-  (gridWidth boardGeom, gridHeight boardGeom) @?= (448, 448)
-  -- 非正方网格：行列不混
-  let g = GridGeom {ggLeft = 0, ggTop = 0, ggCell = 10, ggRows = 2, ggCols = 3} :: GridGeom Int
-  gridCells g @?= [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
-  gridCellAt g (PxX 25) (PxY 15) @?= Just (1, 2)
-  gridCellAt g (PxX 15) (PxY 25) @?= Nothing
-  -- 4 邻接与三消的 adjacent 一致
-  sequence_ [assertEqual (show (a, b)) (adjacent a b) (orthoAdjacent a b) | a <- allPos', b <- allPos']
-
-grid_ui_click_drag_highlight :: Assertion
-grid_ui_click_drag_highlight = do
-  -- 点选：与第 11 刀前 UI.Input.cellClick 的 ToolNone / ToolFreeSwap 分支相同
-  gridClick Nothing (2, 3) @?= ClickSelect ((2, 3) :: Pos)
-  gridClick (Just (2, 3)) (2, 3) @?= (ClickDeselect :: Click Pos)
-  gridClick (Just (2, 3)) (5, 5) @?= ClickPair (2, 3) ((5, 5) :: Pos)
-  -- 拖动：落在另一格且相邻才成对（旧式子 Just p2 | p1 /= p2 && adjacent p1 p2）
-  sequence_
-    [ assertEqual (show (p1, m)) (legacy p1 m) (fmap snd (gridDragRelease adjacent p1 m))
-    | p1 <- [(0, 0), (3, 4), (7, 7)], m <- Nothing : map Just allPos'
-    ]
-  gridDragRelease adjacent (3, 4) (Just (3, 5)) @?= Just ((3, 4), (3, 5))
-  -- 高亮
-  let hl :: Highlight Pos
-      hl = Highlight {hlSelected = Just (1, 1), hlHint = [(2, 2), (2, 3)], hlFlash = [(4, 4)], hlPinned = Nothing}
-  (isSelected hl (1, 1), isSelected hl (2, 2)) @?= (True, False)
-  (isHinted hl (2, 3), isHinted hl (1, 1)) @?= (True, False)
-  (isFlashing hl (4, 4), isFlashing hl (2, 2)) @?= (True, False)
-  [p | p <- allPos', isSelected noHighlight p || isHinted noHighlight p || isFlashing noHighlight p] @?= ([] :: [Pos])
-  where
-    legacy p1 m = case m of
-      Just p2 | p1 /= p2 && adjacent p1 p2 -> Just p2
-      _ -> Nothing
-
---------------------------------------------------------------------------------
 -- 源码扫描
 
 -- | 前端（app/pure 与 web/hs）从库里只 import 前端 API：Match3.Core、视图模型 Match3.View、对局外壳 Match3.Engine、
@@ -412,18 +288,16 @@ frontends_read_view_model = do
   -- 标题行读视图模型（网页 state.title = titleLine）
   assertBool "web title from titleLine" ("titleLine" `mentionsIdent` api)
   -- 规则开关角标：网页按 state.rules（ruleBadges）通用地画（hud.js 不点名具体规则）；关卡用到的每个规则开关都登记了角标；
-  -- 角标文字与 tools/gen_assets.py 里文字贴图（ZH 表）的字面相同，图标是 gen_assets.py 生成的贴图
+  -- 图标是 gen_assets.py 生成的贴图
   hudJs <- readFile "web/www/hud.js"
-  assertBool "web hud.js draws rule badges generically" (not (any (`isInfixOf` hudJs) ["\"bomb_shapes\"", "\"rainbow_combos\"", "\"zh_rule_bomb\""]))
+  assertBool "web hud.js draws rule badges generically" (not (any (`isInfixOf` hudJs) ["\"bomb_shapes\"", "\"rainbow_combos\""]))
   assertBool "web Api encodes ruleBadges" ("ruleBadges" `mentionsIdent` api)
   let levelRules = nub [unElementName r | l <- allLevels, r <- lvlRules l]
   assertEqual "every level rule has a registered badge" [] [r | r <- levelRules, r `notElem` map rbRule ruleBadgeTable]
   assertEqual "level 41 badges" [("bomb_shapes", "L/T 形出炸弹")] [(rbRule b, rbText b) | b <- ruleBadges (gameView (levelGame 40 1))]
   assertEqual "level 1 has no badge" [] (ruleBadges (gameView (levelGame 0 1)))
-  assertEqual "unregistered rule falls back to its name" (RuleBadge "x_rule" "x_rule" [] "zh_rule_x_rule") (ruleBadge "x_rule")
+  assertEqual "unregistered rule falls back to its name" (RuleBadge "x_rule" "x_rule" []) (ruleBadge "x_rule")
   gen <- readFile "tools/gen_assets.py"
-  assertEqual "badge text = gen_assets.py ZH text" []
-    [rbRule b | b <- ruleBadgeTable, not (("\"" ++ drop 3 (rbTextSprite b) ++ "\": \"" ++ rbText b ++ "\"") `isInfixOf` gen)]
   assertEqual "badge icons are generated sprites" []
     [ic | b <- ruleBadgeTable, ic <- rbIcons b, not (("sp[\"" ++ ic ++ "\"]") `isInfixOf` gen)]
   -- 目标中文显示名（goalLabel，网页 HUD「目标 …」的唯一来源）：网页接口输出它；全部关卡与每日挑战的目标都有中文名
@@ -439,7 +313,7 @@ frontends_read_view_model = do
   assertEqual "level 47 goal label" "变色龙" (goalLabel (gvGoal (gameView (levelGame 46 1))))
   assertEqual "unregistered named goal falls back to its name" "x_elem" (goalLabel (goalInfo (goalCount (CountNamed (ElementName "x_elem")) 3) 0))
 
--- | 失败提示（Match3.Game.Outcome.loseHint，视图字段 giLoseHint）与桌面窗口标题的目标段（goalLine）、提示后缀（goalBracket）
+-- | 失败提示（Match3.Game.Outcome.loseHint，视图字段 giLoseHint）与标题的目标段（goalLine）
 -- 只用中文标签：全部关卡与每日挑战都不含 [a-z_]（不露出 fuzzball / chameleon 这类元素内部名，也不再有 score / stone 等英文标签）；
 -- 标签与 goalLabel 同源（Match3.GoalLabel）。
 outcome_lose_hint_no_internal_names :: Assertion
@@ -451,7 +325,6 @@ outcome_lose_hint_no_internal_names = do
   assertEqual "lose hints" [] [(i, loseHint g) | (i, g) <- goals, rawIdent (loseHint g)]
   assertEqual "view lose hints" [] [(i, giLoseHint (goalInfo g 0)) | (i, g) <- goals, rawIdent (giLoseHint (goalInfo g 0))]
   assertEqual "title goal segments" [] [(i, goalLine (goalInfo g 0)) | (i, g) <- goals, rawIdent (goalLine (goalInfo g 0))]
-  assertEqual "bracket suffixes" [] [(i, goalBracket (goalInfo g 0)) | (i, g) <- goals, rawIdent (goalBracket (goalInfo g 0))]
   -- 测试跑手报告过漏出内部名的四关（jelly / bubble / fuzzball / snow_boss，含 Boss 目标）逐字核对
   assertEqual "level 39 lose hint" "消除果冻，目标 32 个" (loseHint (gsGoal (levelGame 38 1)))
   assertEqual "level 40 lose hint" "消除气泡，目标 12 个" (loseHint (gsGoal (levelGame 39 1)))

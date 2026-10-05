@@ -3,9 +3,9 @@
 -- | 效果事件 → 前端表现的一张表（纯数据，不含 SDL）。
 --
 -- 规则层的每种效果事件（Match3.Element.Event.EventKind）在这里查到一条 'Presentation'：表现方式（轮内的
--- 高亮消失 / 得分浮字 / 连击弹字，或步末的某个表现段 'StageKind'）、基础帧数、主色、贴图名、步末碎屑、音效名。
--- 帧数被 ComboFx 的时间线读取（网页版共用），颜色 / 贴图 / 碎屑被 UI.Cascade / UI.EndStage / UI.Playback /
--- UI.HudArt / UI.HudPrim 读取；各表现段怎么画仍是 UI.EndStage 的绘制表（按 'StageKind' 查）。
+-- 高亮消失 / 得分浮字 / 连击弹字，或步末的某个表现段 'StageKind'）、基础帧数、主色、步末碎屑、音效名。
+-- 帧数被 ComboFx 的时间线读取；碎屑、生长曲线、元素颜色与音效名经 UI.WebMeta（m3Meta）给网页；
+-- 各表现段怎么画在网页 web/www/render.js（按 'StageKind' 分派）。
 --
 -- 扩展元素：事件种类是封闭的（EventKind），扩展元素的步末效果也落在某个种类上；按元素名细分的表
 -- （'spreadCurves' 生长曲线、'elementRGBTable' 颜色）里没有的名字用明确的缺省（'defaultSpreadCurve' /
@@ -15,7 +15,6 @@
 module UI.Presentation
   ( -- * 表
     RGB
-  , SpriteName
   , SoundName
   , StageKind (..)
   , Look (..)
@@ -42,11 +41,6 @@ module UI.Presentation
   , elementRGBTable
   , defaultSpreadGlow
   , spreadGlowFor
-    -- * 轮内颜色
-  , clearTint
-  , scorePopRGB
-  , comboPopSprite
-  , clearSprite
     -- * 连击等级样式
   , ComboStyle (..)
   , comboStyle
@@ -64,9 +58,6 @@ import Match3.Core (ElementName)
 -- | 颜色（红, 绿, 蓝）。
 type RGB = (Word8, Word8, Word8)
 
--- | 贴图名（assets/ 里的文件名，不含扩展名）。
-type SpriteName = String
-
 -- | 音效名（网页按名字播放 sfx/<名字>.wav）。
 type SoundName = String
 
@@ -80,7 +71,7 @@ data Look
   | LookScore           -- ^ 轮内：本轮得分浮字
   | LookCombo           -- ^ 轮内：「连击 xN」弹字 + 震屏，播完后 HUD「N 连击！」总结
   | LookWithClear       -- ^ 轮内：随消除一起表现，没有单独的动画（爆炸 / 波及 / 底收）
-  | LookStage StageKind -- ^ 步末：一个表现段（绘制见 UI.EndStage 的绘制表）
+  | LookStage StageKind -- ^ 步末：一个表现段（绘制见网页 render.js 的 drawEndStage）
   deriving (Eq, Show)
 
 -- | 进入步末表现段时迸出的碎屑。
@@ -95,31 +86,30 @@ data Presentation = Presentation
   { prLook   :: Look
   , prFrames :: Int              -- ^ 基础帧数（1 帧 ≈ 16.7 ms；0 = 不单独占时长）
   , prColor  :: Maybe RGB        -- ^ 固定主色（Nothing = 按格子 / 连击等级 / 元素名取色）
-  , prSprite :: Maybe SpriteName -- ^ 贴图版用到的光效 / 精灵（Nothing = 不用；几何版不用贴图）
   , prCrumbs :: Crumbs
   , prSound  :: Maybe SoundName  -- ^ 音效名；消除 clear、爆炸 special，其余无声
   } deriving (Eq, Show)
 
 -- | 只给表现方式与帧数，其余为空。
 look :: Look -> Int -> Presentation
-look l n = Presentation l n Nothing Nothing NoCrumbs Nothing
+look l n = Presentation l n Nothing NoCrumbs Nothing
 
 -- | 效果事件 → 前端表现（按 EventKind 的定义顺序，每种一行）。1 帧 ≈ 16.7 ms：
 -- 高亮 12（≈ 200 ms）、得分浮字 48（≈ 0.8 s）、连击弹字 54（≈ 0.9 s）；步末倒计时减一 10（≈ 170 ms）、
 -- 皮带移位 14（≈ 230 ms）、蔓延 18（≈ 300 ms，藤 / 巧 / 蒸汽同时长出）、会走的元素（蜗牛）18、自动洗牌 22（≈ 370 ms）。
 presentationTable :: [(EventKind, Presentation)]
 presentationTable =
-  [ (EvClear, (look LookClear 12) {prColor = Just (255, 250, 220), prSprite = Just "spark", prSound = Just "clear"}) -- 第 1 轮柔白光圈，连击轮用等级色
+  [ (EvClear, (look LookClear 12) {prColor = Just (255, 250, 220), prSound = Just "clear"}) -- 第 1 轮柔白光圈，连击轮用等级色
   , (EvHit, look LookWithClear 0)
   , (EvBlast, (look LookWithClear 0) {prSound = Just "special"})
   , (EvDrain, look LookWithClear 0)
   , (EvScore, (look LookScore 48) {prColor = Just (255, 244, 200)}) -- 第 1 轮的得分色，连击轮用等级色
-  , (EvCombo, (look LookCombo 54) {prSprite = Just "zh_combo"})
-  , (EvTick, (look (LookStage StTick) 10) {prColor = Just (255, 90, 60), prSprite = Just "spark", prCrumbs = CrumbsAtSources (255, 110, 70)})
+  , (EvCombo, look LookCombo 54)
+  , (EvTick, (look (LookStage StTick) 10) {prColor = Just (255, 90, 60), prCrumbs = CrumbsAtSources (255, 110, 70)})
   , (EvBelt, look (LookStage StBelt) 14)
-  , (EvSpread, (look (LookStage StSpread) 18) {prSprite = Just "spark", prCrumbs = CrumbsByElement})
-  , (EvMove, (look (LookStage StSnail) 18) {prSprite = Just "snail"})
-  , (EvShuffle, (look (LookStage StShuffle) 22) {prColor = Just (200, 150, 255), prSprite = Just "spark"})
+  , (EvSpread, (look (LookStage StSpread) 18) {prCrumbs = CrumbsByElement})
+  , (EvMove, look (LookStage StSnail) 18)
+  , (EvShuffle, (look (LookStage StShuffle) 22) {prColor = Just (200, 150, 255)})
   ]
 
 -- | 表里没有的事件种类：按蔓延段、18 帧播放。
@@ -219,29 +209,6 @@ spreadGlowFor :: ElementName -> RGB
 spreadGlowFor n = fromMaybe defaultSpreadGlow (lookup n elementRGBTable)
 
 --------------------------------------------------------------------------------
--- 轮内颜色
-
--- | 高亮 / 光圈颜色：第 1 轮取 EvClear 行的主色（柔白），连击轮（k ≥ 2）用等级色。
-clearTint :: Int -> Int -> RGB
-clearTint k pulse
-  | k <= 1 = fromMaybe (255, 250, 220) (prColor (presentationFor EvClear))
-  | otherwise = styleRGB (comboStyle k) pulse
-
--- | 得分浮字颜色：第 1 轮取 EvScore 行的主色，连击轮用等级色。
-scorePopRGB :: Int -> Int -> RGB
-scorePopRGB k pulse
-  | k >= 2 = styleRGB (comboStyle k) pulse
-  | otherwise = fromMaybe (255, 244, 200) (prColor (presentationFor EvScore))
-
--- | 高亮 / 消失光圈的光效贴图名：EvClear 行的贴图。
-clearSprite :: SpriteName
-clearSprite = fromMaybe "spark" (prSprite (presentationFor EvClear))
-
--- | 「连击 xN」弹字与 HUD 连击徽章的汉字贴图名：EvCombo 行的贴图（几何版不用贴图，用点阵字）。
-comboPopSprite :: SpriteName
-comboPopSprite = fromMaybe "zh_combo" (prSprite (presentationFor EvCombo))
-
---------------------------------------------------------------------------------
 -- 连击等级样式（ComboFx 再导出）
 
 -- | 等级越高：字越大、颜色越暖越亮、震屏略大（克制：最多 5 px）。
@@ -285,7 +252,7 @@ hsv h s v =
   in (to8 r1, to8 g1, to8 b1)
 
 --------------------------------------------------------------------------------
--- 缓动（UI.Layout 再导出）
+-- 缓动（生长曲线 'curveAt' 用）
 
 -- | smoothstep 缓动（两端慢）。
 smoothT :: Double -> Double

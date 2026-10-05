@@ -227,7 +227,7 @@ function toggleTool(k) {
   tool = k; swapFirst = null; sel = null; drag = null;
   msg = boostersLeft(k) <= 0 ? T.empty : `${T.banner}（菜单里再点「${T.name}」或按 ${T.key} 取消）`;
 }
-// 点选模式下点中一格（同原桌面版 cellClick 的道具分支；自由交换两步点选同 Engine.GridUI.gridClick）
+// 点选模式下点中一格（同原桌面版 cellClick 的道具分支；自由交换两步点选，再点同一格则重选第一格）
 function toolClick(p) {
   if (tool === "hammer" || tool === "cross") {
     if (boostersLeft(tool) <= 0) { msg = TOOL[tool].empty; tool = null; return; }

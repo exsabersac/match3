@@ -21,8 +21,8 @@ chapterLabel 34 = "CH6"
 chapterLabel 36 = "CH7"
 chapterLabel _ = ""
 
--- | 第 k 章（0 起）的中文章名，与贴图 zh_ch1 … zh_ch7（tools/gen_assets.py 的 ZH 表）同一组文字；
--- 网页图集没有 zh_* 文字图，选关地图用它画章节标签。超出七章时退回「第 N 章」。
+-- | 第 k 章（0 起）的中文章名（原桌面版的章节文字贴图已删除，这里是唯一一份）；
+-- 选关地图用它以画布字体画章节标签。超出七章时退回「第 N 章」。
 chapterTitle :: Int -> String
 chapterTitle k
   | k >= 0 && k < length names = names !! k

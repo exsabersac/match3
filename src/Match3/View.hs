@@ -1,5 +1,5 @@
 -- | 视图模型：从 GameState / 回放状态算出前端要画的东西——整局 HUD 视图（关卡、分数、步数、
--- 道具、连击、结局）、目标视图、棋盘视图（逐格底层标记）、关卡进度点、右下角分数徽章、关卡列表，
+-- 道具、连击、结局）、目标视图、棋盘视图（关卡级元素与提示）、关卡进度点、右下角分数徽章、关卡列表，
 -- 以及单格的结构化描述。前端（网页是唯一前端；原 SDL 桌面版已移除）
 -- 经 web/hs/Match3Web/Api.hs 的 JSON 读这里，不各自从 GameState 现算。
 --
@@ -25,8 +25,6 @@ module Match3.View
   , GoalInfo (..)
   , goalInfo
   , goalLine
-  , goalBracket
-  , colorTag
   , goalLabel
   , countLabel
   , colorLabel
@@ -34,9 +32,6 @@ module Match3.View
     -- * 棋盘视图
   , BoardView (..)
   , boardView
-  , CarpetMark (..)
-  , carpetAt
-  , groundAtView
     -- * 关卡进度点
   , LevelDot (..)
   , levelDots
@@ -107,7 +102,7 @@ data Boosters = Boosters
   }
   deriving (Eq, Show)
 
--- | 结局 / 局面状态（HUD 色条与标题共用）。Just 其余结果（MoveApplied 等）按进行中处理。
+-- | 结局 / 局面状态（标题 'titleLine' 的结局段）。Just 其余结果（MoveApplied 等）按进行中处理。
 data PlayStatus
   = PlayWon Int
   | PlayCleared Int Int  -- ^ 分数、下一关下标
@@ -118,15 +113,14 @@ data PlayStatus
 
 -- | 一帧 HUD / 标题 / 网页状态要用的全部读数。
 data GameView = GameView
-  { gvLevel :: Int         -- ^ gsLevel 原值（标题 "L<n>"、网页 level、几何版进度点）
-  , gvLevelIndex :: Int    -- ^ 夹到 [0, levelCount-1] 的关卡下标（贴图版徽章 / 名字图、步数上限）
+  { gvLevel :: Int         -- ^ gsLevel 原值（标题 "L<n>"、网页 level）
+  , gvLevelIndex :: Int    -- ^ 夹到 [0, levelCount-1] 的关卡下标（关名图 name_<i>、进度点）
   , gvLevelName :: String  -- ^ 夹紧下标的关名（标题）
   , gvRawName :: String    -- ^ 原下标的关名，无此关为 "?"（网页 name）
   , gvDaily :: Bool
   , gvRules :: [String]    -- ^ 本关打开的规则开关（Level.lvlRules，如 "bomb_shapes"）；每日挑战为空（HUD 角标）
   , gvScore :: Int
   , gvMoves :: Int
-  , gvMoveCap :: Int       -- ^ 步数条满格值：max 当前步数 该关印制步数
   , gvBoosters :: Boosters
   , gvCombo :: Int         -- ^ 经通用接口 gameStatus 取的连击数（= gsCombo）
   , gvShuffled :: Bool
@@ -148,7 +142,6 @@ gameView gs =
     , gvRules = if gsDaily gs then [] else maybe [] (map unElementName . lvlRules) (lookupLevel lvl)
     , gvScore = gsScore gs
     , gvMoves = mv
-    , gvMoveCap = max mv (maybe mv lvlMoves mlvl)
     , gvBoosters = Boosters (gsHammers gs) (gsFreeSwaps gs) (gsCrossClears gs)
     , gvCombo = fromMaybe 0 (lookup "combo" (gameStatus match3Game gs))
     , gvShuffled = gsShuffled gs
@@ -215,26 +208,24 @@ titleLine gv =
 -- | HUD 上的一枚规则开关角标：本关打开的每个规则开关（'gvRules' 的每一项）一枚，画在关名右侧。
 -- 网页（web/hs/Match3Web/Api.hs 的
 -- state.rules → www/hud.js）画同样的图标，文字用画布字体渲染 'rbText'（网页图集不含文字贴图）。
--- 新玩法加规则开关时在 'ruleBadgeTable' 登记一行，两个前端自动显示，不用改 HUD 代码。
+-- 新玩法加规则开关时在 'ruleBadgeTable' 登记一行，网页自动显示，不用改 HUD 代码。
 data RuleBadge = RuleBadge
   { rbRule :: String        -- ^ 规则开关名（Level.lvlRules 里的名字，如 "bomb_shapes"）
-  , rbText :: String        -- ^ 角标文字，与 tools/gen_assets.py 里对应文字贴图的字面相同（测试核对）
+  , rbText :: String        -- ^ 角标文字（网页用画布字体画）
   , rbIcons :: [String]     -- ^ 图标贴图名，从下往上叠画（网页图集里的贴图）；可为空
-  , rbTextSprite :: String  -- ^ 文字贴图名（zh_*，原 SDL 桌面版用；网页不画，tools/gen_assets.py 仍生成）
   }
   deriving (Eq, Show)
 
 -- | 已登记的规则开关角标（顺序无关，按 gvRules 的顺序画）。
 ruleBadgeTable :: [RuleBadge]
 ruleBadgeTable =
-  [ RuleBadge "bomb_shapes" "L/T 形出炸弹" ["bomb_glow", "bomb_mark"] "zh_rule_bomb"   -- 新玩法 1：L / T 形出炸弹（第 41 关）
-  , RuleBadge "rainbow_combos" "彩虹组合变身" ["rainbow"] "zh_rule_rainbow"          -- 新玩法 4：魔力鸟组合增强（第 44 关）
+  [ RuleBadge "bomb_shapes" "L/T 形出炸弹" ["bomb_glow", "bomb_mark"]   -- 新玩法 1：L / T 形出炸弹（第 41 关）
+  , RuleBadge "rainbow_combos" "彩虹组合变身" ["rainbow"]                 -- 新玩法 4：魔力鸟组合增强（第 44 关）
   ]
 
--- | 查一个规则开关的角标。没登记的规则也显示（不静默丢掉）：文字 = 规则名、无图标、
--- 文字贴图名 zh_rule_<名>。
+-- | 查一个规则开关的角标。没登记的规则也显示（不静默丢掉）：文字 = 规则名、无图标。
 ruleBadge :: String -> RuleBadge
-ruleBadge r = fromMaybe (RuleBadge r r [] ("zh_rule_" ++ r)) (find ((== r) . rbRule) ruleBadgeTable)
+ruleBadge r = fromMaybe (RuleBadge r r []) (find ((== r) . rbRule) ruleBadgeTable)
 
 -- | 本关要画的全部角标（按 gvRules 的顺序；每日挑战为空）。
 ruleBadges :: GameView -> [RuleBadge]
@@ -246,7 +237,7 @@ ruleBadges = map ruleBadge . gvRules
 data GoalInfo = GoalInfo
   { giGoal :: LevelGoal
   , giView :: GoalView
-  , giProgress :: Int      -- ^ 核心 gsProgress（原桌面版 HUD / 标题 / 网页同一个数）
+  , giProgress :: Int      -- ^ 核心 gsProgress（标题与网页同一个数）
   , giTarget :: Int        -- ^ goalTarget
   , giKind :: String       -- ^ show 的首词（网页 goal.kind）
   , giText :: String       -- ^ show 全文（网页 goal.text）
@@ -283,24 +274,6 @@ goalLine gi = goalLabel gi ++ "=" ++ show (giProgress gi) ++ "/" ++ show target
       ViewCount _ n -> n
       _ -> giTarget gi
 
--- | 提示消息里的收集进度后缀（[收集红色宝石 3/20]、[宝箱 1/4]；分数等目标为空串；合 main 9f5504e 前是英文标签）。
-goalBracket :: GoalInfo -> String
-goalBracket gi = case giView gi of
-  ViewCollect _ n -> bracket (goalLabel gi) n
-  ViewCollectMulti _ -> bracket (goalLabel gi) (giTarget gi)
-  ViewCount _ n -> bracket (goalLabel gi) n
-  _ -> ""
-  where
-    bracket tag n = " [" ++ tag ++ " " ++ show (giProgress gi) ++ "/" ++ show n ++ "]"
-
--- | 颜色的三字母标签。
-colorTag :: Color -> String
-colorTag C1 = "RED"
-colorTag C2 = "GRN"
-colorTag C3 = "BLU"
-colorTag C4 = "YEL"
-colorTag C5 = "PRP"
-
 -- | 目标的中文显示名（HUD「目标 …」标签；网页 state.goal.label / m3Levels 的 goal.label、窗口标题的目标段都取这里）。
 -- 表本身（'countLabel' / 'colorLabel' / 'namedGoalLabelTable'）合 main 9f5504e 后下移到 Match3.GoalLabel
 -- （失败提示 Match3.Game.Outcome.loseHint 也用它），这里重新导出，对外 API 不变。
@@ -310,14 +283,9 @@ goalLabel = goalViewLabel . giView
 --------------------------------------------------------------------------------
 -- 棋盘视图
 
--- | 地毯标记：不是地毯格 / 未铺 / 已铺。
-data CarpetMark = CarpetNone | CarpetCovered | CarpetOpen
-  deriving (Eq, Show)
-
 -- | 棋盘与关卡级元素（字段惰性：只读用到的部分）。
 data BoardView = BoardView
   { bvBoard :: Board
-  , bvHint :: Maybe (Pos, Pos)       -- ^ 玩家按 H 要到的提示（gsHint；提示光）
   , bvFoundHint :: Maybe (Pos, Pos)  -- ^ 当前盘面上找到的一步（findHint；网页 hint）
   , bvLastCleared :: [Pos]
   , bvGround :: [(Pos, (ElementName, Int))]
@@ -333,7 +301,6 @@ boardView :: GameState -> BoardView
 boardView gs =
   BoardView
     { bvBoard = gsBoard gs
-    , bvHint = gsHint gs
     , bvFoundHint = findHint (gsBoard gs)
     , bvLastCleared = gsLastCleared gs
     , bvGround = gsGround gs
@@ -345,17 +312,6 @@ boardView gs =
     , bvDrops = levelDrops (gsLevelElems gs)
     }
 
--- | 一格的地毯标记：已铺优先；未铺 = 本关地毯格且未铺。
-carpetAt :: BoardView -> Pos -> CarpetMark
-carpetAt bv pos
-  | pos `elem` bvCarpetOpen bv = CarpetOpen
-  | pos `elem` bvCarpets bv = CarpetCovered
-  | otherwise = CarpetNone
-
--- | 一格的地面层（元素名, 层数）。
-groundAtView :: BoardView -> Pos -> Maybe (ElementName, Int)
-groundAtView bv pos = lookup pos (bvGround bv)
-
 --------------------------------------------------------------------------------
 -- 关卡进度点
 
@@ -363,7 +319,7 @@ data LevelDot = DotCurrent | DotDone | DotUnlocked | DotLocked
   deriving (Eq, Show)
 
 -- | 各关一个点（共 levelCount 个，下标 = 关卡下标）：当前关、已过、已解锁未过、未解锁。
--- 贴图版传夹紧的下标与 appMaxReached；几何版传 gsLevel 原值、只分当前 / 已过 / 其余。
+-- 网页 m3Progress 传夹紧的下标与最高解锁关。
 levelDots :: Int -> Int -> [LevelDot]
 levelDots cur maxReached = map dot [0 .. levelCount - 1]
   where

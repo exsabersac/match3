@@ -30,7 +30,6 @@ library
       Engine.Stream
       Engine.Optics
       Engine.History
-      Engine.GridUI
       Match3.Core
       Match3.Engine
       Match3.View
@@ -218,7 +217,6 @@ test-suite match3-test
       UI.WebMeta
       Engine.Effect
       Engine.Game
-      Engine.GridUI
       Engine.History
       Engine.Optics
       Engine.Playback

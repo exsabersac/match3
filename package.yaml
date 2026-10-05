@@ -39,7 +39,6 @@ library:
   - Engine.Stream
   - Engine.Optics
   - Engine.History
-  - Engine.GridUI
   - Match3.Core
   - Match3.Engine
   - Match3.View

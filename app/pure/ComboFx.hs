@@ -1,4 +1,4 @@
--- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式、浮字曲线。
+-- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式。
 -- 只描述「怎么播」，不含任何绘制（绘制在网页 web/www/render.js / hud.js，经 Match3Web.Anim 取阶段与帧号），
 -- 也不改规则：回放脚本与效果事件来自通用接口 gameStep 的整步报告（Match3.Engine.match3Shell），结算结果仍以规则层为准。
 --
@@ -34,7 +34,6 @@ module ComboFx
   , cascadeStages
   , stepPlayback
   , phaseLen
-  , phaseT
     -- * 波次视图（快照 + 效果事件）
   , WaveView (..)
   , waveViews
@@ -43,33 +42,20 @@ module ComboFx
     -- * 步末效果阶段（StageKind 定义在 UI.Presentation，这里再导出）
   , StageKind (..)
   , EndStage (..)
-  , stageMoves
     -- * 下落映射
   , fallTable
-  , fallAt
-  , holeAt
     -- * 连击等级样式（定义在 UI.Presentation，这里再导出）
   , ComboStyle (..)
   , comboStyle
   , styleRGB
-    -- * 浮字（连击提示 / 本轮得分）
-  , PopKind (..)
-  , TextPop (..)
-  , tickPops
-  , comboPopScale
-  , popAlpha
-  , popRise
-  , scorePopScale
-  , clearedAnchor
   ) where
 
 import Data.List (transpose)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import Match3.Core
-import Data.Word (Word8)
 import Match3.Element.Event (Event (..), EventKind (..))
-import Engine.Playback (Player (..), Stages (..), Tick (..), playerProgress, stepPlayer)
+import Engine.Playback (Player (..), Stages (..), Tick (..), stepPlayer)
 import UI.Presentation (ComboStyle (..), Presentation (..), StageKind (..), comboStyle, presentationFor, stageFrames, stageKindOf, styleRGB)
 
 --------------------------------------------------------------------------------
@@ -241,10 +227,6 @@ cascadeStages = Stages curLen next
       (Continue c', evs) -> Right (c', evs)
       (Finished c', _) -> Left c'
 
--- | 当前阶段进度 0..1。
-phaseT :: CascadePlayer -> Double
-phaseT = playerProgress cascadeStages
-
 -- | 推进一帧（加速时一次推进 fastStep 帧，步末阶段同样加速）。
 stepPlayback :: CascadePlayer -> Tick Cascade CascadeEvent
 stepPlayback = stepPlayer fastStep cascadeStages
@@ -305,10 +287,6 @@ budget ss =
   in if total <= endBudgetFrames
        then ss
        else [s {stFrames = max 8 (stFrames s * endBudgetFrames `div` total)} | s <- ss]
-
--- | 本段的「(来源, 目标)」格对：皮带 / 蔓延 / 蜗牛各自的移动或生长方向（倒计时 / 洗牌为空）。
-stageMoves :: EndStage -> [(Pos, Pos)]
-stageMoves s = concatMap (endEffectPairs . esEffect) (stSteps s)
 
 -- | 进入 head 轮：没有被消格的轮（皮带沉降收饼干等）直接下落，不计连击。
 enterWave :: Cascade -> (StepResult, [CascadeEvent])
@@ -374,72 +352,6 @@ fallTable w = transpose [colInfo c | c <- cols]
             ]
       in news ++ olds
 
--- | 下落映射里某格的 (偏移行数, 是否新补)；越界按「不动」处理。
-fallAt :: [[(Int, Bool)]] -> Pos -> (Int, Bool)
-fallAt table (r, c) = case drop r table of
-  row : _ | r >= 0, c >= 0, x : _ <- drop c row -> x
-  _ -> (0, False)
-
 -- | 本轮消除并放下新特殊块之后、下落之前某格的内容（Nothing = 空洞；越界也按空洞）。
 holeAt :: CascadeWave -> Pos -> Maybe Cell
 holeAt w = atM (cwHoles w)
-
---------------------------------------------------------------------------------
--- 浮字
---------------------------------------------------------------------------------
-
-data PopKind
-  = PopCombo Int     -- ^ 「连击 xN」
-  | PopScore Int Int -- ^ 本轮得分（分数, 连击序号）
-  deriving (Eq, Show)
-
--- | 浮字：位置为逻辑像素（中心点）。
-data TextPop = TextPop
-  { tpKind :: PopKind
-  , tpX    :: Float
-  , tpY    :: Float
-  , tpAge  :: Int
-  , tpLife :: Int
-  }
-
-tickPops :: [TextPop] -> [TextPop]
-tickPops = filter (\p -> tpAge p < tpLife p) . map (\p -> p {tpAge = tpAge p + 1})
-
--- | 「连击」弹出缩放：0.35 → 1.3（7 帧回弹式放大）→ 1.0（5 帧回落）→ 保持。
-comboPopScale :: Int -> Double
-comboPopScale age
-  | age < 7 =
-      let t = fromIntegral age / 7
-          e = 1 - (1 - t) * (1 - t)
-      in 0.35 + (1.3 - 0.35) * e
-  | age < 12 = 1.3 - 0.3 * fromIntegral (age - 7) / 5
-  | otherwise = 1.0
-
--- | 得分浮字：0.6 → 1.0 轻微弹出。
-scorePopScale :: Int -> Double
-scorePopScale age
-  | age < 5 = 0.6 + 0.4 * fromIntegral age / 5
-  | otherwise = 1.0
-
--- | 最后 16 帧线性淡出。
-popAlpha :: TextPop -> Word8
-popAlpha p =
-  let left = tpLife p - tpAge p
-  in if left >= 16 then 255 else fromIntegral (max 0 (left * 255 `div` 16))
-
--- | 上浮距离（逻辑像素）：连击提示停稳后缓慢上浮，得分从一开始就飘起。
-popRise :: TextPop -> Float
-popRise p = case tpKind p of
-  PopCombo _ -> if tpAge p < 12 then 0 else fromIntegral (tpAge p - 12) * 0.35
-  PopScore _ _ -> fromIntegral (tpAge p) * 0.9
-
--- | 被消格的锚点：(平均行, 平均列, 最上行, 最下行)。
-clearedAnchor :: [Pos] -> (Float, Float, Int, Int)
-clearedAnchor [] = (3.5, 3.5, 3, 4)
-clearedAnchor ps@((r0, _) : _) =
-  let n = fromIntegral (length ps)
-  in ( sum [fromIntegral r | (r, _) <- ps] / n
-     , sum [fromIntegral c | (_, c) <- ps] / n
-     , foldr (min . fst) r0 ps
-     , foldr (max . fst) r0 ps
-     )

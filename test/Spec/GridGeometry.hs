@@ -5,15 +5,13 @@
 -- * 方向：'Dir' / 'stepDir' / 'dirBetween' 的基本性质，四种具名邻格顺序写死，并与字面量的坐标列表逐格逐项相同
 --   （邻消 / 蔓延 / 飞碟的上下左右、飞碟移动的右下左上、蔓延来源的上左右下、交换枚举的右下）；
 -- * 带坐标的折叠：'ifoldMap' / 'ifoldr' / 'ifoldl'' / 'positionsWhere' 都是行主序，与 @p <- boardPositions b@ 相同；
--- * UI 边界：像素 newtype 下的 'gridCellAt' / 'gridCellOrigin'、每日挑战 Year / Month / Day 的种子与配置写成固定例子
---   （期望值由现实现生成，生成时与删除前的逐字旧副本核对过）。
+-- * 每日挑战 Year / Month / Day 的种子与配置写成固定例子（期望值由现实现生成，生成时与删除前的逐字旧副本核对过）。
+--   （原像素 newtype 下 'gridCellAt' / 'gridCellOrigin' 的用例随 Engine.GridUI 一起删除：它只给已移除的 SDL 桌面版用。）
 module Spec.GridGeometry
   ( tests
   ) where
 
 import Data.List (sort)
-import Engine.GridUI (GridGeom (..), PxX (..), PxY (..), pxXY)
-import qualified Engine.GridUI as NewUI
 import Match3.Board.Grid (inBounds)
 import Match3.Core
 import Match3.Board.Grid (adjacent, neighborsInBounds)
@@ -52,7 +50,6 @@ tests =
   [ testCase "grid_dir_basics" grid_dir_basics
   , testProperty "qc_grid_neighbor_orders_literal" (withMaxSuccess 300 qc_grid_neighbor_orders_literal)
   , testProperty "qc_grid_indexed_folds_row_major" (withMaxSuccess 300 qc_grid_indexed_folds_row_major)
-  , testCase "grid_ui_px_pinned" grid_ui_px_pinned
   , testCase "daily_date_pinned" daily_date_pinned
   ]
 
@@ -100,13 +97,11 @@ grid_dir_basics = do
   -- dirBetween 是 stepDir 的逆；不相邻（含同一格、对角、隔一格）时 Nothing
   sequence_ [dirBetween p (stepDir d p) @?= Just d | d <- [minBound .. maxBound], p <- [(0, 0), (4, -3), (-1, 7)]]
   sequence_ [dirBetween (2, 2) q @?= Nothing | q <- [(2, 2), (3, 3), (1, 1), (0, 2), (2, 4), (4, 2)]]
-  -- adjacent / orthoAdjacent：曼哈顿距离恰好为 1
+  -- adjacent：曼哈顿距离恰好为 1（原 Engine.GridUI.orthoAdjacent 的同一断言随模块删除）
   let ps = [(r, c) | r <- [-1 .. 4], c <- [-1 .. 4]]
       manhattan1 (r1, c1) (r2, c2) = abs (r1 - r2) + abs (c1 - c2) == 1
   sequence_
-    [ do
-        assertEqual ("adjacent " ++ show (p, q)) (manhattan1 p q) (adjacent p q)
-        assertEqual ("orthoAdjacent " ++ show (p, q)) (manhattan1 p q) (NewUI.orthoAdjacent p q)
+    [ assertEqual ("adjacent " ++ show (p, q)) (manhattan1 p q) (adjacent p q)
     | p <- ps, q <- ps
     ]
   -- 蜗牛：构造器与 Show 不变，方向写法只在 API 层
@@ -159,37 +154,6 @@ qc_grid_indexed_folds_row_major =
               , counterexample "positionsWhere" (positionsWhere even g === [p | (p, x) <- zip ps xs, even x])
               , counterexample "positionsWhere 惰性取前缀" (take 1 (positionsWhere (const True) g) === take 1 ps)
               ]
-
--- | 换算用的三种网格：棋盘几何（16, 124, 56, 8×8）、非正方的 3 行 5 列（左上角为负）、0 行。
-pxGeoms :: [GridGeom Int]
-pxGeoms = [GridGeom 16 124 56 8 8, GridGeom (-10) 30 7 3 5, GridGeom 0 0 10 0 4]
-
--- | 像素探针：网格内外、格边界 ±1 像素。
-pxProbes :: [(Int, Int)]
-pxProbes = [(-1, -1), (0, 0), (15, 123), (16, 124), (71, 179), (72, 180), (463, 571), (464, 572), (30, 200), (300, 130), (-10, 30), (24, 50), (25, 51)]
-
--- | 格探针：盘内、行列不同的格、盘外。
-pxCells :: [(Int, Int)]
-pxCells = [(0, 0), (0, 1), (1, 0), (2, 4), (7, 7), (-1, 3), (8, 0)]
-
--- | 像素 newtype 下的 'gridCellAt' / 'gridCellOrigin' 写死（三种网格 × 像素探针 / 格探针）。
--- (行, 列) 解构写反时，非正方网格与 (2,4) 这类格立刻不同。
-grid_ui_px_pinned :: Assertion
-grid_ui_px_pinned =
-  sequence_
-    [ do
-        assertEqual ("gridCellAt " ++ show g) cellsAt [NewUI.gridCellAt g (PxX x) (PxY y) | (x, y) <- pxProbes]
-        assertEqual ("gridCellOrigin " ++ show g) origins [pxXY (NewUI.gridCellOrigin g rc) | rc <- pxCells]
-    | (g, (cellsAt, origins)) <- zip pxGeoms pinnedPx
-    ]
-
--- | grid_ui_px_pinned 的期望（由现实现生成，生成时与删除前的裸 Int 版副本核对过）。
-pinnedPx :: [([Maybe (Int, Int)], [(Int, Int)])]
-pinnedPx =
-  [ ([Nothing,Nothing,Nothing,Just (0,0),Just (0,0),Just (1,1),Just (7,7),Nothing,Just (1,0),Just (0,5),Nothing,Nothing,Nothing],[(16,124),(72,124),(16,180),(240,236),(408,516),(184,68),(16,572)])
-  , ([Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Just (0,0),Just (2,4),Nothing],[(-10,30),(-3,30),(-10,37),(18,44),(39,79),(11,23),(-10,86)])
-  , ([Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],[(0,0),(10,0),(0,10),(40,20),(70,70),(30,-10),(0,80)])
-  ]
 
 -- | 每日挑战的日期：闰日、跨年、月底等。
 dailyDates :: [(Int, Int, Int)]

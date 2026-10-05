@@ -27,10 +27,10 @@ data DiffCount = DiffCount
 
 -- | 元素世界里所有带 diffCounter 的元素，按步前 / 步后盘面算个数差（格子按 diffWeight 加权，缺省每格 1）。
 diffCountsWith :: World -> Board -> Board -> [DiffCount]
-diffCountsWith reg before after =
+diffCountsWith world before after =
   [ DiffCount n k cnt (cnt * bonus)
-  | (n, k, bonus) <- diffCountersWith reg
-  , let cnt = max 0 (weighElementWith reg n before - weighElementWith reg n after)
+  | (n, k, bonus) <- diffCountersWith world
+  , let cnt = max 0 (weighElementWith world n before - weighElementWith world n after)
   ]
 
 -- | 地毯补充种子：步前本体 vacatesCarpet 的格，步后本体换成了别的元素。
@@ -39,11 +39,11 @@ diffCountsWith reg before after =
 -- 沉降中途才落到地毯上、随后被收走的饼干不在这里：它们的收集位已并入连锁的清除格（见 settleBoardPortalsWith）。
 -- 比较的是步前盘面与步后终盘（蜗牛与后续连锁之后）。
 carpetVacateSeedsWith :: World -> Board -> Board -> [Pos]
-carpetVacateSeedsWith reg before after =
+carpetVacateSeedsWith world before after =
   [ p
   | p <- boardPositions before
   , let cell0 = getCell before p
         cell1 = getCell after p
-  , vacatesCarpetWith reg cell0
-  , elementName reg cell1 /= elementName reg cell0
+  , vacatesCarpetWith world cell0
+  , elementName world cell1 /= elementName world cell0
   ]

@@ -4,7 +4,7 @@
 -- | QuickCheck 性质测试。
 --
 -- qc_findMatches_ge3 是原有的性质（逐字不变）。其余是第 1 刀新增的不变量，覆盖重力、补子、连锁、
--- 撤销 / 重做、回放、目标进度与元素注册表；第 8 刀加形状规则表 / 组合表 / 补子策略与旧实现的对照、组合表的对称性。为了可复现，新性质统一挂在固定种子下
+-- 撤销 / 重做、回放、目标进度与元素世界；第 8 刀加形状规则表 / 组合表 / 补子策略与旧实现的对照、组合表的对称性。为了可复现，新性质统一挂在固定种子下
 -- （localOption (QuickCheckReplayLegacy 20260930)），每条用 withMaxSuccess 控制次数。
 -- 生成器只用本模块里的 Gen（格子、可空盘面、战役关卡 + 种子 + 动作选择），不依赖规则实现。
 module Spec.Properties
@@ -113,8 +113,8 @@ tests =
       , testProperty "qc_goal_matches_legacy" (withMaxSuccess 2000 qc_goal_matches_legacy)
       , testProperty "qc_goal_progress_laws" (withMaxSuccess 1000 qc_goal_progress_laws)
       , testProperty "qc_goal_progress_bounded" (withMaxSuccess 60 qc_goal_progress_bounded)
-      , testProperty "qc_registry_decode_roundtrip" (withMaxSuccess 1000 qc_registry_decode_roundtrip)
-      , testProperty "qc_registry_names_slots_unique" (once qc_registry_names_slots_unique)
+      , testProperty "qc_world_decode_roundtrip" (withMaxSuccess 1000 qc_world_decode_roundtrip)
+      , testProperty "qc_world_names_cells_unique" (once qc_world_names_cells_unique)
       , testProperty "qc_find_hint_local_matches_reference" (withMaxSuccess 400 qc_find_hint_local_matches_reference)
       , testProperty "qc_counts_algebra" (withMaxSuccess 1000 qc_counts_algebra)
       , testProperty "qc_counts_monotone_legacy_view" (withMaxSuccess 60 qc_counts_monotone_legacy_view)
@@ -217,9 +217,9 @@ column mb c = [atM mb (r, c) | r <- [0 .. boardSize - 1]]
 qc_gravity_keeps_cells_and_column_order :: Property
 qc_gravity_keeps_cells_and_column_order =
   forAll genMBoard $ \mb ->
-    let reg = defaultWorld
-        mb' = applyGravityWith reg mb
-        fixed = gravityFixedCellWith reg
+    let world = defaultWorld
+        mb' = applyGravityWith world mb
+        fixed = gravityFixedCellWith world
         isFixedM = maybe False fixed
         colOk c =
           let colBefore = column mb c
@@ -248,7 +248,7 @@ qc_refill_leaves_no_holes seed =
             _ -> False
     in all cellOk [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
 
--- | 连锁：从带现成匹配的盘面开始，内置注册表下的连锁一定结束（2 秒内），结束后盘面上没有现成匹配，
+-- | 连锁：从带现成匹配的盘面开始，内置元素世界下的连锁一定结束（2 秒内），结束后盘面上没有现成匹配，
 -- 每一轮首尾相接。
 qc_cascade_terminates_stable :: Int -> Property
 qc_cascade_terminates_stable seed =
@@ -593,44 +593,44 @@ qc_goal_progress_bounded =
                all okState states && all okOutcome states
 
 --------------------------------------------------------------------------------
--- 元素注册表
+-- 元素元素世界
 
--- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在注册表的本体条目上、
+-- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在元素世界的本体条目上、
 -- 且那个种类的 fromCell 认这个（拆掉叠层后的）格子；最上层的叠层 / 冰层同样落在 peel 认这个格子的叠层条目上。
 -- 未注册的自定义名字解码成惰性占格（名字照旧），编码仍是原格。
-qc_registry_decode_roundtrip :: Property
-qc_registry_decode_roundtrip =
+qc_world_decode_roundtrip :: Property
+qc_world_decode_roundtrip =
   forAll genCell $ \cell ->
-    let reg = defaultWorld
-        w = reg
-        defs = worldDefs reg
+    let world = defaultWorld
+        w = world
+        defs = worldDefs world
         (layers, inner) = decodeLayers w cell
         kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- defs, kindName p == n]
         layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- defs, layerName p == n]
-        bodyName = elementName reg cell
+        bodyName = elementName world cell
         bodyOk = case inner of
           Custom n _
             | n `notElem` map defName defs -> bodyName == n
           _ -> kindAccepts bodyName inner
-        topName = topLayerName reg cell
+        topName = topLayerName world cell
         topOk = case (cell, layers) of
           (Gem _ _ ice _, _) | ice > 0 -> topName == "ice" && layerAccepts topName cell
           (_, l : _) -> topName == layerValueName l && layerAccepts topName cell
           _ -> topName == bodyName
     in counterexample (show (bodyName, topName, map layerValueName layers, inner)) $
-         toCell (elementOf reg cell) === cell .&&. bodyOk .&&. topOk
+         toCell (elementOf world cell) === cell .&&. bodyOk .&&. topOk
 
 -- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
 -- 8 种叠层各由一个叠层种类认领，冰层只有一个。
-qc_registry_names_slots_unique :: Property
-qc_registry_names_slots_unique =
+qc_world_names_cells_unique :: Property
+qc_world_names_cells_unique =
   let names = map defName builtinDefs
-      reg = defaultWorld
+      world = defaultWorld
       bodyCells =
         [Gem C1 k 0 Nothing | k <- [Normal, LineH, LineV, Bomb, Rainbow]]
           ++ [Stone 1, Chest 1, Honey 1, Balloon C1, Cookie, Cake 1, MagicHat, Maker C1 1, Snail 0 1, Safe 1, Flip C1 C2, Surprise, Bottle C1, TimeSpirit, Countdown C1 1]
-      bodyNames = map (elementName reg) bodyCells
-      ovNames = [topLayerName reg (Gem C1 Normal 0 (Just o)) | o <- [Grass, Vine, Choco, Fog 1, Chain 1, Freeze 1, Curtain 1, Steam]]
+      bodyNames = map (elementName world) bodyCells
+      ovNames = [topLayerName world (Gem C1 Normal 0 (Just o)) | o <- [Grass, Vine, Choco, Fog 1, Chain 1, Freeze 1, Curtain 1, Steam]]
       ices = [n | LayerDef (SomeLayer p) <- builtinDefs, let n = layerName p, isJust (peelAs p (Gem C1 Normal 1 Nothing))]
   in conjoin
        [ counterexample "names unique" (length (nub names) === length names)
@@ -713,8 +713,8 @@ qc_counts_monotone_legacy_view =
 
 -- | 第 3 刀之前的 findHintWith（整盘 hasAnyMatchWith (swapCells b p1 p2)），留作参照实现。
 findHintReference :: World -> Board -> Maybe (Pos, Pos)
-findHintReference reg b =
-  case matchHints ++ concatMap ruleHints (swapRules reg) of
+findHintReference world b =
+  case matchHints ++ concatMap ruleHints (swapRules world) of
     (x : _) -> Just x
     [] -> Nothing
   where
@@ -727,8 +727,8 @@ findHintReference reg b =
       , p2 <- [(r, c + 1), (r + 1, c)]
       , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
       , hintable (getCell b p2)
-      , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2)
-      , hasAnyMatchWith reg (swapCells b p1 p2)
+      , hintableWith world (getCell b p1) && hintableWith world (getCell b p2)
+      , hasAnyMatchWith world (swapCells b p1 p2)
       ]
     ruleHints rule =
       [ (p1, p2)
@@ -740,8 +740,8 @@ findHintReference reg b =
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
       , srFires rule b p1 p2
       ]
-    hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
-    upperLocked = upperBlocksSwapWith reg
+    hintable cell = isJust (colorOfWith world cell) && not (blocksSwapWith world cell)
+    upperLocked = upperBlocksSwapWith world
 
 -- | findHintWith 的局部匹配检查与参照实现（整盘检查）结果相同：随机盘面（常带现成匹配）、
 -- 各关开局（稳定、无现成匹配，提示走局部检查路径）、整盘随机格（含障碍与自定义）三类。
@@ -789,8 +789,8 @@ qc_name_newtypes_show_ord =
   where
     nameGen = oneof [elements ["bubble", "jelly", "nest", "a\"b", "中文", ""], arbitrary]
 
--- | 第 7 刀（7a）：Board 层的关卡级钩子（levelHooksWith 内置注册表 + 飞碟 / 传送门的元素值）与第 7 刀前的直接调用相同：
--- 补子后吸收 = stepUfos（吸走的格、移动后的飞碟），沉降传送 = portalTeleport（本体可穿门谓词取自注册表）。
+-- | 第 7 刀（7a）：Board 层的关卡级钩子（levelHooksWith 内置元素世界 + 飞碟 / 传送门的元素值）与第 7 刀前的直接调用相同：
+-- 补子后吸收 = stepUfos（吸走的格、移动后的飞碟），沉降传送 = portalTeleport（本体可穿门谓词取自元素世界）。
 qc_level_hooks_match_legacy :: Property
 qc_level_hooks_match_legacy =
   forAll genPlayBoard $ \b ->
@@ -840,31 +840,31 @@ qc_end_table_matches_legacy =
           (nr, nc) = boardDims (gsBoard gs0)
       in forAll ((,) <$> choose (0, nr - 1) <*> choose (0, nc - 1)) $ \seedPos ->
         let gs = gs0
-            reg = defaultWorld
-            hooks0 = levelHooksWith reg (gsLevelElems gs)
+            world = defaultWorld
+            hooks0 = levelHooksWith world (gsLevelElems gs)
             summary (segs, ends, board, vacate) =
               ( [(crBoard r, crWaves r, crTally r, show (crGen r), hookLevel (crHooks r)) | r <- NE.toList segs]
               , ends
               , board
               , vacate
               )
-            segB = cascadeSeedsWith reg Nothing [seedPos] hooks0 (gsGen gs) (gsBoard gs)
-            segS = [cascadeMatchesWith reg (Just b) hooks0 (gsGen gs) (swapCells (gsBoard gs) a b) | Just (a, b) <- [findHintWith reg (gsBoard gs)]]
+            segB = cascadeSeedsWith world Nothing [seedPos] hooks0 (gsGen gs) (gsBoard gs)
+            segS = [cascadeMatchesWith world (Just b) hooks0 (gsGen gs) (swapCells (gsBoard gs) a b) | Just (a, b) <- [findHintWith world (gsBoard gs)]]
             endsOf (_, e, _, _) = e
-        in classify (any (not . null . endsOf . legacySwapEnd reg) segS) "swap has end effects" $
-             conjoin [summary (runEndTable reg swapEndTable seg) === summary (legacySwapEnd reg seg) | seg <- segS]
-               .&&. summary (runEndTable reg boosterEndTable segB) === summary (legacyBoosterEnd reg segB)
+        in classify (any (not . null . endsOf . legacySwapEnd world) segS) "swap has end effects" $
+             conjoin [summary (runEndTable world swapEndTable seg) === summary (legacySwapEnd world seg) | seg <- segS]
+               .&&. summary (runEndTable world boosterEndTable segB) === summary (legacyBoosterEnd world segB)
 
 -- | 第 7 刀前 Resolve.swapEnd 的逐字副本（皮带效果改为通用形状）。
 legacySwapEnd :: World -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-legacySwapEnd reg seg0 =
+legacySwapEnd world seg0 =
   let ws0 = crWaves seg0
       board0' = crBoard seg0
-      (tickSteps, seg1) = cascadeCountdownsTracedWith reg (crHooks seg0) (crGen seg0) board0'
+      (tickSteps, seg1) = cascadeCountdownsTracedWith world (crHooks seg0) (crGen seg0) board0'
       endTick = [EndStep (length ws0) bB bA e | (bB, bA, e) <- tickSteps]
       elems1 = hookLevel (crHooks seg1)
-      (hasBelts, mvBelt, hooks1) = case beltShiftIn reg elems1 of
-        Just (mv, es) -> (True, mv, levelHooksWith reg es)
+      (hasBelts, mvBelt, hooks1) = case beltShiftIn world elems1 of
+        Just (mv, es) -> (True, mv, levelHooksWith world es)
         Nothing -> (False, [], crHooks seg1)
       boardCd = crBoard seg1
       boardBelt = applyBeltMoves boardCd mvBelt
@@ -877,24 +877,24 @@ legacySwapEnd reg seg0 =
       seg2 =
         if not hasBelts
           then stillRun boardCd hooks1 (crGen seg1)
-          else cascadeAfterWith reg AfterBelt hooks1 (crGen seg1) boardBelt
+          else cascadeAfterWith world AfterBelt hooks1 (crGen seg1) boardBelt
       boardBeltCas = crBoard seg2
       nEnd = nBelt + length (crWaves seg2)
       elems2 = hookLevel (crHooks seg2)
-      avoid = nub (avoidCellsIn reg elems2)
-      walls = nub (wallCellsIn reg elems2)
-      (endSpread, boardSpread) = traceSpreadsWith reg nEnd boardBeltCas
-      (endMove, boardSnail) = runPhase reg PhaseMove (EndCtx avoid walls (pushableWith reg)) nEnd boardSpread
-      seg3 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSnail)) (crHooks seg2) (crGen seg2) boardSnail
+      avoid = nub (avoidCellsIn world elems2)
+      walls = nub (wallCellsIn world elems2)
+      (endSpread, boardSpread) = traceSpreadsWith world nEnd boardBeltCas
+      (endMove, boardSnail) = runPhase world PhaseMove (EndCtx avoid walls (pushableWith world)) nEnd boardSpread
+      seg3 = cascadeAfterWith world (AfterEnd (endHolesWith world boardSnail)) (crHooks seg2) (crGen seg2) boardSnail
       board1 = crBoard seg3
   in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
 
 -- | 第 7 刀前 Resolve.boosterEnd 的逐字副本。
 legacyBoosterEnd :: World -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
-legacyBoosterEnd reg seg0 =
+legacyBoosterEnd world seg0 =
   let boardH = crBoard seg0
-      (ends, boardSp) = traceSpreadsWith reg (length (crWaves seg0)) boardH
-      seg1 = cascadeAfterWith reg (AfterEnd (endHolesWith reg boardSp)) (crHooks seg0) (crGen seg0) boardSp
+      (ends, boardSp) = traceSpreadsWith world (length (crWaves seg0)) boardH
+      seg1 = cascadeAfterWith world (AfterEnd (endHolesWith world boardSp)) (crHooks seg0) (crGen seg0) boardSp
   in (seg0 :| [seg1], ends, crBoard seg1, boardH)
 
 -- | 第 7 刀（7b）起节拍折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的输入（第 5 刀起节拍是 Mechanic 的
@@ -911,10 +911,10 @@ qc_beat_folds_in_order :: Property
 qc_beat_folds_in_order =
   forAll (choose (0, 5) >>= \n -> vectorOf n (choose (1, 9 :: Int))) $ \ks0 ->
     let ks = nub ks0
-        reg = foldl (\r k -> registerMechanic (SomeMechanic (Adder k 0)) r) defaultWorld ks
+        world = foldl (\r k -> registerMechanic (SomeMechanic (Adder k 0)) r) defaultWorld ks
         elems = [SomeMechanic (Adder k 5) | k <- ks]
-        viaProto = beatIn reg [] [] onEndTick
-        viaIn = beatIn reg elems [] onEndTick
+        viaProto = beatIn world [] [] onEndTick
+        viaIn = beatIn world elems [] onEndTick
         expected = if null ks then Nothing else Just [((k, k), (k, k)) | k <- ks]
     in conjoin
          [ fmap fst viaProto === expected
@@ -1084,7 +1084,7 @@ qc_combo_table_symmetric =
          ]
 
 -- | 补子策略：缺省策略（defaultRefill、colorsRefill numColors、Gravity.refill）与旧 refill 逐字相同——
--- 盘面与推进后的生成器都相同（随机数消费顺序不变）；内置关卡级元素不换策略（activeRefill = 注册表的缺省）。
+-- 盘面与推进后的生成器都相同（随机数消费顺序不变）；内置关卡级元素不换策略（activeRefill = 元素世界的缺省）。
 qc_refill_policy_default_matches_legacy :: Int -> Property
 qc_refill_policy_default_matches_legacy seed =
   forAll genMBoard $ \mb ->

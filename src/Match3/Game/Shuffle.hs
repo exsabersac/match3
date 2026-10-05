@@ -36,7 +36,7 @@ data CellDecor = CellDecor
 -- 保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 keepOnShuffle）。
 -- 只有普通宝石会被洗走；直线 / 炸弹 / 彩虹特殊块与所有障碍原样放回。
 extractDecorWith :: World -> Board -> [CellDecor]
-extractDecorWith reg = ifoldMap (\p cell -> [CellDecor p cell | keepOnShuffleWith reg cell])
+extractDecorWith world = ifoldMap (\p cell -> [CellDecor p cell | keepOnShuffleWith world cell])
 
 -- | 把 extractDecorWith 记下的格写回新盘面的原位置。
 restoreDecor :: Board -> [CellDecor] -> Board
@@ -49,10 +49,10 @@ ensurePlayable = ensurePlayableWith defaultWorld
 
 -- | ensurePlayable（指定元素世界）。
 ensurePlayableWith :: World -> GameState -> GameState
-ensurePlayableWith reg gs
+ensurePlayableWith world gs
   | Just _ <- gsOver gs = gs { gsShuffled = False }
-  | hasValidMoveWith reg (gsBoard gs) = gs { gsShuffled = False }
-  | otherwise = fromMaybe (headS rest) (find (hasValidMoveWith reg . gsBoard) checked)
+  | hasValidMoveWith world (gsBoard gs) = gs { gsShuffled = False }
+  | otherwise = fromMaybe (headS rest) (find (hasValidMoveWith world . gsBoard) checked)
   where
     -- 全部重洗结果是一条惰性的无穷流 s1, s2, …（每次从上一次的生成器接着洗）；
     -- 前 24 次逐个检查、取第一个有可走步的，都没有就用第 25 次（不检查）。
@@ -61,7 +61,7 @@ ensurePlayableWith reg gs
     dims g = boardDims (gsBoard g)
     reshuffle g =
       let (rows, cols) = dims g
-          decor = extractDecorWith reg (gsBoard g)
+          decor = extractDecorWith world (gsBoard g)
           (board0, g') = shufflePlayableSized rows cols (gsGen g)
           board = restoreDecor board0 decor
       in (board, g')
@@ -77,9 +77,9 @@ shuffleGame = shuffleGameWith defaultWorld
 -- | 手动洗牌（指定元素世界）：保留判定 keepOnShuffleWith 用这张表——自定义元素
 -- （如测试专用元素）按它自己的 keepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
 shuffleGameWith :: World -> GameState -> GameState
-shuffleGameWith reg gs =
+shuffleGameWith world gs =
   let (rows, cols) = boardDims (gsBoard gs)
-      decor = extractDecorWith reg (gsBoard gs)
+      decor = extractDecorWith world (gsBoard gs)
       (board0, g') = shufflePlayableSized rows cols (gsGen gs)
       board = restoreDecor board0 decor
   -- 洗牌不是一步消除：清掉上一步的连击 / 清除格反馈

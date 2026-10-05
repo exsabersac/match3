@@ -14,7 +14,7 @@ module Match3.Obstacles
   ( orthoNeighbors
   , adjacentWhere
     -- * 气球 / 彩蛋
-  , chipAdjacentBalloonsExcept
+  , balloonsAdjacentSameColor
   , openSurprises
     -- * 魔法帽 / 染色瓶 / 果汁机
   , hatsAdjacentTo
@@ -79,7 +79,8 @@ adjacentWhere ok b cleared =
 hatsAdjacentTo :: Board -> [Pos] -> [Pos]
 hatsAdjacentTo = adjacentWhere isMagicHat
 
--- | Balloon positions orthogonally adjacent to a same-color cleared gem.
+-- | 与同色真消除宝石正交相邻的气球（去重；顺序 = 按消除格、每格上 / 下 / 左 / 右）。气球的邻格规则
+-- 'Match3.Element.Builtin.Obstacle.balloonPop' 用它。
 balloonsAdjacentSameColor :: Board -> [Pos] -> [Pos]
 balloonsAdjacentSameColor b cleared =
   nub
@@ -92,12 +93,6 @@ balloonsAdjacentSameColor b cleared =
     , inBounds b p
     , balloonColor (at b p) == Just col
     ]
-
--- | Pop balloons adjacent to same-color clears (single hit; no layers), skipping cells in 'except'.
-chipAdjacentBalloonsExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentBalloonsExcept b clearedGems except =
-  let dead = [p | p <- balloonsAdjacentSameColor b clearedGems, p `notElem` except]
-  in (b, dead)  -- board unchanged until clear pipeline removes them
 
 cycleColor :: Color -> Color
 cycleColor c = colorAt (fromEnum c + 1)

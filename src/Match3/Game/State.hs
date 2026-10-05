@@ -301,6 +301,6 @@ applyHint = applyHintWith defaultWorld
 
 -- | applyHint（指定元素世界）：可走判定用这张表里的挡交换 / 匹配色定义。
 applyHintWith :: World -> GameState -> (GameState, Maybe (Pos, Pos))
-applyHintWith reg gs =
-  let h = findHintWith reg (gsBoard gs)
+applyHintWith world gs =
+  let h = findHintWith world (gsBoard gs)
   in (gs { gsHint = h }, h)

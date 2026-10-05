@@ -135,22 +135,22 @@ resolveMove = resolveMoveWith defaultWorld
 resolveMoveWith
   :: IsFull (StartPhase k)
   => World -> SMoveKind k -> Stage (StartPhase k) -> Opening (StartPhase k) -> GameState -> (GameState, Outcome, MoveTrace)
-resolveMoveWith reg0 sk startS opening gs =
+resolveMoveWith world0 sk startS opening gs =
   let kind = moveKind sk
       start = stageBoard startS
-      -- 本关的元素世界：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = reg0
-      reg = levelWorldIn reg0 (gsLevelElems gs)
-      hooks0 = levelHooksWith reg (gsLevelElems gs)
+      -- 本关的元素世界：关卡级元素可以改形状表（规则开关 "bomb_shapes"：L / T 形生成炸弹）；没人回复 = world0
+      world = levelWorldIn world0 (gsLevelElems gs)
+      hooks0 = levelHooksWith world (gsLevelElems gs)
       -- 变身起手（OpenMorph）：第一轮之前先把变身写进盘面，并记一条 esAfterWaves = 0 的步末效果
       (startW, preEnds) = case opening of
         OpenMorph _ eff _ -> let b = applyEndEffect eff start in (b, [EndStep 0 start b eff])
         _ -> (start, [])
       seg0 = case opening of
-        OpenMatch prefer -> cascadeMatchesWith reg prefer hooks0 (gsGen gs) startW
-        OpenSeeds prefer seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) startW
-        OpenMorph prefer _ seeds -> cascadeSeedsWith reg prefer seeds hooks0 (gsGen gs) startW
+        OpenMatch prefer -> cascadeMatchesWith world prefer hooks0 (gsGen gs) startW
+        OpenSeeds prefer seeds -> cascadeSeedsWith world prefer seeds hooks0 (gsGen gs) startW
+        OpenMorph prefer _ seeds -> cascadeSeedsWith world prefer seeds hooks0 (gsGen gs) startW
       -- 步末：按表的顺序执行
-      (segs, ends0, board1, vacateAfter) = runEndTable reg (endTableFor kind) seg0
+      (segs, ends0, board1, vacateAfter) = runEndTable world (endTableFor kind) seg0
       ends = preEnds ++ ends0
       finalSeg = NE.last segs
       tallies1 = NE.map crTally segs
@@ -164,7 +164,7 @@ resolveMoveWith reg0 sk startS opening gs =
       clearedAll = concatMap ctCleared tallies
       combo = combineCombo tallies
       -- 按前后盘面差计数（保险箱开启、时间精灵 +2 步、自定义）
-      diffs = diffCountsWith reg (gsBoard gs) board1
+      diffs = diffCountsWith world (gsBoard gs) board1
       bonusMoves = sum (map dcBonus diffs)
       -- 地面层节拍（地面层是核心机制，onGroundHit）：逐轮被上方消除命中（每轮每格一次）；
       -- 内置关卡里只有第 39 关（双层果冻）有地面层
@@ -172,13 +172,13 @@ resolveMoveWith reg0 sk startS opening gs =
       (elemsG, groundCounts) =
         let (es', perWave) =
               mapAccumL
-                (\es w -> let (cs, es1) = hitGroundIn reg (nub (cwCleared w ++ cwDrained w)) es in (es1, cs))
+                (\es w -> let (cs, es1) = hitGroundIn world (nub (cwCleared w ++ cwDrained w)) es in (es1, cs))
                 elemsC
                 (concatMap crWaves (NE.toList segs))
         in (es', concat perWave)
       -- 地毯节拍（onCover）
       (carpetHit, elems') =
-        coverIn reg (clearedAll ++ carpetVacateSeedsWith reg (gsBoard gs) vacateAfter) elemsG
+        coverIn world (clearedAll ++ carpetVacateSeedsWith world (gsBoard gs) vacateAfter) elemsG
       -- 计数（全部进 gsCounts，颜色袋也在 ctCounts 里、目标进度由目标数据派生）：各段清除格 / 飞碟吸收 + 前后差 + 地面层去层 + 地毯覆盖
       counts' =
         gsCounts gs
@@ -203,13 +203,13 @@ resolveMoveWith reg0 sk startS opening gs =
             , gsLevelElems = elems'
             }
       -- 胜负：内置规则先判，再交关卡级元素复核（胜负节拍 judge；没人回复时原样）
-      outcome = judgeIn reg elems' board1 (gsScore gs') (gsMoves gs') (decideOutcome gs' gained)
+      outcome = judgeIn world elems' board1 (gsScore gs') (gsMoves gs') (decideOutcome gs' gained)
       gs'' = case terminalOf outcome of
         Just t -> gs' {gsOver = Just t}
         Nothing -> gs'
       -- 未终局时，没有可走步则自动洗牌
       gs''' = case outcome of
-        MoveApplied _ -> ensurePlayableWith reg gs''
+        MoveApplied _ -> ensurePlayableWith world gs''
         _ -> gs''
       trace =
         MoveTrace

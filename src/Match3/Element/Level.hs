@@ -56,14 +56,14 @@ coreLevels = [SomeMechanic (GroundLayer [])]
 -- | 开局的关卡级机制：世界里的各种（注册顺序）+ 核心机制（与注册的同名时以注册的为准），
 -- 各自按关卡记录给出初始状态（'mechStart'）。内置 = [飞碟, 皮带, 传送门, 地毯, 规则开关 …, 地面层]。
 startLevelsWith :: World -> Level -> [SomeMechanic]
-startLevelsWith reg lvl = map start (kinds ++ [c | c <- coreLevels, mechNameOf c `notElem` map mechNameOf kinds])
+startLevelsWith world lvl = map start (kinds ++ [c | c <- coreLevels, mechNameOf c `notElem` map mechNameOf kinds])
   where
-    kinds = mechanicDefs reg
+    kinds = mechanicDefs world
     start (SomeMechanic m) = SomeMechanic (mechStart lvl m)
 
 -- | 本节拍参与的机制，带「状态是否已在 gsLevelElems 里」。
 active :: World -> [SomeMechanic] -> [(SomeMechanic, Bool)]
-active reg elems =
+active world elems =
   [ maybe (k, False) (\e -> (e, True)) (named (mechNameOf k))
   | k <- kinds
   ]
@@ -73,14 +73,14 @@ active reg elems =
        , mechNameOf e `notElem` map mechNameOf kinds
        ]
   where
-    kinds = mechanicDefs reg
+    kinds = mechanicDefs world
     named n = listToMaybe [e | e <- elems, mechNameOf e == n]
 
 -- | 在一个节拍上问一局的关卡级机制：@step m q@ = 机制 m 对输入 q 的回复（Nothing = 不回复）与推进后的自身。
 -- 按参与顺序（注册顺序的各种 + 核心机制）**折叠所有回复者**（前一个的回复是后一个的输入），各回复者推进后的状态
 -- 依次写回；返回 (最终回复, 写回后的关卡级机制)。没人回复时 Nothing。
 beatIn :: World -> [SomeMechanic] -> q -> (forall m. Mechanic m => m -> q -> Maybe (q, m)) -> Maybe (q, [SomeMechanic])
-beatIn reg elems0 q0 step = foldl one Nothing (active reg elems0)
+beatIn world elems0 q0 step = foldl one Nothing (active world elems0)
   where
     one acc (e@(SomeMechanic m), stored) =
       let (q, es) = maybe (q0, elems0) id acc
@@ -94,7 +94,7 @@ beatIn reg elems0 q0 step = foldl one Nothing (active reg elems0)
 
 -- | 状态不变的节拍（查询）：同 'beatIn' 的折叠，只要最终回复。
 queryIn :: World -> [SomeMechanic] -> q -> (forall m. Mechanic m => m -> q -> Maybe q) -> Maybe q
-queryIn reg elems q0 ask = fst <$> beatIn reg elems q0 (\m q -> (\q' -> (q', m)) <$> ask m q)
+queryIn world elems q0 ask = fst <$> beatIn world elems q0 (\m q -> (\q' -> (q', m)) <$> ask m q)
 
 -- | 同名替换（没有则追加）。
 replaceNamed :: SomeMechanic -> [SomeMechanic] -> [SomeMechanic]
@@ -143,16 +143,16 @@ levelDrops = reading drops
 -- | Board 层的钩子：沉降节拍 'onSettling'（可穿门谓词 = 世界的本体定义），补子之后 'onRefilled'，
 -- 补子策略问 'refillPolicy'（初值 = 世界的策略）。没人回复时不传送 / 不吸收 / 用世界的补子策略。
 levelHooksWith :: World -> [SomeMechanic] -> LevelHooks
-levelHooksWith reg elems = hooks
+levelHooksWith world elems = hooks
   where
-    canPass = portalWith reg
+    canPass = portalWith world
     hooks =
       LevelHooks
-        { onSettle = \mb -> maybe mb fst (beatIn reg elems mb (\m q -> onSettling m canPass q))
-        , onAbsorb = \b -> case beatIn reg elems [] (\m acc -> onRefilled m b acc) of
-            Just (ps, elems') -> (ps, levelHooksWith reg elems')
+        { onSettle = \mb -> maybe mb fst (beatIn world elems mb (\m q -> onSettling m canPass q))
+        , onAbsorb = \b -> case beatIn world elems [] (\m acc -> onRefilled m b acc) of
+            Just (ps, elems') -> (ps, levelHooksWith world elems')
             Nothing -> ([], hooks)
-        , hookRefill = queryIn reg elems (refillPolicyWith reg) refillPolicy
+        , hookRefill = queryIn world elems (refillPolicyWith world) refillPolicy
         , hookLevel = elems
         }
 
@@ -161,7 +161,7 @@ levelHooksWith reg elems = hooks
 -- 新玩法 8：地面层里有带扩爆规则的格（魔法地格）时，再把它们写进本步上下文（'StepCtx'，'setWidening'）；
 -- 没有这种格时世界原样（其余关卡与每日挑战不受影响）。
 levelWorldIn :: World -> [SomeMechanic] -> World
-levelWorldIn reg elems = widened (maybe reg (\rs -> setShapeRules rs reg) (queryIn reg elems (shapeRules reg) shapes))
+levelWorldIn world elems = widened (maybe world (\rs -> setShapeRules rs world) (queryIn world elems (shapeRules world) shapes))
   where
     widened r = case groundWideningWith r (levelGround elems) of
       [] -> r
@@ -170,30 +170,30 @@ levelWorldIn reg elems = widened (maybe reg (\rs -> setShapeRules rs reg) (query
 -- | 交换变身节拍（'morph'，新玩法 4）：玩家交换成立前问一次；Just = 本步先变身再按种子起手。第一个回复者为准。
 -- 内置关卡里只有规则开关 RainbowCombos（"rainbow_combos"）打开时回复。
 morphIn :: World -> [SomeMechanic] -> Board -> Board -> Pos -> Pos -> Maybe Morph
-morphIn reg elems b0 swapped p1 p2 =
-  queryIn reg elems Nothing (\m acc -> maybe (Just <$> morph m b0 swapped p1 p2) (const Nothing) acc) >>= id
+morphIn world elems b0 swapped p1 p2 =
+  queryIn world elems Nothing (\m acc -> maybe (Just <$> morph m b0 swapped p1 p2) (const Nothing) acc) >>= id
 
 -- | 皮带节拍（'onEndTick'）：Just (移位, 推进后的机制)；没人回复时 Nothing（没有皮带，也没有皮带后的再连锁）。
 beltShiftIn :: World -> [SomeMechanic] -> Maybe ([(Pos, Pos)], [SomeMechanic])
-beltShiftIn reg elems = beatIn reg elems [] onEndTick
+beltShiftIn world elems = beatIn world elems [] onEndTick
 
 -- | 会走的元素要跳过的格（'avoidCells'，内置 = 皮带格）。
 avoidCellsIn :: World -> [SomeMechanic] -> [Pos]
-avoidCellsIn reg elems = maybe [] id (queryIn reg elems [] avoidCells)
+avoidCellsIn world elems = maybe [] id (queryIn world elems [] avoidCells)
 
 -- | 会走的元素当墙的格（'wallCells'，内置 = 传送门端点）。
 wallCellsIn :: World -> [SomeMechanic] -> [Pos]
-wallCellsIn reg elems = maybe [] id (queryIn reg elems [] wallCells)
+wallCellsIn world elems = maybe [] id (queryIn world elems [] wallCells)
 
 -- | 地毯节拍（'onCover'）：(新覆盖数, 推进后的机制)；没人回复时不覆盖。
 coverIn :: World -> [Pos] -> [SomeMechanic] -> (Int, [SomeMechanic])
-coverIn reg hit elems = maybe (0, elems) id (beatIn reg elems 0 (\m n -> onCover m hit n))
+coverIn world hit elems = maybe (0, elems) id (beatIn world elems 0 (\m n -> onCover m hit n))
 
 -- | 地面层节拍（'onGroundHit'，规则 = 世界的 hitGroundWith）：(按名字的去层数, 推进后的机制)。
 hitGroundIn :: World -> [Pos] -> [SomeMechanic] -> ([(ElementName, Int)], [SomeMechanic])
-hitGroundIn reg hits elems = maybe ([], elems) id (beatIn reg elems [] (\m acc -> onGroundHit m (hitGroundWith reg) hits acc))
+hitGroundIn world hits elems = maybe ([], elems) id (beatIn world elems [] (\m acc -> onGroundHit m (hitGroundWith world) hits acc))
 
 -- | 胜负节拍（'judge'）：内置规则判出的结局交给关卡级机制复核，有回复就用回复里的结局。
 -- 内置关卡级机制都不回复，所以内置关卡与每日挑战的结局与原来逐字相同（judge_default_no_replier）。
 judgeIn :: World -> [SomeMechanic] -> Board -> Score -> MovesLeft -> Outcome -> Outcome
-judgeIn reg elems b score moves out = maybe out id (queryIn reg elems out (\m o -> judge m b score moves o))
+judgeIn world elems b score moves out = maybe out id (queryIn world elems out (\m o -> judge m b score moves o))

@@ -2,7 +2,7 @@
 -- 全部函数都收一个 World（*With）；这里只把仍有调用方的几个定义为「*With defaultWorld」的短名，
 -- 给只跑内置元素的调用方（Core 再导出、随机开局、前端、测试）用。没有调用方的短名不在这里，直接用 *With。
 --
--- 依赖方向：Board.* ← 本模块 → Element.Builtin；主流程（Game.Resolve 等）一律把 reg 传下去，不经本模块。
+-- 依赖方向：Board.* ← 本模块 → Element.Builtin；主流程（Game.Resolve 等）一律把 world 传下去，不经本模块。
 module Match3.Board.Default
   ( gravityFixedCell
   , applyGravity

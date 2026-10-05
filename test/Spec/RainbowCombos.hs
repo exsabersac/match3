@@ -137,13 +137,13 @@ rc_morph_skips_iced_and_overlaid = do
   assertBool "both still seeds" (all (`elem` seeds) [iced, grassy])
   assertEqual "plain ones morphed" (plainC3 (swapCells b0 a b)) [q | (_, q, _) <- cells]
 
--- | 原有 43 关：同一个彩虹 × 直线 / 炸弹交换，在默认注册表和去掉 rainbow_combos 的注册表下结果逐项相同（没有变身）；
+-- | 原有 43 关：同一个彩虹 × 直线 / 炸弹交换，在默认元素世界和去掉 rainbow_combos 的元素世界下结果逐项相同（没有变身）；
 -- 第 44 关两者不同。
 rc_old_levels_unchanged :: Assertion
 rc_old_levels_unchanged = do
   let off = removeMechanic "rainbow_combos" defaultWorld
       (a, b) = comboMove
-      key reg li k = let (gs, o, mt) = resolveSwapWith reg a b ((levelGame li 3) {gsBoard = comboBoard k}) in (gsBoard gs, gsScore gs, show (gsGen gs), show o, length (mtEnd mt), map cwCleared (mtWaves mt))
+      key world li k = let (gs, o, mt) = resolveSwapWith world a b ((levelGame li 3) {gsBoard = comboBoard k}) in (gsBoard gs, gsScore gs, show (gsGen gs), show o, length (mtEnd mt), map cwCleared (mtWaves mt))
   mapM_
     (\(li, k) -> assertEqual ("level " ++ show (li + 1) ++ " " ++ show k) (key off li k) (key defaultWorld li k))
     [(li, k) | li <- [0 .. rcLevel - 1], k <- [LineH, Bomb]]

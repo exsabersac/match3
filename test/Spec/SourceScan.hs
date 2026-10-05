@@ -1,5 +1,5 @@
 -- | 源码扫描工具（Spec.Support.Source）自身的测试：注释剥离、import 解析、标识符匹配。
--- 其他模块的源码扫描测试（element_registry_custom_crate_extensibility、ext_board_modules_take_registry、
+-- 其他模块的源码扫描测试（element_world_custom_crate_extensibility、ext_board_modules_take_world、
 -- ec_flat_record_removed、jb_main_flow_untouched_scan、br_main_flow_no_special_branches、
 -- engine_layer_is_game_agnostic、engine_frontend_steps_only_via_gameStep）都建立在这些行为上。
 module Spec.SourceScan

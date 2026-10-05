@@ -3,7 +3,7 @@
 -- 特效（直线 / 炸弹）在这一格上引爆时爆炸范围向外扩一圈（原范围各格的八邻格并进来：直线一行 → 三行，
 -- 炸弹 3×3 → 5×5），扩出来的格与原范围一样算直接命中。只看引爆格；彩虹取色、特效 × 特效组合给的清除种子不扩
 -- （种子里的特效照常按各自的引爆格判断）。
--- 实现是通用钩子：能力 widens（StepCaps.stWiden）→ 每步 levelWorldIn 把地面层的扩爆格写进注册表
+-- 实现是通用钩子：能力 widens（StepCaps.stWiden）→ 每步 levelWorldIn 把地面层的扩爆格写进元素世界
 -- （本步上下文 StepCtx 的 stepWiden，缺省空）→ blastWith 按引爆格改写范围。第 48 关「魔法格」用到它（底行 8 块三层碎石）。
 module Spec.MagicGround
   ( tests
@@ -45,7 +45,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "mg_caps_ground_not_consumed" mg_caps_ground_not_consumed
+  [ testCase "mg_ability_ground_not_consumed" mg_ability_ground_not_consumed
   , testCase "mg_widen_one_ring" mg_widen_one_ring
   , testCase "mg_blast_widened_only_at_magic_cell" mg_blast_widened_only_at_magic_cell
   , testCase "mg_swap_and_hammer_reach_bottom_row" mg_swap_and_hammer_reach_bottom_row
@@ -63,7 +63,7 @@ mgLevel = 47
 mgCells :: [Pos]
 mgCells = [(6, 2), (6, 5), (5, 3), (5, 4)]
 
--- | 去掉魔法地格条目的注册表（地面层里的 "magic" 查不到条目 → 没有扩爆格）。
+-- | 去掉魔法地格条目的元素世界（地面层里的 "magic" 查不到条目 → 没有扩爆格）。
 noMg :: World
 noMg = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
   foldl (flip registerMechanic) (mkWorld (filter ((/= "magic") . defName) builtinDefs)) builtinMechanics
@@ -90,8 +90,8 @@ blastCells pd = [map snd (evCells e) | e <- pdEvents pd, evKind e == EvBlast]
 
 -- | 能力：带扩爆规则；没有地面反应（上方消除不去层、不计数），
 -- 果冻没有扩爆规则。实战里地面层始终是开局的 4 格、计数里没有 magic。
-mg_caps_ground_not_consumed :: Assertion
-mg_caps_ground_not_consumed = do
+mg_ability_ground_not_consumed :: Assertion
+mg_ability_ground_not_consumed = do
   assertEqual "name" "magic" magicGroundName
   assertEqual "ground name" magicGroundName (groundName (Proxy :: Proxy MagicGround))
   let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
@@ -121,20 +121,20 @@ mg_widen_one_ring = do
   assertEqual "corner clipped" [(0, 0), (0, 1), (1, 0), (1, 1)] (magicWiden b8 [(0, 0)])
   assertEqual "empty stays empty" [] (magicWiden b8 [])
 
--- | 第 48 关的注册表：本步扩爆格 = 4 格魔法地格；直线 / 炸弹只在引爆格是魔法地格时扩（别的格原样），
--- 缺省注册表不扩；非特效没有爆炸。
+-- | 第 48 关的元素世界：本步扩爆格 = 4 格魔法地格；直线 / 炸弹只在引爆格是魔法地格时扩（别的格原样），
+-- 缺省元素世界不扩；非特效没有爆炸。
 mg_blast_widened_only_at_magic_cell :: Assertion
 mg_blast_widened_only_at_magic_cell = do
   let gs = levelGame mgLevel 1
       b = gsBoard gs
-      reg = levelWorldIn defaultWorld (gsLevelElems gs)
+      world = levelWorldIn defaultWorld (gsLevelElems gs)
       plainH p = blastWith defaultWorld b (line LineH) p
-  assertEqual "widened cells" mgCells (widenedCells reg)
-  mapM_ (\p -> assertEqual ("widened at " ++ show p) (magicWiden b (plainH p)) (blastWith reg b (line LineH) p)) mgCells
-  mapM_ (\p -> assertEqual ("plain at " ++ show p) (plainH p) (blastWith reg b (line LineH) p)) [(6, 3), (5, 2), (4, 3), (7, 2)]
-  assertEqual "bomb at (6,2): 5x5 clipped" 20 (length (blastWith reg b (line Bomb) (6, 2)))
-  assertEqual "plain gem: no blast" [] (blastWith reg b (mkGem C1) (6, 2))
-  assertEqual "default registry: not widened" 8 (length (plainH (6, 2)))
+  assertEqual "widened cells" mgCells (widenedCells world)
+  mapM_ (\p -> assertEqual ("widened at " ++ show p) (magicWiden b (plainH p)) (blastWith world b (line LineH) p)) mgCells
+  mapM_ (\p -> assertEqual ("plain at " ++ show p) (plainH p) (blastWith world b (line LineH) p)) [(6, 3), (5, 2), (4, 3), (7, 2)]
+  assertEqual "bomb at (6,2): 5x5 clipped" 20 (length (blastWith world b (line Bomb) (6, 2)))
+  assertEqual "plain gem: no blast" [] (blastWith world b (mkGem C1) (6, 2))
+  assertEqual "default world: not widened" 8 (length (plainH (6, 2)))
 
 -- | 实战：
 -- * 交换 (5,4)↔(6,4) 连成 (6,2..4) 的 C4 三消，(6,2) 的横直线在魔法地格上引爆 → EvBlast 覆盖 5–7 行共 24 格；
@@ -150,7 +150,7 @@ mg_swap_and_hammer_reach_bottom_row = do
     [[(6, c) | c <- [0 .. 7]] ++ [(r, c) | r <- [5, 7], c <- [0 .. 7]]] (blastCells pd)
   let pdNo = playWith noMg (Swap (5, 4) (6, 4)) g0
   assertEqual "without the entry: one row" [[(6, c) | c <- [0 .. 7]]] (blastCells pdNo)
-  let hammer reg p sp = let (gs, _, _) = resolveHammerWith reg p (mgGame [(p, line sp)]) in row7 gs
+  let hammer world p sp = let (gs, _, _) = resolveHammerWith world p (mgGame [(p, line sp)]) in row7 gs
   assertEqual "hammer line at (5,3)" (chipped [0 .. 7]) (hammer defaultWorld (5, 3) LineH)
   assertEqual "hammer line at (5,3), no entry" (chipped []) (hammer noMg (5, 3) LineH)
   assertEqual "hammer line at (5,2) (not magic)" (chipped []) (hammer defaultWorld (5, 2) LineH)
@@ -159,23 +159,23 @@ mg_swap_and_hammer_reach_bottom_row = do
   assertEqual "hammer vline at (6,2)" (chipped [1 .. 3]) (hammer defaultWorld (6, 2) LineV)
   assertEqual "hammer vline at (6,2), no entry" (chipped [2]) (hammer noMg (6, 2) LineV)
 
--- | 成对交换规则（彩虹取色、特效 × 特效组合）给出的清除种子不扩（与缺省注册表逐项相同）；
+-- | 成对交换规则（彩虹取色、特效 × 特效组合）给出的清除种子不扩（与缺省元素世界逐项相同）；
 -- 但种子里的特效照常逐个引爆、只看各自的引爆格：
 -- * 彩虹 × 宝石（盘上没有别的特效）：与去掉魔法条目时逐项相同；
 -- * 直线 × 直线：交换后 (6,2)（魔法地格）上的竖直线扩成 1–3 列（24 格），(6,3) 上的横直线仍是一行（8 格）；
 -- * 炸弹 × 炸弹：(6,2) 上的炸弹 3×3 → 5×5（贴底边截成 20 格），(6,3) 上的仍是 9 格。
 mg_combo_seeds_not_widened :: Assertion
 mg_combo_seeds_not_widened = do
-  let regW = levelWorldIn defaultWorld (gsLevelElems (levelGame mgLevel 1))
+  let worldW = levelWorldIn defaultWorld (gsLevelElems (levelGame mgLevel 1))
       key (gs, o, _) = (gsBoard gs, gsScore gs, gsCounts gs, o)
       swapped g = setCells (gsBoard g) [((6, 2), getCell (gsBoard g) (6, 3)), ((6, 3), getCell (gsBoard g) (6, 2))]
-      seedsSame what g = assertEqual (what ++ ": seeds") (swapOpeningWith defaultWorld (gsBoard g) (swapped g) (6, 2) (6, 3)) (swapOpeningWith regW (gsBoard g) (swapped g) (6, 2) (6, 3))
-      blasts reg g = [(evElement e, src, length (evCells e)) | e <- pdEvents (playWith reg (Swap (6, 2) (6, 3)) g), evKind e == EvBlast, (src, _) : _ <- [evCells e]]
+      seedsSame what g = assertEqual (what ++ ": seeds") (swapOpeningWith defaultWorld (gsBoard g) (swapped g) (6, 2) (6, 3)) (swapOpeningWith worldW (gsBoard g) (swapped g) (6, 2) (6, 3))
+      blasts world g = [(evElement e, src, length (evCells e)) | e <- pdEvents (playWith world (Swap (6, 2) (6, 3)) g), evKind e == EvBlast, (src, _) : _ <- [evCells e]]
       gR = mgGame [((6, 2), Gem C1 Rainbow 0 Nothing)]
       gL = mgGame [((6, 2), line LineH), ((6, 3), Gem C2 LineV 0 Nothing)]
       gB = mgGame [((6, 2), line Bomb), ((6, 3), Gem C2 Bomb 0 Nothing)]
   mapM_ (uncurry seedsSame) [("rainbow x gem", gR), ("line x line", gL), ("bomb x bomb", gB)]
-  assertBool "rainbow opens" (swapOpeningWith regW (gsBoard gR) (swapped gR) (6, 2) (6, 3) /= Nothing)
+  assertBool "rainbow opens" (swapOpeningWith worldW (gsBoard gR) (swapped gR) (6, 2) (6, 3) /= Nothing)
   assertEqual "rainbow x gem: as without the entry" (key (resolveSwapWith noMg (6, 2) (6, 3) gR)) (key (resolveSwapWith defaultWorld (6, 2) (6, 3) gR))
   assertEqual "line x line" [("line_h", (6, 3), 8), ("line_v", (6, 2), 24)] (blasts defaultWorld gL)
   assertEqual "line x line, no entry" [("line_h", (6, 3), 8), ("line_v", (6, 2), 8)] (blasts noMg gL)
@@ -185,7 +185,7 @@ mg_combo_seeds_not_widened = do
 -- | 没有魔法地格的关卡：本步世界不设扩爆格（levelWorldIn 不写 stepWiden）；前 47 关与每日挑战都是这样。
 mg_default_no_widening :: Assertion
 mg_default_no_widening = do
-  assertEqual "default registry" [] (widenedCells defaultWorld)
+  assertEqual "default world" [] (widenedCells defaultWorld)
   mapM_
     (\li -> assertEqual ("level " ++ show (li + 1)) [] (widenedCells (levelWorldIn defaultWorld (gsLevelElems (levelGame li 1)))))
     [0 .. mgLevel - 1]
@@ -193,15 +193,15 @@ mg_default_no_widening = do
     (\(y, m, d) -> assertEqual ("daily " ++ show (y, m, d)) [] (widenedCells (levelWorldIn defaultWorld (gsLevelElems (newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d)))))))
     [(2026, 9, 28), (2026, 9, 29), (2026, 9, 30)]
 
--- | 去掉魔法地格条目的注册表：前 47 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、gsGen 逐项相同
+-- | 去掉魔法地格条目的元素世界：前 47 关与 3 天的每日挑战按提示各走 6 步，盘面、得分、计数、步数、gsGen 逐项相同
 -- （扩爆钩子缺省什么都不做，也不耗随机数）；原有关卡的地面层里没有 magic。
 mg_other_levels_unchanged :: Assertion
 mg_other_levels_unchanged = do
-  let play reg gs n
+  let play world gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
-        | otherwise = case findHintWith reg (gsBoard gs) of
+        | otherwise = case findHintWith world (gsBoard gs) of
             Nothing -> gs
-            Just (p, q) -> let (gs', _, _) = resolveSwapWith reg p q gs in play reg gs' (n - 1)
+            Just (p, q) -> let (gs', _, _) = resolveSwapWith world p q gs in play world gs' (n - 1)
       key gs = (gsBoard gs, gsScore gs, gsCounts gs, gsMoves gs, show (gsGen gs))
       daily (y, m, d) = newDailyGame (dailyConfig (Year y) (Month m) (Day d)) (dailySeed (Year y) (Month m) (Day d))
   assertEqual "older levels have no magic ground" [] [li | li <- [0 .. mgLevel - 1], any ((== "magic") . fst . snd) (lvlGround (levelAt li))]

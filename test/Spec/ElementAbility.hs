@@ -5,8 +5,8 @@
 -- | 元素能力类（元素类重构第 1 刀起）：新写法（Match3.Element.Ability / Kind / Layer / World）的
 --
 -- * 同名替换：把内置的宝石 / 直线特效 / 石头 / 翻转块 / 气泡 / 雪怪 / 冰 / 巧克力 / 锁链 / 果冻换成测试里独立写的
---   新写法副本、按同名注册进内置注册表，元素对照快照（element-oracle.txt）逐行不变；
--- * 叠层合成：测试世界解码出的 'Layered' 元素与内置注册表解码出的元素在全部宝石 × 冰 × 叠层格上逐方法相等；
+--   新写法副本、按同名注册进内置元素世界，元素对照快照（element-oracle.txt）逐行不变；
+-- * 叠层合成：测试世界解码出的 'Layered' 元素与内置元素世界解码出的元素在全部宝石 × 冰 × 叠层格上逐方法相等；
 -- * 名字一致：每个注册本体的 fromCell 认下的格子，解码值的 nameOf 都等于 kindName；
 -- * 透明性：'SomeElement' 与 'Layered' 的转发 instance 按源码核对没有漏掉任何能力方法（漏了会静默退回默认方法），
 --   且装箱前后 'abilityProbe' 逐项相等。
@@ -279,7 +279,7 @@ instance GroundKind JellyV where
   groundCounter _ = Just (CountNamed "jelly")
   groundLabel _ = Just "果冻"
 
--- | 内置注册表里这些条目换成测试里的副本（同名替换，注册位置不变）。
+-- | 内置元素世界里这些条目换成测试里的副本（同名替换，注册位置不变）。
 replaced :: World
 replaced =
   foldl
@@ -307,7 +307,7 @@ ab_same_name_copies_oracle_unchanged = do
     [] -> assertEqual "line count" (length expected) (length actual)
 
 --------------------------------------------------------------------------------
--- 叠层合成与内置注册表逐方法相等
+-- 叠层合成与内置元素世界逐方法相等
 
 world :: World
 world = mkWorld [kindDef @GemV, kindDef @LineHV, layerDef @IceV, layerDef @ChocoV, layerDef @ChainV, kindDef @StoneV]

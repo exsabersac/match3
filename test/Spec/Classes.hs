@@ -9,7 +9,7 @@
 --
 -- * newtype 派生（DerivingStrategies）：ElementName / CustomState 的 Show / IsString 与底层 String / Int 逐字相同。
 -- * 缺省 toCell（DefaultSignatures）：四个 Int newtype 本体元素的写回格子与第 2 项前手写的 Custom 编码相同，
---   注册表解码回来是同一个元素值；表示不是 Int 的元素不写 toCell 就是类型错误。
+--   元素世界解码回来是同一个元素值；表示不是 Int 的元素不写 toCell 就是类型错误。
 -- * 存在类型的公共相等：同类型比值、不同类型即不等（三个装箱类型行为相同）。
 -- * Grid 的 Functor / Foldable / Traversable：定律、行主序、形状不变；随机盘（mapAccumL）与旧递归逐种子相同；
 --   盘面统计（foldMap Sum）与旧列表推导相同；清除格计数（foldMap Counts）与旧 foldl + bumpCount 相同。
@@ -70,7 +70,7 @@ classes_newtype_show_same_as_underlying =
 --------------------------------------------------------------------------------
 -- 2. 缺省 toCell
 
--- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在的缺省实现相同，经注册表从格子解码回同一个元素值
+-- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在的缺省实现相同，经元素世界从格子解码回同一个元素值
 -- （元素类重构第 2 刀起地面层果冻 / 魔法地格是不带值的 GroundKind 类型，不再有 toCell）。
 classes_default_toCell_same_as_handwritten :: Assertion
 classes_default_toCell_same_as_handwritten =
@@ -197,15 +197,15 @@ classes_board_stats_same_as_list_comprehension :: Assertion
 classes_board_stats_same_as_list_comprehension =
   sequence_
     [ do
-        assertEqual ("count " ++ show (li, n)) (length [() | cell <- boardCells b, elementName reg cell == n]) (countElementWith reg n b)
-        assertEqual ("weigh " ++ show (li, n)) (sum [diffWeight (bodyOf reg cell) | cell <- boardCells b, elementName reg cell == n]) (weighElementWith reg n b)
+        assertEqual ("count " ++ show (li, n)) (length [() | cell <- boardCells b, elementName world cell == n]) (countElementWith world n b)
+        assertEqual ("weigh " ++ show (li, n)) (sum [diffWeight (bodyOf world cell) | cell <- boardCells b, elementName world cell == n]) (weighElementWith world n b)
     | li <- [0 .. levelCount - 1]
     , Just gs <- [campaignGame li 7]
     , let b = gsBoard gs
-    , n <- "no_such_element" : nub (map (elementName reg) (boardCells b))
+    , n <- "no_such_element" : nub (map (elementName world) (boardCells b))
     ]
   where
-    reg = defaultWorld
+    world = defaultWorld
 
 -- | 「每格一份计数，foldMap 合起来」（Cascade.hitsOn / withDrained 的新写法）与旧的「foldl 逐个 bumpCount」相同。
 classes_foldMap_counts_same_as_foldl_bump :: Property

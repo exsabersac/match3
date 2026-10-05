@@ -38,9 +38,9 @@ import Match3.Board.Grid
 -- 匹配只看各格自己的 matchColorWith（与位置、邻格无关），所以「换两格」= 「换两格的码」。
 -- UArray 的元素是未装箱的 Int，整张数组是一块连续内存，读一格不用解引用 thunk / 构造器。
 matchCodesWith :: World -> Board -> UArray Pos Int
-matchCodesWith reg b =
+matchCodesWith world b =
   let arr = boardArray b
-  in listArray (A.bounds arr) [maybe noCode fromEnum (matchColorWith reg cell) | cell <- elems arr]
+  in listArray (A.bounds arr) [maybe noCode fromEnum (matchColorWith world cell) | cell <- elems arr]
 
 noCode :: Int
 noCode = -1
@@ -73,11 +73,11 @@ codesHaveRun = go noCode (0 :: Int)
 
 -- | findMatchRuns（指定元素世界）：先行后列，各自按下标升序；段内位置按线的方向升序（与第 5 项前相同）。
 findMatchRunsWith :: World -> Board -> [MatchRun]
-findMatchRunsWith reg b =
+findMatchRunsWith world b =
   [MatchRun (toEnum k) ps True | r <- rows, (k, ps) <- codeRuns code [(r, c) | c <- cols]]
     ++ [MatchRun (toEnum k) ps False | c <- cols, (k, ps) <- codeRuns code [(r, c) | r <- rows]]
   where
-    codes = matchCodesWith reg b
+    codes = matchCodesWith world b
     code = (codes !)
     rows = boardRowIndices b
     cols = boardColIndices b
@@ -86,34 +86,34 @@ findMatchRunsWith reg b =
 -- 火箭冰冻不挡匹配（冻住的宝石照样成消）。
 groupGemRunsWith :: World -> Board -> [Pos] -> [(Color, [Pos])]
 groupGemRunsWith _ _ [] = []
-groupGemRunsWith reg b (p : ps) = case matchColorWith reg (getCell b p) of
-  Nothing -> groupGemRunsWith reg b ps
+groupGemRunsWith world b (p : ps) = case matchColorWith world (getCell b p) of
+  Nothing -> groupGemRunsWith world b ps
   Just col -> go [p] col ps
   where
     go run col [] = [(col, reverse run)]
-    go run col (q : qs) = case matchColorWith reg (getCell b q) of
+    go run col (q : qs) = case matchColorWith world (getCell b q) of
       Just col' | col' == col -> go (q : run) col qs
-      _ -> (col, reverse run) : groupGemRunsWith reg b (q : qs)
+      _ -> (col, reverse run) : groupGemRunsWith world b (q : qs)
 
--- | hasAnyMatch（指定元素世界）：= not (null (findMatchRunsWith reg b))，但不建连线列表，找到第一条就停。
+-- | hasAnyMatch（指定元素世界）：= not (null (findMatchRunsWith world b))，但不建连线列表，找到第一条就停。
 hasAnyMatchWith :: World -> Board -> Bool
-hasAnyMatchWith reg b =
+hasAnyMatchWith world b =
   any (\r -> codesHaveRun [codes ! (r, c) | c <- cols]) rows
     || any (\c -> codesHaveRun [codes ! (r, c) | r <- rows]) cols
   where
-    codes = matchCodesWith reg b
+    codes = matchCodesWith world b
     rows = boardRowIndices b
     cols = boardColIndices b
 
 -- | hasValidMove（指定元素世界）。
 hasValidMoveWith :: World -> Board -> Bool
-hasValidMoveWith reg = maybe False (const True) . findHintWith reg
+hasValidMoveWith world = maybe False (const True) . findHintWith world
 
 -- | findHint（指定元素世界）。普通匹配提示只试「有色且能交换」的格；成对交换规则（段 4：元素世界的成对交换规则，
 -- 内置 = 彩虹、特殊合成，按 srOrder 逐条）的提示只排除上层（锁链 / 火箭冰冻）挡交换的格，本体由规则自己判定。
 findHintWith :: World -> Board -> Maybe (Pos, Pos)
-findHintWith reg b =
-  case matchHints ++ concatMap ruleHints (swapRules reg) of
+findHintWith world b =
+  case matchHints ++ concatMap ruleHints (swapRules world) of
     (x : _) -> Just x
     [] -> Nothing
   where
@@ -127,7 +127,7 @@ findHintWith reg b =
       , hintable (getCell b p1)
       , p2 <- neighborsInBounds rightAndDown b p1
       , hintable (getCell b p2)
-      , hintableWith reg (getCell b p1) && hintableWith reg (getCell b p2)
+      , hintableWith world (getCell b p1) && hintableWith world (getCell b p2)
       , swapMakesMatch p1 p2
       ]
     ruleHints rule =
@@ -139,14 +139,14 @@ findHintWith reg b =
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
       , srFires rule b p1 p2
       ]
-    hintable cell = isJust (colorOfWith reg cell) && not (blocksSwapWith reg cell)
-    upperLocked = upperBlocksSwapWith reg
+    hintable cell = isJust (colorOfWith world cell) && not (blocksSwapWith world cell)
+    upperLocked = upperBlocksSwapWith world
     -- 局部检查（第 3 刀）：交换后的盘面有匹配 ⇔ 没被交换触及的行 / 列在原盘上已有 ≥3 连，
     -- 或交换两格所在的行 / 列在交换后有 ≥3 连。与整盘 hasAnyMatchWith (swapCells b p1 p2) 逐格等价
     -- （匹配只看各格自己的 matchColorWith，连线按行 / 列独立），遍历顺序与返回结果不变。
     -- 第 5 项：原盘的行 / 列结论从匹配码算（仍是惰性数组，用到才算、最多算一次）；被触及的行 / 列读「换过之后」的码：
     -- at q 在 q 是交换的两格之一时读另一格的码。第 5 项前每个候选要 swapCells（两次整盘复制）再逐格问元素世界。
-    codes = matchCodesWith reg b
+    codes = matchCodesWith world b
     rowPs r = [(r, c) | c <- cols]
     colPs c = [(r, c) | r <- rows]
     rowHas = A.listArray (0, boardNRows b - 1) [codesHaveRun (map (codes !) (rowPs r)) | r <- rows] :: Array Int Bool
@@ -165,4 +165,4 @@ findHintWith reg b =
 
 -- | 所有匹配格（指定元素世界）：各连线位置的去重并集。
 findMatchesWith :: World -> Board -> [Pos]
-findMatchesWith reg b = nub (concatMap runPos (findMatchRunsWith reg b))
+findMatchesWith world b = nub (concatMap runPos (findMatchRunsWith world b))

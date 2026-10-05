@@ -34,13 +34,13 @@ resolveSwap = resolveSwapWith defaultWorld
 
 -- | resolveSwap（指定元素世界）：挡交换、成消判定与结算都查这张表。
 resolveSwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveSwapWith reg p1 p2 gs
+resolveSwapWith world p1 p2 gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (adjacent p1 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
-  | isNothing morph && pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
-  | otherwise = resolveMoveWith reg SKindSwap swappedS opening gs
+  | swapBlockedWith world board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
+  | isNothing morph && pairRule == Nothing && not (hasAnyMatchWith world swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
+  | otherwise = resolveMoveWith world SKindSwap swappedS opening gs
   where
     board0 = gsBoard gs
     -- 交换：Stage 'Full → Stage 'Swapped（类型层的阶段标签，见 Match3.Board.Phase）；
@@ -48,10 +48,10 @@ resolveSwapWith reg p1 p2 gs
     swappedS = swapStage p1 p2 (fullStage board0)
     swapped = stageBoard swappedS
     -- 成对交换规则（彩虹取色 / 特殊合成经元素世界的 swapRule，按 srOrder 取第一条成立的）
-    pairRule = swapOpeningWith reg board0 swapped p1 p2
+    pairRule = swapOpeningWith world board0 swapped p1 p2
     -- 交换变身（新玩法 4：关卡级机制的 morph，内置 = 规则开关 rainbow_combos）：先变身再按种子起手，
     -- 变身记成第 0 轮之前的一条步末效果；没人回复 = 原有起手
-    morph = morphIn reg (gsLevelElems gs) board0 swapped p1 p2
+    morph = morphIn world (gsLevelElems gs) board0 swapped p1 p2
     opening = case morph of
       Just m
         | null (morphCells m) -> OpenSeeds (Just p2) (morphSeeds m)
@@ -64,7 +64,7 @@ trySwap p1 p2 gs = let (g, o, _) = resolveSwap p1 p2 gs in (g, o)
 
 -- | trySwap（指定元素世界；测试专用元素经此接入）。
 trySwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome)
-trySwapWith reg p1 p2 gs = let (g, o, _) = resolveSwapWith reg p1 p2 gs in (g, o)
+trySwapWith world p1 p2 gs = let (g, o, _) = resolveSwapWith world p1 p2 gs in (g, o)
 
 -- | trySwap 的别名（冻结 API）。
 runMove :: Pos -> Pos -> GameState -> (GameState, Outcome)

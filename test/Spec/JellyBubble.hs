@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | 段 5：双层果冻（地面层）与气泡（占格本体）。两者是内置元素，但只经注册表（Element.Builtin 的定义）
+-- | 段 5：双层果冻（地面层）与气泡（占格本体）。两者是内置元素，但只经元素世界（Element.Builtin 的定义）
 -- 与白名单钩子（SlotGround / groundRule、onHit / adjacentRule、CountNamed / GoalNamed）接入；
 -- 主流程源码里没有它们的名字（jb_main_flow_untouched_scan）。设定见 docs/domain.md「双层果冻与气泡」。
 module Spec.JellyBubble

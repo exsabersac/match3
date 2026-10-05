@@ -2,7 +2,7 @@
 --
 -- * 匹配扫描（先算整盘匹配码 unboxed UArray，再在码上扫）与提示搜索（STUArray 上就地换过去查再换回来）：
 --   findMatchRunsWith / hasAnyMatchWith / findHintWith 在全部关卡开局盘及其每一种相邻交换、沿提示走 12 手途经的盘面
---   （按关接上本关注册表）上的结果写死成指纹；匹配码与 matchColorWith 逐格一致；
+--   （按关接上本关元素世界）上的结果写死成指纹；匹配码与 matchColorWith 逐格一致；
 -- * 重力（STArray 上逐段双指针压实）：全部关卡开局盘按若干图案挖空（含不下落的固定格）后的结果写死成指纹；
 --   （两个指纹生成时与删除前的逐格查注册表写法 / 列表版重力副本逐盘核对过）
 -- * 并行批量求值（Spec.Support.Parallel，STM 领任务 + 每任务一个结果槽）与串行 map 逐项相同、顺序不变，
@@ -40,15 +40,15 @@ tests =
 
 -- | 三个查询的结果（写进指纹）。
 scanResult :: World -> Board -> String
-scanResult reg b = show (findMatchRunsWith reg b, hasAnyMatchWith reg b, findHintWith reg b)
+scanResult world b = show (findMatchRunsWith world b, hasAnyMatchWith world b, findHintWith world b)
 
 -- | 匹配码与 matchColorWith 逐格一致。返回 (有匹配?, 有提示?)，供覆盖断言用。
 sameScan :: String -> World -> Board -> IO (Bool, Bool)
-sameScan lbl reg b = do
-  let codes = matchCodesWith reg b
+sameScan lbl world b = do
+  let codes = matchCodesWith world b
   assertBool (lbl ++ ": codes")
-    (and [codes ! p == maybe (-1) fromEnum (matchColorWith reg (getCell b p)) | p <- boardPositions b])
-  pure (hasAnyMatchWith reg b, isJust (findHintWith reg b))
+    (and [codes ! p == maybe (-1) fromEnum (matchColorWith world (getCell b p)) | p <- boardPositions b])
+  pure (hasAnyMatchWith world b, isJust (findHintWith world b))
 
 adjacentSwaps :: Board -> [(Pos, Pos)]
 adjacentSwaps b = [(p, q) | p@(r, c) <- boardPositions b, q <- [(r, c + 1), (r + 1, c)], inBounds b q]
@@ -57,22 +57,22 @@ adjacentSwaps b = [(p, q) | p@(r, c) <- boardPositions b, q <- [(r, c + 1), (r +
 scanCases :: [(String, World, Board)]
 scanCases =
   let levelCases =
-        [ (li, seed, reg, gs0)
+        [ (li, seed, world, gs0)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2, 3 :: Int]
         , Just gs0 <- [campaignGame li seed]
-        , let reg = levelWorldIn defaultWorld (gsLevelElems gs0)
+        , let world = levelWorldIn defaultWorld (gsLevelElems gs0)
         ]
       -- 开局盘的每一种相邻交换（多数带现成的匹配）
       swapped =
-        [ (concat ["L", show li, " s", show seed, " swap ", show pq], reg, swapCells (gsBoard gs0) p q)
-        | (li, seed, reg, gs0) <- levelCases
+        [ (concat ["L", show li, " s", show seed, " swap ", show pq], world, swapCells (gsBoard gs0) p q)
+        | (li, seed, world, gs0) <- levelCases
         , pq@(p, q) <- adjacentSwaps (gsBoard gs0)
         ]
       -- 沿提示走 12 手途经的盘面
       played =
-        [ (concat ["L", show li, " s", show seed, " move ", show k], reg, gsBoard gs)
-        | (li, seed, reg, gs0) <- levelCases
+        [ (concat ["L", show li, " s", show seed, " move ", show k], world, gsBoard gs)
+        | (li, seed, world, gs0) <- levelCases
         , (k, gs) <- zip [0 :: Int ..] (take 13 (walk gs0))
         ]
       walk gs = gs : case (gsOver gs, findHint (gsBoard gs)) of
@@ -86,27 +86,27 @@ scanCases =
 perf_match_scan_pinned :: Assertion
 perf_match_scan_pinned = do
   let (levelBoards, deadBoards) = splitAt (length scanCases - 2) scanCases
-  assertEqual "scan digest" pinnedScan (length scanCases, digest (concatMap (\(_, reg, b) -> scanResult reg b) scanCases))
-  results <- mapM (\(lbl, reg, b) -> sameScan lbl reg b) levelBoards
+  assertEqual "scan digest" pinnedScan (length scanCases, digest (concatMap (\(_, world, b) -> scanResult world b) scanCases))
+  results <- mapM (\(lbl, world, b) -> sameScan lbl world b) levelBoards
   assertBool ("many boards: " ++ show (length results)) (length results > 10000)
   assertBool "some boards have matches" (any fst results)
   assertBool "some boards have none" (any (not . fst) results)
   assertBool "some boards have a hint" (any snd results)
-  deads <- mapM (\(lbl, reg, b) -> sameScan lbl reg b) deadBoards
-  assertBool "stuck boards have no hint" (not (any snd deads) && all (\(_, reg, b) -> isNothing (findHintWith reg b)) deadBoards)
+  deads <- mapM (\(lbl, world, b) -> sameScan lbl world b) deadBoards
+  assertBool "stuck boards have no hint" (not (any snd deads) && all (\(_, world, b) -> isNothing (findHintWith world b)) deadBoards)
 
 -- | perf_match_scan_pinned 的期望：(盘数, 指纹)（由现实现生成，生成时与删除前的逐格查注册表写法副本逐盘核对过）。
 pinnedScan :: (Int, String)
 pinnedScan = (18137, "b1ca0608fe66790c")
 
--- | 重力用例：49 关 × 2 种子 × 6 种挖空图案（按关接上本关注册表）。
+-- | 重力用例：49 关 × 2 种子 × 6 种挖空图案（按关接上本关元素世界）。
 gravityCases :: [(String, World, MBoard)]
 gravityCases =
-        [ (concat ["L", show li, " s", show seed, " hole ", show k], reg, holed)
+        [ (concat ["L", show li, " s", show seed, " hole ", show k], world, holed)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2 :: Int]
         , Just gs0 <- [campaignGame li seed]
-        , let reg = levelWorldIn defaultWorld (gsLevelElems gs0)
+        , let world = levelWorldIn defaultWorld (gsLevelElems gs0)
               b = gsBoard gs0
         , k <- [1 .. 6 :: Int]
         , let holed = toM b A.// [(p, Nothing) | p@(r, c) <- boardPositions b, (r * 7 + c * 3 + k) `mod` (k + 1) == 0]
@@ -115,10 +115,10 @@ gravityCases =
 perf_gravity_pinned :: Assertion
 perf_gravity_pinned = do
   let cases = gravityCases
-  assertEqual "gravity digest" pinnedGravity (length cases, digest (concat [show (mboardRows (applyGravityWith reg mb)) | (_, reg, mb) <- cases]))
+  assertEqual "gravity digest" pinnedGravity (length cases, digest (concat [show (mboardRows (applyGravityWith world mb)) | (_, world, mb) <- cases]))
   -- 用例里确实有固定格把列切成多段、也确实有格子落下
-  let fixedCells = [() | (_, reg, mb) <- cases, Just cell <- A.elems mb, gravityFixedCellWith reg cell]
-      moved = [() | (_, reg, mb) <- cases, applyGravityWith reg mb /= mb]
+  let fixedCells = [() | (_, world, mb) <- cases, Just cell <- A.elems mb, gravityFixedCellWith world cell]
+      moved = [() | (_, world, mb) <- cases, applyGravityWith world mb /= mb]
   assertBool ("fixed cells present: " ++ show (length fixedCells)) (length fixedCells > 100)
   assertBool "gravity moved cells" (length moved > 100)
 

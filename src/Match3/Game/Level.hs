@@ -56,15 +56,15 @@ decorateLevel l =
 
 -- | decorateLevel（指定元素世界），失败时返回 Left。
 decorateLevelWith :: World -> Level -> Board -> Either PlaceError Board
-decorateLevelWith reg l b = placeAllWith reg b (lvlPlacements l)
+decorateLevelWith world l b = placeAllWith world b (lvlPlacements l)
 
 -- | 目标所需的补齐装饰：每日挑战（以及任何裸盘面）也必须能完成——目标需要盘上实体、而关卡装饰放得不够时，
 -- 按目标的放置表补一组最小的（目标 → (元素名, 个数, 放置表)；计数按元素名 countElementWith）。失败时返回 Left。
 goalDecorWith :: World -> LevelGoal -> Board -> Either PlaceError Board
-goalDecorWith reg goal b =
+goalDecorWith world goal b =
   case goalDecor goal of
     Just (name, n, placements)
-      | countElementWith reg name b < n -> placeAllWith reg b placements
+      | countElementWith world name b < n -> placeAllWith world b placements
     _ -> Right b
   where
     slots7 = [(2, 2), (2, 5), (4, 1), (4, 3), (4, 5), (6, 2), (6, 5)]
@@ -90,26 +90,26 @@ newGameAtLevel = newGameAtLevelWith defaultWorld
 -- | newGameAtLevel（指定元素世界）：装饰、目标补齐、可玩判定用这张表；关卡级元素 = 这张表里注册的各种 + 核心元素，
 -- 各自由关卡记录（lvlGoal 换成本局目标）给出开局状态（飞碟 / 地毯的目标补齐在各自的 mechStart 里）。
 newGameAtLevelWith :: World -> Int -> GameConfig -> Int -> GameState
-newGameAtLevelWith reg li cfg seed = newGameFromWith reg li (lookupLevel li) cfg seed
+newGameAtLevelWith world li cfg seed = newGameFromWith world li (lookupLevel li) cfg seed
 
 -- | 按一份完整的关卡记录开局（不必在战役表里，例如关卡包 / 编辑器 / 测试）：步数与目标取自记录，
 -- 装饰、关卡级元素、行列都按记录；gsLevel = lvlIndex（结局与下一关仍按战役下标判定）。
 -- 开局前按 'assertLevel' 校验记录（同 lookupLevel）。对战役里的关，与 'campaignGame' 逐字相同（engine_level_setup_matches_campaign）。
 newGameForLevelWith :: World -> Level -> Int -> GameState
-newGameForLevelWith reg l seed = newGameFromWith reg (lvlIndex l) (Just (assertLevel l)) (levelConfig l) seed
+newGameForLevelWith world l seed = newGameFromWith world (lvlIndex l) (Just (assertLevel l)) (levelConfig l) seed
 
 -- | 开局的公共部分：关卡下标、关卡记录（Nothing = 没有装饰与关卡级元素，只按目标补齐）、配置、种子。
 newGameFromWith :: World -> Int -> Maybe Level -> GameConfig -> Int -> GameState
-newGameFromWith reg li lvl cfg seed =
+newGameFromWith world li lvl cfg seed =
   let g0 = mkStdGen seed
       rows = maybe boardSize lvlRows lvl
       cols = maybe boardSize lvlCols lvl
       (board0, g1) = randomPlayableBoardSized rows cols g0
-      decorate l = placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith reg l
+      decorate l = placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith world l
       -- 新玩法 6：有掉落口的关卡不做目标补齐（收集物由掉落口陆续补进场）；没有掉落口（lvlDrops = []）时照常补齐
       goalDecor
         | maybe False (not . null . lvlDrops) lvl = id
-        | otherwise = placeStatic ("目标 " ++ show (cfgGoal cfg) ++ " 的补齐装饰") . goalDecorWith reg (cfgGoal cfg)
+        | otherwise = placeStatic ("目标 " ++ show (cfgGoal cfg) ++ " 的补齐装饰") . goalDecorWith world (cfgGoal cfg)
       board = goalDecor (maybe id decorate lvl board0)
       start = (fromMaybe (level li "" (cfgMoves cfg) (cfgGoal cfg)) lvl) {lvlGoal = cfgGoal cfg}
       gs0 =
@@ -130,10 +130,10 @@ newGameFromWith reg li lvl cfg seed =
           , gsCrossClears = 1
           , gsLastCleared = []
           , gsDaily = False
-          , gsLevelElems = startLevelsWith reg start
+          , gsLevelElems = startLevelsWith world start
           }
   -- Décor can remove the only legal swap (e.g. dense 终章); auto-reshuffle gems.
-  in ensurePlayableWith reg gs0
+  in ensurePlayableWith world gs0
 
 -- | Date-seeded daily challenge: same bare board as L0 décor, but clears as Won
 -- (not LevelClear into campaign) and never bumps map unlock.

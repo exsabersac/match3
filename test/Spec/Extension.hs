@@ -2,10 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 扩展钩子（段 2c）：按元素名计数的目标 GoalNamed、地面层元素槽、方向可配的边缘收集、
--- 步末之后的补结算、自定义注册表下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
+-- 步末之后的补结算、自定义元素世界下的手动洗牌。所用样例元素（木箱、苔藓、风筝、陷坑、浮尘）
 -- **只定义在测试里**，主流程源码里没有它们的名字；这组测试证明双层果冻、气泡这类元素今后
--- 可以只靠注册表 + 白名单钩子接入。第 8 刀：扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、
--- 一种补子策略（关卡级元素换成掉金币 / 关卡颜色数），都只改注册表的规则表或加一个关卡级元素，主流程不用改。
+-- 可以只靠元素世界 + 白名单钩子接入。第 8 刀：扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、
+-- 一种补子策略（关卡级元素换成掉金币 / 关卡颜色数），都只改元素世界的规则表或加一个关卡级元素，主流程不用改。
 module Spec.Extension
   ( tests
   ) where
@@ -50,7 +50,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "ext_board_modules_take_registry" ext_board_modules_take_registry
+  [ testCase "ext_board_modules_take_world" ext_board_modules_take_world
   , testCase "ext_goal_named_counts_crate" ext_goal_named_counts_crate
   , testCase "ext_ground_layer_test_element" ext_ground_layer_test_element
   , testCase "ext_edge_drain_side_collectible" ext_edge_drain_side_collectible
@@ -68,10 +68,10 @@ tests =
 
 -- tripleBoard / tripleMove / allPos / customsOn / isWin 见 Spec.Support。
 
--- | 通用层之下的 Board.*（除了按内置注册表包一层的 Board.Default）不再直接依赖内置注册表（全程收 reg）：
+-- | 通用层之下的 Board.*（除了按内置元素世界包一层的 Board.Default）不再直接依赖内置元素世界（全程收 world）：
 -- 不 import Element.Builtin*，代码里（去掉注释与字符串）不用 defaultWorld。
-ext_board_modules_take_registry :: Assertion
-ext_board_modules_take_registry = do
+ext_board_modules_take_world :: Assertion
+ext_board_modules_take_world = do
   files <- filter (/= "src/Match3/Board/Default.hs") <$> sourcesUnder "src/Match3/Board"
   assertBool "scanned Board core" (all (`elem` files) ["src/Match3/Board/" ++ m ++ ".hs" | m <- ["Cascade", "Clear", "Gravity", "Match"]])
   srcs <- mapM readFile files
@@ -82,19 +82,19 @@ ext_board_modules_take_registry = do
 -- | GoalNamed：测试专用木箱经 CountNamed "crate" 计数，GoalNamed "crate" 1 达成即过关（直接结算与通用接口两条入口）。
 ext_goal_named_counts_crate :: Assertion
 ext_goal_named_counts_crate = do
-  let reg = register crateDef defaultWorld
+  let world = register crateDef defaultWorld
       gs0 d = (newGame (GameConfig 5 (goalCount (CountNamed "crate") 1)) 1) {gsBoard = crateBoard d}
-      (gsA, oA, _) = resolveSwapWith reg (1, 2) (2, 2) (gs0 2)
+      (gsA, oA, _) = resolveSwapWith world (1, 2) (2, 2) (gs0 2)
   assertBool "durability 2: chipped, not counted, not over" (moveApplied oA && gsCollected gsA == 0 && gsOver gsA == Nothing)
-  let (gsB, oB, _) = resolveSwapWith reg (1, 2) (2, 2) (gs0 1)
+  let (gsB, oB, _) = resolveSwapWith world (1, 2) (2, 2) (gs0 1)
   assertBool "durability 1: broken, goal reached" (moveApplied oB && isWin (gsOver gsB))
   assertEqual "collected by name" 1 (gsCollected gsB)
   assertEqual "named counter" [("crate", 1)] (namedCounts (gsCounts gsB))
-  let st = gameStep (M3E.match3GameWith reg) (gs0 1) (M3E.Swap (1, 2) (2, 2))
+  let st = gameStep (M3E.match3GameWith world) (gs0 1) (M3E.Swap (1, 2) (2, 2))
   assertBool "engine: accepted and won" (stepAccepted st && isWin (stepOutcome st))
   -- 内置表下木箱是惰性占格：不计数、不过关
   let (gsD, _, _) = resolveSwapWith defaultWorld (1, 2) (2, 2) (gs0 1)
-  assertEqual "default registry: not counted" 0 (gsCollected gsD)
+  assertEqual "default world: not counted" 0 (gsCollected gsD)
 
 -- | 测试专用地面层元素「苔藓」（地面层，2 层）：上方格子每被消除一次去一层、按层计入 GoalNamed；
 -- 不占格、不挡交换、洗牌不动、撤销恢复；未注册时地面层原样不动。
@@ -110,11 +110,11 @@ mossDef = groundDef @Moss
 
 ext_ground_layer_test_element :: Assertion
 ext_ground_layer_test_element = do
-  let reg = register mossDef defaultWorld
+  let world = register mossDef defaultWorld
       ground0 = [((1, 1), ("moss", 2)), ((6, 6), ("moss", 1))]
       gs0 = (setGround ground0 $ (newGame (GameConfig 5 (goalCount (CountNamed "moss") 3)) 1) {gsBoard = tripleBoard})
       (p1, p2) = tripleMove
-      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
+      (gs1, o1, mt1) = resolveSwapWith world p1 p2 gs0
       hitsAt p = length [() | w <- mtWaves mt1, p `elem` (cwCleared w ++ cwDrained w)]
   assertBool "move applied" (moveApplied o1)
   assertEqual "(1,1) cleared exactly once this move" 1 (hitsAt (1, 1))
@@ -125,12 +125,12 @@ ext_ground_layer_test_element = do
   assertEqual "ground does not occupy the board" (gsBoard (fst (trySwap p1 p2 (setGround [] $ gs0)))) (gsBoard gs1)
   -- 第二次消除同一格：清掉，累计 2
   let gs1' = gs1 {gsBoard = tripleBoard}
-      (gs2, _, _) = resolveSwapWith reg p1 p2 gs1'
+      (gs2, _, _) = resolveSwapWith world p1 p2 gs1'
   assertEqual "second clear removes the tile" [((6, 6), ("moss", 1))] (gsGround gs2)
   assertEqual "count accumulates by layer" [("moss", 2)] (namedCounts (gsCounts gs2))
   -- 撤销恢复、洗牌不动
-  assertEqual "undo restores ground" (Just (gsGround gs1)) (gsGround <$> stepThenUndo reg gs1' (M3E.Swap p1 p2))
-  assertEqual "shuffle keeps ground" (gsGround gs1) (gsGround (shuffleGameWith reg gs1))
+  assertEqual "undo restores ground" (Just (gsGround gs1)) (gsGround <$> stepThenUndo world gs1' (M3E.Swap p1 p2))
+  assertEqual "shuffle keeps ground" (gsGround gs1) (gsGround (shuffleGameWith world gs1))
   -- 未注册：地面层原样
   let (gsD, _, _) = resolveSwapWith defaultWorld p1 p2 gs0
   assertEqual "unregistered ground untouched" ground0 (gsGround gsD)
@@ -164,11 +164,11 @@ kiteDef = kindDef @Kite
 
 ext_edge_drain_side_collectible :: Assertion
 ext_edge_drain_side_collectible = do
-  let reg = register kiteDef defaultWorld
+  let world = register kiteDef defaultWorld
       board0 = foldl (\b p -> setCell b p (Custom "kite" (CustomState 1))) tripleBoard [(4, 0), (4, 3), (7, 5)]
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "kite") 1)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
-      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
+      (gs1, o1, mt1) = resolveSwapWith world p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
   w1 <- firstWave mt1
   assertBool "left-edge kite drained in the first settle" ((4, 0) `elem` cwDrained w1)
@@ -202,11 +202,11 @@ sinkholeDef = kindDef @Sinkhole
 
 ext_post_end_settle_hole_element :: Assertion
 ext_post_end_settle_hole_element = do
-  let reg = register sinkholeDef defaultWorld
+  let world = register sinkholeDef defaultWorld
       board0 = setCell tripleBoard (5, 5) (Custom "sinkhole" (CustomState 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
-      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
+      (gs1, o1, mt1) = resolveSwapWith world p1 p2 gs0
       settleWaves = [w | w <- mtWaves mt1, null (cwCleared w), atM (cwHoles w) (5, 5) == Nothing]
   assertBool "move applied" (moveApplied o1)
   assertEqual "sinkhole vacated" [] (customsOn "sinkhole" (gsBoard gs1))
@@ -217,15 +217,15 @@ ext_post_end_settle_hole_element = do
       assertEqual "settle wave scores nothing" 0 (cwScore w)
     _ -> assertFailure ("expected exactly one post-end settle wave, got " ++ show (length settleWaves))
   -- 通用接口入口一样生效
-  let st = gameStep (M3E.match3GameWith reg) gs0 (M3E.Swap p1 p2)
+  let st = gameStep (M3E.match3GameWith world) gs0 (M3E.Swap p1 p2)
   assertEqual "engine path same board" (gsBoard gs1) (gsBoard (stepState st))
   -- 内置表：陷坑是惰性占格，不产生空洞
   let (gsD, _, mtD) = resolveSwapWith defaultWorld p1 p2 gs0
-  assertEqual "default registry: sinkhole stays" [(5, 5)] (customsOn "sinkhole" (gsBoard gsD))
-  assertBool "default registry: no settle-only wave" (all (not . null . cwCleared) (mtWaves mtD))
+  assertEqual "default world: sinkhole stays" [(5, 5)] (customsOn "sinkhole" (gsBoard gsD))
+  assertBool "default world: no settle-only wave" (all (not . null . cwCleared) (mtWaves mtD))
 
 -- | 手动洗牌走 match3GameWith customReg 的 Shuffle 动作：木箱原样保留；「浮尘」（keepOnShuffle = False 的障碍）
--- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的注册表，不再退回内置表。
+-- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的元素世界，不再退回内置表。
 newtype Dust = Dust Int
   deriving (Eq, Show)
   deriving (Matchable, Hittable) via (Obstacle Dust)
@@ -250,16 +250,16 @@ dustDef = kindDef @Dust
 
 ext_manual_shuffle_keeps_crate_via_engine :: Assertion
 ext_manual_shuffle_keeps_crate_via_engine = do
-  let reg = register dustDef (register crateDef defaultWorld)
+  let world = register dustDef (register crateDef defaultWorld)
       gs0 = (newGame defaultConfig 1) {gsBoard = setCell (crateBoard 2) (5, 5) (Custom "dust" (CustomState 1))}
-      st = gameStep (M3E.match3GameWith reg) gs0 M3E.Shuffle
+      st = gameStep (M3E.match3GameWith world) gs0 M3E.Shuffle
       b1 = gsBoard (stepState st)
   assertBool "shuffle accepted" (stepAccepted st)
   assertBool "board reshuffled" (b1 /= gsBoard gs0 && gsShuffled (stepState st))
   assertEqual "crate kept in place" [((0, 1), Custom "crate" (CustomState 2))] (cratesOn b1)
-  assertEqual "dust washed away under the custom registry" [] (customsOn "dust" b1)
+  assertEqual "dust washed away under the custom world" [] (customsOn "dust" b1)
   let stD = gameStep M3E.match3Game gs0 M3E.Shuffle
-  assertEqual "built-in registry keeps unknown dust (inert default)" [(5, 5)] (customsOn "dust" (gsBoard (stepState stD)))
+  assertEqual "built-in world keeps unknown dust (inert default)" [(5, 5)] (customsOn "dust" (gsBoard (stepState stD)))
 
 -- | 第 7 刀（7b）：步末效果是通用形状（事件类型 + 元素名 + 逐项 EndItem）。测试专用「跳跳虫」（固定格）在步末
 -- （PhaseMove，排在蜗牛之后）向右跳一格、与右边的宝石换位，产出 EndEffect EvMove "hopper" —— 不改 Event / Trace /
@@ -290,12 +290,12 @@ instance Kind Hopper where
 
 ext_end_effect_generic_hopper :: Assertion
 ext_end_effect_generic_hopper = do
-  let reg = register (kindDef @Hopper) defaultWorld
+  let world = register (kindDef @Hopper) defaultWorld
       hopper = Custom "hopper" (CustomState 1)
       board0 = setCell tripleBoard (7, 0) hopper
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
-      (gs1, o1, mt1) = resolveSwapWith reg p1 p2 gs0
+      (gs1, o1, mt1) = resolveSwapWith world p1 p2 gs0
       hops = [e | e <- mtEnd mt1, endEffectElement (esEffect e) == "hopper"]
   assertBool "move applied" (moveApplied o1)
   case hops of
@@ -304,13 +304,13 @@ ext_end_effect_generic_hopper = do
       endEffectItems (esEffect e) @?= [EndItem (7, 0) (7, 1) hopper (Just (getCell (esBefore e) (7, 1)))]
       assertBool "Show falls back to the record form" ("EndEffect {endEffectKind = EvMove" `isPrefixOf` show (esEffect e))
       assertEqual "event carries the pairs" [(EvMove, "hopper", [((7, 0), (7, 1))])]
-        [(evKind ev, evElement ev, evCells ev) | ev <- traceEventsWith reg mt1, evElement ev == "hopper"]
+        [(evKind ev, evElement ev, evCells ev) | ev <- traceEventsWith world mt1, evElement ev == "hopper"]
     _ -> assertFailure ("expected one hopper end step, got " ++ show (length hops))
   _ <- replayTimeline "hopper" mt1
   assertEqual "hopped right" [(7, 1)] (customsOn "hopper" (gsBoard gs1))
   let (gsD, _, mtD) = resolveSwapWith defaultWorld p1 p2 gs0
-  assertEqual "default registry: hopper stays" [(7, 0)] (customsOn "hopper" (gsBoard gsD))
-  assertBool "default registry: no hopper effect" (all ((/= "hopper") . endEffectElement . esEffect) (mtEnd mtD))
+  assertEqual "default world: hopper stays" [(7, 0)] (customsOn "hopper" (gsBoard gsD))
+  assertBool "default world: no hopper effect" (all ((/= "hopper") . endEffectElement . esEffect) (mtEnd mtD))
 
 --------------------------------------------------------------------------------
 -- 第 8 刀：规则表 / 补子策略的扩展
@@ -331,20 +331,20 @@ ltBombRule = ShapeRule "l/t→bomb" spawn
 lBoard :: Board
 lBoard = setCells stableBoard [((3, 1), mkGem C1), ((3, 2), mkGem C1), ((4, 3), mkGem C1), ((5, 3), mkGem C1), ((2, 3), mkGem C1), ((3, 3), mkGem C3)]
 
--- | 形状规则表扩展：把 L / T 规则插到内置表最前面（优先于直线规则），注册表之外什么都不改——
+-- | 形状规则表扩展：把 L / T 规则插到内置表最前面（优先于直线规则），元素世界之外什么都不改——
 -- 同一局面在内置表下不生成特殊块（两条三连），扩展后交点生成炸弹；走正式的交换流程（resolveSwapWith）也一样。
 ext_shape_rule_lt_bomb :: Assertion
 ext_shape_rule_lt_bomb = do
-  let reg = setShapeRules (ltBombRule : shapeRules defaultWorld) defaultWorld
+  let world = setShapeRules (ltBombRule : shapeRules defaultWorld) defaultWorld
       (p1, p2) = ((2, 3), (3, 3))
       swapped = swapCells lBoard p1 p2
       spawnedAt r = let (mb, _, _) = clearMatchesDetailedWith r (Just p2) swapped in atM mb (3, 3)
   assertBool "no match before the swap" (not (hasAnyMatch lBoard))
   assertEqual "two crossing runs" [True, False] (map runIsH (findMatchRuns swapped))
   assertEqual "builtin table: plain L spawns nothing" Nothing (spawnedAt defaultWorld)
-  assertEqual "extended table: bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) (spawnedAt reg)
+  assertEqual "extended table: bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) (spawnedAt world)
   let gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = lBoard}
-      (_, o, mt) = resolveSwapWith reg p1 p2 gs0
+      (_, o, mt) = resolveSwapWith world p1 p2 gs0
   assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
   w <- firstWave mt
   assertEqual "first wave leaves the bomb at the corner" (Just (Gem C1 Bomb 0 Nothing)) (atM (cwHoles w) (3, 3))
@@ -364,18 +364,18 @@ lineGemRule = ComboRule "line×gem" isLineCell isNormalCell (\b l _ -> Combos.fu
       Gem _ Normal _ _ -> True
       _ -> False
 
--- | 组合表扩展：往内置组合表末尾加一条「直线 × 普通宝石」，注册表之外什么都不改——内置表下这一步不成三消、
+-- | 组合表扩展：往内置组合表末尾加一条「直线 × 普通宝石」，元素世界之外什么都不改——内置表下这一步不成三消、
 -- 被拒；扩展后按组合起手（两个方向都成立），第一轮清掉直线端所在的整行整列。
 ext_combo_rule_line_gem :: Assertion
 ext_combo_rule_line_gem = do
-  let reg = setComboRules (comboRules defaultWorld ++ [lineGemRule]) defaultWorld
+  let world = setComboRules (comboRules defaultWorld ++ [lineGemRule]) defaultWorld
       board = setCell stableBoard (0, 0) (Gem C1 LineH 0 Nothing)
       (p1, p2) = ((0, 0), (0, 1))
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = board}
       (_, o0, _) = resolveSwapWith defaultWorld p1 p2 gs0
-      (_, o, mt) = resolveSwapWith reg p1 p2 gs0
+      (_, o, mt) = resolveSwapWith world p1 p2 gs0
   assertEqual "builtin: rejected" NoMatch o0
-  assertBool "table rule fires both ways" (comboFires (comboRules reg) board p1 p2 && comboFires (comboRules reg) board p2 p1)
+  assertBool "table rule fires both ways" (comboFires (comboRules world) board p1 p2 && comboFires (comboRules world) board p2 p1)
   assertBool "builtin table does not fire" (not (comboFires (comboRules defaultWorld) board p1 p2))
   assertBool "extended: accepted" (o `notElem` [NoMatch, InvalidSwap])
   w <- firstWave mt
@@ -391,33 +391,33 @@ instance Mechanic CoinRain where
   refillPolicy _ _ = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)))
 
 -- | 补子策略扩展（关卡级元素）：注册 CoinRain 之后，交换出的 4 连（横消落在交换点 (1,2)）挖出的 3 个洞补成金币，
--- 金币无色不再连锁；其余什么都不改。注册表缺省策略下同一步不出金币。
+-- 金币无色不再连锁；其余什么都不改。元素世界缺省策略下同一步不出金币。
 ext_refill_policy_level_element :: Assertion
 ext_refill_policy_level_element = do
-  let reg = registerMechanic (SomeMechanic CoinRain) (register (inertDef "coin") defaultWorld)
+  let world = registerMechanic (SomeMechanic CoinRain) (register (inertDef "coin") defaultWorld)
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
-      (gs1, o, mt) = resolveSwapWith reg p1 p2 gs0
+      (gs1, o, mt) = resolveSwapWith world p1 p2 gs0
       (gsD, _, _) = resolveSwapWith defaultWorld p1 p2 gs0
   assertBool "accepted" (o `notElem` [NoMatch, InvalidSwap])
   assertEqual "one wave" 1 (length (mtWaves mt))
   assertEqual "three coins refilled at the top (the line_h sits at (1,2))" [(0, 0), (0, 1), (0, 3)] (sort (customsOn "coin" (gsBoard gs1)))
   assertEqual "default policy: no coins" [] (customsOn "coin" (gsBoard gsD))
 
--- | 补子策略扩展（关卡颜色数）：注册表换成只用 3 色的策略（colorsRefill 3），沉降补子只补 C1..C3；
+-- | 补子策略扩展（关卡颜色数）：元素世界换成只用 3 色的策略（colorsRefill 3），沉降补子只补 C1..C3；
 -- 同一盘面在缺省策略下会出现别的颜色。
 ext_refill_policy_level_colors :: Assertion
 ext_refill_policy_level_colors = do
-  let reg = setRefillPolicy (colorsRefill 3) defaultWorld
+  let world = setRefillPolicy (colorsRefill 3) defaultWorld
       mb = mboardFromRows (replicate boardSize (replicate boardSize Nothing))
       colorsOf r = nub (sort [c | p <- allPos, Gem c Normal 0 Nothing <- [getCell b p]])
         where
           (b, _, _) = settleRefillWith r (levelHooksWith r []) (mkStdGen 42) mb
-  assertEqual "three colours only" [C1, C2, C3] (colorsOf reg)
+  assertEqual "three colours only" [C1, C2, C3] (colorsOf world)
   assertEqual "default: all five" [C1, C2, C3, C4, C5] (colorsOf defaultWorld)
 
 -- | 胜负节拍（judge）：测试专用「限时」关卡级元素在剩余步数 ≤ 3 时把未结束的一步判成输（Lost 总分）；
--- 只 registerMechanic 即可接入，主流程不改。内置注册表下同一步照常 MoveApplied；步数充足时限时元素不改结局。
+-- 只 registerMechanic 即可接入，主流程不改。内置元素世界下同一步照常 MoveApplied；步数充足时限时元素不改结局。
 data TimeLimit = TimeLimit
   deriving (Eq, Show)
 
@@ -429,15 +429,15 @@ instance Mechanic TimeLimit where
 
 ext_judging_level_element :: Assertion
 ext_judging_level_element = do
-  let reg = registerMechanic (SomeMechanic TimeLimit) defaultWorld
+  let world = registerMechanic (SomeMechanic TimeLimit) defaultWorld
       start moves = (newGame (GameConfig moves (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
-      (gs1, o, _) = resolveSwapWith reg p1 p2 (start 4)
+      (gs1, o, _) = resolveSwapWith world p1 p2 (start 4)
       (gsD, oD, _) = resolveSwapWith defaultWorld p1 p2 (start 4)
-      (gsL, oL, _) = resolveSwapWith reg p1 p2 (start 10)
+      (gsL, oL, _) = resolveSwapWith world p1 p2 (start 10)
   assertEqual "time limit: 3 moves left -> Lost" (Lost (gsScore gs1)) o
   assertEqual "gsOver follows the judged outcome" (Just (TLost (gsScore gs1))) (gsOver gs1)
-  assertBool "default registry: move applied" (moveApplied oD && gsOver gsD == Nothing)
+  assertBool "default world: move applied" (moveApplied oD && gsOver gsD == Nothing)
   assertBool "plenty of moves: not judged" (moveApplied oL && gsOver gsL == Nothing)
 
 -- | 内置关卡级元素都不回复胜负节拍：全部战役关开局（种子 1），任何结局交给 judgeIn 都原样返回。
@@ -452,7 +452,7 @@ judge_default_no_replier =
 
 
 -- | 测试专用灯笼（Custom "lantern" k）：显示附加字段、目标中文名与失败提示都只写在元素的 caps 里
--- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与注册表的 displayLabelWith / loseHintWith 直接取到，
+-- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与元素世界的 displayLabelWith / loseHintWith 直接取到，
 -- 主流程与前端不用改；没注册时什么都没有。
 newtype Lantern = Lantern Int
   deriving (Eq, Show)
@@ -474,13 +474,13 @@ instance Kind Lantern where
 
 ext_element_display_fields :: Assertion
 ext_element_display_fields = do
-  let reg = register (kindDef @Lantern) defaultWorld
+  let world = register (kindDef @Lantern) defaultWorld
       cell k = Custom "lantern" (CustomState k)
-  assertEqual "extras (lit)" [("lit", FaceBool True), ("k", FaceInt 2)] (cellExtrasWith reg (cell 2))
-  assertEqual "extras (dark)" [("lit", FaceBool False), ("k", FaceInt 0)] (cellExtrasWith reg (cell 0))
+  assertEqual "extras (lit)" [("lit", FaceBool True), ("k", FaceInt 2)] (cellExtrasWith world (cell 2))
+  assertEqual "extras (dark)" [("lit", FaceBool False), ("k", FaceInt 0)] (cellExtrasWith world (cell 0))
   assertEqual "unregistered: none" [] (cellExtras (cell 2))
-  assertEqual "label" (Just "灯笼") (displayLabelWith reg "lantern")
-  assertEqual "lose hint" (Just "点亮灯笼，目标 5 盏") (fmap ($ 5) (loseHintWith reg "lantern"))
+  assertEqual "label" (Just "灯笼") (displayLabelWith world "lantern")
+  assertEqual "lose hint" (Just "点亮灯笼，目标 5 盏") (fmap ($ 5) (loseHintWith world "lantern"))
   assertEqual "unregistered: no label" Nothing (displayLabelWith defaultWorld "lantern")
-  assertEqual "builtin without hint" Nothing (fmap ($ 5) (loseHintWith reg "bubble"))
+  assertEqual "builtin without hint" Nothing (fmap ($ 5) (loseHintWith world "bubble"))
 

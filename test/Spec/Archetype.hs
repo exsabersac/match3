@@ -161,19 +161,19 @@ instance Kind Thorn where
 
 archetype_ext_element_plugs_in :: Assertion
 archetype_ext_element_plugs_in = do
-  let reg = register (kindDef @Thorn) defaultWorld
+  let world = register (kindDef @Thorn) defaultWorld
       p = (3, 3)
       thorn = Custom "thorn" (CustomState 2)
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "thorn") 1)) 1) {gsBoard = setCell stableBoard p thorn, gsHammers = 5}
-      hammer gs = let (gs', _, _) = resolveHammerWith reg p gs in gs'
+      hammer gs = let (gs', _, _) = resolveHammerWith world p gs in gs'
       gs1 = hammer gs0
       gs2 = hammer gs1
-  assertEqual "decoded through the registry" (Just (Thorn 2)) (fromElement (bodyOf reg thorn))
-  assertEqual "an obstacle by its bundle" (True, Nothing) (blocksSwapWith reg thorn, matchColorWith reg thorn)
+  assertEqual "decoded through the world" (Just (Thorn 2)) (fromElement (bodyOf world thorn))
+  assertEqual "an obstacle by its bundle" (True, Nothing) (blocksSwapWith world thorn, matchColorWith world thorn)
   assertEqual "first hit chips it" (Custom "thorn" (CustomState 1)) (getCell (gsBoard gs1) p)
   assertBool "second hit breaks it" (not (isThorn (getCell (gsBoard gs2) p)))
   assertEqual "counted by name" [("thorn", 1)] (namedCounts (gsCounts gs2))
-  assertEqual "unknown to the default registry" (Just (Inert "thorn" thorn)) (fromElement (bodyOf defaultWorld thorn))
+  assertEqual "unknown to the default world" (Just (Inert "thorn" thorn)) (fromElement (bodyOf defaultWorld thorn))
   where
     isThorn c = case c of
       Custom "thorn" _ -> True

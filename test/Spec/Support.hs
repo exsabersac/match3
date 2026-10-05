@@ -399,11 +399,11 @@ moveApplied o = o /= NoMatch && o /= InvalidSwap
 cratesOn :: Board -> [(Pos, Cell)]
 cratesOn b = [(p, cell) | p <- allPos, let cell = getCell b p, isCustom cell]
 
--- | 撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith reg 执行一个动作，
+-- | 撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith world 执行一个动作，
 -- 再执行 Undo，返回撤销后的状态；走步或撤销被拒时 Nothing。
 stepThenUndo :: World -> GameState -> M3E.Action -> Maybe GameState
-stepThenUndo reg gs act =
-  let g = M3E.match3ShellWith reg
+stepThenUndo world gs act =
+  let g = M3E.match3ShellWith world
       s1 = gameStep g (startHistory gs) (Act act)
       s2 = gameStep g (stepState s1) Undo
   in if stepAccepted s1 && stepAccepted s2 then Just (histNow (stepState s2)) else Nothing

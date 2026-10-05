@@ -77,14 +77,14 @@ bs_rule_order = do
   assertEqual "rule name" "l/t→bomb" (shapeName ltBombRule)
 
 -- | 两条三连交叉成 L 的局面（交换后）：第 41 关第一轮在交点留下炸弹；同一局面在第 1 关、
--- 以及去掉规则开关的注册表下，交点是空洞（内置表不认 L 形）。
+-- 以及去掉规则开关的元素世界下，交点是空洞（内置表不认 L 形）。
 bs_l_shape_bomb_on_level41 :: Assertion
 bs_l_shape_bomb_on_level41 = do
   let lBoard = setCells stableBoard [((3, 1), mkGem C1), ((3, 2), mkGem C1), ((4, 3), mkGem C1), ((5, 3), mkGem C1), ((2, 3), mkGem C1), ((3, 3), mkGem C3)]
       (p1, p2) = ((2, 3), (3, 3))
-      corner reg li = do
+      corner world li = do
         let gs0 = (levelGame li 7) {gsBoard = lBoard}
-            (_, o, mt) = resolveSwapWith reg p1 p2 gs0
+            (_, o, mt) = resolveSwapWith world p1 p2 gs0
         assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
         w <- firstWave mt
         pure (atM' (cwHoles w) (3, 3))
@@ -99,8 +99,8 @@ bs_l_shape_bomb_on_level41 = do
 
 -- | 特殊块种类统计（本轮消除、放下新特殊块之后）。
 spawnedKinds :: World -> Board -> [GemKind]
-spawnedKinds reg b =
-  let (mb, _, _) = clearMatchesDetailedWith reg Nothing b
+spawnedKinds world b =
+  let (mb, _, _) = clearMatchesDetailedWith world Nothing b
   in [k | Gem _ k _ _ <- catMaybes (concat (mboardRows mb)), k /= Normal]
 
 bombReg :: World
@@ -128,14 +128,14 @@ bs_four_in_l_gives_bomb_not_line = do
 -- （本关没有其他炸弹来源）。
 bs_level41_play_spawns_bombs :: Assertion
 bs_level41_play_spawns_bombs = do
-  let bombsIn reg = sum [bombsInGame reg (levelGame bombLevel s) (12 :: Int) | s <- [1 .. 6]]
-      bombsInGame reg gs n
+  let bombsIn world = sum [bombsInGame world (levelGame bombLevel s) (12 :: Int) | s <- [1 .. 6]]
+      bombsInGame world gs n
         | n <= 0 || gsOver gs /= Nothing = 0
-        | otherwise = case findHintWith reg (gsBoard gs) of
+        | otherwise = case findHintWith world (gsBoard gs) of
             Nothing -> 0
             Just (a, b) ->
-              let (gs', _, mt) = resolveSwapWith reg a b gs
+              let (gs', _, mt) = resolveSwapWith world a b gs
                   here = length [() | w <- mtWaves mt, Just (Gem _ Bomb _ _) <- concat (mboardRows (cwHoles w))]
-              in here + bombsInGame reg gs' (n - 1)
+              in here + bombsInGame world gs' (n - 1)
   assertBool "level 41 play spawns bombs" (bombsIn defaultWorld > 0)
   assertEqual "without the switch: no bombs" 0 (bombsIn (removeMechanic "bomb_shapes" defaultWorld))

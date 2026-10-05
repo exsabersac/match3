@@ -30,7 +30,7 @@ import Spec.Support
 
 tests :: [TestTree]
 tests =
-  [ testCase "ms_caps_fixed_immune_colorless" ms_caps_fixed_immune_colorless
+  [ testCase "ms_ability_fixed_immune_colorless" ms_ability_fixed_immune_colorless
   , testCase "ms_charges_once_per_round" ms_charges_once_per_round
   , testCase "ms_fires_row_and_col_at_step_end" ms_fires_row_and_col_at_step_end
   , testCase "ms_not_full_does_not_fire" ms_not_full_does_not_fire
@@ -51,19 +51,19 @@ stateAt b p = case getCell b p of
   _ -> Nothing
 
 -- | 能力：固定（不下落）、挡交换、无色、洗牌保留；平时打不动，发射中被命中归零。
-ms_caps_fixed_immune_colorless :: Assertion
-ms_caps_fixed_immune_colorless = do
-  let reg = defaultWorld
+ms_ability_fixed_immune_colorless :: Assertion
+ms_ability_fixed_immune_colorless = do
+  let world = defaultWorld
   assertEqual "full = 3, firing = 4" (3, 4) (magicStoneFull, magicStoneFiring)
   mapM_
     (\k -> do
-       assertBool ("blocks swap " ++ show k) (blocksSwapWith reg (magic k))
-       assertBool ("does not fall " ++ show k) (not (fallsWith reg (magic k)))
-       assertEqual ("colorless " ++ show k) Nothing (colorOfWith reg (magic k))
-       assertBool ("kept on shuffle " ++ show k) (keepOnShuffleWith reg (magic k))
-       assertEqual ("immune " ++ show k) Immune (directHitWith reg (magic k)))
+       assertBool ("blocks swap " ++ show k) (blocksSwapWith world (magic k))
+       assertBool ("does not fall " ++ show k) (not (fallsWith world (magic k)))
+       assertEqual ("colorless " ++ show k) Nothing (colorOfWith world (magic k))
+       assertBool ("kept on shuffle " ++ show k) (keepOnShuffleWith world (magic k))
+       assertEqual ("immune " ++ show k) Immune (directHitWith world (magic k)))
     [0 .. 3]
-  assertEqual "firing: hit resets to 0" (Absorb (magic 0)) (directHitWith reg (magic 4))
+  assertEqual "firing: hit resets to 0" (Absorb (magic 0)) (directHitWith world (magic 4))
 
 -- | 邻格规则：与真消除格正交相邻的魔法石 +1；同一轮两个邻格也只 +1；满 3 不再涨；斜角 / 远处不动。
 ms_charges_once_per_round :: Assertion

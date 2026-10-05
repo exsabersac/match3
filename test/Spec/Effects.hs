@@ -50,18 +50,18 @@ tests =
 --------------------------------------------------------------------------------
 -- 用例
 
--- | 用例：(标签, 本关注册表, 本关钩子, 起始盘面, 生成器)。
+-- | 用例：(标签, 本关元素世界, 本关钩子, 起始盘面, 生成器)。
 data Case = Case String World LevelHooks Board StdGen
 
 cases :: [Case]
 cases =
-  [ Case (concat ["L", show li, " seed ", show seed, " ", name]) reg hooks b (mkStdGen (1000 * li + seed))
+  [ Case (concat ["L", show li, " seed ", show seed, " ", name]) world hooks b (mkStdGen (1000 * li + seed))
   | li <- [0 .. levelCount - 1]
   , seed <- [1, 2]
   , Just gs <- [campaignGame li seed]
   , let elems = gsLevelElems gs
-        reg = levelWorldIn defaultWorld elems
-        hooks = levelHooksWith reg elems
+        world = levelWorldIn defaultWorld elems
+        hooks = levelHooksWith world elems
         b0 = gsBoard gs
         (nr, nc) = boardDims b0
   , (name, b) <-
@@ -74,14 +74,14 @@ newtype Prog = Prog (forall m. MonadCascade m => m (Board, CascadeTally))
 
 -- | 每个用例上的入口：(名字, 对外入口的结果, 程序)。
 entries :: Case -> [(String, CascadeRun StdGen, Prog)]
-entries (Case _ reg hooks b g) =
-  [ ("matches", cascadeMatchesWith reg Nothing hooks g b, Prog (cascadeMatchesM reg Nothing b))
-  , ("matchesFrom 2", cascadeMatchesFromWith reg 2 (Just (1, 1)) hooks g b, Prog (cascadeMatchesFromM reg 2 (Just (1, 1)) b))
-  , ("seeds", cascadeSeedsWith reg Nothing seeds hooks g b, Prog (cascadeSeedsM reg Nothing seeds b))
-  , ("seeds []", cascadeSeedsWith reg Nothing [] hooks g b, Prog (cascadeSeedsM reg Nothing [] b))
-  , ("after belt", cascadeAfterWith reg AfterBelt hooks g b, Prog (cascadeAfterM reg AfterBelt b))
-  , ("after end", cascadeAfterWith reg (AfterEnd holes) hooks g b, Prog (cascadeAfterM reg (AfterEnd holes) b))
-  , ("countdowns", cascadeCountdownsWith reg hooks g b, Prog (snd <$> cascadeCountdownsM reg b))
+entries (Case _ world hooks b g) =
+  [ ("matches", cascadeMatchesWith world Nothing hooks g b, Prog (cascadeMatchesM world Nothing b))
+  , ("matchesFrom 2", cascadeMatchesFromWith world 2 (Just (1, 1)) hooks g b, Prog (cascadeMatchesFromM world 2 (Just (1, 1)) b))
+  , ("seeds", cascadeSeedsWith world Nothing seeds hooks g b, Prog (cascadeSeedsM world Nothing seeds b))
+  , ("seeds []", cascadeSeedsWith world Nothing [] hooks g b, Prog (cascadeSeedsM world Nothing [] b))
+  , ("after belt", cascadeAfterWith world AfterBelt hooks g b, Prog (cascadeAfterM world AfterBelt b))
+  , ("after end", cascadeAfterWith world (AfterEnd holes) hooks g b, Prog (cascadeAfterM world (AfterEnd holes) b))
+  , ("countdowns", cascadeCountdownsWith world hooks g b, Prog (snd <$> cascadeCountdownsM world b))
   ]
   where
     (nr, nc) = boardDims b
@@ -103,9 +103,9 @@ entryDigest name = digest (concat [show (view run) | c <- cases, (n, run, _) <- 
 
 -- | 倒计时的步末记录、单轮（stepCascadeAtWith，落点 (1,1)）在全部用例上的指纹。
 countdownStepsDigest, singleRoundDigest :: String
-countdownStepsDigest = digest (concat [show (fst (cascadeCountdownsTracedWith reg hooks g b)) | Case _ reg hooks b g <- cases])
+countdownStepsDigest = digest (concat [show (fst (cascadeCountdownsTracedWith world hooks g b)) | Case _ world hooks b g <- cases])
 singleRoundDigest =
-  digest (concat [show (fmap (\(b', n, g') -> (b', n, show g')) (stepCascadeAtWith reg (Just (1, 1)) g b)) | Case _ reg _ b g <- cases])
+  digest (concat [show (fmap (\(b', n, g') -> (b', n, show g')) (stepCascadeAtWith world (Just (1, 1)) g b)) | Case _ world _ b g <- cases])
 
 effects_entries_pinned :: Assertion
 effects_entries_pinned = do

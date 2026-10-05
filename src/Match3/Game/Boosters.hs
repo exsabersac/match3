@@ -44,12 +44,12 @@ resolveHammer = resolveHammerWith defaultWorld
 
 -- | resolveHammer（指定元素世界）。
 resolveHammerWith :: World -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveHammerWith reg p gs
+resolveHammerWith world p gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsHammers gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | hitImmuneWith reg (getCell (gsBoard gs) p) = (rejectMove gs, NoMatch, emptyTrace gs)
-  | otherwise = resolveMoveWith reg SKindHammer (fullStage (gsBoard gs)) (OpenSeeds Nothing [p]) gs
+  | hitImmuneWith world (getCell (gsBoard gs) p) = (rejectMove gs, NoMatch, emptyTrace gs)
+  | otherwise = resolveMoveWith world SKindHammer (fullStage (gsBoard gs)) (OpenSeeds Nothing [p]) gs
 
 -- | 自由交换：花一次交换任意两格（不必相邻），成消才结算；起手规则同玩家交换。
 resolveFreeSwap :: Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
@@ -57,20 +57,20 @@ resolveFreeSwap = resolveFreeSwapWith defaultWorld
 
 -- | resolveFreeSwap（指定元素世界）。
 resolveFreeSwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveFreeSwapWith reg p1 p2 gs
+resolveFreeSwapWith world p1 p2 gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsFreeSwaps gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds board0 p1 && inBounds board0 p2) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | p1 == p2 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | swapBlockedWith reg board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
-  | pairRule == Nothing && not (hasAnyMatchWith reg swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
-  | otherwise = resolveMoveWith reg SKindFreeSwap swappedS opening gs
+  | swapBlockedWith world board0 p1 p2 = (rejectMove gs, NoMatch, emptyTrace gs)
+  | pairRule == Nothing && not (hasAnyMatchWith world swapped) = (rejectMove gs, NoMatch, emptyTrace gs)
+  | otherwise = resolveMoveWith world SKindFreeSwap swappedS opening gs
   where
     board0 = gsBoard gs
     swappedS = swapStage p1 p2 (fullStage board0)
     swapped = stageBoard swappedS
     -- 成对交换规则（同 Move.resolveSwapWith）
-    pairRule = swapOpeningWith reg board0 swapped p1 p2
+    pairRule = swapOpeningWith world board0 swapped p1 p2
     opening = maybe (OpenMatch (Just p2)) (OpenSeeds (Just p2)) pairRule
 
 -- | 十字清除：花一次清掉一格所在的整行 + 整列（种子起手连锁），不耗步。
@@ -79,11 +79,11 @@ resolveCrossClear = resolveCrossClearWith defaultWorld
 
 -- | resolveCrossClear（指定元素世界）。
 resolveCrossClearWith :: World -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveCrossClearWith reg p gs
+resolveCrossClearWith world p gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsCrossClears gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
   | not (inBounds (gsBoard gs) p) = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
-  | otherwise = resolveMoveWith reg SKindCross (fullStage (gsBoard gs)) (OpenSeeds Nothing (crossClearSeeds (gsBoard gs) p)) gs
+  | otherwise = resolveMoveWith world SKindCross (fullStage (gsBoard gs)) (OpenSeeds Nothing (crossClearSeeds (gsBoard gs) p)) gs
 
 -- | 锤子（结算结果）。
 useHammer :: Pos -> GameState -> (GameState, Outcome)

@@ -18,6 +18,7 @@ module Match3.Element.Builtin.Obstacle
   , HoneyE(..)
   , CakeE(..)
   , BalloonE(..)
+  , balloonPop
   , SafeE(..)
   , FlipE(..)
   , SurpriseEgg(..)
@@ -44,13 +45,13 @@ import Data.Proxy (Proxy(..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
-import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, deadRule, nField, pickBy, plainGem, posSeed)
+import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
 import Match3.Element.Ability
 import Match3.Element.Kind
 import Match3.Element.Types
 import Match3.Element.Rules (entityDamage)
 import Match3.Obstacles
-  ( chipAdjacentBalloonsExcept
+  ( balloonsAdjacentSameColor
   , openSurprises
   , orthoNeighbors
   )
@@ -192,7 +193,13 @@ instance Kind BalloonE where
     Balloon c -> Just (BalloonE c)
     _ -> Nothing
   place _ = colorPlace Balloon
-  boardPasses _ = [AdjacentPass 50 (deadRule chipAdjacentBalloonsExcept)]
+  boardPasses _ = [AdjacentPass 50 balloonPop]
+
+-- | 气球的邻格规则（逃生口而不是 'onNeighbourClear'：要看相邻真消除格**自己的颜色**，方法只看得到本格）：
+-- 与同色真消除宝石正交相邻、本轮没被直接命中的气球打破，并入清除格（盘面不变，由清除管线移走）；
+-- 打破的格按「消除格顺序、每格上 / 下 / 左 / 右」去重排列（通用驱动是后处理的在前，顺序不同，所以不走驱动）。
+balloonPop :: AdjCtx -> Board -> AdjOut
+balloonPop ctx b = AdjOut b [p | p <- balloonsAdjacentSameColor b (acTrue ctx), p `notElem` acDirect ctx] []
 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int
@@ -280,7 +287,8 @@ instance Kind SurpriseEgg where
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
 -- 状态 k = 充能格数 0–3；4 = 发射中（只在步末那一轮存在）。
 --
--- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（'magicStoneCharge'，邻格规则 180）；本轮被直接命中的不充能；
+-- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（方法 'onNeighbourClear' + 通用驱动，邻格规则 180；
+--   本轮被直接命中的不充能 = 缺省的 SkipDirect）；
 -- * 玩家交换的步末（PhaseTick 20，倒计时之后）：满 3 格的魔法石转为发射中（记一条 EvTick 步末效果），
 --   以它所在的整行 + 整列为种子引爆（和倒计时爆炸同一轮，种子里的特殊块照常点火、障碍照常受击）；
 -- * 发射中的魔法石被自己的种子命中后归零（Absorb → 0 格），平时打不动（Immune）。
@@ -304,7 +312,11 @@ instance Kind MagicStone where
   fromCell = fromCustom "magic_stone" MagicStone
   place _ args _ = Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
   label _ = Just "魔法石"
-  boardPasses _ = [AdjacentPass 180 magicStoneCharge, EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
+  -- 充能：命名清理时由逃生口（整盘扫魔法石、看邻格是否真消除）改成方法；与旧整盘写法逐盘等价（Spec.RulesDedup
+  -- qc_magic_stone_charge_via_driver 对照留在测试里的旧实现：盘面相同、都不打碎 / 不坐住格）。
+  neighbourPrio _ = Just 180
+  onNeighbourClear (MagicStone k) = if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched
+  boardPasses _ = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
 -- | 满格（可发射）的充能数。
 magicStoneFull :: Int
@@ -317,14 +329,6 @@ magicStoneFiring = 4
 -- | 盘上魔法石的位置与状态（行优先）。
 magicStones :: Board -> [(Pos, Int)]
 magicStones = ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (CustomState k) <- [cell]])
-
--- | 邻格规则：与本轮真消除格正交相邻的每块魔法石充能 1 格（每轮最多 1 格，满 3 为止）。
--- 本轮被直接命中的魔法石不充能——发射那一轮它被自己的种子命中，所以不会被自己清掉的邻格充能。
-magicStoneCharge :: AdjCtx -> Board -> AdjOut
-magicStoneCharge ctx b =
-  let near p = any (`elem` acTrue ctx) (filter (inBounds b) (orthoNeighbors p))
-      charged = [(p, Custom "magic_stone" (CustomState (k + 1))) | (p, k) <- magicStones b, k < magicStoneFull, p `notElem` acDirect ctx, near p]
-  in AdjOut (foldl (\bd (p, cell) -> boardSet bd p cell) b charged) [] []
 
 -- | 步末（PhaseTick）：满格的魔法石转为发射中；记一条 EvTick "magic_stone" 效果（逐块）。
 magicStoneArm :: EndCtx -> Board -> (Maybe EndEffect, Board)

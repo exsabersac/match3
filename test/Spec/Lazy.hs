@@ -105,11 +105,11 @@ hopeless rows cols =
 ensureCases :: ([(String, World, GameState)], [(String, World, GameState)])
 ensureCases =
   let levelCases =
-        [ (concat ["L", show li, " seed ", show seed, " ", tag], reg, gs)
+        [ (concat ["L", show li, " seed ", show seed, " ", tag], world, gs)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2 :: Int]
         , Just gs0 <- [campaignGame li seed]
-        , let reg = levelWorldIn defaultWorld (gsLevelElems gs0)
+        , let world = levelWorldIn defaultWorld (gsLevelElems gs0)
               (rows, cols) = boardDims (gsBoard gs0)
         , (tag, b) <- [("start", gsBoard gs0), ("stuck", stuckSized rows cols), ("hopeless", hopeless rows cols)]
         , let gs = gs0 {gsBoard = b, gsGen = mkStdGen (97 * li + seed), gsShuffled = False}
@@ -131,7 +131,7 @@ pinnedEnsure =
 -- | 按盘面种类（start / stuck / hopeless / over）分组的自动洗牌结果（整个 GameState 的 show）的指纹。
 ensureDigests :: [(String, String)]
 ensureDigests =
-  [ (tag, digest (concat [show (ensurePlayableWith reg gs) | (lbl, reg, gs) <- levelCases ++ overCase, lastWord lbl == tag]))
+  [ (tag, digest (concat [show (ensurePlayableWith world gs) | (lbl, world, gs) <- levelCases ++ overCase, lastWord lbl == tag]))
   | tag <- ["start", "stuck", "hopeless", "over"]
   ]
   where
@@ -143,7 +143,7 @@ lazy_ensure_playable_pinned = do
   let (levelCases, _) = ensureCases
   assertEqual "ensurePlayable digests" pinnedEnsure ensureDigests
   -- 三条路都走到：原盘可走（不洗）、重洗后找到可走盘、24 次都不合格用第 25 次
-  let outcomes = [(gsShuffled r, hasValidMoveWith reg (gsBoard r)) | (_, reg, gs) <- levelCases, let r = ensurePlayableWith reg gs]
+  let outcomes = [(gsShuffled r, hasValidMoveWith world (gsBoard r)) | (_, world, gs) <- levelCases, let r = ensurePlayableWith world gs]
   assertBool "some boards kept" ((False, True) `elem` outcomes)
   assertBool "some boards reshuffled into a playable one" ((True, True) `elem` outcomes)
   assertBool "some boards fell back to the 25th shuffle" ((True, False) `elem` outcomes)

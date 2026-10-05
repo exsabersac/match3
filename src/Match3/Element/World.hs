@@ -402,11 +402,11 @@ topLayerName w cell = case upperOf w cell of
 
 -- | 本体格子的显示附加字段（元素的 'face'；未注册的 Custom 名字 = 无）。
 faceFieldsWith :: World -> Cell -> [(String, FaceValue)]
-faceFieldsWith reg = face . bodyOf reg
+faceFieldsWith world = face . bodyOf world
 
 -- | 按元素名计数的目标的中文名（本体 'label' / 地面层 'groundLabel'；没登记 = Nothing）。
 displayLabelWith :: World -> ElementName -> Maybe String
-displayLabelWith reg n = lookupDef reg n >>= defLabel
+displayLabelWith world n = lookupDef world n >>= defLabel
 
 defLabel :: Def -> Maybe String
 defLabel d = case d of
@@ -416,82 +416,82 @@ defLabel d = case d of
 
 -- | 按元素名计数的目标的失败提示。
 loseHintWith :: World -> ElementName -> Maybe (Int -> String)
-loseHintWith reg n = lookupDef reg n >>= \d -> case d of
+loseHintWith world n = lookupDef world n >>= \d -> case d of
   KindDef (SomeKind p) -> loseHint p
   GroundDef (SomeGround p) -> groundLoseHint p
   _ -> Nothing
 
 -- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
 displayLabels :: World -> [(ElementName, String)]
-displayLabels reg = [(defName d, l) | d <- worldDefs reg, Just l <- [defLabel d]]
+displayLabels world = [(defName d, l) | d <- worldDefs world, Just l <- [defLabel d]]
 
 --------------------------------------------------------------------------------
 -- 钩子
 
 -- | 参与匹配的颜色：任一层挡匹配则 Nothing，否则本体颜色。（匹配、提示的热路径。）
 matchColorWith :: World -> Cell -> Maybe Color
-matchColorWith reg = matchColor . elementOf reg
+matchColorWith world = matchColor . elementOf world
 
 -- | 本体颜色（颜色袋计数用，不看叠层）。
 colorOfWith :: World -> Cell -> Maybe Color
-colorOfWith reg = color . bodyOf reg
+colorOfWith world = color . bodyOf world
 
 -- | 本格不能被交换（任一层挡）。
 blocksSwapWith :: World -> Cell -> Bool
-blocksSwapWith reg = blocksSwap . elementOf reg
+blocksSwapWith world = blocksSwap . elementOf world
 
 -- | 只看上层（冰 / 叠层）是否挡交换（彩虹 / 特殊合成提示用，本体由它们自己判定）。
 upperBlocksSwapWith :: World -> Cell -> Bool
-upperBlocksSwapWith reg = any (\(SomeLayerValue l) -> layerBlocksSwap l) . upperOf reg
+upperBlocksSwapWith world = any (\(SomeLayerValue l) -> layerBlocksSwap l) . upperOf world
 
 -- | 交换两格是否被挡（任一端挡即挡）。
 swapBlockedWith :: World -> Board -> Pos -> Pos -> Bool
-swapBlockedWith reg b p1 p2 = blocksSwapWith reg (getCell b p1) || blocksSwapWith reg (getCell b p2)
+swapBlockedWith world b p1 p2 = blocksSwapWith world (getCell b p1) || blocksSwapWith world (getCell b p2)
 
 -- | 特殊块能否点火：自上而下第一个有意见的层决定，都没有意见则问本体。
 activatesWith :: World -> Cell -> Bool
-activatesWith reg = fires . elementOf reg
+activatesWith world = fires . elementOf world
 
 -- | 本体随重力下落。
 fallsWith :: World -> Cell -> Bool
-fallsWith reg = falls . bodyOf reg
+fallsWith world = falls . bodyOf world
 
 -- | 本体能穿过传送门。
 portalWith :: World -> Cell -> Bool
-portalWith reg = portal . bodyOf reg
+portalWith world = portal . bodyOf world
 
 -- | 本体会被边缘收走。
 drainsWith :: World -> Cell -> Bool
-drainsWith reg = not . null . drains . bodyOf reg
+drainsWith world = not . null . drains . bodyOf world
 
 -- | 本体会在哪些边被收走（段 2c：边缘收集方向可配）。
 drainEdgesWith :: World -> Cell -> [Edge]
-drainEdgesWith reg = drains . bodyOf reg
+drainEdgesWith world = drains . bodyOf world
 
 -- | 直接命中：叠层自上而下先回答（穿透的问里面），吃掉命中时格子写成新的内容。
 directHitWith :: World -> Cell -> Strike
-directHitWith reg = struck . elementOf reg
+directHitWith world = struck . elementOf world
 
 -- | 对一组种子逐格结算直接命中（去重后按顺序）：返回 (新盘面, 被消除的格)。
 -- 被消除的格按「后命中的在前」排列（与旧 chipIceOnClear 相同，下游只当集合用）。
 chipOnHitWith :: World -> Board -> [Pos] -> (Board, [Pos])
-chipOnHitWith reg b seeds = foldl step (b, []) (nub seeds)
+chipOnHitWith world b seeds = foldl step (b, []) (nub seeds)
   where
-    step (board, clearable) p = case directHitWith reg (getCell board p) of
+    step (board, clearable) p = case directHitWith world (getCell board p) of
       Absorb cell' -> (setCell board p cell', clearable)
       Destroy -> (board, p : clearable)
       Immune -> (board, clearable)
 
 -- | 直接命中打不动（锤子对它拒绝且不扣次数）。
 hitImmuneWith :: World -> Cell -> Bool
-hitImmuneWith reg cell = directHitWith reg cell == Immune
+hitImmuneWith world cell = directHitWith world cell == Immune
 
 -- | 真消除格上随格清掉的叠层（草 / 藤 / 巧）：去掉这些层，其余各层原样盖回。
 stripOnClearWith :: World -> Board -> [Pos] -> Board
-stripOnClearWith reg b ps = foldl strip b (nub ps)
+stripOnClearWith world b ps = foldl strip b (nub ps)
   where
     strip board p =
-      let (ls, inner) = decodeLayers (reg) (getCell board p)
+      let (ls, inner) = decodeLayers (world) (getCell board p)
           kept = [lv | lv@(SomeLayerValue l) <- ls, not (layerStripsOnClear l)]
       in if length kept == length ls
            then board
@@ -503,21 +503,21 @@ adjacentRules = wAdjacent
 -- | 按顺序跑完一轮的全部邻格波及：返回 (盘面, 打碎的格（按规则顺序拼接）, 新生成需坐住的格)。
 -- 每条规则的 acProtect = 起始保护格 ++ 之前各规则的 aoSit。
 runAdjacentWith :: World -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
-runAdjacentWith reg trueClears direct protect0 b0 =
-  let ((b', _), outs) = mapAccumL one (b0, nub protect0) (wAdjacent reg)
+runAdjacentWith world trueClears direct protect0 b0 =
+  let ((b', _), outs) = mapAccumL one (b0, nub protect0) (wAdjacent world)
   in (b', concatMap fst outs, concatMap snd outs)
   where
     -- 第 9 项：mapAccumL 把「穿过各规则的状态」（盘面, 保护格）和「每条规则的输出」（打碎格, 坐住格）分开；
     -- 第 9 项前是四元组 foldl + 两个前插列表 + reverse（按规则顺序拼接，结果相同）。
     -- 保护格 = nub (起始保护格 ++ 之前的坐住格)，增量维护（nub (xs ++ ys) = nub xs ++ [y | y <- nub ys, y `notElem` xs]）
     one (board, protect) rule =
-      let out = arRun rule (AdjCtx trueClears direct protect (recolorableWith reg)) board
+      let out = arRun rule (AdjCtx trueClears direct protect (recolorableWith world)) board
           new = aoSit out
       in ((aoBoard out, protect ++ [p | p <- nub new, p `notElem` protect]), (aoDead out, new))
 
 -- | 本体进入清除格时的计数键。
 counterWith :: World -> Cell -> Maybe CounterKey
-counterWith reg = counter . bodyOf reg
+counterWith world = counter . bodyOf world
 
 -- | 按前后个数差计数的元素：(名字, 计数键, 每个的奖励步数)（保险箱、时间精灵、自定义）。
 diffCountersWith :: World -> [(ElementName, CounterKey, Int)]
@@ -525,40 +525,40 @@ diffCountersWith = wDiff
 
 -- | 盘上本体为该元素的格数（盘面是 Foldable：按格 foldMap 到 'Sum'）。
 countElementWith :: World -> ElementName -> Board -> Int
-countElementWith reg n = getSum . foldMap (\cell -> if elementName reg cell == n then Sum 1 else mempty)
+countElementWith world n = getSum . foldMap (\cell -> if elementName world cell == n then Sum 1 else mempty)
 
 -- | 盘上本体为该元素的格按 'diffWeight' 加权的总数（按差计数用）。权重缺省 1，这时与 'countElementWith' 相同；
 -- 新玩法 5 雪怪 Boss 的左上格权重 = 血量，其余格 0。
 weighElementWith :: World -> ElementName -> Board -> Int
-weighElementWith reg n = getSum . foldMap (\cell -> let e = bodyOf reg cell in if nameOf e == n then Sum (diffWeight e) else mempty)
+weighElementWith world n = getSum . foldMap (\cell -> let e = bodyOf world cell in if nameOf e == n then Sum (diffWeight e) else mempty)
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
 vacatesCarpetWith :: World -> Cell -> Bool
-vacatesCarpetWith reg = vacatesCarpet . bodyOf reg
+vacatesCarpetWith world = vacatesCarpet . bodyOf world
 
 -- | 洗牌时原样放回：有冰 / 叠层，或本体要求保留。
 keepOnShuffleWith :: World -> Cell -> Bool
-keepOnShuffleWith reg = keepOnShuffle . elementOf reg
+keepOnShuffleWith world = keepOnShuffle . elementOf world
 
 -- | 本体被消除且能点火时的爆炸范围（不能点火 / 没有爆炸 → []）。新玩法 8：引爆格是本步的扩爆格
 -- （'setWidening'，魔法地格）时再按它的改写函数扩大；没有扩爆格（缺省）时就是本体的 blast。
 blastWith :: World -> Board -> Cell -> Pos -> [Pos]
-blastWith reg b cell p = case blast (bodyOf reg cell) of
-  Just f | activatesWith reg cell -> widenAtWith reg b p (f b p)
+blastWith world b cell p = case blast (bodyOf world cell) of
+  Just f | activatesWith world cell -> widenAtWith world b p (f b p)
   _ -> []
 
 -- | 按本步的扩爆格改写一个爆炸范围（p = 引爆格；p 不是扩爆格时原样返回）。
 widenAtWith :: World -> Board -> Pos -> [Pos] -> [Pos]
-widenAtWith reg b p area = foldl (\a f -> f b a) area [f | (q, f) <- stepWiden (wStep reg), q == p]
+widenAtWith world b p area = foldl (\a f -> f b a) area [f | (q, f) <- stepWiden (wStep world), q == p]
 
 -- | 地面层里带扩爆规则（'widenRule'）的格（新玩法 8：魔法地格）与各自的改写函数；地面层按格序。
 groundWideningWith :: World -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
-groundWideningWith reg g =
-  [(p, w) | (p, (n, _)) <- g, Just (SomeGround gp) <- [lookupGround (reg) n], Just w <- [groundWiden gp]]
+groundWideningWith world g =
+  [(p, w) | (p, (n, _)) <- g, Just (SomeGround gp) <- [lookupGround (world) n], Just w <- [groundWiden gp]]
 
 -- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelWorldIn 调用）。
 setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> World -> World
-setWidening ws reg = reg {wStep = (wStep reg) {stepWiden = ws}}
+setWidening ws world = world {wStep = (wStep world) {stepWiden = ws}}
 
 -- | 本步的扩爆格（测试 / 文档用）。
 widenedCells :: World -> [Pos]
@@ -566,11 +566,11 @@ widenedCells = map fst . stepWiden . wStep
 
 -- | 普通匹配提示是否试这个格（彩虹 = False：它只经成对交换规则给提示）。
 hintableWith :: World -> Cell -> Bool
-hintableWith reg = hintable . bodyOf reg
+hintableWith world = hintable . bodyOf world
 
 -- | 某步末阶段的规则（按 erOrder）。
 endRules :: World -> EndPhase -> [EndRule]
-endRules reg ph = [r | r <- wEnd reg, erPhase r == ph]
+endRules world ph = [r | r <- wEnd world, erPhase r == ph]
 
 -- | 放置失败的原因（第 6 刀：placeWith 不再直接 error）。
 data PlaceError
@@ -581,7 +581,7 @@ data PlaceError
 -- | 按名字放置一个元素到若干格（按列表顺序逐格；元素的放置函数对某格返回 Nothing 时该格不变）。
 -- 未注册的名字 / 越界格返回 Left（静态关卡数据由 Game.Level.placeStatic 统一转成带关卡名的 error）。
 placeWith :: World -> ElementName -> [Arg] -> Board -> [Pos] -> Either PlaceError Board
-placeWith reg n args b0 ps = case lookupDef reg n of
+placeWith world n args b0 ps = case lookupDef world n of
   Nothing -> Left (UnknownElement n)
   Just d -> foldM (one d) b0 ps
   where
@@ -591,17 +591,17 @@ placeWith reg n args b0 ps = case lookupDef reg n of
 
 -- | 按顺序应用一张放置表（遇到第一处失败即返回 Left）。
 placeAllWith :: World -> Board -> [Placement] -> Either PlaceError Board
-placeAllWith reg = foldM (\b (Place n args ps) -> placeWith reg n args b ps)
+placeAllWith world = foldM (\b (Place n args ps) -> placeWith world n args b ps)
 
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
 -- 返回（新地面层，按计数名的去层数）。只有注册为地面层的名字会反应（'groundHit'）；
 -- 计数键取 'groundCounter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
 hitGroundWith :: World -> [Pos] -> Ground -> (Ground, [(ElementName, Int)])
-hitGroundWith reg hits = foldr one ([], [])
+hitGroundWith world hits = foldr one ([], [])
   where
     one (p, (n, layers)) (acc, counts)
       | p `elem` hits
-      , Just (SomeGround g) <- lookupGround (reg) n =
+      , Just (SomeGround g) <- lookupGround (world) n =
           let after = groundHit g layers
               removed = layers - maybe 0 id after
               counts' = case groundCounter g of
@@ -615,9 +615,9 @@ hitGroundWith reg hits = foldr one ([], [])
 
 -- | 成对交换规则（已按 srOrder 排好）：元素声明的（elementSwapRules）+ 组合表并成的一条（第 8 刀，次序 20）。
 swapRules :: World -> [SwapRule]
-swapRules reg = case wCombos reg of
-  [] -> wSwap reg
-  combos -> sortOn srOrder (wSwap reg ++ [comboSwapRule combos])
+swapRules world = case wCombos world of
+  [] -> wSwap world
+  combos -> sortOn srOrder (wSwap world ++ [comboSwapRule combos])
 
 -- | 只是元素自己声明的成对交换规则（不含组合表；按 srOrder 排好）。
 elementSwapRules :: World -> [SwapRule]
@@ -625,17 +625,17 @@ elementSwapRules = wSwap
 
 -- | 交换起手：交换前盘面 b0 上第一条成立的成对规则，在交换后盘面 swapped 上给出的种子；都不成立时 Nothing。
 swapOpeningWith :: World -> Board -> Board -> Pos -> Pos -> Maybe [Pos]
-swapOpeningWith reg b0 swapped p1 p2 =
-  listToMaybe [srSeeds r swapped p1 p2 | r <- swapRules reg, srFires r b0 p1 p2]
+swapOpeningWith world b0 swapped p1 p2 =
+  listToMaybe [srSeeds r swapped p1 p2 | r <- swapRules world, srFires r b0 p1 p2]
 
 -- | 是否有成对规则成立（交换前盘面）。
 swapFiresWith :: World -> Board -> Pos -> Pos -> Bool
-swapFiresWith reg b p1 p2 = any (\r -> srFires r b p1 p2) (swapRules reg)
+swapFiresWith world b p1 p2 = any (\r -> srFires r b p1 p2) (swapRules world)
 
 -- | 一批前沿上的开启（彩蛋类）：依次跑各开启规则，返回 (盘面, 爆炸种子, 本轮坐住的格)。
 -- 只有一条规则时结果就是它自己的输出（内置只有彩蛋）。
 openWith :: World -> Board -> [Pos] -> (Board, [Pos], [Pos])
-openWith reg b front = case wOpen reg of
+openWith world b front = case wOpen world of
   [] -> (b, [], [])
   (r : rs) -> foldl step (orOpen r b front) rs
   where
@@ -645,11 +645,11 @@ openWith reg b front = case wOpen reg of
 
 -- | 本体可被魔法帽 / 染色瓶改色。
 recolorableWith :: World -> Cell -> Bool
-recolorableWith reg = recolorable . bodyOf reg
+recolorableWith world = recolorable . bodyOf world
 
 -- | 本体可被蜗牛推动。
 pushableWith :: World -> Cell -> Bool
-pushableWith reg = pushable . bodyOf reg
+pushableWith world = pushable . bodyOf world
 
 --------------------------------------------------------------------------------
 -- 规则表（第 8 刀）
@@ -661,7 +661,7 @@ shapeRules = wShapes
 
 -- | 换掉形状规则表（扩展一条形状规则 = 把它插到表里合适的位置）。
 setShapeRules :: [ShapeRule] -> World -> World
-setShapeRules rs reg = reg {wShapes = rs}
+setShapeRules rs world = world {wShapes = rs}
 
 -- | 特殊块组合表（有序）。非空时整张表并成一条次序 comboOrder（20）的成对交换规则（见 'swapRules'）。
 -- mkWorld 建出的表为空，内置元素世界是 Match3.Combos.builtinComboRules。
@@ -670,7 +670,7 @@ comboRules = wCombos
 
 -- | 换掉组合表。
 setComboRules :: [ComboRule] -> World -> World
-setComboRules rs reg = reg {wCombos = rs}
+setComboRules rs world = world {wCombos = rs}
 
 -- | 元素世界的补子策略（缺省 Board.Refill.defaultRefill）；关卡级机制可以经 refillPolicy 换掉（见 Gravity.activeRefill）。
 refillPolicyWith :: World -> RefillPolicy
@@ -678,18 +678,18 @@ refillPolicyWith = wRefill
 
 -- | 换掉元素世界的补子策略。
 setRefillPolicy :: RefillPolicy -> World -> World
-setRefillPolicy p reg = reg {wRefill = p}
+setRefillPolicy p world = world {wRefill = p}
 
 --------------------------------------------------------------------------------
 -- 关卡级元素
 
 -- | 注册（或按名字替换）一个关卡级元素。
 registerMechanic :: SomeMechanic -> World -> World
-registerMechanic d reg = reg {wLevel = [x | x <- wLevel reg, mechNameOf x /= mechNameOf d] ++ [d]}
+registerMechanic d world = world {wLevel = [x | x <- wLevel world, mechNameOf x /= mechNameOf d] ++ [d]}
 
 -- | 去掉一个关卡级元素（测试用：去掉后该机制不生效）。
 removeMechanic :: ElementName -> World -> World
-removeMechanic n reg = reg {wLevel = [x | x <- wLevel reg, mechNameOf x /= n]}
+removeMechanic n world = world {wLevel = [x | x <- wLevel world, mechNameOf x /= n]}
 
 -- | 全部关卡级元素（注册顺序）。
 mechanicDefs :: World -> [SomeMechanic]

@@ -62,7 +62,7 @@ import Match3.Types
   , stoneLayers
   )
 import Spec.Support.Obstacles
-  ( chipAdjacentBalloons
+  ( popAdjacentBalloons
   , chipAdjacentCakes
   , chipAdjacentChests
   , chipAdjacentHoney
@@ -413,7 +413,7 @@ balloon_popped_by_same_color = do
           (mkBalloon C1)
   assertBool "balloon present" (isBalloon (getCell board0 (2, 1)))
   let ms = findMatches board0
-      (_b1, dead) = chipAdjacentBalloons board0 ms
+      (_b1, dead) = popAdjacentBalloons board0 ms
   assertEqual "same color pops" [(2, 1)] dead
   let seeds = findMatches board0
       CascadeRun {crBoard = board1, crTally = CascadeTally {ctCounts = (countOf CountBalloons -> balloons)}} = cascadeSeeds Nothing seeds noHooks (mkStdGen 1) board0
@@ -434,7 +434,7 @@ balloon_ignores_other_color = do
           (2, 1)
           (mkBalloon C3)  -- different color
   let ms = findMatches board0
-      (_, dead) = chipAdjacentBalloons board0 ms
+      (_, dead) = popAdjacentBalloons board0 ms
   assertEqual "other color ignored" ([] :: [Pos]) dead
 
 --------------------------------------------------------------------------------

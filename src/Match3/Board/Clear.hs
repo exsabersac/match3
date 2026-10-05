@@ -36,11 +36,11 @@ import Match3.Board.Match
 -- | expandSpecials（指定元素世界）：爆炸范围 = 本体定义的 blast，能否点火 = 各层 activates（软锁纪律）。
 -- 彩虹没有 blast（只经 rainbowClearSeeds 按交换对象取色，否则彩虹 × 宝石会重复清两色）。
 expandSpecialsWith :: World -> Board -> [Pos] -> [Pos]
-expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
+expandSpecialsWith world b seeds = go (nub seeds) (nub seeds)
   where
     go acc [] = acc
     go acc (p : ps) =
-      let extra = blastWith reg b (getCell b p) p
+      let extra = blastWith world b (getCell b p) p
           new = filter (`notElem` acc) extra
       in go (acc ++ new) (ps ++ new)
 
@@ -48,17 +48,17 @@ expandSpecialsWith reg b seeds = go (nub seeds) (nub seeds)
 -- 每条连线取第一条认领它的规则的产出（内置：长度 ≥5 彩虹，长度 4 按方向横 / 竖消）；只放在真正挖空的格上
 -- （Flip / ice>1 的格留在盘面上，落点退到连线里别的可清格，否则 4 连在这类格上会悄悄丢掉特殊块）。
 spawnSpecialsWith :: World -> Maybe Pos -> [MatchRun] -> [Pos] -> [(Pos, Cell)]
-spawnSpecialsWith reg = spawnByShapes (shapeRules reg)
+spawnSpecialsWith world = spawnByShapes (shapeRules world)
 
 -- | countColor（指定元素世界）：按本体颜色 color 计（不看叠层）。
 countColorWith :: World -> Board -> [Pos] -> Color -> Int
-countColorWith reg b ps col = length [p | p <- ps, colorOfWith reg (getCell b p) == Just col]
+countColorWith world b ps col = length [p | p <- ps, colorOfWith world (getCell b p) == Just col]
 
 -- | 一轮内的多轮开启（通用的「开启类元素」流程：开启规则来自元素世界的 openRule，内置只有彩蛋；
 -- 开出的格本轮坐住、屏蔽后再展开爆炸，新命中的格进入下一批前沿）。
 -- 返回 (盘面, 真消除格, 开启带来的直接命中格, 本轮坐住的格)。
 surpriseClearPassWith :: World -> Board -> [Pos] -> (Board, [Pos], [Pos], [Pos])
-surpriseClearPassWith reg b0 seeds0 =
+surpriseClearPassWith world b0 seeds0 =
   go b0 (nub seeds0) [] [] []
   where
     -- Mask saved Surprise-specials so expandSpecials cannot activate them.
@@ -72,23 +72,23 @@ surpriseClearPassWith reg b0 seeds0 =
           , nub saved
           )
       | otherwise =
-          let (bOpen, expl, savedNew) = openWith reg board front
+          let (bOpen, expl, savedNew) = openWith world board front
               saved' = nub (saved ++ savedNew)
               kept = filter (`notElem` saved') front
           in if null expl
                then go bOpen [] (trueAcc ++ kept) directAcc saved'
                else
-                 let expanded = expandSpecialsWith reg (maskSaved board saved') expl
-                     (bChip, free1) = chipOnHitWith reg bOpen expanded
+                 let expanded = expandSpecialsWith world (maskSaved board saved') expl
+                     (bChip, free1) = chipOnHitWith world bOpen expanded
                      processed = nub (front ++ trueAcc)
                      front' = filter (`notElem` processed) free1
                  in go bChip front' (trueAcc ++ kept ++ free1) (directAcc ++ expanded) saved'
 
 -- | 匹配清除一轮（指定元素世界）：种子 = 全部匹配格。
 clearMatchesDetailedWith :: World -> Maybe Pos -> Board -> (MBoard, Int, [Pos])
-clearMatchesDetailedWith reg prefer b =
-  let runs = findMatchRunsWith reg b
-  in clearWaveWith reg prefer runs b (nub (concatMap runPos runs))
+clearMatchesDetailedWith world prefer b =
+  let runs = findMatchRunsWith world b
+  in clearWaveWith world prefer runs b (nub (concatMap runPos runs))
 
 -- | 一轮消除的**唯一流水线**（匹配清除与种子清除共用）：
 --
@@ -100,22 +100,22 @@ clearMatchesDetailedWith reg prefer b =
 --      彩蛋开出的特殊块与果汁机刚产出的炸弹本轮坐住，不被魔法帽 / 染色瓶改色）；
 --   6. 清除格 = 真消除 ∪ 波及打碎的格（按规则顺序）；挖空后在清除格上放新特殊块。
 clearWaveWith :: World -> Maybe Pos -> [MatchRun] -> Board -> [Pos] -> (MBoard, Int, [Pos])
-clearWaveWith reg prefer runs b base =
-  let expanded = expandSpecialsWith reg b base
+clearWaveWith world prefer runs b base =
+  let expanded = expandSpecialsWith world b base
       -- Ice chips first: iced gems stay, ice-free positions may clear.
       -- Do NOT strip Grass/Vine/Choco on raw expand seeds — soft hits (ice>1 /
       -- Flip / Chain peel) keep on-cell overlays (same discipline as adjacent).
-      (bIced, iceFree) = chipOnHitWith reg b expanded
-      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPassWith reg bIced iceFree
-      bClearedOv = stripOnClearWith reg bSurp2 trueClears
+      (bIced, iceFree) = chipOnHitWith world b expanded
+      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPassWith world bIced iceFree
+      bClearedOv = stripOnClearWith world bSurp2 trueClears
       -- Cells that already took a direct-hit peel/chip must not also receive an
       -- ortho adjacent peel this wave (Chain2/Stone2/Safe2 on a Line/Bomb path).
       directHits = nub (expanded ++ surpDirect)
-      (bAdj, dead, _sits) = runAdjacentWith reg trueClears directHits surpSaved bClearedOv
+      (bAdj, dead, _sits) = runAdjacentWith world trueClears directHits surpSaved bClearedOv
       allPos = nub (trueClears ++ dead)
       n = length allPos
       mb0 = setManyM (toM bAdj) [(p, Nothing) | p <- allPos]
-      spawns = spawnSpecialsWith reg prefer runs allPos
+      spawns = spawnSpecialsWith world prefer runs allPos
       mb1 = setManyM mb0 [(p, Just cell) | (p, cell) <- spawns, p `elem` allPos]
   in (mb1, n, allPos)
 
@@ -142,18 +142,18 @@ maskUfoAbsorbSpecials b ps =
 
 -- | 飞碟吸收一轮：吸收格上的特殊块先降级（'maskUfoAbsorbSpecials'），再以吸收格为种子做种子清除。
 clearUfoAbsorbedWith :: World -> Board -> [Pos] -> (MBoard, Int, [Pos])
-clearUfoAbsorbedWith reg b absorbed =
-  clearFromSeedsDetailedWith reg Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
+clearUfoAbsorbedWith world b absorbed =
+  clearFromSeedsDetailedWith world Nothing (maskUfoAbsorbSpecials b absorbed) absorbed
 
 -- | 种子清除一轮（指定元素世界）：流水线同 clearMatchesDetailedWith，种子由调用方给出；
 -- 新特殊块仍按本盘的匹配段生成。
 clearFromSeedsDetailedWith :: World -> Maybe Pos -> Board -> [Pos] -> (MBoard, Int, [Pos])
-clearFromSeedsDetailedWith reg prefer b seeds0 =
-  clearWaveWith reg prefer (findMatchRunsWith reg b) b (nub seeds0)
+clearFromSeedsDetailedWith world prefer b seeds0 =
+  clearWaveWith world prefer (findMatchRunsWith world b) b (nub seeds0)
 
 -- | 只要「挖空后的盘面 + 清除数」的 clearMatchesDetailedWith 简化版（指定元素世界）；
 -- prefer 为新特殊块的优先生成位（交换目标格）。
 clearMatchesAtWith :: World -> Maybe Pos -> Board -> (MBoard, Int)
-clearMatchesAtWith reg prefer b =
-  let (mb, n, _) = clearMatchesDetailedWith reg prefer b
+clearMatchesAtWith world prefer b =
+  let (mb, n, _) = clearMatchesDetailedWith world prefer b
   in (mb, n)

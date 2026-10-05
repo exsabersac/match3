@@ -67,6 +67,7 @@ stack test
 
 - **验收**：合 main 前只跑 `stack test`，即仓库根目录的 `make verify`；全绿就直接推 main，不另找人复测。
   最后一行是结论，例如 `== verify 通过：stack test 461 个全过；用时 0m40s`，失败时写明失败数和日志路径。
+  `tools/verify.sh` 会把 stdin 接到 `/dev/null`：stdin 若是未关闭的管道（代理 / IDE），tasty/RTS 可能一直等 EOF 而挂死；直接跑 `stack test` 时若遇到同样现象，加 `</dev/null`。
   `make check` / `make test`（网页版构建、两组一致性、e2e）不在验收里，留作手动使用。
 - **分支**：几项小改动合成一条分支，一起跑一次 `make verify`；纯文档 / 注释改动不开分支，验收绿了直接提交 main。
   合 main 只做快进：`git fetch -q origin && git merge-base --is-ancestor origin/main <SHA> && git push origin <完整SHA>:refs/heads/main`，

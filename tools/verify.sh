@@ -12,7 +12,9 @@ LOG="$(mktemp "${TMPDIR:-/tmp}/match3-verify.XXXXXX")"
 # 原生 stack 不能带着 ~/.ghc-wasm/env 的编译器变量
 unset CC CXX AR LD RANLIB NM STRIP
 
-stack test 2>&1 | tee "$LOG"
+# stdin 接到未关闭的管道（代理 / IDE / 某些 CI）时，tasty/RTS 可能一直等 EOF 而挂死；
+# 合 main 验收不需要交互，一律关掉 stdin。
+stack test </dev/null 2>&1 | tee "$LOG"
 rc=$?
 t=$(( $(date +%s) - START ))
 took=$(printf '%dm%02ds' $((t / 60)) $((t % 60)))

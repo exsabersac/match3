@@ -5,7 +5,7 @@
 -- | Haskell 特性第 9 项：规则去重（docs/haskell-features/09-规则去重.md）。
 --
 -- * 光学定律：五个占格障碍棱镜的往返律、改色遍历 cellColorT 的遍历定律；
--- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（第 3 刀起是 onNeighbourClear + 通用驱动 kindNeighbour）的结果顺序写成固定例子；
+-- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（第 3 刀起是 onNear + 通用驱动 kindNeighbour）的结果顺序写成固定例子；
 -- * 规则折叠：runEndRules = 逐条 erRun 再丢掉空效果；
 -- * （能力声明 Cap 的幺半群在元素类重构第 2 刀随 Caps 一起删除，原型包的缺省方法见 Spec.Archetype）；
 -- * 阶段智能构造器 tickRule / spreadRule / moveRule；

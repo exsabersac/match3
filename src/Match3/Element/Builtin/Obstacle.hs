@@ -9,8 +9,8 @@
 -- 雪怪 Boss（新玩法 5，Custom "snow_boss"）是占 2×2 的固定格：邻格真消除 / 直接命中扣血，血量归零整只消除；
 -- 每 3 次交换在身边召唤一块雪块（1 层石头）。
 -- 邻格规则顺序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
--- 多层障碍 / 保险箱的邻消是方法 onNeighbourClear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity（entityHit → entityDamage）；
--- 气球（同色）、魔法石、雪怪召唤读整盘，走逃生口 boardPasses。
+-- 多层障碍 / 保险箱 / 气球的邻消是方法 onNear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity（entityHit → entityDamage）；
+-- 魔法石 tick、雪怪召唤读整盘，走逃生口 boardPasses（非邻格波及）。
 -- 步末：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
 module Match3.Element.Builtin.Obstacle
   ( StoneE(..)
@@ -19,6 +19,7 @@ module Match3.Element.Builtin.Obstacle
   , CakeE(..)
   , BalloonE(..)
   , balloonPop
+  , balloonPopLegacy
   , SafeE(..)
   , FlipE(..)
   , SurpriseEgg(..)
@@ -46,9 +47,10 @@ import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
 import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
 import Match3.Element.Ability
+import Data.Proxy (Proxy(..))
 import Match3.Element.Kind
 import Match3.Element.Types
-import Match3.Element.Rules (entityDamage)
+import Match3.Element.Rules (entityDamage, kindNeighbour)
 import Match3.Obstacles
   ( balloonsAdjacentSameColor
   , openSurprises
@@ -82,7 +84,7 @@ instance Kind StoneE where
     _ -> Nothing
   place _ = layersPlace Stone
   neighbourPrio _ = Just 10
-  onNeighbourClear (StoneE n) = chipNudge n Stone
+  onNear (StoneE n) _ = NearNudge (chipNudge n Stone)
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
@@ -110,7 +112,7 @@ instance Kind ChestE where
     _ -> Nothing
   place _ = layersPlace Chest
   neighbourPrio _ = Just 20
-  onNeighbourClear (ChestE n) = chipNudge n Chest
+  onNear (ChestE n) _ = NearNudge (chipNudge n Chest)
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
@@ -138,7 +140,7 @@ instance Kind HoneyE where
     _ -> Nothing
   place _ = layersPlace Honey
   neighbourPrio _ = Just 30
-  onNeighbourClear (HoneyE n) = chipNudge n Honey
+  onNear (HoneyE n) _ = NearNudge (chipNudge n Honey)
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
@@ -166,7 +168,7 @@ instance Kind CakeE where
     _ -> Nothing
   place _ = layersPlace Cake
   neighbourPrio _ = Just 40
-  onNeighbourClear (CakeE n) = chipNudge n Cake
+  onNear (CakeE n) _ = NearNudge (chipNudge n Cake)
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
@@ -192,13 +194,19 @@ instance Kind BalloonE where
     Balloon c -> Just (BalloonE c)
     _ -> Nothing
   place _ = colorPlace Balloon
-  boardPasses _ = [AdjacentPass 50 balloonPop]
+  neighbourPrio _ = Just 50
+  dieOrder _ = DieAppend  -- 对齐旧 balloonPop 列表序（后插）
+  -- 只对「与同色真消除宝石相邻」的气球致死；keys 仍是全部气球邻格，颜色不对则 NearIdle。
+  onNear (BalloonE c) ctx =
+    if any (\(_, mc) -> mc == Just c) (ncTriggers ctx) then NearNudge Dies else NearIdle
 
--- | 气球的邻格规则（逃生口而不是 'onNeighbourClear'：要看相邻真消除格**自己的颜色**，方法只看得到本格）：
--- 与同色真消除宝石正交相邻、本轮没被直接命中的气球打破，并入清除格（盘面不变，由清除管线移走）；
--- 打破的格按「消除格顺序、每格上 / 下 / 左 / 右」去重排列（通用驱动是后处理的在前，顺序不同，所以不走驱动）。
+-- | 气球邻格：委托 'kindNeighbour'（onNear + DieAppend）；保留旧列表写法供性质对照。
 balloonPop :: AdjCtx -> Board -> AdjOut
-balloonPop ctx b = AdjOut b [p | p <- balloonsAdjacentSameColor b (acTrue ctx), p `notElem` acDirect ctx] []
+balloonPop = kindNeighbour (Proxy :: Proxy BalloonE)
+
+-- | 旧气球列表序写法（对照 'balloonPop' / 性质测试）。
+balloonPopLegacy :: AdjCtx -> Board -> AdjOut
+balloonPopLegacy ctx b = AdjOut b [p | p <- balloonsAdjacentSameColor b (acTrue ctx), p `notElem` acDirect ctx] []
 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int
@@ -228,7 +236,7 @@ instance Kind SafeE where
   diffCounter _ = Just CountSafes
   neighbourPrio _ = Just 110
   -- 末层原地开成饼干（不并入清除格）
-  onNeighbourClear (SafeE n) = Becomes (if n <= 1 then Cookie else Safe (n - 1))
+  onNear (SafeE n) _ = NearNudge (Becomes (if n <= 1 then Cookie else Safe (n - 1)))
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
@@ -286,7 +294,7 @@ instance Kind SurpriseEgg where
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
 -- 状态 k = 充能格数 0–3；4 = 发射中（只在步末那一轮存在）。
 --
--- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（方法 'onNeighbourClear' + 通用驱动，邻格规则 180；
+-- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（方法 'onNear' + 通用驱动，邻格规则 180；
 --   本轮被直接命中的不充能 = 缺省的 SkipDirect）；
 -- * 玩家交换的步末（PhaseTick 20，倒计时之后）：满 3 格的魔法石转为发射中（记一条 EvTick 步末效果），
 --   以它所在的整行 + 整列为种子引爆（和倒计时爆炸同一轮，种子里的特殊块照常点火、障碍照常受击）；
@@ -314,7 +322,7 @@ instance Kind MagicStone where
   -- 充能：命名清理时由逃生口（整盘扫魔法石、看邻格是否真消除）改成方法；与旧整盘写法逐盘等价（Spec.RulesDedup
   -- qc_magic_stone_charge_via_driver 对照留在测试里的旧实现：盘面相同、都不打碎 / 不坐住格）。
   neighbourPrio _ = Just 180
-  onNeighbourClear (MagicStone k) = if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched
+  onNear (MagicStone k) _ = NearNudge (if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched)
   boardPasses _ = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
 -- | 满格（可发射）的充能数。

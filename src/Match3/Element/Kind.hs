@@ -7,10 +7,8 @@
 -- 'Kind' 的方法都带 @proxy e@ 参数（解码、放置、标签、按差计数、规则），不需要「原型值」。
 -- 地面层元素（不占格，层数在 GameState.gsGround 里）是 'GroundKind'；叠层见 Match3.Element.Layer。
 --
--- 规则（元素类重构第 3 刀起）：能写成「邻格真消除时这一格怎么变」的邻格规则是方法（'neighbourPrio' / 'reach' /
--- 'onNeighbourClear'），由通用驱动（Match3.Element.Rules.kindNeighbour）统一找邻格、跳过直接命中、按顺序写回；
--- 多格实体（'Entity'）的扣血由驱动 entityDamage 算，经 Kind 方法 'entityHit' 挂进 'kindRules'（勿再塞进 'boardPasses'，
--- 否则会打两次）。其余读整盘、按自己的顺序写回的规则（步末 / 成对交换 / 开启 / 同色邻消 / 改色 …）走逃生口 'boardPasses'。
+-- 规则：邻格波及是 'neighbourPrio' / 'reach' / 'dieOrder' / 'onNear'（'NearCtx' 能看触发消除格颜色，'NearOut'
+-- 能改邻格或自变），由 'kindNeighbour' 驱动。多格实体扣血经 'entityHit'。步末 / 交换 / 开启等仍可走 'boardPasses'。
 module Match3.Element.Kind
   ( -- * 本体
     Kind(..)
@@ -20,6 +18,9 @@ module Match3.Element.Kind
   , BoardPass(..)
   , Reach(..)
   , Nudge(..)
+  , DieOrder(..)
+  , NearCtx(..)
+  , NearOut(..)
     -- * 多格实体
   , Entity(..)
     -- * 地面层
@@ -58,6 +59,25 @@ data Nudge
   | Dies          -- ^ 打碎：并入本轮清除格（格子原样留着，由清除管线移走）
   deriving (Eq, Show)
 
+-- | 打碎格写入 'aoDead' 的次序（气球等旧逃生口用后插对齐列表序；石头等保持前插）。
+data DieOrder = DiePrepend | DieAppend
+  deriving (Eq, Show)
+
+-- | 邻格反应上下文：触发消除格及其颜色（宝石色；非宝石为 Nothing）、本格位置、底层 AdjCtx 与当前盘面。
+data NearCtx = NearCtx
+  { ncTriggers :: [(Pos, Maybe Color)]
+  , ncSelf :: Pos
+  , ncAdj :: AdjCtx
+  , ncBoard :: Board
+  }
+
+-- | 邻格反应结果：不动 / 本格 Nudge / 改盘（新盘面、追加打碎、坐住）。
+data NearOut
+  = NearIdle
+  | NearNudge Nudge
+  | NearEdit Board [Pos] [Pos]
+  deriving (Eq, Show)
+
 -- | 一种本体元素（类型级）。
 class Element e => Kind e where
   -- | 元素名（元素世界的键；与值级 'Match3.Element.Ability.nameOf' 相同）。
@@ -85,9 +105,12 @@ class Element e => Kind e where
   neighbourPrio _ = Nothing
   reach :: proxy e -> Reach
   reach _ = SkipDirect
-  -- | 与本轮真消除格正交相邻时这一格怎么变。
-  onNeighbourClear :: e -> Nudge
-  onNeighbourClear _ = Untouched
+  -- | 打碎格写入次序（缺省前插，与第 3 刀驱动一致）。
+  dieOrder :: proxy e -> DieOrder
+  dieOrder _ = DiePrepend
+  -- | 与本轮真消除格正交相邻时的反应（可看触发色、可改邻格）。
+  onNear :: e -> NearCtx -> NearOut
+  onNear _ _ = NearIdle
   -- | 逃生口：元素自带的整盘趟（不要把 'entityDamage' 写在这里；多格扣血用 'entityHit'）。
   boardPasses :: proxy e -> [BoardPass]
   boardPasses _ = []

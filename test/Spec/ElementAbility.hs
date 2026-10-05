@@ -23,10 +23,11 @@ import Data.Proxy (Proxy(..))
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
 import Match3.Element.Ability
-import Match3.Element.Builtin (Bubble(..), SnowBoss(..), defaultWorld, specialBlast)
+import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultWorld, specialBlast)
+import Match3.Element.Builtin.Actor (BottleE, MagicHatE, MakerE)
 import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
 import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
-import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE)
+import Match3.Element.Builtin.Obstacle (BalloonE, CakeE, ChestE, HoneyE, MagicStone, SafeE, StoneE, balloonPop, balloonPopLegacy)
 import Match3.Element.Rules (kindRules, layerRules)
 import Match3.Element.Kind
 import Match3.Element.Layer
@@ -49,6 +50,7 @@ tests =
   , testCase "ab_boxing_is_transparent" ab_boxing_is_transparent
   , testCase "ab_world_decode_order" ab_world_decode_order
   , testCase "ab_rule_methods_pinned" ab_rule_methods_pinned
+  , testCase "ab_near_escape_absorbed" ab_near_escape_absorbed
   , testCase "ab_cell_face_matches_legacy_zoo" ab_cell_face_matches_legacy_zoo
   , testProperty "qc_cell_face_matches_legacy" qc_cell_face_matches_legacy
   ]
@@ -127,7 +129,7 @@ instance Kind StoneV where
     _ -> Nothing
   place _ args _ = Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
   neighbourPrio _ = Just 10
-  onNeighbourClear (StoneV n) = if n <= 1 then Dies else Becomes (Stone (n - 1))
+  onNear (StoneV n) _ = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
 
 data FlipV = FlipV Color Color
   deriving (Eq, Show)
@@ -440,13 +442,33 @@ ab_world_decode_order = do
 --------------------------------------------------------------------------------
 -- 规则方法（第 3 刀）：优先级 / 波及范围 / 蔓延写死（与旧 R 行的次序一致；元素对照快照另有整盘锁定）
 
+
+-- | slim-1：气球 onNear+DieAppend 与旧 balloonPopLegacy 一致；气泡/毛球因 foldr 去重序留逃生口。
+ab_near_escape_absorbed :: Assertion
+ab_near_escape_absorbed = do
+  let b = boardFromRows
+        [ [Gem C1 Normal 0 Nothing, Balloon C1, Gem C2 Normal 0 Nothing, Flip C1 C2, Countdown C1 2]
+        , [Balloon C2, Gem C1 Normal 0 Nothing, Balloon C1, Gem C3 Normal 0 Nothing, Gem C1 Normal 0 Nothing]
+        , [Gem C4 Normal 0 Nothing, Balloon C1, Gem C1 Normal 0 Nothing, Balloon C2, Balloon C1]
+        ]
+      clears = [(0, 0), (0, 3), (0, 4), (1, 1), (2, 2)]
+      ctx = AdjCtx clears [] [] (const True)
+      outB = balloonPop ctx b
+      legB = balloonPopLegacy ctx b
+  assertEqual "balloon board" (aoBoard outB) (aoBoard legB)
+  assertEqual "balloon dead" (aoDead outB) (aoDead legB)
+  assertEqual "bubble still hatch" [170] [o | AdjacentPass o _ <- boardPasses (Proxy @Bubble)]
+  assertEqual "fuzzball still hatch" [190] [o | AdjacentPass o _ <- boardPasses (Proxy @Fuzzball)]
+
 ab_rule_methods_pinned :: Assertion
 ab_rule_methods_pinned = do
   assertEqual "kind neighbourPrio"
-    [Just 10, Just 20, Just 30, Just 40, Just 110, Just 120, Nothing]
+    [Just 10, Just 20, Just 30, Just 40, Just 50, Just 60, Just 110, Just 120, Just 130, Just 140, Nothing, Just 180, Nothing, Nothing]
     [ neighbourPrio (Proxy @StoneE), neighbourPrio (Proxy @ChestE), neighbourPrio (Proxy @HoneyE)
-    , neighbourPrio (Proxy @CakeE), neighbourPrio (Proxy @SafeE), neighbourPrio (Proxy @TimeSpiritE)
-    , neighbourPrio (Proxy @SnowBoss) ]
+    , neighbourPrio (Proxy @CakeE), neighbourPrio (Proxy @BalloonE), neighbourPrio (Proxy @MagicHatE)
+    , neighbourPrio (Proxy @SafeE), neighbourPrio (Proxy @TimeSpiritE), neighbourPrio (Proxy @MakerE)
+    , neighbourPrio (Proxy @BottleE), neighbourPrio (Proxy @Bubble), neighbourPrio (Proxy @MagicStone)
+    , neighbourPrio (Proxy @Fuzzball), neighbourPrio (Proxy @SnowBoss) ]
   assertEqual "layer neighbourPrio"
     [Just 70, Just 80, Just 90, Just 100, Just 150, Just 160, Nothing, Nothing]
     [ layerNeighbourPrio (Proxy @FogL), layerNeighbourPrio (Proxy @ChainL), layerNeighbourPrio (Proxy @FreezeL)

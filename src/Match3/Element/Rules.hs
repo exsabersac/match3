@@ -5,7 +5,7 @@
 --
 -- * 邻格目标：按真消除格的顺序、每格上 / 下 / 左 / 右，界内、认得出这种元素 / 叠层的格，整体去重；
 --   'SkipDirect' 时去掉本轮直接命中的格；
--- * 打碎的格（'Dies'）用 @nub (q : dead)@ 前插——后处理的在前；
+-- * 打碎的格（'Dies'）：'DiePrepend' 用 @nub (q : dead)@ 前插；'DieAppend' 后插（气球等对齐旧列表序）；
 -- * 蔓延：来源取步首盘面（新种上的这一步不再蔓延），落点是正交相邻的裸宝石（无叠层）；事件的来源取读序第一个
 --   同层邻格；
 -- * 多格实体：锚点行优先，伤害 = 身外一圈的真消除格数 + 部件上的直接命中格数，归零时全部部件并入清除格。
@@ -54,17 +54,35 @@ neighbourTargets r ok ctx b =
       AllNeighbours -> False
 
 -- | 写回一格的回答。
-nudge :: AdjOut -> Pos -> Nudge -> AdjOut
-nudge out@(AdjOut b dead sit) q n = case n of
+nudge :: DieOrder -> AdjOut -> Pos -> Nudge -> AdjOut
+nudge order out@(AdjOut b dead sit) q n = case n of
   Untouched -> out
   Becomes c -> AdjOut (setCell b q c) dead sit
-  Dies -> AdjOut b (nub (q : dead)) sit
+  Dies -> case order of
+    DiePrepend -> AdjOut b (nub (q : dead)) sit
+    DieAppend -> AdjOut b (dead ++ [q | q `notElem` dead]) sit
 
--- | 本体的邻格波及：目标格逐个问 'onNeighbourClear'。
+-- | 触发消除格颜色（与 Obstacles.isGem+cellColor 一致：含倒计时 / 双面块；其余 Nothing）。
+triggerColors :: AdjCtx -> Board -> Pos -> [(Pos, Maybe Color)]
+triggerColors ctx b self =
+  [ (t, cellColor (getCell b t))
+  | t <- acTrue ctx
+  , self `elem` neighborsInBounds upDownLeftRight b t
+  ]
+
+-- | 本体的邻格波及：目标格逐个问 'onNear'。
 kindNeighbour :: Kind e => proxy e -> AdjCtx -> Board -> AdjOut
 kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (reach p) (isJust . fromCellAs p) ctx b0)
   where
-    one out q = maybe out (nudge out q . onNeighbourClear) (fromCellAs p (getCell (aoBoard out) q))
+    order = dieOrder p
+    one out@(AdjOut b dead sit) q = case fromCellAs p (getCell b q) of
+      Nothing -> out
+      Just e ->
+        let nctx = NearCtx (triggerColors ctx b0 q) q ctx b
+         in case onNear e nctx of
+              NearIdle -> out
+              NearNudge n -> nudge order out q n
+              NearEdit b' d s -> AdjOut b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s ++ sit))
 
 -- | 叠层的邻格波及：目标格逐个问 'onLayerNeighbourClear'（同一套目标规则）。
 layerNeighbour :: Layer l => proxy l -> AdjCtx -> Board -> AdjOut
@@ -72,7 +90,7 @@ layerNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (layerRe
   where
     one out q =
       let cell = getCell (aoBoard out) q
-      in maybe out (\(l, _) -> nudge out q (onLayerNeighbourClear l cell)) (peelAs p cell)
+      in maybe out (\(l, _) -> nudge DiePrepend out q (onLayerNeighbourClear l cell)) (peelAs p cell)
 
 -- | 没有叠层的宝石（蔓延的落点）。
 bareGem :: Cell -> Bool

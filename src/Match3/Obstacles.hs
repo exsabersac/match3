@@ -1,9 +1,10 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | 占格障碍的整盘邻消触发：气球/彩蛋/染色瓶/魔法帽/果汁机（走元素的逃生口 boardPasses）。
+-- | 占格障碍的邻格几何与触发算法：气球颜色过滤、彩蛋开启、帽/瓶改色、果汁机充能。
+-- slim-1 起帽/瓶/果汁机/气球的生产路径走 Kind.onNear；本模块仍提供列表序 / 单格算法供对照与开启规则。
 -- 一般不可匹配、挡交换；邻消触发效果。不负责连锁循环本身。
 --
--- 石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 时间精灵的邻消削层自元素类重构第 3 刀起是元素方法 onNeighbourClear +
+-- 石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 时间精灵的邻消削层自元素类重构第 3 刀起是元素方法 onNear +
 -- 通用驱动（Match3.Element.Rules.kindNeighbour），不在这里。「相邻的某种格」都是 'adjacentWhere'，
 -- 魔法帽 / 染色瓶的改色用遍历 'cellColorT'（docs/haskell-features/09-规则去重.md）。结果的列表顺序由金标准与
 -- Spec.RulesDedup 的固定例子（dedup_obstacle_orders_pinned）锁定。

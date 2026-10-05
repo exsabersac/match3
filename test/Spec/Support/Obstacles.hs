@@ -1,8 +1,8 @@
 {-# LANGUAGE TypeApplications #-}
 -- | Match3.Obstacles 邻消函数的无 except 写法（except = []，即本轮没有被直接命中的格），只给障碍测试用。
 --
--- 元素类重构第 3 刀起，多层障碍 / 保险箱 / 时间精灵的邻消不再有专门函数，而是 'onNeighbourClear' 方法 + 通用驱动
--- 'kindNeighbour'；这里的 chipAdjacent* 是驱动之上的旧签名包装（返回值语义不变）。
+-- 元素类重构第 3 刀起邻消走通用驱动；slim-1 起方法是 'onNear' + 'kindNeighbour'。
+-- 这里的 chipAdjacent* 是驱动之上的旧签名包装（返回值语义不变）。
 module Spec.Support.Obstacles
   ( chipAdjacentStonesExcept
   , chipAdjacentChestsExcept

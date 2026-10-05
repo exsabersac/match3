@@ -15,12 +15,15 @@ module Match3.Element.Builtin.Actor
   , BottleE(..)
   , CountdownE(..)
   , Fuzzball(..)
+  , fuzzballAdjacent
   , fuzzballJumps
   , traceSnails
   ) where
 
 import Control.Applicative ((<|>))
+import Engine.Optics (has, (%~), (&), (.~), (^?))
 import Data.Bits (xor)
+import Data.List (nub, sort)
 import Data.List.NonEmpty (NonEmpty (..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
@@ -29,10 +32,46 @@ import Match3.Element.Ability
 import Match3.Element.Event
 import Match3.Element.Kind
 import Match3.Element.Types
-import Match3.Obstacles (chargeAdjacentMakersSit, orthoNeighbors, triggerAdjacentBottlesBy, triggerAdjacentHatsBy)
+import Match3.Obstacles (orthoNeighbors)
 import qualified Match3.Snail as Snail
 import Match3.Snail (snailPositions, stepSnailAtBy)
 import Match3.Types
+import Match3.Types.Optics (cellAt, cellColorT)
+
+
+-- | 单顶魔法帽（与 Obstacles.triggerAdjacentHatsBy 的 triggerOne 同语义）。
+hatTriggerOne :: (Cell -> Bool) -> Board -> [Pos] -> Pos -> Board
+hatTriggerOne okRecolor board skip hatPos =
+  let nbrs =
+        [ p
+        | p <- orthoNeighbors hatPos
+        , inBounds board p
+        , p `notElem` skip
+        , okRecolor (getCell board p)
+        ]
+      sorted = nub (sort nbrs)
+      cycleColor c = colorAt (fromEnum c + 1)
+  in case sorted of
+       (p1 : p2 : _)
+         | Just c1 <- board ^? cellAt p1 . cellColorT
+         , Just c2 <- board ^? cellAt p2 . cellColorT ->
+             board & cellAt p1 . cellColorT .~ c2 & cellAt p2 . cellColorT .~ c1
+       [p1]
+         | has (cellAt p1 . cellColorT) board ->
+             board & cellAt p1 . cellColorT %~ cycleColor
+       _ -> board
+
+-- | 单只染色瓶（与 Obstacles.triggerAdjacentBottlesBy 的 dyeOne 同语义）。
+bottleDyeOne :: (Cell -> Bool) -> Board -> [Pos] -> Pos -> Color -> Board
+bottleDyeOne okRecolor board skip bottlePos col =
+  let nbrs =
+        [ p
+        | p <- orthoNeighbors bottlePos
+        , inBounds board p
+        , p `notElem` skip
+        , okRecolor (getCell board p)
+        ]
+  in foldl (\bd p -> bd & cellAt p . cellColorT .~ col) board (nub nbrs)
 
 -- | 魔法帽（固定格）：邻格真消除时给相邻宝石换色。
 data MagicHatE = MagicHatE
@@ -53,7 +92,12 @@ instance Kind MagicHatE where
     MagicHat -> Just (MagicHatE)
     _ -> Nothing
   place _ = \_ _ -> Just MagicHat
-  boardPasses _ = [AdjacentPass 60 (\ctx b -> AdjOut (triggerAdjacentHatsBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
+  neighbourPrio _ = Just 60
+  reach _ = AllNeighbours
+  onNear _ ctx =
+    let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
+        b' = hatTriggerOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx)
+     in NearEdit b' [] []
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
@@ -74,7 +118,14 @@ instance Kind MakerE where
     Maker c n -> Just (MakerE c n)
     _ -> Nothing
   place _ = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
-  boardPasses _ = [AdjacentPass 130 (\ctx b -> let (b', sit) = chargeAdjacentMakersSit b (acTrue ctx) in AdjOut b' [] sit)]
+  neighbourPrio _ = Just 130
+  reach _ = AllNeighbours
+  onNear (MakerE c n) ctx =
+    if not (any (\(_, mc) -> mc == Just c) (ncTriggers ctx))
+      then NearIdle
+      else if n <= 1
+        then NearEdit (setCell (ncBoard ctx) (ncSelf ctx) (Gem c Bomb 0 Nothing)) [] [ncSelf ctx]
+        else NearNudge (Becomes (Maker c (n - 1)))
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
@@ -116,7 +167,12 @@ instance Kind BottleE where
     Bottle c -> Just (BottleE c)
     _ -> Nothing
   place _ = colorPlace Bottle
-  boardPasses _ = [AdjacentPass 140 (\ctx b -> AdjOut (triggerAdjacentBottlesBy (acRecolor ctx) b (acTrue ctx) (acProtect ctx)) [] [])]
+  neighbourPrio _ = Just 140
+  reach _ = AllNeighbours
+  onNear (BottleE c) ctx =
+    let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
+        b' = bottleDyeOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx) c
+     in NearEdit b' [] []
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
@@ -178,6 +234,7 @@ instance Kind Fuzzball where
   fromCell = fromCustom "fuzzball" Fuzzball
   place _ = customPlace "fuzzball"
   label _ = Just "毛球"
+  -- 邻格打碎留在逃生口：fuzzballAdjacent 的 foldr 去重序与 kindNeighbour nub+DieAppend 不等价。
   boardPasses _ = [AdjacentPass 190 fuzzballAdjacent, EndPass (moveRule 20 fuzzballRun)]
 
 isFuzzball :: Cell -> Bool
@@ -185,7 +242,7 @@ isFuzzball cell = case cell of
   Custom "fuzzball" _ -> True
   _ -> False
 
--- | 邻格规则：与本轮真消除格正交相邻的毛球被消灭（并入清除格）；本轮已在清除 / 直接命中格里的不重复算。
+-- | 毛球邻格（逃生口）：foldr 去重；步末跳格另见 fuzzballRun。
 fuzzballAdjacent :: AdjCtx -> Board -> AdjOut
 fuzzballAdjacent ctx b =
   let dead = foldr (\q acc -> if q `elem` acc then acc else q : acc) []

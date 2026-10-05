@@ -4,13 +4,14 @@
 --
 -- 共同特征：原型 Blocker 的占格本体，本身不削层、不变形；饼干打不动、落到底边被收走（离格也算覆盖地毯）；
 -- 时间精灵命中 / 邻消即破，按步前步后个数差每个奖励 2 步；气泡（Custom "bubble"）命中 / 邻格真消除即破，
--- 按 CountNamed "bubble" 计数。邻格规则顺序：时间精灵 120 → 气泡 170。
+-- 按 CountNamed "bubble" 计数。时间精灵走 onNear；气泡邻格因去重序留逃生口 AdjacentPass 170。
 -- 变色龙（新玩法 7，Custom "chameleon" k）：例外地是普通棋子原型（可交换、按当前颜色匹配、命中即消），
 -- 玩家交换的步末（PhaseMove 40）按固定顺序换到下一种颜色，被消除计 CountNamed "chameleon"。
 module Match3.Element.Builtin.Collectible
   ( CookieE(..)
   , TimeSpiritE(..)
   , Bubble(..)
+  , bubbleAdjacent
   , Chameleon(..)
   , chameleonName
   , chameleonCell
@@ -83,7 +84,7 @@ instance Kind TimeSpiritE where
   diffCounter _ = Just CountSpirits
   bonusMoves _ = 2
   neighbourPrio _ = Just 120
-  onNeighbourClear _ = Dies
+  onNear _ _ = NearNudge Dies
 
 -- | 气泡：占格本体 Custom "bubble" k。无色、挡交换、随重力下落、不穿传送门、洗牌保留；
 -- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。
@@ -107,8 +108,11 @@ instance Kind Bubble where
   fromCell = fromCustom "bubble" Bubble
   place _ = customPlace "bubble"
   label _ = Just "气泡"
+  -- 邻格打碎留在逃生口：bubbleAdjacent 用 foldr 去重（遇重复保留右侧先写入序），
+  -- 与 kindNeighbour 的 nub+DieAppend（保留首次）不等价，金标准 AR170 敏感。
   boardPasses _ = [AdjacentPass 170 bubbleAdjacent]
 
+-- | 气泡邻格：foldr 去重列表序（勿改成 nub，除非重录金标准）。
 bubbleAdjacent :: AdjCtx -> Board -> AdjOut
 bubbleAdjacent ctx b =
   let popped =

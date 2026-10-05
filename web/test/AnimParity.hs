@@ -1,5 +1,5 @@
 -- 逐轮回放的一致性脚本（原生一侧）：同一关卡 + 种子，按核心提示连走 N 步；每步之后建立回放
--- （Match3Web.Anim，即桌面 ComboFx 阶段机）并逐帧推进到播完，打印开播 JSON、每帧 JSON 与
+-- （Match3Web.Anim，即 app/pure 的 ComboFx 阶段机）并逐帧推进到播完，打印开播 JSON、每帧 JSON 与
 -- 「frames=帧数 events=事件数」。每第 3 步从第 5 帧起加速（覆盖 fast 路径）。
 -- 与 node-anim-parity.mjs（wasm 一侧）的输出逐字节比较；另外在原生一侧核对：不加速的步，
 -- 逐帧循环的帧数 / 事件数与 Engine.Playback.runPlayer 一口气播完的结果相同（不一致则退出码 1）。

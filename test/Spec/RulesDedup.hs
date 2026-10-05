@@ -16,7 +16,8 @@ module Spec.RulesDedup
 
 import Data.Functor.Identity (Identity(..))
 import Engine.Optics
-import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, boardPositions, getCell)
+import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, getCell)
+import Match3.Types (boardPositions)
 import Match3.Element (defaultWorld)
 import Match3.Element.World (endRules, pushableWith)
 import Match3.Element.Types

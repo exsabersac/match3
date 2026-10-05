@@ -10,6 +10,9 @@ module Spec.MagicGround
   ) where
 
 import Match3.Core
+import Match3.Daily (dailySeed)
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Types (boardSize)
 import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Combos (builtinComboRules)
 import Match3.Counts (countOf)

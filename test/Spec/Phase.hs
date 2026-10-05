@@ -27,6 +27,7 @@ import Match3.Board.Phase
 import Match3.Board.Random (randomBoard)
 import Match3.Board.Refill (defaultRefill, refillWith)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Game.Boosters (resolveHammer)
 import Match3.Game.Resolve (Opening(..), SMoveKind(..), resolveMove)
 import Match3.Types (Score)

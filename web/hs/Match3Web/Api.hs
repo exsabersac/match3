@@ -3,7 +3,7 @@
 -- 设计原则：
 --   * 一切规则判定（能否交换、消除、下落、补子、连锁、计分、胜负、撤销）都走通用接口
 --     "Engine.Game" 的三消外壳实例 match3Shell（= withHistory match3History match3Game），
---     与桌面版 SDL 外壳（app/UI/Plugin.hs）是同一条路径：前端只调 gameStep，这里只做序列化。
+--     网页是唯一前端（原 SDL 桌面版已移除）：前端只调 gameStep，这里只做序列化。
 --   * 每一步的表现数据全部来自 stepReport（Played）：回放脚本 pdTrace、效果事件 pdEvents、Outcome；
 --     规则只算一次（不分别调 traceSwap 与 trySwap）。
 --   * 输出是手写的最小 JSON（Match3Web.Json，不引入 aeson，减小 wasm 体积与依赖面）。
@@ -55,7 +55,7 @@ import UI.WebMeta (WebMeta(..), webMeta)
 -- ---------------------------------------------------------------------------
 -- 对外接口（被 WebMain 的 JSFFI 导出包装）
 
--- | 网页端持有的一局：当前状态 + 撤销历史（与桌面外壳相同，历史只在 Engine.History 里存一份）。
+-- | 网页端持有的一局：当前状态 + 撤销历史（与原桌面版外壳相同，历史只在 Engine.History 里存一份）。
 type WebGame = History GameState
 
 -- | 当前局面。
@@ -83,7 +83,7 @@ apiSwapAnim p1 p2 = runStep (Act (Swap p1 p2))
 apiUndo :: WebGame -> (WebGame, String)
 apiUndo h = let (h', _, j) = runStep Undo h in (h', j)
 
--- | 三种道具（同桌面 UI.Actions.applyBooster，经 gameStep 的 Hammer / CrossClear / FreeSwap）：JSON 形状同 m3Swap，
+-- | 三种道具（同原桌面版 UI.Actions.applyBooster，经 gameStep 的 Hammer / CrossClear / FreeSwap）：JSON 形状同 m3Swap，
 -- 另加 keepTool（UI.MoveText.keepsTool：之后是否留在点选模式——只有自由交换换不掉、不扣次数时留下）。
 apiHammer :: Pos -> WebGame -> (WebGame, Maybe AnimSeed, String)
 apiHammer p = runStepWith (Just UiHammer) (Act (Hammer p))
@@ -94,19 +94,19 @@ apiCross p = runStepWith (Just UiCross) (Act (CrossClear p))
 apiFreeSwap :: Pos -> Pos -> WebGame -> (WebGame, Maybe AnimSeed, String)
 apiFreeSwap p q = runStepWith (Just UiFreeSwap) (Act (FreeSwap p q))
 
--- | 手动洗牌（同桌面 S 键 UI.Input.keyShuffle：gameStep 的 Shuffle，终局后被拒）；没有回放脚本，前端播一段轻落。
+-- | 手动洗牌（同原桌面版 S 键 UI.Input.keyShuffle：gameStep 的 Shuffle，终局后被拒）；没有回放脚本，前端播一段轻落。
 apiShuffle :: WebGame -> (WebGame, Maybe AnimSeed, String)
 apiShuffle = runStep (Act Shuffle)
 
--- | 每日挑战（同桌面 D 键：Setup Daily，种子由日期决定）。
+-- | 每日挑战（同原桌面版 D 键：Setup Daily，种子由日期决定）。
 apiDaily :: Int -> Int -> Int -> (WebGame, String)
 apiDaily y m d = fresh (gameNew match3Shell (Daily (Year y) (Month m) (Day d)) 0)
 
--- | 重开本关（同桌面 R 键 UI.Input.restartSame）：每日挑战按开局步数与原目标换种子重开，战役关 restartLevel。
+-- | 重开本关（同原桌面版 R 键 UI.Input.restartSame）：每日挑战按开局步数与原目标换种子重开，战役关 restartLevel。
 apiRestart :: Int -> Int -> WebGame -> (WebGame, String)
 apiRestart startMoves seed h = fresh (startHistory (restartSame startMoves seed (histNow h)))
 
--- | 结局后前进（同桌面 N / 空格 / 回车 / 点结算面板，UI.Actions.advanceOrMsg）：过关 → nextLevel（携带剩余步数，最多 3 步），
+-- | 结局后前进（同原桌面版 N / 空格 / 回车 / 点结算面板，UI.Actions.advanceOrMsg）：过关 → nextLevel（携带剩余步数，最多 3 步），
 -- 通关 → 从第 1 关重开战役，失败 → 同 apiRestart；未结束时 accepted=false、状态不变。
 -- 返回 {ok, accepted, startMoves, state}：startMoves 是新一局的「开局步数」（三星分母；过关进下一关时取该关印制步数，不含携带）。
 apiAdvance :: Int -> Int -> WebGame -> (WebGame, String)
@@ -127,14 +127,14 @@ apiAdvance startMoves seed h = case gvOver (gameView gs) of
       in (h', obj [("ok", "true"), ("accepted", "true"), ("startMoves", int sm), ("state", encodeState h')])
     rejected = (h, obj [("ok", "true"), ("accepted", "false"), ("startMoves", int startMoves), ("state", encodeState h)])
 
--- | 元素展示盘（同桌面 MATCH3_SHOWCASE：UI.Showcase.showcaseState，清空撤销历史）。
+-- | 元素展示盘（同原桌面版 MATCH3_SHOWCASE：UI.Showcase.showcaseState，清空撤销历史）。
 apiShowcase :: WebGame -> (WebGame, String)
 apiShowcase h = fresh (startHistory (showcaseState (histNow h)))
 
 fresh :: WebGame -> (WebGame, String)
 fresh h = (h, obj [("ok", "true"), ("state", encodeState h)])
 
--- | 选关进度与结算星级（桌面 App 的 appMaxReached / appStartMoves 由网页持有，传进来）：
+-- | 选关进度与结算星级（原桌面版 App 的 appMaxReached / appStartMoves 由网页持有，传进来）：
 --   {reached, stars, dots}——reached = 开局记到当前关（freshLevelUi 的 max appMaxReached 当前关），
 --   终局后再按 unlockAfterOutcome 解锁（每日挑战不解锁）；stars = starRating 开局步数 剩余步数；
 --   dots = 每关一个字符的进度点（Match3.View.levelDots：C 当前 / D 已过 / U 已解锁 / L 未解锁）。
@@ -152,11 +152,11 @@ apiProgress reached startMoves h =
       DotUnlocked -> 'U'
       DotLocked -> 'L'
 
--- | 选关地图点击（同桌面 UI.Input.mapClick 的 mapClickJump）：{jump: 关卡下标 | null}——null = 当前关或未解锁（关地图、保留进度）。
+-- | 选关地图点击（同原桌面版 UI.Input.mapClick 的 mapClickJump）：{jump: 关卡下标 | null}——null = 当前关或未解锁（关地图、保留进度）。
 apiMapJump :: Int -> Int -> WebGame -> String
 apiMapJump reached clicked h = obj [("jump", maybe "null" int (mapClickJump (gvLevel (gameView (histNow h))) reached clicked))]
 
--- | HUD 右下角分数徽章（同桌面 drawHudArt 的 Match3.View.scoreBadge）：
+-- | HUD 右下角分数徽章（同原桌面版 drawHudArt 的 Match3.View.scoreBadge）：
 -- 回放中（replaying ≠ 0）传当前轮连击与滚动中的分数；播完后传总结剩余帧数与本步最高连击。
 --   {kind:"combo"|"rolling"|"summary"|"score", n, shuffled}
 apiBadge :: Int -> Int -> Int -> Int -> Int -> WebGame -> String
@@ -235,7 +235,7 @@ apiMeta =
     , ("spreadCurves", obj [(n, curve c) | (n, c) <- wmSpreadCurves m])
     , ("frames", obj [(n, int f) | (n, f) <- wmFrames m])
     , ("sounds", arr (map str (wmSounds m)))
-      -- 选关地图的章节（UI.Chapters，与桌面 UI.LevelMap 同一张表）：[{start: 章节第一关的下标, label: CH1…, title: 第一章…}]
+      -- 选关地图的章节（UI.Chapters，与原桌面版 UI.LevelMap 同一张表）：[{start: 章节第一关的下标, label: CH1…, title: 第一章…}]
     , ("chapters", arr [obj [("start", int i), ("label", str (chapterLabel i)), ("title", str (chapterTitle k))] | (k, i) <- zip [0 ..] chapterStarts])
     ]
   where
@@ -252,18 +252,18 @@ rgb (r, g, b) = arr [int (fromIntegral r), int (fromIntegral g), int (fromIntegr
 -- ---------------------------------------------------------------------------
 -- 状态 / 结果 / 回放脚本
 
--- | 局面 JSON：全部读视图模型 Match3.View（与桌面 HUD / 标题同一份读数），不从 GameState 现算。
+-- | 局面 JSON：全部读视图模型 Match3.View（与原桌面版 HUD / 标题同一份读数），不从 GameState 现算。
 encodeState :: WebGame -> String
 encodeState h =
   obj
     [ ("level", int (gvLevel gv))
     , ("name", str (gvRawName gv))
-      -- 每日挑战（gvDaily；HUD 关名画「每日挑战」、没有规则角标）与窗口标题（Match3.View.titleLine，同桌面标题栏，网页写进 document.title）
+      -- 每日挑战（gvDaily；HUD 关名画「每日挑战」、没有规则角标）与窗口标题（Match3.View.titleLine，同原桌面版标题栏，网页写进 document.title）
     , ("daily", bool (gvDaily gv))
     , ("title", str (titleLine gv))
-      -- 道具剩余次数（gvBoosters，同桌面 HUD 的三枚道具芯片）
+      -- 道具剩余次数（gvBoosters，同原桌面版 HUD 的三枚道具芯片）
     , ("boosters", obj [("hammer", int (bHammers bs)), ("swap", int (bFreeSwaps bs)), ("cross", int (bCrossClears bs))])
-      -- 本关打开的规则开关角标（视图模型 gvRules 查 Match3.View.ruleBadge，与桌面 HUD 同一张表）：
+      -- 本关打开的规则开关角标（视图模型 gvRules 查 Match3.View.ruleBadge，与原桌面版 HUD 同一张表）：
       -- [{name, text, icons}]，前端 HUD 按列表逐个画，新规则登记进 ruleBadgeTable 就自动显示
     , ("rules", arr (map encodeRuleBadge (ruleBadges gv)))
     , ("score", int (gvScore gv))
@@ -271,7 +271,7 @@ encodeState h =
     , ("goal", encodeGoal goal)
     , ("progress", int (giProgress goal))
     , ("target", int (giTarget goal))
-      -- 雪怪 Boss 血条（新玩法 5，视图模型 gvBoss，与桌面 HUD 同一份读数）：{hp: 剩余, max: 满血}；目标不是「击败 Boss」时为 null
+      -- 雪怪 Boss 血条（新玩法 5，视图模型 gvBoss，与原桌面版 HUD 同一份读数）：{hp: 剩余, max: 满血}；目标不是「击败 Boss」时为 null
     , ("boss", maybe "null" encodeBoss (gvBoss gv))
     , ("over", maybe "null" (encodeOutcome . fromTerminal) (gvOver gv))
     , ("loseHint", str (giLoseHint goal))
@@ -287,7 +287,7 @@ encodeState h =
     , ("ufos", arr [obj [("p", encodePos (ufoCell u)), ("c", int (colorNum (ufoColor u)))] | u <- bvUfos bv])
     , ("carpets", arr (map encodePos (bvCarpets bv)))
     , ("carpetOpen", arr (map encodePos (bvCarpetOpen bv)))
-      -- 饼干掉落口格（新玩法 6，视图模型 bvDrops，与桌面 UI.BoardArt.drawDropsArt 同一份读数）；没有掉落口为 []
+      -- 饼干掉落口格（新玩法 6，视图模型 bvDrops，与原桌面版 UI.BoardArt.drawDropsArt 同一份读数）；没有掉落口为 []
     , ("drops", arr (map encodePos (bvDrops bv)))
     , ("board", encodeBoard (bvBoard bv))
     ]
@@ -324,7 +324,7 @@ encodeGoal gi =
       ++ [("name", str (unElementName n)) | Just n <- [giName gi]]   -- 按元素名计数的目标（jelly / bubble 等）
       -- 中文显示名（视图模型 Match3.View.goalLabel，唯一来源）：HUD「目标 …」直接画它，前端不自带映射表
       ++ [("label", str (goalLabel gi))]
-      -- 目标图标贴图名（UI.GoalIcon.goalIcon，app/pure 里与桌面 HUD / 选关地图共用的一张表；如第 47 关 chameleon_icon）
+      -- 目标图标贴图名（UI.GoalIcon.goalIcon，app/pure 里与原桌面版 HUD / 选关地图共用的一张表；如第 47 关 chameleon_icon）
       ++ [("icon", str (goalIcon (giGoal gi)))]
 
 -- | 一步的逐轮回放：start → waves[0..] → end（步末效果，按 afterWaves 插在第 k 轮之后）→ final
@@ -406,7 +406,7 @@ encodeEvent e =
 --         元素自带的显示附加字段（Match3.View.cellExtras，元素 caps 的 displays）按顺序追加在后面，前端不自己拆 v：
 --         雪怪 Boss（custom "snow_boss"）{"q":象限 0–3,"hurt":血量是否过半,"turn":召唤计数,"every":召唤周期}；
 --         变色龙（custom "chameleon"，v = 颜色下标 0..4）{"c":当前颜色 1..5（同宝石的 "c"）}
---   每格另带 "s"（核心 show 文本，调试 / 未知元素占位用）。渲染层按 t 查表（www/cells.js，对应桌面 UI.CellTable）。
+--   每格另带 "s"（核心 show 文本，调试 / 未知元素占位用）。渲染层按 t 查表（www/cells.js，对应原桌面版 UI.CellTable）。
 
 encodeBoard :: Board -> String
 encodeBoard b = arr [arr (map encodeCell row) | row <- boardRows b]

@@ -1,3 +1,4 @@
+# 原生构建只编核心库、app/pure 与测试（网页 wasm 见 web/cabal.project）。
 # Stackage 还没有 GHC 9.14 的快照：用最新 LTS（lts-24.60，GHC 9.10.3）的包集，编译器换成 9.14.1。
 resolver: lts-24.60
 compiler: ghc-9.14.1
@@ -9,10 +10,9 @@ extra-deps:
 # 随机数与 lts-21.25 时代相同（同种子 → 同盘面；金标准与网页版 web/cabal.project 依赖这一点）
 - random-1.2.1.1
 - splitmix-0.1.0.5
-# lts-24.60 里的版本上界不认 base-4.22 / template-haskell-2.24，换成已支持 9.14 的新版
-- parallel-3.3.0.0
+# lts-24.60 里的版本上界不认 base-4.22 / template-haskell-2.24，换成已支持 9.14 的新版（tasty 用；
+# 原 parallel / unordered-containers 只被已移除的 SDL2 桌面版依赖链用到，随之去掉）
 - tagged-0.8.10
-- unordered-containers-0.2.21
 
 # 快照里的 file-io-0.1.6 会顶替 GHC 9.14.1 自带的 0.1.5，连带把 directory / process 剪掉；
 # 去掉它，直接用编译器自带的那份。

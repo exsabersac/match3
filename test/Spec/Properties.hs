@@ -73,6 +73,9 @@ import qualified Match3.Combos as Combos
 import Control.Monad (filterM)
 import Data.Maybe (listToMaybe)
 import Match3.Core
+import Match3.Game.State (gsUfos)
+import Match3.Levels.Campaign (allLevels, lookupLevel)
+import Match3.Types (boardDims, boardSize, defaultConfig)
 import Match3.Counts
   ( Counts
   , bumpCount

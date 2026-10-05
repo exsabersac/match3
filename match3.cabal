@@ -6,7 +6,7 @@ cabal-version: 2.2
 
 name:           match3
 version:        0.1.0.0
-description:    Playable Haskell 2D Match-3 (消消乐) with SDL2
+description:    Haskell 2D Match-3 (消消乐) rules engine with a WebAssembly web front end
 homepage:       https://github.com/exsabersac/match3#readme
 bug-reports:    https://github.com/exsabersac/match3/issues
 author:         yu binbin
@@ -128,7 +128,6 @@ library match3-pure
       UI.Presentation
       UI.Restart
       UI.Showcase
-      UI.Sound
       UI.WebMeta
   other-modules:
       Paths_match3
@@ -141,56 +140,6 @@ library match3-pure
       base >=4.7 && <5
     , match3
     , random
-  default-language: Haskell2010
-
-executable match3-sdl
-  main-is: Main.hs
-  other-modules:
-      Art
-      Shell.Loop
-      UI.Actions
-      UI.Audio
-      UI.BoardArt
-      UI.BoardPrim
-      UI.Cascade
-      UI.Cell.Art
-      UI.Cell.Prim
-      UI.Cell.PrimOverlay
-      UI.CellTable
-      UI.Draw
-      UI.EndStage
-      UI.Env
-      UI.Glyph
-      UI.GoalStyle
-      UI.Ground
-      UI.HudArt
-      UI.HudBlocks
-      UI.HudPrim
-      UI.Input
-      UI.Layout
-      UI.LevelMap
-      UI.Playback
-      UI.Plugin
-      UI.TextArt
-      UI.Types
-      Paths_match3
-  autogen-modules:
-      Paths_match3
-  hs-source-dirs:
-      app
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , bytestring
-    , containers
-    , directory
-    , filepath
-    , match3
-    , match3-pure
-    , random
-    , sdl2
-    , text
-    , vector
   default-language: Haskell2010
 
 test-suite match3-test
@@ -266,7 +215,6 @@ test-suite match3-test
       UI.Presentation
       UI.Restart
       UI.Showcase
-      UI.Sound
       UI.WebMeta
       Engine.Effect
       Engine.Game

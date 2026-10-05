@@ -1,5 +1,5 @@
 -- | 连击（连锁）表现层的纯逻辑：逐轮回放的阶段机与时间线、步末效果阶段、下落映射、连击等级样式、浮字曲线。
--- 只描述「怎么播」，不含任何 SDL 绘制（绘制见 UI.Cascade / UI.HudArt / UI.HudPrim），
+-- 只描述「怎么播」，不含任何绘制（绘制在网页 web/www/render.js / hud.js，经 Match3Web.Anim 取阶段与帧号），
 -- 也不改规则：回放脚本与效果事件来自通用接口 gameStep 的整步报告（Match3.Engine.match3Shell），结算结果仍以规则层为准。
 --
 -- 时钟（帧号、加速、进度）在通用播放层 Engine.Playback：本模块只给出阶段机
@@ -7,7 +7,7 @@
 -- 波次级界面（高亮 / 消失 / 粒子 / 得分浮字）读 WaveView 里的效果事件（EvClear 格、EvScore 分），
 -- 不读 CascadeWave 的 cwCleared / cwScore；底图快照（cwBefore / cwHoles / cwAfter）取自波次。
 --
--- 纯前端模块（app/pure，桌面 / 测试 / 网页共用）。帧数（高亮、得分浮字、连击弹字、各步末段）、
+-- 纯前端模块（app/pure，网页 wasm 编译、原生测试也编译）。帧数（高亮、得分浮字、连击弹字、各步末段）、
 -- 步末段种类与连击等级样式都来自表现表 UI.Presentation（StageKind / ComboStyle 在那里定义，这里再导出）。
 module ComboFx
   ( -- * 时间线（帧；主循环固定 60 fps 步长，1 帧 ≈ 16.7 ms）
@@ -84,7 +84,7 @@ waveFlashFrames = prFrames (presentationFor EvClear)
 wavePopFrames :: Int
 wavePopFrames = 6
 
--- | 交换补间与无连锁时的轻落（帧；桌面 UI.Types 再导出，网页经 m3Meta 取）。
+-- | 交换补间与无连锁时的轻落（帧；网页经 m3Meta 取）。
 swapFrames, fallFrames :: Int
 swapFrames = 10
 fallFrames = 12

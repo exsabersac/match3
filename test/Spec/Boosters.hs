@@ -8,6 +8,8 @@ module Spec.Boosters
 import Match3.Board.Grid (setCell)
 import Match3.Boosters (crossClearSeeds)
 import Match3.Core
+import Match3.Board.Grid (adjacent)
+import Match3.Types (boardSize, defaultConfig, hasVine)
 import Match3.Countdown (spawnCountdown)
 import Match3.Game.Boosters (useCrossClear, useFreeSwap, useHammer)
 import Match3.Game.Level (newGame)

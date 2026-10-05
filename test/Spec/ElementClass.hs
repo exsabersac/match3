@@ -19,6 +19,8 @@ import qualified ElementQueries
 import Match3.Board.Grid (setCell)
 import Match3.Board.Match (findHintWith)
 import Match3.Core
+import Match3.Game.Level (newGameAtLevel)
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Ability

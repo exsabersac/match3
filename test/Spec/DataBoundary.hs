@@ -17,7 +17,7 @@
 -- * NonEmpty：'beats' 的分组写成固定例子（只合并相邻的同节拍效果），每组非空、拼回去就是原列表。
 -- * Generic 覆盖：用 GHC.Generics 的 'conName' 列出 Color / GemKind / CellOverlay / CellContents / Outcome 的全部构造器
 --   （'Constructors' 类的默认实现 + DeriveAnyClass 一行一个实例），检查测试生成器 genCell 覆盖每个构造器、
---   每个构造器在注册表 / cellFace / 桌面 UI.CellTable / 网页 encodeOutcome 都有对应项，且解码往返。
+--   每个构造器在注册表 / cellFace / 网页 encodeOutcome 都有对应项，且解码往返。
 --   新增构造器而忘了这些地方之一，这组测试就失败（编译器的不完全匹配警告只管 case，表和生成器它不报）。
 module Spec.DataBoundary
   ( tests
@@ -34,9 +34,13 @@ import Match3.Element.Layer (Layer(layerName), SomeLayer(..), peelAs)
 import Match3.Element.World (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)
 import Data.Foldable (toList)
-import Data.List (isInfixOf, isPrefixOf, nub, sort, tails)
+import Data.List (isInfixOf, nub, sort)
 import Engine.Effect (Effect (..), beats)
 import Match3.Core
+import Match3.Daily (dailyLevel)
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.World (elementName)
+import Match3.Levels.Campaign (allLevels, levelCount, lookupLevel)
 import Match3.Element.World (elementOf, placeWith, worldDefs, topLayerName)
 import Match3.Types (goalScore)
 import Match3.Ufo (mkUfo)
@@ -70,7 +74,7 @@ tests =
   , testProperty "qc_beats_nonempty_groups" qc_beats_nonempty_groups
   , testCase "generic_constructor_lists" generic_constructor_lists
   , testCase "generic_generators_cover_constructors" generic_generators_cover_constructors
-  , testCase "generic_every_constructor_has_registry_face_and_ui" generic_every_constructor_has_registry_face_and_ui
+  , testCase "generic_every_constructor_has_registry_and_face" generic_every_constructor_has_registry_and_face
   ]
 
 --------------------------------------------------------------------------------
@@ -342,8 +346,8 @@ generic_generators_cover_constructors = do
 -- * 桌面 UI.CellTable（源码扫描，app/ 不在测试的源码目录里）：每个内置本体名、每种宝石种类名都是 cellTable 的键，
 --   每个已注册的 Custom 名字都是 customTable 的键；
 -- * 网页 Match3Web.Api.encodeOutcome（源码扫描）：每个 Outcome 构造器都有 @tag "构造器名"@。
-generic_every_constructor_has_registry_face_and_ui :: Assertion
-generic_every_constructor_has_registry_face_and_ui = do
+generic_every_constructor_has_registry_and_face :: Assertion
+generic_every_constructor_has_registry_and_face = do
   cells <- cellSamples
   let reg = defaultWorld
       entries = worldDefs reg
@@ -377,26 +381,10 @@ generic_every_constructor_has_registry_face_and_ui = do
   assertBool "cellFace 标签互不相同" (distinct [fst (cellFace c) | (_, c) <- reps])
   assertBool "cellFace k 互不相同" (distinct (map (faceField "k") kinds))
   assertBool "cellFace o 互不相同" (distinct (map (faceField "o") overlays))
-  -- 桌面 UI.CellTable
-  table <- readFile "app/UI/CellTable.hs"
-  let keys = tableKeys table
-  sequence_
-    [ assertBool ("UI.CellTable 缺 " ++ show (elementName reg c)) (unElementName (elementName reg c) `elem` keys)
-    | c <- map snd builtinReps ++ kinds ++ [Custom n (CustomState 0) | n <- customNames]
-    ]
+  -- （原有一段核对桌面 UI.CellTable 每个元素都有画法，随 SDL2 前端移除；网页的对应护栏是 e2e 的逐关 fallbacks 检查）
   -- 网页 encodeOutcome
   api <- readFile "web/hs/Match3Web/Api.hs"
   sequence_
     [ assertBool ("encodeOutcome 缺 " ++ n) (("tag \"" ++ n ++ "\"") `isInfixOf` api)
     | n <- conNamesOf (Proxy :: Proxy Outcome)
     ]
-
--- | 表里形如 @("名字", …)@ 的键（cellTable 与 customTable 的每一行都是这样开头）。
-tableKeys :: String -> [String]
-tableKeys src =
-  [ key
-  | t <- tails src
-  , "(\"" `isPrefixOf` t
-  , let (key, rest) = break (== '"') (drop 2 t)
-  , "\"," `isPrefixOf` rest
-  ]

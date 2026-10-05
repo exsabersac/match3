@@ -15,6 +15,12 @@ import Data.List (nub, sort)
 import Data.Maybe (isJust)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crGen, crTally, crWaves, crBoard, crHooks), CascadeTally(CascadeTally, ctCleared, ctMaxWave, ctScore))
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Game.Level (newGameAtLevel)
+import Match3.Game.State (gsUfos)
+import Match3.Levels.Campaign (allLevels)
+import Match3.Levels.Level (levelConfig)
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Element.Event (EventKind(..))
 import Match3.Board.Grid (setCell, swapCells)
 import qualified Match3.Engine as M3E

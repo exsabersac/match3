@@ -1,7 +1,7 @@
 -- 独立于仓库根目录 stack 工程的 cabal 工程，只用于 wasm32-wasi-cabal 构建网页版。
 packages: .
 
--- 与桌面版 stack.yaml（GHC 9.14.1：lts-24.60 + compiler: ghc-9.14.1，extra-deps 钉 random-1.2.1.1 / splitmix-0.1.0.5）
+-- 与根目录原生 stack.yaml（GHC 9.14.1：lts-24.60 + compiler: ghc-9.14.1，extra-deps 钉 random-1.2.1.1 / splitmix-0.1.0.5）
 -- 保持完全相同的随机数实现（同种子 → 同开局盘面）；两边必须同步修改
 constraints: random ==1.2.1.1, splitmix ==0.1.0.5
 

@@ -11,7 +11,7 @@
 -- （'spreadCurves' 生长曲线、'elementRGBTable' 颜色）里没有的名字用明确的缺省（'defaultSpreadCurve' /
 -- 'defaultSpreadGlow'，不迸碎屑）。整张表里查不到的种类用 'defaultPresentation'（蔓延段、18 帧）。
 --
--- 音效：'effectSound' 查表项的音效名（内置：消除 clear、爆炸 special，其余无声）；本模块不播放，桌面播放在 UI.Audio（见 UI.Sound）。
+-- 音效：'effectSound' 查表项的音效名（内置：消除 clear、爆炸 special，其余无声）；本模块不播放，网页按事件选音效并播放（web/www/main.js）。
 module UI.Presentation
   ( -- * 表
     RGB
@@ -67,7 +67,7 @@ type RGB = (Word8, Word8, Word8)
 -- | 贴图名（assets/ 里的文件名，不含扩展名）。
 type SpriteName = String
 
--- | 音效名（桌面 UI.Audio 按名字播放 assets/sfx/<名字>.wav）。
+-- | 音效名（网页按名字播放 sfx/<名字>.wav）。
 type SoundName = String
 
 -- | 步末阶段的种类（同一时刻连续的藤 / 巧 / 蒸汽合并为一个 StSpread 同时播放）。
@@ -158,7 +158,7 @@ presentationRGB = fromMaybe defaultSpreadGlow . prColor
 effectSound :: EventKind -> Maybe SoundName
 effectSound = prSound . presentationFor
 
--- | 全部音效名（素材 sfx/<名字>.wav；bgm 是循环背景音乐，其余是一次性音效）：桌面 UI.Audio 按它加载，网页经 m3Meta 取。
+-- | 全部音效名（素材 sfx/<名字>.wav；bgm 是循环背景音乐，其余是一次性音效）：网页经 m3Meta 取。
 soundNames :: [SoundName]
 soundNames = ["swap", "clear", "special", "illegal", "win", "lose", "bgm"]
 

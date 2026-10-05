@@ -10,6 +10,8 @@ import Data.List (isInfixOf)
 import Data.Maybe (isJust)
 import Match3.Board.Grid (setCell)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Types (defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
   ( Strike(Absorb, Destroy)

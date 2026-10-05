@@ -16,6 +16,9 @@ import Engine.GridUI (GridGeom (..), PxX (..), PxY (..), pxXY)
 import qualified Engine.GridUI as NewUI
 import Match3.Board.Grid (inBounds)
 import Match3.Core
+import Match3.Board.Grid (adjacent, neighborsInBounds)
+import Match3.Daily (dailySeed)
+import Match3.Types (boardDims, boardPositions, positionsWhere, upDownLeftRight)
 import Match3.Daily (dailyConfig)
 import qualified Match3.Obstacles as NewObs
 import Match3.Types

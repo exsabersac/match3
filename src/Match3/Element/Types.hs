@@ -290,7 +290,7 @@ overlaySlot ov = case ov of
   Steam -> 7
 
 -- | 元素自带的显示附加字段的值（Match3.Element.Ability 的 Renders.face）：网页格子 JSON 里按出现顺序
--- 追加在 cellFace 字段之后（FaceInt / FaceColor → 数字（颜色取 1..5），FaceBool → true / false），桌面按名字读。
+-- 追加在 cellFace 字段之后（FaceInt / FaceColor → 数字（颜色取 1..5），FaceBool → true / false）。
 -- | 前端格子的基本字段的值（网页 JSON 的 c / k / i / o / n …；元素类重构第 6 刀从 Match3.View 移来，
 -- 元素经 'Match3.Element.Ability.Renders' 的 faceBase 给出自己的标签与字段）。
 data CellField = FieldInt Int | FieldText String | FieldNull

@@ -10,6 +10,8 @@ module Spec.RainbowCombos
 import Data.List (isInfixOf)
 import Match3.Board.Grid (swapCells)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Levels.Campaign (allLevels)
 import Match3.Combos (rainbowComboMorph)
 import Match3.Counts (countOf)
 import Match3.Element (removeMechanic)

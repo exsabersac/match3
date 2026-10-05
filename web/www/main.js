@@ -1,9 +1,9 @@
 // 网页外壳：加载 wasm 与贴图集、自适应布局、固定步长的帧循环、输入（点选 / 拖划 / 键盘）与 HUD。
-// 网页是唯一前端（PC 端将像 Android 一样套壳），桌面 SDL 版的交互都迁到这里：道具、洗牌、每日挑战、选关地图、暂停、
+// 网页是唯一前端（PC 端将像 Android 一样套壳），原 SDL 桌面版（已移除）的交互都迁到了这里：道具、洗牌、每日挑战、选关地图、暂停、
 // 结局后前进、星级、进度点、分数徽章、首关提示、按键条、窗口标题、元素展示盘（见 docs/web.md §8.1）。
 // 规则全在 Haskell 核心（m3New / m3Swap / m3Hammer / m3Cross / m3FreeSwap / m3Shuffle / m3Undo / m3Daily / m3Restart /
 // m3Advance / m3Progress / m3MapJump / m3Badge / m3State / m3Levels，经 Engine.Game 的 match3Shell）；
-// 逐轮回放的时间线也在 wasm 里（m3AnimStart / m3AnimTick，桌面 app/pure/ComboFx.hs 的阶段机），
+// 逐轮回放的时间线也在 wasm 里（m3AnimStart / m3AnimTick，app/pure/ComboFx.hs 的阶段机），
 // JS 每帧推进一次、按返回的阶段 / 帧号插值绘制（render.js），不做任何规则或时间线判断。
 import { WASI, OpenFile, File, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 import makeJsffi from "./ghc_wasm_jsffi.js";
@@ -81,7 +81,7 @@ let hudDrawn = null;   // 上一帧 HUD 关卡面板各部件的矩形（drawHud
 let pressed = null, frozen = false, frames = 0;
 let overlayDrawn = null;   // 上一帧画出的结局面板文字 {title, sub, stars, action}（e2e 查失败提示不漏内部名）
 const fx = new Fx();
-// 从桌面版（app/UI/Types.hs 的 App）迁来的界面状态：
+// 从原 SDL 桌面版（app/UI/Types.hs 的 App，已移除）迁来的界面状态：
 let tool = null, swapFirst = null;          // 道具点选模式 "hammer" | "swap" | "cross"（appTool）；自由交换已点的第一格
 let paused = false, mapOpen = false;        // 暂停说明（appPaused）、选关地图（appMapOpen）
 let menuOpen = false;                       // 菜单面板（网页自有：常驻按钮之外的全部操作；打开时冻结回放）
@@ -90,7 +90,7 @@ let tipFrames = 0, helpFrames = 0;          // 首关提示横幅（appTipFrames
 let comboLeft = 0, comboBest = 0;           // 本步连击总结剩余帧（appComboShow）与本步最高连击（appComboBest）
 let dailyDate = null;                       // 当前每日挑战的日期 [年, 月, 日]（战役关为 null）
 let drawnExtra = { banner: null, help: null, pause: null, map: null, menu: null };   // 上一帧各浮层画出的内容（e2e 用）
-// 选关进度（appMaxReached）：桌面只在内存里，网页存 localStorage「m3-reached」，刷新 / 重开浏览器后保留
+// 选关进度（appMaxReached）：存 localStorage「m3-reached」，刷新 / 重开浏览器后保留
 const REACHED_KEY = "m3-reached";
 let reached = (() => { try { return Math.max(0, parseInt(localStorage.getItem(REACHED_KEY) ?? "0", 10) || 0); } catch { return 0; } })();
 let prog = { reached, stars: 0, dots: "" };  // m3Progress：{reached, stars, dots}
@@ -110,7 +110,7 @@ function refreshProgress() {
   }
 }
 
-// 换一局（新关 / 重开 / 前进 / 每日 / 展示盘）后的界面重置：同桌面 UI.Actions.freshLevelUi——
+// 换一局（新关 / 重开 / 前进 / 每日 / 展示盘）后的界面重置：同原桌面版 UI.Actions.freshLevelUi——
 // 清选中 / 动画 / 道具模式 / 暂停 / 地图，记开局步数，第 1 关（下标 0，含每日挑战）自动亮提示并显示 240 帧「按 H 查看提示」，
 // 按键条重新显示 300 帧，进度记到当前关。
 function begin(st, text, sm = st.moves) {
@@ -138,7 +138,7 @@ function newGame(level, seed) {
   begin(st, `第 ${st.level + 1} 关：交换相邻两格（点选或拖划），凑 3 个以上同色消除`);
 }
 
-// 每日挑战（桌面 D 键 keyDaily；桌面用固定演示日期 2026-09-29，网页用本地今天，?daily=YYYY-MM-DD 可指定）
+// 每日挑战（原桌面版 D 键 keyDaily；桌面用固定演示日期 2026-09-29，网页用本地今天，?daily=YYYY-MM-DD 可指定）
 const dailyLabel = (d) => d && `${d[0]}-${String(d[1]).padStart(2, "0")}-${String(d[2]).padStart(2, "0")}`;
 function today() { const t = new Date(); return [t.getFullYear(), t.getMonth() + 1, t.getDate()]; }
 function startDaily(d) {
@@ -146,13 +146,13 @@ function startDaily(d) {
   begin(call("m3Daily", d[0], d[1], d[2]).state, `每日挑战 ${dailyLabel(d)}：同一天的盘面人人相同`);
 }
 
-// 重开本关（桌面 R 键 restartSame：每日挑战按开局步数与原目标换种子重开，战役关同一关换种子）
+// 重开本关（原桌面版 R 键 restartSame：每日挑战按开局步数与原目标换种子重开，战役关同一关换种子）
 function restart() {
   const res = call("m3Restart", startMoves, newSeed());
   begin(res.state, state.daily ? `每日挑战 ${dailyLabel(dailyDate) ?? ""}：已重开` : `第 ${res.state.level + 1} 关：已重开`);
 }
 
-// 结局后前进（桌面 N / 回车 / 空格 / 点结算面板，UI.Actions.advanceOrMsg）：过关 → 下一关（带入剩余步数，最多 3 步）、
+// 结局后前进（原桌面版 N / 回车 / 空格 / 点结算面板，UI.Actions.advanceOrMsg）：过关 → 下一关（带入剩余步数，最多 3 步）、
 // 通关 → 从第 1 关重开战役、失败 → 重开本关。没结束时只提示。
 function advance() {
   if (busy) return;
@@ -188,7 +188,7 @@ function doSwap(a, b) {
   anim = { kind: "swap", board: state.board, a, b, frame: 0, back: false };
 }
 
-// 道具（桌面 1 / 2 / 3 键与 HUD 道具芯片，UI.Actions.applyBooster）：锤子 / 十字消打一格，自由交换换任意两格。
+// 道具（原桌面版 1 / 2 / 3 键与 HUD 道具芯片，UI.Actions.applyBooster）：锤子 / 十字消打一格，自由交换换任意两格。
 // 核心经 gameStep 结算（m3Hammer / m3Cross / m3FreeSwap），keepTool 决定之后是否留在点选模式（UI.MoveText.keepsTool）。
 // 锤子 / 十字直接进逐轮回放；自由交换先播交换补间（换不掉时换过去再换回来、不扣次数）。
 const TOOL = {
@@ -216,7 +216,7 @@ function applyBooster(k, a, b = null) {
   if (k === "swap") { play("swap"); anim = { kind: "swap", board: state.board, a, b, frame: 0, back: false }; }
   else startCascade();
 }
-// 按道具键 / 道具按钮（同桌面 keyHammer / keyFreeSwap / keyCross）：再按一次取消；锤子 / 十字在已选中一格且有次数时立即使用；
+// 按道具键 / 道具按钮（同原桌面版 keyHammer / keyFreeSwap / keyCross）：再按一次取消；锤子 / 十字在已选中一格且有次数时立即使用；
 // 次数为 0 时锤子 / 十字仍进入模式（提示用完，点格即退出），自由交换不进入。
 function toggleTool(k) {
   if (busy || state.over) return;
@@ -227,7 +227,7 @@ function toggleTool(k) {
   tool = k; swapFirst = null; sel = null; drag = null;
   msg = boostersLeft(k) <= 0 ? T.empty : `${T.banner}（菜单里再点「${T.name}」或按 ${T.key} 取消）`;
 }
-// 点选模式下点中一格（同桌面 cellClick 的道具分支；自由交换两步点选同 Engine.GridUI.gridClick）
+// 点选模式下点中一格（同原桌面版 cellClick 的道具分支；自由交换两步点选同 Engine.GridUI.gridClick）
 function toolClick(p) {
   if (tool === "hammer" || tool === "cross") {
     if (boostersLeft(tool) <= 0) { msg = TOOL[tool].empty; tool = null; return; }
@@ -237,7 +237,7 @@ function toolClick(p) {
   else applyBooster("swap", swapFirst, p);
 }
 
-// 手动洗牌（桌面 S 键 keyShuffle：播放中 / 已结束时无效）：核心 m3Shuffle，新盘面播一段轻落；收掉连击角标 / 浮字 / 粒子
+// 手动洗牌（原桌面版 S 键 keyShuffle：播放中 / 已结束时无效）：核心 m3Shuffle，新盘面播一段轻落；收掉连击角标 / 浮字 / 粒子
 function doShuffle() {
   if (busy || state.over) return;
   const res = call("m3Shuffle");
@@ -292,7 +292,7 @@ function stepCascade() {
     if (e.e === "end" && tk.s) {
       for (const i of tk.s.e) {
         const ef = cas.ends[i].effect;
-        // 蔓延碎屑按元素名取色（桌面 UI.Playback.endCrumbs 的 CrumbsByElement：表里没有的元素不迸，
+        // 蔓延碎屑按元素名取色（原桌面版 UI.Playback.endCrumbs 的 CrumbsByElement：表里没有的元素不迸，
         // 例如第 44 关彩虹组合的变身步 rainbow_line / rainbow_bomb）
         const crumbRGB = ef.type === "spread" && SPREAD_CRUMB_RGB[ef.kind];
         if (crumbRGB) fx.crumbs(crumbRGB, ef.pairs.map((p) => p[1]));
@@ -311,7 +311,7 @@ function finishMove(best = 0) {
   const pre = res.ui && TOOL[res.ui] ? `${TOOL[res.ui].name} ` : "";
   msg = res.ui === "shuffle" ? "已洗牌" : best >= 2 ? `${pre}${best} 连击！本步 +${gained}` : `${pre}+${gained}`;
   if (state.shuffled && res.ui !== "shuffle") msg += "（无可走步，已自动洗牌）";
-  // 本步连击总结（桌面 appComboShow = comboSummaryFrames）
+  // 本步连击总结（原桌面版 appComboShow = comboSummaryFrames）
   if (best >= 2) { comboBest = best; comboLeft = meta.frames.comboSummary; }
   const tag = state.over && state.over.tag;
   if (tag === "Won" || tag === "LevelClear") play("win");
@@ -319,7 +319,7 @@ function finishMove(best = 0) {
   refreshProgress();
 }
 
-// 固定步长的一帧（60 fps）：呼吸计数、粒子 / 浮字 / 震屏、当前动画。暂停 / 地图打开时冻结（同桌面）
+// 固定步长的一帧（60 fps）：呼吸计数、粒子 / 浮字 / 震屏、当前动画。暂停 / 地图打开时冻结（同原桌面版）
 function stepFrame() {
   pulse++; frames++;
   if (paused || mapOpen || menuOpen) return;
@@ -415,12 +415,12 @@ function render() {
     overlayDrawn = { title, sub, stars, action, panel: d.panel, starSprites: d.stars.map((s) => (s.on ? "star_on" : "star_off")) };
   } else {
     overlayDrawn = null;
-    // 棋盘上沿横幅：道具点选模式（桌面 drawToolBannerArt）优先，其次第 1 关的提示（drawTipBannerArt）
+    // 棋盘上沿横幅：道具点选模式（原桌面版 drawToolBannerArt）优先，其次第 1 关的提示（drawTipBannerArt）
     if (!paused && !mapOpen && !menuOpen) {
       if (tool) drawnExtra.banner = drawBanner(ctx, art, boardRect, TOOL[tool].banner, { icon: TOOL[tool].icon });
       else if (tipFrames > 0 && state.level === 0)
         drawnExtra.banner = drawBanner(ctx, art, boardRect, finePointer() ? "按 H 查看提示" : "点「提示」查看提示", { key: finePointer() ? "H" : null });
-      // 按键条（桌面 drawHelpStripArt）：只在有键盘鼠标的设备上
+      // 按键条（原桌面版 drawHelpStripArt）：只在有键盘鼠标的设备上
       if (helpFrames > 0 && finePointer()) drawnExtra.help = drawHelpStrip(ctx, art, boardRect);
     }
   }
@@ -438,7 +438,7 @@ function render() {
     drawnExtra.menu = drawMenu(ctx, art, { x: 0, y: 0, w: L.w, h: L.h }, curMenuLayout(),
       { boosters: s.boosters, tool, over: !!state.over, busy, sfx: sfxEnabled(), bgm: bgmEnabled(), keys: finePointer() });
   }
-  // 窗口标题（桌面 updateTitle：Match3.View.titleLine + 「  |  」+ 最近提示）；PC 壳一般把它显示在标题栏
+  // 窗口标题（原桌面版 updateTitle：Match3.View.titleLine + 「  |  」+ 最近提示）；PC 壳一般把它显示在标题栏
   const title = `${(pending ? pending.state : state).title}  |  ${msg}`;
   if (document.title !== title) document.title = title;
   perf.drawMs += performance.now() - t0; perf.draws++;
@@ -461,8 +461,8 @@ function loop(ts) {
 
 // ---------------------------------------------------------------------------
 // 5. 输入：指针事件经同一布局变换映射；点选两格或按住向相邻方向拖划；播放中点击棋盘 = 加速；
-//    结局后点棋盘 = 前进（同桌面）；道具点选模式下点格 = 用道具；暂停时点任意处继续；地图上点节点跳关、点别处关闭。
-//    键盘（桌面 UI.Input.handleKey 的按键表）见 keydown；每个按键在触屏上都有对应按钮（暂停页列出）。
+//    结局后点棋盘 = 前进（同原桌面版）；道具点选模式下点格 = 用道具；暂停时点任意处继续；地图上点节点跳关、点别处关闭。
+//    键盘（原桌面版 UI.Input.handleKey 的按键表）见 keydown；每个按键在触屏上都有对应按钮（暂停页列出）。
 const isAdj = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
 let drag = null;   // {cell, x, y}（设计单位）
 function unitsOf(ev) { const r = canvas.getBoundingClientRect(); return toUnits(L, ev.clientX - r.left, ev.clientY - r.top); }
@@ -519,18 +519,18 @@ function menuClick(x, y) {
   else if (it.id === "bgm") toggleBgm();
   else onButton(it.id);
 }
-// 暂停（桌面 P：全屏按键说明，冻结动画，清掉拖划 / 选中；取消暂停后按键条再显示 240 帧）
+// 暂停（原桌面版 P：全屏按键说明，冻结动画，清掉拖划 / 选中；取消暂停后按键条再显示 240 帧）
 function togglePause() {
   paused = !paused; mapOpen = false; menuOpen = false; drag = null; sel = null; swapFirst = null; pressed = null;
   msg = paused ? "已暂停：R 重开 · P / Esc / 点任意处继续" : "继续游戏";
   if (!paused) helpFrames = 240;
 }
-// 选关地图（桌面 M）
+// 选关地图（原桌面版 M）
 function toggleMap() {
   mapOpen = !mapOpen; paused = false; menuOpen = false; drag = null; pressed = null;
   msg = mapOpen ? "选关地图：点已解锁的关卡进入" : "已关闭选关地图";
 }
-// 地图上的点击（桌面 mapClick）：已解锁的别的关 → 跳过去；当前关 / 未解锁 / 节点外 → 关地图、保留当前进度
+// 地图上的点击（原桌面版 mapClick）：已解锁的别的关 → 跳过去；当前关 / 未解锁 / 节点外 → 关地图、保留当前进度
 function mapClick(x, y) {
   const { ml } = curMapLayout(), i = mapHit(ml, x, y);
   mapOpen = false;
@@ -549,7 +549,7 @@ function closeTop() {
   else if (tool) { msg = `已取消${TOOL[tool].name}`; tool = null; swapFirst = null; sel = null; }
   else sel = null;
 }
-// N / 回车 / 空格（桌面 keySpeedOrAdvance）：播放中加速，否则前进 / 重试
+// N / 回车 / 空格（原桌面版 keySpeedOrAdvance）：播放中加速，否则前进 / 重试
 function speedOrAdvance() {
   if (busy) { if (!fastReq && anim && anim.kind === "cascade") msg = "加速回放"; fastReq = true; return; }
   advance();
@@ -561,7 +561,7 @@ window.addEventListener("keydown", (e) => {
   unlock();
   // 菜单开着时按快捷键：先关菜单再照常处理（Esc 只关菜单）
   if (menuOpen && k !== "Escape" && k.length === 1) menuOpen = false;
-  // 任何时候都响应：Esc / P / K / B / R（暂停中也能重开，同桌面 handleKey）
+  // 任何时候都响应：Esc / P / K / B / R（暂停中也能重开，同原桌面版 handleKey）
   if (k === "Escape") return closeTop();
   if (k === "p") return togglePause();
   if (k === "k") return toggleSfx();
@@ -587,7 +587,7 @@ function onButton(id) {
   if (paused || mapOpen || busy) return;
   if (id === "prev") newGame((state.level + levels.length - 1) % levels.length, newSeed());
   else if (id === "next") {
-    // 过关后「›」= 前进（带入剩余步数，同桌面 N）；其余时候自由选关
+    // 过关后「›」= 前进（带入剩余步数，同原桌面版 N）；其余时候自由选关
     if (state.over && state.over.tag === "LevelClear") advance();
     else newGame((state.level + 1) % levels.length, newSeed());
   } else if (id === "restart") restart();
@@ -607,13 +607,13 @@ function onButton(id) {
 }
 
 // ---------------------------------------------------------------------------
-// 6. 开局与调试钩子：?level=（0 起）&seed=；?daily=YYYY-MM-DD 开当天的每日挑战；?showcase=1 元素展示盘（桌面 MATCH3_SHOWCASE）
+// 6. 开局与调试钩子：?level=（0 起）&seed=；?daily=YYYY-MM-DD 开当天的每日挑战；?showcase=1 元素展示盘（原桌面版 MATCH3_SHOWCASE）
 const q = new URLSearchParams(location.search);
 const dm = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(q.get("daily") ?? "");
 const dailyParam = dm ? [+dm[1], +dm[2], +dm[3]] : null;
 newGame(+(q.get("level") ?? 0), +(q.get("seed") ?? 20260929));
 if (dailyParam) startDaily(dailyParam);
-if (q.get("showcase") === "1") begin(call("m3Showcase").state, "元素展示盘：各种元素各摆一格（桌面 MATCH3_SHOWCASE）");
+if (q.get("showcase") === "1") begin(call("m3Showcase").state, "元素展示盘：各种元素各摆一格（原桌面版 MATCH3_SHOWCASE）");
 function debugInfo() {
   const tk = anim && anim.kind === "cascade" ? anim.tk : null;
   return { kind: anim ? anim.kind : null, p: tk?.p ?? null, fr: tk?.fr ?? anim?.frame ?? 0, n: tk?.n ?? 0, w: tk?.w ?? 0, k: tk?.k ?? 0,
@@ -628,7 +628,7 @@ window.m3debug = {
   // 最近一帧画的掉落口标记（cells.js 的 dropMarks：{seq, marks:[{p,x,y}]}，棋盘设计坐标）
   get dropMarks() { return { seq: dropMarks.seq, marks: dropMarks.marks.map((m) => ({ ...m, p: [...m.p] })) }; }, get dpr() { return dpr; }, perf, breakWhen: null,
   get frozen() { return frozen; }, set frozen(v) { frozen = v; },
-  // 迁自桌面版的界面状态（e2e 用）
+  // 迁自原桌面版的界面状态（e2e 用）
   get ui() {
     return { tool, swapFirst, sel, hint: showHint, paused, mapOpen, menuOpen, showGuide, startMoves, reached, progress: { ...prog }, tipFrames, helpFrames, comboLeft, comboBest,
       daily: dailyLabel(dailyDate), msg, title: document.title, badge, drawn: drawnExtra, fine: finePointer() };

@@ -14,6 +14,12 @@ import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import Engine.GridUI
 import Match3.Board.Default (findHint)
 import Match3.Core
+import Match3.Board.Grid (adjacent)
+import Match3.Daily (dailySeed)
+import Match3.Game.Outcome (loseHint)
+import Match3.Game.State (gsUfos)
+import Match3.Levels.Campaign (allLevels, levelCount, lookupLevel)
+import Match3.Types (boardSize)
 import Match3.Daily (dailyConfig)
 import Match3.Element.Builtin (SnowBoss(..), chameleonCell)
 import Match3.Element.Ability (toCell)
@@ -375,13 +381,13 @@ grid_ui_click_drag_highlight = do
 --------------------------------------------------------------------------------
 -- 源码扫描
 
--- | 前端（app/ 与 web/hs）从库里只 import 前端 API：Match3.Core、视图模型 Match3.View、对局外壳 Match3.Engine、
+-- | 前端（app/pure 与 web/hs）从库里只 import 前端 API：Match3.Core、视图模型 Match3.View、对局外壳 Match3.Engine、
 -- 效果事件 Match3.Element.Event 与通用层 Engine.*；Match3.Core 导出的函数与不带构造的类型都有前端在用
 -- （带 (..) 的类型前端可能只用构造或字段，不查）。
 frontends_import_core_api :: Assertion
 frontends_import_core_api = do
   files <- sourcesUnderAll ["app", "web/hs"]
-  assertBool "scan covers app/ and web/hs" (all (`elem` files) ["app/UI/Actions.hs", "app/pure/ComboFx.hs", "web/hs/Match3Web/Api.hs"])
+  assertBool "scan covers app/pure and web/hs" (all (`elem` files) ["app/pure/ComboFx.hs", "web/hs/Match3Web/Api.hs"])
   srcs <- mapM (\f -> (,) f <$> readCode f) files
   let frontendApi m = m `elem` ["Match3.Core", "Match3.View", "Match3.Engine", "Match3.Element.Event"] || "Engine." `isPrefixOf` m
       fromLibrary m = "Match3." `isPrefixOf` m || "Engine." `isPrefixOf` m
@@ -403,28 +409,12 @@ frontends_read_view_model = do
         , "gsShuffled", "gsBoard", "findHint", "gsLastCleared", "gsGround", "gsBelts", "gsPortals", "gsUfos"
         , "levelCarpets", "gsCarpetOpen", "lookupLevel", "allLevels", "goalView" ]
   assertEqual "web Api reads no GameState fields" [] (filter (`mentionsIdent` api) stateReads)
-  let hudFiles = ["app/UI/HudArt.hs", "app/UI/HudBlocks.hs", "app/UI/HudPrim.hs"]
-      hudBanned = ["gsHammers", "gsFreeSwaps", "gsCrossClears", "gsProgress", "goalTarget", "lookupLevel", "levelCount", "allLevels", "gsShuffled", "gsDaily"]
-  bad <- concat <$> mapM (\f -> (\src -> [(f, i) | i <- hudBanned, i `mentionsIdent` src]) <$> readCode f) hudFiles
-  assertEqual "HUD reads view model" [] bad
-  let boardFiles = ["app/UI/BoardPrim.hs", "app/UI/BoardArt.hs"]
-      boardBanned = ["levelCarpets", "gsCarpetOpen", "gsGround", "groundAt", "gsHint", "gsBelts", "gsPortals"]
-  badB <- concat <$> mapM (\f -> (\src -> [(f, i) | i <- boardBanned, i `mentionsIdent` src]) <$> readCode f) boardFiles
-  assertEqual "board underlay reads view model" [] badB
-  actions <- readCode "app/UI/Actions.hs"
-  assertBool "title from titleLine" ("titleLine" `mentionsIdent` actions && not ("goalView" `mentionsIdent` actions))
-  layout <- readCode "app/UI/Layout.hs"
-  assertBool "pixelToCell via GridUI" ("gridCellAt boardGrid" `isInfixOf` layout && "gridCellOrigin boardGrid" `isInfixOf` layout)
-  input <- readCode "app/UI/Input.hs"
-  assertBool "click/drag via GridUI" (all (`mentionsIdent` input) ["gridClick", "gridDragRelease"])
-  assertBool "collect bracket via view" (not ("goalView" `mentionsIdent` input))
-  -- 标签表只有一份（在 Match3.View）
-  goalStyle <- readCode "app/UI/GoalStyle.hs"
-  assertBool "no tag tables in GoalStyle" (not (any (`mentionsIdent` goalStyle) ["countTag", "colorTag"]))
-  -- 规则开关角标：两个前端都按 ruleBadges 通用地画（HUD 不点名具体规则）；关卡用到的每个规则开关都登记了角标；
-  -- 角标文字与 tools/gen_assets.py 里桌面文字贴图（ZH 表）的字面相同，图标是 gen_assets.py 生成的贴图
-  hudArt <- readCode "app/UI/HudArt.hs"
-  assertBool "HudArt draws ruleBadges generically" ("ruleBadges" `mentionsIdent` hudArt && not (any (`isInfixOf` hudArt) ["\"bomb_shapes\"", "\"zh_rule_bomb\""]))
+  -- 标题行读视图模型（网页 state.title = titleLine）
+  assertBool "web title from titleLine" ("titleLine" `mentionsIdent` api)
+  -- 规则开关角标：网页按 state.rules（ruleBadges）通用地画（hud.js 不点名具体规则）；关卡用到的每个规则开关都登记了角标；
+  -- 角标文字与 tools/gen_assets.py 里文字贴图（ZH 表）的字面相同，图标是 gen_assets.py 生成的贴图
+  hudJs <- readFile "web/www/hud.js"
+  assertBool "web hud.js draws rule badges generically" (not (any (`isInfixOf` hudJs) ["\"bomb_shapes\"", "\"rainbow_combos\"", "\"zh_rule_bomb\""]))
   assertBool "web Api encodes ruleBadges" ("ruleBadges" `mentionsIdent` api)
   let levelRules = nub [unElementName r | l <- allLevels, r <- lvlRules l]
   assertEqual "every level rule has a registered badge" [] [r | r <- levelRules, r `notElem` map rbRule ruleBadgeTable]

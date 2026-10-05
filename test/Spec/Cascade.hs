@@ -13,6 +13,7 @@ import Match3.Board.Grid (setCell, swapCells)
 import Match3.Board.Random (randomBoard)
 import Match3.Conveyor (shiftBelts)
 import Match3.Core
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (countOf)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)

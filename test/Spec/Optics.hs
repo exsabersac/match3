@@ -15,6 +15,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Maybe (isJust)
 import Engine.Optics
 import Match3.Core
+import Match3.Types (boardPositions)
 import Match3.Element.Mechanic (mechNameOf)
 import Match3.Game.State (gsBeltsL, gsBoardL, gsCarpetOpenL, gsCrossClearsL, gsFreeSwapsL, gsGroundL, gsHammersL, gsMovesL, gsPortalsL, gsUfosL)
 import Match3.Types (boardCells, cellOverlay, isGem)

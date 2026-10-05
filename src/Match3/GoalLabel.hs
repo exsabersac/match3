@@ -1,5 +1,5 @@
 -- | 目标的中文显示名（合 main 9f5504e 后从 Match3.View 下移到这里）：HUD「目标 …」标签、网页 state.goal.label /
--- m3Levels 的 goal.label、失败提示（Match3.Game.Outcome.loseHint）与桌面窗口标题都取这里，前端不再各自维护
+-- m3Levels 的 goal.label、失败提示（Match3.Game.Outcome.loseHint）与窗口标题（Match3.View.titleLine）都取这里，前端不再各自维护
 -- 「目标种类 → 中文」的表；与图例（tools/gen_assets.py 的 LEGEND）用词一致。
 --
 -- 放在 Match3.Game.* 之下、Match3.View 之上（View 重新导出 countLabel / colorLabel / namedGoalLabelTable，

@@ -1,5 +1,5 @@
--- | 元素展示盘（桌面 MATCH3_SHOWCASE=1 / 网页 ?showcase=1）：把棋盘换成「全部棋子一览」，用于检查贴图（仅展示，不影响规则模块）。
--- 桌面 UI.Env（重新导出）与网页 Match3Web.Api 共用；原在 UI.Env，web-sdl-parity 时逐字移进 app/pure。
+-- | 元素展示盘（原桌面版 MATCH3_SHOWCASE=1 / 网页 ?showcase=1）：把棋盘换成「全部棋子一览」，用于检查贴图（仅展示，不影响规则模块）。
+-- 网页 Match3Web.Api 用；原在已移除的 SDL 桌面版 UI.Env，web-sdl-parity 时逐字移进 app/pure。
 --
 -- 依赖：Match3.Core。纯函数。
 module UI.Showcase

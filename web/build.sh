@@ -18,7 +18,7 @@ if [ ! -f "$PREFIX/env" ]; then
   echo "找不到 $PREFIX/env，请先按 README 安装 ghc-wasm-meta 工具链" >&2
   exit 1
 fi
-# 只在本脚本的子进程里加载 wasm 工具链环境（它会改 CC/AR 等变量，别污染桌面版 stack 构建）
+# 只在本脚本的子进程里加载 wasm 工具链环境（它会改 CC/AR 等变量，别污染根目录的原生 stack 构建）
 # shellcheck disable=SC1091
 source "$PREFIX/env"
 
@@ -59,7 +59,7 @@ fi
 "$(wasm32-wasi-ghc --print-libdir)/post-link.mjs" -i "$WASM_RAW" -o "$DIST/ghc_wasm_jsffi.js"
 cp "$HERE/www/"* "$DIST/"
 
-# 3b) 网页图集：从桌面资源 assets/ 重新打包成 2x WebP（atlas.webp + atlas.json + background.webp），
+# 3b) 网页图集：从 assets/（tools/gen_assets.py 生成）重新打包成 2x WebP（atlas.webp + atlas.json + background.webp），
 #     资源或生成器变了才重新生成（约 9 秒），结果缓存在 web/.cache/art/。需要 Pillow（带 WebP）。
 ART="$HERE/.cache/art"
 if [ ! -f "$ART/atlas.webp" ] || [ ! -f "$ART/atlas.json" ] || [ ! -f "$ART/background.webp" ] \

@@ -22,8 +22,10 @@ import Numeric (showHex)
 import Spec.Support (campaignLevelCount, levelAt, levelGame)
 import Match3.Element.Types (Placement(..))
 import Match3.Levels.Level (level)
-import Spec.Support.Source (importsOf, mentionsIdent, sourcesUnder, sourcesUnderAll)
+import Spec.Support.Source (importsOf, mentionsIdent, sourcesUnderAll)
 import Match3.Core
+import Match3.Game.State (applyHint, gsUfos)
+import Match3.Types (boardDims)
 import Match3.Game.Trace (traceEvents)
 import Engine.Effect (Effect(..))
 import Engine.Game (Game(..), Step(..), finalState, runActions, stepEffects)
@@ -90,11 +92,11 @@ engine_toy_counter_game = do
   assertEqual "custom stages frames" 8 fr
   assertEqual "custom stages final" 0 final
 
--- | 通用层（src/Engine/*、app/Shell/*）与玩具实现不 import 任何 Match3 模块（依赖方向单向）。
+-- | 通用层（src/Engine/*）与玩具实现不 import 任何 Match3 模块（依赖方向单向）。
 engine_layer_is_game_agnostic :: Assertion
 engine_layer_is_game_agnostic = do
-  files <- (++ ["test/Toy.hs"]) <$> sourcesUnderAll ["src/Engine", "app/Shell"]
-  assertBool "scanned the generic layer" (all (`elem` files) ["src/Engine/Game.hs", "src/Engine/Playback.hs", "app/Shell/Loop.hs"])
+  files <- (++ ["test/Toy.hs"]) <$> sourcesUnderAll ["src/Engine"]
+  assertBool "scanned the generic layer" (all (`elem` files) ["src/Engine/Game.hs", "src/Engine/Playback.hs"])
   srcs <- mapM readFile files
   let bad =
         [ f ++ ": import " ++ m
@@ -221,13 +223,13 @@ legacyProj h =
   where
     fnv s = showHex (foldl' (\acc c -> (acc `xor` fromIntegral (ord c)) * 1099511628211) (14695981039346656037 :: Word64) s) ""
 
--- | 前端（app/ 下全部 .hs）不再直接调用三消的 play / playWith，也没有 undoMove：动作一律经通用接口
--- gameStep（UI.Actions.stepShell → Match3.Engine.match3Shell），撤销由 Engine.History 处理。
+-- | 前端（网页版 web/hs 与它编译的 app/pure）不直接调用三消的 play / playWith，也没有 undoMove：动作一律经通用接口
+-- gameStep（Match3Web.Api.runStepWith → Match3.Engine.match3Shell），撤销由 Engine.History 处理。
 -- 扫描去掉注释与字符串后的标识符（含限定名 M3E.play）；同时确认前端确实经 match3Shell 的 gameStep。
 engine_frontend_steps_only_via_gameStep :: Assertion
 engine_frontend_steps_only_via_gameStep = do
-  files <- sourcesUnder "app"
-  assertBool "scanned the whole front end" (length files >= 20)
+  files <- sourcesUnderAll ["app", "web/hs"]
+  assertBool "scanned the whole front end" (length files >= 10 && "web/hs/Match3Web/Api.hs" `elem` files)
   srcs <- mapM readFile files
   let banned = ["play", "playWith", "undoMove"]
       bad =
@@ -236,8 +238,8 @@ engine_frontend_steps_only_via_gameStep = do
         , w <- banned
         , mentionsIdent w src
         ]
-      uses = [f | (f, src) <- zip files srcs, any ("gameStep M3E.match3Shell" `isPrefixOf`) (tailsS src)]
-  assertEqual "no direct play / playWith / undoMove in app/" [] bad
+      uses = [f | (f, src) <- zip files srcs, any ("gameStep match3Shell" `isPrefixOf`) (tailsS src)]
+  assertEqual "no direct play / playWith / undoMove in front ends" [] bad
   assertBool "front end steps through match3Shell's gameStep" (not (null uses))
   where
     tailsS [] = [[]]

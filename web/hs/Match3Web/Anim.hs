@@ -1,5 +1,5 @@
--- | 网页端的逐轮回放：直接复用桌面版的纯阶段机 app/pure/ComboFx.hs（cascadeStages + Engine.Playback 的播放器），
--- 因此网页与桌面的时间线（每阶段帧数、加速、步末段压缩、触发的一次性事件）逐帧相同。
+-- | 网页端的逐轮回放：直接用纯阶段机 app/pure/ComboFx.hs（cascadeStages + Engine.Playback 的播放器），
+-- 因此时间线（每阶段帧数、加速、步末段压缩、触发的一次性事件）与原生测试逐帧相同（make anim-parity）。
 --
 -- 数据流（每步一次 + 每帧一次）：
 --   * m3Swap 已把本步所有盘面快照随 trace 发给 JS；本模块用「盘面编号」引用它们（见 animBoards），
@@ -7,7 +7,7 @@
 --   * m3AnimTick(fast) 每帧推进播放器一帧，只回传几十字节：阶段、帧号 / 阶段长度、轮次、连击、
 --     当前落定盘面编号、步末段描述与进入阶段时触发的事件。
 --
--- 何时有回放：与桌面 UI.Playback.withMovePlayback 相同——本步 MoveFx 为空（被拒 / 终局后）不播；
+-- 何时有回放：与原桌面版 UI.Playback.withMovePlayback 相同——本步 MoveFx 为空（被拒 / 终局后）不播；
 -- 有轮次或步末效果才建立回放（结算过却两者皆无的兜底情形这里不播，JS 直接显示结算后盘面）。
 module Match3Web.Anim
   ( AnimSeed(..)
@@ -28,7 +28,7 @@ import Match3.Element.Event (Event)
 import Match3.Engine (Played(..))
 import Match3Web.Json
 
--- | 建立一段回放所需的全部输入（与桌面 newCascade 的参数相同）。
+-- | 建立一段回放所需的全部输入（与原桌面版 newCascade 的参数相同）。
 data AnimSeed = AnimSeed
   { asTrace  :: MoveTrace  -- ^ 本步回放脚本
   , asEvents :: [Event]    -- ^ 本步效果事件
@@ -60,7 +60,7 @@ animBoards s =
 boardId :: [Board] -> Board -> Int
 boardId bs b = maybe (-1) id (elemIndex b bs)
 
--- | 与桌面相同的初始回放状态。
+-- | 初始回放状态（与原 SDL 桌面版相同）。
 animCascade :: AnimSeed -> Cascade
 animCascade s = newCascade (asTrace s) (asEvents s) (asFinal s) (asBase s)
 
@@ -84,7 +84,7 @@ animStart s =
 --   w 当前轮下标（= 已播完的轮数）；k 连击序号；g 已消失轮次的累计得分；b 最近落定盘面编号；
 --   s 步末段 {kind, e:[trace.end 下标], b0, b1, n}（仅 p = end）；ev 进入阶段时的一次性事件：
 --   {e:"hl"|"van", k, w}（高亮 / 消失）或 {e:"end", kind}。
--- 播完：{done:true, b, best, g, fall}（fall = 最后落定盘面 ≠ 结算后盘面，需补一段轻落，同桌面 AnimFall）。
+-- 播完：{done:true, b, best, g, fall}（fall = 最后落定盘面 ≠ 结算后盘面，需补一段轻落，同原桌面版 AnimFall）。
 -- 第二个分量是本帧触发的事件数（测试用）。
 animTick :: Bool -> AnimSeed -> Player Cascade -> (Maybe (Player Cascade), Int, String)
 animTick fast s p0 =

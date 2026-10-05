@@ -1,5 +1,5 @@
--- | 桌面按名字读单格的显示附加字段（Match3.View.cellExtras，由元素自己提供；网页 JSON 是同一组字段）。
--- 这里只把字段拼回桌面画法顺手的形状，不认元素名：哪个元素给出了这些字段，就按它画。
+-- | 按名字读单格的显示附加字段（Match3.View.cellExtras，由元素自己提供；网页格子 JSON 是同一组字段）。
+-- 这里只把字段拼回顺手的形状（UI.WebMeta 等用），不认元素名：哪个元素给出了这些字段，就按它画。
 -- 依赖：Match3.Core、Match3.View。
 module UI.CellFace
   ( BossPart (..)

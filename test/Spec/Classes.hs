@@ -24,6 +24,8 @@ import Data.String (fromString)
 import Data.Traversable (mapAccumL)
 import Match3.Board.Grid (chunk, randomColor)
 import Match3.Core
+import Match3.Levels.Campaign (levelCount)
+import Match3.Types (boardDims, maxBoardDim)
 import Match3.Counts (Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Board.Random (randomBoardSized)
 import Match3.Element

@@ -152,7 +152,7 @@ function boardGrid(draws, rows, cols) {
   const ok = ts.every((t) => { const c = (t.x0 - x) / (56 * k), r = (t.y0 - y) / (56 * k); return near(c, Math.round(c), 0.01) && near(r, Math.round(r), 0.01) && near(t.w, 56 * k, 0.01) && near(t.h, 56 * k, 0.01); });
   return ok ? { x, y, k } : null;
 }
-// 掉落口：桌面 UI.BoardArt.drawDropsArt 画在 (cellOrigin 的 x, y − 6)、56 × 56；设计坐标 (16 + 56c, 16 + 56r − 6) → 屏幕 = 网格原点 + (X − 16, Y − 16) × k
+// 掉落口：原桌面版 UI.BoardArt.drawDropsArt 画在 (cellOrigin 的 x, y − 6)、56 × 56；设计坐标 (16 + 56c, 16 + 56r − 6) → 屏幕 = 网格原点 + (X − 16, Y − 16) × k
 function dropMarkCheck(draws, grid, drops) {
   const got = draws.filter((d) => d.name === "cookie_drop").map((d) => ({ seq: d.seq, x: d.x0, y: d.y0, w: d.w, h: d.h, rot: d.rot }));
   const want = drops.map(([r, c]) => ({ p: [r, c], x: grid.x + (16 + 56 * c - 16) * grid.k, y: grid.y + (16 + 56 * r - 6 - 16) * grid.k, w: 56 * grid.k }));
@@ -172,7 +172,7 @@ function chamCheck(draws, grid, board) {
   }));
   return { ok: cells.length > 0 && cells.every((x) => x.ok), cells };
 }
-// 地面层：桌面 UI.Ground.groundTable 的贴图名（测试侧自己的一份，不 import 页面的 cells.js）；表外的名字没有贴图（页面画淡灰框）
+// 地面层：原桌面版 UI.Ground.groundTable 的贴图名（测试侧自己的一份，不 import 页面的 cells.js）；表外的名字没有贴图（页面画淡灰框）
 const GROUND_SPRITE = { jelly: (n) => (n >= 2 ? "jelly_2" : "jelly"), magic: () => "magic" };
 // 每个地面层格：真实画了表内贴图、56 × 56 画在该格左上角、不旋转，且调用序在该格底格 tile 之后、在该格任何棋子之前（棋盘格之上、棋子之下）
 const UNDER = new Set(["tile_a", "tile_b", "carpet_open", "carpet_covered", "belt", "portal"]);
@@ -189,7 +189,7 @@ function groundCheck(draws, grid, ground) {
   }
   return { ok: cells.every((x) => x.ok), cells };
 }
-// HUD 关名：真实画了且只画了一张 name_*（预渲染文字图），就是 name_<关卡下标>（同桌面 HudArt 的 "name_" ++ show li），
+// HUD 关名：真实画了且只画了一张 name_*（预渲染文字图），就是 name_<关卡下标>（同原桌面版 HudArt 的 "name_" ++ show li），
 // 目标矩形 = 页面报告的关名槽（m3debug.hud.name，设计单位）经 HUD 变换（dpr × u、偏移 ox / oy）
 function nameCheck(draws, li, hud, L, dpr) {
   const names = draws.filter((d) => /^name_\d+$/.test(d.name || "")), want = `name_${li}`, n = hud?.name;
@@ -546,7 +546,7 @@ try {
     check("第 1 关没有规则角标", Array.isArray(s.rules) && s.rules.length === 0 && hud && hud.badges.length === 0, { rules: s.rules, badges: hud?.badges });
     await P.ctx.close();
     // 第 42 关「魔石」（下标 41，新玩法 2）：魔法石是元素（Custom "magic_stone"）不是规则开关，lvlRules 为空 → 没有角标
-    // （与桌面 gvRules 相同）；盘面上有 4 块魔法石，图集里有 magic_stone_0..3 贴图。截图 rules-badge-l42-*.png
+    // （与原桌面版 gvRules 相同）；盘面上有 4 块魔法石，图集里有 magic_stone_0..3 贴图。截图 rules-badge-l42-*.png
     const atlas = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
     check("图集含魔法石贴图 magic_stone_0..3", [0, 1, 2, 3].every((k) => atlas[`magic_stone_${k}`]));
     for (const vp of [{ name: "portrait-390x844", w: 390, h: 844, dpr: 3 }, { name: "landscape-1280x800", w: 1280, h: 800, dpr: 2 }]) {
@@ -629,7 +629,7 @@ try {
     const groundLevels = report.groundByLevel.map((x) => x.level), groundCells = report.groundByLevel.reduce((n, x) => n + (x.cells?.length ?? 0), 0);
     check(`全部 ${nLevels} 关的地面层格（${groundLevels.length} 关 ${groundCells} 格）都真实画了表内贴图（jelly / jelly_2 / magic），棋盘格之上、棋子之下`,
       nLevels >= 48 && groundLevels.includes(39) && groundLevels.includes(48) && badGround.length === 0, { levels: groundLevels, bad: badGround });
-    check(`全部 ${nLevels} 关 HUD 关名真实画了预渲染文字图 name_<关卡下标>（同桌面 HudArt），位置 = 关名槽`, nLevels >= 48 && badName.length === 0, badName);
+    check(`全部 ${nLevels} 关 HUD 关名真实画了预渲染文字图 name_<关卡下标>（同原桌面版 HudArt），位置 = 关名槽`, nLevels >= 48 && badName.length === 0, badName);
     for (const lv of [43, 44, 45, 46, 47, 48]) {
       const row = report.fallbacksByLevel.find((x) => x.level === lv);
       check(`第 ${lv} 关 m3debug.fallbacks 为空`, !!row && Object.keys(row.fallbacks).length === 0, row);
@@ -680,7 +680,7 @@ try {
 
   // -------------------------------------------------------------------------
   // 3e. 第 43 关「毛球」（下标 42，新玩法 3）
-  //     (1) 浮动：同桌面 sprBob（round(2·sin(pulse/9)) 设计像素）。静止时冻结在偏移 -2 与 +2 的两帧，截毛球所在格，
+  //     (1) 浮动：同原桌面版 sprBob（round(2·sin(pulse/9)) 设计像素）。静止时冻结在偏移 -2 与 +2 的两帧，截毛球所在格，
   //         并在页面里对两帧的格内像素做纵向平移搜索：最佳平移应 ≈ 4 设计像素 × u × dpr；
   //     (2) 步末跳格：核心记为 EvBelt "fuzzball"，按皮带段平移播放，冻结在段中间截图；
   //     (3) HUD 目标标签「目标 毛球」：竖屏 390×844 / 横屏 1280×800
@@ -774,7 +774,7 @@ try {
   // 3f. 第 44 关「魔力鸟」（下标 43，规则开关 rainbow_combos）
   //     (1) state.rules 与 HUD 角标「彩虹组合变身」（通用 state.rules 角标，竖屏 / 横屏）；
   //     (2) 彩虹 × 直线 / 彩虹 × 炸弹：核心在第一轮之前发一条蔓延步末（rainbow_line / rainbow_bomb），网页按蔓延段播放
-  //         （来源不相邻 → 从格子中心长出，同桌面 drawEndSpread），冻结在变身段中间截图
+  //         （来源不相邻 → 从格子中心长出，同原桌面版 drawEndSpread），冻结在变身段中间截图
   {
     const want44 = [{ name: "rainbow_combos", text: "彩虹组合变身", icons: ["rainbow"] }];
     const inside = (a, b) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5;
@@ -827,7 +827,7 @@ try {
   // 3g. 第 46 关「掉落口」（下标 45，新玩法 6）：state.drops = 视图模型 bvDrops（顶行 4 个掉落口），掉落口格上沿画 cookie_drop；
   //     竖屏 390×844 / 横屏 1280×800 截图 cookie-drop-l46-*.png；按提示走，截「掉落口补下饼干的下落段」cookie-drop-fall.png
   //     与补完后的静止盘 cookie-drop-after-refill.png；
-  //     交换补间中与补间结束后标记格 = state.drops（bvDrops）、坐标同桌面；其它关卡 drops 为空；全程不走几何降级
+  //     交换补间中与补间结束后标记格 = state.drops（bvDrops）、坐标同原桌面版；其它关卡 drops 为空；全程不走几何降级
   {
     const atlas = JSON.parse(fs.readFileSync(path.join(dist, "atlas.json"), "utf8")).sprites;
     check("图集含掉落口贴图 cookie_drop", !!atlas.cookie_drop);
@@ -848,8 +848,8 @@ try {
       check("第 1 关没有掉落口（state.drops = []）", Array.isArray(s.drops) && s.drops.length === 0, s.drops);
       await P.ctx.close();
     }
-    // 掉落口标记是不动的装饰：交换补间中（网页也画，桌面 drawSwap 不画）与补间结束后的静止盘上，标记格 = state.drops
-    // （核心 bvDrops），坐标 = 桌面 drawDropsArt 的 (cellOrigin, y − 6)，换成棋盘设计坐标即 (16 + 56c, 16 + 56r − 6)
+    // 掉落口标记是不动的装饰：交换补间中（网页也画，原桌面版 drawSwap 不画）与补间结束后的静止盘上，标记格 = state.drops
+    // （核心 bvDrops），坐标 = 原桌面版 drawDropsArt 的 (cellOrigin, y − 6)，换成棋盘设计坐标即 (16 + 56c, 16 + 56r − 6)
     {
       const P = await openPage({ w: 390, h: 844, dpr: 1 }, 45, 1);
       await sleep(150);
@@ -864,8 +864,8 @@ try {
       const s1 = await P.st(), idle1 = await fresh();
       report.dropMarks = { drops: s1.drops, idle0: idle0?.marks, inSwap: inSwap?.marks, idle1: idle1?.marks };
       const ok = (m, drops) => !!m && JSON.stringify(m) === JSON.stringify(want(drops));
-      check("第 46 关交换补间中：掉落口标记格 = state.drops（bvDrops）、坐标同桌面 drawDropsArt", ok(inSwap?.marks, s0.drops), report.dropMarks);
-      check("第 46 关补间结束后：掉落口标记格 = state.drops（bvDrops）、坐标同桌面 drawDropsArt，与走之前相同",
+      check("第 46 关交换补间中：掉落口标记格 = state.drops（bvDrops）、坐标同原桌面版 drawDropsArt", ok(inSwap?.marks, s0.drops), report.dropMarks);
+      check("第 46 关补间结束后：掉落口标记格 = state.drops（bvDrops）、坐标同原桌面版 drawDropsArt，与走之前相同",
         s1.moves === s0.moves - 1 && ok(idle0?.marks, s0.drops) && ok(idle1?.marks, s1.drops) && JSON.stringify(s1.drops) === JSON.stringify(wantDrops), report.dropMarks);
       await P.ctx.close();
     }
@@ -897,7 +897,7 @@ try {
 
   // -------------------------------------------------------------------------
   // 3h. 真实绘制核对（ctx.drawImage 钩子，见 DRAW_HOOK；不用页面自报的 m3debug.dropMarks）：
-  //     (a) 第 46 / 47 关掉落口标记 cookie_drop 的真实目标矩形 = 桌面 drawDropsArt 的 (16 + 56c, 16 + 56r − 6)（换算到屏幕：
+  //     (a) 第 46 / 47 关掉落口标记 cookie_drop 的真实目标矩形 = 原桌面版 drawDropsArt 的 (16 + 56c, 16 + 56r − 6)（换算到屏幕：
   //         以真实画出的底格 tile_a / tile_b 求 (0,0) 格位置与缩放），静止帧与交换补间帧都查；
   //     (b) 第 47 关「变色龙」（下标 46，新玩法 7）：每只变色龙格真实画了 gem_c<v+1>（v 取核心格子的原始值）、位置在该格，
   //         且调用序在环 chameleon 之前；HUD「目标 变色龙」+ 图标 chameleon_icon；换色（步末 tick 段）前半段旧色、后半段新色，
@@ -914,7 +914,7 @@ try {
         await sleep(150);
         const s = await P.st();
         const d0 = await captureDraws(P), g0 = boardGrid(d0, s.board.length, s.board[0].length), r0 = g0 && dropMarkCheck(d0, g0, s.drops);
-        check(`第 ${li + 1} 关真实绘制（静止帧）：掉落口 cookie_drop 画在桌面 drawDropsArt 的 (16+56c, 16+56r−6)：${vp.name}`,
+        check(`第 ${li + 1} 关真实绘制（静止帧）：掉落口 cookie_drop 画在原桌面版 drawDropsArt 的 (16+56c, 16+56r−6)：${vp.name}`,
           JSON.stringify(s.drops) === JSON.stringify(wantDrops) && !!r0?.ok, { drops: s.drops, grid: g0, ...r0 });
         await P.breakAt((i) => i.kind === "swap" && i.fr >= 4);
         await P.swap(s.hint[0], s.hint[1], false);
@@ -1393,7 +1393,7 @@ try {
         const [hx, hy] = await P.center([4, 4]); await P.page.mouse.click(hx, hy); await sleep(30); await P.idle();
         let s1 = await P.st(); u = await ui(P);
         check(`锤子打一格：次数 2 → 1、退出模式、盘面变化：${t}`, s1.boosters.hammer === 1 && u.tool === null && !same(s1.board, s0.board), { boosters: s1.boosters, tool: u.tool, msg: u.msg });
-        // 十字消：先点选一格再按 3，立即使用（同桌面 keyCross 的「已选格且有次数」分支）
+        // 十字消：先点选一格再按 3，立即使用（同原桌面版 keyCross 的「已选格且有次数」分支）
         const [cx, cy] = await P.center([3, 3]); await P.page.mouse.click(cx, cy); await sleep(40);
         await press(P, "3"); await sleep(30); await P.idle();
         let s2 = await P.st();
@@ -1546,7 +1546,7 @@ try {
         check(`窗口标题 = Match3.View.titleLine +「  |  」+ 提示：${t}`, ws(u.title) === ws(`${s1.title}  |  ${u.msg}`) && u.title.includes("Hm="), { title: u.title, want: `${s1.title}  |  ${u.msg}` });
         await P.ctx.close();
       }
-      // 5h. 首关提示与按键条（桌面 freshLevelUi / drawHelpStripArt）：第 1 关开局自动亮提示 + 横幅「按 H 查看提示」，
+      // 5h. 首关提示与按键条（原桌面版 freshLevelUi / drawHelpStripArt）：第 1 关开局自动亮提示 + 横幅「按 H 查看提示」，
       //     有键盘鼠标时棋盘底部按键条 300 帧后消失；触屏设备横幅改成「点「提示」查看提示」、不画按键条
       {
         const P = await openPage(vp, 0, 20260929);
@@ -1618,7 +1618,7 @@ try {
       check(`失败后点棋盘 / N：重开本关（同一关、步数回到开局）：${t}`, s.level === 7 && !s.over && s.moves === sm, { level: s.level, moves: s.moves, sm });
       await P.ctx.close();
     }
-    // 5k. 元素展示盘（桌面 MATCH3_SHOWCASE → ?showcase=1）
+    // 5k. 元素展示盘（原桌面版 MATCH3_SHOWCASE → ?showcase=1）
     for (const vp of VPS) {
       const P = await openPage(vp, 0, 1);
       await P.page.goto(`http://127.0.0.1:${PORT}/?showcase=1`);

@@ -10,6 +10,9 @@ module Spec.Chameleon
 
 import Data.Foldable (toList)
 import Match3.Core
+import Match3.Daily (dailySeed)
+import Match3.Element.Builtin (chameleonColor, defaultWorld)
+import Match3.Types (boardSize)
 import Match3.Board.Grid (setM, toM)
 import Match3.Board.Match (findHintWith, hasAnyMatchWith)
 import Match3.Board.Refill (defaultRefill, refillWith)

@@ -1,6 +1,6 @@
--- | 「重开本关」规则（桌面 R 键 / 失败后 N 与网页 m3Restart / m3Advance 共用）：
--- 每日挑战按开局步数与原目标换种子重开，战役关 restartLevel。原在桌面 UI.Input.restartSame，web-sdl-parity 时移进 app/pure，
--- 桌面 UI.Input.restartSame 改为调这里（行为不变）；网页 Api 不直接读 GameState 字段（测试 frontends_read_view_model）。
+-- | 「重开本关」规则（网页 m3Restart / m3Advance 用；R 键 / 失败后 N）：
+-- 每日挑战按开局步数与原目标换种子重开，战役关 restartLevel。原在已移除的 SDL 桌面版 UI.Input.restartSame，web-sdl-parity 时移进
+-- app/pure（行为不变）；网页 Api 不直接读 GameState 字段（测试 frontends_read_view_model）。
 --
 -- 依赖：Match3.Core。纯函数。
 module UI.Restart

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-网页版贴图集生成器：把桌面版资源（assets/atlas*.bmp + atlas.txt + background.bmp，由 tools/gen_assets.py 生成）
-重新打包成浏览器用的 2x WebP 图集。只读 assets/，不改桌面版资源与生成器（避免与游戏本体的改动冲突）。
+网页版贴图集生成器：把 assets/ 里的资源（assets/atlas*.bmp + atlas.txt + background.bmp，由 tools/gen_assets.py 生成）
+重新打包成浏览器用的 2x WebP 图集。只读 assets/，不改 assets/ 与生成器 tools/gen_assets.py。
 
 输出（到指定目录，默认 web/.cache/art/）：
   atlas.webp      2x 贴图集（一页，1024 宽；RGBA，有损 WebP，alpha 无损）
@@ -11,7 +11,7 @@
 
 取舍：
   - 只收棋盘 / HUD 贴图的基名（2x 烘焙：格 56 逻辑像素 → 贴图 112 像素）；
-  - 不收预渲染文字 g_* 字形、zh_* 中文标签——网页用浏览器字体画字；关卡名 name_<i> 要收（HUD 关名同桌面画这张图，
+  - 不收预渲染文字 g_* 字形、zh_* 中文标签——网页用浏览器字体画字；关卡名 name_<i> 要收（HUD 关名同原桌面版画这张图，
     第 N 关 = name_<N−1>，见 www/hud.js 的 levelName）；
   - 不收 `名字@高度` 尺寸变体——Canvas drawImage 缩放 + dpr 放大后备缓冲已够清晰；
   - 贴图之间留 2 像素透明缝，避免缩放采样串色。

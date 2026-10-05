@@ -25,6 +25,9 @@ import Match3.Board.Random (randomStableBoard)
 import Match3.Carpet (coverCarpets)
 import Match3.Conveyor (beltMoves)
 import Match3.Core
+import Match3.Game.State (gsUfos)
+import Match3.Levels.Campaign (allLevels)
+import Match3.Types (boardSize)
 import Match3.Element
 import Match3.Element.Ability
 import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)

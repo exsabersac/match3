@@ -17,6 +17,7 @@ import Match3.Combos
   , isSpecialCombo
   )
 import Match3.Core
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (setCell, swapCells)
 import Match3.Game.Boosters (useFreeSwap, useHammer)
 import Match3.Game.Level (newGame)

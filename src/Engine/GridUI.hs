@@ -1,6 +1,6 @@
 -- | 通用网格 UI 组件（第 11 刀）：与具体游戏无关的网格几何（像素 ↔ 格子坐标）、点选 / 拖动的判定、
--- 高亮集合。三消桌面版的 UI.Layout.pixelToCell / cellOrigin / allCells 与 UI.Input 的点选 / 拖动交换
--- 都经这里算；以后的其他网格类游戏直接复用。
+-- 高亮集合。原 SDL 桌面版（已移除）的 UI.Layout.pixelToCell / cellOrigin / allCells 与 UI.Input 的点选 / 拖动交换
+-- 曾经这里算；网页在 JS 里做命中（规则相同），本模块留作通用层组件与测试（grid_ui_*），以后的其他网格类游戏直接复用。
 --
 -- 依赖：只有 base（不 import 任何 Match3 模块，测试 engine_layer_is_game_agnostic 扫描）。
 -- 坐标约定：格子坐标是 (行, 列)，行优先；像素坐标是 (x, y)，x 对应列、y 对应行。

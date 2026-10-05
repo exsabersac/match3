@@ -1,6 +1,6 @@
-# 仓库自动化任务入口（仓库根目录运行 `make <目标>`）：桌面版（Stack）+ 网页版（GHC wasm，web/）。
+# 仓库自动化任务入口（仓库根目录运行 `make <目标>`）：核心规则测试（Stack）+ 网页版（GHC wasm，web/，唯一前端）。
 # 不带目标时显示帮助（按分组列出）。兼容 GNU make 3.81+（macOS 自带版本即可）；配方只用 POSIX sh。
-# 桌面版目标只是 Stack 常用命令的薄包装，日常直接用 stack 也完全一样。
+# verify / test-native 只是 stack test 的薄包装，日常直接用 stack 也完全一样。
 #
 # 常用变量（命令行覆盖，例如 `make serve PORT=9000 BIND=127.0.0.1`）：
 #   PORT / BIND        serve 与 deploy-* 的端口 / 监听地址
@@ -20,7 +20,6 @@ SHELL := /bin/sh
 
 ROOT            := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 WEB             := $(ROOT)/web
-EXE             := match3-sdl
 GHC_WASM_PREFIX ?= $(HOME)/.ghc-wasm
 FLAVOUR         ?= 9.14
 PORT            ?= 8080
@@ -45,7 +44,7 @@ NEED_DIST = @[ -f "$(WEB)/dist/match3-web.wasm" ] || { echo "没有 web/dist，�
 NATIVE_ENV = env -u CC -u CXX -u AR -u LD -u RANLIB -u NM -u STRIP
 
 .PHONY: android-sync apk apk-release aab android-check
-.PHONY: help verify desktop-build run test-native build atlas serve parity anim-parity e2e test check lint-sh size pack \
+.PHONY: help verify test-native build atlas serve parity anim-parity e2e test check lint-sh size pack \
         deploy-install deploy-start deploy-stop deploy-status clean toolchain doctor
 
 ##@ 通用
@@ -61,17 +60,9 @@ verify: ## 合 main 前的验收：stack test（最后一行写通过 / 失败�
 	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
 	"$(ROOT)/tools/verify.sh"
 
-##@ 桌面版（Stack，SDL2）
+##@ 原生核心（Stack）
 
-desktop-build: ## 构建桌面版（stack build；首次需系统 SDL2，见根目录 README）
-	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
-	cd "$(ROOT)" && $(NATIVE_ENV) stack build
-
-run: ## 运行桌面版（stack run match3-sdl；需要显示器，环境变量原样传给游戏）
-	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
-	cd "$(ROOT)" && exec $(NATIVE_ENV) stack run $(EXE)
-
-test-native: ## 核心规则测试（stack test；与桌面版共用）
+test-native: ## 核心规则测试（stack test；原生 GHC 编译核心 src/ 与 app/pure）
 	@command -v stack >/dev/null 2>&1 || { echo "找不到 stack：见 https://docs.haskellstack.org/（make doctor）" >&2; exit 1; }
 	cd "$(ROOT)" && $(NATIVE_ENV) stack test
 

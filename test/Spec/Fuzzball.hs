@@ -8,6 +8,7 @@ module Spec.Fuzzball
   ) where
 
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Board.Match (findHintWith)
 import Match3.Counts (countOf)
 import Match3.Element

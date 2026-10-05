@@ -9,7 +9,7 @@ copyright:           "2026 yu binbin"
 extra-source-files:
 - README.md
 
-description:        Playable Haskell 2D Match-3 (消消乐) with SDL2
+description:        Haskell 2D Match-3 (消消乐) rules engine with a WebAssembly web front end
 
 dependencies:
 - base >= 4.7 && < 5
@@ -112,9 +112,10 @@ library:
   - Match3.Element.World
   - Match3.Element.Level
 
-# 桌面前端的纯模块（不依赖 SDL）：可执行文件经这个内部库用；测试套件直接编译 app/pure 源码（它也直接编译 src，
-# 若经内部库用，内部库里的 Match3.* 类型来自 match3 库、与测试自己编译的 src 不是同一类型）；
-# 网页 web/match3-web.cabal 按源码编其中用到的几个（web/build.sh 检查它们都在这张清单里）。
+# 前端共用的纯模块（app/pure）：网页 web/match3-web.cabal 按源码编其中用到的几个（web/build.sh 检查它们都在这张清单里），
+# 这个内部库让 stack build 也按本包的 -Wall 原生编译它们；测试套件直接编译 app/pure 源码（它也直接编译 src，
+# 若经内部库用，内部库里的 Match3.* 类型来自 match3 库、与测试自己编译的 src 不是同一类型）。
+# SDL2 桌面前端（match3-sdl）已于 refactor/web-only 移除：网页是唯一前端，PC 端以后像安卓一样给网页套壳。
 internal-libraries:
   match3-pure:
     source-dirs: app/pure
@@ -130,28 +131,7 @@ internal-libraries:
     - UI.Presentation
     - UI.Restart
     - UI.Showcase
-    - UI.Sound
     - UI.WebMeta
-
-executables:
-  match3-sdl:
-    main:                Main.hs
-    source-dirs:
-    - app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - match3
-    - match3-pure
-    - sdl2
-    - text
-    - containers
-    - directory
-    - filepath
-    - bytestring
-    - vector
 
 tests:
   match3-test:

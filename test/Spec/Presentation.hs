@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | 第 10 刀：前端表现表（app/pure/UI/Presentation.hs）与音效钩子（app/pure/UI/Sound.hs）。
+-- | 第 10 刀：前端表现表（app/pure/UI/Presentation.hs）。音效钩子 UI.Sound 与只测桌面绘制的用例随 SDL2 前端移除（refactor/web-only）。
 --
 -- 对照的旧实现是本文件里的字面副本：第 10 刀前散在 ComboFx（endStageTable / 帧数常量 / comboStyle）、
 -- UI.EndStage（spreadProgress、倒计时 / 洗牌颜色）、UI.Playback（endCrumbTable）、UI.BoardArt（waveTint）、
@@ -10,18 +10,14 @@ module Spec.Presentation
   ) where
 
 import ComboFx
-import Data.List (isInfixOf, isPrefixOf, nub)
+import Data.List (isInfixOf, isPrefixOf)
 import Data.Word (Word8)
-import Engine.Playback (Tick (..), newPlayer)
 import Match3.Core
 import Match3.Element.Event (EventKind (..))
-import Match3.Game.Move (resolveSwap)
-import Match3.Game.Trace (traceEvents)
-import Spec.Support.Source (readCode, sourcesUnder, stripComments)
+import Spec.Support.Source (readCode, sourcesUnder)
 import Test.Tasty
 import Test.Tasty.HUnit
 import UI.Presentation
-import UI.Sound (cascadeEventKinds, cascadeSounds, playSounds)
 
 tests :: [TestTree]
 tests =
@@ -32,9 +28,7 @@ tests =
   , testCase "presentation_combo_style_matches_legacy" presentation_combo_style_matches_legacy
   , testCase "presentation_extension_defaults" presentation_extension_defaults
   , testCase "effect_sound_names_clear_and_special" effect_sound_names_clear_and_special
-  , testCase "cascade_sounds_follow_clear_and_special" cascade_sounds_follow_clear_and_special
   , testCase "presentation_scattered_cases_removed" presentation_scattered_cases_removed
-  , testCase "draw_hud_and_prim_overlay_are_thin" draw_hud_and_prim_overlay_are_thin
   ]
 
 allKinds :: [EventKind]
@@ -206,29 +200,6 @@ effect_sound_names_clear_and_special = do
   effectSound EvBlast @?= Just "special"
   map effectSound (filter (`notElem` [EvClear, EvBlast]) allKinds) @?= map (const Nothing) (filter (`notElem` [EvClear, EvBlast]) allKinds)
   prSound defaultPresentation @?= Nothing
-  playSounds ["anything"] -- 纯模块仍是空操作；真正播放在桌面 UI.Audio / 网页
-
--- | 用真实的连锁（第 8 关 7 轮、第 16 关倒计时步末）跑完整个回放：各阶段事件映射到的效果种类齐全，且都不出声。
-cascade_sounds_follow_clear_and_special :: Assertion
-cascade_sounds_follow_clear_and_special = do
-  kinds <- concat <$> mapM run [(7, ((2, 5), (3, 5))), (15, ((0, 1), (1, 1)))]
-  mapM_ (\k -> assertBool ("kind seen: " ++ show k) (k `elem` kinds)) [EvClear, EvScore, EvCombo, EvTick]
-  where
-    run (lvl, (a, b)) = case campaignGame lvl 1 of
-      Nothing -> assertFailure ("no level " ++ show lvl) >> pure []
-      Just gs0 -> do
-        let (gs, _, mt) = resolveSwap a b gs0
-            evs = traceEvents mt
-            c = newCascade mt evs (gsBoard gs) (gsScore gs0)
-            go n p acc
-              | n > (100000 :: Int) = acc
-              | otherwise = case stepPlayback p of
-                  Playing p' es -> go (n + 1) p' (acc ++ es)
-                  Done _ -> acc
-            cevs = go 0 (newPlayer c) []
-        assertBool "cascade produced events" (not (null cevs))
-        mapM_ (\e -> assertBool (show (cascadeSounds e)) (all (`elem` ["clear", "special"]) (cascadeSounds e))) cevs
-        pure (concatMap cascadeEventKinds cevs)
 
 -- | 源码扫描：散落的表 / case 已收进表现表；搬走的颜色字面量只在 UI.Presentation 里出现。
 presentation_scattered_cases_removed :: Assertion
@@ -255,33 +226,3 @@ presentation_scattered_cases_removed = do
   -- 表现表所在模块是纯模块：不 import SDL
   pres <- readFile "app/pure/UI/Presentation.hs"
   assertBool "UI.Presentation is pure" (not ("import SDL" `isInfixOf` pres))
-  -- 读表的地方确实在读表
-  endStage <- readCode "app/UI/EndStage.hs"
-  playback <- readCode "app/UI/Playback.hs"
-  assertBool "EndStage reads spread curves from the table" ("curveAt (spreadCurveFor" `isInfixOf` endStage)
-  assertBool "Playback interprets prCrumbs" ("prCrumbs (stagePresentation" `isInfixOf` playback)
-  assertBool "Playback queues sounds" ("cascadeSounds" `isInfixOf` playback)
-
--- | drawHud 只按顺序调用 UI.HudBlocks 的区块；primOverlay 只按构造子分派到 UI.Cell.PrimOverlay 的各函数。
-draw_hud_and_prim_overlay_are_thin :: Assertion
-draw_hud_and_prim_overlay_are_thin = do
-  hud <- stripComments <$> readFile "app/UI/HudPrim.hs"
-  ov <- stripComments <$> readFile "app/UI/Cell/PrimOverlay.hs"
-  prim <- stripComments <$> readFile "app/UI/Cell/Prim.hs"
-  let body name src =
-        let afterSig = drop 1 (dropWhile (not . ((name ++ " ::") `isPrefixOf`)) (lines src))
-            afterDef = drop 1 (dropWhile (not . ((name ++ " ") `isPrefixOf`)) afterSig)
-        in takeWhile (\l -> null l || " " `isPrefixOf` l) afterDef
-      hudBody = filter (not . null) (body "drawHud" hud)
-      ovBody = filter (not . null) (body "primOverlay" ov)
-      hudCalls = [w | l <- hudBody, (w : _) <- [words l], "hud" `isPrefixOf` w]
-  assertBool "drawHud body found" (not (null hudBody))
-  assertBool ("drawHud is thin: " ++ show (length hudBody)) (length hudBody <= 11)
-  hudCalls @?= ["hudFrame", "hudLevel", "hudGoal", "hudBoss", "hudGoalSwatch", "hudMoves", "hudBoosters", "hudComboBadge", "hudStatus", "hudSound"]
-  assertBool "drawHud draws nothing itself" (not (any (\l -> any (`isInfixOf` l) ["rendererDrawColor", "fillRect", "drawNumber"]) hudBody))
-  assertBool "primOverlay body found" (not (null ovBody))
-  assertBool ("primOverlay is a dispatch: " ++ show (length ovBody)) (length ovBody <= 10)
-  assertBool "primOverlay draws nothing itself" (not (any (\l -> any (`isInfixOf` l) ["rendererDrawColor", "fillRect", "drawRect", "drawLine"]) ovBody))
-  length (nub [w | l <- ovBody, w <- words l, "overlay" `isPrefixOf` w]) @?= 8
-  -- UI.Cell.Prim 不再定义 primOverlay（只再导出）
-  assertBool "Cell.Prim no longer defines primOverlay" (not (any ("primOverlay ::" `isPrefixOf`) (lines prim)))

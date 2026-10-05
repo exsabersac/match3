@@ -16,6 +16,10 @@ import Match3.Board.Default
   )
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crBoard))
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Game.Level (newGameAtLevel)
+import Match3.Levels.Campaign (allLevels)
+import Match3.Types (boardSize, defaultConfig, hasChoco, hasVine)
 import Match3.Board.Grid (setCell)
 import Match3.Element.World (swapBlockedWith)
 import Match3.Game.Boosters (useFreeSwap, useHammer)

@@ -1,5 +1,5 @@
 -- | 网页启动时从 wasm 取的表现表（m3Meta，见 web/hs/Match3Web/Api.hs 的 encodeMeta）：网页不再手抄颜色 / 生长曲线 /
--- 帧数 / 音效名，全由这里从桌面的唯一来源（UI.Palette / UI.Presentation / ComboFx）推出。
+-- 帧数 / 音效名，全由这里从唯一来源（UI.Palette / UI.Presentation / ComboFx）推出。
 --
 -- 网页 cells.js 的 cellRGB 规则（按格子 JSON 的 t 查）：wmColorTags 里的标签取 COLOR_RGB[c]；wmTagRGB 里的标签取固定色；
 -- custom 有 "c"（元素给出的当前颜色，见 Match3.View.cellExtras）取 COLOR_RGB[c]，否则 ELEMENT_RGB[name]；其余 wmFallbackRGB。

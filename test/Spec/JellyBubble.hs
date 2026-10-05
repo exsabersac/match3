@@ -12,6 +12,10 @@ import Match3.Board.Default (hasAnyMatch)
 import Match3.Board.Grid (setCell)
 import Match3.Board.Match (findHintWith)
 import Match3.Core
+import Match3.Game.Level (newGameAtLevel)
+import Match3.Levels.Campaign (allLevels)
+import Match3.Levels.Level (levelConfig)
+import Match3.Types (defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Engine.Game (Game(..), Step(..))

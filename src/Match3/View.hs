@@ -1,7 +1,7 @@
 -- | 视图模型：从 GameState / 回放状态算出前端要画的东西——整局 HUD 视图（关卡、分数、步数、
 -- 道具、连击、结局）、目标视图、棋盘视图（逐格底层标记）、关卡进度点、右下角分数徽章、关卡列表，
--- 以及单格的结构化描述。桌面版（UI.HudArt / UI.HudBlocks / UI.Actions 标题 / UI.Board* 底层）与
--- 网页版（web/hs/Match3Web/Api.hs 的 JSON）都读这里，不各自从 GameState 现算。
+-- 以及单格的结构化描述。前端（网页是唯一前端；原 SDL 桌面版已移除）
+-- 经 web/hs/Match3Web/Api.hs 的 JSON 读这里，不各自从 GameState 现算。
 --
 -- 全部是纯函数、只读。
 -- 依赖：Match3.Types、Match3.Game.*、Match3.Levels.*（直接 import 子模块，不经前端门面 Match3.Core）、
@@ -181,7 +181,7 @@ bossView gs = case [t | Quota (MeterCount (CountNamed n)) t <- goalQuotas (gsGoa
   t : _ -> Just (BossView (max 0 (min t (snowBossHp (gsBoard gs)))) t)
   [] -> Nothing
 
--- | 桌面版窗口标题（不含末尾的 "  |  " 与提示消息）。
+-- | 窗口标题（不含末尾的 "  |  " 与提示消息；网页写进 document.title）。
 titleLine :: GameView -> String
 titleLine gv =
   "L"
@@ -213,14 +213,14 @@ titleLine gv =
 -- 规则开关角标
 
 -- | HUD 上的一枚规则开关角标：本关打开的每个规则开关（'gvRules' 的每一项）一枚，画在关名右侧。
--- 桌面贴图版（UI.HudArt）叠画 'rbIcons' 再画文字贴图 'rbTextSprite'；网页版（web/hs/Match3Web/Api.hs 的
+-- 网页（web/hs/Match3Web/Api.hs 的
 -- state.rules → www/hud.js）画同样的图标，文字用画布字体渲染 'rbText'（网页图集不含文字贴图）。
 -- 新玩法加规则开关时在 'ruleBadgeTable' 登记一行，两个前端自动显示，不用改 HUD 代码。
 data RuleBadge = RuleBadge
   { rbRule :: String        -- ^ 规则开关名（Level.lvlRules 里的名字，如 "bomb_shapes"）
   , rbText :: String        -- ^ 角标文字，与 tools/gen_assets.py 里对应文字贴图的字面相同（测试核对）
-  , rbIcons :: [String]     -- ^ 图标贴图名，从下往上叠画（桌面与网页图集都有的贴图）；可为空
-  , rbTextSprite :: String  -- ^ 桌面版的文字贴图名（zh_*）
+  , rbIcons :: [String]     -- ^ 图标贴图名，从下往上叠画（网页图集里的贴图）；可为空
+  , rbTextSprite :: String  -- ^ 文字贴图名（zh_*，原 SDL 桌面版用；网页不画，tools/gen_assets.py 仍生成）
   }
   deriving (Eq, Show)
 
@@ -232,7 +232,7 @@ ruleBadgeTable =
   ]
 
 -- | 查一个规则开关的角标。没登记的规则也显示（不静默丢掉）：文字 = 规则名、无图标、
--- 桌面文字贴图名 zh_rule_<名>（图集里没有时桌面版不画文字）。
+-- 文字贴图名 zh_rule_<名>。
 ruleBadge :: String -> RuleBadge
 ruleBadge r = fromMaybe (RuleBadge r r [] ("zh_rule_" ++ r)) (find ((== r) . rbRule) ruleBadgeTable)
 
@@ -246,7 +246,7 @@ ruleBadges = map ruleBadge . gvRules
 data GoalInfo = GoalInfo
   { giGoal :: LevelGoal
   , giView :: GoalView
-  , giProgress :: Int      -- ^ 核心 gsProgress（桌面 HUD / 标题 / 网页同一个数）
+  , giProgress :: Int      -- ^ 核心 gsProgress（原桌面版 HUD / 标题 / 网页同一个数）
   , giTarget :: Int        -- ^ goalTarget
   , giKind :: String       -- ^ show 的首词（网页 goal.kind）
   , giText :: String       -- ^ show 全文（网页 goal.text）
@@ -301,7 +301,7 @@ colorTag C3 = "BLU"
 colorTag C4 = "YEL"
 colorTag C5 = "PRP"
 
--- | 目标的中文显示名（HUD「目标 …」标签；网页 state.goal.label / m3Levels 的 goal.label、桌面窗口标题的目标段都取这里）。
+-- | 目标的中文显示名（HUD「目标 …」标签；网页 state.goal.label / m3Levels 的 goal.label、窗口标题的目标段都取这里）。
 -- 表本身（'countLabel' / 'colorLabel' / 'namedGoalLabelTable'）合 main 9f5504e 后下移到 Match3.GoalLabel
 -- （失败提示 Match3.Game.Outcome.loseHint 也用它），这里重新导出，对外 API 不变。
 goalLabel :: GoalInfo -> String
@@ -317,7 +317,7 @@ data CarpetMark = CarpetNone | CarpetCovered | CarpetOpen
 -- | 棋盘与关卡级元素（字段惰性：只读用到的部分）。
 data BoardView = BoardView
   { bvBoard :: Board
-  , bvHint :: Maybe (Pos, Pos)       -- ^ 玩家按 H 要到的提示（gsHint；桌面提示光）
+  , bvHint :: Maybe (Pos, Pos)       -- ^ 玩家按 H 要到的提示（gsHint；提示光）
   , bvFoundHint :: Maybe (Pos, Pos)  -- ^ 当前盘面上找到的一步（findHint；网页 hint）
   , bvLastCleared :: [Pos]
   , bvGround :: [(Pos, (ElementName, Int))]
@@ -420,7 +420,7 @@ levelViews = [LevelView (lvlIndex l) (lvlName l) (lvlMoves l) (goalInfo (lvlGoal
 
 -- | 结构化描述里的一个字段值。
 -- | 单格的结构化描述：类型标签 + 按固定顺序的字段（网页 JSON 的 t / c / k / i / o / n …；
--- 桌面版按 UI.CellTable 画，不读这里）。
+-- 渲染层按 t 查表，www/cells.js）。
 cellFace :: Cell -> (String, [(String, CellField)])
 cellFace = cellFaceWith defaultWorld
 
@@ -444,7 +444,7 @@ cellFaceWith w cell = case cell of
 
 -- | 单格的显示附加字段：元素自己提供（能力类 Renders 的 face，Match3.Element.Ability），这里不按元素名特判。
 -- 内置：雪怪 Boss 的 q（象限 0–3）/ hurt（血量是否过半）/ turn（召唤计数）/ every（召唤周期），变色龙的 c（当前颜色）。
--- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；桌面按名字读（app/pure/UI/CellFace.hs）。
+-- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；app/pure/UI/CellFace.hs 按名字读。
 cellExtras :: Cell -> [(String, FaceValue)]
 cellExtras = cellExtrasWith defaultWorld
 

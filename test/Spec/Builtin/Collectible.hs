@@ -10,6 +10,8 @@ import Match3.Board.Default (cascadeSeeds, findMatches, noHooks)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Board.Grid (setCell)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Element.World (swapBlockedWith)
 import Match3.Game.Boosters (useHammer)
 import Match3.Game.Level (newGame)

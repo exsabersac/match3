@@ -1,4 +1,4 @@
--- | 前端 API：桌面版（app/）与网页版（web/hs）用到的类型、构造函数、查询和对局操作。
+-- | 前端 API：网页版（web/hs 与它编译的 app/pure）用到的类型、构造函数、查询和对局操作。
 -- 本模块只再导出，不定义任何东西。
 --
 -- 规则内部（障碍邻消、蔓延、连锁各阶段、道具清除范围等）不从这里导出：库内模块和测试直接 import
@@ -14,11 +14,6 @@ module Match3.Core
   , CellOverlay(..)
   , ElementName(..)
   , CustomState(..)
-  , hasVine
-  , hasChoco
-  , chameleonColor
-  , elementName
-  , defaultWorld
     -- ** 构造（图例、几何版示意格）
   , mkGem
   , mkIceGem
@@ -50,35 +45,21 @@ module Match3.Core
   , Board
   , boardFromRows
   , boardRows
-  , boardSize
-  , boardDims
-  , maxBoardDim
-  , boardPositions
   , boardRowIndices
   , boardColIndices
-  , positionsWhere
-  , upDownLeftRight
   , getCell
-  , adjacent
-  , neighborsInBounds
   , gravityFixedCell
     -- ** 可空盘面（连锁波次里带空洞的盘面）
   , atM
   , mboardRows
     -- * 关卡与目标
   , GameConfig(..)
-  , defaultConfig
   , Level(..)
-  , levelConfig
-  , allLevels
-  , lookupLevel
-  , levelCount
   , clampLevelIndex
   , LevelGoal(..)
   , CounterKey(..)
   , GoalView(..)
   , goalView
-  , MovesLeft
   , Outcome(..)
   , Terminal(..)
   , fromTerminal
@@ -86,18 +67,14 @@ module Match3.Core
   , GameState(..)
   , MoveFx(..)
   , Ufo(..)
-  , gsUfos
   , setUfos
   , setBelts
   , setPortals
   , setCarpetOpen
-  , newGameAtLevel
   , campaignGame
   , newDailyGame
   , restartLevel
   , nextLevel
-  , applyHint
-  , loseHint
   , unlockAfterOutcome
   , mapClickJump
     -- * 一步的轨迹（回放用）
@@ -113,24 +90,20 @@ module Match3.Core
   , Year(..)
   , Month(..)
   , Day(..)
-  , dailySeed
-  , dailyLevel
   , starRating
   ) where
 
 import Match3.Board.Cascade (CascadeWave(..))
 import Match3.Board.Default (gravityFixedCell)
-import Match3.Board.Grid (adjacent, atM, getCell, mboardRows, neighborsInBounds)
+import Match3.Board.Grid (atM, getCell, mboardRows)
 import Match3.Counts (CounterKey(..))
-import Match3.Daily (Day(..), Month(..), Year(..), dailyLevel, dailySeed, starRating)
-import Match3.Element.Builtin (chameleonColor, defaultWorld)
-import Match3.Element.World (elementName)
-import Match3.Game.Level (campaignGame, newDailyGame, newGameAtLevel, nextLevel, restartLevel)
-import Match3.Game.Outcome (loseHint, mapClickJump, unlockAfterOutcome)
-import Match3.Game.State (GameState(..), MoveFx(..), applyHint, gsUfos, setBelts, setCarpetOpen, setPortals, setUfos)
+import Match3.Daily (Day(..), Month(..), Year(..), starRating)
+import Match3.Game.Level (campaignGame, newDailyGame, nextLevel, restartLevel)
+import Match3.Game.Outcome (mapClickJump, unlockAfterOutcome)
+import Match3.Game.State (GameState(..), MoveFx(..), setBelts, setCarpetOpen, setPortals, setUfos)
 import Match3.Game.Trace (EndEffect(..), EndItem(..), EndStep(..), MoveTrace(..), emptyTrace, endEffectPairs, endItemDir)
-import Match3.Levels.Campaign (allLevels, clampLevelIndex, levelCount, lookupLevel)
-import Match3.Levels.Level (Level(..), levelConfig)
+import Match3.Levels.Campaign (clampLevelIndex)
+import Match3.Levels.Level (Level(..))
 import Match3.Types
   ( Board
   , Cell
@@ -143,24 +116,16 @@ import Match3.Types
   , GemKind(..)
   , GoalView(..)
   , LevelGoal(..)
-  , MovesLeft
   , Outcome(..)
   , Pos
   , Terminal(..)
   , allColors
   , boardColIndices
-  , boardDims
   , boardFromRows
-  , boardPositions
   , boardRowIndices
   , boardRows
-  , boardSize
-  , defaultConfig
   , fromTerminal
   , goalView
-  , hasChoco
-  , hasVine
-  , maxBoardDim
   , mkBalloon
   , mkBottle
   , mkCakeLayers
@@ -186,7 +151,5 @@ import Match3.Types
   , mkSurprise
   , mkTimeSpirit
   , mkVineGem
-  , positionsWhere
-  , upDownLeftRight
   )
 import Match3.Ufo (Ufo(..))

@@ -1,6 +1,6 @@
--- | 关卡目标的图标贴图名（纯模块，不依赖 SDL）：桌面贴图版 HUD / 选关地图节点（UI.GoalStyle 重新导出）与网页版
--- （Match3Web.Api 编码进 state.goal.icon）共用这一张表，网页端不另写「目标 → 图标」映射。
--- 按 Match3.Goal.goalView 的目标形状 / 计数键分派；图标复用棋子贴图（宝石名同 UI.Cell.Art.gemSprite：gem_c1..gem_c5）。
+-- | 关卡目标的图标贴图名（纯模块）：网页版 HUD 目标条与选关地图节点
+-- （Match3Web.Api 编码进 state.goal.icon）用这一张表，网页端不另写「目标 → 图标」映射。
+-- 按 Match3.Goal.goalView 的目标形状 / 计数键分派；图标复用棋子贴图（宝石名 gem_c1..gem_c5，同 web/www/cells.js）。
 module UI.GoalIcon
   ( goalIcon
   ) where

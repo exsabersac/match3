@@ -15,6 +15,8 @@ import Engine.Game (Game(..), Step(..))
 import Match3.Board.Default (findMatchRuns, hasAnyMatch)
 import Match3.Board.Match (MatchRun(..))
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Def, groundDef, inertDef, kindDef, register)

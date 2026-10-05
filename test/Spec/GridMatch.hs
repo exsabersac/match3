@@ -13,6 +13,8 @@ import Match3.Board.Default (findMatches, hasAnyMatch, hasValidMove)
 import Match3.Board.Grid (setCell, swapCells)
 import Match3.Board.Random (randomPlayableBoard)
 import Match3.Core
+import Match3.Game.State (applyHint)
+import Match3.Types (boardSize, defaultConfig)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
 import Match3.Types

@@ -1,4 +1,4 @@
-// 棋盘动画绘制（网页版）：对应桌面 app/UI/Cascade.hs（交换补间 / 逐轮 高亮→消失→下落→落定 / 轻落）、
+// 棋盘动画绘制（网页版）：迁自原 SDL 桌面版（已移除）的 app/UI/Cascade.hs（交换补间 / 逐轮 高亮→消失→下落→落定 / 轻落）、
 // app/UI/EndStage.hs（步末：倒计时 / 皮带（含毛球跳格）/ 蔓延（含彩虹组合变身）/ 蜗牛 / 自动洗牌）与 UI/Playback.hs 的粒子、浮字、震屏。
 // 只画插值，不算规则：阶段、帧号、轮次由 wasm 里的 ComboFx 阶段机（m3AnimTick）给出，盘面快照来自 m3Swap。
 // 全部坐标为棋盘设计单位（格 56，见 cells.js）。
@@ -70,7 +70,7 @@ function drawCellsExcept(ctx, art, v, board, hidden) {
   drawBoardBase(ctx, art, v.st, v.pulse);
   for (const p of cellsOf()) if (!inList(p, hidden)) { const [x, y] = origin(p); drawCell(ctx, art, v.pulse, x, y, board[p[0]][p[1]]); }
   drawUfos(ctx, art, v.st, v.pulse);
-  drawDrops(ctx, art, v.st);   // 同桌面 drawCellsExcept（皮带 / 蜗牛段）；交换补间也走这里（桌面 drawSwap 不画）。消失 / 下落段两边都不画
+  drawDrops(ctx, art, v.st);   // 同原桌面版 drawCellsExcept（皮带 / 蜗牛段）；交换补间也走这里（原桌面版 drawSwap 不画）。消失 / 下落段两边都不画
 }
 
 function veil(ctx, alpha) {
@@ -183,7 +183,7 @@ function drawEndStage(ctx, art, v, cas, s, t) {
     }
   } else if (s.kind === "belt") {
     // 皮带移位：相邻格平滑滑过去；首尾相接的那一格在终点缩放淡入。
-    // 第 43 关毛球的步末跳格也是这一段（核心记为 EvBelt "fuzzball"，pairs = 毛球与相邻宝石互换），同桌面 drawEndBelt
+    // 第 43 关毛球的步末跳格也是这一段（核心记为 EvBelt "fuzzball"，pairs = 毛球与相邻宝石互换），同原桌面版 drawEndBelt
     const e = smoothT(t);
     drawCellsExcept(ctx, art, v, before, moves.map((m) => m[1]));
     clipBoard(ctx);
@@ -194,10 +194,10 @@ function drawEndStage(ctx, art, v, cas, s, t) {
     }
     ctx.restore();
   } else if (s.kind === "spread") {
-    // 蔓延：新格的覆盖层从来源格那一侧「长」过来；生长前沿带同色柔光（桌面 UI.EndStage.drawEndSpread，逐分支对应）。
-    // 来源不相邻时从格子中心向外长（桌面 otherwise 分支）：第 44 关彩虹组合（规则开关 rainbow_combos）的变身步就走这里——
+    // 蔓延：新格的覆盖层从来源格那一侧「长」过来；生长前沿带同色柔光（原桌面版 UI.EndStage.drawEndSpread，逐分支对应）。
+    // 来源不相邻时从格子中心向外长（原桌面版 otherwise 分支）：第 44 关彩虹组合（规则开关 rainbow_combos）的变身步就走这里——
     // 核心在第一轮之前发一条 {type:"spread", kind:"rainbow_line"|"rainbow_bomb"}，来源 = 彩虹格、目标 = 盘上同色普通宝石，
-    // 变身后的直线 / 炸弹从格子中心的小方块匀速长满整格（生长曲线与前沿光都不在表里 → 匀速、白光、不迸碎屑，同桌面缺省）。
+    // 变身后的直线 / 炸弹从格子中心的小方块匀速长满整格（生长曲线与前沿光都不在表里 → 匀速、白光、不迸碎屑，同原桌面版缺省）。
     drawStatic(ctx, art, { ...v, busy: true }, before);
     for (const i of s.e) {
       const ef = cas.ends[i].effect, name = ef.kind;

@@ -10,6 +10,8 @@ import Data.List (isInfixOf)
 import Data.Maybe (catMaybes)
 import Match3.Board.Default (findMatchRuns)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Levels.Campaign (allLevels)
 import Match3.Board.Clear (clearMatchesDetailedWith)
 import Match3.Board.Match (MatchRun(..), findHintWith)
 import Match3.Element

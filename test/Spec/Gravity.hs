@@ -11,6 +11,7 @@ import Match3.Board.Default (applyGravity, cascadeSeeds, clearMatches, hasAnyMat
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts))
 import Match3.Board.Gravity (refill)
 import Match3.Core
+import Match3.Types (boardSize)
 import Match3.Board.Grid (setCell)
 import Match3.Counts (countOf)
 import Match3.Types (isBottle, isCookie, isMagicHat, isMaker, isSnail)

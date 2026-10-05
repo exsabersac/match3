@@ -23,6 +23,9 @@ import Engine.Stream
 import Match3.Board.Default (hasAnyMatch, hasValidMove)
 import Match3.Board.Random (randomBoardSized, randomPlayableBoardSized, randomStableBoardSized)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Levels.Campaign (levelCount)
+import Match3.Types (boardDims)
 import Match3.Counts (bumpCount, countsFromList, noCounts)
 import Match3.Element.Level (levelWorldIn)
 import Match3.Element.World (World)

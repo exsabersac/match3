@@ -17,6 +17,8 @@ import Match3.Board.Default (findHint)
 import Match3.Board.Grid (MBoard, inBounds, swapCells)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Types (boardDims, boardPositions)
 import Match3.Game.Move (trySwap)
 import Match3.Types (boardCells)
 import Spec.Properties (genPick, genStart, playPicks, startState)

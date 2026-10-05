@@ -11,6 +11,8 @@ module Spec.SnowBoss
 
 import Data.List (nub, sort)
 import Match3.Core
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Types (boardSize)
 import Match3.Board.Match (findHintWith)
 import Match3.Counts (countOf, countsFromList)
 import Match3.Element

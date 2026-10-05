@@ -11,6 +11,11 @@ module Spec.CookieDrop
 import Data.Foldable (toList)
 import Data.List (isInfixOf)
 import Match3.Core
+import Match3.Daily (dailySeed)
+import Match3.Element.Builtin (defaultWorld)
+import Match3.Levels.Campaign (allLevels)
+import Match3.Levels.Level (levelConfig)
+import Match3.Types (boardSize)
 import Match3.Board.Grid (MBoard, setM, toM)
 import Match3.Board.Match (findHintWith)
 import Match3.Board.Refill (RefillPolicy(..), defaultRefill, refillWith)

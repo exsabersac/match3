@@ -4,7 +4,7 @@
 match3 美术资源生成器（程序化、可复现）。
 
 输出（均提交到仓库）：
-  assets/atlas.bmp      32 位 BGRA 贴图集第 0 页（BITMAPV4 头 + alpha 掩码，SDL2 核心 SDL_LoadBMP 可直接读取）
+  assets/atlas.bmp      32 位 BGRA 贴图集第 0 页（BITMAPV4 头 + alpha 掩码；网页图集由 web/tools/gen_web_atlas.py 从它重新打包）
   assets/atlas1.bmp ... 第 1 页起（单页超过 1024x2048 时自动分页）
   assets/atlas.txt      贴图索引：每行 `名字 x y w h 页号`
   assets/background.bmp 窗口背景（960x1176 = 480x588 的 2x，24 位不透明）
@@ -18,7 +18,7 @@ match3 美术资源生成器（程序化、可复现）。
   - 文字（中文标签 / HUD 字形）按游戏内实际使用的逻辑高度 × TS 直接用 FreeType 渲染（带 hinting），
     不再「超大字号 + 缩小」，笔画落在像素格上更锐利。
   - 同一贴图可有多个尺寸变体，命名为 `基名@像素高`（如 `zh_combo@68`、`g_48@60`、`gem_c1@56`）；
-    运行时 app/Art.hs 按「目标物理高度」挑最小的够用变体，基名本身始终存在，旧名字全部可用。
+    原 SDL 桌面版（app/Art.hs，已移除）运行时按「目标物理高度」挑变体；网页图集只收基名（gen_web_atlas.py 跳过 @ 变体）。
 """
 import math
 import os
@@ -38,7 +38,7 @@ DOCIMG = ROOT / "docs" / "images"
 S = 112          # 棋子贴图边长（游戏内按 56px 绘制，即 2x）
 SS = 4           # 超采样倍数
 N = S * SS       # 工作画布边长
-WIN_W, WIN_H = 480, 588   # 与 app/Main.hs 的 winW / winH 一致
+WIN_W, WIN_H = 480, 588   # 原 SDL 桌面版的窗口逻辑尺寸（背景图按它烘焙，网页仍用这张背景）
 TS = 2           # 文字 / UI 烘焙倍率：贴图像素 = 逻辑像素 × TS（Retina 2x 下 1:1）
 PAGE_W, PAGE_H = 1024, 2048   # 单页图集上限（兼顾老 GPU 的 2048 纹理限制）
 
@@ -1511,8 +1511,8 @@ GLYPH_PX = (3, 4, 5)   # textA 用到的字号；3 为基名 g_<码点>，其余
 BIG_GLYPH_CHARS = "0123456789x+"
 BIG_GLYPH_PX = (7, 9, 12)
 
-# 中文标签在游戏内的逻辑高度（与 app/Main.hs 的 zhA / zhAC 调用一致）；第一个是基名，其余生成 @变体。
-# 未列出的默认 20。改了 Main.hs 里的高度，记得同步这里，否则会被非整数倍缩放（略糊但仍可用）。
+# 中文标签的逻辑高度（原 SDL 桌面版 app/Main.hs 的 zhA / zhAC 调用，已移除）；第一个是基名，其余生成 @变体。
+# 未列出的默认 20。网页不画 zh_* 文字贴图（用画布字体）；为保持资源逐字节不变，这张表原样保留。
 ZH_SIZES = {
     "daily": [22], "combo": [18, 24, 34, 44, 64], "combo_end": [20, 28], "shuffle": [18], "score": [18], "help_more": [16],
     "pause": [32], "clear": [38], "win": [38], "lose": [38], "next": [22], "retry": [26],
@@ -1638,7 +1638,7 @@ def page_file(i):
 
 
 def save_bmp32(img, path):
-    """写 32 位 BGRA BMP（BITMAPV4HEADER，BI_BITFIELDS + alpha 掩码），SDL_LoadBMP 可保留透明度。"""
+    """写 32 位 BGRA BMP（BITMAPV4HEADER，BI_BITFIELDS + alpha 掩码），读图时可保留透明度。"""
     img = img.convert("RGBA")
     w, h = img.size
     a = np.asarray(img)
@@ -1748,7 +1748,7 @@ def build_sprites():
         for j, h in enumerate(NAME_SIZES):
             sp["name_%d" % i + ("" if j == 0 else "@%d" % (h * TS))] = zh_label(n, h, (255, 240, 200), (40, 20, 10))
     # 112px 棋盘贴图再各出一个 @56 半尺寸变体：HUD 目标图标（26 / 18 逻辑像素）、
-    # 双面块小角标、以及 1x 屏上的棋盘格都用它，避免 SDL 双线性一次缩小 2 倍以上产生锯齿。
+    # 双面块小角标、以及 1x 屏上的棋盘格都用它，避免双线性一次缩小 2 倍以上产生锯齿。
     for name in [n for n, im in sp.items() if im.size == (S, S)]:
         sp[name + "@56"] = sp[name].resize((S // 2, S // 2), Image.LANCZOS)
     return sp

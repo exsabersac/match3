@@ -52,12 +52,12 @@ function chip(ctx, art, x, y, w, h, label, value, valueColor = "#ffe082") {
   text(ctx, fit(ctx, String(value), w - 24), x + 12, y + h * 0.68, 21, valueColor, "left", 800);
 }
 
-// 关名（同桌面 UI.HudArt：zhA ren art ("name_" ++ show li) 66 11 24）：画预渲染文字图 name_<关卡下标 0 起>（tools/gen_assets.py
-// 按关卡表烘焙，与桌面同一张图；第 N 关 = name_<N−1>），高 21 设计单位、按原图宽高比（与原来浏览器字体 21 px 的关名槽同高，规则角标布局不变），超出槽宽时等比缩小；
+// 关名（同原桌面版 UI.HudArt：zhA ren art ("name_" ++ show li) 66 11 24）：画预渲染文字图 name_<关卡下标 0 起>（tools/gen_assets.py
+// 按关卡表烘焙，与原桌面版同一张图；第 N 关 = name_<N−1>），高 21 设计单位、按原图宽高比（与原来浏览器字体 21 px 的关名槽同高，规则角标布局不变），超出槽宽时等比缩小；
 // 图集里没有这张图时退回浏览器字体画 state.name。返回实际画出的矩形与贴图名 / 文字（e2e 检查每关画的是对应的 name_N）。
 const NAME_H = 21;
 function levelName(ctx, art, x, cy, maxW, info) {
-  // 每日挑战：同桌面 HudArt 的 zh_daily，画「每日挑战」（网页图集没有 zh_* 文字图，用画布字体）
+  // 每日挑战：同原桌面版 HudArt 的 zh_daily，画「每日挑战」（网页图集没有 zh_* 文字图，用画布字体）
   if (info.daily) {
     ctx.font = `800 21px ${FONT}`;
     const t = fit(ctx, "每日挑战", maxW);
@@ -87,7 +87,7 @@ function roundPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// 规则开关角标（state.rules = [{name, text, icons}]：视图模型 gvRules 查 Match3.View.ruleBadge，与桌面 HUD 同一张表）。
+// 规则开关角标（state.rules = [{name, text, icons}]：视图模型 gvRules 查 Match3.View.ruleBadge，与原桌面版 HUD 同一张表）。
 // 通用画法：每个规则一枚「叠放图标 + 文字」小胶囊，从 (x, cy) 起向右排，总宽不超过 maxW；
 // 放不下时先把各枚的文字截断（省略号），再不够就只留图标，仍放不下的不画。文字用画布字体（网页图集没有文字贴图）。
 // 返回画出的各枚矩形（设计单位，e2e 检查不重叠 / 不出框）。
@@ -120,7 +120,7 @@ function drawRuleBadges(ctx, art, rules, x, cy, maxW, h, size) {
     ctx.restore();
     let tx = bx + BADGE_PAD;
     if (iw) {
-      // 图标从下往上叠画（如 bomb_glow + bomb_mark，同桌面 HudArt）；缺图时退回一个金色圆点
+      // 图标从下往上叠画（如 bomb_glow + bomb_mark，同原桌面版 HudArt）；缺图时退回一个金色圆点
       const s = h - 2, ix = bx + (label ? BADGE_PAD - 2 : (w - s) / 2), iy = cy - s / 2;
       let drawn = false;
       for (const ic of r.icons) drawn = art.draw(ctx, ic, ix, iy, s, s) || drawn;
@@ -154,7 +154,7 @@ function levelChip(ctx, art, x, y, w, h, info, badgeH, badgeSize) {
   };
 }
 
-// 关卡进度点（同桌面 drawHudArt：m3Progress 的 dots，每关一个字符 C 当前 / D 已过 / U 已解锁 / L 未解锁；
+// 关卡进度点（同原桌面版 drawHudArt：m3Progress 的 dots，每关一个字符 C 当前 / D 已过 / U 已解锁 / L 未解锁；
 // 已过绿、当前金且高一些、未解锁暗）。点距最多 6，关卡多时收窄到放得下。cy = 点的底边。返回 {x, y, w, h, n}。
 const DOT_RGB = { C: "rgb(255,214,90)", D: "rgb(90,210,130)", U: "rgb(120,180,140)", L: "rgb(80,72,130)" };
 function levelDots(ctx, dots, x, bottom, maxW) {
@@ -168,7 +168,7 @@ function levelDots(ctx, dots, x, bottom, maxW) {
   return { x, y: bottom - 6, w: n * step, h: 6, n };
 }
 
-// 分数芯片（同桌面 drawHudArt 右下角 Match3.View.scoreBadge，经 m3Badge）：回放中连击 ≥ 2 显示「连击 xN」，否则滚动的分数；
+// 分数芯片（同原桌面版 drawHudArt 右下角 Match3.View.scoreBadge，经 m3Badge）：回放中连击 ≥ 2 显示「连击 xN」，否则滚动的分数；
 // 播完后 comboSummary 帧内显示本步「N 连击！」；其余显示得分（洗过牌时标签换成「已洗牌」）。
 function scoreChip(ctx, art, x, y, w, h, info) {
   const b = info.badge || { kind: "score", n: info.score, shuffled: false };
@@ -184,14 +184,14 @@ function scoreChip(ctx, art, x, y, w, h, info) {
   } else chip(ctx, art, x, y, w, h, b.kind === "score" && b.shuffled ? "已洗牌" : "分数", b.kind === "rolling" ? b.n : info.score);
   return b.kind;
 }
-// 步数 ≤ 5 时变红并闪烁（同桌面 160 + 95 × breathe(pulse, 40)）
+// 步数 ≤ 5 时变红并闪烁（同原桌面版 160 + 95 × breathe(pulse, 40)）
 function movesColor(info) {
   if (info.moves > 5) return "#ffe082";
   const k = Math.round(160 + 95 * (0.5 + 0.5 * Math.sin(((info.pulse || 0) * 2 * Math.PI) / 40)));
   return `rgb(255,${Math.round(k / 2)},${Math.round(k / 2)})`;
 }
 
-// 目标进度条：左边目标图标（info.goalIcon = state.goal.icon，核心侧 UI.GoalIcon.goalIcon，与桌面 HUD 同一张表；缺图不画、
+// 目标进度条：左边目标图标（info.goalIcon = state.goal.icon，核心侧 UI.GoalIcon.goalIcon，与原桌面版 HUD 同一张表；缺图不画、
 // 条不右移）+ 标签「目标 <中文名>」（info.goalText = state.goal.label）+ 进度数字 + 进度条。
 // 返回实际画出的标签文字与图标名（e2e 检查）。
 function goalBar(ctx, art, x0, y, w0, h, info) {
@@ -211,9 +211,9 @@ function goalBar(ctx, art, x0, y, w0, h, info) {
   return { label, icon };
 }
 
-// 雪怪 Boss 血条（新玩法 5；state.boss = 视图模型 gvBoss {hp, max}）：目标是「击败 Boss」时替换目标条，同桌面 UI.HudArt——
+// 雪怪 Boss 血条（新玩法 5；state.boss = 视图模型 gvBoss {hp, max}）：目标是「击败 Boss」时替换目标条，同原桌面版 UI.HudArt——
 // 左边 snow_boss 头像，红色进度条长度 = 剩余 / 满血，文字「HP 剩余/满血」；剩余 ≤ 一半后变深红并随呼吸计数闪烁
-// （桌面 150 + 80 × breathe(pulse, 30)）。左上仍画目标标签「目标 <中文名>」（state.goal.label，与 goalBar 同一条路径）。
+// （原桌面版 150 + 80 × breathe(pulse, 30)）。左上仍画目标标签「目标 <中文名>」（state.goal.label，与 goalBar 同一条路径）。
 // 返回血条矩形、读数与标签文字（e2e 检查用）。
 function bossBar(ctx, art, x, y, w, h, info, pulse) {
   const boss = info.boss, s = h, bx = x + s + 6, bw = w - s - 6;
@@ -235,8 +235,8 @@ function bossBar(ctx, art, x, y, w, h, info, pulse) {
 }
 const clampHp = (hp, mx) => Math.max(0, Math.min(mx, hp));
 
-// left：道具按钮的剩余次数（其余 null）；active：当前道具点选模式（同桌面道具芯片的金框）。
-// 道具按钮画「图标 + 次数」（同桌面 HudArt 的道具芯片：icon_hammer / icon_swap / icon_cross），缺图时退回单字标签。
+// left：道具按钮的剩余次数（其余 null）；active：当前道具点选模式（同原桌面版道具芯片的金框）。
+// 道具按钮画「图标 + 次数」（同原桌面版 HudArt 的道具芯片：icon_hammer / icon_swap / icon_cross），缺图时退回单字标签。
 function button(ctx, art, b, enabled, pressed, left = null, active = false) {
   ctx.save();
   ctx.globalAlpha = enabled || active ? 1 : 0.45;
@@ -259,7 +259,7 @@ function button(ctx, art, b, enabled, pressed, left = null, active = false) {
   ctx.restore();
 }
 
-// 音效 / BGM 状态芯片：同桌面 UI.HudArt.drawSoundChipsArt——46 × 28 的 panel_chip（圆角 10）+ 18 高的单字（效 / 乐，关掉为 静），
+// 音效 / BGM 状态芯片：同原桌面版 UI.HudArt.drawSoundChipsArt——46 × 28 的 panel_chip（圆角 10）+ 18 高的单字（效 / 乐，关掉为 静），
 // 只显示状态、不接点击（太小，够不到 44 CSS px 触控尺寸；开关在菜单里与 K / B 键），
 // 字号固定 18 设计单位（不走 button 的单字大号 32：那是给 ‹ › 用的，放进 28 高的芯片会溢出、压到提示行）。
 const SOUND_W = 46, SOUND_H = 28, SOUND_GAP = 4, SOUND_FONT = 18;
@@ -323,7 +323,7 @@ export function drawHud(ctx, art, L, info, pressed) {
   return { ...lv, boss, sfx, bgm, msg };
 }
 
-// 结局面板（盖在棋盘上）：标题、星级（stars = null 时不画；同桌面 drawOverlayArtNow：过关 / 通关画 star_on / star_off 三颗，
+// 结局面板（盖在棋盘上）：标题、星级（stars = null 时不画；同原桌面版 drawOverlayArtNow：过关 / 通关画 star_on / star_off 三颗，
 // 失败不画）、说明 sub（最多 3 行）、底部一行操作提示 action（点棋盘 / 按键做什么）。返回星星与各行的矩形（e2e 用）。
 export function drawOverlay(ctx, art, rect, title, sub, stars = null, action = "") {
   ctx.fillStyle = "rgba(10,6,24,.72)";
@@ -350,7 +350,7 @@ export function drawOverlay(ctx, art, rect, title, sub, stars = null, action = "
   return { panel: { x: px, y: py, w: pw, h: ph }, stars: starRects };
 }
 
-// 棋盘上沿的横幅（同桌面 drawToolBannerArt / drawTipBannerArt：panel_gold 底 + 图标或按键芯片 + 文字）。
+// 棋盘上沿的横幅（同原桌面版 drawToolBannerArt / drawTipBannerArt：panel_gold 底 + 图标或按键芯片 + 文字）。
 // icon：贴图名；key：按键字母（画成小键帽）；返回横幅矩形。
 export function drawBanner(ctx, art, board, s, { icon = null, key = null } = {}) {
   ctx.font = `700 18px ${FONT}`;
@@ -364,13 +364,13 @@ export function drawBanner(ctx, art, board, s, { icon = null, key = null } = {})
   return { x, y, w, h, text: s };
 }
 
-// 小键帽：22 × 22 的 panel_chip + 金色字母（同桌面 keyChipA）
+// 小键帽：22 × 22 的 panel_chip + 金色字母（同原桌面版 keyChipA）
 export function keyCap(ctx, art, x, y, ch, size = 22) {
   if (!art.panel(ctx, "panel_chip", x, y, size, size, 6)) { ctx.fillStyle = "#3a3060"; ctx.fillRect(x, y, size, size); }
   text(ctx, ch, x + size / 2, y + size / 2 + 0.5, Math.round(size * 0.62), "#ffdc78", "center", 800);
 }
 
-// 按键条（同桌面 drawHelpStripArt：开局 / 取消暂停后 300 帧，棋盘底部浮层）：各键帽 + 「P：暂停并查看全部按键」。
+// 按键条（同原桌面版 drawHelpStripArt：开局 / 取消暂停后 300 帧，棋盘底部浮层）：各键帽 + 「P：暂停并查看全部按键」。
 // 只在有键盘鼠标的设备上画（调用方判断 (hover: hover) and (pointer: fine)）。返回矩形。
 export const HELP_KEYS = "H123USDMRKBNP";
 export function drawHelpStrip(ctx, art, board) {

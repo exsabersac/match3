@@ -1,5 +1,5 @@
 -- | 选关地图的章节划分（CH1–CH7）：章节起点的关卡下标与章节标签。
--- 桌面 UI.LevelMap（重新导出）与网页（Match3Web.Api 的 m3Meta.chapters）共用；原在 UI.LevelMap，web-sdl-parity 时逐字移进 app/pure。
+-- 网页经 Match3Web.Api 的 m3Meta.chapters 取；原在已移除的 SDL 桌面版 UI.LevelMap，web-sdl-parity 时逐字移进 app/pure。
 -- 同步：章节起点要与 allLevels 的章节划分一致。
 module UI.Chapters
   ( chapterStarts
@@ -21,7 +21,7 @@ chapterLabel 34 = "CH6"
 chapterLabel 36 = "CH7"
 chapterLabel _ = ""
 
--- | 第 k 章（0 起）的中文章名，与桌面贴图 zh_ch1 … zh_ch7（tools/gen_assets.py 的 ZH 表）同一组文字；
+-- | 第 k 章（0 起）的中文章名，与贴图 zh_ch1 … zh_ch7（tools/gen_assets.py 的 ZH 表）同一组文字；
 -- 网页图集没有 zh_* 文字图，选关地图用它画章节标签。超出七章时退回「第 N 章」。
 chapterTitle :: Int -> String
 chapterTitle k

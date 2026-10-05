@@ -186,6 +186,7 @@ instance Kind Chameleon where
         Gem col _ _ _ -> Just col
         _ -> Nothing
   label _ = Just "变色龙"
+  goalIconName _ = Just "chameleon_icon"  -- 环贴图单独看不出是宝石，HUD / 地图用合成图标
   boardPasses _ = [SwapPass (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds), EndPass (moveRule 40 chameleonRun)]
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。

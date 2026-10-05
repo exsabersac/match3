@@ -402,6 +402,7 @@ instance Kind SnowBoss where
   loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
   diffCounter _ = Just (CountNamed snowBossName)
   entityHit p = Just (entityHitOrder p, entityDamage p)
+  boardBossHp _ = Just . snowBossHp
   boardPasses _ = [EndPass (moveRule 30 snowBossRun)]
 
 -- | 2×2 多格实体：扣血经 'entityHit' 挂进 'kindRules'（顺序 'entityHitOrder' = 200）。

@@ -16,6 +16,7 @@ module Match3.View
     -- * Boss 血条
   , BossView (..)
   , bossView
+  , bossViewWith
     -- * 规则开关角标
   , RuleBadge (..)
   , ruleBadgeTable
@@ -60,9 +61,9 @@ import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Board.Default (findHint)
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (defaultWorld, snowBossHp, snowBossName)
+import Match3.Element.Builtin (defaultWorld)
 import Match3.Element.Ability (Cellular(nameOf), Renders(faceBase))
-import Match3.Element.World (World, bodyOf, faceFieldsWith)
+import Match3.Element.World (World, boardBossHpWith, bodyOf, faceFieldsWith)
 import Match3.Element.Types (CellField (..), FaceValue (..))
 import Match3.Engine (match3Game)
 import Match3.Game.Outcome (loseHint)
@@ -127,7 +128,7 @@ data GameView = GameView
   , gvOver :: Maybe Terminal
   , gvStatus :: PlayStatus
   , gvGoal :: GoalInfo
-  , gvBoss :: Maybe BossView  -- ^ 雪怪 Boss 血条（新玩法 5）：目标是「击败 Boss」的关卡才有
+  , gvBoss :: Maybe BossView  -- ^ Boss 血条：目标配额对应的元素提供 boardBossHp 时才有
   , gvBoard :: BoardView
   }
 
@@ -168,11 +169,20 @@ data BossView = BossView
   }
   deriving (Eq, Show)
 
--- | 目标里有「击败 Boss」（CountNamed "snow_boss"）配额时给出血条；满血值 = 该配额的目标值。
+-- | 目标配额对应的元素提供 'boardBossHp' 时给出血条；满血值 = 该配额的目标值（不点名具体元素）。
 bossView :: GameState -> Maybe BossView
-bossView gs = case [t | Quota (MeterCount (CountNamed n)) t <- goalQuotas (gsGoal gs), n == snowBossName] of
-  t : _ -> Just (BossView (max 0 (min t (snowBossHp (gsBoard gs)))) t)
-  [] -> Nothing
+bossView = bossViewWith defaultWorld
+
+-- | 'bossView'，用给定的元素世界（扩展 Boss 元素时用）。
+bossViewWith :: World -> GameState -> Maybe BossView
+bossViewWith world gs =
+  case
+    [ BossView (max 0 (min t hp)) t
+    | Quota (MeterCount (CountNamed n)) t <- goalQuotas (gsGoal gs)
+    , Just hp <- [boardBossHpWith world (gsBoard gs) n]
+    ] of
+    (b : _) -> Just b
+    [] -> Nothing
 
 -- | 窗口标题（不含末尾的 "  |  " 与提示消息；网页写进 document.title）。
 titleLine :: GameView -> String

@@ -55,6 +55,8 @@ module Match3.Element.World
   , displayLabelWith
   , loseHintWith
   , displayLabels
+  , boardBossHpWith
+  , goalIconWith
     -- * 主流程的查询（钩子）
   , matchColorWith
   , colorOfWith
@@ -424,6 +426,18 @@ loseHintWith world n = lookupDef world n >>= \d -> case d of
 -- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
 displayLabels :: World -> [(ElementName, String)]
 displayLabels world = [(defName d, l) | d <- worldDefs world, Just l <- [defLabel d]]
+
+-- | 目标名对应的 HUD 血条剩余 HP（元素 'boardBossHp'；未登记 / 不提供 = Nothing）。
+boardBossHpWith :: World -> Board -> ElementName -> Maybe Int
+boardBossHpWith world board n = case lookupDef world n of
+  Just (KindDef (SomeKind p)) -> boardBossHp p board
+  _ -> Nothing
+
+-- | 目标图标贴图名（元素 'goalIconName'；未覆盖 = Nothing，调用方用元素名本身）。
+goalIconWith :: World -> ElementName -> Maybe String
+goalIconWith world n = case lookupDef world n of
+  Just (KindDef (SomeKind p)) -> goalIconName p
+  _ -> Nothing
 
 --------------------------------------------------------------------------------
 -- 钩子

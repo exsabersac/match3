@@ -96,6 +96,12 @@ class Element e => Kind e where
   -- 护栏 'ec_entity_wires_damage' 按源码核对。缺省 Nothing = 不是多格实体。
   entityHit :: proxy e -> Maybe (Int, AdjCtx -> Board -> AdjOut)
   entityHit _ = Nothing
+  -- | HUD 血条：盘上剩余 HP；Nothing = 本元素不提供血条（View 按目标名查世界，不点名具体元素）。
+  boardBossHp :: proxy e -> Board -> Maybe Int
+  boardBossHp _ _ = Nothing
+  -- | 目标图标贴图名（覆盖默认的元素名）；Nothing = 用 'unElementName'。
+  goalIconName :: proxy e -> Maybe String
+  goalIconName _ = Nothing
 
 -- | 多格实体（雪怪 Boss）：各部件仍是独立的格子，'Entity' 告诉驱动锚点怎么认（'partNo' == 0）、部件在哪
 -- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。伤害由 Match3.Element.Rules.entityDamage 统一算，

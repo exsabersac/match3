@@ -212,6 +212,7 @@ instance Kind BossV where
   loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
   diffCounter _ = Just (CountNamed "snow_boss")
   entityHit _ = entityHit (Proxy :: Proxy SnowBoss)
+  boardBossHp _ = boardBossHp (Proxy :: Proxy SnowBoss)
   boardPasses _ = boardPasses (Proxy :: Proxy SnowBoss)
 
 newtype IceV = IceV Int

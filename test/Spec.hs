@@ -41,6 +41,7 @@ import qualified Spec.Chameleon
 import qualified Spec.MagicGround
 import qualified Spec.RainbowCombos
 import qualified Spec.Phase
+import qualified Spec.PhaseSlim
 import qualified Spec.Classes
 import qualified Spec.Effects
 import qualified Spec.Lazy
@@ -103,6 +104,7 @@ tests =
         , Spec.MagicGround.tests
         , Spec.RainbowCombos.tests
         , Spec.Phase.tests
+        , Spec.PhaseSlim.tests
         , Spec.Classes.tests
         , Spec.Effects.tests
         , Spec.Lazy.tests

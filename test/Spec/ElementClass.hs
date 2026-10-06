@@ -199,8 +199,8 @@ ec_flat_record_removed = do
   assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/ECS/Registry.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
   srcs <- mapM (fmap stripStrings . readFile) srcFiles
   -- 按完整标识符比（第 7 刀的钩子记录 LevelHooks 不是段 4 的封闭钩子 LevelHook）
-  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult", "SomePhase", "phaseProbe", "Layered", "SpecialKind", "kindRules", "boardSystems", "Codec", "layerCover", "LayerCover", "defaultCover", "layerRules", "peelAs", "SomeLayerValue"], mentionsIdent w s]
-  assertEqual "no flat record / closed hooks / old element class / Phase typeclass" [] bad
+  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult", "SomePhase", "phaseProbe", "Layered", "SpecialKind", "kindRules", "boardSystems", "Codec", "layerCover", "LayerCover", "defaultCover", "layerRules", "peelAs", "SomeLayerValue", "onBeat", "MechLayout", "emptyLayout", "GroundKind", "groundKind", "mlName", "mechStart"], mentionsIdent w s]
+  assertEqual "no flat record / closed hooks / old element class / Phase / Layer / Mechanic typeclass" [] bad
   match <- readFile "src/Match3/Board/Match.hs"
   assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` stripStrings match) && "Match3.Rainbow" `notElem` importsOf match)
   flowFiles <- pipelineSources

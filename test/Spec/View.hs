@@ -16,8 +16,8 @@ import Match3.Game.Outcome (loseHint)
 import Match3.Game.State (gsUfos)
 import Match3.Levels.Campaign (allLevels, levelCount, lookupLevel)
 import Match3.Daily (dailyConfig)
-import Match3.Element.Builtin (SnowBoss(..), chameleonCell)
-import Match3.Element.Phase (toCell)
+import Match3.Element.Builtin (SnowBoss(..), chameleonCell, snowBossColumn)
+import Match3.ECS.Archetype (colPut)
 import Match3.Game.Move (trySwap)
 import Match3.Game.State (gsBelts, gsCarpetOpen, gsGround, gsPortals, gsProgress)
 import Match3.Levels.Campaign (levelCarpets)
@@ -344,8 +344,8 @@ outcome_lose_hint_no_internal_names = do
 -- View / GoalLabel / 网页 Api / 调色板不再点名这些元素。
 view_cell_extras_from_elements :: Assertion
 view_cell_extras_from_elements = do
-  assertEqual "snow boss (hurt)" [("q", FaceInt 3), ("hurt", FaceBool True), ("turn", FaceInt 2), ("every", FaceInt 3)] (cellExtras (toCell (SnowBoss 20 40 2 3)))
-  assertEqual "snow boss (not hurt)" [("q", FaceInt 0), ("hurt", FaceBool False), ("turn", FaceInt 0), ("every", FaceInt 3)] (cellExtras (toCell (SnowBoss 21 40 0 0)))
+  assertEqual "snow boss (hurt)" [("q", FaceInt 3), ("hurt", FaceBool True), ("turn", FaceInt 2), ("every", FaceInt 3)] (cellExtras (colPut snowBossColumn (SnowBoss 20 40 2 3)))
+  assertEqual "snow boss (not hurt)" [("q", FaceInt 0), ("hurt", FaceBool False), ("turn", FaceInt 0), ("every", FaceInt 3)] (cellExtras (colPut snowBossColumn (SnowBoss 21 40 0 0)))
   assertEqual "chameleon" [[("c", FaceColor c)] | c <- allColors] (map (cellExtras . chameleonCell) allColors)
   assertEqual "other cells have none" [] (concatMap cellExtras [mkGem C1, Stone 2, Countdown C2 3, Custom (ElementName "fuzzball") (CustomState 1), Custom (ElementName "no_such") (CustomState 0)])
   assertEqual "named goal labels"

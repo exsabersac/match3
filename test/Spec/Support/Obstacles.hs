@@ -1,8 +1,7 @@
-{-# LANGUAGE TypeApplications #-}
 -- | Match3.Obstacles 邻消函数的无 except 写法（except = []，即本轮没有被直接命中的格），只给障碍测试用。
 --
--- 元素类重构第 3 刀起邻消走通用驱动；slim-1 起方法是 'onNear' + 'kindNeighbour'。
--- 这里的 chipAdjacent* 是驱动之上的旧签名包装（返回值语义不变）。
+-- ecs-3 起邻消是各原型自带的邻格 system（'aSystems' 里的 SysNear）；这里的 chipAdjacent* 是 system 之上的
+-- 旧签名包装（返回值语义不变）。
 module Spec.Support.Obstacles
   ( chipAdjacentStonesExcept
   , chipAdjacentChestsExcept
@@ -21,12 +20,10 @@ module Spec.Support.Obstacles
   , chargeAdjacentMakers
   ) where
 
-import Data.Proxy (Proxy(..))
 import Match3.Board.Grid (getCell)
-import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE, balloonPop)
-import Match3.Element.Phase (Phase)
-import Match3.Element.Rules (kindNeighbour)
-import Match3.ECS.Stage (NearWorld(..), nearWorld)
+import Match3.ECS.Archetype (Archetype(..))
+import Match3.Element.Builtin.Obstacle (balloonPop, cakeArch, chestArch, honeyArch, safeArch, stoneArch)
+import Match3.ECS.Stage (NearWorld(..), SysDef(..), nearWorld)
 import Match3.ECS.System (System(..))
 import Match3.Obstacles
   ( chargeAdjacentMakersSit
@@ -36,24 +33,24 @@ import Match3.Obstacles
   )
 import Match3.Types (Board, CellContents(..), Pos, boardPositions)
 
--- | 用通用驱动跑一种本体的邻格规则：真消除 = gems，直接命中 = except；返回（新盘面, 打碎的位置）。
-viaDriver :: Phase e => Proxy e -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
-viaDriver p b gems except =
-  let out = runSystem (kindNeighbour p) (nearWorld (const True) gems except [] b)
+-- | 跑一种本体原型自带的邻格 system：真消除 = gems，直接命中 = except；返回（新盘面, 打碎的位置）。
+viaDriver :: Archetype s -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
+viaDriver a b gems except =
+  let out = foldl (\w f -> runSystem f w) (nearWorld (const True) gems except [] b) [f | SysNear _ f <- aSystems a]
   in (nwBoard out, nwDead out)
 
 -- | 石头 / 宝箱 / 蜂蜜 / 蛋糕：削一层；返回（新盘面, 末层被削掉、并入清除格的位置，后处理的在前）。
 chipAdjacentStonesExcept, chipAdjacentChestsExcept, chipAdjacentHoneyExcept, chipAdjacentCakesExcept
   :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
-chipAdjacentStonesExcept = viaDriver (Proxy @StoneE)
-chipAdjacentChestsExcept = viaDriver (Proxy @ChestE)
-chipAdjacentHoneyExcept = viaDriver (Proxy @HoneyE)
-chipAdjacentCakesExcept = viaDriver (Proxy @CakeE)
+chipAdjacentStonesExcept = viaDriver stoneArch
+chipAdjacentChestsExcept = viaDriver chestArch
+chipAdjacentHoneyExcept = viaDriver honeyArch
+chipAdjacentCakesExcept = viaDriver cakeArch
 
 -- | 保险箱：削一层，末层原地开成饼干；返回（新盘面, 本次开成饼干的位置，行优先）。
 chipAdjacentSafesExcept :: Board -> [Pos] -> [Pos] -> (Board, [Pos])
 chipAdjacentSafesExcept b gems except =
-  let (b', _) = viaDriver (Proxy @SafeE) b gems except
+  let (b', _) = viaDriver safeArch b gems except
       opened q = case (getCell b q, getCell b' q) of
         (Safe _, Cookie) -> True
         _ -> False

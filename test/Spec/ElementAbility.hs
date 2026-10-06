@@ -1,39 +1,40 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
--- | 元素值级行为（元素类重构第 1 刀起；slim-9 起只有 Match3.Element.Phase）：新写法（Phase / Kind / Layer / Registry）的
+-- | 原型与组件（ecs-3 起取代 Phase 类）：
 --
 -- * 同名替换：把内置的宝石 / 直线特效 / 石头 / 翻转块 / 气泡 / 雪怪 / 冰 / 巧克力 / 锁链 / 果冻换成测试里独立写的
---   新写法副本、按同名注册进内置元素世界，元素对照快照（element-oracle.txt）逐行不变；
--- * 叠层合成：测试世界解码出的 'Layered' 元素与内置元素世界解码出的元素在全部宝石 × 冰 × 叠层格上逐方法相等；
--- * 名字一致：每个注册本体的 fromCell 认下的格子，解码值的 nameOf 都等于 kindName；
--- * 透明性：'Layered' 的 Phase instance 按源码核对覆盖了每个 Phase 方法（漏了会静默退回默认方法），
---   'phaseProbe' 读到每个方法，且装箱（'SomePhase'）前后逐项相等。
+--   原型副本、按同名注册进内置注册表，元素对照快照（element-oracle.txt）逐行不变；
+-- * 叠层合成：测试注册表与内置注册表的整格组件（'wholeMatch' / 'wholeHit' / 'wholePhysics' + 本体组件）在全部
+--   宝石 × 冰 × 叠层格上逐项相等；
+-- * 名字一致：每个注册原型的存储列认下的格子，经注册表解码的行名都等于原型名、状态往返不变；
+-- * 透明性：'rowProbe' 按源码核对读到每种 'Component'，整格合成按源码核对读到每个叠层查询；装箱（'Row'）不改读数。
 module Spec.ElementAbility
   ( tests
   ) where
 
 import Control.Applicative ((<|>))
 import Control.Monad (forM_)
-import Data.Char (isAlphaNum, isSpace)
-import Data.List (isInfixOf, isPrefixOf, sort)
+import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy(..))
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
-import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultRegistry, snowBossEntity, specialBlast)
-import Match3.Element.Builtin.Actor (BottleE, MagicHatE, MakerE)
-import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
+import Match3.ECS.Archetype
+import Match3.ECS.Component
+import Match3.Element.Builtin
+  ( SnowBoss(..), bubbleArch, defaultRegistry, fuzzballArch, snowBossArch, snowBossEntity, specialBlast
+  , stoneArch, chestArch, honeyArch, cakeArch, balloonArch, magicHatArch, safeArch, timeSpiritArch, makerArch
+  , bottleArch, magicStoneArch, cookieArch )
 import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
-import Match3.Element.Builtin.Obstacle (BalloonE, CakeE, ChestE, HoneyE, MagicStone, SafeE, StoneE, balloonPop, balloonPopLegacy)
-import Match3.Element.Rules (kindRules, layerRules)
+import Match3.Element.Builtin.Obstacle (balloonPop, balloonPopLegacy)
+import Match3.Element.Rules (layerRules, nearBy)
 import Match3.Element.Kind
-import Match3.Element.Phase
 import Match3.Element.Near
 import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.ECS.Registry
-import Match3.ECS.Stage (NearWorld(..), nearWorld)
+import Match3.ECS.Stage (NearWorld(..), SysDef(..), nearWorld)
 import Match3.ECS.System (System(..))
 import Match3.Types
 import Test.Tasty
@@ -47,9 +48,9 @@ tests =
   [ testCase "ab_same_name_copies_oracle_unchanged" ab_same_name_copies_oracle_unchanged
   , testCase "ab_layered_matches_builtin" ab_layered_matches_builtin
   , testCase "ab_kind_name_matches_decoded" ab_kind_name_matches_decoded
-  , testCase "ab_some_element_forwards_all_methods" ab_some_element_forwards_all_methods
-  , testCase "ab_layered_composes_all_methods" ab_layered_composes_all_methods
-  , testCase "ab_boxing_is_transparent" ab_boxing_is_transparent
+  , testCase "ab_row_probe_reads_all_components" ab_row_probe_reads_all_components
+  , testCase "ab_whole_reads_every_layer_query" ab_whole_reads_every_layer_query
+  , testCase "ab_row_is_transparent" ab_row_is_transparent
   , testCase "ab_world_decode_order" ab_world_decode_order
   , testCase "ab_rule_methods_pinned" ab_rule_methods_pinned
   , testCase "ab_near_escape_absorbed" ab_near_escape_absorbed
@@ -58,138 +59,85 @@ tests =
   ]
 
 --------------------------------------------------------------------------------
--- 新写法的样本元素（与内置同名同行为）
+-- 原型副本（与内置同名同行为）
 
-newtype GemV = GemV Color
-  deriving (Eq, Show)
+gemV :: Archetype Color
+gemV = (archetype "gem" (Column get (\c -> Gem c Normal 0 Nothing)))
+  { aMatch = gemMatch . Just
+  , aHit = const gemHit
+  , aPhysics = const gemPhysics
+  }
+  where
+    get cell = case cell of
+      Gem c Normal _ _ -> Just c
+      _ -> Nothing
 
-instance Phase GemV where
-  codec = Codec
-    { cName = "gem"
-    , cToCell = \(GemV c) -> Gem c Normal 0 Nothing
-    , cFromCell = \cell -> case cell of
-        Gem c Normal _ _ -> Just (GemV c)
-        _ -> Nothing
-    , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (GemV c) = gemMatch (Just c)
-  onHit _ _ = gemHit
-  physics _ = gemPhysics
-  view _ = noFace
+lineHV :: Archetype Color
+lineHV = (archetype "line_h" (Column get (\c -> Gem c LineH 0 Nothing)))
+  { aSpawn = \_ cell -> case cell of
+      Gem c _ _ _ -> Just (Gem c LineH 0 Nothing)
+      _ -> Nothing
+  , aMatch = gemMatch . Just
+  , aHit = const gemHit {hBlast = specialBlast LineH}
+  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  }
+  where
+    get cell = case cell of
+      Gem c LineH _ _ -> Just c
+      _ -> Nothing
 
-newtype LineHV = LineHV Color
-  deriving (Eq, Show)
+stoneV :: Archetype Int
+stoneV = (archetype "stone" col)
+  { aSpawn = \args _ -> Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
+  , aTally = const emptyTally {tCounter = Just CountStones}
+  , aHit = \n -> if n <= 1 then breakHit else absorbHit (Stone (n - 1))
+  , aFace = \n -> baseFace "stone" [("n", FieldInt n)]
+  , aSystems = [SysNear 10 (nearBy col SkipDirect DiePrepend (\_ n -> NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))))]
+  }
+  where
+    col = Column (\cell -> case cell of Stone n -> Just n; _ -> Nothing) Stone
 
-instance Phase LineHV where
-  codec = Codec
-    { cName = "line_h"
-    , cToCell = \(LineHV c) -> Gem c LineH 0 Nothing
-    , cFromCell = \cell -> case cell of
-        Gem c LineH _ _ -> Just (LineHV c)
-        _ -> Nothing
-    , cPlace = \_ cell -> case cell of
-        Gem c _ _ _ -> Just (Gem c LineH 0 Nothing)
-        _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (LineHV c) = gemMatch (Just c)
-  onHit _ _ = gemHit { hBlast = specialBlast LineH }
-  physics _ = gemPhysics { pKeepShuffle = True }
-  view _ = noFace
+flipV :: Archetype (Color, Color)
+flipV = (archetype "flip" (Column get (uncurry Flip)))
+  { aSpawn = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
+  , aMatch = \(f, _) -> gemMatch (Just f)
+  , aHit = \(_, b) -> absorbHit (Gem b Normal 0 Nothing)
+  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  }
+  where
+    get cell = case cell of
+      Flip f b -> Just (f, b)
+      _ -> Nothing
 
-newtype StoneV = StoneV Int
-  deriving (Eq, Show)
+bubbleV :: Archetype Int
+bubbleV = (archetype "bubble" (customColumn "bubble"))
+  { aSpawn = customPlace "bubble"
+  , aTally = const emptyTally {tCounter = Just (CountNamed "bubble")}
+  , aHit = const breakHit
+  , aHud = noHud {hudLabel = Just "气泡"}
+  , aSystems = aSystems bubbleArch
+  }
 
-instance Phase StoneV where
-  codec = Codec
-    { cName = "stone"
-    , cToCell = \(StoneV n) -> Stone n
-    , cFromCell = \cell -> case cell of
-        Stone n -> Just (StoneV n)
-        _ -> Nothing
-    , cPlace = \args _ -> Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
-    , cMeta = emptyMeta { metaCounter = Just CountStones }
-    , cNear = Just (NearRule 10 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onNear _ _ (StoneV n) = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
-  onMatch _ = obstacleMatch
-  onHit _ (StoneV n) = HitOut (if n <= 1 then Destroy else Absorb (Stone (n - 1))) False Nothing Nothing
-  physics _ = obstaclePhysics
-  view (StoneV n) = baseFace "stone" [("n", FieldInt n)]
-
-data FlipV = FlipV Color Color
-  deriving (Eq, Show)
-
-instance Phase FlipV where
-  codec = Codec
-    { cName = "flip"
-    , cToCell = \(FlipV f b) -> Flip f b
-    , cFromCell = \cell -> case cell of
-        Flip f b -> Just (FlipV f b)
-        _ -> Nothing
-    , cPlace = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (FlipV f _) = gemMatch (Just f)
-  onHit _ (FlipV _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
-  physics _ = gemPhysics { pKeepShuffle = True }
-  view _ = noFace
-
-newtype BubbleV = BubbleV Int
-  deriving (Eq, Show)
-
-instance Phase BubbleV where
-  codec = Codec
-    { cName = "bubble"
-    , cToCell = intCell "bubble"
-    , cFromCell = fromCustom "bubble" BubbleV
-    , cPlace = customPlace "bubble"
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
-    , cNear = Nothing
-    , cHud = noHud { hudLabel = Just "气泡" }
-    , cSystems = boardSystems (Proxy :: Proxy Bubble)
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = obstaclePhysics
-  view _ = noFace
-
-data BossV = BossV Int Int Int Int
-  deriving (Eq, Show)
-
-instance Phase BossV where
-  codec = Codec
-    { cName = "snow_boss"
-    , cToCell = \(BossV hp mx t q) -> toCell (SnowBoss hp mx t q)
-    , cFromCell = \cell -> case cell of
-        Custom "snow_boss" (CustomState v) -> Just (BossV ((v `div` 16) `mod` 256) (v `div` 4096) ((v `div` 4) `mod` 4) (v `mod` 4))
-        _ -> Nothing
-    , cPlace = \args _ -> case exactArgs ((,) <$> argInt <*> argInt) args of
-        Just (hp, q) | hp > 0 && hp <= 255 && q >= 0 && q < 4 -> Just (toCell (BossV hp hp 0 q))
-        _ -> Nothing
-    , cMeta = emptyMeta { metaDiffCounter = Just (CountNamed "snow_boss") }
-    , cNear = Nothing
-      -- HUD（中文名 / 失败提示 / 血条）与规则（扣血 + 步末移动）照抄雪怪
-    , cHud = cHud (codec @SnowBoss)
-    , cSystems = cSystems (codec @SnowBoss)
-    }
-  onMatch _ = MatchRule Nothing False True False
-  onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
-  physics _ = fixedPhysics
-  liveMeta (BossV hp _ _ q) = (cMeta (codec @BossV)) { metaDiffWeight = if q == 0 then hp else 0 }
-  view (BossV hp mx t q) = noFace { fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)] }
+-- | 雪怪副本：状态是 (血量, 满血, 计数, 象限)，自己解码；HUD 与 system（扣血 + 步末召唤）照抄雪怪。
+bossV :: Archetype (Int, Int, Int, Int)
+bossV = (archetype "snow_boss" (Column get put))
+  { aSpawn = \args _ -> case exactArgs ((,) <$> argInt <*> argInt) args of
+      Just (hp, q) | hp > 0 && hp <= 255 && q >= 0 && q < 4 -> Just (put (hp, hp, 0, q))
+      _ -> Nothing
+  , aMatch = const (Match Nothing False True False)
+  , aHit = absorbHit . put
+  , aPhysics = const fixedPhysics
+  , aTally = \(hp, _, _, q) -> emptyTally {tDiffWeight = if q == 0 then hp else 0}
+  , aDiff = Just (DiffCount (CountNamed "snow_boss") 0)
+  , aHud = aHud snowBossArch
+  , aFace = \(hp, mx, t, q) -> noFace {fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)]}
+  , aSystems = aSystems snowBossArch
+  }
+  where
+    get cell = case cell of
+      Custom "snow_boss" (CustomState v) -> Just ((v `div` 16) `mod` 256, v `div` 4096, (v `div` 4) `mod` 4, v `mod` 4)
+      _ -> Nothing
+    put (hp, mx, t, q) = colPut (aColumn snowBossArch) (SnowBoss hp mx t q)
 
 newtype IceV = IceV Int
   deriving (Eq, Show)
@@ -265,12 +213,12 @@ replaced =
   foldl
     (flip register)
     defaultRegistry
-    [ kindDef @GemV
-    , kindDef @LineHV
-    , kindDef @StoneV
-    , kindDef @FlipV
-    , kindDef @BubbleV
-    , kindDef @BossV
+    [ kindDef gemV
+    , kindDef lineHV
+    , kindDef stoneV
+    , kindDef flipV
+    , kindDef bubbleV
+    , kindDef bossV
     , layerDef @IceV
     , layerDef @ChocoV
     , layerDef @ChainV
@@ -287,10 +235,31 @@ ab_same_name_copies_oracle_unchanged = do
     [] -> assertEqual "line count" (length expected) (length actual)
 
 --------------------------------------------------------------------------------
--- 叠层合成与内置元素世界逐方法相等
+-- 叠层合成与内置注册表逐组件相等
 
 world :: Registry
-world = mkRegistry [kindDef @GemV, kindDef @LineHV, layerDef @IceV, layerDef @ChocoV, layerDef @ChainV, kindDef @StoneV]
+world = mkRegistry [kindDef gemV, kindDef lineHV, layerDef @IceV, layerDef @ChocoV, layerDef @ChainV, kindDef stoneV]
+
+-- | 整格读数：名字、写回、整格的匹配 / 命中 / 物理（叠层合成后）与本体的计数 / 显示。
+wholeProbe :: Registry -> Cell -> [(String, String)]
+wholeProbe w cell =
+  [ ("name", show (elementName w cell))
+  , ("mColor", show (mColor m))
+  , ("mBlockMatch", show (mBlockMatch m))
+  , ("mBlockSwap", show (mBlockSwap m))
+  , ("mHintable", show (mHintable m))
+  , ("hStrike", show (hStrike h))
+  , ("hFires", show (hFires h))
+  , ("hBlast", show (hBlast h))
+  , ("physics", show (wholePhysics w cell))
+  , ("tally", show (body w cell :: Tally))
+  , ("fBase", show (fBase f))
+  , ("fExtras", show (fExtras f))
+  ]
+  where
+    m = wholeMatch w cell
+    h = wholeHit w cell
+    f = body w cell :: Face
 
 layeredCells :: [Cell]
 layeredCells =
@@ -300,7 +269,7 @@ layeredCells =
 ab_layered_matches_builtin :: Assertion
 ab_layered_matches_builtin =
   mapM_
-    (\cell -> assertEqual (show cell) (somePhaseProbe (elementOf defaultRegistry cell)) (somePhaseProbe (decode world cell)))
+    (\cell -> assertEqual (show cell) (wholeProbe defaultRegistry cell) (wholeProbe world cell))
     layeredCells
 
 --------------------------------------------------------------------------------
@@ -318,72 +287,76 @@ sampleCells =
 
 ab_kind_name_matches_decoded :: Assertion
 ab_kind_name_matches_decoded = do
-  let kinds = [k | KindDef k <- registryDefs defaultRegistry]
-      accepted (SomeKind p) = [(kindName p, nameOf e) | c <- sampleCells, Just e <- [fromCellAs p c]]
+  let kinds = registryKinds defaultRegistry
   assertEqual "all builtin kinds" 25 (length kinds)
   mapM_
-    ( \k@(SomeKind p) -> do
-        let got = accepted k
-        assertBool ("some sample decodes as " ++ show (kindName p)) (not (null got))
-        mapM_ (\(kn, en) -> assertEqual "nameOf decoded == kindName" kn en) got
+    ( \(SomeArchetype a) -> do
+        let got = [(c, st) | c <- sampleCells, Just st <- [colGet (aColumn a) c]]
+        assertBool ("some sample decodes as " ++ show (aName a)) (not (null got))
+        forM_ got $ \(c, st) -> do
+          assertEqual ("registry name of " ++ show c) (aName a) (rowName (bodyOf defaultRegistry c))
+          assertEqual ("state roundtrip " ++ show c) (Just (colPut (aColumn a) st)) (fmap (colPut (aColumn a)) (colGet (aColumn a) (colPut (aColumn a) st)))
     )
     kinds
 
 --------------------------------------------------------------------------------
 -- 透明性
 
--- | 源码里某个块（以给定前缀的行开头，到下一个顶格行为止）里各行开头的标识符。
-blockNames :: (String -> Bool) -> String -> [[String]]
-blockNames isHead src = go (lines src)
-  where
-    go ls = case break isHead ls of
-      (_, []) -> []
-      (_, _ : rest) ->
-        let (body, rest') = span (\l -> case l of [] -> True; ch : _ -> isSpace ch) rest
-        in [w | l <- body, "  " `isPrefixOf` l, not ("   " `isPrefixOf` l), not ("  --" `isPrefixOf` l), let w = takeWhile (\ch -> isAlphaNum ch || ch == '\'' || ch == '_') (drop 2 l), not (null w), w `notElem` ["default"]] : go rest'
+-- | 源码里某个顶层定义的块（从以给定前缀开头的行起，含签名与各等式，到下一个别的顶格行为止）。
+blockOf :: String -> String -> String
+blockOf prefix src =
+  case break (prefix `isPrefixOf`) (lines src) of
+    (_, l : rest) -> unlines (l : takeWhile (\x -> null x || take 1 x == " " || prefix `isPrefixOf` x) rest)
+    _ -> ""
 
-uniq :: [String] -> [String]
-uniq = foldr (\x acc -> if x `elem` acc then acc else x : acc) []
+-- | 'rowProbe' 读到每种组件（漏读的组件透明性测不出来）：Archetype 模块里每个 @instance Component X@ 的 X
+-- 都在 rowProbe 的定义里出现为 @:: X@。
+ab_row_probe_reads_all_components :: Assertion
+ab_row_probe_reads_all_components = do
+  src <- readFile "src/Match3/ECS/Archetype.hs"
+  let comps = [c | l <- lines src, ("instance" : "Component" : c : _) <- [words l]]
+      probeSrc = blockOf "rowProbe " src
+  assertBool "components found" (length comps >= 5)
+  mapM_ (\c -> assertBool ("rowProbe reads " ++ c) ((":: " ++ c) `isInfixOf` probeSrc)) comps
 
--- | Phase 类声明里的方法名。
-phaseMethods :: String -> [String]
-phaseMethods src = uniq (concat (blockNames (\l -> "class " `isPrefixOf` l && ") => Phase e where" `isInfixOf` l) src))
+-- | 整格合成读到每个叠层查询：挡匹配 / 挡交换在 wholeMatch，点火 / 命中在 wholeHit，随清在 stripOnClearWith；
+-- 洗牌保留在 wholePhysics（有层即保留）。
+ab_whole_reads_every_layer_query :: Assertion
+ab_whole_reads_every_layer_query = do
+  src <- readFile "src/Match3/ECS/Registry.hs"
+  let has blk q = assertBool (blk ++ " reads " ++ q) (q `isInfixOf` blockOf (blk ++ " ") src)
+  has "wholeMatch" "layerBlocksMatch"
+  has "wholeMatch" "layerBlocksSwap"
+  has "wholeHit" "layerFires"
+  has "wholeHit" "layerHit"
+  has "stripOnClearWith" "layerStripsOnClear"
+  has "wholePhysics" "pKeepShuffle = True"
 
--- | 'phaseProbe' 读到每个值级 Phase 方法（漏读的方法透明性测不出来；codec 是类型级，onNear 由规则快照锁定）。
-ab_some_element_forwards_all_methods :: Assertion
-ab_some_element_forwards_all_methods = do
-  src <- readFile "src/Match3/Element/Phase.hs"
-  let ms = phaseMethods src
-      probeSrc = unlines (takeWhile (not . ("somePhaseProbe ::" `isPrefixOf`)) (dropWhile (not . ("phaseProbe ::" `isPrefixOf`)) (lines src)))
-  assertBool "Phase methods found" (length ms >= 6)
-  mapM_ (\m -> assertBool ("phaseProbe reads " ++ m) (m `elem` ["codec", "onNear"] || (m ++ " ") `isInfixOf` probeSrc)) ms
-
-ab_layered_composes_all_methods :: Assertion
-ab_layered_composes_all_methods = do
-  src <- readFile "src/Match3/Element/Phase.hs"
-  lsrc <- readFile "src/Match3/Element/Layer.hs"
-  let composed = uniq (concat (blockNames (\l -> "instance " `isPrefixOf` l && "=> Phase (Layered l e) where" `isInfixOf` l) lsrc))
-  assertEqual "Layered composes every Phase method" (sort (phaseMethods src)) (sort composed)
-
--- | 装箱前后、叠层装箱前后逐方法相等。
-ab_boxing_is_transparent :: Assertion
-ab_boxing_is_transparent = do
-  let check :: Phase e => String -> e -> Assertion
-      check what e = assertEqual what (phaseProbe e) (somePhaseProbe (SomePhase e))
-  check "gem" (GemV C2)
-  check "line_h" (LineHV C4)
-  check "stone" (StoneV 2)
-  check "flip" (FlipV C1 C5)
-  check "bubble" (BubbleV 3)
-  check "boss" (BossV 3 6 1 0)
-  check "inert" (Inert "x" (Custom "x" (CustomState 2)))
-  check "iced choco gem" (Layered (IceV 2) (Layered ChocoV (GemV C1)))
-  check "chained line" (Layered (ChainV 1) (LineHV C3))
-  check "cookie" CookieE
-  -- 每个读数在这组样本上至少有一个不是缺省值（否则漏读测不出来）
-  let samples = [phaseProbe (StoneV 2), phaseProbe (FlipV C1 C5), phaseProbe (BossV 3 6 1 0), phaseProbe (LineHV C4), phaseProbe (Layered (IceV 2) (GemV C1)), phaseProbe (Layered (ChainV 1) (GemV C1)), phaseProbe CookieE]
-      defaults = phaseProbe (GemV C1)
-      boring = [k | (k, v) <- defaults, k `notElem` ["name", "toCell"], all (\s -> lookup k s == Just v) samples]
+-- | 装箱（'Row'）前后逐组件相等；无叠层的格整格读数就是本体读数；每个读数在样本上至少有一个不是缺省值。
+ab_row_is_transparent :: Assertion
+ab_row_is_transparent = do
+  let check :: String -> Archetype s -> s -> Assertion
+      check what a st = do
+        let row = Row a st
+            direct =
+              [ show (aMatch a st), show (aHit a st), show (aPhysics a st), show (aTally a st), show (aFace a st) ]
+        assertEqual what direct [show (rowGet row :: Match), show (rowGet row :: OnHit), show (rowGet row :: Physics), show (rowGet row :: Tally), show (rowGet row :: Face)]
+  check "gem" gemV C2
+  check "line_h" lineHV C4
+  check "stone" stoneV 2
+  check "flip" flipV (C1, C5)
+  check "bubble" bubbleV 3
+  check "boss" bossV (3, 6, 1, 0)
+  check "inert" (inertArch "x") (Custom "x" (CustomState 2))
+  check "cookie" cookieArch ()
+  forM_ [Gem C2 Normal 0 Nothing, Gem C4 LineH 0 Nothing, Stone 2, Custom "x" (CustomState 2)] $ \cell ->
+    let r = bodyOf world cell
+    in assertEqual ("no layers: whole = body " ++ show cell)
+         (show (rowGet r :: Match), show (rowGet r :: OnHit), show (rowGet r :: Physics))
+         (show (wholeMatch world cell), show (wholeHit world cell), show (wholePhysics world cell))
+  let samples = map (wholeProbe replaced) [Stone 2, Flip C1 C5, Custom "snow_boss" (CustomState (((6 * 256 + 3) * 4 + 1) * 4)), Gem C4 LineH 0 Nothing, Gem C1 Normal 2 Nothing, Gem C1 Normal 0 (Just (Chain 1)), Cookie, Custom "bubble" (CustomState 1)]
+      defaults = wholeProbe replaced (Gem C1 Normal 0 Nothing)
+      boring = [k | (k, v) <- defaults, k /= "name", all (\smp -> lookup k smp == Just v) samples]
   assertEqual "every reading varies in the samples" [] boring
 
 -- | 解码：冰在外、叠层在内，剩下的交给本体；未注册的 Custom 名字 = 惰性占格；同名以后注册的为准。
@@ -392,19 +365,20 @@ ab_world_decode_order = do
   let cell = Gem C2 Normal 2 (Just (Chain 1))
   assertEqual "layers" ["ice", "chain"] (map layerValueName (fst (decodeLayers world cell)))
   assertEqual "inner" (Gem C2 Normal 0 Nothing) (snd (decodeLayers world cell))
-  assertEqual "roundtrip" cell (phaseToCell (decode world cell))
-  assertEqual "unregistered custom" (Just (Inert "moss" (Custom "moss" (CustomState 1)))) (fromPhase (decode world (Custom "moss" (CustomState 1))))
-  assertEqual "unclaimed cell" "?" (phaseName (decode world Cookie))
+  assertEqual "roundtrip" cell (recodeWith world cell)
+  let moss = Custom "moss" (CustomState 1)
+  assertEqual "unregistered custom" ("moss", moss) (let r = bodyOf world moss in (rowName r, rowCell r))
+  assertEqual "unclaimed cell" "?" (rowName (bodyOf world Cookie))
   assertEqual "names in order" ["gem", "line_h", "ice", "choco", "chain", "stone"] (map defName (registryDefs world))
-  let w2 = mkRegistry [kindDef @StoneV, kindDef @GemV, kindDef @StoneV]
+  let w2 = mkRegistry [kindDef stoneV, kindDef gemV, kindDef stoneV]
   assertEqual "dedupe keeps first position" ["stone", "gem"] (map defName (registryDefs w2))
-  assertEqual "body" (Just (StoneV 2)) (fromPhase (decode w2 (Stone 2)))
+  assertEqual "body" ("stone", Stone 2) (let r = bodyOf w2 (Stone 2) in (rowName r, rowCell r))
   assertEqual "mapMaybe sanity" [1 :: Int] (mapMaybe (\c -> case c of Stone n -> Just n; _ -> Nothing) [getCell (gridFromRows [[Stone 1]]) (0, 0)])
 
 --------------------------------------------------------------------------------
 -- 规则方法（第 3 刀）：优先级 / 波及范围 / 蔓延写死（与旧 R 行的次序一致；元素对照快照另有整盘锁定）
 
--- | slim-1：气球 onNear+DieAppend 与旧 balloonPopLegacy 一致；气泡/毛球因 foldr 去重序留逃生口。
+-- | 气球的邻格 system（nearBy + DieAppend）与旧 balloonPopLegacy 一致；气泡 / 毛球的邻格 system 自己写（foldr 去重序）。
 ab_near_escape_absorbed :: Assertion
 ab_near_escape_absorbed = do
   let b = boardFromRows
@@ -418,18 +392,20 @@ ab_near_escape_absorbed = do
       legB = runSystem balloonPopLegacy ctx
   assertEqual "balloon board" (nwBoard outB) (nwBoard legB)
   assertEqual "balloon dead" (nwDead outB) (nwDead legB)
-  assertEqual "bubble still hatch" [170] [o | SysNear o _ <- boardSystems (Proxy @Bubble)]
-  assertEqual "fuzzball still hatch" [190] [o | SysNear o _ <- boardSystems (Proxy @Fuzzball)]
+  assertEqual "bubble near system" [170] [o | SysNear o _ <- aSystems bubbleArch]
+  assertEqual "fuzzball near system" [190] [o | SysNear o _ <- aSystems fuzzballArch]
 
 ab_rule_methods_pinned :: Assertion
 ab_rule_methods_pinned = do
-  assertEqual "kind neighbourPrio"
-    [Just 10, Just 20, Just 30, Just 40, Just 50, Just 60, Just 110, Just 120, Just 130, Just 140, Nothing, Just 180, Nothing, Nothing]
-    [ phaseNearPrio @StoneE, phaseNearPrio @ChestE, phaseNearPrio @HoneyE
-    , phaseNearPrio @CakeE, phaseNearPrio @BalloonE, phaseNearPrio @MagicHatE
-    , phaseNearPrio @SafeE, phaseNearPrio @TimeSpiritE, phaseNearPrio @MakerE
-    , phaseNearPrio @BottleE, phaseNearPrio @Bubble, phaseNearPrio @MagicStone
-    , phaseNearPrio @Fuzzball, phaseNearPrio @SnowBoss ]
+  let nearOrders (SomeArchetype a) = [o | SysNear o _ <- aSystems a]
+  assertEqual "kind near systems"
+    [[10], [20], [30], [40], [50], [60], [110], [120], [130], [140], [170], [180], [190], [200]]
+    (map nearOrders
+      [ SomeArchetype stoneArch, SomeArchetype chestArch, SomeArchetype honeyArch
+      , SomeArchetype cakeArch, SomeArchetype balloonArch, SomeArchetype magicHatArch
+      , SomeArchetype safeArch, SomeArchetype timeSpiritArch, SomeArchetype makerArch
+      , SomeArchetype bottleArch, SomeArchetype bubbleArch, SomeArchetype magicStoneArch
+      , SomeArchetype fuzzballArch, SomeArchetype snowBossArch ])
   assertEqual "layer neighbourPrio"
     [Just 70, Just 80, Just 90, Just 100, Just 150, Just 160, Nothing, Nothing]
     [ layerNeighbourPrio (Proxy @FogL), layerNeighbourPrio (Proxy @ChainL), layerNeighbourPrio (Proxy @FreezeL)
@@ -441,14 +417,13 @@ ab_rule_methods_pinned = do
     , layerReach (Proxy @CurtainL), layerReach (Proxy @ChocoL), layerReach (Proxy @SteamL) ]
   assertEqual "spreads" [Just 10, Just 20, Just 30, Nothing]
     [fst <$> spreads (Proxy @VineL), fst <$> spreads (Proxy @ChocoL), fst <$> spreads (Proxy @SteamL), fst <$> spreads (Proxy @FogL)]
-  -- 收集：方法给出的规则在逃生口之前
-  assertEqual "kindRules stone" [10] [o | SysNear o _ <- kindRules (Proxy @StoneE)]
+  assertEqual "stone systems" [10] [o | SysNear o _ <- aSystems stoneArch]
   assertEqual "layerRules choco" (1, 1) (length [() | SysNear 150 _ <- layerRules (Proxy @ChocoL)], length [() | SysEnd _ <- layerRules (Proxy @ChocoL)])
   assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint snowBossEntity (2, 3))
-  assertEqual "snow boss rules" [200] [o | SysNear o _ <- kindRules (Proxy @SnowBoss)]
+  assertEqual "snow boss near system" [200] [o | SysNear o _ <- aSystems snowBossArch]
 
 --------------------------------------------------------------------------------
--- 前端格子描述（第 6 刀）：cellFace 由 Phase view 的 fBase 驱动，与第 6 刀前按构造器写死的 case 逐字段相同
+-- 前端格子描述（第 6 刀）：cellFace 由 Face 组件的 fBase 驱动，与第 6 刀前按构造器写死的 case 逐字段相同
 
 -- | 第 6 刀前 Match3.View.cellFace 的逐字副本。
 legacyCellFace :: Cell -> (String, [(String, CellField)])

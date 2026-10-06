@@ -34,9 +34,9 @@ import Match3.Element
   , decodeBoss
   )
 import Match3.Combos (builtinComboRules)
-import Data.Proxy (Proxy(..))
-import Match3.Element.Phase (Meta(..), liveMeta, toCell)
-import Match3.Element.Kind (diffCounter)
+import Match3.Element.Builtin (snowBossArch, snowBossColumn)
+import Match3.ECS.Archetype (Archetype(..), Column(..))
+import Match3.ECS.Component (DiffCount(..), Tally(..))
 import Match3.Element.Event (EventKind(..))
 import Match3.ECS.Registry (Registry, countElementWith, defName, mkRegistry, placeWith, registerMechanic, setComboRules, setShapeRules, weighElementWith)
 import Match3.Game.Boosters (resolveHammerWith)
@@ -76,7 +76,7 @@ ring = [(1, 3), (1, 4), (2, 2), (2, 5), (3, 2), (3, 5), (4, 3), (4, 4)]
 
 -- | 一格 Boss（满血 40）。
 boss :: Int -> Int -> Int -> Cell
-boss hp t q = toCell (SnowBoss hp 40 t q)
+boss hp t q = colPut snowBossColumn (SnowBoss hp 40 t q)
 
 -- | 在 stableBoard 上放一只 Boss（左上角 (2,3)）。
 bossBoard :: Int -> Board
@@ -99,8 +99,8 @@ sb_ability_fixed_blocker = do
         assertEqual "hit absorbed as itself" (Absorb c) (directHitWith world c)
     )
     [0 .. 3]
-  assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [metaDiffWeight (liveMeta (SnowBoss 12 40 1 q)) | q <- [0 .. 3]]
-  assertEqual "counter" (Just (CountNamed "snow_boss")) (diffCounter (Proxy :: Proxy SnowBoss))
+  assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [tDiffWeight (aTally snowBossArch (SnowBoss 12 40 1 q)) | q <- [0 .. 3]]
+  assertEqual "counter" (Just (CountNamed "snow_boss")) (dcKey <$> aDiff snowBossArch)
   assertEqual "encoding round-trips" [SnowBoss hp 40 t q | hp <- [0, 12, 40], t <- [0 .. 2], q <- [0 .. 3]]
     [decodeBoss st | hp <- [0, 12, 40], t <- [0 .. 2], q <- [0 .. 3], Custom _ st <- [boss hp t q]]
 

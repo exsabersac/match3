@@ -31,6 +31,7 @@ module Match3.Element.Builtin
   , traceSnails
     -- * 内置原型（测试 / 扩展用）
   , gemArch
+  , gemColumn
   , specialArch
   , lineHArch
   , lineVArch

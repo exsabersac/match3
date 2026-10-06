@@ -3,7 +3,7 @@
 module Spec.Support.Inventory
   ( campaignLevelCount
   , builtinEntryCount
-  , builtinBodyInstanceCount
+  , builtinArchetypeCount
   ) where
 
 -- | 战役关卡数（'Match3.Levels.Campaign.allLevels' 的长度）。
@@ -14,7 +14,7 @@ campaignLevelCount = 49
 builtinEntryCount :: Int
 builtinEntryCount = 36
 
--- | 内置本体的 Phase instance 个数（'Spec.Archetype.archetype_builtin_kind_inventory' 在 Element/Builtin 源码里
--- 数出来的；SpecialGem 一个 instance 覆盖四种特殊块）。
-builtinBodyInstanceCount :: Int
-builtinBodyInstanceCount = 22
+-- | 内置本体原型个数（ecs-3 起本体 = 'Match3.ECS.Archetype.Archetype' 值；'Spec.Archetype.archetype_builtin_kind_inventory'
+-- 在 Element/Builtin 源码里数 @… :: Archetype …@ 签名声明的原型名，四种特殊块各算一个）。
+builtinArchetypeCount :: Int
+builtinArchetypeCount = 25

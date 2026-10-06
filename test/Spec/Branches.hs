@@ -12,7 +12,6 @@
 module Spec.Branches
   ( tests
   ) where
-import Data.Proxy (Proxy(..))
 
 import Control.Monad (forM_)
 import Data.List (sort)
@@ -29,9 +28,8 @@ import Match3.Game.State (gsUfos)
 import Match3.Levels.Campaign (allLevels)
 import Match3.Types (boardSize)
 import Match3.Element
-import Match3.Element.Phase
 import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
-import Match3.Element.Kind (SysDef(..), customPlace, fromCustom, noHud)
+import Match3.Element.Kind (customPlace)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Level (newGame)
@@ -66,74 +64,35 @@ tests =
 allCells :: Board -> [Cell]
 allCells b = map (getCell b) allPos
 
--- | 替换内置「gem」的测试版本：同普通宝石（缺省方法），只关掉可改色（'NoRecolorGem'）或可推动（'NoPushGem'）。
-newtype NoRecolorGem = NoRecolorGem Color
-  deriving (Eq, Show)
+-- | 替换内置「gem」的测试版本：同普通宝石组件，只关掉可改色（'NoRecolorGem'）或可推动（'NoPushGem'）。
+noRecolorGem :: Archetype Color
+noRecolorGem = (archetype "gem" (Column (\cell -> case cell of Gem c _ _ _ -> Just c; _ -> Nothing) (\c -> Gem c Normal 0 Nothing)))
+  { aMatch = gemMatch . Just
+  , aHit = const gemHit
+  , aPhysics = const gemPhysics {pRecolor = False}
+  }
 
-instance Phase NoRecolorGem where
-  codec = Codec
-    { cName = "gem"
-    , cToCell = \(NoRecolorGem c) -> Gem c Normal 0 Nothing
-    , cFromCell = \cell -> case cell of
-        Gem c _ _ _ -> Just (NoRecolorGem c)
-        _ -> Nothing
-    , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (NoRecolorGem c) = gemMatch (Just c)
-  onHit _ _ = gemHit
-  physics _ = gemPhysics { pRecolor = False }
-  view _ = noFace
+noPushGem :: Archetype Color
+noPushGem = (archetype "gem" (Column (\cell -> case cell of Gem c _ _ _ -> Just c; _ -> Nothing) (\c -> Gem c Normal 0 Nothing)))
+  { aMatch = gemMatch . Just
+  , aHit = const gemHit
+  , aPhysics = const gemPhysics {pPush = False}
+  }
 
-newtype NoPushGem = NoPushGem Color
-  deriving (Eq, Show)
-
-instance Phase NoPushGem where
-  codec = Codec
-    { cName = "gem"
-    , cToCell = \(NoPushGem c) -> Gem c Normal 0 Nothing
-    , cFromCell = \cell -> case cell of
-        Gem c _ _ _ -> Just (NoPushGem c)
-        _ -> Nothing
-    , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (NoPushGem c) = gemMatch (Just c)
-  onHit _ _ = gemHit
-  physics _ = gemPhysics { pPush = False }
-  view _ = noFace
-
--- | 测试专用「拉杆」：占格障碍原型包，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
-newtype Lever = Lever Int
-  deriving (Eq, Show)
-
-instance Phase Lever where
-  codec = Codec
-    { cName = "lever"
-    , cToCell = intCell "lever"
-    , cFromCell = fromCustom "lever" Lever
-    , cPlace = customPlace "lever"
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysSwap (SwapSys 5 leverFires (\_ p1 p2 -> [p1, p2]))]
-    }
-  onMatch _ = gemMatch Nothing  -- 可交换（不挡交换），无色
-  onHit _ _ = gemHit { hFires = False }
-  physics _ = obstaclePhysics
-  view _ = noFace
+-- | 测试专用「拉杆」：占格障碍原型，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
+leverArch :: Archetype Int
+leverArch = (archetype "lever" (customColumn "lever"))
+  { aSpawn = customPlace "lever"
+  , aMatch = const (gemMatch Nothing)  -- 可交换（不挡交换），无色
+  , aHit = const gemHit {hFires = False}
+  , aSystems = [SysSwap (SwapSys 5 leverFires (\_ p1 p2 -> [p1, p2]))]
+  }
 
 leverFires :: Board -> Pos -> Pos -> Bool
 leverFires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
 
 leverDef :: Def
-leverDef = kindDef @Lever
+leverDef = kindDef leverArch
 
 br_swap_rule_test_element :: Assertion
 br_swap_rule_test_element = do
@@ -156,27 +115,14 @@ br_swap_rule_test_element = do
   assertBool "default world rejects" (not (moveApplied oD))
 
 -- | 测试专用「豆荚」：被命中或邻格在本批前沿里时开出 C2 直线（本轮坐住，不在本轮清除）。
-newtype Pod = Pod Int
-  deriving (Eq, Show)
-
-instance Phase Pod where
-  codec = Codec
-    { cName = "pod"
-    , cToCell = intCell "pod"
-    , cFromCell = fromCustom "pod" Pod
-    , cPlace = customPlace "pod"
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysOpen (System (\w -> let (b, e, s) = openPods (owBoard w) (owFront w) in w {owBoard = b, owSeeds = e, owSits = s}))]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = obstaclePhysics
-  view _ = noFace
+podArch :: Archetype Int
+podArch = (archetype "pod" (customColumn "pod"))
+  { aSpawn = customPlace "pod"
+  , aSystems = [SysOpen (System (\w -> let (b, e, st) = openPods (owBoard w) (owFront w) in w {owBoard = b, owSeeds = e, owSits = st}))]
+  }
 
 podDef :: Def
-podDef = kindDef @Pod
+podDef = kindDef podArch
 
 openPods :: Board -> [Pos] -> (Board, [Pos], [Pos])
 openPods b front =
@@ -222,7 +168,7 @@ br_builtin_predicates_match_legacy = do
 -- | 魔法帽只给元素世界里可改色（recolorable）的格换色：把普通宝石改成不可改色后，帽子不再动它们。
 br_recolorable_from_world :: Assertion
 br_recolorable_from_world = do
-  let worldNoRecolor = register (kindDef @NoRecolorGem) defaultRegistry
+  let worldNoRecolor = register (kindDef noRecolorGem) defaultRegistry
       board0 = setCell tripleBoard (0, 1) MagicHat
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
@@ -235,29 +181,14 @@ br_recolorable_from_world = do
   assertEqual "not recolorable: colors kept" (mkGem C1, mkGem C3) (getCell bNo (1, 0), getCell bNo (0, 2))
 
 -- | 蜗牛只推元素世界里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
-newtype Cart = Cart Int
-  deriving (Eq, Show)
-
--- 占格障碍原型包的移动方法，只把可推动打开
-
-instance Phase Cart where
-  codec = Codec
-    { cName = "cart"
-    , cToCell = intCell "cart"
-    , cFromCell = fromCustom "cart" Cart
-    , cPlace = customPlace "cart"
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = obstaclePhysics { pPush = True }
-  view _ = noFace
+cartArch :: Archetype Int
+cartArch = (archetype "cart" (customColumn "cart"))
+  { aSpawn = customPlace "cart"
+  , aPhysics = const obstaclePhysics {pPush = True}
+  }
 
 cartDef :: Def
-cartDef = kindDef @Cart
+cartDef = kindDef cartArch
 
 br_pushable_from_world :: Assertion
 br_pushable_from_world = do
@@ -271,7 +202,7 @@ br_pushable_from_world = do
   assertBool "default world: snail turns around" (isSnail (getCell bD (7, 1)) && isCustomNamed "cart" (getCell bD (7, 2)))
   let boardG = setCell tripleBoard (7, 1) (mkSnail 0 1)
       bG = final defaultRegistry boardG
-      bNoPush = final (register (kindDef @NoPushGem) defaultRegistry) boardG
+      bNoPush = final (register (kindDef noPushGem) defaultRegistry) boardG
   assertBool "default: gem pushed" (isSnail (getCell bG (7, 2)))
   assertBool "gem not pushable: snail stays" (isSnail (getCell bNoPush (7, 1)))
 

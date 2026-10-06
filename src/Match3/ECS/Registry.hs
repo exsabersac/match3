@@ -46,6 +46,7 @@ module Match3.ECS.Registry
   , decodeBody
   , decodeLayers
   , bodyOf
+  , recodeWith
   , body
   , upperOf
   , wholeMatch
@@ -371,6 +372,12 @@ hasLayers cell = case cell of
   Gem _ _ ice ov -> ice > 0 || isJust ov
   _ -> False
 {-# INLINE hasLayers #-}
+
+-- | 解码再写回：本体行的格子外面按原次序盖回各层（往返测试用；对任何格子都应是恒等）。
+recodeWith :: Registry -> Cell -> Cell
+recodeWith w cell =
+  let (ls, inner) = decodeLayers w cell
+   in foldr (\(SomeLayerValue l) c -> putOn l c) (rowCell (decodeBody w inner)) ls
 
 -- | 本体层的一行（拆掉冰层 / 叠层之后）。
 bodyOf :: Registry -> Cell -> Row

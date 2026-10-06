@@ -60,7 +60,6 @@ import Numeric (showHex)
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Match3.Core
-import Match3.Element.Phase
 import Match3.Board.Grid (adjacent)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.Game.Level (newGameAtLevel)
@@ -68,8 +67,8 @@ import Match3.Levels.Campaign (lookupLevel)
 import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
-import Match3.Element (Def, NearWorld(..), System(..), kindDef)
-import Match3.Element.Kind (SysDef(..), customPlace, fromCustom, noHud)
+import Match3.Element (Archetype(..), Def, NearWorld(..), SysDef(..), System(..), Tally(..), absorbHit, archetype, breakHit, customColumn, emptyTally, fixedPhysics, kindDef)
+import Match3.Element.Kind (customPlace)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
@@ -345,25 +344,15 @@ checkEffectDetail tag e = case endEffectKind eff of
 
 -- | 测试专用元素「木箱」（只在测试里定义，主流程源码里没有它）：Custom "crate" n，n = 剩余耐久。
 -- 定义：固定格（挡交换、不随重力下落）、被邻格真消除波及一次耐久 -1、耐久 1 时再被波及就碎
--- （并入清除格，计数 CountNamed "crate"）；直接命中（锤子 / 爆炸）同样 -1 / 碎。状态（耐久）在元素值里。
-newtype Crate = Crate Int
-  deriving (Eq, Show)
-
-instance Phase Crate where
-  codec = Codec
-    { cName = "crate"
-    , cToCell = intCell "crate"
-    , cFromCell = fromCustom "crate" Crate
-    , cPlace = customPlace "crate"
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed "crate") }
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysNear 200 crateAdjacent]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (Crate n) = HitOut (if n <= 1 then Destroy else Absorb (toCell (Crate (n - 1)))) False Nothing Nothing
-  physics _ = fixedPhysics
-  view _ = noFace
+-- （并入清除格，计数 CountNamed "crate"）；直接命中（锤子 / 爆炸）同样 -1 / 碎。状态（耐久）在存储列里。
+crateArch :: Archetype Int
+crateArch = (archetype "crate" (customColumn "crate"))
+  { aSpawn = customPlace "crate"
+  , aTally = const emptyTally {tCounter = Just (CountNamed "crate")}
+  , aHit = \n -> if n <= 1 then breakHit else absorbHit (Custom "crate" (CustomState (n - 1)))
+  , aPhysics = const fixedPhysics
+  , aSystems = [SysNear 200 crateAdjacent]
+  }
 
 -- | 木箱的邻格规则：真消除格的正交邻格里的木箱（直接命中格除外）耐久 -1，耐久 1 的碎掉。
 crateAdjacent :: System NearWorld
@@ -382,7 +371,7 @@ crateAdjacent = System $ \w ->
   in w {nwBoard = b', nwDead = nwDead w ++ dead'}
 
 crateDef :: Def
-crateDef = kindDef @Crate
+crateDef = kindDef crateArch
 
 -- | 木箱局面：(0,1) 放木箱；交换 (1,2)↔(2,2) 在第 1 行凑出 C5 连消，(1,1) 与木箱正交相邻。
 crateBoard :: Int -> Board

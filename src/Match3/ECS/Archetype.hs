@@ -17,6 +17,7 @@ module Match3.ECS.Archetype
     Column(..)
   , prismColumn
   , customColumn
+  , intColumn
   , unitColumn
   , query
     -- * 原型
@@ -31,15 +32,17 @@ module Match3.ECS.Archetype
   , rowCell
   , Component(..)
   , rowGet
+  , rowProbe
     -- * 多格实体
   , Entity(..)
   ) where
 
+import Data.Coerce (Coercible, coerce)
 import Engine.Optics (Prism', preview, review)
 import Match3.ECS.Component
 import Match3.ECS.Stage (SysDef)
 import Match3.Element.Types (Placer)
-import Match3.Types (Board, Cell, CellContents(..), CustomState(..), ElementName(..), Pos, ifoldMap)
+import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, gridFromRows, ifoldMap)
 
 -- | 存储列：一行（'Cell'）↔ 类型化状态 s 的仿射编解码（并非每行都有这一列）。
 data Column s = Column
@@ -58,6 +61,10 @@ customColumn n = Column get (Custom n . CustomState)
     get cell = case cell of
       Custom n' (CustomState k) | n' == n -> Just k
       _ -> Nothing
+
+-- | Int newtype 状态的自定义本体列（'Coercible'：状态表示不是 Int 的类型用它就是类型错误）。
+intColumn :: Coercible s Int => ElementName -> Column s
+intColumn n = Column (fmap coerce . colGet (customColumn n)) (colPut (customColumn n) . coerce)
 
 -- | 无状态的列：只认一种格子（饼干、魔法帽、彩蛋…）。
 unitColumn :: (Cell -> Bool) -> Cell -> Column ()
@@ -142,6 +149,29 @@ instance Component Face where
 rowGet :: Component c => Row -> c
 rowGet (Row a s) = component a s
 {-# INLINE rowGet #-}
+
+-- | 一行全部组件的读数（透明性测试 / 调试用；爆炸范围在 8×8 宝石盘的 (3,3) 上解释）。
+rowProbe :: Row -> [(String, String)]
+rowProbe row =
+  [ ("name", show (rowName row))
+  , ("toCell", show (rowCell row))
+  , ("mColor", show (mColor m))
+  , ("mBlockMatch", show (mBlockMatch m))
+  , ("mBlockSwap", show (mBlockSwap m))
+  , ("mHintable", show (mHintable m))
+  , ("hStrike", show (hStrike h))
+  , ("hFires", show (hFires h))
+  , ("hBlast", show (fmap (\bl -> blastArea bl probeBoard (3, 3)) (hBlast h)))
+  , ("physics", show (rowGet row :: Physics))
+  , ("tally", show (rowGet row :: Tally))
+  , ("fBase", show (fBase f))
+  , ("fExtras", show (fExtras f))
+  ]
+  where
+    m = rowGet row :: Match
+    h = rowGet row :: OnHit
+    f = rowGet row :: Face
+    probeBoard = gridFromRows (replicate 8 (replicate 8 (Gem C1 Normal 0 Nothing)))
 
 -- | 多格实体（雪怪 Boss）：各部件仍是独立的格实体，记录告诉扣血 system 锚点怎么认（'partNo' == 0）、部件在哪
 -- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。扣血由 Match3.Element.Rules.entityDamage 统一算。

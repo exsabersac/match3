@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 -- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultWorld'。
 --
--- 每种元素一个类型 + 值级能力 instance（Match3.Element.Ability）+ 一个类型级 instance（本体 'Kind' /
+-- 每种元素一个类型 + 'Phase' instance（Match3.Element.Phase）+ 一个类型级 instance（本体 'Kind' /
 -- 叠层 'Layer' / 地面层 'GroundKind'；关卡级元素 Mechanic），xmonad LayoutClass 风格，
 -- 按功能分组放在 Match3.Element.Builtin.* 里：
 --

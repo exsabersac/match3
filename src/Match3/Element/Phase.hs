@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
--- | 按引擎阶段收缩的元素 API：生产行为的唯一来源（slim-3 起 Ability/Kind 邻格薄封装到此）。
+-- | 按引擎阶段收缩的元素 API：值级行为的唯一来源（slim-9 删除了旧的 Ability 六类）。
 -- Meta 并进 'Codec'；邻格编辑优先 Match3.Element.Near 白名单组合子（nearSelf* / nearLocalEdit）。
 module Match3.Element.Phase
   ( Physics(..)
@@ -52,7 +52,7 @@ import Match3.Element.Near
 import Match3.Element.Types (CellField, CounterKey, Edge, FaceValue, Placer)
 import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, gridFromRows)
 
--- | 直接命中反应（原 Ability.Strike）。
+-- | 直接命中反应。
 data Strike
   = Absorb Cell
   | Destroy

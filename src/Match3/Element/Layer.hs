@@ -4,10 +4,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 叠层（冰、草 / 藤 / 巧 / 雾 / 锁链 / 冻结 / 窗帘 / 蒸汽）：对应 xmonad 的 LayoutModifier。
--- slim-4：值级挡匹配 / 命中 / 点火 / 随清 收成 'layerCover'；'Layered' 同时是 Ability 与 Phase 的修饰器，
+-- slim-4：值级挡匹配 / 命中 / 点火 / 随清 收成 'layerCover'；'Layered' 是 Phase 的修饰器，
 -- 不再在 Layer 类上重复声明五个值级方法。
 --
--- 合成规则只在 'Layered' 的 Ability / Phase instance 里写一次：
+-- 合成规则只在 'Layered' 的 Phase instance 里写一次：
 --
 -- * 挡匹配 / 挡交换：本层 OR 里层；
 -- * 点火：本层有意见（'lcFires' = Just）就听本层，否则问里层；
@@ -50,7 +50,7 @@ data LayerHit l
   | Shatter  -- ^ 本格被消除（末层冰随宝石一起碎）
   deriving (Eq, Show)
 
--- | 值级覆盖（slim-4：五个旧方法合成一包，由 'Layered' 的 Phase / Ability 读取）。
+-- | 值级覆盖（slim-4：五个旧方法合成一包，由 'Layered' 的 Phase instance 读取）。
 data LayerCover l = LayerCover
   { lcBlocksMatch :: Bool
   , lcBlocksSwap :: Bool
@@ -103,7 +103,7 @@ layerStripsOnClear = lcStripsOnClear . layerCover
 data Layered l e = Layered l e
   deriving (Eq, Show)
 
--- | Phase 修饰器：与 Ability 'Layered' 同语义（生产值级仍可走 Ability，对照走 Phase）。
+-- | Phase 修饰器：外层先回答、里层兜底（合成规则见模块头）。
 instance (Layer l, Phase e) => Phase (Layered l e) where
   codec = Codec
     { cName = cName (codec @e)

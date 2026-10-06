@@ -4,7 +4,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
--- | 元素的类型级 API：一种本体元素 = 一个类型 + 值级能力（Match3.Element.Ability）+ 一个 'Kind' instance。
+-- | 元素的类型级 API：一种本体元素 = 一个类型 + 'Phase' instance（Match3.Element.Phase）+ 一个 'Kind' instance。
 -- 'Kind' 的方法都带 @proxy e@ 参数（解码、放置、标签、按差计数、规则），不需要「原型值」。
 -- 地面层元素（不占格，层数在 GameState.gsGround 里）是 'GroundKind'；叠层见 Match3.Element.Layer。
 --

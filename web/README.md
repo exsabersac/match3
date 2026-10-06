@@ -119,7 +119,7 @@ make size            # 事后单独看体积
 1. 检查 `match3-web.cabal` 里的核心模块清单（`Engine.*` + `Match3.*`）与 `package.yaml` 的 `library.exposed-modules` 是否一致
    （核心新增模块时要同步到 cabal 文件，否则会打印警告；例如 main 2121bf8 新增的 `Match3.Element.Class` / `Message` /
    `Builtin.{Common,Gem,Layer,Obstacle,Collectible,Actor,Ground,Level}`，以及元素类重构第 2 刀换下 `Match3.Element.Caps` 的
-   `Match3.Element.{Ability,Kind,Layer,World}` 已同步）；
+   `Match3.Element.{Near,Phase,Kind,Layer,World}` 已同步）；
 2. `wasm32-wasi-cabal build exe:match3-web`，链接为 WASI **reactor** 模块；
 3. `wasm-opt -Oz` 压体积；用 GHC 自带的 `post-link.mjs` 生成 JSFFI 胶水 `ghc_wasm_jsffi.js`；
 4. 下载并缓存浏览器 WASI 垫片 `@bjorn3/browser_wasi_shim@0.4.2`（MIT/Apache-2.0，约 96 KB）；

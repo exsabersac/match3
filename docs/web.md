@@ -44,7 +44,7 @@ SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表
 
 ### 2.0 元素框架在 wasm 里
 
-元素是类型类（2026-10 元素类重构后，见 [guide/04](guide/04-元素框架.md)）：`Match3.Element.Ability` 的六个能力类（本体的值级能力，`SomeElement` 装箱）、
+元素是类型类（2026-10 元素类重构后，见 [guide/04](guide/04-元素框架.md)）：`Match3.Element.Phase` 的 `Phase` 类（本体元素，`SomePhase` 装箱）、
 `Match3.Element.Kind` / `Layer`（本体 / 叠层的类型级 API，`Layered` 合成）、`Match3.Element.Mechanic`（飞碟、皮带、传送门、地毯、地面层等关卡级机制，状态在值里，
 主流程的节拍是它的有类型方法）、`Match3.Element.World`（解码与全部 `*With` 查询）；`Match3.Element.Level` 管一局的关卡级元素（`gsLevelElems`），`Match3.Board.Hooks` 是 Board 层收的钩子记录；
 内置元素按功能分到 `Match3.Element.Builtin.{Gem,Layer,Obstacle,Collectible,Actor,Ground,Level,Common}`，
@@ -112,13 +112,13 @@ SDL2 桌面版的功能先全部迁到网页（`feat/web-sdl-parity`，对照表
 - 播放期间锁输入（`busy`；规则同原桌面版 `animBusy`），按钮 / 撤销在播完后可用；
 - 特效（粒子、连击浮字、得分浮字、震屏）只在 JS 里，由 `m3AnimTick` 的事件（`hl` / `van` / `end`）触发，不影响规则；
 - `window.m3debug` 暴露状态、布局、耗时和断点钩子，给 e2e 用；
-- **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成（元素类重构第 6 刀起由元素的 `Renders.faceBase` 给出类型标签与基本字段，缺省时），`Custom` 元素统一是
-  `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素的 `Renders.face`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
+- **新元素什么时候要改 `cells.js`**：格子 JSON 由 `Match3Web.Api.encodeCell` 按核心 `Match3.View.cellFace` 生成（由元素 `view` 的 `fBase` 给出类型标签与基本字段，缺省时），`Custom` 元素统一是
+  `{t:"custom", name, v}`，后面按顺序追加元素自带的显示字段（`Match3.View.cellExtras`，元素 `view` 的 `fExtras`：雪怪的 `q/hurt/turn/every`、变色龙的 `c`），`Api` 不点名元素。
   - **不用改**：单格、不带颜色、没有专门画法的 `Custom`——网页 `CELL_ART.custom` 的通用画法画「贴图名 = 元素名 + 层数角标」；只要贴图在 `assets/` 里，重新生成网页图集即可（`web/tools/gen_web_atlas.py` 收 `assets/` 的全部贴图）。降级色缺省是灰色。
-  - **要改**：① 新的 `Cell` 构造器（同时给它的元素写 `Renders.faceBase`）；② 要专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
-    在 `CUSTOM_ART` / `primarySprite` 补画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素的 `Renders.face` 里给出字段（`Api` 不用改）、
+  - **要改**：① 新的 `Cell` 构造器（同时给它的元素在 `view` 里写 `fBase`）；② 要专门画法的 `Custom`（按状态换贴图、浮动、叠画等），
+    在 `CUSTOM_ART` / `primarySprite` 补画法；③ 占多格（带 `q`）或带颜色（带 `c`）的 `Custom`，通用画法画不对，在元素 `view` 的 `fExtras` 里给出字段（`Api` 不用改）、
     `cells.js` 补画法；④ 需要专门的降级 / 粒子颜色时只在 `UI.Presentation.elementRGBTable` 补一项（网页经 `m3Meta` 读同一张表）。
-  - **双轨维护（Haskell `Renders` ↔ JS `CUSTOM_ART`）**：显示字段由元素 `face` / `faceBase` 提供，画法分派仍在 `web/www/cells.js` 按 `cell.name` 字符串表。
+  - **双轨维护（Haskell `view` ↔ JS `CUSTOM_ART`）**：显示字段由元素 `view`（`fExtras` / `fBase`）提供，画法分派仍在 `web/www/cells.js` 按 `cell.name` 字符串表。
     加专门画法的元素时**必须同时**改 Haskell instance 与 `CUSTOM_ART`（及贴图）；漏改一侧时 e2e 降级护栏 / `m3debug.fallbacks` 会报，类型系统抓不到。
   - **回归护栏**：漏了画法或贴图的格子会走几何降级（色块 + 类型名，如魔法石合入时的「custom」灰块），③ 类走了通用画法也会记一笔；
     `cells.js` 按元素名统计，`m3debug.fallbacks` 暴露；e2e 对**每一关**开局并按提示走 3 步，图集加载后它必须为空，否则列出元素名和关卡

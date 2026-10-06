@@ -201,7 +201,7 @@ src/Match3/Types/  Name Cell Overlay Optics Body Board Game（第 6 刀从 Types
 src/Match3/Levels/ Level Campaign（关卡记录 / 49 关关卡表与 lookupLevel，第 6 刀）
 src/Match3/Board/  Grid Match Clear Gravity Cascade Effect Phase Wave Hooks Refill Random Default（Effect = 连锁的能力类与解释器；Phase = 一轮的阶段标签；Wave = 回放轮次；Hooks = 第 7 刀的关卡级钩子记录；Refill = 第 8 刀的补子策略；Default = 不带 With 的内置表便捷入口）
 src/Match3/Game/   State Tally Outcome Shuffle Level Trace EndPhase Resolve Move Boosters（EndPhase = 步末表）
-src/Match3/Element/ Types Ability Kind Layer Rules World Mechanic Special Builtin Event Level（元素框架：规则类型 / 六个能力类与原型包 / 类型级 Kind·Entity·GroundKind / 叠层 Layer·Layered / 规则通用驱动 / 元素世界（解码与全部 *With 查询）/ 关卡级机制类 Mechanic / 规则表解释器（第 8 刀）/ 内置元素汇总 / 效果事件 / 一局的关卡级机制与节拍折叠；Element.hs 为再导出外观；2026-10 元素类重构，见 docs/guide/04）
+src/Match3/Element/ Types Near Phase Kind Layer Rules World Mechanic Special Builtin Event Level（元素框架：规则类型 / 邻格规则 / 本体类 Phase 与原型组合子 / 读 codec 的函数与 Entity·GroundKind 记录 / 叠层 Layer·Layered / 规则通用驱动 / 元素世界（解码与全部 *With 查询）/ 关卡级机制类 Mechanic / 规则表解释器（第 8 刀）/ 内置元素汇总 / 效果事件 / 一局的关卡级机制与节拍折叠；Element.hs 为再导出外观；2026-10 元素类重构，见 docs/guide/04）
 src/Match3/Element/Builtin/ Gem Layer Obstacle Collectible Actor Ground Level Common（内置元素按功能分组的 instance；Builtin.hs 只汇总类型列表 builtinDefs）
 app/pure/     纯前端模块，内部库 match3-pure（原生 -Wall 编译；测试与网页 wasm 按源码编）：ComboFx（连锁逐轮回放 / 步末动画的纯阶段机与时间线）、
               UI/Presentation（第 10 刀：效果事件 → 前端表现的表现表）、UI/GoalIcon（目标 → 图标贴图名）、
@@ -212,7 +212,7 @@ web/          网页版（唯一前端）：hs/（wasm 导出与 JSON 接口 Mat
 assets/       生成的源贴图（atlas.bmp / atlas1.bmp 图集分页 + atlas.txt + background.bmp；2x 高分屏规格），网页图集由它重新打包
 tools/        gen_assets.py（Pillow 程序化生成贴图与图例）；golden/ 旧提交比对用的 Golden.hs 存档（不参与编译）
 test/Spec.hs  测试入口（只汇总；466 命名用例）
-test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Archetype / ElementAbility / ElementOracle / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
+test/Spec/    按功能拆分的测试模块（GridMatch / Gravity / Cascade / Specials / Builtin.*（按元素分组，对应 Element/Builtin/*） / Boosters / GoalsLevels / Levels / Element / Extension / Branches / JellyBubble / ElementClass / Engine / UIEvents / ReplayUndo / Golden / Properties / Archetype / ElementAbility / ElementOracle / PhaseSlim / Presentation / SourceScan）与共用辅助 Support（含源码扫描工具 Support.Source、摘要函数 digest）
 test/Toy.hs   通用接口的玩具实现（一维计数器，只 import Engine.*）
 test/golden/ 行为金标准（Golden.hs 投影 + golden.txt）与元素查询快照（ElementQueries.hs + element-queries.txt）
 docs/         中文设计文档（架构 / 领域 / 规则流水线 / 测试 / 键位 / 美术 / 网页 / 安卓）

@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或任何图形库（原生只编核心库、`app/pure` 与测试；SDL2 桌面版已移除）。
-- 期望：**466** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**471** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -57,6 +57,8 @@ stack test
   - 元素命名清理（2026-10-05）：魔法石充能由逃生口改成方法 + 通用驱动，+1（`qc_magic_stone_charge_via_driver`，与留在测试里的旧整盘写法逐盘等价）→ 477；另有 16 个测试改名（registry / caps / message / slots → world / ability / beat / cells）
   - 移除 SDL2 桌面前端（2026-10-05，`refactor/web-only`），−7 → 470：`MoveText` 删 5 个只钉桌面英文走步文案的用例（`move_text_boosters_pinned` / `move_text_drag_pinned` / `move_text_click_pinned` / `move_text_lost_reads_goal_of` / `move_text_tables_only_in_app_pure`，6 → 1）；`Presentation` 删 `cascade_sounds_follow_clear_and_special`（桌面音效钩子 `UI.Sound`）与 `draw_hud_and_prim_overlay_are_thin`（桌面几何 HUD / 覆盖层），10 → 8；`generic_every_constructor_has_world_face_and_ui` 去掉桌面 `UI.CellTable` 一段，改名 `generic_every_constructor_has_world_and_face`；源码扫描（`frontends_*`、`engine_frontend_steps_only_via_gameStep` 等）改扫 `app/pure` + `web/hs`
   - 桌面遗留清理（2026-10-05，`refactor/web-only-2`），−4 → 466：随 `Engine.GridUI` 删除 `View` 的 `grid_ui_geometry_matches_legacy_layout` / `grid_ui_click_drag_highlight` 与 `GridGeometry` 的 `grid_ui_px_pinned`；随桌面地毯标记 `carpetAt` 删除 `view_carpet_marks_match_legacy`（`View` 12 → 9，`GridGeometry` 5 → 4）；`view_title_and_bracket_match_legacy` 去掉 `goalBracket` 部分，改名 `view_title_matches_legacy`；`Presentation` 用例数不变，去掉对 `prSprite` / `clearTint` / `scorePopRGB` / `clearSprite` / `comboPopSprite` 的断言
+  - 审计整改第 3 轮（2026-10-05），+2 → 468：`ec_entity_wires_damage`（多格实体扣血接线）与 `mechName` 唯一护栏
+  - 元素接口收缩（2026-10-05 – 06，slim-1…11，见 [guide/08 阶段 14](guide/08-演进史.md)）：slim-1 +1（`ab_near_escape_absorbed`）→ 469；slim-2 +2（`Spec.PhaseSlim`：`phase_gem_matches_ability_gem`、`phase_defaults_silent_near`）→ 471；slim-3…11 只改写不增减（slim-9 起 `ElementAbility` / `Archetype` 针对 `Phase`；slim-10 `archetype_builtin_kind_inventory` 改数 `Phase` 实例、`ec_entity_wires_damage` 改扫 `cPasses` 里的 `entityDamage`）→ 471
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 网页版的构建与测试（`make build` / `make check`）见下文「网页版测试」。
@@ -87,7 +89,7 @@ stack test
 - 测试套件**直接编译 `src/`**（`source-dirs` 含 `src`，不依赖 `match3` 库）：库模块对测试是同一组件里的模块，GHC 只重编真正用到改动内容的测试模块。改一个库模块导出时，`make verify` 从约 50–67 s 降到约 22–27 s；代价是全量构建多编一遍 `src`（约 +15 s）。
 - 内置内容的数量（关卡数、注册项数、本体 instance 数）集中在 `test/Spec/Support/Inventory.hs`，加元素 / 加关卡只改那里。
 - 每个用例默认 120 秒超时（`test/Spec.hs` 的 `defaultTimeout`，命令行 `--timeout` 优先），挂起会变成失败而不是卡住。
-- 目录（用例数合计 466）：
+- 目录（用例数合计 471）：
 
 | 文件 | 用例数 | 内容 |
 |------|-------:|------|
@@ -106,8 +108,8 @@ stack test
 | `test/Spec/Element.hs` | 2 | 元素世界（测试专用木箱 `Crate` / 注册项 `crateDef` 在 Support 里） |
 | `test/Spec/Extension.hs` | 14 | 段 2c 扩展钩子护栏：Board 层收元素世界（源码扫描）、`GoalNamed`、地面层、边缘收集、步末补结算、经 Engine 的手动洗牌；第 7b 刀通用步末效果（跳跳虫）；第 8 刀扩展一条形状规则（L / T → 炸弹）、一条组合规则（直线 × 普通宝石）、两种补子策略（关卡级元素「金币雨」、关卡颜色数 `colorsRefill 3`）（样例元素苔藓 / 风筝 / 陷坑 / 浮尘 / 跳跳虫 / 金币雨与样例规则只定义在该模块里）；可扩展性 P2 胜负节拍：测试专用「限时」关卡级元素经 `Judging` 把步数 ≤ 3 的一步判成输（`ext_judging_level_element`），内置关卡级元素都不回复（`judge_default_no_replier`，全部战役关）；可扩展性 P2 显示字段：测试专用「灯笼」只在 caps 里写 `displays` / `labelled` / `loseHintIs`，`cellExtrasWith` / `displayLabelWith` / `loseHintWith` 直接取到（`ext_element_display_fields`） |
 | `test/Spec/Branches.hs` | 11 | 段 4 专门分支收编护栏：测试专用成对交换规则（拉杆）/ 开启规则（豆荚）/ 可推动（小车）只经元素世界生效；内置改色 / 推动谓词与原写死谓词相同；关卡级元素（飞碟 / 皮带 / 传送门 / 地毯 / 地面层）的节拍回复与原实现相同、去掉后不生效（含 38 关实测；第 7a 刀起经钩子与 `Element.Level` 的节拍函数）；主流程源码扫描；第 7a 刀 `br_board_takes_hooks_only`（Board 核心只收钩子、流水线不读旧的五个字段、删掉的名字不再出现）；第 7b 刀 `br_end_phase_table_order`（步末表的内容与顺序、按表执行、删掉的步末构造器不再出现）；第 8 刀 `br_rule_tables_out_of_main_flow`（流水线不点名特殊块种类、不直接随机选色、不用组合几何；特殊合成不再挂在元素上） |
-| `test/Spec/ElementClass.hs` | 13 | 元素类：逐格查询 / 规则 / 逐手结果与元素查询快照全等；`SomeElement` 的 Eq / Show（按类型比较，同名不同类型不等）、冰层与里层的合成、状态在元素值里、`Mechanic` 的节拍缺省都不回复；旧框架名字已删（源码扫描）、关卡级机制只经 `registerMechanic` 接入、带状态的扩展机制「虹吸」不改主流程接入（`mechStart` 开局、状态写回 `gsLevelElems`、去掉注册后原样不生效、`Show` 追加 `gsLevelExtra`；保留内置飞碟，同一 `onRefilled` 节拍两者都吸收）、自定义可匹配宝石；`mkWorldChecked` 报重名 / 同格多认领 / 不认领 |
-| `test/Spec/ElementAbility.hs` | 10 | 元素类重构第 1–6 刀：能力类与 `Layered` 合成（与内置世界逐方法相等）、`SomeElement` / `Layered` 转发全部方法（按源码核对）、装箱透明、解码顺序、规则方法钉值、同名替换后对照快照不变、`cellFace` 由 `faceBase` 驱动与旧写法逐字段相同（见「元素类重构验收」） |
+| `test/Spec/ElementClass.hs` | 15 | 元素类：逐格查询 / 规则 / 逐手结果与元素查询快照全等；`SomePhase` 的 Eq / Show（按类型比较，同名不同类型不等）、冰层与里层的合成、状态在元素值里、`Mechanic` 的节拍缺省都不回复；旧框架名字已删（源码扫描）、关卡级机制只经 `registerMechanic` 接入、带状态的扩展机制「虹吸」不改主流程接入（`mechStart` 开局、状态写回 `gsLevelElems`、去掉注册后原样不生效、`Show` 追加 `gsLevelExtra`；保留内置飞碟，同一 `onRefilled` 节拍两者都吸收）、自定义可匹配宝石；`mkWorldChecked` 报重名 / 同格多认领 / 不认领 |
+| `test/Spec/ElementAbility.hs` | 11 | 元素类重构第 1–6 刀起，slim-9 改为针对 `Phase`：`Layered` 合成与内置世界逐方法相等、`phaseProbe` 读全值级方法且 `Layered` 覆盖每个 `Phase` 方法（按源码核对）、装箱透明、解码顺序、规则方法钉值、同名替换后对照快照不变、`cellFace` 由 `view` 的 `fBase` 驱动与旧写法逐字段相同（见「元素类重构验收」） |
 | `test/Spec/ElementOracle.hs` | 4 | 元素类重构第 0 刀：元素对照快照 `element-oracle.txt` 的 V / N·P / AR·ER·SR·SO / 整轮查询各段逐行相等 |
 | `test/Spec/JellyBubble.hs` | 8 | 段 5 双层果冻 / 气泡：按层计数与目标、洗牌 / 撤销、气泡邻消 / 直接命中即破、挡交换 / 无色 / 下落、第 39 / 40 关、主流程源码扫描 |
 | `test/Spec/Engine.hs` | 6 | 多游戏通用接口（玩具 `test/Toy.hs`、依赖方向扫描、三消实例）；段 3：终局后撤销与 `13094d1` 比对、前端只经 `gameStep`（源码扫描）；`engine_level_setup_matches_campaign`（`LevelSetup` 关卡记录开局 = `Campaign` 下标开局，全部战役关 × 种子 1–2；战役外记录按记录开局） |
@@ -115,7 +117,8 @@ stack test
 | `test/Spec/ReplayUndo.hs` | 17 | 回放脚本 `trace_*`、撤销、洗牌 |
 | `test/Spec/Golden.hs` | 1 | `golden_behaviour_snapshot`（调 `test/golden/Golden.hs`；第 5 项起把 `Golden.goldenSections` 各段经 `Spec.Support.Parallel.parallelForce` 多核求值、按原顺序拼回再逐行比对） |
 | `test/Spec/Properties.hs` | 24 | QuickCheck 性质（原有 1 条 + 第 1 刀 8 条 + 第 3 刀提示局部检查对照旧实现 1 条 + 第 4 刀计数 2 条 + 第 5 刀目标 3 条 + 第 6b 刀名字 newtype 1 条 + 第 7a 刀关卡级钩子 / 读数 2 条 + 第 7b 刀步末表 / 折叠回复 2 条 + 第 8 刀形状表 / 组合表 / 组合对称 / 补子策略 4 条，见「性质测试」） |
-| `test/Spec/Archetype.hs` | 3 | 元素类重构第 2 刀（取代第 9 刀的 `Spec.Caps`）：普通宝石 / `Obstacle` / `Fixed` / `Inert` 的缺省方法值（`abilityProbe` 字面量锁定）、内置本体 instance 清单、扩展障碍「荆棘」不改主流程接入（见「元素类重构验收」） |
+| `test/Spec/Archetype.hs` | 3 | 元素类重构第 2 刀（取代第 9 刀的 `Spec.Caps`）：原型组合子 `gemPhysics` / `obstaclePhysics` / `fixedPhysics` 与 `Inert` 的值（`phaseProbe` 字面量锁定）、内置本体 instance 清单、扩展障碍「荆棘」不改主流程接入（见「元素类重构验收」） |
+| `test/Spec/PhaseSlim.hs` | 2 | 元素接口收缩 slim-2：宝石经 `Phase` 与旧路径逐项相同（`phase_gem_matches_ability_gem`，名字沿用）、缺省 `onNear` 不反应 |
 | `test/Spec/Presentation.hs` | 8 | 第 10 刀：前端表现表 `UI.Presentation`（`app/pure`，测试直接编译）——每种事件恰一行、帧数 / 颜色 / 生长曲线 / 连击样式对照第 10 刀前各处 case 的字面副本、扩展元素缺省表现、音效名（只有消除 `clear` / 爆炸 `special`）、源码扫描（散落的表与颜色已收掉） |
 | `test/Spec/BombShapes.hs` | 6 | 新玩法 1：L / T 形出炸弹（规则开关 `bomb_shapes`）——只有第 41 关打开、原有 40 关 / 每日挑战 / 自由开局的形状表等于内置表、插表顺序、L 形交点出炸弹（第 1 关与去掉开关时是空洞）、五连仍出彩虹、带四连的 L 出炸弹不出直线、第 41 关实战会生成炸弹 |
 | `test/Spec/MagicStone.hs` | 6 | 新玩法 2：魔法石——能力（固定 / 挡交换 / 无色 / 洗牌保留 / 平时打不动、发射中命中归零）、邻格充能每轮 1 格且满 3 为止、满格在交换步末发射清整行整列并归零、不满不发射、道具不触发而下一次交换发射、第 42 关布局与实战（魔法石不动、发射过、石头有进度） |
@@ -314,7 +317,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `ext_end_effect_generic_hopper` | 第 7b 刀：测试专用跳跳虫（`PhaseMove` 规则，排在蜗牛之后）步末向右与宝石换位，产出通用 `EndEffect EvMove "hopper"`：不改 Event / Trace / 主流程，回放逐项重放到终盘、效果事件带 (起点, 终点)、`Show` 退回记录语法；内置表下原地不动、没有它的效果 |
 | `ext_shape_rule_lt_bomb` | 第 8 刀：测试专用 L / T 形状规则插到内置形状表最前面（`setShapeRules`）：同色横竖三连交叉时横线在交点放炸弹、竖线认领不生成；内置表下同一 L 形不生成特殊块（交点是空洞），扩展后 `clearMatchesDetailedWith` 与正式交换（`resolveSwapWith`）第一轮的交点都是炸弹 |
 | `ext_combo_rule_line_gem` | 第 8 刀：往内置组合表末尾加「直线 × 普通宝石 → 直线端整行整列」（`setComboRules`）：内置表下这一步不成三消、`NoMatch`；扩展后两个方向都成立、交换被接受，第一轮清掉直线端所在行与交换列 |
-| `ext_refill_policy_level_element` | 第 8 刀：测试专用关卡级机制「金币雨」实现 `refillPolicy`，把补子策略换成每洞一枚金币（惰性占格、不耗随机数）：C5 四连一步只有一轮，挖出的 3 个洞 (0,0) (0,1) (0,3) 补成金币（横消落在交换点）；缺省策略下同一步没有金币 |
+| `ext_refill_policy_level_element` | 第 8 刀：测试专用关卡级机制「金币雨」回复 `AskRefill` 节拍，把补子策略换成每洞一枚金币（惰性占格、不耗随机数）：C5 四连一步只有一轮，挖出的 3 个洞 (0,0) (0,1) (0,3) 补成金币（横消落在交换点）；缺省策略下同一步没有金币 |
 | `ext_refill_policy_level_colors` | 第 8 刀：元素世界换成关卡颜色数策略 `colorsRefill 3`（`setRefillPolicy`）：空盘沉降补子只出 C1..C3；缺省策略五色都出 |
 | `ext_manual_shuffle_keeps_crate_via_engine` | 走 `match3GameWith world` 的 `Shuffle` 动作：木箱原位保留；`keepOnShuffle = False` 的浮尘只在自定义表下被洗走（修的是 `playWith` 洗牌分支原先用内置表的问题） |
 
@@ -366,7 +369,7 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | `ec_queries_match_stage1_snapshot` | 快照 Q / P / R 行逐行相等（取代阶段 1 的 `ec_bridge_fields_match_legacy`） |
 | `ec_rules_match_stage1_snapshot` | 快照 A / E / S / O / C / G 行逐行相等（取代阶段 1 的 `ec_bridge_rules_match_legacy`） |
 | `ec_play_matches_stage1_snapshot` | 快照 M 行逐行相等（取代阶段 1 的 `ec_registry_paths_agree_in_play`） |
-| `ec_some_element_eq_show` | `SomeElement` 的 Eq（第 6b 刀起按具体类型 + 该类型的 Eq，不再比名字字符串）、Show 稳定；宝石全用缺省方法（颜色取自写回的格子）；彩虹 `hintable = False`；世界把格子解码成（带冰的）元素值 |
+| `ec_some_element_eq_show` | `SomePhase`（原 `SomeElement`）的 Eq（第 6b 刀起按具体类型 + 该类型的 Eq，不再比名字字符串）、Show 稳定；宝石全用缺省方法（颜色取自写回的格子）；彩虹 `hintable = False`；世界把格子解码成（带冰的）元素值 |
 | `ec_some_element_eq_by_type` | 第 6b 刀：两个同名（`"twin"`）、写回同一个格子的测试元素类型装箱后不相等；同类型同状态相等、不同状态不等；叠层同理；名字是 `ElementName`（Show 与 String 相同） |
 | `ec_ice_layer_composes` | 冰层 `Layered`：写回格子带冰层数、匹配色透过、名字取本体、多冰不点火 / 末层点火、命中削一层 / 末层随宝石碎、洗牌保留；与世界的 `directHitWith` 逐格一致 |
 | `ec_state_lives_in_element_value` | 测试专用「鸟窝」：剩余命中数在元素值里，锤子每敲一次减一、最后一下才碎并计数；放置经构造器 |
@@ -411,7 +414,9 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 
 画面等价性依据：22 个静态场景、6 个步末动画场景与连击逐轮高亮 / 特殊块爆炸 / 特殊块组合 / 锤子 / 十字动画场景截图与 `ac211d8` 逐帧相同（AE=0），窗口标题逐字相同。
 
-## 元素类重构验收（2026-10，第 0–6 刀）
+## 元素类重构验收（2026-10，第 0–6 刀；slim-1…11 续）
+
+> slim-9 删除 `Ability` 六类、slim-10 删除 `Kind` 类之后，下表里的用例名保留原名，内容改为针对 `Phase` / `phaseProbe` / 原型组合子；slim-1…11 每刀三份快照同样逐字节不变。
 
 框架见 [architecture.md「元素的能力与调用时机」](architecture.md#元素的能力与调用时机) 与 [guide/04](guide/04-元素框架.md)。等价性依据：`golden.txt`、`element-queries.txt`、`element-oracle.txt` 三份快照每刀逐字节不变；第 3–6 刀另跑 `make check`（含网页 parity / anim / e2e）。第 9 刀的能力记录 `Caps` 与它的测试文件 `Spec.Caps`（`default_caps_pinned` / `caps_element_class_is_thin` / `ext_caps_element_plugs_in`）随第 2 刀删除，由下面的用例取代。
 
@@ -420,17 +425,17 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 | 用例 | 断言 |
 |------|------|
 | `ab_same_name_copies_oracle_unchanged` | 把若干内置元素换成测试里同名的新写法副本注册，对照快照逐行不变 |
-| `ab_layered_matches_builtin` | 测试里的冰 / 巧 / 锁链 / 石头 / 宝石副本经 `Layered` 合成后，与内置世界解码出的元素 `abilityProbe` 逐方法相等 |
+| `ab_layered_matches_builtin` | 测试里的冰 / 巧 / 锁链 / 石头 / 宝石副本经 `Layered` 合成后，与内置世界解码出的元素 `somePhaseProbe` 逐方法相等 |
 | `ab_kind_name_matches_decoded` | 每种本体的 `kindName` = 解码出的值的 `nameOf` |
-| `ab_some_element_forwards_all_methods` | 源码扫描：六个能力类的每个方法都在 `SomeElement` 里转发、都进了 `abilityProbe` |
+| `ab_some_element_forwards_all_methods` | 源码扫描：`Phase` 的每个值级方法都进了 `phaseProbe`（`codec` 是类型级、`onNear` 由规则快照锁定）（名字沿用 slim-9 之前） |
 | `ab_layered_composes_all_methods` | 源码扫描：每个能力方法在 `Layered` 的 instance 里都有合成 |
-| `ab_boxing_is_transparent` | 装箱前后 `abilityProbe` 逐项相等；样本上每个方法至少有一个非缺省值（漏转发测得出来） |
+| `ab_boxing_is_transparent` | 装箱（`SomePhase`）前后 `phaseProbe` 逐项相等；样本上每个方法至少有一个非缺省值（漏转发测得出来） |
 | `ab_world_decode_order` | 解码：冰在外、叠层在内，剩下的交给本体；未注册的 `Custom` 名字 = 惰性占格；同名以后注册的为准 |
-| `ab_rule_methods_pinned` | 第 3 刀：每种内置本体 / 叠层的 `neighbourPrio` / `reach` / `spreads` 等方法值与写死的表相同 |
-| `ab_cell_face_matches_legacy_zoo` / `qc_cell_face_matches_legacy` | 第 6 刀：`cellFace`（由 `Renders.faceBase` 驱动）与第 6 刀前按构造器写死的旧写法副本逐字段相同（内置样本格 + 随机格） |
-| `archetype_defaults_pinned` | 普通宝石 / `Obstacle` / `Fixed` 原型包与 `Inert` 在石头 2 层、C3 宝石等格上的 `abilityProbe` 与写死的字面量相同 |
+| `ab_rule_methods_pinned` | 第 3 刀起：每种内置本体 / 叠层的邻格次序（slim 后读 `phaseNearPrio`，即 codec 的 `cNear`）/ 范围 / 蔓延与写死的表相同 |
+| `ab_cell_face_matches_legacy_zoo` / `qc_cell_face_matches_legacy` | 第 6 刀：`cellFace`（由元素 `view` 的 `fBase` 驱动）与第 6 刀前按构造器写死的旧写法副本逐字段相同（内置样本格 + 随机格） |
+| `archetype_defaults_pinned` | `gemPhysics` / `obstaclePhysics` / `fixedPhysics` 的字面量，以及普通 / 障碍 / 固定原型与 `Inert` 在石头 2 层、C3 宝石等格上的 `phaseProbe` 与写死的值相同 |
 | `archetype_builtin_kind_inventory` | 内置本体 instance 个数 = `Inventory.builtinBodyInstanceCount`（22） |
-| `archetype_ext_element_plugs_in` | 测试专用障碍「荆棘」（`deriving … via (Obstacle Thorn)` + `instance Kind Thorn`），`register (kindDef @Thorn) defaultWorld` 后：挡交换、无色；锤子第 1 下耐久 2→1、第 2 下碎掉并计 `("thorn",1)`；`defaultWorld` 下是惰性占格 |
+| `archetype_ext_element_plugs_in` | 测试专用障碍「荆棘」（`instance Phase Thorn`，用 `obstacleMatch` / `obstaclePhysics`），`register (kindDef @Thorn) defaultWorld` 后：挡交换、无色；锤子第 1 下耐久 2→1、第 2 下碎掉并计 `("thorn",1)`；`defaultWorld` 下是惰性占格 |
 
 ## 多游戏接口验收（第三刀）
 

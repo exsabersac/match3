@@ -193,12 +193,12 @@
 | 回放 | 每次交换的步末记一条 `EvTick "snow_boss"`：四格的新计数（召唤时还有雪块格），`applyEndEffect` 可重放 |
 | 放置 | `Place "snow_boss" [AInt 血量 (1–255), AInt 象限] 格`；关卡里用 `bossAt (行, 列) 血量` 一次铺四格 |
 | 关卡 | 第 45 关「雪怪」：24 步，Boss 左上角在 (2,3)（占 (2,3)–(3,4)），40 血，目标击败 Boss |
-| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素的 `Renders.face`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；`UI.CellFace.bossPart` 把它们拼回 `BossPart`，网页格子 JSON 是同一组字段） |
+| 视图 | `Match3.View.gvBoss :: Maybe BossView`（目标里有 `CountNamed "snow_boss"` 时为 `Just`，`bvHp` = 满血 − 已扣、`bvMax` = 目标数）；单格显示字段 `cellExtras`（元素 `view` 的 `fExtras`：象限 q、是否过半受伤 hurt、召唤计数 / 周期 turn / every；`UI.CellFace.bossPart` 把它们拼回 `BossPart`，网页格子 JSON 是同一组字段） |
 | 前端 | 贴图 `snow_boss_0..3`（整只冰蓝雪怪切成四块）/ `snow_boss_hurt_0..3`（血量 ≤ 一半时的受伤表情），右下块上三个召唤进度点；HUD 目标条换成红色血条 + `snow_boss` 头像 +「HP 剩余/满血」，过半后深红闪烁（原桌面几何版已随桌面版移除） |
 
 取舍说明：
 - **四个 Custom 格而不是关卡级元素**：backlog 原写「关卡级元素记位置和血量」；这里按「占 2×2 格、挡交换不下落」的要求，直接用四个固定格表达——挡交换 / 不下落 / 洗牌保留 / 前端画格都走现成的固定格路径，状态随盘面走（撤销 / 回放 / 快照天然正确），`gsLevelElems` 不变。代价是血量在四格里各存一份，规则里总是四格一起改写。
-- **最小通用钩子**：只加了一个计数能力 `weighs n`（当时的 `CountCaps.ccDiffWeight`，元素类重构后是 `Countable.diffWeight`，缺省 1；`weighElementWith`、`Game.Tally.diffCountsWith` 按权重求和）。缺省权重 1 时与原来的「个数差」逐字相同，所以原有元素（双面块等 `countsDiff`）不受影响。掉血、击败、召唤都用已有的邻格规则 / 直接命中 / 步末规则表达，主流程没有点名雪怪。
+- **最小通用钩子**：只加了一个计数能力 `weighs n`（当时的 `CountCaps.ccDiffWeight`，slim-9 起是 `Meta.metaDiffWeight`（雪怪经 `liveMeta` 随血量变），缺省 1；`weighElementWith`、`Game.Tally.diffCountsWith` 按权重求和）。缺省权重 1 时与原来的「个数差」逐字相同，所以原有元素（双面块等 `countsDiff`）不受影响。掉血、击败、召唤都用已有的邻格规则 / 直接命中 / 步末规则表达，主流程没有点名雪怪。
 - **确定性召唤**：召唤选格若从 `gsGen` 取随机数，会让补子序列移位、所有后续局面变化；按盘面散列保证只有第 45 关行为变化（`sb_other_levels_unchanged` 去掉雪怪条目逐关比对）。散列与毛球共用 `Builtin.Common.boardSeed` / `posSeed` / `pickBy`，同样依赖派生的 `Show`（`Spec.BoardSeed` 钉住第 45 关开局的召唤格）。
 - **雪块 = 1 层石头**：不引入新障碍类型，前端与计数都现成；打碎雪块照常计石头。
 - **扣血只看真消除 + 直接命中**：与魔法石 / 毛球一致，被波及的叠层 / 冰层（没有真消除）不算，避免一次特效在一格上重复扣血。
@@ -323,9 +323,9 @@
 | 步末效果 | `EndEffect { endEffectKind, endEffectElement, endEffectItems }`（第 7 刀 7b 起的通用形状） | 事件类型 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` + 元素名 countdown / belt / vine·choco·steam / snail；`applyEndEffect` 逐项重放回盘面 |
 | 步末一项 | `EndItem { eiFrom, eiTo, eiCell, eiBack }` | 目标格写成 `eiCell`，`eiBack` 为 `Just` 时来源格写成它；蜗牛 `eiFrom == eiTo` 表示碰壁掉头，新朝向 = `endItemDir` |
 | 效果事件 | `Event { evKind, evWave, evElement, evCells, evAmount }`、`traceEvents` | 回放脚本按时间线展开：`EvBlast` / `EvClear` / `EvHit` / `EvDrain` / `EvScore` / `EvCombo` / 步末 `EvTick` / `EvBelt` / `EvSpread` / `EvMove` / `EvShuffle` |
-| 元素（类 / 元素世界） | 六个能力类 `Cellular` / `Matchable` / `Hittable` / `Movable` / `Countable` / `Renders`（类同义词 `Element`，每个方法带「普通宝石」缺省；障碍用 DerivingVia 原型包 `Obstacle` / `Fixed`）、类型级 `Kind`（解码、放置、标签、邻格规则方法、逃生口 `boardPasses`）/ `Entity`（多格实体）/ `GroundKind`（地面层）、叠层 `Layer` 与合成 `Layered`、`SomeElement`、元素世界 `World`（有序的类型列表 `[Def]`，`kindDef @T` …）、`defaultWorld` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)、[guide/04](guide/04-元素框架.md)）；`gsCounts` 的 `CountNamed 名字` 记元素的具名计数（`namedCounts` 列出） |
+| 元素（类 / 元素世界） | 本体类 `Phase`（`codec` 类型级数据 + `onMatch` / `onHit` / `physics` / `onNear` / `view` / `liveMeta`；常见组合用原型组合子 `gemMatch` / `obstaclePhysics` / `fixedPhysics` 等）、`Match3.Element.Kind` 里读 codec 的函数（解码、放置、标签、逃生口 `boardPasses`）与记录 `Entity`（多格实体）/ `GroundKind`（地面层）、叠层 `Layer`（`peel` / `putOn` / `layerCover`）、关卡级 `Mechanic`（`layout` / `onBeat`）、元素世界 `World` | 一种格子内容在各时机的反应，状态在元素值里（见 [architecture.md](architecture.md#元素框架与事件)、[guide/04](guide/04-元素框架.md)）；`gsCounts` 的 `CountNamed 名字` 记元素的具名计数（`namedCounts` 列出） |
 | 元素名 / 自定义状态 | `ElementName`、`CustomState`（`Match3.Types.Name`，第 6b 刀起为 newtype） | 元素名是元素世界 / 放置表 / 地面层 / `Custom` 格 / 效果事件 / `CountNamed` 的键；`Custom 名字 状态` 的状态值包在 `CustomState` 里。两者打印与底层字符串 / 整数相同（`Custom "bubble" 1`） |
-| 成对交换规则 / 开启规则 | `SwapRule`（`SwapPass`）/ `OpenRule`（`OpenPass`），挂在 `Kind.boardPasses` 上 | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
+| 成对交换规则 / 开启规则 | `SwapRule`（`SwapPass`）/ `OpenRule`（`OpenPass`），挂在元素 codec 的 `cPasses` 上 | 段 4：彩虹取色、特殊 × 特殊合成是成对交换规则（交换两端的组合直接给起手种子）；彩蛋是开启规则（开出的格本轮坐住） |
 | 特殊块形状规则 | `ShapeRule { shapeName, shapeSpawn }`、`ShapeCtx`（第 8 刀） | 匹配形状 → 生成哪种特殊块；有序表（元素世界 `shapeRules`），每条连线取第一条认领它的规则。内置 `builtinShapeRules`：5 连彩虹、横 4 横消、竖 4 竖消；L / T 形 → 炸弹（`ltBombRule`）只在规则开关 `bomb_shapes` 打开的关卡插入（见下文「L / T 形出炸弹」） |
 | 特殊块组合规则 | `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`（第 8 刀） | 两个特殊块交换时的组合效果；有序表（元素世界 `comboRules`），两个方向都试（对称），整张表并成成对交换规则 20。内置 `builtinComboRules`：炸弹 × 炸弹、直线 × 直线、直线 × 炸弹、彩虹 × 直线 |
 | 补子策略 | `RefillPolicy { refillName, refillCell }`、`RefillCtx`（第 8 刀） | 沉降后空洞补什么：元素世界的策略（`refillPolicyWith`，缺省 `defaultRefill` = 随机五色普通宝石），关卡级元素可回复 `Refilling` 换掉；`colorsRefill n` = 只用前 n 色 |

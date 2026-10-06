@@ -30,11 +30,11 @@ import Match3.Element.Mechanic (SomeMechanic)
 import Match3.Types (boardAt)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Levels.Campaign (levelCount)
 import Match3.Types (boardDims)
-import Match3.Element.Level (levelHooksWith, levelWorldIn)
-import Match3.Element.World (World)
+import Match3.Element.Level (levelHooksWith, levelRegistryIn)
+import Match3.ECS.Registry (Registry)
 import Spec.Support (digest, findMatchPair)
 import System.Random (RandomGen, StdGen, mkStdGen)
 import Test.Tasty
@@ -51,7 +51,7 @@ tests =
 -- 用例
 
 -- | 用例：(标签, 本关元素世界, 本关钩子, 起始盘面, 生成器)。
-data Case = Case String World LevelHooks Board StdGen
+data Case = Case String Registry LevelHooks Board StdGen
 
 cases :: [Case]
 cases =
@@ -60,7 +60,7 @@ cases =
   , seed <- [1, 2]
   , Just gs <- [campaignGame li seed]
   , let elems = gsLevelElems gs
-        world = levelWorldIn defaultWorld elems
+        world = levelRegistryIn defaultRegistry elems
         hooks = levelHooksWith world elems
         b0 = gsBoard gs
         (nr, nc) = boardDims b0

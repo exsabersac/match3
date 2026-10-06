@@ -11,7 +11,7 @@ import Data.Maybe (isJust)
 import Match3.Board.Default (findHint)
 import Match3.Board.Grid (setCell)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Game.Level (newGameAtLevel)
 import Match3.Levels.Campaign (allLevels)
 import Match3.Levels.Level (levelConfig)
@@ -201,7 +201,7 @@ undo_shuffle_reset_combo_feedback = withComboState $ \_ gs1 -> do
     Nothing -> assertFailure "need a follow-up move"
     Just (p1, p2) -> do
       let (gs2, _) = trySwap p1 p2 gs1
-      case stepThenUndo defaultWorld gs1 (M3E.Swap p1 p2) of
+      case stepThenUndo defaultRegistry gs1 (M3E.Swap p1 p2) of
         Nothing -> assertFailure "undo should succeed"
         Just gsU -> do
           gsBoard gsU @?= gsBoard gs1
@@ -270,7 +270,7 @@ trace_events_consistent_with_trace = do
                  , sum [evAmount e | e <- evs, evWave e == k, evKind e == EvScore] /= cwScore w
                  ]
           | (li, gs, p1, p2) <- cases
-          , let (gs1, _, mt) = resolveSwapWith defaultWorld p1 p2 gs
+          , let (gs1, _, mt) = resolveSwapWith defaultRegistry p1 p2 gs
                 evs = traceEvents mt
                 tag x = x ++ "@L" ++ show li ++ show (p1, p2)
           ]

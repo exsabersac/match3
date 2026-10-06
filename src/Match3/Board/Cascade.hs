@@ -5,7 +5,7 @@
 -- 同时产出「结算计数」（CascadeTally）和「逐轮回放」（[CascadeWave]），两者来自同一次计算，
 -- 结算与回放因此天然一致。
 --
--- 核心：cascadeMatchesFromWith / cascadeSeedsWith / cascadeAfterWith（皮带后 / 步末后）/ cascadeCountdownsWith（全部收 World），返回 CascadeRun。
+-- 核心：cascadeMatchesFromWith / cascadeSeedsWith / cascadeAfterWith（皮带后 / 步末后）/ cascadeCountdownsWith（全部收 Registry），返回 CascadeRun。
 -- 每一轮的「沉降 + 补子」只在 settleRound、整轮吸收只在 absorbRound 各写一次。
 -- 调用方直接读 CascadeRun / CascadeTally 的字段；stepCascadeAtWith 是「恰好一轮」的小工具。
 -- 本模块不依赖内置元素世界（内置元素世界的短名在 Match3.Board.Default）。
@@ -63,7 +63,7 @@ import Match3.Board.Effect
 import Match3.Board.Hooks (LevelHooks(..), noHooks)
 import Match3.Board.Phase (Phase(..), Stage, clearStage, digHoles, fallStage, fullStage, stageGrid)
 import Match3.Board.Wave (CascadeWave(..))
-import Match3.Element.World (World, counterWith, endRules, pushableWith)
+import Match3.ECS.Registry (Registry, counterWith, endRules, pushableWith)
 import Match3.Element.Event (EndEffect)
 import Match3.Counts (CounterKey(..), Counts, countsFromList, noCounts, singleCount)
 import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..), runEndRules)
@@ -105,7 +105,7 @@ stillRun :: Board -> LevelHooks -> g -> CascadeRun g
 stillRun b hooks g = CascadeRun b zeroTally hooks [] g
 
 -- | 沉降时被边缘收走的格按各自的 counter 计数（内置只有饼干 → CountCookies：底行收走的饼干计入饼干数）。
-withDrained :: World -> [(Pos, Cell)] -> Counts -> Counts
+withDrained :: Registry -> [(Pos, Cell)] -> Counts -> Counts
 withDrained world drained h = h <> foldMap (hitOf . counterWith world . snd) drained
 
 -- | 把一组计数加进已有计数（皮带后沉降收走的格）。
@@ -116,7 +116,7 @@ addHits h t = t {ctCounts = ctCounts t <> h}
 --
 -- Counts 是交换幺半群（逐键相加、mempty = 什么都没计），所以「每格一份计数，foldMap 合起来」
 -- 等于逐格 bumpCount 进累积器（加法与顺序无关，Counts 不存 0）。
-hitsOn :: World -> Board -> [Pos] -> Counts
+hitsOn :: Registry -> Board -> [Pos] -> Counts
 hitsOn world b = foldMap (hitOf . counterWith world . getCell b)
 
 -- | 一个格子的计数：计数键加 1。保险箱 / 时间精灵的键按前后盘面差计（Game.Tally，元素的 diffCounter），
@@ -128,7 +128,7 @@ hitOf (Just CountSpirits) = mempty
 hitOf (Just k) = singleCount k 1
 
 -- | 一组格在盘面 b 上按颜色计数（CountColor）。
-colorsOn :: World -> Board -> [Pos] -> Counts
+colorsOn :: Registry -> Board -> [Pos] -> Counts
 colorsOn world b pos = countsFromList [(CountColor col, countColorWith world b pos col) | col <- allColors]
 
 --------------------------------------------------------------------------------
@@ -159,7 +159,7 @@ waveOf before cleared drained holes after =
 --
 -- 签名只说用到哪两种效果——读钩子（沉降节拍、补子策略）与补子（随机数）；不发出回放
 -- （是否记这一轮由调用方决定，见 'cascadeAfterM'）。
-settleRoundM :: (MonadRefill m, MonadLevelHooks m) => World -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
+settleRoundM :: (MonadRefill m, MonadLevelHooks m) => Registry -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
 settleRoundM world before (holes, n, pos) w = do
   hooks <- currentHooks
   let (fallen, drained) = fallStage world hooks holes                  -- 消除 → 下落
@@ -169,7 +169,7 @@ settleRoundM world before (holes, n, pos) w = do
   pure (Round wave after n (withDrained world drained (hitsOn world (stageGrid before) pos)) sites)
 
 -- | 一轮并发出它的回放记录（除皮带后 / 步末后的「只沉降」一轮外，每一轮都这样记）。
-roundM :: MonadCascade m => World -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
+roundM :: MonadCascade m => Registry -> Stage 'Full -> (Stage 'Cleared, Int, [Pos]) -> Int -> m Round
 roundM world before cr w = do
   rd <- settleRoundM world before cr w
   emitWave (rdWave rd)
@@ -178,7 +178,7 @@ roundM world before cr w = do
 -- | 补子后的整轮吸收（钩子 onAbsorb：关卡级机制的 onRefilled，内置 = 飞碟）。吸到格子时吸收单独成一轮
 -- （clearUfoAbsorbedWith → 一轮，波次 w，已发出回放）；返回 Just (吸收轮, 其中被吸走的格数)。钩子由 absorbHooks 推进。
 -- 匹配连锁与种子起手共用这一份。
-absorbRoundM :: MonadCascade m => World -> Board -> Int -> m (Maybe (Round, Int))
+absorbRoundM :: MonadCascade m => Registry -> Board -> Int -> m (Maybe (Round, Int))
 absorbRoundM world b w = do
   absorbed <- absorbHooks b
   if null absorbed
@@ -204,19 +204,19 @@ ranToRun (Ran (b, t) hooks waves g) = CascadeRun b t hooks waves g
 -- 核心：普通匹配连锁
 
 -- | 普通匹配连锁，波次从 0 起（= cascadeMatchesFromWith world 0）。
-cascadeMatchesWith :: RandomGen g => World -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
+cascadeMatchesWith :: RandomGen g => Registry -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatchesWith world = cascadeMatchesFromWith world 0
 
 -- | 普通匹配连锁，波次从 startW 起：纯解释器运行 'cascadeMatchesFromM'。
-cascadeMatchesFromWith :: RandomGen g => World -> Int -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
+cascadeMatchesFromWith :: RandomGen g => Registry -> Int -> Maybe Pos -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeMatchesFromWith world startW prefer hooks g b = runCascade hooks g (cascadeMatchesFromM world startW prefer b)
 
-cascadeMatchesM :: MonadCascade m => World -> Maybe Pos -> Board -> m (Board, CascadeTally)
+cascadeMatchesM :: MonadCascade m => Registry -> Maybe Pos -> Board -> m (Board, CascadeTally)
 cascadeMatchesM world = cascadeMatchesFromM world 0
 
 -- | 普通匹配连锁（程序）。每轮：clearMatchesDetailedWith → 一轮（沉降 + 补子）→ 整轮吸收（若飞碟吸到格子，吸收单独算下一轮）。
 -- 没有匹配时最大波次 = startW。返回 (终盘, 计数)；回放、钩子、生成器都在效果里，循环只带计数相关的累积器。
-cascadeMatchesFromM :: MonadCascade m => World -> Int -> Maybe Pos -> Board -> m (Board, CascadeTally)
+cascadeMatchesFromM :: MonadCascade m => Registry -> Int -> Maybe Pos -> Board -> m (Board, CascadeTally)
 cascadeMatchesFromM world startW prefer0 b0 =
   go prefer0 b0 0 0 startW noCounts []
   where
@@ -248,11 +248,11 @@ cascadeMatchesFromM world startW prefer0 b0 =
 -- 核心：种子起手
 
 -- | cascadeSeeds（指定元素世界）：纯解释器运行 'cascadeSeedsM'。
-cascadeSeedsWith :: RandomGen g => World -> Maybe Pos -> [Pos] -> LevelHooks -> g -> Board -> CascadeRun g
+cascadeSeedsWith :: RandomGen g => Registry -> Maybe Pos -> [Pos] -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeSeedsWith world prefer seeds hooks g b = runCascade hooks g (cascadeSeedsM world prefer seeds b)
 
 -- | 种子起手（程序）：种子清除一轮（波次 1）→ 整轮吸收（波次 2）→ 普通匹配续连锁。
-cascadeSeedsM :: MonadCascade m => World -> Maybe Pos -> [Pos] -> Board -> m (Board, CascadeTally)
+cascadeSeedsM :: MonadCascade m => Registry -> Maybe Pos -> [Pos] -> Board -> m (Board, CascadeTally)
 cascadeSeedsM world prefer seeds b
   | null seeds = cascadeMatchesM world prefer b
   | otherwise = do
@@ -290,18 +290,18 @@ data AfterEntry
   deriving (Eq, Show)
 
 -- | 全部步末规则在终盘上声明的空洞（erHoles，去重，按规则顺序）。内置规则恒为 []。
-endHolesWith :: World -> Board -> [Pos]
+endHolesWith :: Registry -> Board -> [Pos]
 endHolesWith world b = nub (concat [erHoles r b | ph <- [PhaseTick, PhaseSpread, PhaseMove], r <- endRules world ph])
 
 -- | 皮带后 / 步末后的补结算：挖空（步末的空洞；皮带没有）→ 沉降（重力 / 边缘收集 / 传送门）+ 补子；
 -- 盘面有变化或收走了格时记一个只有沉降的轮次；之后成消则接普通连锁（波次从 1 起）。
 -- 步末入口没有空洞、边上也没有待收格时沉降是恒等、refill 不消耗随机数，结果就是「成消才连锁」：
 -- 内置元素的步末从不留下空洞（38 关 × 多种子扫描确认，见 docs/testing.md），金标准因此不变。
-cascadeAfterWith :: RandomGen g => World -> AfterEntry -> LevelHooks -> g -> Board -> CascadeRun g
+cascadeAfterWith :: RandomGen g => Registry -> AfterEntry -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeAfterWith world entry hooks g b = runCascade hooks g (cascadeAfterM world entry b)
 
 -- | 皮带后 / 步末后的补结算（程序）。
-cascadeAfterM :: MonadCascade m => World -> AfterEntry -> Board -> m (Board, CascadeTally)
+cascadeAfterM :: MonadCascade m => Registry -> AfterEntry -> Board -> m (Board, CascadeTally)
 cascadeAfterM world entry b = case entry of
   AfterBelt
     | hasAnyMatchWith world b -> cascadeMatchesM world Nothing b
@@ -325,13 +325,13 @@ cascadeAfterM world entry b = case entry of
 -- 核心：倒计时
 
 -- | cascadeCountdowns（指定元素世界）：依次跑 PhaseTick 阶段的步末规则，再合并各规则的引爆种子。
-cascadeCountdownsWith :: RandomGen g => World -> LevelHooks -> g -> Board -> CascadeRun g
+cascadeCountdownsWith :: RandomGen g => Registry -> LevelHooks -> g -> Board -> CascadeRun g
 cascadeCountdownsWith world hooks0 g b = snd (cascadeCountdownsTracedWith world hooks0 g b)
 
 -- | 带记录的 cascadeCountdownsWith：PhaseTick 规则只跑一遍，同时返回各规则的 (前盘, 后盘, 效果)
 -- （空效果不记，按规则顺序）和倒计时连锁。步末记录由调用方按轮次号包成 EndStep。
 cascadeCountdownsTracedWith
-  :: RandomGen g => World -> LevelHooks -> g -> Board -> ([(Board, Board, EndEffect)], CascadeRun g)
+  :: RandomGen g => Registry -> LevelHooks -> g -> Board -> ([(Board, Board, EndEffect)], CascadeRun g)
 cascadeCountdownsTracedWith world hooks0 g b =
   let r = runPureCascade hooks0 g (cascadeCountdownsM world b)
       (steps, run) = ranValue r
@@ -339,7 +339,7 @@ cascadeCountdownsTracedWith world hooks0 g b =
 
 -- | 倒计时（程序）：步末规则是纯的盘面变换，只有引爆种子之后的连锁用到效果；没有种子时什么效果也不发生
 -- （= stillRun：盘面、钩子、生成器原样）。
-cascadeCountdownsM :: MonadCascade m => World -> Board -> m ([(Board, Board, EndEffect)], (Board, CascadeTally))
+cascadeCountdownsM :: MonadCascade m => Registry -> Board -> m ([(Board, Board, EndEffect)], (Board, CascadeTally))
 cascadeCountdownsM world b = do
   let rules = endRules world PhaseTick
       -- 规则依次执行、收集非空效果 = runEndRules
@@ -357,13 +357,13 @@ cascadeCountdownsM world b = do
 -- | 恰好一轮匹配消除 + 沉降补子（指定元素世界；没有关卡级钩子：不跑飞碟、无传送门）；无匹配时返回 Nothing。
 -- 与 cascadeMatchesFromWith 的单轮是同一组调用：clear → settleRound（沉降 + 补子）；
 -- prefer 为第一轮新特殊块的优先生成位。
-stepCascadeAtWith :: RandomGen g => World -> Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
+stepCascadeAtWith :: RandomGen g => Registry -> Maybe Pos -> g -> Board -> Maybe (Board, Int, g)
 stepCascadeAtWith world prefer g b =
   let r = runPureCascade noHooks g (stepCascadeAtM world prefer b)
   in fmap (\(b', n) -> (b', n, ranGen r)) (ranValue r)
 
 -- | 单轮（程序）：发出这一轮的回放（纯入口 'stepCascadeAtWith' 不返回回放，丢弃）。
-stepCascadeAtM :: MonadCascade m => World -> Maybe Pos -> Board -> m (Maybe (Board, Int))
+stepCascadeAtM :: MonadCascade m => Registry -> Maybe Pos -> Board -> m (Maybe (Board, Int))
 stepCascadeAtM world prefer b
   | not (hasAnyMatchWith world b) = pure Nothing
   | otherwise = do

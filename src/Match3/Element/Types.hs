@@ -2,13 +2,13 @@
 -- 特殊块形状规则（ShapeRule，连同连线 MatchRun）与组合规则（ComboRule）。
 -- 元素本身是类型类（Match3.Element.Phase / Kind / Layer；命中结果是 Phase 的 Strike），主流程（匹配、挡交换、
 -- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经元素世界
--- （Match3.Element.World）问它们，不按构造器写死分支。
+-- （Match3.ECS.Registry）问它们，不按构造器写死分支。
 --
 -- 依赖：Match3.Types、Element.Event（步末规则产出 EndEffect）。不含具体元素（见 Element.Builtin）。
 --
 -- 一个格子最多三层，自上而下：冰层（宝石的 ice Int）→ 叠层（CellOverlay）→ 本体（CellContents 构造器 /
 -- 宝石种类 / Custom 名字）。冰层与叠层是叠层种类（Match3.Element.Layer 的 Layer），本体是本体种类（Kind）；
--- 命中与挡匹配等按层自上而下组合（见 Layer 的 Layered 与 World 的解码）。
+-- 命中与挡匹配等按层自上而下组合（见 Layer 的 Layered 与 Registry 的解码）。
 module Match3.Element.Types
   ( ElementName(..)
   , CustomState(..)

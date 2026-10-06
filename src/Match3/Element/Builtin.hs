@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
--- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultWorld'。
+-- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultRegistry'。
 --
 -- 本体元素 = 一个类型 + 'Phase' instance（Match3.Element.Phase；名字 / 编解码 / HUD / 逃生口都在 codec 里）；
 -- 叠层 = 'Layer' instance；地面层 = 一条 'GroundKind' 记录；关卡级元素 = Mechanic instance。xmonad LayoutClass 风格，
@@ -24,7 +24,7 @@
 -- 蜗牛 10 → 毛球 20 → 雪怪 30 → 变色龙 40（PhaseMove）。
 -- 成对交换：彩虹取色 10 → 彩虹 × 变色龙 15（新玩法 7）→ 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级机制（飞碟 / 皮带 / 传送门 / 地毯 …）实现各自的节拍方法（Match3.Element.Mechanic）。
 module Match3.Element.Builtin
-  ( defaultWorld
+  ( defaultRegistry
   , builtinDefs
   , builtinMechanics
   , builtinShapeRules
@@ -87,16 +87,16 @@ import Match3.Element.Builtin.Level
 import Match3.Element.Builtin.Obstacle
 import Match3.Element.Mechanic (SomeMechanic(..))
 import Match3.Combos (builtinComboRules)
-import Match3.Element.World (World, mkWorld, registerMechanic, setComboRules, setShapeRules)
-import Match3.Element.World (Def, groundDef, kindDef, layerDef)
+import Match3.ECS.Registry (Registry, mkRegistry, registerMechanic, setComboRules, setShapeRules)
+import Match3.ECS.Registry (Def, groundDef, kindDef, layerDef)
 import Match3.Types (GemKind(..))
 
 -- | 内置元素世界：全部内置元素 + 内置规则表（第 8 刀：形状规则 builtinShapeRules、组合表 builtinComboRules；
--- 补子策略是 mkWorld 的缺省 defaultRefill）。主流程的旧函数名（不带 With）都用它。
-defaultWorld :: World
-defaultWorld =
+-- 补子策略是 mkRegistry 的缺省 defaultRefill）。主流程的旧函数名（不带 With）都用它。
+defaultRegistry :: Registry
+defaultRegistry =
   setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-    foldl (flip registerMechanic) (mkWorld builtinDefs) builtinMechanics
+    foldl (flip registerMechanic) (mkRegistry builtinDefs) builtinMechanics
 
 -- | 全部内置元素（注册顺序 = 文档里的清单顺序，也是元素查询快照 R 行锁定的顺序；与分组无关，不要重排）：
 -- 只是一张类型列表（解码、放置、规则都是各类型的 instance 方法）。

@@ -31,17 +31,17 @@ import Data.Maybe (isJust)
 import Match3.Element.Phase (phaseToCell)
 import Match3.Element.Kind (kindName, SomeKind(..), fromCellAs)
 import Match3.Element.Layer (layerName, SomeLayer(..), peelAs)
-import Match3.Element.World (Def(..), decodeLayers)
+import Match3.ECS.Registry (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)
 import Data.Foldable (toList)
 import Data.List (isInfixOf, nub, sort)
 import Engine.Effect (Effect (..), beats)
 import Match3.Core
 import Match3.Daily (dailyLevel)
-import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (elementName)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.ECS.Registry (elementName)
 import Match3.Levels.Campaign (allLevels, levelCount, lookupLevel)
-import Match3.Element.World (elementOf, placeWith, worldDefs, topLayerName)
+import Match3.ECS.Registry (elementOf, placeWith, registryDefs, topLayerName)
 import Match3.Types (goalScore)
 import Match3.Ufo (mkUfo)
 import Match3.View (cellFace)
@@ -174,7 +174,7 @@ argp_placers_pinned = do
         sequence_ [assertEqual (show (n, args, cell)) e a | ((cell, args), e, a) <- zip3 inputs expected actual]
     | (n, expected) <- pinnedPlacements
     , let inputs = [(cell, args) | cell <- argpCells, args <- argpArgs]
-          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultWorld (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
+          actual = [either (const (Stone 99)) (`getCell` (0, 0)) (placeWith defaultRegistry (fromString n) args (boardFromRows [[cell]]) [(0, 0)]) | (cell, args) <- inputs]
     ]
 
 -- | argp_placers_pinned 的期望（由现实现生成，生成时与删除前的手写 case 副本核对过）。
@@ -347,8 +347,8 @@ generic_generators_cover_constructors = do
 generic_every_constructor_has_world_and_face :: Assertion
 generic_every_constructor_has_world_and_face = do
   cells <- cellSamples
-  let world = defaultWorld
-      entries = worldDefs world
+  let world = defaultRegistry
+      entries = registryDefs world
       kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- entries, kindName p == n]
       layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- entries, layerName p == n]
       inner = snd . decodeLayers world

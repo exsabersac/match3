@@ -1,10 +1,10 @@
 -- | 宝石冰层（Int）：匹配/清除种子时削一层；末层同波清除宝石。
 -- 与 overlay 火箭冰冻 Freeze（只挡交换）不同。
 --
--- 第二刀 2b：直接命中改由元素框架按层结算（冰层 → 叠层 → 本体，见 Match3.Element.World.directHitWith，
+-- 第二刀 2b：直接命中改由元素框架按层结算（冰层 → 叠层 → 本体，见 Match3.ECS.Registry.directHitWith，
 -- 各层反应在 Match3.Element.Builtin）。
 --
--- **兼容入口（薄封装）**：`chipIceOnClear` = `chipOnHitWith defaultWorld`，硬绑默认世界，供旧测试与
+-- **兼容入口（薄封装）**：`chipIceOnClear` = `chipOnHitWith defaultRegistry`，硬绑默认世界，供旧测试与
 -- `Match3.Board.Default` 注释对照。新代码请直接调 `chipOnHitWith w`；算法与定义以 Builtin/Layer 为准
 -- （审计 P2-7：顶层 Match3.Ice / Obstacles / Snail… 与 Builtin instance 分裂，共用几何留在 Obstacles）。
 module Match3.Ice
@@ -13,8 +13,8 @@ module Match3.Ice
   , mkIceGem
   ) where
 
-import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (chipOnHitWith)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.ECS.Registry (chipOnHitWith)
 import Match3.Types
 
 -- | Chip one ice layer on each seed / handle direct-hit peel locks.
@@ -25,4 +25,4 @@ import Match3.Types
 -- (Safe opens to Cookie). MagicHat/Maker/Snail/Bottle/Cookie are immune (persist);
 -- cookies only collect via bottom-row drain, never mid-board blast wipe.
 chipIceOnClear :: Board -> [Pos] -> (Board, [Pos])
-chipIceOnClear = chipOnHitWith defaultWorld
+chipIceOnClear = chipOnHitWith defaultRegistry

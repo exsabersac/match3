@@ -199,7 +199,7 @@ phaseOnNear e ctx = case cNear (codec @e) of
   Nothing -> NearIdle
   Just rule -> onNear rule ctx e
 
--- | 装箱的 Phase 值（slim-8：World 热路径解码）。
+-- | 装箱的 Phase 值（slim-8：Registry 热路径解码）。
 data SomePhase = forall e. Phase e => SomePhase e
 
 phaseName :: SomePhase -> ElementName

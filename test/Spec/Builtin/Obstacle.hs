@@ -21,11 +21,11 @@ import Match3.Board.Default
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crBoard), CascadeTally(CascadeTally, ctCounts, ctCells))
 import Match3.Board.Match (MatchRun(..))
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Levels.Campaign (allLevels)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (setCell)
-import Match3.Element.World (swapBlockedWith)
+import Match3.ECS.Registry (swapBlockedWith)
 import Match3.Game.Boosters (useHammer)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
@@ -290,7 +290,7 @@ stone_layer_clears_at_zero = do
 chest_blocks_swap :: Assertion
 chest_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkChest
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is chest" (isChest (getCell board (3, 3)))
 
 chest_cleared_by_adjacent :: Assertion
@@ -342,7 +342,7 @@ chest_layer_decrement = do
 honey_blocks_swap :: Assertion
 honey_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkHoney
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is honey" (isHoney (getCell board (3, 3)))
 
 honey_cleared_by_adjacent :: Assertion
@@ -395,7 +395,7 @@ honey_layer_decrement = do
 balloon_blocks_swap :: Assertion
 balloon_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkBalloon C1)
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is balloon" (isBalloon (getCell board (3, 3)))
 
 balloon_popped_by_same_color :: Assertion
@@ -444,7 +444,7 @@ balloon_ignores_other_color = do
 cake_blocks_swap :: Assertion
 cake_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkCake
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is cake" (isCake (getCell board (3, 3)))
   assertBool "not cookie" (not (isCookie (getCell board (3, 3))))
 
@@ -495,7 +495,7 @@ safe_blocks_swap :: Assertion
 safe_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkSafe
   assertBool "is safe" (isSafe (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   let gs0 =
         (newGame defaultConfig 7)
           { gsBoard = board
@@ -587,7 +587,7 @@ flip_matches_front = do
   assertEqual "front" (Just C1) (flipFront (getCell boardM (3, 1)))
   assertEqual "back" (Just C3) (flipBack (getCell boardM (3, 1)))
   -- Can swap like a gem
-  assertBool "not blocked" (not (swapBlockedWith defaultWorld boardM (3, 1) (3, 3)))
+  assertBool "not blocked" (not (swapBlockedWith defaultRegistry boardM (3, 1) (3, 3)))
 
 flip_becomes_back_on_clear :: Assertion
 flip_becomes_back_on_clear = do
@@ -620,7 +620,7 @@ surprise_blocks_swap :: Assertion
 surprise_blocks_swap = do
   let board = setCell stableBoard (3, 3) mkSurprise
   assertBool "is surprise" (isSurprise (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   let gs0 =
         (newGame defaultConfig 7)
           { gsBoard = board

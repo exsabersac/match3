@@ -149,12 +149,12 @@ mentionsIdent name src = any ((== name) . baseName) (codeIdents src)
 builtinSources :: IO [FilePath]
 builtinSources = ("src/Match3/Element/Builtin.hs" :) <$> sourcesUnder "src/Match3/Element/Builtin"
 
--- | 主流程（规则流水线与通用层）：@Board/@、@Game/@、@Element/@ 下除内置定义以外的模块、
+-- | 主流程（规则流水线与通用层）：@Board/@、@Game/@、@Element/@、@ECS/@ 下除内置定义以外的模块、
 -- @Match3/Engine.hs@ 与 @src/Engine/@；不含关卡数据 @Game/Level.hs@（那里按元素名写放置表）。
 mainFlowSources :: IO [FilePath]
 mainFlowSources = do
   flow <- sourcesUnderAll ["src/Match3/Board", "src/Match3/Game"]
-  element <- sourcesUnder "src/Match3/Element"
+  element <- sourcesUnderAll ["src/Match3/Element", "src/Match3/ECS"]
   builtin <- builtinSources
   engine <- sourcesUnder "src/Engine"
   pure ((flow \\ ["src/Match3/Game/Level.hs"]) ++ (element \\ builtin) ++ ["src/Match3/Engine.hs"] ++ engine)

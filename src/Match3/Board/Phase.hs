@@ -55,7 +55,7 @@ import Match3.Board.Gravity (settleDrainWith)
 import Match3.Board.Grid (MBoard, setManyM, swapCells, toM)
 import Match3.Board.Hooks (LevelHooks)
 import Match3.Board.Refill (RefillPolicy, refillWith)
-import Match3.Element.World (World)
+import Match3.ECS.Registry (Registry)
 import Match3.Types
 import System.Random (RandomGen)
 
@@ -121,7 +121,7 @@ digHoles holes (AtFull b) = AtCleared (setManyM (toM b) [(p, Nothing) | p <- hol
 
 -- | 下落：有空洞 → 空洞在上方。即 'settleDrainWith'（重力 → 边缘收集 → 传送门 → 再重力 / 收集），
 -- 另返回被边缘收走的 (位置, 原格)。
-fallStage :: World -> LevelHooks -> Stage 'Cleared -> (Stage 'Fallen, [(Pos, Cell)])
+fallStage :: Registry -> LevelHooks -> Stage 'Cleared -> (Stage 'Fallen, [(Pos, Cell)])
 fallStage world hooks (AtCleared mb) =
   let (settled, drained) = settleDrainWith world hooks mb
   in (AtFallen settled, drained)

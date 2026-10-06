@@ -25,12 +25,12 @@ import Match3.Counts (countOf)
 import Match3.Element.Level (levelUfos)
 import Match3.Board.Cascade (CascadeRun(CascadeRun, crTally, crHooks, crBoard), CascadeTally(CascadeTally, ctCounts, ctScore, ctMaxWave, ctCells))
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Game.Level (newGameAtLevel)
 import Match3.Game.State (gsUfos)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (mboardFromRows, setCell, setM)
-import Match3.Element.World (swapBlockedWith)
+import Match3.ECS.Registry (swapBlockedWith)
 import Match3.Game.Boosters (useHammer)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (trySwap)
@@ -168,7 +168,7 @@ hat_swaps_colors = do
 maker_blocks_swap :: Assertion
 maker_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkMaker C1)
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   assertBool "is maker" (isMaker (getCell board (3, 3)))
   assertEqual "default charges" (3 :: Int) (makerCharges (getCell board (3, 3)))
 
@@ -243,7 +243,7 @@ bottle_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkBottle C2)
   assertBool "is bottle" (isBottle (getCell board (3, 3)))
   assertEqual "color" (Just C2) (bottleColor (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
 
 bottle_dyes_neighbors :: Assertion
 bottle_dyes_neighbors = do
@@ -757,7 +757,7 @@ snail_blocks_swap :: Assertion
 snail_blocks_swap = do
   let board = setCell stableBoard (3, 3) (mkSnail 0 1)
   assertBool "is snail" (isSnail (getCell board (3, 3)))
-  assertBool "blocked" (swapBlockedWith defaultWorld board (3, 3) (3, 4))
+  assertBool "blocked" (swapBlockedWith defaultRegistry board (3, 3) (3, 4))
   let gs0 =
         (newGame defaultConfig 7)
           { gsBoard = board

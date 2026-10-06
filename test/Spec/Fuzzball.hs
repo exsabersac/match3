@@ -8,7 +8,7 @@ module Spec.Fuzzball
   ) where
 
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Board.Match (findHintWith)
 import Match3.Counts (countOf)
 import Match3.Element
@@ -26,7 +26,7 @@ import Match3.Element
   )
 import Match3.Combos (builtinComboRules)
 import Match3.Element.Event (EventKind(..))
-import Match3.Element.World (World, defName, mkWorld, registerMechanic, setComboRules, setShapeRules)
+import Match3.ECS.Registry (Registry, defName, mkRegistry, registerMechanic, setComboRules, setShapeRules)
 import Match3.Game.Move (resolveSwapWith)
 import Match3.Game.Trace (applyEndEffect)
 import Test.Tasty
@@ -57,7 +57,7 @@ fuzzAt = customsOn "fuzzball"
 -- | 能力：挡交换、随重力下落、无色、洗牌保留；命中即消灭。
 fz_ability_blocker_falls_breaks :: Assertion
 fz_ability_blocker_falls_breaks = do
-  let world = defaultWorld
+  let world = defaultRegistry
   assertBool "blocks swap" (blocksSwapWith world fuzz)
   assertBool "falls" (fallsWith world fuzz)
   assertEqual "colorless" Nothing (colorOfWith world fuzz)
@@ -68,7 +68,7 @@ fz_ability_blocker_falls_breaks = do
 fz_adjacent_clear_kills :: Assertion
 fz_adjacent_clear_kills = do
   let b0 = setCells stableBoard [((3, 3), fuzz), ((0, 0), fuzz), ((5, 5), fuzz)]
-      (_, dead, _) = runAdjacentWith defaultWorld [(3, 4), (2, 3), (1, 1), (5, 6)] [(5, 5)] [] b0
+      (_, dead, _) = runAdjacentWith defaultRegistry [(3, 4), (2, 3), (1, 1), (5, 6)] [(5, 5)] [] b0
   assertEqual "orthogonal neighbour dies once" 1 (length (filter (== (3, 3)) dead))
   assertBool "diagonal survives" ((0, 0) `notElem` dead)
   assertBool "direct hit not repeated" ((5, 5) `notElem` dead)
@@ -112,7 +112,7 @@ fz_step_end_belt_effect_replays :: Assertion
 fz_step_end_belt_effect_replays = do
   let gs0 = (levelGame fuzzLevel 7) {gsBoard = setCells tripleBoard [((6, 6), fuzz)]}
       (a, b) = tripleMove
-      (gs1, o, mt) = resolveSwapWith defaultWorld a b gs0
+      (gs1, o, mt) = resolveSwapWith defaultRegistry a b gs0
   assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
   let steps = [es | es <- mtEnd mt, endEffectElement (esEffect es) == "fuzzball"]
   case steps of
@@ -128,9 +128,9 @@ fz_step_end_belt_effect_replays = do
 -- | 去掉毛球条目的元素世界：前 42 关按提示各走 6 步，盘面、分数与随机种子逐一相同（毛球不耗 gsGen）；原有关卡开局没有毛球。
 fz_other_levels_unchanged :: Assertion
 fz_other_levels_unchanged = do
-  let noFz :: World
+  let noFz :: Registry
       noFz = setShapeRules builtinShapeRules . setComboRules builtinComboRules $
-        foldl (flip registerMechanic) (mkWorld (filter ((/= "fuzzball") . defName) builtinDefs)) builtinMechanics
+        foldl (flip registerMechanic) (mkRegistry (filter ((/= "fuzzball") . defName) builtinDefs)) builtinMechanics
       play world gs n
         | n <= (0 :: Int) || gsOver gs /= Nothing = gs
         | otherwise = case findHintWith world (gsBoard gs) of
@@ -139,7 +139,7 @@ fz_other_levels_unchanged = do
       key gs = (gsBoard gs, gsScore gs, show (gsGen gs))
   assertEqual "older levels have none" [] [li | li <- [0 .. fuzzLevel - 1], not (null (fuzzAt (gsBoard (levelGame li 1))))]
   mapM_
-    (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noFz (levelGame li 3) 6)) (key (play defaultWorld (levelGame li 3) 6)))
+    (\li -> assertEqual ("level " ++ show (li + 1)) (key (play noFz (levelGame li 3) 6)) (key (play defaultRegistry (levelGame li 3) 6)))
     [0 .. fuzzLevel - 1]
 
 -- | 第 43 关：14 个毛球分散开局（2026-09-30 加难：原 10 个挤在上三行，一次连锁常灭掉大半）；按提示走 22 步（种子 1–6）：
@@ -149,10 +149,10 @@ fz_level43_layout_and_play = do
   mapM_ (\s -> assertEqual ("level 43 seed " ++ show s) 14 (length (fuzzAt (gsBoard (levelGame fuzzLevel s))))) [1 .. 3]
   let play gs n acc
         | n <= (0 :: Int) || gsOver gs /= Nothing = (gs, acc)
-        | otherwise = case findHintWith defaultWorld (gsBoard gs) of
+        | otherwise = case findHintWith defaultRegistry (gsBoard gs) of
             Nothing -> (gs, acc)
             Just (p, q) ->
-              let (gs', _, mt) = resolveSwapWith defaultWorld p q gs
+              let (gs', _, mt) = resolveSwapWith defaultRegistry p q gs
                   jumps = sum [length (endEffectItems (esEffect es)) `div` 2 | es <- mtEnd mt, endEffectElement (esEffect es) == "fuzzball"]
               in play gs' (n - 1) (acc + jumps)
       runs = [play (levelGame fuzzLevel s) 22 0 | s <- [1 .. 6]]

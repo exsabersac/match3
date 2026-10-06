@@ -40,10 +40,10 @@ import Engine.Game (Game(..), Step(..))
 import Engine.History (History, HistoryPolicy(..), Undoable, withHistory)
 import Match3.Board.Grid (neighborsInBounds)
 import Match3.Daily (Day, Month, Year, dailyConfig, dailySeed)
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Event (Event(..), EventKind(..))
-import Match3.Element.Level (levelWorldIn)
-import Match3.Element.World (World)
+import Match3.Element.Level (levelRegistryIn)
+import Match3.ECS.Registry (Registry)
 import Match3.Game.Boosters (resolveCrossClearWith, resolveFreeSwapWith, resolveHammerWith)
 import Match3.Game.Level (campaignGame, newDailyGame, newGame, newGameAtLevel, newGameForLevelWith)
 import Match3.Levels.Level (Level)
@@ -88,10 +88,10 @@ rejectedPlayed s = Played s Nothing (emptyTrace s) (MoveFx 0 []) [] Nothing Fals
 
 -- | 用内置元素世界执行一个动作。
 play :: Action -> GameState -> Played
-play = playWith defaultWorld
+play = playWith defaultRegistry
 
 -- | 用指定元素世界执行一个动作。
-playWith :: World -> Action -> GameState -> Played
+playWith :: Registry -> Action -> GameState -> Played
 playWith world act gs = case act of
   Swap p q -> move (resolveSwapWith world p q gs)
   Hammer p -> move (resolveHammerWith world p gs)
@@ -107,18 +107,18 @@ playWith world act gs = case act of
     move (gs', out, mt) =
       let fx = moveFx gs gs' out
           ok = out /= NoMatch && out /= InvalidSwap
-      -- 事件按本步结算用的元素世界展开（levelWorldIn：新玩法 8 魔法地格的扩爆格要算进 EvBlast 的范围；
+      -- 事件按本步结算用的元素世界展开（levelRegistryIn：新玩法 8 魔法地格的扩爆格要算进 EvBlast 的范围；
       -- 其余关卡它只可能换形状表，而事件展开不读形状表，与用 world 逐项相同）
-      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelWorldIn world (gsLevelElems gs)) mt else []) Nothing ok
+      in Played gs' (Just out) mt fx (if ok then traceEventsWith (levelRegistryIn world (gsLevelElems gs)) mt else []) Nothing ok
     other gs' evs ok = Played gs' Nothing (emptyTrace gs') (MoveFx 0 []) evs Nothing ok
 
 -- | 通用接口实例（内置元素世界）。
 match3Game :: Game Setup GameState Action Event Terminal Played
-match3Game = match3GameWith defaultWorld
+match3Game = match3GameWith defaultRegistry
 
 -- | 通用接口实例（指定元素世界）。
 -- 终局后拒绝一切走步 / 洗牌；提示除外（只写 gsHint、不推进对局，与原前端「终局后按 H 仍给提示」一致）。
-match3GameWith :: World -> Game Setup GameState Action Event Terminal Played
+match3GameWith :: Registry -> Game Setup GameState Action Event Terminal Played
 match3GameWith world =
   Game
     { gameName = "match3"
@@ -170,10 +170,10 @@ match3History =
 
 -- | 外壳用的实例：内置元素世界 + 撤销历史。
 match3Shell :: Game Setup (History GameState) (Undoable Action) Event Terminal Played
-match3Shell = match3ShellWith defaultWorld
+match3Shell = match3ShellWith defaultRegistry
 
 -- | 外壳用的实例（指定元素世界）。
-match3ShellWith :: World -> Game Setup (History GameState) (Undoable Action) Event Terminal Played
+match3ShellWith :: Registry -> Game Setup (History GameState) (Undoable Action) Event Terminal Played
 match3ShellWith world = withHistory match3History (match3GameWith world)
 
 -- | 外壳用的具名数值（标题栏 / HUD）。

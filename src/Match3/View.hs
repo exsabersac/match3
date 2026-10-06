@@ -62,9 +62,9 @@ import Data.Maybe (fromMaybe)
 import Engine.Game (Game (..))
 import Match3.Board.Default (findHint)
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Element.Phase (Face(..), Phase(..), SomePhase(..), phaseName)
-import Match3.Element.World (World, boardBossHpWith, bodyOf, faceFieldsWith)
+import Match3.ECS.Registry (Registry, boardBossHpWith, bodyOf, faceFieldsWith)
 import Match3.Element.Types (CellField (..), FaceValue (..))
 import Match3.Engine (match3Game)
 import Match3.Game.Outcome (loseHint)
@@ -172,10 +172,10 @@ data BossView = BossView
 
 -- | 目标配额对应的元素提供 'boardBossHp' 时给出血条；满血值 = 该配额的目标值（不点名具体元素）。
 bossView :: GameState -> Maybe BossView
-bossView = bossViewWith defaultWorld
+bossView = bossViewWith defaultRegistry
 
 -- | 'bossView'，用给定的元素世界（扩展 Boss 元素时用）。
-bossViewWith :: World -> GameState -> Maybe BossView
+bossViewWith :: Registry -> GameState -> Maybe BossView
 bossViewWith world gs =
   case
     [ BossView (max 0 (min t hp)) t
@@ -389,12 +389,12 @@ levelViews = [LevelView (lvlIndex l) (lvlName l) (lvlMoves l) (goalInfo (lvlGoal
 -- | 单格的结构化描述：类型标签 + 按固定顺序的字段（网页 JSON 的 t / c / k / i / o / n …；
 -- 渲染层按 t 查表，www/cells.js）。
 cellFace :: Cell -> (String, [(String, CellField)])
-cellFace = cellFaceWith defaultWorld
+cellFace = cellFaceWith defaultRegistry
 
 -- | 'cellFace'，用给定的世界解码（扩展元素）。宝石格（冰层 / 叠层都在宝石格的字段里）按存储编码给出；
 -- 其余格问本体 'view' 的 fBase（Match3.Element.Phase），没给时：Custom 格 = ("custom", name / v)，
 -- 其余 = (元素名, 无字段)。元素类重构第 6 刀前这里是按 Cell 构造器写死的 case，网页 JSON 逐字节不变。
-cellFaceWith :: World -> Cell -> (String, [(String, CellField)])
+cellFaceWith :: Registry -> Cell -> (String, [(String, CellField)])
 cellFaceWith w cell = case cell of
   Gem c k ice ov ->
     ( "G"
@@ -413,10 +413,10 @@ cellFaceWith w cell = case cell of
 -- 内置：雪怪 Boss 的 q（象限 0–3）/ hurt（血量是否过半）/ turn（召唤计数）/ every（召唤周期），变色龙的 c（当前颜色）。
 -- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；app/pure/UI/CellFace.hs 按名字读。
 cellExtras :: Cell -> [(String, FaceValue)]
-cellExtras = cellExtrasWith defaultWorld
+cellExtras = cellExtrasWith defaultRegistry
 
 -- | 'cellExtras'，用给定的元素世界解码（扩展元素）。
-cellExtrasWith :: World -> Cell -> [(String, FaceValue)]
+cellExtrasWith :: Registry -> Cell -> [(String, FaceValue)]
 cellExtrasWith = faceFieldsWith
 
 overlayName :: CellOverlay -> String

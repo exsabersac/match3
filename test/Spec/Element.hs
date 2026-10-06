@@ -10,7 +10,7 @@ import Data.List (isInfixOf)
 import Data.Maybe (isJust)
 import Match3.Board.Grid (setCell)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Types (defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
@@ -23,10 +23,10 @@ import Match3.Element
   , lookupDef
   , matchColorWith
   , register
-  , worldDefs
+  , registryDefs
   )
 import Match3.Element.Event (EventKind(..), Event(..))
-import Match3.Element.World (swapBlockedWith)
+import Match3.ECS.Registry (swapBlockedWith)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (resolveSwapWith, trySwap, trySwapWith)
@@ -64,11 +64,11 @@ tests =
 -- | 扩展性验收：测试专用元素只经元素世界接入，跑一局并断言它按定义起作用；同时证明主流程没有为它改动。
 element_world_custom_crate_extensibility :: Assertion
 element_world_custom_crate_extensibility = do
-  let world = register crateDef defaultWorld
+  let world = register crateDef defaultRegistry
       gs0 = (newGame defaultConfig 1) {gsBoard = crateBoard 2}
   -- 元素世界里有它，内置定义一个不少
   assertBool "registered" (isJust (lookupDef world "crate"))
-  assertEqual "builtins kept" (length (worldDefs defaultWorld) + 1) (length (worldDefs world))
+  assertEqual "builtins kept" (length (registryDefs defaultRegistry) + 1) (length (registryDefs world))
   -- 挡交换（固定格原型），不可匹配
   let (gsB, oB) = trySwapWith world (0, 1) (0, 2) gs0
   assertEqual "crate blocks swap" NoMatch oB
@@ -102,7 +102,7 @@ element_world_custom_crate_extensibility = do
   let (gsD, oD) = trySwap (1, 2) (2, 2) gs0
   assertBool "default applied" (moveApplied oD)
   assertEqual "unregistered: inert, untouched" [Custom "crate" (CustomState 2)] (map snd (cratesOn (gsBoard gsD)))
-  assertBool "unregistered: hammer immune" (hitImmuneWith defaultWorld (Custom "crate" (CustomState 2)))
+  assertBool "unregistered: hammer immune" (hitImmuneWith defaultRegistry (Custom "crate" (CustomState 2)))
   assertEqual "unregistered: not counted" [] (namedCounts (gsCounts gsD))
   -- 主流程没有为它改动：src/ 与 app/ 下全部源码（含注释）里都没有这个元素名的字面量 "crate" 或「木箱」
   coreFiles <- sourcesUnderAll ["src", "app"]
@@ -114,7 +114,7 @@ element_world_custom_crate_extensibility = do
 -- | 元素世界的查询与第二刀之前按构造器写死的谓词逐格等价（对所有内置本体 × 冰层 × 叠层）。
 element_world_matches_legacy_predicates :: Assertion
 element_world_matches_legacy_predicates = do
-  let world = defaultWorld
+  let world = defaultRegistry
       overlays = Nothing : map Just [Grass, Vine, Choco, Fog 1, Fog 2, Chain 1, Chain 2, Freeze 1, Freeze 2, Curtain 1, Curtain 2, Steam]
       gems = [Gem col k ice ov | col <- [C1, C4], k <- [Normal, LineH, LineV, Bomb, Rainbow], ice <- [0, 1, 2], ov <- overlays]
       others =
@@ -144,7 +144,7 @@ element_world_matches_legacy_predicates = do
       board c = setCell stableBoard (0, 0) c
       check name f g = assertEqual name [] [show c | c <- cells, f c /= g c]
   check "blocksSwap" (blocksSwapWith world) legacyBlock
-  check "swapBlockedWith" (\c -> swapBlockedWith defaultWorld (board c) (0, 0) (0, 1)) legacyBlock
+  check "swapBlockedWith" (\c -> swapBlockedWith defaultRegistry (board c) (0, 0) (0, 1)) legacyBlock
   check "hitImmune" (hitImmuneWith world) legacyImmune
   check "gravityFixed" gravityFixedCell legacyFixed
   check "activates" (activatesWith world) specialActivates

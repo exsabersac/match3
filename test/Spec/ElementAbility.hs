@@ -82,7 +82,7 @@ instance Phase GemV where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -93,7 +93,8 @@ instance Phase GemV where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind GemV where
   kindName _ = "gem"
@@ -128,7 +129,7 @@ instance Phase LineHV where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -139,7 +140,8 @@ instance Phase LineHV where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind LineHV where
   kindName _ = "line_h"
@@ -177,11 +179,12 @@ instance Phase StoneV where
     , cMeta = emptyMeta { metaCounter = Just CountStones }
     , cNear = Just (NearRule 10 SkipDirect DiePrepend)
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics _ = obstaclePhysics
   onNear _ _ (StoneV n) = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind StoneV where
   kindName _ = "stone"
@@ -219,7 +222,7 @@ instance Phase FlipV where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -230,7 +233,8 @@ instance Phase FlipV where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind FlipV where
   kindName _ = "flip"
@@ -263,7 +267,7 @@ instance Phase BubbleV where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -274,7 +278,8 @@ instance Phase BubbleV where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind BubbleV where
   kindName _ = "bubble"
@@ -314,7 +319,7 @@ instance Phase BossV where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -325,7 +330,8 @@ instance Phase BossV where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind BossV where
   kindName _ = "snow_boss"

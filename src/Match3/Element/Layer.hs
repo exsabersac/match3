@@ -159,22 +159,24 @@ instance (Layer l, Phase e) => Phase (Layered l e) where
           { mBlockMatch = layerBlocksMatch l || mBlockMatch m
           , mBlockSwap = layerBlocksSwap l || mBlockSwap m
           }
-  onHit h (Layered l e) = case layerHit l of
-    Pierce ->
-      let HitOut st fi bl nx = onHit h e
-          st' = case st of
-            Absorb inner -> Absorb (putOn l inner)
-            r -> r
-          nx' = fmap (Layered l) nx
-       in HitOut st' (fromMaybe fi (layerFires l)) bl nx'
-    Keep l' -> HitOut (Absorb (putOn l' (cToCell (codec @e) e))) False Nothing Nothing
-    Peel -> HitOut (Absorb (cToCell (codec @e) e)) False Nothing Nothing
-    Shatter -> HitOut Destroy (fromMaybe True (layerFires l)) Nothing Nothing
+  onHit h (Layered l e) =
+    let HitOut st fi bl nx = onHit h e
+        fi' = fromMaybe fi (layerFires l)
+     in case layerHit l of
+          Pierce ->
+            let st' = case st of
+                  Absorb inner -> Absorb (putOn l inner)
+                  r -> r
+             in HitOut st' fi' bl (fmap (Layered l) nx)
+          Keep l' -> HitOut (Absorb (putOn l' (cToCell (codec @e) e))) fi' bl Nothing
+          Peel -> HitOut (Absorb (cToCell (codec @e) e)) fi' bl Nothing
+          Shatter -> HitOut Destroy fi' bl Nothing
   physics (Layered _ e) =
     let p = physics e
      in p { pKeepShuffle = True }
   onNear r ctx (Layered _ e) = onNear r ctx e
   view (Layered _ e) = view e
+  liveMeta (Layered _ e) = liveMeta e
 
 data SomeLayer = forall l. Layer l => SomeLayer (Proxy l)
 

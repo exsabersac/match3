@@ -329,8 +329,8 @@ instance Phase FlipE where
     , cNear = Nothing
     }
   onMatch (FlipE f _) = gemMatch (Just f)
-  onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) True Nothing Nothing
-  physics _ = gemPhysics
+  onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
+  physics _ = gemPhysics { pKeepShuffle = True }
   view _ = emptyFace "flip"
 
 instance Kind FlipE where
@@ -498,9 +498,20 @@ instance Phase SnowBoss where
     , cNear = Nothing
     }
   onMatch _ = MatchRule Nothing True True False
-  onHit _ _ = HitOut Immune False Nothing Nothing
+  onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
   physics _ = fixedPhysics
-  view _ = emptyFace (unElementName snowBossName)
+  liveMeta b = emptyMeta
+    { metaDiffCounter = Just (CountNamed snowBossName)
+    , metaDiffWeight = if sbQuad b == 0 then sbHp b else 0
+    }
+  view b = (emptyFace (unElementName snowBossName))
+    { fExtras =
+        [ ("q", FaceInt (sbQuad b))
+        , ("hurt", FaceBool (sbHp b * 2 <= sbMax b))
+        , ("turn", FaceInt (sbTurn b))
+        , ("every", FaceInt snowBossEvery)
+        ]
+    }
 
 instance Kind SnowBoss where
   place _ = cPlace (codec @SnowBoss)

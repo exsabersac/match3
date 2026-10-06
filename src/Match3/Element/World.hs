@@ -6,7 +6,7 @@
 --
 -- 注册的只是一张**有序的类型列表**（本体种类 'Kind'、叠层 'Layer'、地面层 'GroundKind'），引擎由它解码格子：
 -- 叠层由外向内 'peel'（冰层在外、叠层在内，这是 Cell 存储编码决定的），剩下的格子交给本体的 'fromCell'；
--- 都不认识时得到惰性占格 'Inert'。各查询就是在解码出的元素值上调能力类的方法（Match3.Element.Ability）。
+-- 都不认识时得到惰性占格 'Inert'。slim-8：热路径 *With 调 Phase（'SomePhase'）；'decode'/'elementOf' 仍返回 Ability 的 SomeElement（测试 / slim-9 前）。
 --
 -- 分派缓存（按 cellSlot / 叠层编号 / Custom 名字建的候选表）是引擎内部的事，不是元素作者写的东西：
 -- 某个编号的候选 = 'fromCell' / 'peel' 接受该编号代表格的种类（注册倒序：同名 / 同格以后注册的为准）；
@@ -48,6 +48,9 @@ module Match3.Element.World
   , bodyOf
   , upperOf
   , elementOf
+  , decodePhase
+  , bodyPhase
+  , elementPhase
   , elementName
   , topLayerName
     -- * 显示（ViewCaps）
@@ -123,7 +126,20 @@ import Match3.Board.Refill (RefillPolicy, defaultRefill)
 import Match3.Element.Ability
 import Match3.Element.Mechanic (SomeMechanic, mechNameOf)
 import Match3.Element.Kind
-import Match3.Element.Phase (Phase)
+import Match3.Element.Phase
+  ( Hit(..)
+  , HitOut(..)
+  , Phase(..)
+  , SomePhase(..)
+  , MatchRule(..)
+  , Physics(..)
+  , Meta(..)
+  , Codec(..)
+  , Face(..)
+  , phaseName
+  , phaseToCell
+  )
+
 import Match3.Element.Layer
 import Match3.Element.Rules (kindRules, layerRules)
 import Match3.Element.Special (comboSwapRule)
@@ -330,7 +346,15 @@ firstDecode ks0 cell = go ks0
       Just e -> Just (SomeElement e)
       Nothing -> go ks
 
--- | 本体层的元素值（参数是拆掉叠层之后的格子，或原格：本体不看叠层）。
+firstDecodePhase :: [SomeKind] -> Cell -> Maybe SomePhase
+firstDecodePhase ks0 cell = go ks0
+  where
+    go [] = Nothing
+    go (SomeKind p : ks) = case fromCellAs p cell of
+      Just e -> Just (SomePhase e)
+      Nothing -> go ks
+
+-- | 本体层的元素值（Ability；测试 / 透明性用）。
 decodeBody :: World -> Cell -> SomeElement
 decodeBody w cell = case cell of
   Custom n _ -> maybe (SomeElement (Inert n cell)) id (lookup n (wCustom w) >>= (`firstDecode` cell))  -- 含 'InertDef'
@@ -340,6 +364,17 @@ decodeBody w cell = case cell of
     in case firstDecode cands cell of
          Just e -> e
          Nothing -> maybe (SomeElement (Inert (ElementName "?") cell)) id (firstDecode (wAll w) cell)
+
+-- | 本体层 Phase 值（slim-8 热路径）。
+decodeBodyPhase :: World -> Cell -> SomePhase
+decodeBodyPhase w cell = case cell of
+  Custom n _ -> maybe (SomePhase (Inert n cell)) id (lookup n (wCustom w) >>= (`firstDecodePhase` cell))
+  _ ->
+    let i = cellSlot cell
+        cands = if inRange (bounds (wSlots w)) i then wSlots w ! i else []
+    in case firstDecodePhase cands cell of
+         Just e -> e
+         Nothing -> maybe (SomePhase (Inert (ElementName "?") cell)) id (firstDecodePhase (wAll w) cell)
 
 -- | 本体之上的各层（自外向内：冰层 → 叠层）与拆完之后的格子。
 decodeLayers :: World -> Cell -> ([SomeLayerValue], Cell)
@@ -366,7 +401,7 @@ hasLayers cell = case cell of
   _ -> False
 {-# INLINE hasLayers #-}
 
--- | 整个格子的元素值：叠层（自外向内）包着本体。
+-- | 整个格子的元素值：叠层（自外向内）包着本体（Ability；测试用）。
 decode :: World -> Cell -> SomeElement
 decode w cell
   | hasLayers cell =
@@ -374,11 +409,24 @@ decode w cell
       in foldr (\(SomeLayerValue l) e -> SomeElement (Layered l e)) (decodeBody w inner) ls
   | otherwise = decodeBody w cell
 
+-- | slim-8：Phase 解码（叠层包本体）。
+decodePhase :: World -> Cell -> SomePhase
+decodePhase w cell
+  | hasLayers cell =
+      let (ls, inner) = decodeLayers w cell
+      in foldr (\(SomeLayerValue l) (SomePhase e) -> SomePhase (Layered l e)) (decodeBodyPhase w inner) ls
+  | otherwise = decodeBodyPhase w cell
+
 -- | 本体层的元素值（拆掉冰层 / 叠层之后）。
 bodyOf :: World -> Cell -> SomeElement
 bodyOf w cell
   | hasLayers cell = decodeBody w (snd (decodeLayers w cell))
   | otherwise = decodeBody w cell
+
+bodyPhase :: World -> Cell -> SomePhase
+bodyPhase w cell
+  | hasLayers cell = decodeBodyPhase w (snd (decodeLayers w cell))
+  | otherwise = decodeBodyPhase w cell
 
 -- | 本体之上的各层（自上而下）：冰层（ice > 0）、叠层。
 upperOf :: World -> Cell -> [SomeLayerValue]
@@ -390,9 +438,12 @@ upperOf w cell
 elementOf :: World -> Cell -> SomeElement
 elementOf = decode
 
+elementPhase :: World -> Cell -> SomePhase
+elementPhase = decodePhase
+
 -- | 本体的元素名。
 elementName :: World -> Cell -> ElementName
-elementName w = nameOf . bodyOf w
+elementName w = phaseName . bodyPhase w
 
 -- | 最上面一层的元素名（事件里「波及了什么」用）。
 topLayerName :: World -> Cell -> ElementName
@@ -405,7 +456,8 @@ topLayerName w cell = case upperOf w cell of
 
 -- | 本体格子的显示附加字段（元素的 'face'；未注册的 Custom 名字 = 无）。
 faceFieldsWith :: World -> Cell -> [(String, FaceValue)]
-faceFieldsWith world = face . bodyOf world
+faceFieldsWith world cell = case bodyPhase world cell of
+  SomePhase e -> fExtras (view e)
 
 -- | 按元素名计数的目标的中文名（本体 'label' / 地面层 'groundLabel'；没登记 = Nothing）。
 displayLabelWith :: World -> ElementName -> Maybe String
@@ -445,15 +497,20 @@ goalIconWith world n = case lookupDef world n of
 
 -- | 参与匹配的颜色：任一层挡匹配则 Nothing，否则本体颜色。（匹配、提示的热路径。）
 matchColorWith :: World -> Cell -> Maybe Color
-matchColorWith world = matchColor . elementOf world
+matchColorWith world cell = case elementPhase world cell of
+  SomePhase e ->
+    let m = onMatch e
+     in if mBlockMatch m then Nothing else mColor m
 
 -- | 本体颜色（颜色袋计数用，不看叠层）。
 colorOfWith :: World -> Cell -> Maybe Color
-colorOfWith world = color . bodyOf world
+colorOfWith world cell = case bodyPhase world cell of
+  SomePhase e -> mColor (onMatch e)
 
 -- | 本格不能被交换（任一层挡）。
 blocksSwapWith :: World -> Cell -> Bool
-blocksSwapWith world = blocksSwap . elementOf world
+blocksSwapWith world cell = case elementPhase world cell of
+  SomePhase e -> mBlockSwap (onMatch e)
 
 -- | 只看上层（冰 / 叠层）是否挡交换（彩虹 / 特殊合成提示用，本体由它们自己判定）。
 upperBlocksSwapWith :: World -> Cell -> Bool
@@ -465,27 +522,32 @@ swapBlockedWith world b p1 p2 = blocksSwapWith world (getCell b p1) || blocksSwa
 
 -- | 特殊块能否点火：自上而下第一个有意见的层决定，都没有意见则问本体。
 activatesWith :: World -> Cell -> Bool
-activatesWith world = fires . elementOf world
+activatesWith world cell = case elementPhase world cell of
+  SomePhase e -> hFires (onHit DirectHit e)
 
 -- | 本体随重力下落。
 fallsWith :: World -> Cell -> Bool
-fallsWith world = falls . bodyOf world
+fallsWith world cell = case bodyPhase world cell of
+  SomePhase e -> pFalls (physics e)
 
 -- | 本体能穿过传送门。
 portalWith :: World -> Cell -> Bool
-portalWith world = portal . bodyOf world
+portalWith world cell = case bodyPhase world cell of
+  SomePhase e -> pPortal (physics e)
 
 -- | 本体会被边缘收走。
 drainsWith :: World -> Cell -> Bool
-drainsWith world = not . null . drains . bodyOf world
+drainsWith world = not . null . drainEdgesWith world
 
 -- | 本体会在哪些边被收走（段 2c：边缘收集方向可配）。
 drainEdgesWith :: World -> Cell -> [Edge]
-drainEdgesWith world = drains . bodyOf world
+drainEdgesWith world cell = case bodyPhase world cell of
+  SomePhase e -> pDrains (physics e)
 
 -- | 直接命中：叠层自上而下先回答（穿透的问里面），吃掉命中时格子写成新的内容。
 directHitWith :: World -> Cell -> Strike
-directHitWith world = struck . elementOf world
+directHitWith world cell = case elementPhase world cell of
+  SomePhase e -> hStrike (onHit DirectHit e)
 
 -- | 对一组种子逐格结算直接命中（去重后按顺序）：返回 (新盘面, 被消除的格)。
 -- 被消除的格按「后命中的在前」排列（与旧 chipIceOnClear 相同，下游只当集合用）。
@@ -532,7 +594,8 @@ runAdjacentWith world trueClears direct protect0 b0 =
 
 -- | 本体进入清除格时的计数键。
 counterWith :: World -> Cell -> Maybe CounterKey
-counterWith world = counter . bodyOf world
+counterWith world cell = case bodyPhase world cell of
+  SomePhase e -> metaCounter (liveMeta e)
 
 -- | 按前后个数差计数的元素：(名字, 计数键, 每个的奖励步数)（保险箱、时间精灵、自定义）。
 diffCountersWith :: World -> [(ElementName, CounterKey, Int)]
@@ -545,22 +608,29 @@ countElementWith world n = getSum . foldMap (\cell -> if elementName world cell 
 -- | 盘上本体为该元素的格按 'diffWeight' 加权的总数（按差计数用）。权重缺省 1，这时与 'countElementWith' 相同；
 -- 新玩法 5 雪怪 Boss 的左上格权重 = 血量，其余格 0。
 weighElementWith :: World -> ElementName -> Board -> Int
-weighElementWith world n = getSum . foldMap (\cell -> let e = bodyOf world cell in if nameOf e == n then Sum (diffWeight e) else mempty)
+weighElementWith world n = getSum . foldMap (\cell -> case bodyPhase world cell of
+  SomePhase e | phaseName (SomePhase e) == n -> Sum (metaDiffWeight (liveMeta e))
+  _ -> mempty)
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
 vacatesCarpetWith :: World -> Cell -> Bool
-vacatesCarpetWith world = vacatesCarpet . bodyOf world
+vacatesCarpetWith world cell = case bodyPhase world cell of
+  SomePhase e -> metaVacatesCarpet (liveMeta e)
 
 -- | 洗牌时原样放回：有冰 / 叠层，或本体要求保留。
 keepOnShuffleWith :: World -> Cell -> Bool
-keepOnShuffleWith world = keepOnShuffle . elementOf world
+keepOnShuffleWith world cell = case elementPhase world cell of
+  SomePhase e -> pKeepShuffle (physics e)
 
 -- | 本体被消除且能点火时的爆炸范围（不能点火 / 没有爆炸 → []）。新玩法 8：引爆格是本步的扩爆格
 -- （'setWidening'，魔法地格）时再按它的改写函数扩大；没有扩爆格（缺省）时就是本体的 blast。
 blastWith :: World -> Board -> Cell -> Pos -> [Pos]
-blastWith world b cell p = case blast (bodyOf world cell) of
-  Just f | activatesWith world cell -> widenAtWith world b p (f b p)
-  _ -> []
+blastWith world b cell p = case bodyPhase world cell of
+  SomePhase e ->
+    let HitOut _ _ blastFn _ = onHit DirectHit e
+     in case blastFn of
+          Just f | activatesWith world cell -> widenAtWith world b p (f b p)
+          _ -> []
 
 -- | 按本步的扩爆格改写一个爆炸范围（p = 引爆格；p 不是扩爆格时原样返回）。
 widenAtWith :: World -> Board -> Pos -> [Pos] -> [Pos]
@@ -581,7 +651,8 @@ widenedCells = map fst . stepWiden . wStep
 
 -- | 普通匹配提示是否试这个格（彩虹 = False：它只经成对交换规则给提示）。
 hintableWith :: World -> Cell -> Bool
-hintableWith world = hintable . bodyOf world
+hintableWith world cell = case bodyPhase world cell of
+  SomePhase e -> mHintable (onMatch e)
 
 -- | 某步末阶段的规则（按 erOrder）。
 endRules :: World -> EndPhase -> [EndRule]
@@ -660,11 +731,13 @@ openWith world b front = case wOpen world of
 
 -- | 本体可被魔法帽 / 染色瓶改色。
 recolorableWith :: World -> Cell -> Bool
-recolorableWith world = recolorable . bodyOf world
+recolorableWith world cell = case bodyPhase world cell of
+  SomePhase e -> pRecolor (physics e)
 
 -- | 本体可被蜗牛推动。
 pushableWith :: World -> Cell -> Bool
-pushableWith world = pushable . bodyOf world
+pushableWith world cell = case bodyPhase world cell of
+  SomePhase e -> pPush (physics e)
 
 --------------------------------------------------------------------------------
 -- 规则表（第 8 刀）

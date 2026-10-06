@@ -165,7 +165,7 @@ instance Phase Kite where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -176,7 +176,8 @@ instance Phase Kite where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Kite where
   kindName _ = "kite"
@@ -224,7 +225,7 @@ instance Phase Sinkhole where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -235,7 +236,8 @@ instance Phase Sinkhole where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Sinkhole where
   kindName _ = "sinkhole"
@@ -295,7 +297,7 @@ instance Phase Dust where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -306,7 +308,8 @@ instance Phase Dust where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Dust where
   kindName _ = "dust"
@@ -350,7 +353,7 @@ instance Phase Hopper where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -361,7 +364,8 @@ instance Phase Hopper where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Hopper where
   kindName _ = "hopper"
@@ -566,7 +570,7 @@ instance Phase Lantern where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -577,7 +581,8 @@ instance Phase Lantern where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Lantern where
   kindName _ = "lantern"

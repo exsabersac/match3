@@ -32,11 +32,17 @@ module Match3.Element.Phase
   , phaseReach
   , phaseDieOrder
   , phaseOnNear
+  , liveMeta
+  , SomePhase(..)
+  , phaseName
+  , phaseToCell
+  , Inert(..)
   ) where
 
+import Data.Typeable (Typeable, cast)
 import Match3.Element.Near
-import Match3.Element.Types (CounterKey, Edge, ElementName, Placer)
-import Match3.Types (Board, Cell, Color, MovesLeft, Outcome, Pos, Score)
+import Match3.Element.Types (CounterKey, Edge, ElementName, FaceValue, Placer)
+import Match3.Types (Board, Cell(..), Color, ElementName(..), MovesLeft, Outcome, Pos, Score)
 
 -- | 直接命中反应（原 Ability.Strike）。
 data Strike
@@ -78,7 +84,7 @@ gemMatch :: Maybe Color -> MatchRule
 gemMatch mc = MatchRule mc False False True
 
 obstacleMatch :: MatchRule
-obstacleMatch = MatchRule Nothing True True False
+obstacleMatch = MatchRule Nothing True True True
 
 data Hit = DirectHit
   deriving (Eq, Show)
@@ -99,13 +105,14 @@ immuneHit = HitOut Immune False Nothing Nothing
 data Face = Face
   { fTag :: String
   , fFields :: [(String, String)]
+  , fExtras :: [(String, FaceValue)]
   , fLabel :: Maybe String
   , fGoalIcon :: Maybe String
   , fBossHp :: Board -> Maybe Int
   }
 
 emptyFace :: String -> Face
-emptyFace t = Face t [] Nothing Nothing (const Nothing)
+emptyFace t = Face t [] [] Nothing Nothing (const Nothing)
 
 data Meta = Meta
   { metaCounter :: Maybe CounterKey
@@ -128,7 +135,7 @@ data Codec e = Codec
   , cNear :: Maybe NearRule
   }
 
-class Phase e where
+class Typeable e => Phase e where
   codec :: Codec e
   onSwap :: e -> [()]
   onMatch :: e -> MatchRule
@@ -136,8 +143,11 @@ class Phase e where
   physics :: e -> Physics
   onNear :: NearRule -> NearCtx -> e -> NearOut
   view :: e -> Face
+  -- | 值级 Meta（缺省 = codec 的 cMeta；雪怪等权重随值变时覆盖）。
+  liveMeta :: e -> Meta
   onSwap _ = []
   onNear = noNear
+  liveMeta _ = cMeta (codec @e)
 
 noNear :: NearRule -> NearCtx -> e -> NearOut
 noNear _ _ _ = NearIdle
@@ -155,3 +165,38 @@ phaseOnNear :: forall e. Phase e => e -> NearCtx -> NearOut
 phaseOnNear e ctx = case cNear (codec @e) of
   Nothing -> NearIdle
   Just rule -> onNear rule ctx e
+
+-- | 装箱的 Phase 值（slim-8：World 热路径解码）。
+data SomePhase = forall e. Phase e => SomePhase e
+
+phaseName :: SomePhase -> ElementName
+phaseName (SomePhase e) = phaseNameOf e
+
+phaseToCell :: SomePhase -> Cell
+phaseToCell (SomePhase e) = phaseCellOf e
+
+phaseNameOf :: forall e. Phase e => e -> ElementName
+phaseNameOf e = case cast e of
+  Just (Inert n _) -> n
+  Nothing -> cName (codec @e)
+
+phaseCellOf :: forall e. Phase e => e -> Cell
+phaseCellOf e = cToCell (codec @e) e
+
+-- | 惰性占格：障碍的缺省、无色，写回原来的格子。解码兜底（未注册的 Custom 名字、没有种类认领的格子）。
+data Inert = Inert ElementName Cell
+  deriving (Eq, Show)
+
+instance Phase Inert where
+  codec = Codec
+    { cName = ElementName "inert"
+    , cToCell = \(Inert _ cell) -> cell
+    , cFromCell = const Nothing
+    , cPlace = \_ _ -> Nothing
+    , cMeta = emptyMeta
+    , cNear = Nothing
+    }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics
+  view (Inert n _) = emptyFace (unElementName n)

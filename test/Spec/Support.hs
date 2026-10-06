@@ -70,7 +70,7 @@ import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Element (Def, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
-import Match3.Element.Ability (Cellular(..), Countable(counter), Fixed(..), Hittable(..), Matchable, Movable(..), Renders, Strike(..))
+import Match3.Element.Ability (Cellular(..), Countable(..), Fixed(..), Hittable(..), Matchable(..), Movable(..), Renders(..), Strike(..))
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
@@ -374,7 +374,7 @@ instance Phase Crate where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -385,7 +385,8 @@ instance Phase Crate where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Crate where
   kindName _ = "crate"

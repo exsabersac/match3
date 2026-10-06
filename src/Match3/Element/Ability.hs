@@ -1,9 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ExistentialQuantification #-}
 -- | 元素的值级能力（xmonad LayoutClass 风格）：引擎对「一格」的全部需求拆成六个能力小类，
 -- 每个类都带「普通宝石」的默认方法，元素只覆盖自己不同的那几个：
@@ -47,7 +49,10 @@ module Match3.Element.Ability
 import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Counts (CounterKey)
-import Match3.Element.Phase (Strike(..))
+import Match3.Element.Phase
+  ( Strike(..)
+  , Inert(..)
+  )
 import Match3.Element.Types (CellField, Edge, FaceValue)
 import Match3.Types
 
@@ -258,10 +263,8 @@ instance Movable (Fixed e) where
   recolorable _ = False
   pushable _ = False
 
--- | 惰性占格：障碍的缺省、无色，写回原来的格子。解码兜底（未注册的 Custom 名字、没有种类认领的格子）。
-data Inert = Inert ElementName Cell
-  deriving (Eq, Show)
-  deriving (Hittable, Movable) via (Obstacle Inert)
+deriving via (Obstacle Inert) instance Hittable Inert
+deriving via (Obstacle Inert) instance Movable Inert
 
 instance Cellular Inert where
   nameOf (Inert n _) = n
@@ -274,3 +277,4 @@ instance Matchable Inert where
 instance Countable Inert
 
 instance Renders Inert
+

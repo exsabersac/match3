@@ -228,7 +228,7 @@ instance Phase Chameleon where
   onMatch (Chameleon k) = gemMatch (Just (colorAt k))
   onHit _ _ = gemHit
   physics _ = gemPhysics { pKeepShuffle = True, pRecolor = False }
-  view _ = emptyFace "chameleon"
+  view (Chameleon k) = (emptyFace "chameleon") { fExtras = [("c", FaceColor (colorAt k))] }
 
 instance Kind Chameleon where
   place _ = cPlace (codec @Chameleon)

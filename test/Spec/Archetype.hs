@@ -165,7 +165,7 @@ instance Phase Thorn where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -176,7 +176,8 @@ instance Phase Thorn where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Thorn where
   kindName _ = "thorn"

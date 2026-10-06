@@ -91,7 +91,7 @@ instance Phase NoRecolorGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -102,7 +102,8 @@ instance Phase NoRecolorGem where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind NoRecolorGem where
   kindName _ = "gem"
@@ -132,7 +133,7 @@ instance Phase NoPushGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -143,7 +144,8 @@ instance Phase NoPushGem where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind NoPushGem where
   kindName _ = "gem"
@@ -173,7 +175,7 @@ instance Phase Lever where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -184,7 +186,8 @@ instance Phase Lever where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Lever where
   kindName _ = "lever"
@@ -237,7 +240,7 @@ instance Phase Pod where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -248,7 +251,8 @@ instance Phase Pod where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Pod where
   kindName _ = "pod"
@@ -340,7 +344,7 @@ instance Phase Cart where
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch _ = obstacleMatch
+  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
   onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
   physics e = Physics
     { pFixed = not (falls e)
@@ -351,7 +355,8 @@ instance Phase Cart where
     , pKeepShuffle = keepOnShuffle e
     , pDrains = drains e
     }
-  view e = emptyFace (unElementName (nameOf e))
+  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
+  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
 
 instance Kind Cart where
   kindName _ = "cart"

@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 -- | 原型与组件（ecs-3 起取代 Phase 类）：
 --
 -- * 同名替换：把内置的宝石 / 直线特效 / 石头 / 翻转块 / 气泡 / 雪怪 / 冰 / 巧克力 / 锁链 / 果冻换成测试里独立写的
@@ -16,8 +15,7 @@ module Spec.ElementAbility
 import Control.Applicative ((<|>))
 import Control.Monad (forM_)
 import Data.List (isInfixOf, isPrefixOf)
-import Data.Maybe (mapMaybe)
-import Data.Proxy (Proxy(..))
+import Data.Maybe (isJust, mapMaybe)
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
 import Match3.ECS.Archetype
@@ -26,15 +24,14 @@ import Match3.Element.Builtin
   ( SnowBoss(..), bubbleArch, defaultRegistry, fuzzballArch, snowBossArch, snowBossEntity, specialBlast
   , stoneArch, chestArch, honeyArch, cakeArch, balloonArch, magicHatArch, safeArch, timeSpiritArch, makerArch
   , bottleArch, magicStoneArch, cookieArch )
-import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
+import Match3.ECS.Cover
+import Match3.Element.Builtin.Layer (chainCover, chocoCover, curtainCover, fogCover, freezeCover, grassCover, steamCover, vineCover)
 import Match3.Element.Builtin.Obstacle (balloonPop, balloonPopLegacy)
-import Match3.Element.Rules (layerRules, nearBy)
+import Match3.Element.Rules (coverNear, coverSpread, nearBy)
 import Match3.Element.Kind
-import Match3.Element.Near
-import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.ECS.Registry
-import Match3.ECS.Stage (NearWorld(..), SysDef(..), nearWorld)
+import Match3.ECS.Stage (EndSys(..), NearWorld(..), SysDef(..), nearWorld, spreadSys)
 import Match3.ECS.System (System(..))
 import Match3.Types
 import Test.Tasty
@@ -53,6 +50,7 @@ tests =
   , testCase "ab_row_is_transparent" ab_row_is_transparent
   , testCase "ab_world_decode_order" ab_world_decode_order
   , testCase "ab_rule_methods_pinned" ab_rule_methods_pinned
+  , testCase "ab_cover_column_law" ab_cover_column_law
   , testCase "ab_near_escape_absorbed" ab_near_escape_absorbed
   , testCase "ab_cell_face_matches_legacy_zoo" ab_cell_face_matches_legacy_zoo
   , testProperty "qc_cell_face_matches_legacy" qc_cell_face_matches_legacy
@@ -139,66 +137,54 @@ bossV = (archetype "snow_boss" (Column get put))
       _ -> Nothing
     put (hp, mx, t, q) = colPut (aColumn snowBossArch) (SnowBoss hp mx t q)
 
-newtype IceV = IceV Int
-  deriving (Eq, Show)
+iceV :: Cover Int
+iceV = (mkCover "ice" (CoverColumn peel put))
+  { cvShield = \n -> openShield {sFires = Just (n <= 1), sHit = if n > 1 then Keep (n - 1) else Shatter}
+  , cvSpawn = \args cell -> case cell of
+      Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
+      _ -> Nothing
+  }
+  where
+    peel cell = case cell of
+      Gem c k n ov | n > 0 -> Just (n, Gem c k 0 ov)
+      _ -> Nothing
+    put n cell = case cell of
+      Gem c k _ ov -> Gem c k n ov
+      _ -> cell
 
-instance Layer IceV where
-  peel cell = case cell of
-    Gem c k n ov | n > 0 -> Just (IceV n, Gem c k 0 ov)
-    _ -> Nothing
-  putOn (IceV n) cell = case cell of
-    Gem c k _ ov -> Gem c k n ov
-    _ -> cell
-  layerCover = (defaultCover "ice")
-    { lcFires = \(IceV n) -> Just (n <= 1)
-    , lcHit = \(IceV n) -> if n > 1 then Keep (IceV (n - 1)) else Shatter
-    , lcPlace = \args cell -> case cell of
-        Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
-        _ -> Nothing
-    }
+chocoV :: Cover ()
+chocoV = (mkCover "choco" (CoverColumn peel (const (putOverlay Choco))))
+  { cvShield = const openShield {sStrips = True}
+  , cvSpawn = \_ cell -> case cell of
+      Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
+      _ -> Nothing
+  , cvSystems =
+      [ SysNear 150 (coverNear chocoV AllNeighbours (\_ cell -> case cell of
+          Gem c k i _ -> Becomes (Gem c k i Nothing)
+          _ -> Untouched))
+      , SysEnd (spreadSys 20 (coverSpread chocoV ()))
+      ]
+  }
+  where
+    peel cell = case cell of
+      Gem c k i (Just Choco) -> Just ((), Gem c k i Nothing)
+      _ -> Nothing
 
-data ChocoV = ChocoV
-  deriving (Eq, Show)
-
-instance Layer ChocoV where
-  peel cell = case cell of
-    Gem c k i (Just Choco) -> Just (ChocoV, Gem c k i Nothing)
-    _ -> Nothing
-  putOn _ = putOverlay Choco
-  layerCover = (defaultCover "choco")
-    { lcStripsOnClear = const True
-    , lcPlace = \_ cell -> case cell of
-        Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
-        _ -> Nothing
-    , lcNearPrio = Just 150
-    , lcReach = AllNeighbours
-    , lcOnNear = \_ cell -> case cell of
-        Gem c k i _ -> Becomes (Gem c k i Nothing)
-        _ -> Untouched
-    , lcSpreads = Just (20, ChocoV)
-    }
-
-newtype ChainV = ChainV Int
-  deriving (Eq, Show)
-
-instance Layer ChainV where
-  peel cell = case cell of
-    Gem c k i (Just (Chain n)) -> Just (ChainV n, Gem c k i Nothing)
-    _ -> Nothing
-  putOn (ChainV n) = putOverlay (Chain n)
-  layerCover = (defaultCover "chain")
-    { lcBlocksMatch = const True
-    , lcBlocksSwap = const True
-    , lcFires = const (Just False)
-    , lcHit = \(ChainV n) -> if n <= 1 then Peel else Keep (ChainV (n - 1))
-    , lcPlace = \args cell -> case cell of
-        Gem col kind ice _ -> (\n -> Gem col kind ice (Just (Chain n))) <$> exactArgs argInt args
-        _ -> Nothing
-    , lcNearPrio = Just 80
-    , lcOnNear = \(ChainV n) cell -> case cell of
-        Gem c k i _ | n <= 1 -> Becomes (Gem c k i Nothing)
-        _ -> Becomes (putOn (ChainV (n - 1)) cell)
-    }
+chainV :: Cover Int
+chainV = (mkCover "chain" col)
+  { cvShield = \n -> openShield {sBlocksMatch = True, sBlocksSwap = True, sFires = Just False, sHit = if n <= 1 then Peel else Keep (n - 1)}
+  , cvSpawn = \args cell -> case cell of
+      Gem col' kind ice _ -> (\n -> Gem col' kind ice (Just (Chain n))) <$> exactArgs argInt args
+      _ -> Nothing
+  , cvSystems = [SysNear 80 (coverNear chainV SkipDirect (\n cell -> case cell of
+      Gem c k i _ | n <= 1 -> Becomes (Gem c k i Nothing)
+      _ -> Becomes (ccPut col (n - 1) cell)))]
+  }
+  where
+    col = CoverColumn peel (putOverlay . Chain)
+    peel cell = case cell of
+      Gem c k i (Just (Chain n)) -> Just (n, Gem c k i Nothing)
+      _ -> Nothing
 
 jellyV :: GroundKind
 jellyV = (groundKind "jelly")
@@ -219,9 +205,9 @@ replaced =
     , kindDef flipV
     , kindDef bubbleV
     , kindDef bossV
-    , layerDef @IceV
-    , layerDef @ChocoV
-    , layerDef @ChainV
+    , coverDef iceV
+    , coverDef chocoV
+    , coverDef chainV
     , groundDef jellyV
     ]
 
@@ -238,7 +224,7 @@ ab_same_name_copies_oracle_unchanged = do
 -- 叠层合成与内置注册表逐组件相等
 
 world :: Registry
-world = mkRegistry [kindDef gemV, kindDef lineHV, layerDef @IceV, layerDef @ChocoV, layerDef @ChainV, kindDef stoneV]
+world = mkRegistry [kindDef gemV, kindDef lineHV, coverDef iceV, coverDef chocoV, coverDef chainV, kindDef stoneV]
 
 -- | 整格读数：名字、写回、整格的匹配 / 命中 / 物理（叠层合成后）与本体的计数 / 显示。
 wholeProbe :: Registry -> Cell -> [(String, String)]
@@ -319,17 +305,17 @@ ab_row_probe_reads_all_components = do
   assertBool "components found" (length comps >= 5)
   mapM_ (\c -> assertBool ("rowProbe reads " ++ c) ((":: " ++ c) `isInfixOf` probeSrc)) comps
 
--- | 整格合成读到每个叠层查询：挡匹配 / 挡交换在 wholeMatch，点火 / 命中在 wholeHit，随清在 stripOnClearWith；
+-- | 整格合成读到叠层组件 'Shield' 的每个字段：挡匹配 / 挡交换在 wholeMatch，点火 / 命中在 wholeHit，随清在 stripOnClearWith；
 -- 洗牌保留在 wholePhysics（有层即保留）。
 ab_whole_reads_every_layer_query :: Assertion
 ab_whole_reads_every_layer_query = do
   src <- readFile "src/Match3/ECS/Registry.hs"
   let has blk q = assertBool (blk ++ " reads " ++ q) (q `isInfixOf` blockOf (blk ++ " ") src)
-  has "wholeMatch" "layerBlocksMatch"
-  has "wholeMatch" "layerBlocksSwap"
-  has "wholeHit" "layerFires"
-  has "wholeHit" "layerHit"
-  has "stripOnClearWith" "layerStripsOnClear"
+  has "wholeMatch" "sBlocksMatch"
+  has "wholeMatch" "sBlocksSwap"
+  has "wholeHit" "sFires"
+  has "wholeHit" "sHit"
+  has "stripOnClearWith" "sStrips"
   has "wholePhysics" "pKeepShuffle = True"
 
 -- | 装箱（'Row'）前后逐组件相等；无叠层的格整格读数就是本体读数；每个读数在样本上至少有一个不是缺省值。
@@ -363,7 +349,7 @@ ab_row_is_transparent = do
 ab_world_decode_order :: Assertion
 ab_world_decode_order = do
   let cell = Gem C2 Normal 2 (Just (Chain 1))
-  assertEqual "layers" ["ice", "chain"] (map layerValueName (fst (decodeLayers world cell)))
+  assertEqual "layers" ["ice", "chain"] (map peeledName (fst (decodeLayers world cell)))
   assertEqual "inner" (Gem C2 Normal 0 Nothing) (snd (decodeLayers world cell))
   assertEqual "roundtrip" cell (recodeWith world cell)
   let moss = Custom "moss" (CustomState 1)
@@ -377,6 +363,18 @@ ab_world_decode_order = do
 
 --------------------------------------------------------------------------------
 -- 规则方法（第 3 刀）：优先级 / 波及范围 / 蔓延写死（与旧 R 行的次序一致；元素对照快照另有整盘锁定）
+
+-- | 叠层存储列的定律：剥得下来就盖得回去（@ccPeel c == Just (l, inner)@ ⇒ @ccPut l inner == c@），
+-- 每种内置叠层都至少认一个样本格；剥下之后同一种叠层不再认里面的格子。
+ab_cover_column_law :: Assertion
+ab_cover_column_law = do
+  let samples = [Gem c k i ov | c <- [C1, C4], k <- [Normal, Bomb], i <- [0, 1, 3], ov <- Nothing : map Just [Grass, Vine, Choco, Fog 1, Fog 3, Chain 2, Freeze 1, Curtain 2, Steam]]
+  forM_ (registryLayers defaultRegistry) $ \(SomeCover cv) -> do
+    let hits = [(cell, l, inner) | cell <- samples, Just (l, inner) <- [peelWith cv cell]]
+    assertBool ("some sample carries " ++ show (cvName cv)) (not (null hits))
+    forM_ hits $ \(cell, l, inner) -> do
+      assertEqual ("put . peel " ++ show (cvName cv) ++ " " ++ show cell) cell (ccPut (cvColumn cv) l inner)
+      assertBool ("peeled once " ++ show (cvName cv) ++ " " ++ show cell) (not (isJust (peelWith cv inner)))
 
 -- | 气球的邻格 system（nearBy + DieAppend）与旧 balloonPopLegacy 一致；气泡 / 毛球的邻格 system 自己写（foldr 去重序）。
 ab_near_escape_absorbed :: Assertion
@@ -406,19 +404,22 @@ ab_rule_methods_pinned = do
       , SomeArchetype safeArch, SomeArchetype timeSpiritArch, SomeArchetype makerArch
       , SomeArchetype bottleArch, SomeArchetype bubbleArch, SomeArchetype magicStoneArch
       , SomeArchetype fuzzballArch, SomeArchetype snowBossArch ])
-  assertEqual "layer neighbourPrio"
-    [Just 70, Just 80, Just 90, Just 100, Just 150, Just 160, Nothing, Nothing]
-    [ layerNeighbourPrio (Proxy @FogL), layerNeighbourPrio (Proxy @ChainL), layerNeighbourPrio (Proxy @FreezeL)
-    , layerNeighbourPrio (Proxy @CurtainL), layerNeighbourPrio (Proxy @ChocoL), layerNeighbourPrio (Proxy @SteamL)
-    , layerNeighbourPrio (Proxy @VineL), layerNeighbourPrio (Proxy @GrassL) ]
-  assertEqual "layer reach"
-    [SkipDirect, SkipDirect, SkipDirect, SkipDirect, AllNeighbours, AllNeighbours]
-    [ layerReach (Proxy @FogL), layerReach (Proxy @ChainL), layerReach (Proxy @FreezeL)
-    , layerReach (Proxy @CurtainL), layerReach (Proxy @ChocoL), layerReach (Proxy @SteamL) ]
-  assertEqual "spreads" [Just 10, Just 20, Just 30, Nothing]
-    [fst <$> spreads (Proxy @VineL), fst <$> spreads (Proxy @ChocoL), fst <$> spreads (Proxy @SteamL), fst <$> spreads (Proxy @FogL)]
+  let layerNear (SomeCover c) = [o | SysNear o _ <- cvSystems c]
+      layerSpreads (SomeCover c) = [esOrder e | SysEnd e <- cvSystems c, esPhase e == PhaseSpread]
+      covers = [SomeCover fogCover, SomeCover chainCover, SomeCover freezeCover, SomeCover curtainCover, SomeCover chocoCover, SomeCover steamCover, SomeCover vineCover, SomeCover grassCover]
+      -- 波及范围按行为测：被直接命中的邻格上的叠层，SkipDirect 不动、AllNeighbours 照样反应
+      reachesDirect (SomeCover c) = or
+        [ nwBoard (runSystem sys w0) /= b
+        | cell <- take 1 [x | ov <- [Grass, Vine, Choco, Fog 2, Chain 2, Freeze 2, Curtain 2, Steam], let x = Gem C2 Normal 0 (Just ov), isJust (peelWith c x)]
+        , let b = boardFromRows [[Gem C1 Normal 0 Nothing, cell]]
+              w0 = nearWorld (const True) [(0, 0)] [(0, 1)] [] b
+        , SysNear _ sys <- cvSystems c
+        ]
+  assertEqual "layer near systems" [[70], [80], [90], [100], [150], [160], [], []] (map layerNear covers)
+  assertEqual "layer reach (direct-hit neighbour reacts)" [False, False, False, False, True, True] (map reachesDirect (take 6 covers))
+  assertEqual "spreads" [[10], [20], [30], []] (map layerSpreads [SomeCover vineCover, SomeCover chocoCover, SomeCover steamCover, SomeCover fogCover])
   assertEqual "stone systems" [10] [o | SysNear o _ <- aSystems stoneArch]
-  assertEqual "layerRules choco" (1, 1) (length [() | SysNear 150 _ <- layerRules (Proxy @ChocoL)], length [() | SysEnd _ <- layerRules (Proxy @ChocoL)])
+  assertEqual "choco systems" (1, 1) (length [() | SysNear 150 _ <- cvSystems chocoCover], length [() | SysEnd _ <- cvSystems chocoCover])
   assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint snowBossEntity (2, 3))
   assertEqual "snow boss near system" [200] [o | SysNear o _ <- aSystems snowBossArch]
 

@@ -31,7 +31,6 @@ import Match3.Element
   , swapOpeningWith
   , widenedCells
   )
-import Data.Proxy (Proxy(..))
 import Match3.Element.Kind (GroundKind(..))
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.ECS.Registry (Registry, defName, mkRegistry, registerMechanic, setComboRules, setShapeRules)

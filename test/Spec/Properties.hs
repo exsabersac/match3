@@ -88,8 +88,6 @@ import Match3.Counts
   , plusCounts
   )
 import Match3.Element
-import Match3.ECS.Archetype (Archetype(..), Column(..), SomeArchetype(..))
-import Match3.Element.Layer (layerName, SomeLayer(..), layerValueName, peelAs)
 import Match3.Element.Mechanic (mechNameOf)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E
@@ -605,7 +603,7 @@ qc_world_decode_roundtrip =
         defs = registryDefs world
         (layers, inner) = decodeLayers w cell
         kindAccepts n c = or [isJust (colGet (aColumn a) c) | SomeArchetype a <- registryKinds world, aName a == n]
-        layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- defs, layerName p == n]
+        layerAccepts n c = or [coversCell l c | LayerDef l <- defs, coverName l == n]
         bodyName = elementName world cell
         bodyOk = case inner of
           Custom n _
@@ -614,9 +612,9 @@ qc_world_decode_roundtrip =
         topName = topLayerName world cell
         topOk = case (cell, layers) of
           (Gem _ _ ice _, _) | ice > 0 -> topName == "ice" && layerAccepts topName cell
-          (_, l : _) -> topName == layerValueName l && layerAccepts topName cell
+          (_, l : _) -> topName == peeledName l && layerAccepts topName cell
           _ -> topName == bodyName
-    in counterexample (show (bodyName, topName, map layerValueName layers, inner)) $
+    in counterexample (show (bodyName, topName, map peeledName layers, inner)) $
          recodeWith w cell === cell .&&. bodyOk .&&. topOk
 
 -- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
@@ -630,7 +628,7 @@ qc_world_names_cells_unique =
           ++ [Stone 1, Chest 1, Honey 1, Balloon C1, Cookie, Cake 1, MagicHat, Maker C1 1, Snail 0 1, Safe 1, Flip C1 C2, Surprise, Bottle C1, TimeSpirit, Countdown C1 1]
       bodyNames = map (elementName world) bodyCells
       ovNames = [topLayerName world (Gem C1 Normal 0 (Just o)) | o <- [Grass, Vine, Choco, Fog 1, Chain 1, Freeze 1, Curtain 1, Steam]]
-      ices = [n | LayerDef (SomeLayer p) <- builtinDefs, let n = layerName p, isJust (peelAs p (Gem C1 Normal 1 Nothing))]
+      ices = [coverName l | LayerDef l <- builtinDefs, coversCell l (Gem C1 Normal 1 Nothing)]
   in conjoin
        [ counterexample "names unique" (length (nub names) === length names)
        , counterexample "body cells claimed, one kind each" (length (nub bodyNames) === 20 .&&. notElem "?" bodyNames)

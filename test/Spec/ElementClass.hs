@@ -20,7 +20,6 @@ import Match3.Game.Level (newGameAtLevel)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
-import Match3.Element.Builtin (gemColumn)
 import Match3.Element.Mechanic
   ( Beat(..)
   , Mechanic(..)
@@ -30,7 +29,6 @@ import Match3.Element.Mechanic
   , mechNameOf
   )
 import Match3.Element.Kind (customPlace)
-import Match3.Element.Layer (LayerHit(..), layerHit, layerValueName)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame, newGameAtLevelWith)
@@ -99,7 +97,7 @@ ec_row_decodes_components = do
   assertEqual "egg is an obstacle" (True, False, Nothing, True) (mBlockSwap (rowGet egg), hFires (rowGet egg), mColor (rowGet egg), pKeepShuffle (rowGet egg))
   -- 叠层在外、本体在内：冰层名单 + 本体行
   let iced = Gem C1 LineV 2 Nothing
-  assertEqual "iced line: layers" ["ice"] (map layerValueName (upperOf defaultRegistry iced))
+  assertEqual "iced line: layers" ["ice"] (map peeledName (upperOf defaultRegistry iced))
   assertEqual "iced line: body" ("line_v", Gem C1 LineV 0 Nothing) (let r = bodyOf defaultRegistry iced in (rowName r, rowCell r))
 
 -- | 同名原型按名字替换（以后注册的为准），状态类型可以不同：两个都叫 "twin" 的原型写回同一种格子，
@@ -141,7 +139,7 @@ ec_ice_layer_composes = do
   assertEqual "hit peels one ice" (Absorb (plain 1)) (hStrike (wholeHit w (plain 2)))
   assertEqual "last ice shatters with the gem" Destroy (hStrike (wholeHit w (plain 1)))
   assertBool "iced normal gem kept on shuffle" (pKeepShuffle (wholePhysics w (plain 1)))
-  assertEqual "layer hit" (Keep (Ice 1)) (layerHit (Ice 2))
+  assertEqual "layer hit" (Keep 1) (sHit (cvShield iceCover 2))
   forM_ [(c, k, i, ov) | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \(c, k, i, ov) -> do
     let cell = Gem c k i ov
     assertEqual ("world directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultRegistry cell)
@@ -201,7 +199,7 @@ ec_flat_record_removed = do
   assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/ECS/Registry.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
   srcs <- mapM (fmap stripStrings . readFile) srcFiles
   -- 按完整标识符比（第 7 刀的钩子记录 LevelHooks 不是段 4 的封闭钩子 LevelHook）
-  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult", "SomePhase", "phaseProbe", "Layered", "SpecialKind", "kindRules", "boardSystems", "Codec"], mentionsIdent w s]
+  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult", "SomePhase", "phaseProbe", "Layered", "SpecialKind", "kindRules", "boardSystems", "Codec", "layerCover", "LayerCover", "defaultCover", "layerRules", "peelAs", "SomeLayerValue"], mentionsIdent w s]
   assertEqual "no flat record / closed hooks / old element class / Phase typeclass" [] bad
   match <- readFile "src/Match3/Board/Match.hs"
   assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` stripStrings match) && "Match3.Rainbow" `notElem` importsOf match)

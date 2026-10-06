@@ -97,10 +97,10 @@ class Kind e => Entity e where
   entityHitOrder _ = 200
 
 -- | 装箱的本体种类（元素世界里的一项）。
-data SomeKind = forall e. (Kind e, Phase e) => SomeKind (Proxy e)
+data SomeKind = forall e. Kind e => SomeKind (Proxy e)
 
 -- | @someKind \@StoneE@。
-someKind :: forall e. (Kind e, Phase e) => SomeKind
+someKind :: forall e. Kind e => SomeKind
 someKind = SomeKind (Proxy :: Proxy e)
 
 -- | 按 proxy 指定类型解码。

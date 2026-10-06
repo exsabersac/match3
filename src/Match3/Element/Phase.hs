@@ -33,7 +33,6 @@ module Match3.Element.Phase
   , phaseReach
   , phaseDieOrder
   , phaseOnNear
-  , liveMeta
   , SomePhase(..)
   , phaseName
   , phaseToCell
@@ -51,7 +50,7 @@ import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Element.Near
 import Match3.Element.Types (CellField, CounterKey, Edge, FaceValue, Placer)
-import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), MovesLeft, Outcome, Pos, Score, gridFromRows)
+import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, gridFromRows)
 
 -- | 直接命中反应（原 Ability.Strike）。
 data Strike

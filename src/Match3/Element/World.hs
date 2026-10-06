@@ -132,10 +132,8 @@ import Match3.Element.Phase
   , MatchRule(..)
   , Physics(..)
   , Meta(..)
-  , Codec(..)
   , Face(..)
   , phaseName
-  , phaseToCell
   )
 
 import Match3.Element.Layer
@@ -152,7 +150,7 @@ data Def
   | InertDef ElementName  -- ^ 只登记名字的惰性占格（Custom 名字 状态值；放置 = 'customPlace'）
 
 -- | @kindDef \@StoneE@、@layerDef \@Ice@、@groundDef \@Jelly@。
-kindDef :: forall e. (Kind e, Phase e) => Def
+kindDef :: forall e. Kind e => Def
 kindDef = KindDef (someKind @e)
 
 layerDef :: forall l. Layer l => Def

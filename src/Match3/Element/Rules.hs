@@ -30,14 +30,13 @@ import Match3.Board.Grid (getCell, inBounds, neighborsInBounds, setCell)
 import Match3.Element.Phase (toCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
-import Match3.Element.Near
-import Match3.Element.Phase (Phase(..), phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
+import Match3.Element.Phase (phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
 import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.Types
 
 -- | 一种本体的全部规则：方法邻格 → 'entityHit' 扣血 → 逃生口 'boardPasses'（之后按优先级稳定排序）。
-kindRules :: forall e proxy. (Kind e, Phase e) => proxy e -> [BoardPass]
+kindRules :: forall e proxy. Kind e => proxy e -> [BoardPass]
 kindRules _ =
   [AdjacentPass o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
     ++ [AdjacentPass o f | Just (o, f) <- [entityHit (Proxy @e)]]
@@ -77,7 +76,7 @@ triggerColors ctx b self =
   ]
 
 -- | 本体的邻格波及：目标格逐个问 'onNear'。
-kindNeighbour :: forall e proxy. (Kind e, Phase e) => proxy e -> AdjCtx -> Board -> AdjOut
+kindNeighbour :: forall e proxy. Kind e => proxy e -> AdjCtx -> Board -> AdjOut
 kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (phaseReach @e) (isJust . fromCellAs p) ctx b0)
   where
     order = phaseDieOrder @e

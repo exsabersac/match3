@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 关卡级元素：不在格子里的机制。第 7 刀（7a）起状态在元素值里（一局的全部关卡级元素 = GameState.gsLevelElems），
 -- 取代第 7 刀前 GameState 的专用字段 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround。
@@ -30,6 +31,7 @@ import Match3.Element.Mechanic
 import Match3.Levels.Level (DropSpec(..), Level(..))
 import Match3.Types
 import Match3.Ufo (Ufo, mkUfo, stepUfos)
+import System.Random (RandomGen)
 
 -- | 飞碟：每轮补子之后（onRefilled）整轮吸收并移动。开局 = 关卡记录的飞碟；没有放置而目标是飞碟吸收时放一个 (1,3) C1。
 newtype UfoLevel = UfoLevel [Ufo]
@@ -140,6 +142,7 @@ instance Mechanic CookieDrop where
 dropRefill :: [DropSpec] -> RefillPolicy -> RefillPolicy
 dropRefill ds base = RefillPolicy (refillName base ++ "+drop") pick
   where
+    pick :: RandomGen g => RefillCtx -> g -> (Cell, g)
     pick ctx g =
       let (c, g') = refillCell base ctx g
           onBoard d = length (filter (maybe False (sameKind (dropCell d))) (toList (rcBoard ctx)))

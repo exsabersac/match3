@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE TypeApplications #-}
 
 -- | 测试辅助：多个测试模块共用的局面构造、查找与断言助手（tripleBoard / tripleMove / allPos / isWin / firstWave / firstLevel …），
@@ -70,7 +69,6 @@ import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Element (Def, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
-import Match3.Element.Ability (Cellular(..), Countable(..), Fixed(..), Hittable(..), Matchable(..), Movable(..), Renders(..), Strike(..))
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
@@ -131,7 +129,6 @@ firstWave :: HasCallStack => MoveTrace -> IO CascadeWave
 firstWave mt = case mtWaves mt of
   (w : _) -> pure w
   [] -> assertFailure "expected at least one cascade wave"
-
 
 findNoMatchPair :: Board -> Maybe (Pos, Pos)
 findNoMatchPair b =
@@ -351,42 +348,20 @@ checkEffectDetail tag e = case endEffectKind eff of
 -- （并入清除格，计数 CountNamed "crate"）；直接命中（锤子 / 爆炸）同样 -1 / 碎。状态（耐久）在元素值里。
 newtype Crate = Crate Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Fixed Crate)
-
-instance Cellular Crate where
-  nameOf _ = "crate"
-
-instance Hittable Crate where
-  struck (Crate n) = if n <= 1 then Destroy else Absorb (toCell (Crate (n - 1)))
-  fires _ = False
-
-instance Countable Crate where
-  counter _ = Just (CountNamed "crate")
-
-instance Renders Crate
 
 instance Phase Crate where
   codec = Codec
     { cName = "crate"
-    , cToCell = toCell
+    , cToCell = intCell "crate"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "crate") }
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ (Crate n) = HitOut (if n <= 1 then Destroy else Absorb (toCell (Crate (n - 1)))) False Nothing Nothing
+  physics _ = fixedPhysics
+  view _ = noFace
 
 instance Kind Crate where
   kindName _ = "crate"

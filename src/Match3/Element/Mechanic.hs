@@ -24,7 +24,7 @@ import Data.Typeable (Typeable, cast)
 import Match3.Board.Grid (MBoard)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Conveyor (Belt)
-import Match3.Element.Ability (sameTypeEq)
+import Match3.Element.Phase (sameTypeEq)
 import Match3.Element.Types (ShapeRule)
 import Match3.Levels.Level (Level(..))
 import Match3.Types

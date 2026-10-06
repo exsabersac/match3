@@ -1,9 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
--- | slim-2：Phase 七方法骨架与普通宝石双路径对照（Ability PlainGem vs Phase PhaseGem）。
+-- | slim-2：Phase 骨架；slim-9 起对照内置 PlainGem 与测试里独立写的 PhaseGem（两份 Phase 写法逐项相等）。
 module Spec.PhaseSlim (tests) where
 
-import Match3.Element.Ability
 import Match3.Element.Builtin.Gem (PlainGem(..))
 import Match3.Element.Kind (DieOrder(..), NearOut(..), Reach(..))
 import Match3.Element.Phase
@@ -28,7 +27,7 @@ instance Phase PhaseGem where
   onMatch (PhaseGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics
-  view _ = emptyFace "gem"
+  view _ = noFace
 
 tests :: [TestTree]
 tests =
@@ -43,18 +42,8 @@ phase_gem_matches_ability_gem = do
       cdc = codec @PhaseGem
   assertEqual "name" (nameOf g) (cName cdc)
   assertEqual "toCell" (toCell g) (cToCell cdc p)
-  assertEqual "color" (color g) (mColor (onMatch p))
-  assertEqual "blocksMatch" (blocksMatch g) (mBlockMatch (onMatch p))
-  assertEqual "blocksSwap" (blocksSwap g) (mBlockSwap (onMatch p))
-  assertEqual "hintable" (hintable g) (mHintable (onMatch p))
-  assertEqual "struck" (struck g) (hStrike (onHit DirectHit p))
-  assertEqual "fires" (fires g) (hFires (onHit DirectHit p))
-  let phy = physics p
-  assertEqual "falls" (falls g) (pFalls phy)
-  assertEqual "portal" (portal g) (pPortal phy)
-  assertEqual "recolor" (recolorable g) (pRecolor phy)
-  assertEqual "push" (pushable g) (pPush phy)
-  assertEqual "shuffle" (keepOnShuffle g) (pKeepShuffle phy)
+  assertEqual "probe" (drop 1 (phaseProbe g)) (drop 1 (phaseProbe p))
+  assertEqual "decode" (Just p) (cFromCell cdc (toCell g))
 
 phase_defaults_silent_near :: Assertion
 phase_defaults_silent_near = do

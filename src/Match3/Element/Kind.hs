@@ -36,7 +36,6 @@ module Match3.Element.Kind
 
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
-import Match3.Element.Ability (Element)
 import Match3.Element.Near
 import Match3.Element.Phase (Phase(..), cFromCell, cName, codec)
 import Match3.Element.Types
@@ -50,13 +49,11 @@ data BoardPass
   | OpenPass OpenRule                              -- ^ 开启规则（彩蛋类）
 
 -- | 一种本体元素（类型级）。
-class Element e => Kind e where
+class Phase e => Kind e where
   -- | 元素名（元素世界的键；与值级 nameOf 相同）。有 Phase 时默认 codec。
   kindName :: proxy e -> ElementName
-  default kindName :: Phase e => proxy e -> ElementName
   kindName _ = cName (codec @e)
   fromCell :: Cell -> Maybe e
-  default fromCell :: Phase e => Cell -> Maybe e
   fromCell = cFromCell (codec @e)
   place :: proxy e -> Placer
   place _ _ _ = Nothing

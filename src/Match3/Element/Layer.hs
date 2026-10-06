@@ -37,7 +37,6 @@ module Match3.Element.Layer
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
-import Match3.Element.Ability
 import Match3.Element.Kind (BoardPass, Nudge(..), Reach(..))
 import Match3.Element.Phase
 import Match3.Element.Types (Placer)
@@ -104,44 +103,6 @@ layerStripsOnClear = lcStripsOnClear . layerCover
 data Layered l e = Layered l e
   deriving (Eq, Show)
 
-instance (Layer l, Element e) => Cellular (Layered l e) where
-  nameOf (Layered _ e) = nameOf e
-  toCell (Layered l e) = putOn l (toCell e)
-
-instance (Layer l, Element e) => Matchable (Layered l e) where
-  color (Layered _ e) = color e
-  blocksMatch (Layered l e) = layerBlocksMatch l || blocksMatch e
-  blocksSwap (Layered l e) = layerBlocksSwap l || blocksSwap e
-  hintable (Layered _ e) = hintable e
-
-instance (Layer l, Element e) => Hittable (Layered l e) where
-  struck (Layered l e) = case layerHit l of
-    Pierce -> case struck e of
-      Absorb inner -> Absorb (putOn l inner)
-      r -> r
-    Keep l' -> Absorb (putOn l' (toCell e))
-    Peel -> Absorb (toCell e)
-    Shatter -> Destroy
-  fires (Layered l e) = fromMaybe (fires e) (layerFires l)
-  blast (Layered _ e) = blast e
-
-instance Element e => Movable (Layered l e) where
-  falls (Layered _ e) = falls e
-  portal (Layered _ e) = portal e
-  drains (Layered _ e) = drains e
-  keepOnShuffle _ = True
-  recolorable (Layered _ e) = recolorable e
-  pushable (Layered _ e) = pushable e
-
-instance Element e => Countable (Layered l e) where
-  counter (Layered _ e) = counter e
-  diffWeight (Layered _ e) = diffWeight e
-  vacatesCarpet (Layered _ e) = vacatesCarpet e
-
-instance Element e => Renders (Layered l e) where
-  face (Layered _ e) = face e
-  faceBase (Layered _ e) = faceBase e
-
 -- | Phase 修饰器：与 Ability 'Layered' 同语义（生产值级仍可走 Ability，对照走 Phase）。
 instance (Layer l, Phase e) => Phase (Layered l e) where
   codec = Codec
@@ -152,7 +113,6 @@ instance (Layer l, Phase e) => Phase (Layered l e) where
     , cMeta = cMeta (codec @e)
     , cNear = Nothing
     }
-  onSwap (Layered _ e) = onSwap e
   onMatch (Layered l e) =
     let m = onMatch e
      in m

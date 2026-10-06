@@ -1,4 +1,3 @@
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 扩展钩子（段 2c）：按元素名计数的目标 GoalNamed、地面层元素槽、方向可配的边缘收集、
@@ -21,7 +20,6 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Def, groundDef, inertDef, kindDef, register)
-import Match3.Element.Ability
 import Match3.Element.Phase
 import Match3.Element.Kind (BoardPass(..), GroundKind(..), Kind(..), customPlace, fromCustom)
 import Match3.Element.World (displayLabelWith, loseHintWith)
@@ -141,43 +139,22 @@ ext_ground_layer_test_element = do
 -- 内部格与底边的风筝不收；未注册时是惰性占格。内置饼干的底边收集由原有 cookie_* 测试与金标准锁定。
 newtype Kite = Kite Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable) via (Obstacle Kite)
 
-instance Cellular Kite where
-  nameOf _ = "kite"
 -- 占格障碍原型包的移动方法，另加左边收集
-instance Movable Kite where
-  portal _ = False
-  drains _ = [EdgeLeft]
-  keepOnShuffle _ = True
-  recolorable _ = False
-  pushable _ = False
-instance Countable Kite where
-  counter _ = Just (CountNamed "kite")
-instance Renders Kite
 
 instance Phase Kite where
   codec = Codec
     { cName = "kite"
-    , cToCell = toCell
+    , cToCell = intCell "kite"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "kite") }
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics { pDrains = [EdgeLeft] }
+  view _ = noFace
 
 instance Kind Kite where
   kindName _ = "kite"
@@ -209,35 +186,20 @@ ext_edge_drain_side_collectible = do
 -- 补结算是统一路径（内置元素步末从不留下空洞，见 docs/testing.md 的扫描），没有开关。
 newtype Sinkhole = Sinkhole Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Fixed Sinkhole)
-
-instance Cellular Sinkhole where
-  nameOf _ = "sinkhole"
-instance Countable Sinkhole
-instance Renders Sinkhole
 
 instance Phase Sinkhole where
   codec = Codec
     { cName = "sinkhole"
-    , cToCell = toCell
+    , cToCell = intCell "sinkhole"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = fixedPhysics
+  view _ = noFace
 
 instance Kind Sinkhole where
   kindName _ = "sinkhole"
@@ -276,40 +238,22 @@ ext_post_end_settle_hole_element = do
 -- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的元素世界，不再退回内置表。
 newtype Dust = Dust Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable) via (Obstacle Dust)
 
-instance Cellular Dust where
-  nameOf _ = "dust"
 -- 占格障碍原型包的移动方法，只把洗牌时原样放回关掉
-instance Movable Dust where
-  portal _ = False
-  recolorable _ = False
-  pushable _ = False
-instance Countable Dust
-instance Renders Dust
 
 instance Phase Dust where
   codec = Codec
     { cName = "dust"
-    , cToCell = toCell
+    , cToCell = intCell "dust"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics { pKeepShuffle = False }
+  view _ = noFace
 
 instance Kind Dust where
   kindName _ = "dust"
@@ -337,35 +281,20 @@ ext_manual_shuffle_keeps_crate_via_engine = do
 -- 主流程：回放按时间线重放到终盘（applyEndEffect 逐项重放）、效果事件里有它、内置表下它是惰性占格。
 newtype Hopper = Hopper Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Fixed Hopper)
-
-instance Cellular Hopper where
-  nameOf _ = "hopper"
-instance Countable Hopper
-instance Renders Hopper
 
 instance Phase Hopper where
   codec = Codec
     { cName = "hopper"
-    , cToCell = toCell
+    , cToCell = intCell "hopper"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = fixedPhysics
+  view _ = noFace
 
 instance Kind Hopper where
   kindName _ = "hopper"
@@ -546,43 +475,25 @@ judge_default_no_replier =
     , o <- [MoveApplied 5, Lost 3, Won 7, LevelClear 9 (li + 1)]
     ]
 
-
 -- | 测试专用灯笼（Custom "lantern" k）：显示附加字段、目标中文名与失败提示都只写在元素的 caps 里
 -- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与元素世界的 displayLabelWith / loseHintWith 直接取到，
 -- 主流程与前端不用改；没注册时什么都没有。
 newtype Lantern = Lantern Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Obstacle Lantern)
-
-instance Cellular Lantern where
-  nameOf _ = "lantern"
-instance Countable Lantern where
-  counter _ = Just (CountNamed "lantern")
-instance Renders Lantern where
-  face (Lantern k) = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]
 
 instance Phase Lantern where
   codec = Codec
     { cName = "lantern"
-    , cToCell = toCell
+    , cToCell = intCell "lantern"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "lantern") }
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics
+  view (Lantern k) = noFace { fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)] }
 
 instance Kind Lantern where
   kindName _ = "lantern"

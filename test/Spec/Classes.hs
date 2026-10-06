@@ -1,5 +1,5 @@
--- 本模块有一处故意的类型错误（见「缺省 toCell 的约束」一节）：-fdefer-type-errors 把它推迟到运行时，
--- 只有调用那个 instance 的 toCell 时才抛出 TypeError（消息正是编译器本来会报的「缺 Coercible」）。
+-- 本模块有一处故意的类型错误（见「Int newtype 的写回」一节的 pairCell）：-fdefer-type-errors 把它推迟到运行时，
+-- 只有调用 pairCell 时才抛出 TypeError（消息正是编译器本来会报的「缺 Coercible」）。
 -- 做法同 Spec.Phase；-Wno-deferred-type-errors 保持 0 警告；-fno-defer-out-of-scope-variables / -fno-defer-typed-holes
 -- 让拼错 / 漏导入的名字与类型洞仍是编译错误，其余代码照常完整类型检查。
 {-# OPTIONS_GHC -fdefer-type-errors -fno-defer-out-of-scope-variables -fno-defer-typed-holes -Wno-deferred-type-errors #-}
@@ -8,8 +8,8 @@
 -- | 类型类与抽象（Haskell 特性第 2 项，docs/haskell-features/02-类型类与抽象.md）。
 --
 -- * newtype 派生（DerivingStrategies）：ElementName / CustomState 的 Show / IsString 与底层 String / Int 逐字相同。
--- * 缺省 toCell（DefaultSignatures）：四个 Int newtype 本体元素的写回格子与第 2 项前手写的 Custom 编码相同，
---   元素世界解码回来是同一个元素值；表示不是 Int 的元素不写 toCell 就是类型错误。
+-- * Int newtype 的写回（'intCell'，Coercible）：四个 Int newtype 本体元素的写回格子与第 2 项前手写的 Custom 编码相同，
+--   元素世界解码回来是同一个元素值；表示不是 Int 的元素用 intCell 就是类型错误。
 -- * 存在类型的公共相等：同类型比值、不同类型即不等（三个装箱类型行为相同）。
 -- * Grid 的 Functor / Foldable / Traversable：定律、行主序、形状不变；随机盘（mapAccumL）与旧递归逐种子相同；
 --   盘面统计（foldMap Sum）与旧列表推导相同；清除格计数（foldMap Counts）与旧 foldl + bumpCount 相同。
@@ -30,7 +30,7 @@ import Match3.Counts (Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Board.Random (randomBoardSized)
 import Match3.Element
 import Match3.Element.Builtin.Obstacle (StoneE(..))
-import Match3.Element.Ability
+import Match3.Element.Phase
 import Match3.Element.Layer (Layered(..))
 import Match3.Types (Grid, boardCells, gridFromRows, gridRows, minBoardDim)
 import System.Random (StdGen, mkStdGen, randomR)
@@ -70,7 +70,7 @@ classes_newtype_show_same_as_underlying =
 --------------------------------------------------------------------------------
 -- 2. 缺省 toCell
 
--- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在的缺省实现相同，经元素世界从格子解码回同一个元素值
+-- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在的 intCell 写回相同，经元素世界从格子解码回同一个元素值
 -- （元素类重构第 2 刀起地面层果冻 / 魔法地格是不带值的 GroundKind 类型，不再有 toCell）。
 classes_default_toCell_same_as_handwritten :: Assertion
 classes_default_toCell_same_as_handwritten =
@@ -83,23 +83,25 @@ classes_default_toCell_same_as_handwritten =
       body (MagicStone k) (Custom "magic_stone" (CustomState k))
       -- 表示同样是 Int、但写了自己 toCell 的元素不受缺省影响
       encode (StoneE k) (Stone k)
-    encode :: Element e => e -> Cell -> Assertion
+    encode :: Phase e => e -> Cell -> Assertion
     encode e cell = assertEqual ("toCell " ++ show e) cell (toCell e)
-    body :: Element e => e -> Cell -> Assertion
+    body :: Phase e => e -> Cell -> Assertion
     body e cell = do
       encode e cell
-      assertEqual ("decode " ++ show e) (SomeElement e) (bodyOf defaultWorld cell)
+      assertEqual ("decode " ++ show e) (SomePhase e) (bodyOf defaultWorld cell)
 
--- | 表示不是 Int 的元素（两个字段）不写 toCell：缺省实现的 Coercible Pair Int 约束解不出来，是类型错误。
+-- | 表示不是 Int 的元素（两个字段）用 intCell 写回：Coercible Pair Int 约束解不出来，是类型错误。
 data Pair = Pair Int Int
   deriving (Eq, Show)
 
-instance Cellular Pair where
-  nameOf _ = "pair"
+-- | 推迟的类型错误放在函数体里：只有调用时才抛出。
+pairCell :: () -> Cell
+pairCell () = intCell "pair" (Pair 1 2)
+{-# NOINLINE pairCell #-}
 
 classes_default_toCell_needs_coercible :: Assertion
 classes_default_toCell_needs_coercible = do
-  r <- try (evaluate (toCell (Pair 1 2)))
+  r <- try (evaluate (pairCell ()))
   case r of
     Left (TypeError msg) -> assertBool ("names the representation mismatch: " ++ msg) ("Couldn't match representation of type" `isInfixOf` msg && "Pair" `isInfixOf` msg)
     Right cell -> assertFailure ("should not typecheck, got " ++ show cell)
@@ -110,29 +112,29 @@ classes_default_toCell_needs_coercible = do
 newtype Twin = Twin Int
   deriving (Eq, Show)
 
-instance Cellular Twin where
-  nameOf _ = "bubble" -- 故意与内置泡泡同名、同编码
-instance Matchable Twin
-instance Hittable Twin
-instance Movable Twin
-instance Countable Twin
-instance Renders Twin
+-- | 故意与内置泡泡同名、同编码。
+instance Phase Twin where
+  codec = Codec "bubble" (intCell "bubble") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+  onMatch _ = gemMatch Nothing
+  onHit _ _ = gemHit
+  physics _ = gemPhysics
+  view _ = noFace
 
 -- | 同类型比值；名字、编码都相同但类型不同即不等（装箱类型共用 sameTypeEq）。
 classes_boxed_eq_by_type :: Assertion
 classes_boxed_eq_by_type = do
   assertEqual "same encoding" (toCell (Bubble 2)) (toCell (Twin 2))
-  assertBool "same type, same value" (SomeElement (Bubble 2) == SomeElement (Bubble 2))
-  assertBool "same type, other value" (SomeElement (Bubble 2) /= SomeElement (Bubble 3))
-  assertBool "other type" (SomeElement (Bubble 2) /= SomeElement (Twin 2))
-  assertEqual "show" "SomeElement \"bubble\" (Bubble 2)" (show (SomeElement (Bubble 2)))
-  assertEqual "show nested" "Just (SomeElement \"bubble\" (Twin 2))" (show (Just (SomeElement (Twin 2))))
-  let iced = SomeElement (Layered (Ice 2) (SomeElement (Bubble 1)))
-  assertBool "layered eq" (iced == SomeElement (Layered (Ice 2) (SomeElement (Bubble 1))))
-  assertBool "layered other layer value" (iced /= SomeElement (Layered (Ice 1) (SomeElement (Bubble 1))))
-  assertBool "layered other inner type" (iced /= SomeElement (Layered (Ice 2) (SomeElement (Twin 1))))
-  assertEqual "layered show" "SomeElement \"bubble\" (Layered (Ice 2) (SomeElement \"bubble\" (Bubble 1)))" (show iced)
-  assertEqual "decoded show" "SomeElement \"gem\" (Layered (Ice 2) (SomeElement \"gem\" (PlainGem C1)))" (show (elementOf defaultWorld (Gem C1 Normal 2 Nothing)))
+  assertBool "same type, same value" (SomePhase (Bubble 2) == SomePhase (Bubble 2))
+  assertBool "same type, other value" (SomePhase (Bubble 2) /= SomePhase (Bubble 3))
+  assertBool "other type" (SomePhase (Bubble 2) /= SomePhase (Twin 2))
+  assertEqual "show" "SomePhase \"bubble\" (Bubble 2)" (show (SomePhase (Bubble 2)))
+  assertEqual "show nested" "Just (SomePhase \"bubble\" (Twin 2))" (show (Just (SomePhase (Twin 2))))
+  let iced = SomePhase (Layered (Ice 2) (Bubble 1))
+  assertBool "layered eq" (iced == SomePhase (Layered (Ice 2) (Bubble 1)))
+  assertBool "layered other layer value" (iced /= SomePhase (Layered (Ice 1) (Bubble 1)))
+  assertBool "layered other inner type" (iced /= SomePhase (Layered (Ice 2) (Twin 1)))
+  assertEqual "layered show" "SomePhase \"bubble\" (Layered (Ice 2) (Bubble 1))" (show iced)
+  assertEqual "decoded show" "SomePhase \"gem\" (Layered (Ice 2) (PlainGem C1))" (show (elementOf defaultWorld (Gem C1 Normal 2 Nothing)))
   assertBool "level boxes" (all (\l -> l == l) (gsLevelElems (levelGame0 0)))
   where
     levelGame0 li = maybe (error "no level") id (campaignGame li 1)
@@ -198,7 +200,7 @@ classes_board_stats_same_as_list_comprehension =
   sequence_
     [ do
         assertEqual ("count " ++ show (li, n)) (length [() | cell <- boardCells b, elementName world cell == n]) (countElementWith world n b)
-        assertEqual ("weigh " ++ show (li, n)) (sum [diffWeight (bodyOf world cell) | cell <- boardCells b, elementName world cell == n]) (weighElementWith world n b)
+        assertEqual ("weigh " ++ show (li, n)) (sum [(\(SomePhase e) -> metaDiffWeight (liveMeta e)) (bodyOf world cell) | cell <- boardCells b, elementName world cell == n]) (weighElementWith world n b)
     | li <- [0 .. levelCount - 1]
     , Just gs <- [campaignGame li 7]
     , let b = gsBoard gs

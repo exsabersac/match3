@@ -27,7 +27,7 @@ import Data.List (nub)
 import Data.Proxy (Proxy(..))
 import Data.Maybe (isJust)
 import Match3.Board.Grid (getCell, inBounds, neighborsInBounds, setCell)
-import Match3.Element.Ability (toCell)
+import Match3.Element.Phase (toCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
 import Match3.Element.Near

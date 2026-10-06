@@ -35,7 +35,7 @@ import Match3.Element
   )
 import Match3.Combos (builtinComboRules)
 import Data.Proxy (Proxy(..))
-import Match3.Element.Ability (Countable(diffWeight), toCell)
+import Match3.Element.Phase (Meta(..), liveMeta, toCell)
 import Match3.Element.Kind (Kind(diffCounter))
 import Match3.Element.Event (EventKind(..))
 import Match3.Element.World (World, countElementWith, defName, mkWorld, placeWith, registerMechanic, setComboRules, setShapeRules, weighElementWith)
@@ -99,7 +99,7 @@ sb_ability_fixed_blocker = do
         assertEqual "hit absorbed as itself" (Absorb c) (directHitWith world c)
     )
     [0 .. 3]
-  assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [diffWeight (SnowBoss 12 40 1 q) | q <- [0 .. 3]]
+  assertEqual "weights: top-left = hp, others 0" [12, 0, 0, 0] [metaDiffWeight (liveMeta (SnowBoss 12 40 1 q)) | q <- [0 .. 3]]
   assertEqual "counter" (Just (CountNamed "snow_boss")) (diffCounter (Proxy :: Proxy SnowBoss))
   assertEqual "encoding round-trips" [SnowBoss hp 40 t q | hp <- [0, 12, 40], t <- [0 .. 2], q <- [0 .. 3]]
     [decodeBoss st | hp <- [0, 12, 40], t <- [0 .. 2], q <- [0 .. 3], Custom _ st <- [boss hp t q]]

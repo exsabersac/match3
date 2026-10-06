@@ -1,4 +1,3 @@
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 段 4：原先写死在主流程里的专门分支收进元素框架后的行为锁定。
@@ -30,7 +29,6 @@ import Match3.Game.State (gsUfos)
 import Match3.Levels.Campaign (allLevels)
 import Match3.Types (boardSize)
 import Match3.Element
-import Match3.Element.Ability
 import Match3.Element.Phase
 import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
 import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
@@ -72,38 +70,19 @@ allCells b = map (getCell b) allPos
 newtype NoRecolorGem = NoRecolorGem Color
   deriving (Eq, Show)
 
-instance Cellular NoRecolorGem where
-  nameOf _ = "gem"
-  toCell (NoRecolorGem c) = Gem c Normal 0 Nothing
-instance Matchable NoRecolorGem
-instance Hittable NoRecolorGem
-instance Movable NoRecolorGem where
-  recolorable _ = False
-instance Countable NoRecolorGem
-instance Renders NoRecolorGem
-
 instance Phase NoRecolorGem where
   codec = Codec
     { cName = "gem"
-    , cToCell = toCell
+    , cToCell = \(NoRecolorGem c) -> Gem c Normal 0 Nothing
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (NoRecolorGem c) = gemMatch (Just c)
+  onHit _ _ = gemHit
+  physics _ = gemPhysics { pRecolor = False }
+  view _ = noFace
 
 instance Kind NoRecolorGem where
   kindName _ = "gem"
@@ -114,38 +93,19 @@ instance Kind NoRecolorGem where
 newtype NoPushGem = NoPushGem Color
   deriving (Eq, Show)
 
-instance Cellular NoPushGem where
-  nameOf _ = "gem"
-  toCell (NoPushGem c) = Gem c Normal 0 Nothing
-instance Matchable NoPushGem
-instance Hittable NoPushGem
-instance Movable NoPushGem where
-  pushable _ = False
-instance Countable NoPushGem
-instance Renders NoPushGem
-
 instance Phase NoPushGem where
   codec = Codec
     { cName = "gem"
-    , cToCell = toCell
+    , cToCell = \(NoPushGem c) -> Gem c Normal 0 Nothing
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (NoPushGem c) = gemMatch (Just c)
+  onHit _ _ = gemHit
+  physics _ = gemPhysics { pPush = False }
+  view _ = noFace
 
 instance Kind NoPushGem where
   kindName _ = "gem"
@@ -156,38 +116,20 @@ instance Kind NoPushGem where
 -- | 测试专用「拉杆」：占格障碍原型包，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
 newtype Lever = Lever Int
   deriving (Eq, Show)
-  deriving (Movable) via (Obstacle Lever)
-
-instance Cellular Lever where
-  nameOf _ = "lever"
-instance Matchable Lever
-instance Hittable Lever where
-  fires _ = False
-instance Countable Lever
-instance Renders Lever
 
 instance Phase Lever where
   codec = Codec
     { cName = "lever"
-    , cToCell = toCell
+    , cToCell = intCell "lever"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = gemMatch Nothing  -- 可交换（不挡交换），无色
+  onHit _ _ = gemHit { hFires = False }
+  physics _ = obstaclePhysics
+  view _ = noFace
 
 instance Kind Lever where
   kindName _ = "lever"
@@ -224,35 +166,20 @@ br_swap_rule_test_element = do
 -- | 测试专用「豆荚」：被命中或邻格在本批前沿里时开出 C2 直线（本轮坐住，不在本轮清除）。
 newtype Pod = Pod Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Obstacle Pod)
-
-instance Cellular Pod where
-  nameOf _ = "pod"
-instance Countable Pod
-instance Renders Pod
 
 instance Phase Pod where
   codec = Codec
     { cName = "pod"
-    , cToCell = toCell
+    , cToCell = intCell "pod"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics
+  view _ = noFace
 
 instance Kind Pod where
   kindName _ = "pod"
@@ -322,41 +249,22 @@ br_recolorable_from_world = do
 -- | 蜗牛只推元素世界里可推动（pushable）的格：测试专用「小车」可推；普通宝石改成不可推后蜗牛掉头。
 newtype Cart = Cart Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable) via (Obstacle Cart)
 
-instance Cellular Cart where
-  nameOf _ = "cart"
 -- 占格障碍原型包的移动方法，只把可推动打开
-instance Movable Cart where
-  portal _ = False
-  keepOnShuffle _ = True
-  recolorable _ = False
-  pushable _ = True
-instance Countable Cart
-instance Renders Cart
 
 instance Phase Cart where
   codec = Codec
     { cName = "cart"
-    , cToCell = toCell
+    , cToCell = intCell "cart"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics { pPush = True }
+  view _ = noFace
 
 instance Kind Cart where
   kindName _ = "cart"

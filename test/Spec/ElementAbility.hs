@@ -1,15 +1,14 @@
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
--- | 元素能力类（元素类重构第 1 刀起）：新写法（Match3.Element.Ability / Kind / Layer / World）的
+-- | 元素值级行为（元素类重构第 1 刀起；slim-9 起只有 Match3.Element.Phase）：新写法（Phase / Kind / Layer / World）的
 --
 -- * 同名替换：把内置的宝石 / 直线特效 / 石头 / 翻转块 / 气泡 / 雪怪 / 冰 / 巧克力 / 锁链 / 果冻换成测试里独立写的
 --   新写法副本、按同名注册进内置元素世界，元素对照快照（element-oracle.txt）逐行不变；
 -- * 叠层合成：测试世界解码出的 'Layered' 元素与内置元素世界解码出的元素在全部宝石 × 冰 × 叠层格上逐方法相等；
 -- * 名字一致：每个注册本体的 fromCell 认下的格子，解码值的 nameOf 都等于 kindName；
--- * 透明性：'SomeElement' 与 'Layered' 的转发 instance 按源码核对没有漏掉任何能力方法（漏了会静默退回默认方法），
---   且装箱前后 'abilityProbe' 逐项相等。
+-- * 透明性：'Layered' 的 Phase instance 按源码核对覆盖了每个 Phase 方法（漏了会静默退回默认方法），
+--   'phaseProbe' 读到每个方法，且装箱（'SomePhase'）前后逐项相等。
 module Spec.ElementAbility
   ( tests
   ) where
@@ -22,7 +21,6 @@ import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy(..))
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
-import Match3.Element.Ability
 import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultWorld, specialBlast)
 import Match3.Element.Builtin.Actor (BottleE, MagicHatE, MakerE)
 import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
@@ -63,38 +61,19 @@ tests =
 newtype GemV = GemV Color
   deriving (Eq, Show)
 
-instance Cellular GemV where
-  nameOf _ = "gem"
-  toCell (GemV c) = Gem c Normal 0 Nothing
-
-instance Matchable GemV
-instance Hittable GemV
-instance Movable GemV
-instance Countable GemV
-instance Renders GemV
-
 instance Phase GemV where
   codec = Codec
     { cName = "gem"
-    , cToCell = toCell
+    , cToCell = \(GemV c) -> Gem c Normal 0 Nothing
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (GemV c) = gemMatch (Just c)
+  onHit _ _ = gemHit
+  physics _ = gemPhysics
+  view _ = noFace
 
 instance Kind GemV where
   kindName _ = "gem"
@@ -105,43 +84,19 @@ instance Kind GemV where
 newtype LineHV = LineHV Color
   deriving (Eq, Show)
 
-instance Cellular LineHV where
-  nameOf _ = "line_h"
-  toCell (LineHV c) = Gem c LineH 0 Nothing
-
-instance Matchable LineHV
-
-instance Hittable LineHV where
-  blast _ = specialBlast LineH
-
-instance Movable LineHV where
-  keepOnShuffle _ = True
-
-instance Countable LineHV
-instance Renders LineHV
-
 instance Phase LineHV where
   codec = Codec
     { cName = "line_h"
-    , cToCell = toCell
+    , cToCell = \(LineHV c) -> Gem c LineH 0 Nothing
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (LineHV c) = gemMatch (Just c)
+  onHit _ _ = gemHit { hBlast = specialBlast LineH }
+  physics _ = gemPhysics { pKeepShuffle = True }
+  view _ = noFace
 
 instance Kind LineHV where
   kindName _ = "line_h"
@@ -154,37 +109,21 @@ instance Kind LineHV where
 
 newtype StoneV = StoneV Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle StoneV)
-
-instance Cellular StoneV where
-  nameOf _ = "stone"
-  toCell (StoneV n) = Stone n
-
-instance Hittable StoneV where
-  struck (StoneV n) = if n <= 1 then Destroy else Absorb (Stone (n - 1))
-  fires _ = False
-
-instance Countable StoneV where
-  counter _ = Just CountStones
-
-instance Renders StoneV where
-  faceBase (StoneV n) = Just ("stone", [("n", FieldInt n)])
 
 instance Phase StoneV where
   codec = Codec
     { cName = "stone"
-    , cToCell = toCell
+    , cToCell = \(StoneV n) -> Stone n
     , cFromCell = \cell -> case cell of Stone n -> Just (StoneV n); _ -> Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta { metaCounter = Just CountStones }
     , cNear = Just (NearRule 10 SkipDirect DiePrepend)
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics _ = obstaclePhysics
   onNear _ _ (StoneV n) = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ (StoneV n) = HitOut (if n <= 1 then Destroy else Absorb (Stone (n - 1))) False Nothing Nothing
+  physics _ = obstaclePhysics
+  view (StoneV n) = baseFace "stone" [("n", FieldInt n)]
 
 instance Kind StoneV where
   kindName _ = "stone"
@@ -196,45 +135,19 @@ instance Kind StoneV where
 data FlipV = FlipV Color Color
   deriving (Eq, Show)
 
-instance Cellular FlipV where
-  nameOf _ = "flip"
-  toCell (FlipV f b) = Flip f b
-
-instance Matchable FlipV where
-  color (FlipV f _) = Just f
-
-instance Hittable FlipV where
-  struck (FlipV _ b) = Absorb (Gem b Normal 0 Nothing)
-  fires _ = False
-
-instance Movable FlipV where
-  keepOnShuffle _ = True
-
-instance Countable FlipV
-instance Renders FlipV
-
 instance Phase FlipV where
   codec = Codec
     { cName = "flip"
-    , cToCell = toCell
+    , cToCell = \(FlipV f b) -> Flip f b
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (FlipV f _) = gemMatch (Just f)
+  onHit _ (FlipV _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
+  physics _ = gemPhysics { pKeepShuffle = True }
+  view _ = noFace
 
 instance Kind FlipV where
   kindName _ = "flip"
@@ -245,41 +158,20 @@ instance Kind FlipV where
 
 newtype BubbleV = BubbleV Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle BubbleV)
-
-instance Cellular BubbleV where
-  nameOf _ = "bubble"
-
-instance Hittable BubbleV where
-  fires _ = False
-
-instance Countable BubbleV where
-  counter _ = Just (CountNamed "bubble")
-
-instance Renders BubbleV
 
 instance Phase BubbleV where
   codec = Codec
     { cName = "bubble"
-    , cToCell = toCell
+    , cToCell = intCell "bubble"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = HitOut Destroy False Nothing Nothing
+  physics _ = obstaclePhysics
+  view _ = noFace
 
 instance Kind BubbleV where
   kindName _ = "bubble"
@@ -290,48 +182,21 @@ instance Kind BubbleV where
 
 data BossV = BossV Int Int Int Int
   deriving (Eq, Show)
-  deriving (Movable) via (Fixed BossV)
-
-instance Cellular BossV where
-  nameOf _ = "snow_boss"
-  toCell (BossV hp mx t q) = toCell (SnowBoss hp mx t q)
-
-instance Matchable BossV where
-  blocksSwap _ = True
-  hintable _ = False
-
-instance Hittable BossV where
-  struck b = Absorb (toCell b)
-  fires _ = False
-
-instance Countable BossV where
-  diffWeight (BossV hp _ _ q) = if q == 0 then hp else 0
-
-instance Renders BossV where
-  face (BossV hp mx t q) = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)]
 
 instance Phase BossV where
   codec = Codec
     { cName = "snow_boss"
-    , cToCell = toCell
+    , cToCell = \(BossV hp mx t q) -> toCell (SnowBoss hp mx t q)
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = MatchRule Nothing False True False
+  onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
+  physics _ = fixedPhysics
+  liveMeta (BossV hp _ _ q) = (cMeta (codec @BossV)) { metaDiffWeight = if q == 0 then hp else 0 }
+  view (BossV hp mx t q) = noFace { fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)] }
 
 instance Kind BossV where
   kindName _ = "snow_boss"
@@ -459,7 +324,7 @@ layeredCells =
 ab_layered_matches_builtin :: Assertion
 ab_layered_matches_builtin =
   mapM_
-    (\cell -> assertEqual (show cell) (abilityProbe (elementOf defaultWorld cell)) (abilityProbe (decode world cell)))
+    (\cell -> assertEqual (show cell) (somePhaseProbe (elementOf defaultWorld cell)) (somePhaseProbe (decode world cell)))
     layeredCells
 
 --------------------------------------------------------------------------------
@@ -504,45 +369,31 @@ blockNames isHead src = go (lines src)
 uniq :: [String] -> [String]
 uniq = foldr (\x acc -> if x `elem` acc then acc else x : acc) []
 
-abilityClasses :: [String]
-abilityClasses = ["Cellular", "Matchable", "Hittable", "Movable", "Countable", "Renders"]
+-- | Phase 类声明里的方法名。
+phaseMethods :: String -> [String]
+phaseMethods src = uniq (concat (blockNames (\l -> "class " `isPrefixOf` l && ") => Phase e where" `isInfixOf` l) src))
 
--- | 每个能力类在类声明里的方法名。
-classMethods :: String -> [(String, [String])]
-classMethods src =
-  [ (c, uniq (concat (blockNames (\l -> "class " `isPrefixOf` l && (" " ++ c ++ " e where") `isInfixOf` l) src)))
-  | c <- abilityClasses
-  ]
-
+-- | 'phaseProbe' 读到每个值级 Phase 方法（漏读的方法透明性测不出来；codec 是类型级，onNear 由规则快照锁定）。
 ab_some_element_forwards_all_methods :: Assertion
 ab_some_element_forwards_all_methods = do
-  src <- readFile "src/Match3/Element/Ability.hs"
-  let methods = classMethods src
-  assertEqual "six ability classes found" 6 (length (filter (not . null . snd) methods))
-  mapM_
-    ( \(c, ms) -> do
-        let fwd = uniq (concat (blockNames (== ("instance " ++ c ++ " SomeElement where")) src))
-        assertEqual ("SomeElement forwards every " ++ c ++ " method") (sort ms) (sort fwd)
-        mapM_ (\m -> assertBool ("abilityProbe covers " ++ m) (("(\"" ++ m ++ "\",") `isInfixOf` src)) ms
-    )
-    methods
+  src <- readFile "src/Match3/Element/Phase.hs"
+  let ms = phaseMethods src
+      probeSrc = unlines (takeWhile (not . ("somePhaseProbe ::" `isPrefixOf`)) (dropWhile (not . ("phaseProbe ::" `isPrefixOf`)) (lines src)))
+  assertBool "Phase methods found" (length ms >= 6)
+  mapM_ (\m -> assertBool ("phaseProbe reads " ++ m) (m `elem` ["codec", "onNear"] || (m ++ " ") `isInfixOf` probeSrc)) ms
 
 ab_layered_composes_all_methods :: Assertion
 ab_layered_composes_all_methods = do
-  src <- readFile "src/Match3/Element/Ability.hs"
+  src <- readFile "src/Match3/Element/Phase.hs"
   lsrc <- readFile "src/Match3/Element/Layer.hs"
-  mapM_
-    ( \(c, ms) -> do
-        let composed = uniq (concat (blockNames (\l -> "instance " `isPrefixOf` l && (" => " ++ c ++ " (Layered l e) where") `isInfixOf` l) lsrc))
-        assertEqual ("Layered composes every " ++ c ++ " method") (sort ms) (sort composed)
-    )
-    (classMethods src)
+  let composed = uniq (concat (blockNames (\l -> "instance " `isPrefixOf` l && "=> Phase (Layered l e) where" `isInfixOf` l) lsrc))
+  assertEqual "Layered composes every Phase method" (sort (phaseMethods src)) (sort composed)
 
 -- | 装箱前后、叠层装箱前后逐方法相等。
 ab_boxing_is_transparent :: Assertion
 ab_boxing_is_transparent = do
-  let check :: Element e => String -> e -> Assertion
-      check what e = assertEqual what (abilityProbe e) (abilityProbe (SomeElement e))
+  let check :: Phase e => String -> e -> Assertion
+      check what e = assertEqual what (phaseProbe e) (somePhaseProbe (SomePhase e))
   check "gem" (GemV C2)
   check "line_h" (LineHV C4)
   check "stone" (StoneV 2)
@@ -551,13 +402,13 @@ ab_boxing_is_transparent = do
   check "boss" (BossV 3 6 1 0)
   check "inert" (Inert "x" (Custom "x" (CustomState 2)))
   check "iced choco gem" (Layered (IceV 2) (Layered ChocoV (GemV C1)))
-  check "boxed inner" (Layered (ChainV 1) (SomeElement (LineHV C3)))
+  check "chained line" (Layered (ChainV 1) (LineHV C3))
   check "cookie" CookieE
-  -- 每个能力方法在这组样本上至少有一个不是缺省值（否则漏转发测不出来）
-  let samples = [abilityProbe (StoneV 2), abilityProbe (FlipV C1 C5), abilityProbe (BossV 3 6 1 0), abilityProbe (LineHV C4), abilityProbe (Layered (IceV 2) (GemV C1)), abilityProbe (Layered (ChainV 1) (GemV C1)), abilityProbe CookieE]
-      defaults = abilityProbe (GemV C1)
-      boring = [k | (k, v) <- defaults, k `notElem` ["nameOf", "toCell"], all (\s -> lookup k s == Just v) samples]
-  assertEqual "every method varies in the samples" [] boring
+  -- 每个读数在这组样本上至少有一个不是缺省值（否则漏读测不出来）
+  let samples = [phaseProbe (StoneV 2), phaseProbe (FlipV C1 C5), phaseProbe (BossV 3 6 1 0), phaseProbe (LineHV C4), phaseProbe (Layered (IceV 2) (GemV C1)), phaseProbe (Layered (ChainV 1) (GemV C1)), phaseProbe CookieE]
+      defaults = phaseProbe (GemV C1)
+      boring = [k | (k, v) <- defaults, k `notElem` ["name", "toCell"], all (\s -> lookup k s == Just v) samples]
+  assertEqual "every reading varies in the samples" [] boring
 
 -- | 解码：冰在外、叠层在内，剩下的交给本体；未注册的 Custom 名字 = 惰性占格；同名以后注册的为准。
 ab_world_decode_order :: Assertion
@@ -565,18 +416,17 @@ ab_world_decode_order = do
   let cell = Gem C2 Normal 2 (Just (Chain 1))
   assertEqual "layers" ["ice", "chain"] (map layerValueName (fst (decodeLayers world cell)))
   assertEqual "inner" (Gem C2 Normal 0 Nothing) (snd (decodeLayers world cell))
-  assertEqual "roundtrip" cell (toCell (decode world cell))
-  assertEqual "unregistered custom" (Just (Inert "moss" (Custom "moss" (CustomState 1)))) (fromElement (decode world (Custom "moss" (CustomState 1))))
-  assertEqual "unclaimed cell" "?" (nameOf (decode world Cookie))
+  assertEqual "roundtrip" cell (phaseToCell (decode world cell))
+  assertEqual "unregistered custom" (Just (Inert "moss" (Custom "moss" (CustomState 1)))) (fromPhase (decode world (Custom "moss" (CustomState 1))))
+  assertEqual "unclaimed cell" "?" (phaseName (decode world Cookie))
   assertEqual "names in order" ["gem", "line_h", "ice", "choco", "chain", "stone"] (map defName (worldDefs world))
   let w2 = mkWorld [kindDef @StoneV, kindDef @GemV, kindDef @StoneV]
   assertEqual "dedupe keeps first position" ["stone", "gem"] (map defName (worldDefs w2))
-  assertEqual "body" (Just (StoneV 2)) (fromElement (decode w2 (Stone 2)))
+  assertEqual "body" (Just (StoneV 2)) (fromPhase (decode w2 (Stone 2)))
   assertEqual "mapMaybe sanity" [1 :: Int] (mapMaybe (\c -> case c of Stone n -> Just n; _ -> Nothing) [getCell (gridFromRows [[Stone 1]]) (0, 0)])
 
 --------------------------------------------------------------------------------
 -- 规则方法（第 3 刀）：优先级 / 波及范围 / 蔓延写死（与旧 R 行的次序一致；元素对照快照另有整盘锁定）
-
 
 -- | slim-1：气球 onNear+DieAppend 与旧 balloonPopLegacy 一致；气泡/毛球因 foldr 去重序留逃生口。
 ab_near_escape_absorbed :: Assertion
@@ -622,7 +472,7 @@ ab_rule_methods_pinned = do
   assertEqual "snow boss rules" [200] [o | AdjacentPass o _ <- kindRules (Proxy @SnowBoss)]
 
 --------------------------------------------------------------------------------
--- 前端格子描述（第 6 刀）：cellFace 由 Renders.faceBase 驱动，与第 6 刀前按构造器写死的 case 逐字段相同
+-- 前端格子描述（第 6 刀）：cellFace 由 Phase view 的 fBase 驱动，与第 6 刀前按构造器写死的 case 逐字段相同
 
 -- | 第 6 刀前 Match3.View.cellFace 的逐字副本。
 legacyCellFace :: Cell -> (String, [(String, CellField)])

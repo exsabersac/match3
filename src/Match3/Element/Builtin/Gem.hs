@@ -25,7 +25,6 @@ import Data.List (intersect)
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
 import Match3.Board.Grid (inBounds)
-import Match3.Element.Ability
 import Match3.Element.Kind
 import Match3.Element.Phase
 import Match3.Element.Special (runShape)
@@ -36,17 +35,6 @@ import Match3.Types
 -- | 普通宝石：除名字、写回与解码外全用缺省能力（颜色缺省取自写回的格子）。宝石不经关卡放置表放置。
 newtype PlainGem = PlainGem Color
   deriving (Eq, Show)
-
-instance Cellular PlainGem where
-  nameOf _ = "gem"
-  toCell (PlainGem c) = Gem c Normal 0 Nothing
-
-instance Matchable PlainGem where
-  color (PlainGem c) = Just c  -- 与缺省（取写回格子的颜色）相同，热路径上省掉写回
-instance Hittable PlainGem
-instance Movable PlainGem
-instance Countable PlainGem
-instance Renders PlainGem
 
 instance Phase PlainGem where
   codec = Codec
@@ -60,7 +48,7 @@ instance Phase PlainGem where
   onMatch (PlainGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics
-  view _ = emptyFace "gem"
+  view _ = noFace
 
 instance Kind PlainGem where
   place _ = cPlace (codec @PlainGem)
@@ -97,23 +85,6 @@ specialName k = case k of
   Rainbow -> "rainbow"
   Normal -> "gem"
 
-instance SpecialKind k => Cellular (SpecialGem k) where
-  nameOf = specialName . kindOf
-  toCell g@(SpecialGem c) = Gem c (kindOf g) 0 Nothing
-
-instance SpecialKind k => Matchable (SpecialGem k) where
-  color (SpecialGem c) = Just c  -- 与缺省相同，省掉写回
-  hintable g = kindOf g /= Rainbow
-
-instance SpecialKind k => Hittable (SpecialGem k) where
-  blast = specialBlast . kindOf
-
-instance Movable (SpecialGem k) where
-  keepOnShuffle _ = True
-
-instance Countable (SpecialGem k)
-instance Renders (SpecialGem k)
-
 instance forall k. SpecialKind k => Phase (SpecialGem k) where
   codec = Codec
     { cName = specialName (specialKind (Proxy :: Proxy k))
@@ -130,7 +101,7 @@ instance forall k. SpecialKind k => Phase (SpecialGem k) where
   onMatch g@(SpecialGem c) = (gemMatch (Just c)) { mHintable = kindOf g /= Rainbow }
   onHit _ g = gemHit { hBlast = specialBlast (kindOf g) }
   physics _ = gemPhysics { pKeepShuffle = True }
-  view g = emptyFace (unElementName (specialName (kindOf g)))
+  view _ = noFace
 
 instance forall k. SpecialKind k => Kind (SpecialGem k) where
   place _ = cPlace (codec @(SpecialGem k))

@@ -88,7 +88,7 @@ import Match3.Counts
   , plusCounts
   )
 import Match3.Element
-import Match3.Element.Ability (toCell)
+import Match3.Element.Phase (phaseToCell)
 import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
 import Match3.Element.Layer (Layer(layerName), SomeLayer(..), layerValueName, peelAs)
 import Match3.Element.Mechanic (mechNameOf)
@@ -618,7 +618,7 @@ qc_world_decode_roundtrip =
           (_, l : _) -> topName == layerValueName l && layerAccepts topName cell
           _ -> topName == bodyName
     in counterexample (show (bodyName, topName, map layerValueName layers, inner)) $
-         toCell (elementOf world cell) === cell .&&. bodyOk .&&. topOk
+         phaseToCell (elementOf world cell) === cell .&&. bodyOk .&&. topOk
 
 -- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
 -- 8 种叠层各由一个叠层种类认领，冰层只有一个。

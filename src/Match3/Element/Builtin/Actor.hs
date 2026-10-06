@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 会动或会生成东西的元素：在邻格真消除时改动周围的格子，或在步末自己行动。
 --
@@ -30,7 +29,6 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
 import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
-import Match3.Element.Ability
 import Match3.Element.Event
 import Match3.Element.Kind
 import Match3.Element.Near
@@ -41,7 +39,6 @@ import qualified Match3.Snail as Snail
 import Match3.Snail (snailPositions, stepSnailAtBy)
 import Match3.Types
 import Match3.Types.Optics (cellAt, cellColorT)
-
 
 -- | 单顶魔法帽（与 Obstacles.triggerAdjacentHatsBy 的 triggerOne 同语义）。
 hatTriggerOne :: (Cell -> Bool) -> Board -> [Pos] -> Pos -> Board
@@ -80,15 +77,6 @@ bottleDyeOne okRecolor board skip bottlePos col =
 -- | 魔法帽（固定格）：邻格真消除时给相邻宝石换色。
 data MagicHatE = MagicHatE
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Fixed MagicHatE)
-
-instance Cellular MagicHatE where
-  nameOf _ = "magic_hat"
-  toCell _ = MagicHat
-
-instance Countable MagicHatE
-instance Renders MagicHatE where
-  faceBase _ = Just ("hat", [])
 
 instance Phase MagicHatE where
   codec = Codec
@@ -106,7 +94,7 @@ instance Phase MagicHatE where
     let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
         b' = hatTriggerOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx)
      in nearLocalEdit b' [] []  -- 白名单：hatTriggerOne 只改邻接可改色格
-  view _ = emptyFace "hat"
+  view _ = Face (Just ("hat", [])) []
 
 instance Kind MagicHatE where
   place _ = cPlace (codec @MagicHatE)
@@ -114,15 +102,6 @@ instance Kind MagicHatE where
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Fixed MakerE)
-
-instance Cellular MakerE where
-  nameOf _ = "maker"
-  toCell (MakerE c n) = Maker c n
-
-instance Countable MakerE
-instance Renders MakerE where
-  faceBase (MakerE c k) = Just ("maker", [colorField c, nField k])
 
 instance Phase MakerE where
   codec = Codec
@@ -142,7 +121,7 @@ instance Phase MakerE where
       else if n <= 1
         then nearSelfSits ctx (Gem c Bomb 0 Nothing)
         else NearNudge (Becomes (Maker c (n - 1)))
-  view _ = emptyFace "maker"
+  view (MakerE c k) = Face (Just ("maker", [colorField c, nField k])) []
 
 instance Kind MakerE where
   place _ = cPlace (codec @MakerE)
@@ -150,15 +129,6 @@ instance Kind MakerE where
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Fixed SnailE)
-
-instance Cellular SnailE where
-  nameOf _ = "snail"
-  toCell (SnailE dr dc) = Snail dr dc
-
-instance Countable SnailE
-instance Renders SnailE where
-  faceBase (SnailE dr dc) = Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])
 
 instance Phase SnailE where
   codec = Codec
@@ -172,7 +142,7 @@ instance Phase SnailE where
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
-  view _ = emptyFace "snail"
+  view (SnailE dr dc) = Face (Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])) []
 
 instance Kind SnailE where
   place _ = cPlace (codec @SnailE)
@@ -181,15 +151,6 @@ instance Kind SnailE where
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
 newtype BottleE = BottleE Color
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Fixed BottleE)
-
-instance Cellular BottleE where
-  nameOf _ = "bottle"
-  toCell (BottleE c) = Bottle c
-
-instance Countable BottleE
-instance Renders BottleE where
-  faceBase (BottleE c) = Just ("bottle", [colorField c])
 
 instance Phase BottleE where
   codec = Codec
@@ -207,7 +168,7 @@ instance Phase BottleE where
     let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
         b' = bottleDyeOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx) c
      in nearLocalEdit b' [] []  -- 白名单：bottleTriggerOne 只改邻接可改色格
-  view _ = emptyFace "bottle"
+  view (BottleE c) = Face (Just ("bottle", [colorField c])) []
 
 instance Kind BottleE where
   place _ = cPlace (codec @BottleE)
@@ -215,23 +176,6 @@ instance Kind BottleE where
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
   deriving (Eq, Show)
-
-instance Cellular CountdownE where
-  nameOf _ = "countdown"
-  toCell (CountdownE c n) = Countdown c n
-
-instance Matchable CountdownE where
-  color (CountdownE c _) = Just c
-
-instance Hittable CountdownE where
-  fires _ = False
-
-instance Movable CountdownE where
-  keepOnShuffle _ = True
-
-instance Countable CountdownE
-instance Renders CountdownE where
-  faceBase (CountdownE c k) = Just ("countdown", [colorField c, nField k])
 
 instance Phase CountdownE where
   codec = Codec
@@ -248,7 +192,7 @@ instance Phase CountdownE where
   onMatch (CountdownE c _) = gemMatch (Just c)
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = gemPhysics { pKeepShuffle = True }
-  view _ = emptyFace "countdown"
+  view (CountdownE c k) = Face (Just ("countdown", [colorField c, nField k])) []
 
 instance Kind CountdownE where
   place _ = cPlace (codec @CountdownE)
@@ -263,23 +207,11 @@ instance Kind CountdownE where
 -- 步末效果记为 EvBelt "fuzzball"（前端按皮带的平移动画播放：毛球与宝石互换位置）。
 newtype Fuzzball = Fuzzball Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle Fuzzball)
-
-instance Cellular Fuzzball where
-  nameOf _ = "fuzzball"
-
-instance Hittable Fuzzball where
-  fires _ = False
-
-instance Countable Fuzzball where
-  counter _ = Just (CountNamed "fuzzball")
-
-instance Renders Fuzzball
 
 instance Phase Fuzzball where
   codec = Codec
     { cName = "fuzzball"
-    , cToCell = toCell
+    , cToCell = intCell "fuzzball"
     , cFromCell = fromCustom "fuzzball" Fuzzball
     , cPlace = customPlace "fuzzball"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "fuzzball") }
@@ -288,7 +220,7 @@ instance Phase Fuzzball where
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
-  view _ = emptyFace "fuzzball"
+  view _ = noFace
 
 instance Kind Fuzzball where
   place _ = cPlace (codec @Fuzzball)

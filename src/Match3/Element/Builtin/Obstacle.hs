@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 打破型障碍：占格本体，被直接命中或邻格真消除时削层 / 打碎 / 变成别的元素。
 --
@@ -48,7 +47,6 @@ import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
 import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
-import Match3.Element.Ability
 import Data.Proxy (Proxy(..))
 import Match3.Element.Kind
 import Match3.Element.Near
@@ -65,21 +63,6 @@ import Match3.Types
 -- | 石头：直接命中削一层、末层消除；邻消同样削层。
 newtype StoneE = StoneE Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle StoneE)
-
-instance Cellular StoneE where
-  nameOf _ = "stone"
-  toCell (StoneE n) = Stone n
-
-instance Hittable StoneE where
-  struck (StoneE n) = chip n Stone
-  fires _ = False
-
-instance Countable StoneE where
-  counter _ = Just CountStones
-
-instance Renders StoneE where
-  faceBase (StoneE k) = Just ("stone", [nField k])
 
 instance Phase StoneE where
   codec = Codec
@@ -94,8 +77,7 @@ instance Phase StoneE where
   onHit _ (StoneE n) = HitOut (chip n Stone) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (StoneE n) = NearNudge (chipNudge n Stone)
-  view _ = emptyFace "stone"
-
+  view (StoneE k) = Face (Just ("stone", [nField k])) []
 
 instance Kind StoneE where
   place _ = cPlace (codec @StoneE)
@@ -103,21 +85,6 @@ instance Kind StoneE where
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle ChestE)
-
-instance Cellular ChestE where
-  nameOf _ = "chest"
-  toCell (ChestE n) = Chest n
-
-instance Hittable ChestE where
-  struck (ChestE n) = chip n Chest
-  fires _ = False
-
-instance Countable ChestE where
-  counter _ = Just CountChests
-
-instance Renders ChestE where
-  faceBase (ChestE k) = Just ("chest", [nField k])
 
 instance Phase ChestE where
   codec = Codec
@@ -132,8 +99,7 @@ instance Phase ChestE where
   onHit _ (ChestE n) = HitOut (chip n Chest) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (ChestE n) = NearNudge (chipNudge n Chest)
-  view _ = emptyFace "chest"
-
+  view (ChestE k) = Face (Just ("chest", [nField k])) []
 
 instance Kind ChestE where
   place _ = cPlace (codec @ChestE)
@@ -141,21 +107,6 @@ instance Kind ChestE where
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle HoneyE)
-
-instance Cellular HoneyE where
-  nameOf _ = "honey"
-  toCell (HoneyE n) = Honey n
-
-instance Hittable HoneyE where
-  struck (HoneyE n) = chip n Honey
-  fires _ = False
-
-instance Countable HoneyE where
-  counter _ = Just CountHoney
-
-instance Renders HoneyE where
-  faceBase (HoneyE k) = Just ("honey", [nField k])
 
 instance Phase HoneyE where
   codec = Codec
@@ -170,8 +121,7 @@ instance Phase HoneyE where
   onHit _ (HoneyE n) = HitOut (chip n Honey) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (HoneyE n) = NearNudge (chipNudge n Honey)
-  view _ = emptyFace "honey"
-
+  view (HoneyE k) = Face (Just ("honey", [nField k])) []
 
 instance Kind HoneyE where
   place _ = cPlace (codec @HoneyE)
@@ -179,21 +129,6 @@ instance Kind HoneyE where
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle CakeE)
-
-instance Cellular CakeE where
-  nameOf _ = "cake"
-  toCell (CakeE n) = Cake n
-
-instance Hittable CakeE where
-  struck (CakeE n) = chip n Cake
-  fires _ = False
-
-instance Countable CakeE where
-  counter _ = Just CountCakes
-
-instance Renders CakeE where
-  faceBase (CakeE k) = Just ("cake", [nField k])
 
 instance Phase CakeE where
   codec = Codec
@@ -208,8 +143,7 @@ instance Phase CakeE where
   onHit _ (CakeE n) = HitOut (chip n Cake) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (CakeE n) = NearNudge (chipNudge n Cake)
-  view _ = emptyFace "cake"
-
+  view (CakeE k) = Face (Just ("cake", [nField k])) []
 
 instance Kind CakeE where
   place _ = cPlace (codec @CakeE)
@@ -217,20 +151,6 @@ instance Kind CakeE where
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle BalloonE)
-
-instance Cellular BalloonE where
-  nameOf _ = "balloon"
-  toCell (BalloonE c) = Balloon c
-
-instance Hittable BalloonE where
-  fires _ = False
-
-instance Countable BalloonE where
-  counter _ = Just CountBalloons
-
-instance Renders BalloonE where
-  faceBase (BalloonE c) = Just ("balloon", [colorField c])
 
 instance Phase BalloonE where
   codec = Codec
@@ -246,7 +166,7 @@ instance Phase BalloonE where
   physics _ = obstaclePhysics
   onNear _ ctx (BalloonE c) =
     if any (\(_, mc) -> mc == Just c) (ncTriggers ctx) then NearNudge Dies else NearIdle
-  view _ = emptyFace "balloon"
+  view (BalloonE c) = Face (Just ("balloon", [colorField c])) []
 
 instance Kind BalloonE where
   place _ = cPlace (codec @BalloonE)
@@ -262,21 +182,6 @@ balloonPopLegacy ctx b = AdjOut b [p | p <- balloonsAdjacentSameColor b (acTrue 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle SafeE)
-
-instance Cellular SafeE where
-  nameOf _ = "safe"
-  toCell (SafeE n) = Safe n
-
-instance Hittable SafeE where
-  struck (SafeE n) = Absorb (if n <= 1 then Cookie else Safe (n - 1))
-  fires _ = False
-
-instance Countable SafeE where
-  vacatesCarpet _ = True
-
-instance Renders SafeE where
-  faceBase (SafeE k) = Just ("safe", [nField k])
 
 instance Phase SafeE where
   codec = Codec
@@ -291,7 +196,7 @@ instance Phase SafeE where
   onHit _ (SafeE n) = HitOut (Absorb (if n <= 1 then Cookie else Safe (n - 1))) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (SafeE n) = NearNudge (Becomes (if n <= 1 then Cookie else Safe (n - 1)))
-  view _ = emptyFace "safe"
+  view (SafeE k) = Face (Just ("safe", [nField k])) []
 
 instance Kind SafeE where
   place _ = cPlace (codec @SafeE)
@@ -300,24 +205,6 @@ instance Kind SafeE where
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
   deriving (Eq, Show)
-
-instance Cellular FlipE where
-  nameOf _ = "flip"
-  toCell (FlipE f b) = Flip f b
-
-instance Matchable FlipE where
-  color (FlipE f _) = Just f
-
-instance Hittable FlipE where
-  struck (FlipE _ back) = Absorb (Gem back Normal 0 Nothing)
-  fires _ = False
-
-instance Movable FlipE where
-  keepOnShuffle _ = True
-
-instance Countable FlipE
-instance Renders FlipE where
-  faceBase (FlipE f b) = Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])
 
 instance Phase FlipE where
   codec = Codec
@@ -331,7 +218,7 @@ instance Phase FlipE where
   onMatch (FlipE f _) = gemMatch (Just f)
   onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
   physics _ = gemPhysics { pKeepShuffle = True }
-  view _ = emptyFace "flip"
+  view (FlipE f b) = Face (Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])) []
 
 instance Kind FlipE where
   place _ = cPlace (codec @FlipE)
@@ -340,17 +227,6 @@ instance Kind FlipE where
 -- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
 data SurpriseEgg = SurpriseEgg
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle SurpriseEgg)
-
-instance Cellular SurpriseEgg where
-  nameOf _ = "surprise"
-  toCell _ = Surprise
-
-instance Hittable SurpriseEgg where
-  fires _ = False
-
-instance Countable SurpriseEgg
-instance Renders SurpriseEgg
 
 instance Phase SurpriseEgg where
   codec = Codec
@@ -364,7 +240,7 @@ instance Phase SurpriseEgg where
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
-  view _ = emptyFace "surprise"
+  view _ = noFace
 
 instance Kind SurpriseEgg where
   place _ = cPlace (codec @SurpriseEgg)
@@ -381,22 +257,11 @@ instance Kind SurpriseEgg where
 -- 道具（锤子 / 自由交换 / 十字）没有 PhaseTick 步末，充满的魔法石等到下一次交换的步末再发射。
 newtype MagicStone = MagicStone Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Fixed MagicStone)
-
-instance Cellular MagicStone where
-  nameOf _ = "magic_stone"
-
-instance Hittable MagicStone where
-  struck (MagicStone k) = if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune
-  fires _ = False
-
-instance Countable MagicStone
-instance Renders MagicStone
 
 instance Phase MagicStone where
   codec = Codec
     { cName = "magic_stone"
-    , cToCell = toCell
+    , cToCell = intCell "magic_stone"
     , cFromCell = fromCustom "magic_stone" MagicStone
     , cPlace = \args _ -> Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
     , cMeta = emptyMeta
@@ -406,7 +271,7 @@ instance Phase MagicStone where
   onHit _ (MagicStone k) = HitOut (if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune) False Nothing Nothing
   physics _ = fixedPhysics
   onNear _ _ (MagicStone k) = NearNudge (if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched)
-  view _ = emptyFace "magic_stone"
+  view _ = noFace
 
 instance Kind MagicStone where
   place _ = cPlace (codec @MagicStone)
@@ -461,32 +326,11 @@ data SnowBoss = SnowBoss
   , sbQuad :: Int
   }
   deriving (Eq, Show)
-  deriving (Movable) via (Fixed SnowBoss)
-
-instance Cellular SnowBoss where
-  nameOf _ = snowBossName
-  toCell (SnowBoss hp mx t q) = Custom snowBossName (CustomState (((clamp mx * 256 + clamp hp) * 4 + t `mod` 4) * 4 + q `mod` 4))
-    where
-      clamp = max 0 . min 255
-
-instance Matchable SnowBoss where
-  blocksSwap _ = True
-  hintable _ = False
-
-instance Hittable SnowBoss where
-  struck b = Absorb (toCell b)
-  fires _ = False
-
-instance Countable SnowBoss where
-  diffWeight b = if sbQuad b == 0 then sbHp b else 0
-
-instance Renders SnowBoss where
-  face b = [("q", FaceInt (sbQuad b)), ("hurt", FaceBool (sbHp b * 2 <= sbMax b)), ("turn", FaceInt (sbTurn b)), ("every", FaceInt snowBossEvery)]
 
 instance Phase SnowBoss where
   codec = Codec
     { cName = snowBossName
-    , cToCell = toCell
+    , cToCell = bossToCell
     , cFromCell = \cell -> case cell of
         Custom n s | n == snowBossName -> Just (decodeBoss s)
         _ -> Nothing
@@ -504,7 +348,7 @@ instance Phase SnowBoss where
     { metaDiffCounter = Just (CountNamed snowBossName)
     , metaDiffWeight = if sbQuad b == 0 then sbHp b else 0
     }
-  view b = (emptyFace (unElementName snowBossName))
+  view b = noFace
     { fExtras =
         [ ("q", FaceInt (sbQuad b))
         , ("hurt", FaceBool (sbHp b * 2 <= sbMax b))
@@ -531,6 +375,12 @@ instance Entity SnowBoss where
 
 snowBossName :: ElementName
 snowBossName = "snow_boss"
+
+-- | 写回格子（'decodeBoss' 的逆；各字段截到编码范围内）。
+bossToCell :: SnowBoss -> Cell
+bossToCell (SnowBoss hp mx t q) = Custom snowBossName (CustomState (((clamp mx * 256 + clamp hp) * 4 + t `mod` 4) * 4 + q `mod` 4))
+  where
+    clamp = max 0 . min 255
 
 -- | 每隔几次交换召唤一块雪块。
 snowBossEvery :: Int

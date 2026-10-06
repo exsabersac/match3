@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 收集与计数类：离开盘面（被收走 / 打破）时按计数键记一笔，常作关卡目标。
 --
@@ -25,7 +24,6 @@ module Match3.Element.Builtin.Collectible
 import Control.Applicative ((<|>))
 import Data.List (nub)
 import Match3.Board.Grid (getCell, inBounds, setCell)
-import Match3.Element.Ability
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
 import Match3.Element.Near
@@ -38,23 +36,6 @@ import Match3.Types
 -- | 饼干：打不动；随重力下落、可过传送门，落到底边被收走；离格也算覆盖地毯。
 data CookieE = CookieE
   deriving (Eq, Show)
-  deriving (Matchable, Hittable) via (Obstacle CookieE)
-
-instance Cellular CookieE where
-  nameOf _ = "cookie"
-  toCell _ = Cookie
-
-instance Movable CookieE where
-  drains _ = [EdgeBottom]
-  keepOnShuffle _ = True
-  recolorable _ = False
-  pushable _ = False
-
-instance Countable CookieE where
-  counter _ = Just CountCookies
-  vacatesCarpet _ = True
-
-instance Renders CookieE
 
 instance Phase CookieE where
   codec = Codec
@@ -68,7 +49,7 @@ instance Phase CookieE where
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Immune False Nothing Nothing
   physics _ = gemPhysics { pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom] }
-  view _ = emptyFace "cookie"
+  view _ = noFace
 
 instance Kind CookieE where
   place _ = cPlace (codec @CookieE)
@@ -76,18 +57,6 @@ instance Kind CookieE where
 -- | 时间精灵：命中 / 邻消即破，按个数差每个奖励 2 步。
 data TimeSpiritE = TimeSpiritE
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle TimeSpiritE)
-
-instance Cellular TimeSpiritE where
-  nameOf _ = "time_spirit"
-  toCell _ = TimeSpirit
-
-instance Hittable TimeSpiritE where
-  fires _ = False
-
-instance Countable TimeSpiritE
-instance Renders TimeSpiritE where
-  faceBase _ = Just ("spirit", [])
 
 instance Phase TimeSpiritE where
   codec = Codec
@@ -102,7 +71,7 @@ instance Phase TimeSpiritE where
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ _ = NearNudge Dies
-  view _ = emptyFace "spirit"
+  view _ = Face (Just ("spirit", [])) []
 
 instance Kind TimeSpiritE where
   place _ = cPlace (codec @TimeSpiritE)
@@ -113,23 +82,11 @@ instance Kind TimeSpiritE where
 -- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。
 newtype Bubble = Bubble Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle Bubble)
-
-instance Cellular Bubble where
-  nameOf _ = "bubble"
-
-instance Hittable Bubble where
-  fires _ = False
-
-instance Countable Bubble where
-  counter _ = Just (CountNamed "bubble")
-
-instance Renders Bubble
 
 instance Phase Bubble where
   codec = Codec
     { cName = "bubble"
-    , cToCell = toCell
+    , cToCell = intCell "bubble"
     , cFromCell = fromCustom "bubble" Bubble
     , cPlace = customPlace "bubble"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
@@ -138,7 +95,7 @@ instance Phase Bubble where
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
-  view _ = emptyFace "bubble"
+  view _ = noFace
 
 instance Kind Bubble where
   place _ = cPlace (codec @Bubble)
@@ -196,28 +153,10 @@ chameleonColor cell = case cell of
 chameleonNext :: Color -> Color
 chameleonNext c = colorAt (fromEnum c + 1)
 
-instance Cellular Chameleon where
-  nameOf _ = chameleonName
-
-instance Matchable Chameleon where
-  color (Chameleon k) = Just (colorAt k)
-
-instance Hittable Chameleon
-
-instance Movable Chameleon where
-  keepOnShuffle _ = True
-  recolorable _ = False
-
-instance Countable Chameleon where
-  counter _ = Just (CountNamed "chameleon")
-
-instance Renders Chameleon where
-  face (Chameleon k) = [("c", FaceColor (colorAt k))]  -- 当前颜色（网页格子 JSON 的 "c"，同宝石；前端不自己换算 v）
-
 instance Phase Chameleon where
   codec = Codec
     { cName = chameleonName
-    , cToCell = toCell
+    , cToCell = intCell chameleonName
     , cFromCell = fromCustom chameleonName Chameleon
     , cPlace = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
     , cMeta = emptyMeta { metaCounter = Just (CountNamed chameleonName) }
@@ -228,7 +167,7 @@ instance Phase Chameleon where
   onMatch (Chameleon k) = gemMatch (Just (colorAt k))
   onHit _ _ = gemHit
   physics _ = gemPhysics { pKeepShuffle = True, pRecolor = False }
-  view (Chameleon k) = (emptyFace "chameleon") { fExtras = [("c", FaceColor (colorAt k))] }
+  view (Chameleon k) = noFace { fExtras = [("c", FaceColor (colorAt k))] }
 
 instance Kind Chameleon where
   place _ = cPlace (codec @Chameleon)

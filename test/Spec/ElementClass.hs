@@ -2,7 +2,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
--- | 元素类（xmonad LayoutClass 风格；元素类重构第 2 刀起是能力类 Match3.Element.Ability + 类型级 Kind / Layer）。
+-- | 元素类（xmonad LayoutClass 风格；slim-9 起值级行为只有 Match3.Element.Phase + 类型级 Kind / Layer）。
 --
 -- 阶段 2 删掉了扁平 ElementDef 记录，新旧两条路径不能再在同一进程里并排跑；等价性改由阶段 1（9ae6a7b，
 -- 新旧记录并存且逐手相等）上生成的元素查询快照 test/golden/element-queries.txt 锁定：全部 *With 查询 ×
@@ -24,7 +24,6 @@ import Match3.Game.Level (newGameAtLevel)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
-import Match3.Element.Ability
 import Match3.Element.Phase
 import Match3.Element.Mechanic
   ( Beat(..)
@@ -88,81 +87,85 @@ ec_rules_match_stage1_snapshot = snapshotPart ["A ", "E ", "S ", "O ", "C ", "G 
 ec_play_matches_stage1_snapshot :: Assertion
 ec_play_matches_stage1_snapshot = snapshotPart ["M "]
 
--- | SomeElement 的 Eq 按类型再比状态，Show 稳定（元素名 + 状态值）。
+-- | SomePhase 的 Eq 按类型再比状态，Show 稳定（元素名 + 状态值）。
 ec_some_element_eq_show :: Assertion
 ec_some_element_eq_show = do
-  assertEqual "same name same state" (SomeElement (PlainGem C1)) (SomeElement (PlainGem C1))
-  assertBool "same type other state" (SomeElement (PlainGem C1) /= SomeElement (PlainGem C2))
-  assertBool "other element" (SomeElement (SpecialGem @'LineH C1) /= SomeElement (SpecialGem @'LineV C1))
-  assertBool "other type" (SomeElement (PlainGem C1) /= SomeElement SurpriseEgg)
-  assertEqual "show gem" "SomeElement \"gem\" (PlainGem C1)" (show (SomeElement (PlainGem C1)))
-  assertEqual "show layered" "SomeElement \"gem\" (Layered (Ice 2) (SomeElement \"gem\" (PlainGem C3)))" (show (iceOn 2 (SomeElement (PlainGem C3))))
-  assertEqual "unbox" (Just (PlainGem C4)) (fromElement (SomeElement (PlainGem C4)))
-  assertEqual "unbox wrong type" (Nothing :: Maybe SurpriseEgg) (fromElement (SomeElement (PlainGem C4)))
-  -- 宝石全用缺省方法（普通棋子），颜色取自写回的格子
+  assertEqual "same name same state" (SomePhase (PlainGem C1)) (SomePhase (PlainGem C1))
+  assertBool "same type other state" (SomePhase (PlainGem C1) /= SomePhase (PlainGem C2))
+  assertBool "other element" (SomePhase (SpecialGem @'LineH C1) /= SomePhase (SpecialGem @'LineV C1))
+  assertBool "other type" (SomePhase (PlainGem C1) /= SomePhase SurpriseEgg)
+  assertEqual "show gem" "SomePhase \"gem\" (PlainGem C1)" (show (SomePhase (PlainGem C1)))
+  assertEqual "show layered" "SomePhase \"gem\" (Layered (Ice 2) (PlainGem C3))" (show (SomePhase (Layered (Ice 2) (PlainGem C3))))
+  assertEqual "unbox" (Just (PlainGem C4)) (fromPhase (SomePhase (PlainGem C4)))
+  assertEqual "unbox wrong type" (Nothing :: Maybe SurpriseEgg) (fromPhase (SomePhase (PlainGem C4)))
+  -- 宝石 = 普通棋子原型（gemMatch / gemHit / gemPhysics）
   let g = PlainGem C2
-  assertEqual "gem color" (Just C2) (color g)
-  assertEqual "gem defaults" (False, True, True, True, Destroy, True, True, False, True) (blocksSwap g, fires g, falls g, portal g, struck g, recolorable g, pushable g, keepOnShuffle g, hintable g)
-  assertBool "rainbow not hintable" (not (hintable (SpecialGem @'Rainbow C1)))
-  assertEqual "egg is an obstacle" (True, False, Nothing, True) (blocksSwap SurpriseEgg, fires SurpriseEgg, color SurpriseEgg, keepOnShuffle SurpriseEgg)
+      gm = onMatch g
+      gh = onHit DirectHit g
+      gp = physics g
+  assertEqual "gem color" (Just C2) (mColor gm)
+  assertEqual "gem defaults" (False, True, True, True, Destroy, True, True, False, True) (mBlockSwap gm, hFires gh, pFalls gp, pPortal gp, hStrike gh, pRecolor gp, pPush gp, pKeepShuffle gp, mHintable gm)
+  assertBool "rainbow not hintable" (not (mHintable (onMatch (SpecialGem @'Rainbow C1))))
+  assertEqual "egg is an obstacle" (True, False, Nothing, True) (mBlockSwap (onMatch SurpriseEgg), hFires (onHit DirectHit SurpriseEgg), mColor (onMatch SurpriseEgg), pKeepShuffle (physics SurpriseEgg))
   -- 元素世界把格子解码成元素值
-  assertEqual "decode gem" (SomeElement (PlainGem C5)) (bodyOf defaultWorld (mkGem C5))
-  assertEqual "decode iced line" (iceOn 2 (SomeElement (SpecialGem @'LineV C1))) (elementOf defaultWorld (Gem C1 LineV 2 Nothing))
+  assertEqual "decode gem" (SomePhase (PlainGem C5)) (bodyOf defaultWorld (mkGem C5))
+  assertEqual "decode iced line" (SomePhase (Layered (Ice 2) (SpecialGem @'LineV C1))) (elementOf defaultWorld (Gem C1 LineV 2 Nothing))
 
--- | 冰层包在外面的元素值（与元素世界解码出的形状相同）。
-iceOn :: Int -> SomeElement -> SomeElement
-iceOn n e = SomeElement (Layered (Ice n) e)
-
--- | 第 6b 刀：SomeElement 的相等按具体类型（Typeable cast）+ 该类型的 Eq，不比较名字字符串。
+-- | 第 6b 刀：SomePhase 的相等按具体类型（Typeable cast）+ 该类型的 Eq，不比较名字字符串。
 -- 两个同名（"twin"）而类型不同的测试元素不相等；同类型同状态相等、不同状态不等；名字是 ElementName（newtype）。
 ec_some_element_eq_by_type :: Assertion
 ec_some_element_eq_by_type = do
-  assertEqual "same type same state" (SomeElement (TwinA 1)) (SomeElement (TwinA 1))
-  assertBool "same type other state" (SomeElement (TwinA 1) /= SomeElement (TwinA 2))
+  assertEqual "same type same state" (SomePhase (TwinA 1)) (SomePhase (TwinA 1))
+  assertBool "same type other state" (SomePhase (TwinA 1) /= SomePhase (TwinA 2))
   assertEqual "names collide" (nameOf (TwinA 1)) (nameOf (TwinB 1))
-  assertBool "same name, other type" (SomeElement (TwinA 1) /= SomeElement (TwinB 1))
-  assertBool "same name, other type (flipped)" (SomeElement (TwinB 1) /= SomeElement (TwinA 1))
+  assertBool "same name, other type" (SomePhase (TwinA 1) /= SomePhase (TwinB 1))
+  assertBool "same name, other type (flipped)" (SomePhase (TwinB 1) /= SomePhase (TwinA 1))
   assertEqual "same cell, still other type" (toCell (TwinA 1)) (toCell (TwinB 1))
-  assertEqual "boxed twice" (SomeElement (SomeElement (TwinA 3))) (SomeElement (SomeElement (TwinA 3)))
-  assertEqual "layer same" (iceOn 2 (SomeElement (TwinA 1))) (iceOn 2 (SomeElement (TwinA 1)))
-  assertBool "layer other state" (iceOn 1 (SomeElement (TwinA 1)) /= iceOn 2 (SomeElement (TwinA 1)))
-  assertBool "layer, inner other type" (iceOn 1 (SomeElement (TwinA 1)) /= iceOn 1 (SomeElement (TwinB 1)))
+  assertEqual "layer same" (iceOn 2 (TwinA 1)) (iceOn 2 (TwinA 1))
+  assertBool "layer other state" (iceOn 1 (TwinA 1) /= iceOn 2 (TwinA 1))
+  assertBool "layer, inner other type" (iceOn 1 (TwinA 1) /= iceOn 1 (TwinB 1))
   assertEqual "name is a newtype with String's Show" "\"twin\"" (show (nameOf (TwinA 1)))
   assertEqual "unElementName" "twin" (unElementName (nameOf (TwinB 1)))
+  where
+    iceOn :: Phase e => Int -> e -> SomePhase
+    iceOn n e = SomePhase (Layered (Ice n) e)
 
--- | 测试专用的两个同名元素类型（只用来检查 SomeElement 的相等不看名字字符串）。
+-- | 测试专用的两个同名元素类型（只用来检查 SomePhase 的相等不看名字字符串）。
 newtype TwinA = TwinA Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Obstacle TwinA)
 
 newtype TwinB = TwinB Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Obstacle TwinB)
 
-instance Cellular TwinA where
-  nameOf _ = "twin"
-instance Countable TwinA
-instance Renders TwinA
+instance Phase TwinA where
+  codec = Codec "twin" (intCell "twin") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics
+  view _ = noFace
 
-instance Cellular TwinB where
-  nameOf _ = "twin"
-instance Countable TwinB
-instance Renders TwinB
+instance Phase TwinB where
+  codec = Codec "twin" (intCell "twin") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics
+  view _ = noFace
 
 -- | 冰层：包在宝石外面，组合结果与逐层询问一致，写回格子带冰层数。
 ec_ice_layer_composes :: Assertion
 ec_ice_layer_composes = do
-  let iced n = iceOn n (SomeElement (SpecialGem @'Bomb C3))
-      plain n = iceOn n (SomeElement (PlainGem C3))
+  let iced n = Layered (Ice n) (SpecialGem @'Bomb C3)
+      plain n = Layered (Ice n) (PlainGem C3)
+      matchColorOf e = let m = onMatch e in if mBlockMatch m then Nothing else mColor m
   assertEqual "encode" (Gem C3 Normal 2 Nothing) (toCell (plain 2))
   assertEqual "encode special" (Gem C3 Bomb 1 Nothing) (toCell (iced 1))
-  assertEqual "match color passes" (Just C3) (matchColor (plain 2))
+  assertEqual "match color passes" (Just C3) (matchColorOf (plain 2))
   assertEqual "name is the body's" "bomb" (nameOf (iced 1))
-  assertEqual "multi-ice does not fire" False (fires (iced 2))
-  assertEqual "last ice fires" True (fires (iced 1))
-  assertEqual "hit peels one ice" (Absorb (Gem C3 Normal 1 Nothing)) (struck (plain 2))
-  assertEqual "last ice shatters with the gem" Destroy (struck (plain 1))
-  assertBool "iced normal gem kept on shuffle" (keepOnShuffle (plain 1))
+  assertEqual "multi-ice does not fire" False (hFires (onHit DirectHit (iced 2)))
+  assertEqual "last ice fires" True (hFires (onHit DirectHit (iced 1)))
+  assertEqual "hit peels one ice" (Absorb (Gem C3 Normal 1 Nothing)) (hStrike (onHit DirectHit (plain 2)))
+  assertEqual "last ice shatters with the gem" Destroy (hStrike (onHit DirectHit (plain 1)))
+  assertBool "iced normal gem kept on shuffle" (pKeepShuffle (physics (plain 1)))
   assertEqual "layer hit" (Keep (Ice 1)) (layerHit (Ice 2))
   forM_ [(c, k, i, ov) | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \(c, k, i, ov) -> do
     let cell = Gem c k i ov
@@ -172,39 +175,20 @@ ec_ice_layer_composes = do
 -- 注册进元素世界后，锤子每敲一次减一，最后一下才碎并计数。
 newtype Nest = Nest Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle Nest)
-
-instance Cellular Nest where
-  nameOf _ = "nest"
-instance Hittable Nest where
-  struck (Nest k) = if k > 1 then Absorb (toCell (Nest (k - 1))) else Destroy
-  fires _ = False
-instance Countable Nest where
-  counter _ = Just (CountNamed "nest")
-instance Renders Nest
 
 instance Phase Nest where
   codec = Codec
     { cName = "nest"
-    , cToCell = toCell
+    , cToCell = intCell "nest"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "nest") }
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ (Nest k) = HitOut (if k > 1 then Absorb (toCell (Nest (k - 1))) else Destroy) False Nothing Nothing
+  physics _ = obstaclePhysics
+  view _ = noFace
 
 instance Kind Nest where
   kindName _ = "nest"
@@ -220,8 +204,8 @@ ec_state_lives_in_element_value = do
       gs1 = hammer gs0
       gs2 = hammer gs1
       gs3 = hammer gs2
-  assertEqual "struck returns the new state" (Absorb (Custom "nest" (CustomState 2))) (struck (Nest 3))
-  assertEqual "decoded state" (SomeElement (Nest 3)) (bodyOf world (Custom "nest" (CustomState 3)))
+  assertEqual "struck returns the new state" (Absorb (Custom "nest" (CustomState 2))) (hStrike (onHit DirectHit (Nest 3)))
+  assertEqual "decoded state" (SomePhase (Nest 3)) (bodyOf world (Custom "nest" (CustomState 3)))
   assertEqual "first hit" (Custom "nest" (CustomState 2)) (getCell (gsBoard gs1) p)
   assertEqual "second hit" (Custom "nest" (CustomState 1)) (getCell (gsBoard gs2) p)
   assertBool "third hit breaks it" (not (isNest (getCell (gsBoard gs3) p)))
@@ -285,7 +269,6 @@ ec_entity_wires_damage = do
   snow <- readFile "src/Match3/Element/Builtin/Obstacle.hs"
   assertBool "SnowBoss boardPasses no longer inlines entityDamage"
     (not ("boardPasses _ = [AdjacentPass 200 (entityDamage" `isInfixOf` snow))
-
 
 -- | 内置关卡级机制的 mechName 两两不同（beatIn / registerMechanic 按名合并；撞名会静默覆盖）。
 ec_mechanic_names_unique :: Assertion
@@ -399,39 +382,19 @@ ec_mechanic_stateful_extension = do
 newtype Star = Star Color
   deriving (Eq, Show)
 
-instance Cellular Star where
-  nameOf _ = "star"
-  toCell (Star c) = Custom "star" (CustomState (fromEnum c))
-instance Matchable Star where
-  color (Star c) = Just c
-instance Hittable Star
-instance Movable Star
-instance Countable Star where
-  counter _ = Just (CountNamed "star")
-instance Renders Star
-
 instance Phase Star where
   codec = Codec
     { cName = "star"
-    , cToCell = toCell
+    , cToCell = \(Star c) -> Custom "star" (CustomState (fromEnum c))
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cMeta = emptyMeta { metaCounter = Just (CountNamed "star") }
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (Star c) = gemMatch (Just c)
+  onHit _ _ = gemHit
+  physics _ = gemPhysics
+  view _ = noFace
 
 instance Kind Star where
   kindName _ = "star"
@@ -462,37 +425,19 @@ ec_custom_matchable_gem = do
 newtype OtherGem = OtherGem Color
   deriving (Eq, Show)
 
-instance Cellular OtherGem where
-  nameOf _ = "other_gem"
-  toCell (OtherGem c) = Gem c Normal 0 Nothing
-instance Matchable OtherGem
-instance Hittable OtherGem
-instance Movable OtherGem
-instance Countable OtherGem
-instance Renders OtherGem
-
 instance Phase OtherGem where
   codec = Codec
     { cName = "gem"
-    , cToCell = toCell
+    , cToCell = \(OtherGem c) -> Gem c Normal 0 Nothing
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch (OtherGem c) = gemMatch (Just c)
+  onHit _ _ = gemHit
+  physics _ = gemPhysics
+  view _ = noFace
 
 instance Kind OtherGem where
   kindName _ = "other_gem"
@@ -503,35 +448,20 @@ instance Kind OtherGem where
 -- | 什么格子都不认的种类。
 newtype Stray = Stray Int
   deriving (Eq, Show)
-  deriving (Matchable, Hittable, Movable) via (Obstacle Stray)
-
-instance Cellular Stray where
-  nameOf _ = "stray"
-instance Countable Stray
-instance Renders Stray
 
 instance Phase Stray where
   codec = Codec
     { cName = "stray"
-    , cToCell = toCell
+    , cToCell = intCell "stray"
     , cFromCell = const Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
     }
-  onMatch e = MatchRule (color e) (blocksMatch e) (blocksSwap e) (hintable e)
-  onHit _ e = HitOut (struck e) (fires e) (blast e) Nothing
-  physics e = Physics
-    { pFixed = not (falls e)
-    , pFalls = falls e
-    , pPortal = portal e
-    , pRecolor = recolorable e
-    , pPush = pushable e
-    , pKeepShuffle = keepOnShuffle e
-    , pDrains = drains e
-    }
-  view e = (emptyFace (unElementName (nameOf e))) { fExtras = face e }
-  liveMeta e = emptyMeta { metaCounter = counter e, metaDiffWeight = diffWeight e, metaVacatesCarpet = vacatesCarpet e }
+  onMatch _ = obstacleMatch
+  onHit _ _ = immuneHit
+  physics _ = obstaclePhysics
+  view _ = noFace
 
 instance Kind Stray where
   kindName _ = "stray"

@@ -28,7 +28,7 @@ import Data.Proxy (Proxy (..))
 import Data.String (fromString)
 import GHC.Generics
 import Data.Maybe (isJust)
-import Match3.Element.Ability (toCell)
+import Match3.Element.Phase (phaseToCell)
 import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
 import Match3.Element.Layer (Layer(layerName), SomeLayer(..), peelAs)
 import Match3.Element.World (Def(..), decodeLayers)
@@ -374,7 +374,7 @@ generic_every_constructor_has_world_and_face = do
     | c <- overlays
     ]
   assertBool "overlay names distinct" (distinct (map (topLayerName world) overlays))
-  sequence_ [assertEqual ("roundtrip " ++ show c) c (toCell (elementOf world c)) | c <- map snd reps ++ kinds ++ overlays]
+  sequence_ [assertEqual ("roundtrip " ++ show c) c (phaseToCell (elementOf world c)) | c <- map snd reps ++ kinds ++ overlays]
   -- cellFace
   assertBool "cellFace 标签互不相同" (distinct [fst (cellFace c) | (_, c) <- reps])
   assertBool "cellFace k 互不相同" (distinct (map (faceField "k") kinds))

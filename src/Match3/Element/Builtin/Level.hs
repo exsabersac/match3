@@ -53,12 +53,16 @@ import Match3.Types
 import Match3.Ufo (Ufo, mkUfo, stepUfos)
 import System.Random (RandomGen)
 
+-- | 内置机制原型的起点：名字 + 内置标签（GameState 的固定格式 Show 认这个标签，不靠状态类型识别）。
+builtinMech :: ElementName -> Mechanic m
+builtinMech n = (mechanic n) {mechBuiltin = True}
+
 -- | 飞碟：每轮补子之后（OnRefilled）整轮吸收并移动。开局 = 关卡记录的飞碟；没有放置而目标是飞碟吸收时放一个 (1,3) C1。
 newtype UfoLevel = UfoLevel [Ufo]
   deriving (Eq, Show)
 
 ufoMech :: Mechanic UfoLevel
-ufoMech = (mechanic "ufo")
+ufoMech = (builtinMech "ufo")
   { mechView = \(UfoLevel us) -> noView {lvUfos = Just us}
   , mechSystems =
       [ OnStart $ \lvl _ ->
@@ -79,7 +83,7 @@ newtype BeltLevel = BeltLevel [Belt]
   deriving (Eq, Show)
 
 beltMech :: Mechanic BeltLevel
-beltMech = (mechanic "belt")
+beltMech = (builtinMech "belt")
   { mechView = \(BeltLevel bs) -> noView {lvBelts = Just bs}
   , mechSystems =
       [ OnStart (\lvl _ -> BeltLevel (lvlBelts lvl))
@@ -96,7 +100,7 @@ newtype PortalLevel = PortalLevel [(Pos, Pos)]
   deriving (Eq, Show)
 
 portalMech :: Mechanic PortalLevel
-portalMech = (mechanic "portal")
+portalMech = (builtinMech "portal")
   { mechView = \(PortalLevel ps) -> noView {lvPortals = Just ps}
   , mechSystems =
       [ OnStart (\lvl _ -> PortalLevel (lvlPortals lvl))
@@ -113,7 +117,7 @@ newtype CarpetLevel = CarpetLevel [Pos]
   deriving (Eq, Show)
 
 carpetMech :: Mechanic CarpetLevel
-carpetMech = (mechanic "carpet")
+carpetMech = (builtinMech "carpet")
   { mechView = \(CarpetLevel ps) -> noView {lvCarpetOpen = Just ps}
   , mechSystems =
       [ OnStart $ \lvl _ ->
@@ -139,7 +143,7 @@ newtype BombShapes = BombShapes Bool
   deriving (Eq, Show)
 
 bombShapesMech :: Mechanic BombShapes
-bombShapesMech = (mechanic "bomb_shapes")
+bombShapesMech = (builtinMech "bomb_shapes")
   { mechSystems =
       [ OnStart (\lvl _ -> BombShapes ("bomb_shapes" `elem` lvlRules lvl))
       , AnswerShapes $ \rules (BombShapes on) -> if on then Just (withBombShapes rules) else Nothing
@@ -154,7 +158,7 @@ newtype RainbowCombos = RainbowCombos Bool
   deriving (Eq, Show)
 
 rainbowCombosMech :: Mechanic RainbowCombos
-rainbowCombosMech = (mechanic "rainbow_combos")
+rainbowCombosMech = (builtinMech "rainbow_combos")
   { mechSystems =
       [ OnStart (\lvl _ -> RainbowCombos ("rainbow_combos" `elem` lvlRules lvl))
       , AnswerMorph $ \b0 swapped p1 p2 (RainbowCombos on) ->
@@ -170,7 +174,7 @@ newtype CookieDrop = CookieDrop [DropSpec]
   deriving (Eq, Show)
 
 cookieDropMech :: Mechanic CookieDrop
-cookieDropMech = (mechanic "cookie_drop")
+cookieDropMech = (builtinMech "cookie_drop")
   { mechView = \(CookieDrop ds) -> noView {lvDrops = Just (concatMap dropCells ds)}
   , mechSystems =
       [ OnStart (\lvl _ -> CookieDrop (lvlDrops lvl))

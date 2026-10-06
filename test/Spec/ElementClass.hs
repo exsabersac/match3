@@ -10,8 +10,8 @@ module Spec.ElementClass
   ) where
 
 import Control.Monad (forM_)
-import Data.List (isInfixOf, isPrefixOf, nub)
-import Data.Maybe (isJust, isNothing)
+import Data.List (isInfixOf, isPrefixOf, nub, stripPrefix)
+import Data.Maybe (isJust, isNothing, listToMaybe)
 import qualified ElementQueries
 import Match3.Board.Grid (setCell)
 import Match3.Board.Match (findHintWith)
@@ -24,7 +24,7 @@ import Match3.Element.Mechanic
   ( Mechanic(..)
   , MechSys(..)
   , SomeMechanic(..)
-  , fromMechanic
+  , mechBuiltinOf
   , mechanic
   , mechNameOf
   )
@@ -36,6 +36,7 @@ import Match3.Game.Move (resolveSwapWith, trySwap)
 import Match3.Game.State (gsCount)
 import Match3.Types (colorAt, goalCount, goalScore)
 import Test.Tasty
+import Text.Read (readMaybe)
 import Test.Tasty.HUnit
 import Spec.Support
 
@@ -189,7 +190,9 @@ ec_mechanic_defaults_silent = do
   assertBool "no beat reply" (isNothing (beatIn world es [] onEndTick) && isNothing (queryIn world es [] askAvoid) && isNothing (queryIn world es [] askWall))
   assertBool "no query reply" (isNothing (queryIn world es [] askShapes) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
   assertEqual "no readings" ([], []) (levelUfos es, levelBelts es)
-  assertBool "fromMechanic type check" (fromMechanic quiet == Just (Quiet ()))
+  assertEqual "boxed state shows as the state" (show (Quiet ())) (show quiet)
+  assertBool "Eq = same name + same canonical encoding" (quiet == quiet && quiet /= SomeMechanic (mechanic "quiet2") (Quiet ()) && siphon 1 /= siphon 2 && siphon 1 == siphon 1)
+  assertBool "extension mechanics are not tagged builtin" (not (mechBuiltinOf quiet) && all mechBuiltinOf builtinMechanics)
 
 -- | 阶段 2 消掉的遗留项：源码里没有扁平记录 / 封闭钩子；findHint 不再点名彩虹；
 -- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 33 个：新玩法 2 追加魔法石、新玩法 3 追加毛球，名字与阶段 1 相同由快照锁定）。
@@ -199,8 +202,12 @@ ec_flat_record_removed = do
   assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/ECS/Registry.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
   srcs <- mapM (fmap stripStrings . readFile) srcFiles
   -- 按完整标识符比（第 7 刀的钩子记录 LevelHooks 不是段 4 的封闭钩子 LevelHook）
-  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult", "SomePhase", "phaseProbe", "Layered", "SpecialKind", "kindRules", "boardSystems", "Codec", "layerCover", "LayerCover", "defaultCover", "layerRules", "peelAs", "SomeLayerValue", "onBeat", "MechLayout", "emptyLayout", "GroundKind", "groundKind", "mlName", "mechStart"], mentionsIdent w s]
+  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult", "SomePhase", "phaseProbe", "Layered", "SpecialKind", "kindRules", "boardSystems", "Codec", "layerCover", "LayerCover", "defaultCover", "layerRules", "peelAs", "SomeLayerValue", "onBeat", "MechLayout", "emptyLayout", "GroundKind", "groundKind", "mlName", "mechStart", "fromMechanic", "levelState", "builtinLevel"], mentionsIdent w s]
   assertEqual "no flat record / closed hooks / old element class / Phase / Layer / Mechanic typeclass" [] bad
+  -- ecs-8：整个 src 不做运行时类型识别（SomeMechanic 的相等按名字 + 规范编码，内置识别按 mechBuiltin 标签）
+  allSrc <- sourcesUnderAll ["src"]
+  allTexts <- mapM (fmap stripStrings . readFile) allSrc
+  assertEqual "no Typeable / cast in src" [] [(f, w) | (f, t) <- zip allSrc allTexts, w <- ["Typeable", "cast", "eqT", "gcast"], mentionsIdent w t]
   match <- readFile "src/Match3/Board/Match.hs"
   assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` stripStrings match) && "Match3.Rainbow" `notElem` importsOf match)
   flowFiles <- pipelineSources
@@ -297,7 +304,7 @@ ec_mechanic_stateful_extension :: Assertion
 ec_mechanic_stateful_extension = do
   let world = registerMechanic (siphon 0) defaultRegistry
       gs0 = newGameAtLevelWith world 0 defaultConfig 7
-      charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
+      charge gs = siphonCharge (gsLevelElems gs)
       play r n gs
         | n == (0 :: Int) || gsOver gs /= Nothing = [gs]
         | otherwise = case findHintWith r (gsBoard gs) of
@@ -326,7 +333,11 @@ ec_mechanic_stateful_extension = do
   assertBool "ufo level has ufos" (not (null (levelUfos (gsLevelElems gsU))))
   assertEqual "both absorb in one beat (ufo first)" (psUfo ++ [lastC2]) psBoth
   assertEqual "ufo state advanced as without the siphon" (levelUfos (hookLevel hooksUfo)) (levelUfos (hookLevel hooksBoth))
-  assertEqual "siphon state advanced" (Just 1) (fmap (\(Siphon k) -> k) (levelState (hookLevel hooksBoth)))
+  assertEqual "siphon state advanced" (Just 1) (siphonCharge (hookLevel hooksBoth))
+
+-- | 按名字找到虹吸、从状态的规范编码（Show 文本 "Siphon k"）读回电量（ecs-8 起没有按类型取状态的 fromMechanic / levelState）。
+siphonCharge :: [SomeMechanic] -> Maybe Int
+siphonCharge es = listToMaybe [k | e <- es, mechNameOf e == "siphon", Just k <- [readMaybe =<< stripPrefix "Siphon " (show e)]]
 
 -- | 自定义元素可以当可匹配的有色宝石：测试专用「星星」（Custom "star" 颜色号，普通棋子组件、按颜色匹配）
 -- 与同色宝石成三连被消除并按名字计数、进提示；未注册时是惰性占格（打断连线）。

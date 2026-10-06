@@ -112,7 +112,7 @@ instance (Layer l, Phase e) => Phase (Layered l e) where
     , cPlace = \_ _ -> Nothing
     , cMeta = cMeta (codec @e)
     , cNear = Nothing
-    , cHud = cHud (codec @e)
+    , cHud = noHud
     , cPasses = []
     }
   onMatch (Layered l e) =

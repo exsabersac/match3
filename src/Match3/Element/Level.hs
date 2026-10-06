@@ -64,17 +64,18 @@ startLevelsWith world lvl = map start (kinds ++ [c | c <- coreLevels, mechNameOf
 -- | 本节拍参与的机制，带「状态是否已在 gsLevelElems 里」。
 active :: World -> [SomeMechanic] -> [(SomeMechanic, Bool)]
 active world elems =
-  [ maybe (k, False) (\e -> (e, True)) (named (mechNameOf k))
-  | k <- kinds
+  [ maybe (k, False) (\e -> (e, True)) (lookup n named)
+  | (n, k) <- kinds
   ]
     ++ [ (e, True)
-       | e@(SomeMechanic m) <- elems
+       | (n, e@(SomeMechanic m)) <- named
        , mechCore m
-       , mechNameOf e `notElem` map mechNameOf kinds
+       , n `notElem` map fst kinds
        ]
   where
-    kinds = mechanicDefs world
-    named n = listToMaybe [e | e <- elems, mechNameOf e == n]
+    -- 名字各算一次（mechName 经 layout 读出，每次都要建一份 MechLayout）
+    kinds = [(mechNameOf k, k) | k <- mechanicDefs world]
+    named = [(mechNameOf e, e) | e <- elems]
 
 -- | 在一个节拍上问一局的关卡级机制：@step m q@ = 机制 m 对输入 q 的回复（Nothing = 不回复）与推进后的自身。
 -- 按参与顺序（注册顺序的各种 + 核心机制）**折叠所有回复者**（前一个的回复是后一个的输入），各回复者推进后的状态
@@ -102,7 +103,8 @@ replaceNamed e es
   | any same es = map (\x -> if same x then e else x) es
   | otherwise = es ++ [e]
   where
-    same x = mechNameOf x == mechNameOf e
+    n = mechNameOf e
+    same x = mechNameOf x == n
 
 -- | 某类型的关卡级机制的状态（第一个类型对得上的）。
 levelState :: Mechanic m => [SomeMechanic] -> Maybe m

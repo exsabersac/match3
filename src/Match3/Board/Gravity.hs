@@ -4,7 +4,7 @@
 -- 补子（按补子策略 RefillPolicy，见 Match3.Board.Refill；refill = 缺省策略）以及回放用的 settleRefillWith。
 --
 -- 依赖：Grid、Board.Refill（补子策略）、Board.Hooks（关卡级钩子）、元素元素世界（固定格 falls、边缘收集 drains（方向可配））。
--- 本模块不依赖内置元素世界，全部函数收 World；内置元素世界的短名在 Match3.Board.Default。
+-- 本模块不依赖内置元素世界，全部函数收 Registry；内置元素世界的短名在 Match3.Board.Default。
 -- 不变量：补子按行优先顺序逐个空洞消耗随机数（缺省策略每洞恰好一次 randomColor）；settleRefillWith 与 stepCascadeDetailed /
 -- 种子清除内部用的 settle + refill 完全相同，回放与结算的随机数顺序因此一致。
 module Match3.Board.Gravity
@@ -28,18 +28,18 @@ import Data.List (nubBy)
 import Match3.Board.Hooks (LevelHooks(..))
 import Data.Maybe (fromMaybe)
 import Match3.Board.Refill (RefillPolicy, defaultRefill, refillWith)
-import Match3.Element.World (World, drainEdgesWith, fallsWith, refillPolicyWith)
+import Match3.ECS.Registry (Registry, drainEdgesWith, fallsWith, refillPolicyWith)
 import Match3.Element.Types (Edge(..))
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Grid
 
 -- | 固定格（指定元素世界）：本体 falls = False。
-gravityFixedCellWith :: World -> Cell -> Bool
+gravityFixedCellWith :: Registry -> Cell -> Bool
 gravityFixedCellWith world = not . fallsWith world
 
 -- | 一列的重力（自上而下的列表）：固定格（本体不 falls）原地不动并把列切成段，段内实格保持次序落到段底、空洞在段顶。
-colGravityWith :: World -> [Maybe Cell] -> [Maybe Cell]
+colGravityWith :: Registry -> [Maybe Cell] -> [Maybe Cell]
 colGravityWith world = concatMap packSegment . splitFixed
   where
     isFixed (Just c) = gravityFixedCellWith world c
@@ -61,7 +61,7 @@ colGravityWith world = concatMap packSegment . splitFixed
 -- 遇到实格就写到写指针处，最后把段顶剩下的格写成空洞，不为每列建列表、切段、拼接。
 -- 对外仍是纯函数（ST 的可变数组出不了 runSTArray）。微基准约 2.5 倍，但重力只占规则总耗时的百分之二三，
 -- 整体收益很小（文档 §4 如实给数）。
-applyGravityWith :: World -> MBoard -> MBoard
+applyGravityWith :: Registry -> MBoard -> MBoard
 applyGravityWith world mb = runSTArray $ do
   let bnds@((r0, c0), (r1, c1)) = bounds mb
   m <- newListArray bnds (elems mb)
@@ -90,7 +90,7 @@ compactSegment m c lo hi = go hi hi
 
 -- | 边缘收集（'drainEdgesMWith'）的计数形状：(盘面, 收走个数, 收走位置)。收走位置按收集顺序，
 -- 结算把它们并入清除格（GoalCarpet 的覆盖、前端粒子）。
-drainBottomCookiesWith :: World -> MBoard -> (MBoard, Int, [Pos])
+drainBottomCookiesWith :: Registry -> MBoard -> (MBoard, Int, [Pos])
 drainBottomCookiesWith world mb =
   let (mb', drained) = drainEdgesMWith world mb
   in (mb', length drained, map fst drained)
@@ -99,7 +99,7 @@ drainBottomCookiesWith world mb =
 -- 然后重力，重复到没有可收的格。返回（盘面，按收集顺序的 (位置, 原格)）。
 -- 每一轮按 底 → 左 → 右 → 上 扫四条边（边内按列 / 行升序，角格只收一次）；
 -- 内置只有饼干 = [EdgeBottom]，即「底行收饼干、重力、再收」。
-drainEdgesMWith :: World -> MBoard -> (MBoard, [(Pos, Cell)])
+drainEdgesMWith :: Registry -> MBoard -> (MBoard, [(Pos, Cell)])
 drainEdgesMWith world mb =
   let ((r0, c0), (r1, c1)) = bounds mb
       edgeCells e = case e of
@@ -123,13 +123,13 @@ drainEdgesMWith world mb =
          in (mb2, hits ++ more)
 
 -- | settleBoardPortals（指定元素世界；传送经钩子 onSettle）。
-settleBoardPortalsWith :: World -> LevelHooks -> MBoard -> (MBoard, Int, [Pos])
+settleBoardPortalsWith :: Registry -> LevelHooks -> MBoard -> (MBoard, Int, [Pos])
 settleBoardPortalsWith world hooks mb =
   let (mb', drained) = settleDrainWith world hooks mb
   in (mb', length drained, map fst drained)
 
 -- | 沉降：同 settleBoardPortalsWith，但返回被边缘收走的原格（连锁按各自的 counter 计数）。
-settleDrainWith :: World -> LevelHooks -> MBoard -> (MBoard, [(Pos, Cell)])
+settleDrainWith :: Registry -> LevelHooks -> MBoard -> (MBoard, [(Pos, Cell)])
 settleDrainWith world hooks mb =
   let fallen = applyGravityWith world mb
       (drained1, d1) = drainEdgesMWith world fallen
@@ -143,11 +143,11 @@ refill :: RandomGen g => g -> MBoard -> (Board, g)
 refill = refillWith defaultRefill
 
 -- | 本轮用的补子策略：关卡级元素换的（钩子 hookRefill）优先，否则元素世界的（缺省 = 随机五色宝石）。
-activeRefill :: World -> LevelHooks -> RefillPolicy
+activeRefill :: Registry -> LevelHooks -> RefillPolicy
 activeRefill world hooks = fromMaybe (refillPolicyWith world) (hookRefill hooks)
 
 -- | 回放用的沉降 + 补子：settleBoardPortalsWith 后按本轮补子策略补满，返回 (终盘, 收饼干位, 生成器)。
-settleRefillWith :: RandomGen g => World -> LevelHooks -> g -> MBoard -> (Board, [Pos], g)
+settleRefillWith :: RandomGen g => Registry -> LevelHooks -> g -> MBoard -> (Board, [Pos], g)
 settleRefillWith world hooks g mb =
   let (settled, _cookies, cookSites) = settleBoardPortalsWith world hooks mb
       (b', g') = refillWith (activeRefill world hooks) g settled

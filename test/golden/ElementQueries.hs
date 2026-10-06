@@ -38,8 +38,8 @@ firstLevel = fromMaybe (error "firstLevel: allLevels is empty") (lookupLevel 0)
 levelGame :: Int -> Int -> GameState
 levelGame li seed = fromMaybe (error ("levelGame: no level " ++ show li)) (campaignGame li seed)
 
-world :: World
-world = defaultWorld
+world :: Registry
+world = defaultRegistry
 
 hash :: String -> String
 hash s =
@@ -138,7 +138,7 @@ ruleLines =
   [ "R adjacent " ++ show (map arOrder (adjacentRules world))
   , "R end " ++ show [(ph, map erOrder (endRules world ph)) | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
   , "R swap " ++ show (map srOrder (swapRules world))
-  , "R names " ++ show (map defName (worldDefs world))
+  , "R names " ++ show (map defName (registryDefs world))
   , "R diff " ++ show [(n, Just k, bonus) | (n, k, bonus) <- diffCountersWith world]
   , "R level " ++ show (map mechNameOf (mechanicDefs world))
   ]

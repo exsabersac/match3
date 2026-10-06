@@ -52,13 +52,13 @@ jb_jelly_two_layers_counted_per_layer = do
   let ground0 = [((1, 1), ("jelly", 2)), ((6, 6), ("jelly", 2))]
       gs0 = (setGround ground0 $ (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 4)) 1) {gsBoard = tripleBoard})
       (p1, p2) = tripleMove
-      (gs1, o1, _) = resolveSwapWith defaultWorld p1 p2 gs0
+      (gs1, o1, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
   assertEqual "one layer peeled at (1,1)" [((1, 1), ("jelly", 1)), ((6, 6), ("jelly", 2))] (gsGround gs1)
   assertEqual "counted per layer" [("jelly", 1)] (namedCounts (gsCounts gs1))
   assertEqual "goal progress" 1 (gsCollected gs1)
   assertEqual "jelly does not occupy the board" (gsBoard (fst (trySwap p1 p2 (setGround [] $ gs0)))) (gsBoard gs1)
-  let (gs2, _, _) = resolveSwapWith defaultWorld p1 p2 gs1 {gsBoard = tripleBoard}
+  let (gs2, _, _) = resolveSwapWith defaultRegistry p1 p2 gs1 {gsBoard = tripleBoard}
   assertEqual "second clear removes the tile" [((6, 6), ("jelly", 2))] (gsGround gs2)
   assertEqual "count accumulates" [("jelly", 2)] (namedCounts (gsCounts gs2))
   -- 通用接口入口一样
@@ -70,9 +70,9 @@ jb_jelly_goal_wins_on_last_layer :: Assertion
 jb_jelly_goal_wins_on_last_layer = do
   let gs0 = (setGround [((1, 1), ("jelly", 2))] $ (newGame (GameConfig 5 (goalCount (CountNamed "jelly") 2)) 1) {gsBoard = tripleBoard})
       (p1, p2) = tripleMove
-      (gs1, _, _) = resolveSwapWith defaultWorld p1 p2 gs0
+      (gs1, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "not yet" (gsOver gs1 == Nothing)
-  let (gs2, _, _) = resolveSwapWith defaultWorld p1 p2 gs1 {gsBoard = tripleBoard}
+  let (gs2, _, _) = resolveSwapWith defaultRegistry p1 p2 gs1 {gsBoard = tripleBoard}
   assertBool "won on last layer" (isWin (gsOver gs2))
   assertEqual "ground empty" [] (gsGround gs2)
 
@@ -84,9 +84,9 @@ jb_jelly_keeps_on_shuffle_and_undo = do
   assertEqual "16 double-layer tiles" 16 (length [() | (_, ("jelly", 2)) <- g0])
   let stS = gameStep M3E.match3Game gs0 M3E.Shuffle
   assertEqual "shuffle keeps ground" g0 (gsGround (stepState stS))
-  case findHintWith defaultWorld (gsBoard gs0) of
+  case findHintWith defaultRegistry (gsBoard gs0) of
     Nothing -> assertFailure "level 39 should be playable"
-    Just (a, b) -> assertEqual "undo restores ground" (Just g0) (gsGround <$> stepThenUndo defaultWorld gs0 (M3E.Swap a b))
+    Just (a, b) -> assertEqual "undo restores ground" (Just g0) (gsGround <$> stepThenUndo defaultRegistry gs0 (M3E.Swap a b))
 
 -- | 邻格真消除（任意颜色）一次即破，计 CountNamed "bubble"；不相邻的不破。
 jb_bubble_pops_on_adjacent_clear :: Assertion
@@ -94,7 +94,7 @@ jb_bubble_pops_on_adjacent_clear = do
   let board0 = foldl (\b p -> setCell b p (Custom "bubble" (CustomState 1))) tripleBoard [(0, 1), (6, 6)]
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "bubble") 1)) 1) {gsBoard = board0}
       (p1, p2) = tripleMove
-      (gs1, o1, mt1) = resolveSwapWith defaultWorld p1 p2 gs0
+      (gs1, o1, mt1) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertBool "move applied" (moveApplied o1)
   w1 <- firstWave mt1
   assertBool "adjacent bubble cleared in the first wave" ((0, 1) `elem` cwCleared w1)
@@ -123,7 +123,7 @@ jb_bubble_blocks_swap_falls_no_match = do
   let board1 = setCell tripleBoard (0, 5) (Custom "bubble" (CustomState 1))
       board2 = setCell (setCell board1 (1, 5) (mkGem C1)) (2, 5) (mkGem C2)
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board2}
-      (_, _, mt) = resolveSwapWith defaultWorld (1, 2) (2, 2) gs0
+      (_, _, mt) = resolveSwapWith defaultRegistry (1, 2) (2, 2) gs0
   w <- firstWave mt
   assertEqual "untouched column: bubble stays" (Custom "bubble" (CustomState 1)) (getCell (cwAfter w) (0, 5))
   -- 下落：第 3 行 (3,0)(3,1)(3,2) 成三连被清；气泡放在 (1,0)（与清除格隔一格，不被波及），
@@ -132,7 +132,7 @@ jb_bubble_blocks_swap_falls_no_match = do
       gsF = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = bF0}
   case [(a, b) | (a, b) <- [((3, 2), (2, 2)), ((3, 2), (4, 2))], moveApplied (snd (trySwap a b gsF))] of
     ((a, b) : _) -> do
-      let (_, _, mtF) = resolveSwapWith defaultWorld a b gsF
+      let (_, _, mtF) = resolveSwapWith defaultRegistry a b gsF
       wF <- firstWave mtF
       assertEqual "bubble fell one row" (Custom "bubble" (CustomState 1)) (getCell (cwAfter wF) (2, 0))
     [] -> assertFailure "fixture: no move completes row 3"
@@ -150,8 +150,8 @@ jb_levels_appended = do
         g40 = newGameAtLevel 39 (levelConfig l40) seed
     assertEqual "L39 layers = goal" 32 (sum [n | (_, ("jelly", n)) <- gsGround g39])
     assertEqual "L40 bubbles = goal" 12 (length (bubblesOn (gsBoard g40)))
-    assertBool "L39 playable" (findHintWith defaultWorld (gsBoard g39) /= Nothing)
-    assertBool "L40 playable" (findHintWith defaultWorld (gsBoard g40) /= Nothing)
+    assertBool "L39 playable" (findHintWith defaultRegistry (gsBoard g39) /= Nothing)
+    assertBool "L40 playable" (findHintWith defaultRegistry (gsBoard g40) /= Nothing)
   assertBool "earlier levels have no ground" (all (\li -> null (gsGround (levelGame li 1))) [0 .. 37])
   assertBool "earlier levels have no bubbles" (all (\li -> null (bubblesOn (gsBoard (levelGame li 1)))) [0 .. 37])
 
@@ -160,10 +160,10 @@ jb_levels_appended = do
 jb_main_flow_untouched_scan :: Assertion
 jb_main_flow_untouched_scan = do
   mainFlow <- mainFlowSources
-  assertBool "scanned the main flow" (all (`elem` mainFlow) ["src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs", "src/Match3/Element/World.hs", "src/Match3/Engine.hs", "src/Engine/Game.hs"])
+  assertBool "scanned the main flow" (all (`elem` mainFlow) ["src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs", "src/Match3/ECS/Registry.hs", "src/Match3/Engine.hs", "src/Engine/Game.hs"])
   srcs <- mapM readFile mainFlow
   let bad = [f | (f, s) <- zip mainFlow srcs, "jelly" `isInfixOf` s || "bubble" `isInfixOf` s]
   assertEqual "no jelly / bubble in the main flow" [] bad
   builtin <- concat <$> (mapM readFile =<< builtinSources)
   assertBool "both defined in Element.Builtin" ("\"jelly\"" `isInfixOf` builtin && "\"bubble\"" `isInfixOf` builtin)
-  assertBool "both registered" (all (`elem` map defName (worldDefs defaultWorld)) ["jelly", "bubble"])
+  assertBool "both registered" (all (`elem` map defName (registryDefs defaultRegistry)) ["jelly", "bubble"])

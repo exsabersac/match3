@@ -1,6 +1,6 @@
 -- | 特殊块规则表的解释器（第 8 刀）：形状规则表（'ShapeRule'：匹配形状 → 生成哪种特殊块）与
 -- 组合规则表（'ComboRule'：两个特殊块交换时的组合效果）。规则表本身是数据，挂在元素世界上
--- （World.shapeRules / comboRules；内置表见 Element.Builtin.Gem.builtinShapeRules 与 Match3.Combos.builtinComboRules）。
+-- （Registry.shapeRules / comboRules；内置表见 Element.Builtin.Gem.builtinShapeRules 与 Match3.Combos.builtinComboRules）。
 -- 新形状 / 新组合只需往表里加一条，主流程（Board.Clear 的特殊块生成、Game.Move 的交换起手、提示）不用改。
 --
 -- 依赖：Element.Types、Match3.Types。不含任何具体规则。

@@ -30,8 +30,8 @@ import Engine.Optics (over)
 import Match3.Board.Random (randomPlayableBoardSized)
 import Match3.Counts (CounterKey(..), noCounts)
 import Match3.Element.Level (startLevelsWith)
-import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (PlaceError, World, countElementWith, placeAllWith)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.ECS.Registry (PlaceError, Registry, countElementWith, placeAllWith)
 import Match3.Element.Types (Arg(..), Placement(..))
 import Match3.Levels.Campaign (clampLevelIndex, lookupLevel)
 import Match3.Levels.Level
@@ -52,15 +52,15 @@ placeStatic what = either (\e -> error ("关卡数据有误（" ++ what ++ "）�
 -- | 某关的装饰（关卡记录里的放置表；按元素名引用，由元素条目的放置函数解释）。
 decorateLevel :: Level -> Board -> Board
 decorateLevel l =
-  placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith defaultWorld l
+  placeStatic ("第 " ++ show (lvlIndex l + 1) ++ " 关「" ++ lvlName l ++ "」的装饰") . decorateLevelWith defaultRegistry l
 
 -- | decorateLevel（指定元素世界），失败时返回 Left。
-decorateLevelWith :: World -> Level -> Board -> Either PlaceError Board
+decorateLevelWith :: Registry -> Level -> Board -> Either PlaceError Board
 decorateLevelWith world l b = placeAllWith world b (lvlPlacements l)
 
 -- | 目标所需的补齐装饰：每日挑战（以及任何裸盘面）也必须能完成——目标需要盘上实体、而关卡装饰放得不够时，
 -- 按目标的放置表补一组最小的（目标 → (元素名, 个数, 放置表)；计数按元素名 countElementWith）。失败时返回 Left。
-goalDecorWith :: World -> LevelGoal -> Board -> Either PlaceError Board
+goalDecorWith :: Registry -> LevelGoal -> Board -> Either PlaceError Board
 goalDecorWith world goal b =
   case goalDecor goal of
     Just (name, n, placements)
@@ -85,21 +85,21 @@ goalDecorWith world goal b =
 -- 按关卡记录开出关卡级元素（gsLevelElems）→ ensurePlayable。同一 (关卡, 种子) 总是同一开局。
 -- 装饰与关卡级元素取自 lookupLevel li 的记录（下标越界 = 没有装饰与关卡级元素，只按目标补齐）；步数与目标取自 cfg。
 newGameAtLevel :: Int -> GameConfig -> Int -> GameState
-newGameAtLevel = newGameAtLevelWith defaultWorld
+newGameAtLevel = newGameAtLevelWith defaultRegistry
 
 -- | newGameAtLevel（指定元素世界）：装饰、目标补齐、可玩判定用这张表；关卡级元素 = 这张表里注册的各种 + 核心元素，
 -- 各自由关卡记录（lvlGoal 换成本局目标）给出开局状态（飞碟 / 地毯的目标补齐在各自的 mechStart 里）。
-newGameAtLevelWith :: World -> Int -> GameConfig -> Int -> GameState
+newGameAtLevelWith :: Registry -> Int -> GameConfig -> Int -> GameState
 newGameAtLevelWith world li cfg seed = newGameFromWith world li (lookupLevel li) cfg seed
 
 -- | 按一份完整的关卡记录开局（不必在战役表里，例如关卡包 / 编辑器 / 测试）：步数与目标取自记录，
 -- 装饰、关卡级元素、行列都按记录；gsLevel = lvlIndex（结局与下一关仍按战役下标判定）。
 -- 开局前按 'assertLevel' 校验记录（同 lookupLevel）。对战役里的关，与 'campaignGame' 逐字相同（engine_level_setup_matches_campaign）。
-newGameForLevelWith :: World -> Level -> Int -> GameState
+newGameForLevelWith :: Registry -> Level -> Int -> GameState
 newGameForLevelWith world l seed = newGameFromWith world (lvlIndex l) (Just (assertLevel l)) (levelConfig l) seed
 
 -- | 开局的公共部分：关卡下标、关卡记录（Nothing = 没有装饰与关卡级元素，只按目标补齐）、配置、种子。
-newGameFromWith :: World -> Int -> Maybe Level -> GameConfig -> Int -> GameState
+newGameFromWith :: Registry -> Int -> Maybe Level -> GameConfig -> Int -> GameState
 newGameFromWith world li lvl cfg seed =
   let g0 = mkStdGen seed
       rows = maybe boardSize lvlRows lvl

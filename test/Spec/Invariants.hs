@@ -17,7 +17,7 @@ import Match3.Board.Default (findHint)
 import Match3.Board.Grid (MBoard, inBounds, swapCells)
 import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith, refill)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Types (boardDims, boardPositions)
 import Match3.Game.Move (trySwap)
 import Match3.Types (boardCells)
@@ -58,7 +58,7 @@ qc_inv_swap_is_involution =
 qc_inv_gravity_idempotent_no_floating :: Property
 qc_inv_gravity_idempotent_no_floating =
   property $ \(HoledBoard mb) ->
-    let world = defaultWorld
+    let world = defaultRegistry
         mb' = applyGravityWith world mb
         fixed = maybe False (gravityFixedCellWith world)
         ((r0, c0), (r1, c1)) = boundsOf mb
@@ -82,7 +82,7 @@ qc_inv_gravity_idempotent_no_floating =
 qc_inv_settle_fills_board :: Int -> Property
 qc_inv_settle_fills_board seed =
   property $ \(HoledBoard mb) ->
-    let fallen = applyGravityWith defaultWorld mb
+    let fallen = applyGravityWith defaultRegistry mb
         (b, _) = refill (mkStdGen seed) fallen
         ok p = case atM fallen p of
           Just x -> getCell b p == x

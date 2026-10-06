@@ -109,8 +109,8 @@ ec_some_element_eq_show = do
   assertBool "rainbow not hintable" (not (mHintable (onMatch (SpecialGem @'Rainbow C1))))
   assertEqual "egg is an obstacle" (True, False, Nothing, True) (mBlockSwap (onMatch SurpriseEgg), hFires (onHit DirectHit SurpriseEgg), mColor (onMatch SurpriseEgg), pKeepShuffle (physics SurpriseEgg))
   -- 元素世界把格子解码成元素值
-  assertEqual "decode gem" (SomePhase (PlainGem C5)) (bodyOf defaultWorld (mkGem C5))
-  assertEqual "decode iced line" (SomePhase (Layered (Ice 2) (SpecialGem @'LineV C1))) (elementOf defaultWorld (Gem C1 LineV 2 Nothing))
+  assertEqual "decode gem" (SomePhase (PlainGem C5)) (bodyOf defaultRegistry (mkGem C5))
+  assertEqual "decode iced line" (SomePhase (Layered (Ice 2) (SpecialGem @'LineV C1))) (elementOf defaultRegistry (Gem C1 LineV 2 Nothing))
 
 -- | 第 6b 刀：SomePhase 的相等按具体类型（Typeable cast）+ 该类型的 Eq，不比较名字字符串。
 -- 两个同名（"twin"）而类型不同的测试元素不相等；同类型同状态相等、不同状态不等；名字是 ElementName（newtype）。
@@ -170,7 +170,7 @@ ec_ice_layer_composes = do
   assertEqual "layer hit" (Keep (Ice 1)) (layerHit (Ice 2))
   forM_ [(c, k, i, ov) | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \(c, k, i, ov) -> do
     let cell = Gem c k i ov
-    assertEqual ("world directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultWorld cell)
+    assertEqual ("world directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultRegistry cell)
 
 -- | 测试专用「鸟窝」：状态（剩余命中数）放在元素值里；受击返回新的元素值，写回 Custom "nest" k；
 -- 注册进元素世界后，锤子每敲一次减一，最后一下才碎并计数。
@@ -195,7 +195,7 @@ instance Phase Nest where
 
 ec_state_lives_in_element_value :: Assertion
 ec_state_lives_in_element_value = do
-  let world = register (kindDef @Nest) defaultWorld
+  let world = register (kindDef @Nest) defaultRegistry
       p = (3, 3)
       gs0 = (newGame defaultConfig 7) {gsBoard = setCell stableBoard p (Custom "nest" (CustomState 3)), gsHammers = 5}
       hammer gs = let (gs', _, _) = resolveHammerWith world p gs in gs'
@@ -224,7 +224,7 @@ instance Mechanic Quiet where
 
 ec_mechanic_defaults_silent :: Assertion
 ec_mechanic_defaults_silent = do
-  let world = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultWorld (map mechNameOf builtinMechanics))
+  let world = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultRegistry (map mechNameOf builtinMechanics))
       es = [SomeMechanic (Quiet ())]
   assertBool "no beat reply" (isNothing (beatIn world es [] (\m acc -> onBeat (EndTick acc) m)) && isNothing (queryIn world es [] (\m acc -> fst <$> onBeat (AskAvoid acc) m)) && isNothing (queryIn world es [] (\m acc -> fst <$> onBeat (AskWall acc) m)))
   assertBool "no query reply" (isNothing (queryIn world es [] (\m rs -> fst <$> onBeat (AskShapes rs) m)) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
@@ -235,11 +235,11 @@ ec_mechanic_defaults_silent = do
 -- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 33 个：新玩法 2 追加魔法石、新玩法 3 追加毛球，名字与阶段 1 相同由快照锁定）。
 ec_flat_record_removed :: Assertion
 ec_flat_record_removed = do
-  srcFiles <- sourcesUnderAll ["src/Match3/Element", "src/Match3/Board", "src/Match3/Game"]
-  assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/Element/World.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
+  srcFiles <- sourcesUnderAll ["src/Match3/Element", "src/Match3/ECS", "src/Match3/Board", "src/Match3/Game"]
+  assertBool "scanned Element / Board / Game" (all (`elem` srcFiles) ["src/Match3/ECS/Registry.hs", "src/Match3/Element/Builtin/Gem.hs", "src/Match3/Board/Cascade.hs", "src/Match3/Game/Resolve.hs"])
   srcs <- mapM (fmap stripStrings . readFile) srcFiles
   -- 按完整标识符比（第 7 刀的钩子记录 LevelHooks 不是段 4 的封闭钩子 LevelHook）
-  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "Archetype", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "Registry", "HitResult"], mentionsIdent w s]
+  let bad = [(f, w) | (f, s) <- zip srcFiles srcs, w <- ["ElementDef", "baseDef", "LevelHook", "HookAbsorb", "HookShift", "HookTeleport", "HookCover", "Caps", "capsOf", "SomeModifier", "Modified", "sendMessage", "handleMessage", "customEntry", "bodyEntry", "SomeMessage", "fromMessage", "LevelElement", "SomeLevelElement", "levelReply", "HitResult"], mentionsIdent w s]
   assertEqual "no flat record / closed hooks / old element class" [] bad
   match <- readFile "src/Match3/Board/Match.hs"
   assertBool "findHint no longer names the rainbow" (not ("isRainbow" `isInfixOf` stripStrings match) && "Match3.Rainbow" `notElem` importsOf match)
@@ -305,12 +305,12 @@ instance Mechanic Doubler where
 
 ec_mechanics_by_beat :: Assertion
 ec_mechanics_by_beat = do
-  let world = registerMechanic (SomeMechanic Magnet) defaultWorld
+  let world = registerMechanic (SomeMechanic Magnet) defaultRegistry
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
       (p1, p2) = ((1, 2), (2, 2))
       (_, o, mt) = resolveSwapWith world p1 p2 gs0 {gsBoard = b1}
-      (_, oD, mtD) = resolveSwapWith defaultWorld p1 p2 gs0 {gsBoard = b1}
+      (_, oD, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0 {gsBoard = b1}
       ping r = length <$> queryIn r [] (replicate 7 (0, 0)) (\m acc -> fst <$> onBeat (AskAvoid acc) m)
       withPinger = registerMechanic (SomeMechanic Pinger) world
   assertBool "applied" (moveApplied o && moveApplied oD)
@@ -318,8 +318,8 @@ ec_mechanics_by_beat = do
   assertEqual "magnet does not answer other beats" Nothing (ping world)
   assertEqual "beat folds the only replier" (Just 8) (ping withPinger)
   assertEqual "beat folds all repliers in registration order" (Just 16) (ping (registerMechanic (SomeMechanic Doubler) withPinger))
-  assertEqual "other order" (Just 15) (ping (registerMechanic (SomeMechanic Pinger) (registerMechanic (SomeMechanic Doubler) defaultWorld)))
-  assertEqual "nobody answers by default" Nothing (ping defaultWorld)
+  assertEqual "other order" (Just 15) (ping (registerMechanic (SomeMechanic Pinger) (registerMechanic (SomeMechanic Doubler) defaultRegistry)))
+  assertEqual "nobody answers by default" Nothing (ping defaultRegistry)
   assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "magnet"] (map mechNameOf (mechanicDefs world))
 
 -- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 mechStart 给 2 格电量，
@@ -341,7 +341,7 @@ instance Mechanic Siphon where
 
 ec_mechanic_stateful_extension :: Assertion
 ec_mechanic_stateful_extension = do
-  let world = registerMechanic (SomeMechanic (Siphon 0)) defaultWorld
+  let world = registerMechanic (SomeMechanic (Siphon 0)) defaultRegistry
       gs0 = newGameAtLevelWith world 0 defaultConfig 7
       charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
       play r n gs
@@ -367,7 +367,7 @@ ec_mechanic_stateful_extension = do
       gsUD = newGameAtLevel 12 defaultConfig 1
       bU = gsBoard gsU
       (psBoth, hooksBoth) = onAbsorb (levelHooksWith world (gsLevelElems gsU)) bU
-      (psUfo, hooksUfo) = onAbsorb (levelHooksWith defaultWorld (gsLevelElems gsUD)) bU
+      (psUfo, hooksUfo) = onAbsorb (levelHooksWith defaultRegistry (gsLevelElems gsUD)) bU
       lastC2 = last [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell bU q == mkGem C2]
   assertBool "ufo level has ufos" (not (null (levelUfos (gsLevelElems gsU))))
   assertEqual "both absorb in one beat (ufo first)" (psUfo ++ [lastC2]) psBoth
@@ -397,7 +397,7 @@ instance Phase Star where
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do
-  let world = register (kindDef @Star) defaultWorld
+  let world = register (kindDef @Star) defaultRegistry
       star = Custom "star" (CustomState (fromEnum C5))
       board0 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) star
       gs0 = (newGame (GameConfig 5 (goalCount (CountNamed "star") 1)) 1) {gsBoard = board0}
@@ -411,11 +411,11 @@ ec_custom_matchable_gem = do
   assertEqual "counted by name" [("star", 1)] (namedCounts (gsCounts gs1))
   assertBool "hint sees the star" (isJust (findHintWith world board0))
   let (_, oD) = trySwap p1 p2 gs0
-  assertEqual "unregistered star is inert" Nothing (matchColorWith defaultWorld star)
+  assertEqual "unregistered star is inert" Nothing (matchColorWith defaultRegistry star)
   assertBool "unregistered: no match through it" (not (moveApplied oD) || namedCounts (gsCounts (fst (trySwap p1 p2 gs0))) == [])
 
--- | 元素世界检查（元素类重构第 2 刀起由世界的解码探针推导）：mkWorldChecked 把重名 / 同一种格子被多个种类认领 /
--- 种类不认领任何格子暴露成值，内置条目表通过检查；mkWorld 是总函数（空表也能解码，认不出的格子退回惰性占格）。
+-- | 元素世界检查（元素类重构第 2 刀起由世界的解码探针推导）：mkRegistryChecked 把重名 / 同一种格子被多个种类认领 /
+-- 种类不认领任何格子暴露成值，内置条目表通过检查；mkRegistry 是总函数（空表也能解码，认不出的格子退回惰性占格）。
 newtype OtherGem = OtherGem Color
   deriving (Eq, Show)
 
@@ -459,11 +459,11 @@ instance Phase Stray where
 
 ec_world_checked_cells :: Assertion
 ec_world_checked_cells = do
-  let errsOf = either Just (const Nothing) . mkWorldChecked
+  let errsOf = either Just (const Nothing) . mkRegistryChecked
   assertEqual "builtin defs pass the check" Nothing (errsOf builtinDefs)
   assertEqual "duplicate name" (Just [DuplicateName "dup"]) (errsOf [inertDef "dup", inertDef "dup"])
   assertEqual "shared cell" (Just [SharedCell "cell 0" ["gem", "other_gem"]]) (errsOf (builtinDefs ++ [kindDef @OtherGem]))
   assertEqual "unclaimed" (Just [Unclaimed "stray"]) (errsOf [kindDef @Stray])
   -- 总函数：register 按名字替换仍可用；空元素世界解码不崩
-  assertEqual "empty world decodes to inert" "?" (elementName (mkWorld []) (mkGem C1))
-  assertEqual "empty world: no upper layers" 0 (length (upperOf (mkWorld []) (mkIceGem C1 2)))
+  assertEqual "empty world decodes to inert" "?" (elementName (mkRegistry []) (mkGem C1))
+  assertEqual "empty world: no upper layers" 0 (length (upperOf (mkRegistry []) (mkIceGem C1 2)))

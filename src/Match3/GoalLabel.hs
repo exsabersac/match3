@@ -5,7 +5,7 @@
 -- 放在 Match3.Game.* 之下、Match3.View 之上（View 重新导出 countLabel / colorLabel / namedGoalLabelTable，
 -- 并用 'goalViewLabel' 定义 goalLabel，对外 API 不变），这样 Game.Outcome 也能用而不成环。
 --
--- 依赖：Match3.Goal、Match3.Counts、Match3.Color、Match3.Element.Builtin / World（中文名与失败提示由元素条目提供）。
+-- 依赖：Match3.Goal、Match3.Counts、Match3.Color、Match3.Element.Builtin / Registry（中文名与失败提示由元素条目提供）。
 module Match3.GoalLabel
   ( goalViewLabel
   , countLabel
@@ -19,8 +19,8 @@ import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Match3.Color (Color(..))
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (displayLabels, goalIconWith, loseHintWith)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.ECS.Registry (displayLabels, goalIconWith, loseHintWith)
 import Match3.Goal (GoalView(..))
 import Match3.Types.Name (ElementName(..))
 
@@ -54,15 +54,15 @@ countLabel k = case k of
 -- cHud.hudLabel / 地面层的 groundLabel；注册顺序）。新元素做成关卡目标时在它的 codec 里写 cHud = noHud { hudLabel = Just "…" }
 -- （stack test 的 frontends_read_view_model 与 outcome_lose_hint_no_internal_names 核对全部关卡目标都有中文名）。
 namedGoalLabelTable :: [(String, String)]
-namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultWorld]
+namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultRegistry]
 
 -- | 按元素名计数的目标的专用失败提示（元素条目的 loseHintIs；参数 = 目标值；没有 = Nothing，用通用句式）。
 namedLoseHint :: ElementName -> Maybe (Int -> String)
-namedLoseHint = loseHintWith defaultWorld
+namedLoseHint = loseHintWith defaultRegistry
 
 -- | 按元素名计数的目标的覆盖图标贴图名（元素 codec 的 cHud.hudGoalIcon；没有 = Nothing，调用方用元素名本身）。
 namedGoalIcon :: ElementName -> Maybe String
-namedGoalIcon = goalIconWith defaultWorld
+namedGoalIcon = goalIconWith defaultRegistry
 
 -- | 颜色的中文名（与图例、ui-art.md 的颜色表一致）。
 colorLabel :: Color -> String

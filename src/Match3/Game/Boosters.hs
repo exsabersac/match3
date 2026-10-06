@@ -24,8 +24,8 @@ module Match3.Game.Boosters
 import Match3.Board.Grid (inBounds, getCell)
 import Match3.Board.Match (hasAnyMatchWith)
 import Match3.Board.Phase (fullStage, stageBoard, swapStage)
-import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (World, hitImmuneWith, swapBlockedWith, swapOpeningWith)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.ECS.Registry (Registry, hitImmuneWith, swapBlockedWith, swapOpeningWith)
 import Match3.Boosters (crossClearSeeds)
 import Match3.Types
 import Match3.Game.Resolve
@@ -40,10 +40,10 @@ thd3 (_, _, c) = c
 
 -- | 锤子：花一次清掉一格（种子起手连锁），不耗步。免疫格拒绝且不扣次数。
 resolveHammer :: Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveHammer = resolveHammerWith defaultWorld
+resolveHammer = resolveHammerWith defaultRegistry
 
 -- | resolveHammer（指定元素世界）。
-resolveHammerWith :: World -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
+resolveHammerWith :: Registry -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveHammerWith world p gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsHammers gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
@@ -53,10 +53,10 @@ resolveHammerWith world p gs
 
 -- | 自由交换：花一次交换任意两格（不必相邻），成消才结算；起手规则同玩家交换。
 resolveFreeSwap :: Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveFreeSwap = resolveFreeSwapWith defaultWorld
+resolveFreeSwap = resolveFreeSwapWith defaultRegistry
 
 -- | resolveFreeSwap（指定元素世界）。
-resolveFreeSwapWith :: World -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
+resolveFreeSwapWith :: Registry -> Pos -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveFreeSwapWith world p1 p2 gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsFreeSwaps gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)
@@ -75,10 +75,10 @@ resolveFreeSwapWith world p1 p2 gs
 
 -- | 十字清除：花一次清掉一格所在的整行 + 整列（种子起手连锁），不耗步。
 resolveCrossClear :: Pos -> GameState -> (GameState, Outcome, MoveTrace)
-resolveCrossClear = resolveCrossClearWith defaultWorld
+resolveCrossClear = resolveCrossClearWith defaultRegistry
 
 -- | resolveCrossClear（指定元素世界）。
-resolveCrossClearWith :: World -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
+resolveCrossClearWith :: Registry -> Pos -> GameState -> (GameState, Outcome, MoveTrace)
 resolveCrossClearWith world p gs
   | Just t <- gsOver gs = (gs, fromTerminal t, emptyTrace gs)
   | gsCrossClears gs <= 0 = (clearMoveFx gs, InvalidSwap, emptyTrace gs)

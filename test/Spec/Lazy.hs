@@ -23,12 +23,12 @@ import Engine.Stream
 import Match3.Board.Default (hasAnyMatch, hasValidMove)
 import Match3.Board.Random (randomBoardSized, randomPlayableBoardSized, randomStableBoardSized)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Levels.Campaign (levelCount)
 import Match3.Types (boardDims)
 import Match3.Counts (bumpCount, countsFromList, noCounts)
-import Match3.Element.Level (levelWorldIn)
-import Match3.Element.World (World)
+import Match3.Element.Level (levelRegistryIn)
+import Match3.ECS.Registry (Registry)
 import Match3.Board.Match (hasValidMoveWith)
 import Match3.Game.Move (resolveSwap)
 import Match3.Game.Shuffle (ensurePlayableWith)
@@ -102,20 +102,20 @@ hopeless rows cols =
   boardFromRows [[if even r && even c then mkGem (toEnum ((r + c) `mod` 5)) else mkStone | c <- [0 .. cols - 1]] | r <- [0 .. rows - 1]]
 
 -- | 自动洗牌的用例：49 关 × 2 种子 × (开局盘 / 斜纹死盘 / 怎么洗都死的盘)，外加已终局的一局。
-ensureCases :: ([(String, World, GameState)], [(String, World, GameState)])
+ensureCases :: ([(String, Registry, GameState)], [(String, Registry, GameState)])
 ensureCases =
   let levelCases =
         [ (concat ["L", show li, " seed ", show seed, " ", tag], world, gs)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2 :: Int]
         , Just gs0 <- [campaignGame li seed]
-        , let world = levelWorldIn defaultWorld (gsLevelElems gs0)
+        , let world = levelRegistryIn defaultRegistry (gsLevelElems gs0)
               (rows, cols) = boardDims (gsBoard gs0)
         , (tag, b) <- [("start", gsBoard gs0), ("stuck", stuckSized rows cols), ("hopeless", hopeless rows cols)]
         , let gs = gs0 {gsBoard = b, gsGen = mkStdGen (97 * li + seed), gsShuffled = False}
         ]
       overCase = case campaignGame 0 1 of
-        Just gs0 -> [("over", defaultWorld, gs0 {gsBoard = stuckSized 8 8, gsOver = Just (TWon 0)})]
+        Just gs0 -> [("over", defaultRegistry, gs0 {gsBoard = stuckSized 8 8, gsOver = Just (TWon 0)})]
         Nothing -> []
   in (levelCases, overCase)
 

@@ -62,7 +62,7 @@ import Data.Maybe (fromMaybe)
 import Match3.Core
 import Match3.Element.Phase
 import Match3.Board.Grid (adjacent)
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Game.Level (newGameAtLevel)
 import Match3.Levels.Campaign (lookupLevel)
 import Match3.Levels.Level (levelConfig)
@@ -74,7 +74,7 @@ import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
 import Engine.History (History(..), Undoable(..), startHistory)
-import Match3.Element.World (World, swapBlockedWith)
+import Match3.ECS.Registry (Registry, swapBlockedWith)
 import qualified Match3.Engine as M3E
 import Test.Tasty.HUnit
 import Spec.Support.Inventory
@@ -150,7 +150,7 @@ findMatchPair b =
     (p : _) -> Just p
     [] -> Nothing
   where
-    accepted (p1, p2) = not (swapBlockedWith defaultWorld b p1 p2) && hasAnyMatch (swapCells b p1 p2)
+    accepted (p1, p2) = not (swapBlockedWith defaultRegistry b p1 p2) && hasAnyMatch (swapCells b p1 p2)
 
 -- | 旧版 'findMatchPair'（不查能否交换），只给回归测试对照用。
 findMatchPairNaive :: Board -> Maybe (Pos, Pos)
@@ -397,7 +397,7 @@ cratesOn b = [(p, cell) | p <- allPos, let cell = getCell b p, isCustom cell]
 
 -- | 撤销只在通用历史层（Engine.History）。从 gs 经带历史的通用接口 match3ShellWith world 执行一个动作，
 -- 再执行 Undo，返回撤销后的状态；走步或撤销被拒时 Nothing。
-stepThenUndo :: World -> GameState -> M3E.Action -> Maybe GameState
+stepThenUndo :: Registry -> GameState -> M3E.Action -> Maybe GameState
 stepThenUndo world gs act =
   let g = M3E.match3ShellWith world
       s1 = gameStep g (startHistory gs) (Act act)

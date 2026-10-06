@@ -447,4 +447,4 @@ layersPlace :: (Int -> Cell) -> Placer
 layersPlace con args _ = con <$> exactArgs (max 1 <$> argInt <|> pure 1) args
 
 --------------------------------------------------------------------------------
--- 条目（注册项的分派编号由 World 的解码探针推导）
+-- 条目（注册项的分派编号由 Registry 的解码探针推导）

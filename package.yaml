@@ -109,7 +109,7 @@ library:
   - Match3.Element.Mechanic
   - Match3.Element.Kind
   - Match3.Element.Layer
-  - Match3.Element.World
+  - Match3.ECS.Registry
   - Match3.Element.Level
 
 # 前端共用的纯模块（app/pure）：网页 web/match3-web.cabal 按源码编其中用到的几个（web/build.sh 检查它们都在这张清单里），

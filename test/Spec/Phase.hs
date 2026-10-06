@@ -27,7 +27,7 @@ import Match3.Board.Phase
 import Match3.Board.Random (randomBoard)
 import Match3.Board.Refill (defaultRefill, refillWith)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Game.Boosters (resolveHammer)
 import Match3.Game.Resolve (Opening(..), SMoveKind(..), resolveMove)
 import Match3.Types (Score)
@@ -51,7 +51,7 @@ phase_round_same_as_untyped :: Assertion
 phase_round_same_as_untyped =
   mapM_ one [1 .. 40]
   where
-    world = defaultWorld
+    world = defaultRegistry
     one seed = do
       let (b, g) = randomBoard (mkStdGen seed)
           -- 带阶段标签
@@ -90,11 +90,11 @@ phase_typed_hammer_same_as_resolveHammer = do
 -- 非法写法（类型错误，推迟到运行时） ----------------------------------------------
 
 clearedSample :: Stage 'Cleared
-clearedSample = fst3 (clearStage (clearMatchesDetailedWith defaultWorld Nothing) (fullStage stableBoard))
+clearedSample = fst3 (clearStage (clearMatchesDetailedWith defaultRegistry Nothing) (fullStage stableBoard))
   where fst3 (a, _, _) = a
 
 fallenSample :: Stage 'Fallen
-fallenSample = fst (fallStage defaultWorld noHooks clearedSample)
+fallenSample = fst (fallStage defaultRegistry noHooks clearedSample)
 
 -- | 没下落就补子：refillStage 要 Stage 'Fallen，给的是 Stage 'Cleared。
 bad_refillBeforeFall :: Board
@@ -102,11 +102,11 @@ bad_refillBeforeFall = stageGrid (fst (refillStage defaultRefill (mkStdGen 1) cl
 
 -- | 下落两次：fallStage 要 Stage 'Cleared，给的是 Stage 'Fallen。
 bad_fallTwice :: MBoard
-bad_fallTwice = stageGrid (fst (fallStage defaultWorld noHooks fallenSample))
+bad_fallTwice = stageGrid (fst (fallStage defaultRegistry noHooks fallenSample))
 
 -- | 有空洞的盘面再消一次：clearStage 要 Stage 'Full。
 bad_clearWithHoles :: MBoard
-bad_clearWithHoles = stageGrid (fst3 (clearStage (clearMatchesDetailedWith defaultWorld Nothing) clearedSample))
+bad_clearWithHoles = stageGrid (fst3 (clearStage (clearMatchesDetailedWith defaultRegistry Nothing) clearedSample))
   where fst3 (a, _, _) = a
 
 -- | 把有空洞的盘面当满盘取出：IsFull 'Cleared 化简成 MBoard ~ Board，不成立。

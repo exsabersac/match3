@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
--- | 元素值级行为（元素类重构第 1 刀起；slim-9 起只有 Match3.Element.Phase）：新写法（Phase / Kind / Layer / World）的
+-- | 元素值级行为（元素类重构第 1 刀起；slim-9 起只有 Match3.Element.Phase）：新写法（Phase / Kind / Layer / Registry）的
 --
 -- * 同名替换：把内置的宝石 / 直线特效 / 石头 / 翻转块 / 气泡 / 雪怪 / 冰 / 巧克力 / 锁链 / 果冻换成测试里独立写的
 --   新写法副本、按同名注册进内置元素世界，元素对照快照（element-oracle.txt）逐行不变；
@@ -21,7 +21,7 @@ import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy(..))
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
-import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultWorld, snowBossEntity, specialBlast)
+import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultRegistry, snowBossEntity, specialBlast)
 import Match3.Element.Builtin.Actor (BottleE, MagicHatE, MakerE)
 import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
 import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
@@ -32,7 +32,7 @@ import Match3.Element.Phase
 import Match3.Element.Near
 import Match3.Element.Layer
 import Match3.Element.Types
-import Match3.Element.World
+import Match3.ECS.Registry
 import Match3.Types
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -258,11 +258,11 @@ jellyV = (groundKind "jelly")
   }
 
 -- | 内置元素世界里这些条目换成测试里的副本（同名替换，注册位置不变）。
-replaced :: World
+replaced :: Registry
 replaced =
   foldl
     (flip register)
-    defaultWorld
+    defaultRegistry
     [ kindDef @GemV
     , kindDef @LineHV
     , kindDef @StoneV
@@ -279,7 +279,7 @@ ab_same_name_copies_oracle_unchanged :: Assertion
 ab_same_name_copies_oracle_unchanged = do
   expected <- lines <$> readFile "test/golden/element-oracle.txt"
   let actual = ElementOracle.oracleLinesWith replaced
-  assertEqual "names unchanged" (map defName (worldDefs defaultWorld)) (map defName (worldDefs replaced))
+  assertEqual "names unchanged" (map defName (registryDefs defaultRegistry)) (map defName (registryDefs replaced))
   case [(i, x, y) | (i, x, y) <- zip3 [1 :: Int ..] expected actual, x /= y] of
     ((i, x, y) : _) -> assertFailure ("line " ++ show i ++ " differs\nexpected: " ++ take 400 x ++ "\nactual:   " ++ take 400 y)
     [] -> assertEqual "line count" (length expected) (length actual)
@@ -287,8 +287,8 @@ ab_same_name_copies_oracle_unchanged = do
 --------------------------------------------------------------------------------
 -- 叠层合成与内置元素世界逐方法相等
 
-world :: World
-world = mkWorld [kindDef @GemV, kindDef @LineHV, layerDef @IceV, layerDef @ChocoV, layerDef @ChainV, kindDef @StoneV]
+world :: Registry
+world = mkRegistry [kindDef @GemV, kindDef @LineHV, layerDef @IceV, layerDef @ChocoV, layerDef @ChainV, kindDef @StoneV]
 
 layeredCells :: [Cell]
 layeredCells =
@@ -298,7 +298,7 @@ layeredCells =
 ab_layered_matches_builtin :: Assertion
 ab_layered_matches_builtin =
   mapM_
-    (\cell -> assertEqual (show cell) (somePhaseProbe (elementOf defaultWorld cell)) (somePhaseProbe (decode world cell)))
+    (\cell -> assertEqual (show cell) (somePhaseProbe (elementOf defaultRegistry cell)) (somePhaseProbe (decode world cell)))
     layeredCells
 
 --------------------------------------------------------------------------------
@@ -308,7 +308,7 @@ ab_layered_matches_builtin =
 sampleCells :: [Cell]
 sampleCells =
   [ c
-  | d <- worldDefs defaultWorld
+  | d <- registryDefs defaultRegistry
   , base <- [Gem C1 Normal 0 Nothing, Gem C3 LineV 2 Nothing, Stone 2]
   , args <- [[], [AInt 1], [AInt 2], [AInt 4], [AColor C2], [AColor C1, AColor C4], [AColor C3, AInt 5], [AInt 1, AInt 0], [AInt 5, AInt 2], [AInt 2, AColor C1]]
   , Just c <- [defPlace d args base]
@@ -316,7 +316,7 @@ sampleCells =
 
 ab_kind_name_matches_decoded :: Assertion
 ab_kind_name_matches_decoded = do
-  let kinds = [k | KindDef k <- worldDefs defaultWorld]
+  let kinds = [k | KindDef k <- registryDefs defaultRegistry]
       accepted (SomeKind p) = [(kindName p, nameOf e) | c <- sampleCells, Just e <- [fromCellAs p c]]
   assertEqual "all builtin kinds" 25 (length kinds)
   mapM_
@@ -393,9 +393,9 @@ ab_world_decode_order = do
   assertEqual "roundtrip" cell (phaseToCell (decode world cell))
   assertEqual "unregistered custom" (Just (Inert "moss" (Custom "moss" (CustomState 1)))) (fromPhase (decode world (Custom "moss" (CustomState 1))))
   assertEqual "unclaimed cell" "?" (phaseName (decode world Cookie))
-  assertEqual "names in order" ["gem", "line_h", "ice", "choco", "chain", "stone"] (map defName (worldDefs world))
-  let w2 = mkWorld [kindDef @StoneV, kindDef @GemV, kindDef @StoneV]
-  assertEqual "dedupe keeps first position" ["stone", "gem"] (map defName (worldDefs w2))
+  assertEqual "names in order" ["gem", "line_h", "ice", "choco", "chain", "stone"] (map defName (registryDefs world))
+  let w2 = mkRegistry [kindDef @StoneV, kindDef @GemV, kindDef @StoneV]
+  assertEqual "dedupe keeps first position" ["stone", "gem"] (map defName (registryDefs w2))
   assertEqual "body" (Just (StoneV 2)) (fromPhase (decode w2 (Stone 2)))
   assertEqual "mapMaybe sanity" [1 :: Int] (mapMaybe (\c -> case c of Stone n -> Just n; _ -> Nothing) [getCell (gridFromRows [[Stone 1]]) (0, 0)])
 
@@ -500,7 +500,7 @@ ab_cell_face_matches_legacy_zoo :: Assertion
 ab_cell_face_matches_legacy_zoo =
   forM_ zoo $ \cell -> assertEqual (show cell) (legacyCellFace cell) (cellFace cell)
   where
-    customs = [Custom (defName d) (CustomState v) | d <- worldDefs defaultWorld, v <- [0, 1, 3, 17]] ++ [Custom "nobody" (CustomState 2)]
+    customs = [Custom (defName d) (CustomState v) | d <- registryDefs defaultRegistry, v <- [0, 1, 3, 17]] ++ [Custom "nobody" (CustomState 2)]
     zoo =
       customs
         ++ [Stone 2, Chest 1, Honey 3, Balloon C4, Cookie, Cake 2, MagicHat, Maker C3 2, Snail 0 (-1), Safe 1, Flip C2 C5, Surprise, Bottle C1, TimeSpirit, Countdown C5 4]

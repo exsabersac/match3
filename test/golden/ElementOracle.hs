@@ -116,7 +116,7 @@ allPos = [(r, c) | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1]]
 boardText :: Board -> String
 boardText b = show (map (getCell b) allPos)
 
-valueLine :: World -> Cell -> String
+valueLine :: Registry -> Cell -> String
 valueLine world cell =
   "V " ++ show cell ++ " | "
     ++ unwords
@@ -147,17 +147,17 @@ valueLine world cell =
       , show (swapBlockedWith world (setCell base (2, 2) cell) (2, 2) (2, 3))
       ]
 
-names :: World -> [ElementName]
-names world = map defName (worldDefs world)
+names :: Registry -> [ElementName]
+names world = map defName (registryDefs world)
 
-nameLines :: World -> [String]
+nameLines :: Registry -> [String]
 nameLines world =
   [ "N " ++ show n ++ " " ++ show (displayLabelWith world n) ++ " " ++ show (fmap ($ 7) (loseHintWith world n))
   | n <- names world ++ ["unregistered", "ufo"]
   ]
     ++ ["N labels " ++ show (displayLabels world), "N diff " ++ show (diffCountersWith world)]
 
-placeLines :: World -> [String]
+placeLines :: Registry -> [String]
 placeLines world =
   [ "P " ++ unElementName n ++ " " ++ show args ++ " " ++ show cell ++ " -> " ++ either show (show . (`getCell` (4, 4))) (placeWith world n args (setCell base (4, 4) cell) [(4, 4)])
   | n <- names world ++ ["unregistered"]
@@ -236,7 +236,7 @@ ruleSummary f =
 adjOutText :: Board -> AdjOut -> (Bool, String)
 adjOutText b0 out = (aoBoard out /= b0 || not (null (aoDead out)) || not (null (aoSit out)), show (boardText (aoBoard out), aoDead out, aoSit out))
 
-ruleLines :: World -> [String]
+ruleLines :: Registry -> [String]
 ruleLines world =
   [ "AR " ++ show i ++ " " ++ show (arOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (arRun r (AdjCtx (smTrue s) (smDirect s) (smProtect s) (recolorableWith world)) (smBoard s)))
   | (i, r) <- zip [0 :: Int ..] (adjacentRules world)
@@ -270,10 +270,10 @@ ruleLines world =
       _ -> False
 
 oracleLines :: [String]
-oracleLines = oracleLinesWith defaultWorld
+oracleLines = oracleLinesWith defaultRegistry
 
 -- | 同一套投影，换一张元素世界（第 1 刀：把内置条目换成新类经适配器注册的版本，快照应逐行不变）。
-oracleLinesWith :: World -> [String]
+oracleLinesWith :: Registry -> [String]
 oracleLinesWith world = map (valueLine world) valueCells ++ nameLines world ++ placeLines world ++ ruleLines world
 
 -- | 直接命中一列的文本。对照文件的格式固定为第 4 刀前的构造子名（HitAbsorb / HitDestroy / HitImmune），

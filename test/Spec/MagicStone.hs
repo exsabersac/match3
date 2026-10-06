@@ -7,7 +7,7 @@ module Spec.MagicStone
   ) where
 
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Board.Match (findHintWith)
 import Match3.Counts (countOf)
 import Match3.Element
@@ -53,7 +53,7 @@ stateAt b p = case getCell b p of
 -- | 能力：固定（不下落）、挡交换、无色、洗牌保留；平时打不动，发射中被命中归零。
 ms_ability_fixed_immune_colorless :: Assertion
 ms_ability_fixed_immune_colorless = do
-  let world = defaultWorld
+  let world = defaultRegistry
   assertEqual "full = 3, firing = 4" (3, 4) (magicStoneFull, magicStoneFiring)
   mapM_
     (\k -> do
@@ -69,7 +69,7 @@ ms_ability_fixed_immune_colorless = do
 ms_charges_once_per_round :: Assertion
 ms_charges_once_per_round = do
   let b0 = setCells stableBoard [((3, 3), magic 0), ((6, 6), magic 3), ((0, 0), magic 1)]
-      adj tc b = let (b', _, _) = runAdjacentWith defaultWorld tc [] [] b in b'
+      adj tc b = let (b', _, _) = runAdjacentWith defaultRegistry tc [] [] b in b'
       b1 = adj [(3, 4), (2, 3), (5, 5), (6, 5), (1, 1)] b0
   assertEqual "two neighbours: +1" (Just 1) (stateAt b1 (3, 3))
   assertEqual "full stays 3" (Just 3) (stateAt b1 (6, 6))
@@ -84,7 +84,7 @@ ms_fires_row_and_col_at_step_end :: Assertion
 ms_fires_row_and_col_at_step_end = do
   let gs0 = (levelGame stoneLevel 7) {gsBoard = setCells tripleBoard [((2, 1), magic 2)]}
       (a, b) = tripleMove
-      (gs1, o, mt) = resolveSwapWith defaultWorld a b gs0
+      (gs1, o, mt) = resolveSwapWith defaultRegistry a b gs0
   assertBool "move accepted" (o `notElem` [NoMatch, InvalidSwap])
   let fired = [es | es <- mtEnd mt, endEffectKind (esEffect es) == EvTick, endEffectElement (esEffect es) == "magic_stone"]
   assertEqual "one firing step" 1 (length fired)
@@ -97,7 +97,7 @@ ms_not_full_does_not_fire :: Assertion
 ms_not_full_does_not_fire = do
   let gs0 = (levelGame stoneLevel 7) {gsBoard = setCells tripleBoard [((2, 1), magic 0)]}
       (a, b) = tripleMove
-      (gs1, _, mt) = resolveSwapWith defaultWorld a b gs0
+      (gs1, _, mt) = resolveSwapWith defaultRegistry a b gs0
   assertEqual "no firing" [] [es | es <- mtEnd mt, endEffectElement (esEffect es) == "magic_stone"]
   assertEqual "charged to 1" (Just 1) (stateAt (gsBoard gs1) (2, 1))
 
@@ -105,14 +105,14 @@ ms_not_full_does_not_fire = do
 ms_boosters_wait_for_next_swap :: Assertion
 ms_boosters_wait_for_next_swap = do
   let gs0 = (levelGame stoneLevel 7) {gsBoard = setCells tripleBoard [((2, 1), magic 3)]}
-      (gsH, oH, mtH) = resolveHammerWith defaultWorld (7, 7) gs0
+      (gsH, oH, mtH) = resolveHammerWith defaultRegistry (7, 7) gs0
   assertBool "hammer accepted" (oH `notElem` [NoMatch, InvalidSwap])
   assertEqual "hammer: no firing" [] [es | es <- mtEnd mtH, endEffectElement (esEffect es) == "magic_stone"]
   assertEqual "hammer: still full" (Just 3) (stateAt (gsBoard gsH) (2, 1))
-  case findHintWith defaultWorld (gsBoard gsH) of
+  case findHintWith defaultRegistry (gsBoard gsH) of
     Nothing -> assertFailure "fixture: no hint after hammer"
     Just (p, q) -> do
-      let (gs2, _, mt2) = resolveSwapWith defaultWorld p q gsH
+      let (gs2, _, mt2) = resolveSwapWith defaultRegistry p q gsH
       assertEqual "next swap fires" 1 (length [es | es <- mtEnd mt2, endEffectElement (esEffect es) == "magic_stone"])
       assertEqual "reset" (Just 0) (stateAt (gsBoard gs2) (2, 1))
 
@@ -125,10 +125,10 @@ ms_level42_layout_and_play = do
   assertEqual "older levels have none" [] [li | li <- [0 .. stoneLevel - 1], not (null (customsOn "magic_stone" (gsBoard (levelGame li 1))))]
   let play gs n acc
         | n <= (0 :: Int) || gsOver gs /= Nothing = (gs, acc)
-        | otherwise = case findHintWith defaultWorld (gsBoard gs) of
+        | otherwise = case findHintWith defaultRegistry (gsBoard gs) of
             Nothing -> (gs, acc)
             Just (p, q) ->
-              let (gs', _, mt) = resolveSwapWith defaultWorld p q gs
+              let (gs', _, mt) = resolveSwapWith defaultRegistry p q gs
                   fires = length [es | es <- mtEnd mt, endEffectElement (esEffect es) == "magic_stone"]
                   stay = customsOn "magic_stone" (gsBoard gs') == spots
               in if stay then play gs' (n - 1) (acc + fires) else (gs', -1000)

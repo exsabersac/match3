@@ -15,8 +15,8 @@
 --
 -- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）、
 -- 关卡级元素（'SomeMechanic'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
--- 元素类重构第 4 刀起，旧的注册表模块并进这里（World 取代旧注册表类型、Def 取代旧注册项）。
-module Match3.Element.World
+-- 元素类重构第 4 刀起，旧的注册表模块并进这里（Registry 取代旧注册表类型、Def 取代旧注册项）。
+module Match3.ECS.Registry
   ( -- * 注册项
     Def(..)
   , kindDef
@@ -27,15 +27,15 @@ module Match3.Element.World
   , defPlace
   , Placer
     -- * 世界
-  , World
-  , mkWorld
-  , mkWorldChecked
-  , WorldError(..)
+  , Registry
+  , mkRegistry
+  , mkRegistryChecked
+  , RegistryError(..)
   , register
-  , worldDefs
-  , worldKinds
-  , worldLayers
-  , worldGrounds
+  , registryDefs
+  , registryKinds
+  , registryLayers
+  , registryGrounds
   , lookupDef
   , lookupGround
     -- * 本步上下文
@@ -179,8 +179,8 @@ defPlace d = case d of
   InertDef n -> customPlace n
 
 -- | 世界：注册项 + 解码缓存 + 规则缓存（各类型的规则收集一次、按次序排好）+ 规则表 + 本步上下文。
--- 用 'mkWorld' / 'register' 构造；字段不导出。
-data World = World
+-- 用 'mkRegistry' / 'register' 构造；字段不导出。
+data Registry = Registry
   { wDefs     :: [Def]
   , wSlots    :: Array Int [SomeKind]   -- 内置本体编号（cellSlot）→ 候选（注册倒序）
   , wAll      :: [SomeKind]             -- 全部本体（注册倒序；候选都不认领时兜底）
@@ -199,7 +199,7 @@ data World = World
   , wStep     :: StepCtx                          -- 本步上下文（缺省 'noStep'）
   }
 
--- | 本步上下文：只在一步结算期间有意义的东西，由 Element.Level.levelWorldIn 每步按关卡状态填，注册时为空。
+-- | 本步上下文：只在一步结算期间有意义的东西，由 Element.Level.levelRegistryIn 每步按关卡状态填，注册时为空。
 newtype StepCtx = StepCtx
   { stepWiden :: [(Pos, Board -> [Pos] -> [Pos])]  -- ^ 本步的扩爆格（新玩法 8）：格 → 爆炸范围改写（魔法地格）
   }
@@ -208,11 +208,11 @@ newtype StepCtx = StepCtx
 noStep :: StepCtx
 noStep = StepCtx []
 
--- | 由注册项建世界（总函数，不报错；检查见 'mkWorldChecked'）。同名多项以后出现的为准，位置取第一次出现处。
+-- | 由注册项建世界（总函数，不报错；检查见 'mkRegistryChecked'）。同名多项以后出现的为准，位置取第一次出现处。
 -- 规则表（形状 / 组合）为空、补子策略为 defaultRefill、没有关卡级元素。
-mkWorld :: [Def] -> World
-mkWorld defs0 =
-  World
+mkRegistry :: [Def] -> Registry
+mkRegistry defs0 =
+  Registry
     { wDefs = defs
     , wAdjacent = sortOn arOrder [AdjacentRule o f | AdjacentPass o f <- passes]
     , wEnd = sortOn (\r -> (erPhase r, erOrder r)) [r | EndPass r <- passes]
@@ -244,9 +244,9 @@ mkWorld defs0 =
 
 -- | 往世界里加（或按名字替换）一个注册项。测试专用元素就这样接进来，主流程不用改。
 -- 关卡级元素、规则表（形状 / 组合 / 补子策略）与本步上下文原样保留。
-register :: Def -> World -> World
+register :: Def -> Registry -> Registry
 register d w =
-  (mkWorld (wDefs w ++ [d]))
+  (mkRegistry (wDefs w ++ [d]))
     { wLevel = wLevel w
     , wShapes = wShapes w
     , wCombos = wCombos w
@@ -254,21 +254,21 @@ register d w =
     , wStep = wStep w
     }
 
--- | 建世界时发现的注册错误（'mkWorldChecked'）。
-data WorldError
+-- | 建世界时发现的注册错误（'mkRegistryChecked'）。
+data RegistryError
   = DuplicateName ElementName        -- ^ 同名注册项出现多次
   | SharedCell String [ElementName]  -- ^ 同一种格子（本体编号 / 冰层 / 叠层编号）被多个种类认领（注册顺序）
   | Unclaimed ElementName            -- ^ 种类不认领任何格子（解码永远轮不到它）
   deriving (Eq, Show)
 
 -- | 由注册项建世界并检查：名字互不相同、每种格子至多一个种类认领、每个本体 / 叠层种类至少认领一种格子。
--- 有错时返回全部错误；没错时与 'mkWorld' 建出同一个世界。
-mkWorldChecked :: [Def] -> Either [WorldError] World
-mkWorldChecked defs0 = case dups ++ shared ++ unclaimed of
+-- 有错时返回全部错误；没错时与 'mkRegistry' 建出同一个世界。
+mkRegistryChecked :: [Def] -> Either [RegistryError] Registry
+mkRegistryChecked defs0 = case dups ++ shared ++ unclaimed of
   [] -> Right w
   errs -> Left errs
   where
-    w = mkWorld defs0
+    w = mkRegistry defs0
     names = map defName defs0
     dups = [DuplicateName n | n <- nub names, length (filter (== n) names) > 1]
     kname (SomeKind p) = kindName p
@@ -313,24 +313,24 @@ overlayProbes i = [Gem C1 Normal 0 (Just o)]
     o = [Grass, Vine, Choco, Fog 1, Chain 1, Freeze 1, Curtain 1, Steam] !! i
 
 -- | 全部注册项（注册顺序）。
-worldDefs :: World -> [Def]
-worldDefs = wDefs
+registryDefs :: Registry -> [Def]
+registryDefs = wDefs
 
-worldKinds :: World -> [SomeKind]
-worldKinds w = [k | KindDef k <- wDefs w]
+registryKinds :: Registry -> [SomeKind]
+registryKinds w = [k | KindDef k <- wDefs w]
 
-worldLayers :: World -> [SomeLayer]
-worldLayers w = [l | LayerDef l <- wDefs w]
+registryLayers :: Registry -> [SomeLayer]
+registryLayers w = [l | LayerDef l <- wDefs w]
 
-worldGrounds :: World -> [GroundKind]
-worldGrounds w = [g | GroundDef g <- wDefs w]
+registryGrounds :: Registry -> [GroundKind]
+registryGrounds w = [g | GroundDef g <- wDefs w]
 
 -- | 按名字找注册项。
-lookupDef :: World -> ElementName -> Maybe Def
+lookupDef :: Registry -> ElementName -> Maybe Def
 lookupDef w n = listToMaybe [d | d <- wDefs w, defName d == n]
 
 -- | 按名字找地面层种类。
-lookupGround :: World -> ElementName -> Maybe GroundKind
+lookupGround :: Registry -> ElementName -> Maybe GroundKind
 lookupGround w n = listToMaybe [g | GroundDef g <- wDefs w, groundName g == n]
 
 -- 候选表上第一个认领该格的种类（显式递归：解码在匹配 / 提示 / 计数的热路径上，不建中间列表）。
@@ -343,7 +343,7 @@ firstDecode ks0 cell = go ks0
       Nothing -> go ks
 
 -- | 本体层的元素值（参数是拆掉叠层之后的格子，或原格：本体不看叠层）。
-decodeBody :: World -> Cell -> SomePhase
+decodeBody :: Registry -> Cell -> SomePhase
 decodeBody w cell = case cell of
   Custom n _ -> maybe (SomePhase (Inert n cell)) id (lookup n (wCustom w) >>= (`firstDecode` cell))
   _ ->
@@ -354,7 +354,7 @@ decodeBody w cell = case cell of
          Nothing -> maybe (SomePhase (Inert (ElementName "?") cell)) id (firstDecode (wAll w) cell)
 
 -- | 本体之上的各层（自外向内：冰层 → 叠层）与拆完之后的格子。
-decodeLayers :: World -> Cell -> ([SomeLayerValue], Cell)
+decodeLayers :: Registry -> Cell -> ([SomeLayerValue], Cell)
 decodeLayers w cell
   | hasLayers cell = case cell of
       Gem _ _ ice ov ->
@@ -379,7 +379,7 @@ hasLayers cell = case cell of
 {-# INLINE hasLayers #-}
 
 -- | 整个格子的元素值：叠层（自外向内）包着本体。
-decode :: World -> Cell -> SomePhase
+decode :: Registry -> Cell -> SomePhase
 decode w cell
   | hasLayers cell =
       let (ls, inner) = decodeLayers w cell
@@ -387,27 +387,27 @@ decode w cell
   | otherwise = decodeBody w cell
 
 -- | 本体层的元素值（拆掉冰层 / 叠层之后）。
-bodyOf :: World -> Cell -> SomePhase
+bodyOf :: Registry -> Cell -> SomePhase
 bodyOf w cell
   | hasLayers cell = decodeBody w (snd (decodeLayers w cell))
   | otherwise = decodeBody w cell
 
 -- | 本体之上的各层（自上而下）：冰层（ice > 0）、叠层。
-upperOf :: World -> Cell -> [SomeLayerValue]
+upperOf :: Registry -> Cell -> [SomeLayerValue]
 upperOf w cell
   | hasLayers cell = fst (decodeLayers w cell)
   | otherwise = []
 
 -- | 整个格子的元素值（= 'decode'：叠层自外向内包着本体）。
-elementOf :: World -> Cell -> SomePhase
+elementOf :: Registry -> Cell -> SomePhase
 elementOf = decode
 
 -- | 本体的元素名。
-elementName :: World -> Cell -> ElementName
+elementName :: Registry -> Cell -> ElementName
 elementName w = phaseName . bodyOf w
 
 -- | 最上面一层的元素名（事件里「波及了什么」用）。
-topLayerName :: World -> Cell -> ElementName
+topLayerName :: Registry -> Cell -> ElementName
 topLayerName w cell = case upperOf w cell of
   (lv : _) -> layerValueName lv
   [] -> elementName w cell
@@ -416,12 +416,12 @@ topLayerName w cell = case upperOf w cell of
 -- 显示（只给前端 / 文案用，不参与规则）
 
 -- | 本体格子的显示附加字段（元素 'view' 的 fExtras；未注册的 Custom 名字 = 无）。
-faceFieldsWith :: World -> Cell -> [(String, FaceValue)]
+faceFieldsWith :: Registry -> Cell -> [(String, FaceValue)]
 faceFieldsWith world cell = case bodyOf world cell of
   SomePhase e -> fExtras (view e)
 
 -- | 按元素名计数的目标的中文名（本体 'label' / 地面层 'groundLabel'；没登记 = Nothing）。
-displayLabelWith :: World -> ElementName -> Maybe String
+displayLabelWith :: Registry -> ElementName -> Maybe String
 displayLabelWith world n = lookupDef world n >>= defLabel
 
 defLabel :: Def -> Maybe String
@@ -431,24 +431,24 @@ defLabel d = case d of
   _ -> Nothing
 
 -- | 按元素名计数的目标的失败提示。
-loseHintWith :: World -> ElementName -> Maybe (Int -> String)
+loseHintWith :: Registry -> ElementName -> Maybe (Int -> String)
 loseHintWith world n = lookupDef world n >>= \d -> case d of
   KindDef (SomeKind p) -> loseHint p
   GroundDef g -> groundLoseHint g
   _ -> Nothing
 
 -- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
-displayLabels :: World -> [(ElementName, String)]
-displayLabels world = [(defName d, l) | d <- worldDefs world, Just l <- [defLabel d]]
+displayLabels :: Registry -> [(ElementName, String)]
+displayLabels world = [(defName d, l) | d <- registryDefs world, Just l <- [defLabel d]]
 
 -- | 目标名对应的 HUD 血条剩余 HP（元素 'boardBossHp'；未登记 / 不提供 = Nothing）。
-boardBossHpWith :: World -> Board -> ElementName -> Maybe Int
+boardBossHpWith :: Registry -> Board -> ElementName -> Maybe Int
 boardBossHpWith world board n = case lookupDef world n of
   Just (KindDef (SomeKind p)) -> boardBossHp p board
   _ -> Nothing
 
 -- | 目标图标贴图名（元素 'goalIconName'；未覆盖 = Nothing，调用方用元素名本身）。
-goalIconWith :: World -> ElementName -> Maybe String
+goalIconWith :: Registry -> ElementName -> Maybe String
 goalIconWith world n = case lookupDef world n of
   Just (KindDef (SomeKind p)) -> goalIconName p
   _ -> Nothing
@@ -457,62 +457,62 @@ goalIconWith world n = case lookupDef world n of
 -- 钩子
 
 -- | 参与匹配的颜色：任一层挡匹配则 Nothing，否则本体颜色。（匹配、提示的热路径。）
-matchColorWith :: World -> Cell -> Maybe Color
+matchColorWith :: Registry -> Cell -> Maybe Color
 matchColorWith world cell = case elementOf world cell of
   SomePhase e ->
     let m = onMatch e
      in if mBlockMatch m then Nothing else mColor m
 
 -- | 本体颜色（颜色袋计数用，不看叠层）。
-colorOfWith :: World -> Cell -> Maybe Color
+colorOfWith :: Registry -> Cell -> Maybe Color
 colorOfWith world cell = case bodyOf world cell of
   SomePhase e -> mColor (onMatch e)
 
 -- | 本格不能被交换（任一层挡）。
-blocksSwapWith :: World -> Cell -> Bool
+blocksSwapWith :: Registry -> Cell -> Bool
 blocksSwapWith world cell = case elementOf world cell of
   SomePhase e -> mBlockSwap (onMatch e)
 
 -- | 只看上层（冰 / 叠层）是否挡交换（彩虹 / 特殊合成提示用，本体由它们自己判定）。
-upperBlocksSwapWith :: World -> Cell -> Bool
+upperBlocksSwapWith :: Registry -> Cell -> Bool
 upperBlocksSwapWith world = any (\(SomeLayerValue l) -> layerBlocksSwap l) . upperOf world
 
 -- | 交换两格是否被挡（任一端挡即挡）。
-swapBlockedWith :: World -> Board -> Pos -> Pos -> Bool
+swapBlockedWith :: Registry -> Board -> Pos -> Pos -> Bool
 swapBlockedWith world b p1 p2 = blocksSwapWith world (getCell b p1) || blocksSwapWith world (getCell b p2)
 
 -- | 特殊块能否点火：自上而下第一个有意见的层决定，都没有意见则问本体。
-activatesWith :: World -> Cell -> Bool
+activatesWith :: Registry -> Cell -> Bool
 activatesWith world cell = case elementOf world cell of
   SomePhase e -> hFires (onHit DirectHit e)
 
 -- | 本体随重力下落。
-fallsWith :: World -> Cell -> Bool
+fallsWith :: Registry -> Cell -> Bool
 fallsWith world cell = case bodyOf world cell of
   SomePhase e -> pFalls (physics e)
 
 -- | 本体能穿过传送门。
-portalWith :: World -> Cell -> Bool
+portalWith :: Registry -> Cell -> Bool
 portalWith world cell = case bodyOf world cell of
   SomePhase e -> pPortal (physics e)
 
 -- | 本体会被边缘收走。
-drainsWith :: World -> Cell -> Bool
+drainsWith :: Registry -> Cell -> Bool
 drainsWith world = not . null . drainEdgesWith world
 
 -- | 本体会在哪些边被收走（段 2c：边缘收集方向可配）。
-drainEdgesWith :: World -> Cell -> [Edge]
+drainEdgesWith :: Registry -> Cell -> [Edge]
 drainEdgesWith world cell = case bodyOf world cell of
   SomePhase e -> pDrains (physics e)
 
 -- | 直接命中：叠层自上而下先回答（穿透的问里面），吃掉命中时格子写成新的内容。
-directHitWith :: World -> Cell -> Strike
+directHitWith :: Registry -> Cell -> Strike
 directHitWith world cell = case elementOf world cell of
   SomePhase e -> hStrike (onHit DirectHit e)
 
 -- | 对一组种子逐格结算直接命中（去重后按顺序）：返回 (新盘面, 被消除的格)。
 -- 被消除的格按「后命中的在前」排列（与旧 chipIceOnClear 相同，下游只当集合用）。
-chipOnHitWith :: World -> Board -> [Pos] -> (Board, [Pos])
+chipOnHitWith :: Registry -> Board -> [Pos] -> (Board, [Pos])
 chipOnHitWith world b seeds = foldl step (b, []) (nub seeds)
   where
     step (board, clearable) p = case directHitWith world (getCell board p) of
@@ -521,11 +521,11 @@ chipOnHitWith world b seeds = foldl step (b, []) (nub seeds)
       Immune -> (board, clearable)
 
 -- | 直接命中打不动（锤子对它拒绝且不扣次数）。
-hitImmuneWith :: World -> Cell -> Bool
+hitImmuneWith :: Registry -> Cell -> Bool
 hitImmuneWith world cell = directHitWith world cell == Immune
 
 -- | 真消除格上随格清掉的叠层（草 / 藤 / 巧）：去掉这些层，其余各层原样盖回。
-stripOnClearWith :: World -> Board -> [Pos] -> Board
+stripOnClearWith :: Registry -> Board -> [Pos] -> Board
 stripOnClearWith world b ps = foldl strip b (nub ps)
   where
     strip board p =
@@ -536,11 +536,11 @@ stripOnClearWith world b ps = foldl strip b (nub ps)
            else setCell board p (foldr (\(SomeLayerValue l) c -> putOn l c) inner kept)
 
 -- | 邻格波及规则（已按 arOrder 排好）。
-adjacentRules :: World -> [AdjacentRule]
+adjacentRules :: Registry -> [AdjacentRule]
 adjacentRules = wAdjacent
 -- | 按顺序跑完一轮的全部邻格波及：返回 (盘面, 打碎的格（按规则顺序拼接）, 新生成需坐住的格)。
 -- 每条规则的 acProtect = 起始保护格 ++ 之前各规则的 aoSit。
-runAdjacentWith :: World -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
+runAdjacentWith :: Registry -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
 runAdjacentWith world trueClears direct protect0 b0 =
   let ((b', _), outs) = mapAccumL one (b0, nub protect0) (wAdjacent world)
   in (b', concatMap fst outs, concatMap snd outs)
@@ -554,38 +554,38 @@ runAdjacentWith world trueClears direct protect0 b0 =
       in ((aoBoard out, protect ++ [p | p <- nub new, p `notElem` protect]), (aoDead out, new))
 
 -- | 本体进入清除格时的计数键。
-counterWith :: World -> Cell -> Maybe CounterKey
+counterWith :: Registry -> Cell -> Maybe CounterKey
 counterWith world cell = case bodyOf world cell of
   SomePhase e -> metaCounter (liveMeta e)
 
 -- | 按前后个数差计数的元素：(名字, 计数键, 每个的奖励步数)（保险箱、时间精灵、自定义）。
-diffCountersWith :: World -> [(ElementName, CounterKey, Int)]
+diffCountersWith :: Registry -> [(ElementName, CounterKey, Int)]
 diffCountersWith = wDiff
 
 -- | 盘上本体为该元素的格数（盘面是 Foldable：按格 foldMap 到 'Sum'）。
-countElementWith :: World -> ElementName -> Board -> Int
+countElementWith :: Registry -> ElementName -> Board -> Int
 countElementWith world n = getSum . foldMap (\cell -> if elementName world cell == n then Sum 1 else mempty)
 
 -- | 盘上本体为该元素的格按 'diffWeight' 加权的总数（按差计数用）。权重缺省 1，这时与 'countElementWith' 相同；
 -- 新玩法 5 雪怪 Boss 的左上格权重 = 血量，其余格 0。
-weighElementWith :: World -> ElementName -> Board -> Int
+weighElementWith :: Registry -> ElementName -> Board -> Int
 weighElementWith world n = getSum . foldMap (\cell -> case bodyOf world cell of
   SomePhase e | phaseName (SomePhase e) == n -> Sum (metaDiffWeight (liveMeta e))
   _ -> mempty)
 
 -- | 本体离开格子（不进清除格）也算覆盖地毯。
-vacatesCarpetWith :: World -> Cell -> Bool
+vacatesCarpetWith :: Registry -> Cell -> Bool
 vacatesCarpetWith world cell = case bodyOf world cell of
   SomePhase e -> metaVacatesCarpet (liveMeta e)
 
 -- | 洗牌时原样放回：有冰 / 叠层，或本体要求保留。
-keepOnShuffleWith :: World -> Cell -> Bool
+keepOnShuffleWith :: Registry -> Cell -> Bool
 keepOnShuffleWith world cell = case elementOf world cell of
   SomePhase e -> pKeepShuffle (physics e)
 
 -- | 本体被消除且能点火时的爆炸范围（不能点火 / 没有爆炸 → []）。新玩法 8：引爆格是本步的扩爆格
 -- （'setWidening'，魔法地格）时再按它的改写函数扩大；没有扩爆格（缺省）时就是本体的 blast。
-blastWith :: World -> Board -> Cell -> Pos -> [Pos]
+blastWith :: Registry -> Board -> Cell -> Pos -> [Pos]
 blastWith world b cell p = case bodyOf world cell of
   SomePhase e ->
     let HitOut _ _ blastFn _ = onHit DirectHit e
@@ -594,29 +594,29 @@ blastWith world b cell p = case bodyOf world cell of
           _ -> []
 
 -- | 按本步的扩爆格改写一个爆炸范围（p = 引爆格；p 不是扩爆格时原样返回）。
-widenAtWith :: World -> Board -> Pos -> [Pos] -> [Pos]
+widenAtWith :: Registry -> Board -> Pos -> [Pos] -> [Pos]
 widenAtWith world b p area = foldl (\a f -> f b a) area [f | (q, f) <- stepWiden (wStep world), q == p]
 
 -- | 地面层里带扩爆规则（'widenRule'）的格（新玩法 8：魔法地格）与各自的改写函数；地面层按格序。
-groundWideningWith :: World -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
+groundWideningWith :: Registry -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
 groundWideningWith world g =
   [(p, w) | (p, (n, _)) <- g, Just gk <- [lookupGround (world) n], Just w <- [groundWiden gk]]
 
--- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelWorldIn 调用）。
-setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> World -> World
+-- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelRegistryIn 调用）。
+setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> Registry -> Registry
 setWidening ws world = world {wStep = (wStep world) {stepWiden = ws}}
 
 -- | 本步的扩爆格（测试 / 文档用）。
-widenedCells :: World -> [Pos]
+widenedCells :: Registry -> [Pos]
 widenedCells = map fst . stepWiden . wStep
 
 -- | 普通匹配提示是否试这个格（彩虹 = False：它只经成对交换规则给提示）。
-hintableWith :: World -> Cell -> Bool
+hintableWith :: Registry -> Cell -> Bool
 hintableWith world cell = case bodyOf world cell of
   SomePhase e -> mHintable (onMatch e)
 
 -- | 某步末阶段的规则（按 erOrder）。
-endRules :: World -> EndPhase -> [EndRule]
+endRules :: Registry -> EndPhase -> [EndRule]
 endRules world ph = [r | r <- wEnd world, erPhase r == ph]
 
 -- | 放置失败的原因（第 6 刀：placeWith 不再直接 error）。
@@ -627,7 +627,7 @@ data PlaceError
 
 -- | 按名字放置一个元素到若干格（按列表顺序逐格；元素的放置函数对某格返回 Nothing 时该格不变）。
 -- 未注册的名字 / 越界格返回 Left（静态关卡数据由 Game.Level.placeStatic 统一转成带关卡名的 error）。
-placeWith :: World -> ElementName -> [Arg] -> Board -> [Pos] -> Either PlaceError Board
+placeWith :: Registry -> ElementName -> [Arg] -> Board -> [Pos] -> Either PlaceError Board
 placeWith world n args b0 ps = case lookupDef world n of
   Nothing -> Left (UnknownElement n)
   Just d -> foldM (one d) b0 ps
@@ -637,13 +637,13 @@ placeWith world n args b0 ps = case lookupDef world n of
       | otherwise = Right (maybe b (setCell b p) (defPlace d args (getCell b p)))
 
 -- | 按顺序应用一张放置表（遇到第一处失败即返回 Left）。
-placeAllWith :: World -> Board -> [Placement] -> Either PlaceError Board
+placeAllWith :: Registry -> Board -> [Placement] -> Either PlaceError Board
 placeAllWith world = foldM (\b (Place n args ps) -> placeWith world n args b ps)
 
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
 -- 返回（新地面层，按计数名的去层数）。只有注册为地面层的名字会反应（'groundHit'）；
 -- 计数键取 'groundCounter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
-hitGroundWith :: World -> [Pos] -> Ground -> (Ground, [(ElementName, Int)])
+hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(ElementName, Int)])
 hitGroundWith world hits = foldr one ([], [])
   where
     one (p, (n, layers)) (acc, counts)
@@ -661,27 +661,27 @@ hitGroundWith world hits = foldr one ([], [])
 -- 成对交换、开启、改色 / 推动
 
 -- | 成对交换规则（已按 srOrder 排好）：元素声明的（elementSwapRules）+ 组合表并成的一条（第 8 刀，次序 20）。
-swapRules :: World -> [SwapRule]
+swapRules :: Registry -> [SwapRule]
 swapRules world = case wCombos world of
   [] -> wSwap world
   combos -> sortOn srOrder (wSwap world ++ [comboSwapRule combos])
 
 -- | 只是元素自己声明的成对交换规则（不含组合表；按 srOrder 排好）。
-elementSwapRules :: World -> [SwapRule]
+elementSwapRules :: Registry -> [SwapRule]
 elementSwapRules = wSwap
 
 -- | 交换起手：交换前盘面 b0 上第一条成立的成对规则，在交换后盘面 swapped 上给出的种子；都不成立时 Nothing。
-swapOpeningWith :: World -> Board -> Board -> Pos -> Pos -> Maybe [Pos]
+swapOpeningWith :: Registry -> Board -> Board -> Pos -> Pos -> Maybe [Pos]
 swapOpeningWith world b0 swapped p1 p2 =
   listToMaybe [srSeeds r swapped p1 p2 | r <- swapRules world, srFires r b0 p1 p2]
 
 -- | 是否有成对规则成立（交换前盘面）。
-swapFiresWith :: World -> Board -> Pos -> Pos -> Bool
+swapFiresWith :: Registry -> Board -> Pos -> Pos -> Bool
 swapFiresWith world b p1 p2 = any (\r -> srFires r b p1 p2) (swapRules world)
 
 -- | 一批前沿上的开启（彩蛋类）：依次跑各开启规则，返回 (盘面, 爆炸种子, 本轮坐住的格)。
 -- 只有一条规则时结果就是它自己的输出（内置只有彩蛋）。
-openWith :: World -> Board -> [Pos] -> (Board, [Pos], [Pos])
+openWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos])
 openWith world b front = case wOpen world of
   [] -> (b, [], [])
   (r : rs) -> foldl step (orOpen r b front) rs
@@ -691,55 +691,55 @@ openWith world b front = case wOpen world of
       in (b2, nub (e1 ++ e2), nub (s1 ++ s2))
 
 -- | 本体可被魔法帽 / 染色瓶改色。
-recolorableWith :: World -> Cell -> Bool
+recolorableWith :: Registry -> Cell -> Bool
 recolorableWith world cell = case bodyOf world cell of
   SomePhase e -> pRecolor (physics e)
 
 -- | 本体可被蜗牛推动。
-pushableWith :: World -> Cell -> Bool
+pushableWith :: Registry -> Cell -> Bool
 pushableWith world cell = case bodyOf world cell of
   SomePhase e -> pPush (physics e)
 
 --------------------------------------------------------------------------------
 -- 规则表（第 8 刀）
 
--- | 特殊块形状规则表（有序；Board.Clear.spawnSpecialsWith 用）。mkWorld 建出的表为空（不生成特殊块），
+-- | 特殊块形状规则表（有序；Board.Clear.spawnSpecialsWith 用）。mkRegistry 建出的表为空（不生成特殊块），
 -- 内置元素世界是 Element.Builtin.Gem.builtinShapeRules。
-shapeRules :: World -> [ShapeRule]
+shapeRules :: Registry -> [ShapeRule]
 shapeRules = wShapes
 
 -- | 换掉形状规则表（扩展一条形状规则 = 把它插到表里合适的位置）。
-setShapeRules :: [ShapeRule] -> World -> World
+setShapeRules :: [ShapeRule] -> Registry -> Registry
 setShapeRules rs world = world {wShapes = rs}
 
 -- | 特殊块组合表（有序）。非空时整张表并成一条次序 comboOrder（20）的成对交换规则（见 'swapRules'）。
--- mkWorld 建出的表为空，内置元素世界是 Match3.Combos.builtinComboRules。
-comboRules :: World -> [ComboRule]
+-- mkRegistry 建出的表为空，内置元素世界是 Match3.Combos.builtinComboRules。
+comboRules :: Registry -> [ComboRule]
 comboRules = wCombos
 
 -- | 换掉组合表。
-setComboRules :: [ComboRule] -> World -> World
+setComboRules :: [ComboRule] -> Registry -> Registry
 setComboRules rs world = world {wCombos = rs}
 
 -- | 元素世界的补子策略（缺省 Board.Refill.defaultRefill）；关卡级机制可以经 refillPolicy 换掉（见 Gravity.activeRefill）。
-refillPolicyWith :: World -> RefillPolicy
+refillPolicyWith :: Registry -> RefillPolicy
 refillPolicyWith = wRefill
 
 -- | 换掉元素世界的补子策略。
-setRefillPolicy :: RefillPolicy -> World -> World
+setRefillPolicy :: RefillPolicy -> Registry -> Registry
 setRefillPolicy p world = world {wRefill = p}
 
 --------------------------------------------------------------------------------
 -- 关卡级元素
 
 -- | 注册（或按名字替换）一个关卡级元素。
-registerMechanic :: SomeMechanic -> World -> World
+registerMechanic :: SomeMechanic -> Registry -> Registry
 registerMechanic d world = world {wLevel = [x | x <- wLevel world, mechNameOf x /= mechNameOf d] ++ [d]}
 
 -- | 去掉一个关卡级元素（测试用：去掉后该机制不生效）。
-removeMechanic :: ElementName -> World -> World
+removeMechanic :: ElementName -> Registry -> Registry
 removeMechanic n world = world {wLevel = [x | x <- wLevel world, mechNameOf x /= n]}
 
 -- | 全部关卡级元素（注册顺序）。
-mechanicDefs :: World -> [SomeMechanic]
+mechanicDefs :: Registry -> [SomeMechanic]
 mechanicDefs = wLevel

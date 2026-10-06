@@ -49,7 +49,7 @@ import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Level (avoidCellsIn, beltShiftIn, levelHooksWith, wallCellsIn)
-import Match3.Element.World (World, pushableWith)
+import Match3.ECS.Registry (Registry, pushableWith)
 import Match3.Element.Types (EndCtx(..), EndPhase(..))
 import Match3.Game.Trace (EndStep(..), runPhaseSteps, traceSpreadsWith)
 import Match3.Types
@@ -67,7 +67,7 @@ data EndAcc = EndAcc
 data EndStage = EndStage
   { stageName  :: String
   , stagePhase :: Maybe EndPhase  -- ^ 这一行跑的元素步末规则阶段（皮带 / 补结算 / 腾空记录没有）
-  , stageRun   :: World -> EndAcc -> EndAcc
+  , stageRun   :: Registry -> EndAcc -> EndAcc
   }
 
 instance Show EndStage where
@@ -82,7 +82,7 @@ boosterEndTable :: [EndStage]
 boosterEndTable = [vacateStage, spreadStage, settleStage]
 
 -- | 按表执行：返回 (各段连锁（主连锁在前）, 步末记录, 终盘, 地毯腾空比较用的盘面（表里没有 vacate 时 = 终盘）)。
-runEndTable :: World -> [EndStage] -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
+runEndTable :: Registry -> [EndStage] -> CascadeRun StdGen -> (NonEmpty (CascadeRun StdGen), [EndStep], Board, Board)
 runEndTable world table seg0 =
   let acc = foldl (\a st -> stageRun st world a) (EndAcc (seg0 :| []) [] (crBoard seg0) Nothing) table
   in (NE.reverse (eaSegsRev acc), eaEnds acc, eaBoard acc, maybe (eaBoard acc) id (eaVacate acc))
@@ -151,5 +151,5 @@ vacateStage = EndStage "vacate" Nothing $ \_ a -> a {eaVacate = Just (eaBoard a)
 
 -- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
 -- （第 9 项起 = Game.Trace 的 runPhaseSteps，与蔓延共用同一个 runEndRules；第 9 项前这里另有一份 foldl + reverse。）
-runPhase :: World -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
+runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
 runPhase = runPhaseSteps

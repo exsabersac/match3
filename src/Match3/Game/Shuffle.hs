@@ -21,8 +21,8 @@ import Engine.Stream (headS, iterateS, splitAtS)
 import Match3.Board.Grid (setCell)
 import Match3.Board.Match (hasValidMoveWith)
 import Match3.Board.Random (shufflePlayableSized)
-import Match3.Element.Builtin (defaultWorld)
-import Match3.Element.World (World, keepOnShuffleWith)
+import Match3.Element.Builtin (defaultRegistry)
+import Match3.ECS.Registry (Registry, keepOnShuffleWith)
 import Match3.Types
 import Match3.Game.State
 
@@ -35,7 +35,7 @@ data CellDecor = CellDecor
 -- | 记下所有需要在洗牌后原样放回的格（障碍、特殊块、带叠层 / 冰的宝石等）：
 -- 保留判定 = keepOnShuffleWith（有冰 / 叠层，或本体 keepOnShuffle）。
 -- 只有普通宝石会被洗走；直线 / 炸弹 / 彩虹特殊块与所有障碍原样放回。
-extractDecorWith :: World -> Board -> [CellDecor]
+extractDecorWith :: Registry -> Board -> [CellDecor]
 extractDecorWith world = ifoldMap (\p cell -> [CellDecor p cell | keepOnShuffleWith world cell])
 
 -- | 把 extractDecorWith 记下的格写回新盘面的原位置。
@@ -45,10 +45,10 @@ restoreDecor b = foldl (\board (CellDecor p cell) -> setCell board p cell) b
 -- | If board has no valid move (and game not over), reshuffle to a playable board.
 -- Retries a few times because restoreDecor can recreate a stuck layout.
 ensurePlayable :: GameState -> GameState
-ensurePlayable = ensurePlayableWith defaultWorld
+ensurePlayable = ensurePlayableWith defaultRegistry
 
 -- | ensurePlayable（指定元素世界）。
-ensurePlayableWith :: World -> GameState -> GameState
+ensurePlayableWith :: Registry -> GameState -> GameState
 ensurePlayableWith world gs
   | Just _ <- gsOver gs = gs { gsShuffled = False }
   | hasValidMoveWith world (gsBoard gs) = gs { gsShuffled = False }
@@ -72,11 +72,11 @@ ensurePlayableWith world gs
 -- | Force reshuffle (e.g. player key S). Preserves stones / ice / overlays /
 -- specials (Line/Bomb/Rainbow) / countdown bombs; keeps UFOs.
 shuffleGame :: GameState -> GameState
-shuffleGame = shuffleGameWith defaultWorld
+shuffleGame = shuffleGameWith defaultRegistry
 
 -- | 手动洗牌（指定元素世界）：保留判定 keepOnShuffleWith 用这张表——自定义元素
 -- （如测试专用元素）按它自己的 keepOnShuffle 原样放回，不会退回内置表被当普通格洗走。
-shuffleGameWith :: World -> GameState -> GameState
+shuffleGameWith :: Registry -> GameState -> GameState
 shuffleGameWith world gs =
   let (rows, cols) = boardDims (gsBoard gs)
       decor = extractDecorWith world (gsBoard gs)

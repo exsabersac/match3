@@ -5,7 +5,7 @@
 -- 依赖：Grid、元素元素世界（哪些格参与匹配 / 能交换 / 进普通匹配提示；成对交换规则 = 彩虹与特殊合成也算可走）。只读盘面。
 -- 第二刀 2b：「哪些格打断连线」不再按构造器列举，改为查元素世界 matchColorWith
 -- （本体颜色 + 挡匹配的叠层）；新增元素只需在它的 instance 里声明。元素类迁移起普通匹配提示排除彩虹本体
--- 改查元素的 hintable（原先直接调 Rainbow.isRainbow）。段 2c 起本模块不依赖内置元素世界，全部函数收 World；不带 With 的旧名在 Match3.Board.Default。
+-- 改查元素的 hintable（原先直接调 Rainbow.isRainbow）。段 2c 起本模块不依赖内置元素世界，全部函数收 Registry；不带 With 的旧名在 Match3.Board.Default。
 --
 -- 性能（Haskell 特性第 5 项，见 docs/haskell-features/05-性能与并发.md）：匹配扫描是整个规则里最热的路径
 -- （金标准生成的剖析里 findMatchRunsWith / hasAnyMatchWith 合计约四成时间，其中 matchColorWith 被调用四千多万次，
@@ -29,7 +29,7 @@ import qualified Data.Array as A
 import Data.Array.Unboxed (UArray, listArray, (!))
 import Data.List (nub)
 import Data.Maybe (isJust)
-import Match3.Element.World (World, blocksSwapWith, colorOfWith, hintableWith, matchColorWith, swapRules, upperBlocksSwapWith)
+import Match3.ECS.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith, matchColorWith, swapRules, upperBlocksSwapWith)
 import Match3.Element.Types (MatchRun(..), SwapRule(..))
 import Match3.Types
 import Match3.Board.Grid
@@ -37,7 +37,7 @@ import Match3.Board.Grid
 -- | 整盘的匹配码：matchColorWith 为 Just c 的格是 fromEnum c，为 Nothing（障碍、被叠层挡住的宝石……）的格是 -1。
 -- 匹配只看各格自己的 matchColorWith（与位置、邻格无关），所以「换两格」= 「换两格的码」。
 -- UArray 的元素是未装箱的 Int，整张数组是一块连续内存，读一格不用解引用 thunk / 构造器。
-matchCodesWith :: World -> Board -> UArray Pos Int
+matchCodesWith :: Registry -> Board -> UArray Pos Int
 matchCodesWith world b =
   let arr = boardArray b
   in listArray (A.bounds arr) [maybe noCode fromEnum (matchColorWith world cell) | cell <- elems arr]
@@ -72,7 +72,7 @@ codesHaveRun = go noCode (0 :: Int)
       | otherwise = go k 1 ks
 
 -- | findMatchRuns（指定元素世界）：先行后列，各自按下标升序；段内位置按线的方向升序（与第 5 项前相同）。
-findMatchRunsWith :: World -> Board -> [MatchRun]
+findMatchRunsWith :: Registry -> Board -> [MatchRun]
 findMatchRunsWith world b =
   [MatchRun (toEnum k) ps True | r <- rows, (k, ps) <- codeRuns code [(r, c) | c <- cols]]
     ++ [MatchRun (toEnum k) ps False | c <- cols, (k, ps) <- codeRuns code [(r, c) | r <- rows]]
@@ -84,7 +84,7 @@ findMatchRunsWith world b =
 
 -- | 连续同色段：matchColorWith 为 Nothing 的格（障碍、被迷雾 / 锁链 / 窗帘 / 蒸汽盖住的宝石等）打断连线。
 -- 火箭冰冻不挡匹配（冻住的宝石照样成消）。
-groupGemRunsWith :: World -> Board -> [Pos] -> [(Color, [Pos])]
+groupGemRunsWith :: Registry -> Board -> [Pos] -> [(Color, [Pos])]
 groupGemRunsWith _ _ [] = []
 groupGemRunsWith world b (p : ps) = case matchColorWith world (getCell b p) of
   Nothing -> groupGemRunsWith world b ps
@@ -96,7 +96,7 @@ groupGemRunsWith world b (p : ps) = case matchColorWith world (getCell b p) of
       _ -> (col, reverse run) : groupGemRunsWith world b (q : qs)
 
 -- | hasAnyMatch（指定元素世界）：= not (null (findMatchRunsWith world b))，但不建连线列表，找到第一条就停。
-hasAnyMatchWith :: World -> Board -> Bool
+hasAnyMatchWith :: Registry -> Board -> Bool
 hasAnyMatchWith world b =
   any (\r -> codesHaveRun [codes ! (r, c) | c <- cols]) rows
     || any (\c -> codesHaveRun [codes ! (r, c) | r <- rows]) cols
@@ -106,12 +106,12 @@ hasAnyMatchWith world b =
     cols = boardColIndices b
 
 -- | hasValidMove（指定元素世界）。
-hasValidMoveWith :: World -> Board -> Bool
+hasValidMoveWith :: Registry -> Board -> Bool
 hasValidMoveWith world = maybe False (const True) . findHintWith world
 
 -- | findHint（指定元素世界）。普通匹配提示只试「有色且能交换」的格；成对交换规则（段 4：元素世界的成对交换规则，
 -- 内置 = 彩虹、特殊合成，按 srOrder 逐条）的提示只排除上层（锁链 / 火箭冰冻）挡交换的格，本体由规则自己判定。
-findHintWith :: World -> Board -> Maybe (Pos, Pos)
+findHintWith :: Registry -> Board -> Maybe (Pos, Pos)
 findHintWith world b =
   case matchHints ++ concatMap ruleHints (swapRules world) of
     (x : _) -> Just x
@@ -164,5 +164,5 @@ findHintWith world b =
            || or [colHas A.! c | c <- cols, c `notElem` cs]
 
 -- | 所有匹配格（指定元素世界）：各连线位置的去重并集。
-findMatchesWith :: World -> Board -> [Pos]
+findMatchesWith :: Registry -> Board -> [Pos]
 findMatchesWith world b = nub (concatMap runPos (findMatchRunsWith world b))

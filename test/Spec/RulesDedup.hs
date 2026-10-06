@@ -22,10 +22,10 @@ import Engine.Optics
 import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, getCell)
 import Match3.Types (boardPositions)
 import Match3.Board.Grid (inBounds)
-import Match3.Element (defaultWorld)
+import Match3.Element (defaultRegistry)
 import Match3.Element.Builtin.Obstacle (MagicStone, magicStoneFull)
 import Match3.Element.Rules (kindNeighbour)
-import Match3.Element.World (endRules, pushableWith)
+import Match3.ECS.Registry (endRules, pushableWith)
 import Match3.Element.Types
 import qualified Match3.Obstacles as New
 import qualified Match3.Types as NewB
@@ -150,14 +150,14 @@ qc_run_end_rules_is_fold =
   forAllShrink genRuleBoard shrinkBoard $ \b ->
     forAll (genSomePos b) $ \avoid -> forAll (genSomePos b) $ \walls ->
       forAll (listOf (choose (0, length allRules - 1))) $ \ixs ->
-        let world = defaultWorld
+        let world = defaultRegistry
             picked = map (allRules !!) ixs  -- 按下标挑（EndRule 没有 Show）
             ctx = EndCtx avoid walls (pushableWith world)
             (recs, bEnd) = runEndRules ctx picked b
             naive = foldl (\(acc, bd) r -> let (e, bd') = erRun r ctx bd in (acc ++ [(bd, bd', x) | Just x <- [e]], bd')) ([], b) picked
         in classify (not (null recs)) "runEndRules recorded" ((recs, bEnd) === naive)
   where
-    allRules = concat [endRules defaultWorld ph | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
+    allRules = concat [endRules defaultRegistry ph | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
     -- 步末规则要有东西可做：蜗牛 / 倒计时 / 藤 / 巧克力 / 蒸汽 / 毛球等都在 genCell 里
     genRuleBoard = do
       r <- choose (2, 8)
@@ -181,7 +181,7 @@ end_rule_smart_constructors = do
   assertEqual "seeds" [[(1, 1)], [], []] (map (`erSeeds` b) [t, sp, mv])
   assertEqual "holes" [[], [], []] (map (`erHoles` b) [t, sp, mv])
   assertEqual "run passes through" [b, b, b] [snd (erRun r (EndCtx [] [] (const True)) b) | r <- [t, sp, mv]]
-  let world = defaultWorld
+  let world = defaultRegistry
       phases = [PhaseTick, PhaseSpread, PhaseMove]
   assertEqual "builtin end rules (phase, order)" [(PhaseTick, [10, 20]), (PhaseSpread, [10, 20, 30]), (PhaseMove, [10, 20, 30, 40])] [(ph, map erOrder (endRules world ph)) | ph <- phases]
   assertEqual "builtin holes all empty" [] [erOrder r | ph <- phases, r <- endRules world ph, not (null (erHoles r b))]

@@ -88,7 +88,7 @@ classes_default_toCell_same_as_handwritten =
     body :: Phase e => e -> Cell -> Assertion
     body e cell = do
       encode e cell
-      assertEqual ("decode " ++ show e) (SomePhase e) (bodyOf defaultWorld cell)
+      assertEqual ("decode " ++ show e) (SomePhase e) (bodyOf defaultRegistry cell)
 
 -- | 表示不是 Int 的元素（两个字段）用 intCell 写回：Coercible Pair Int 约束解不出来，是类型错误。
 data Pair = Pair Int Int
@@ -134,7 +134,7 @@ classes_boxed_eq_by_type = do
   assertBool "layered other layer value" (iced /= SomePhase (Layered (Ice 1) (Bubble 1)))
   assertBool "layered other inner type" (iced /= SomePhase (Layered (Ice 2) (Twin 1)))
   assertEqual "layered show" "SomePhase \"bubble\" (Layered (Ice 2) (Bubble 1))" (show iced)
-  assertEqual "decoded show" "SomePhase \"gem\" (Layered (Ice 2) (PlainGem C1))" (show (elementOf defaultWorld (Gem C1 Normal 2 Nothing)))
+  assertEqual "decoded show" "SomePhase \"gem\" (Layered (Ice 2) (PlainGem C1))" (show (elementOf defaultRegistry (Gem C1 Normal 2 Nothing)))
   assertBool "level boxes" (all (\l -> l == l) (gsLevelElems (levelGame0 0)))
   where
     levelGame0 li = maybe (error "no level") id (campaignGame li 1)
@@ -207,7 +207,7 @@ classes_board_stats_same_as_list_comprehension =
     , n <- "no_such_element" : nub (map (elementName world) (boardCells b))
     ]
   where
-    world = defaultWorld
+    world = defaultRegistry
 
 -- | 「每格一份计数，foldMap 合起来」（Cascade.hitsOn / withDrained 的新写法）与旧的「foldl 逐个 bumpCount」相同。
 classes_foldMap_counts_same_as_foldl_bump :: Property

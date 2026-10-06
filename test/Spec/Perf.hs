@@ -20,11 +20,11 @@ import Match3.Board.Gravity (applyGravityWith, gravityFixedCellWith)
 import Match3.Board.Grid (MBoard, inBounds, swapCells, toM)
 import Match3.Board.Match (findHintWith, findMatchRunsWith, hasAnyMatchWith, matchCodesWith)
 import Match3.Core
-import Match3.Element.Builtin (defaultWorld)
+import Match3.Element.Builtin (defaultRegistry)
 import Match3.Levels.Campaign (levelCount)
 import Match3.Types (boardPositions)
-import Match3.Element.Level (levelWorldIn)
-import Match3.Element.World (World, matchColorWith)
+import Match3.Element.Level (levelRegistryIn)
+import Match3.ECS.Registry (Registry, matchColorWith)
 import Match3.Game.Move (trySwap)
 import Spec.Support (digest)
 import Spec.Support.Parallel (forceLines, parallelForce)
@@ -39,11 +39,11 @@ tests =
   ]
 
 -- | 三个查询的结果（写进指纹）。
-scanResult :: World -> Board -> String
+scanResult :: Registry -> Board -> String
 scanResult world b = show (findMatchRunsWith world b, hasAnyMatchWith world b, findHintWith world b)
 
 -- | 匹配码与 matchColorWith 逐格一致。返回 (有匹配?, 有提示?)，供覆盖断言用。
-sameScan :: String -> World -> Board -> IO (Bool, Bool)
+sameScan :: String -> Registry -> Board -> IO (Bool, Bool)
 sameScan lbl world b = do
   let codes = matchCodesWith world b
   assertBool (lbl ++ ": codes")
@@ -54,14 +54,14 @@ adjacentSwaps :: Board -> [(Pos, Pos)]
 adjacentSwaps b = [(p, q) | p@(r, c) <- boardPositions b, q <- [(r, c + 1), (r + 1, c)], inBounds b q]
 
 -- | 扫描用例：全部关卡 × 种子 1–3 的开局盘的每一种相邻交换、沿提示走 12 手途经的盘面，外加两张死盘。
-scanCases :: [(String, World, Board)]
+scanCases :: [(String, Registry, Board)]
 scanCases =
   let levelCases =
         [ (li, seed, world, gs0)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2, 3 :: Int]
         , Just gs0 <- [campaignGame li seed]
-        , let world = levelWorldIn defaultWorld (gsLevelElems gs0)
+        , let world = levelRegistryIn defaultRegistry (gsLevelElems gs0)
         ]
       -- 开局盘的每一种相邻交换（多数带现成的匹配）
       swapped =
@@ -81,7 +81,7 @@ scanCases =
       -- 没有可走步的盘（提示为 Nothing）：两份死盘图案
       stuck = boardFromRows [[mkGem (toEnum ((r + c) `mod` 5)) | c <- [0 .. 7]] | r <- [0 .. 7 :: Int]]
       tiny = boardFromRows [[mkGem C1, mkGem C2], [mkGem C2, mkGem C1]]
-  in swapped ++ played ++ [("stuck", defaultWorld, stuck), ("tiny", defaultWorld, tiny)]
+  in swapped ++ played ++ [("stuck", defaultRegistry, stuck), ("tiny", defaultRegistry, tiny)]
 
 perf_match_scan_pinned :: Assertion
 perf_match_scan_pinned = do
@@ -100,13 +100,13 @@ pinnedScan :: (Int, String)
 pinnedScan = (18137, "b1ca0608fe66790c")
 
 -- | 重力用例：49 关 × 2 种子 × 6 种挖空图案（按关接上本关元素世界）。
-gravityCases :: [(String, World, MBoard)]
+gravityCases :: [(String, Registry, MBoard)]
 gravityCases =
         [ (concat ["L", show li, " s", show seed, " hole ", show k], world, holed)
         | li <- [0 .. levelCount - 1]
         , seed <- [1, 2 :: Int]
         , Just gs0 <- [campaignGame li seed]
-        , let world = levelWorldIn defaultWorld (gsLevelElems gs0)
+        , let world = levelRegistryIn defaultRegistry (gsLevelElems gs0)
               b = gsBoard gs0
         , k <- [1 .. 6 :: Int]
         , let holed = toM b A.// [(p, Nothing) | p@(r, c) <- boardPositions b, (r * 7 + c * 3 + k) `mod` (k + 1) == 0]
@@ -130,7 +130,7 @@ perf_parallel_force_same_as_serial :: Assertion
 perf_parallel_force_same_as_serial = do
   -- 任务：每关开局盘的匹配 / 提示描述（几百个互不依赖的小计算）
   let tasks =
-        [ [show li, show seed, show (findMatchRunsWith defaultWorld b), show (findHintWith defaultWorld b)]
+        [ [show li, show seed, show (findMatchRunsWith defaultRegistry b), show (findHintWith defaultRegistry b)]
         | li <- [0 .. levelCount - 1]
         , seed <- [1 .. 6 :: Int]
         , Just gs <- [campaignGame li seed]

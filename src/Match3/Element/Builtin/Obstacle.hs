@@ -1,37 +1,38 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | 打破型障碍：占格本体，被直接命中或邻格真消除时削层 / 打碎 / 变成别的元素。
+-- | 打破型障碍：占格本体，被直接命中或邻格真消除时削层 / 打碎 / 变成别的元素。每种元素是一个原型值
+-- （Match3.ECS.Archetype）：存储列 + 由状态派生的纯数据组件 + 自带的 system。
 --
--- 共同特征：原型 Blocker（挡交换、不点火、会下落、洗牌保留），状态是层数或颜色；
--- 石头 / 宝箱 / 蜂蜜 / 蛋糕命中与邻消各削一层、末层消除；气球命中即破、邻格同色真消除打破；
--- 保险箱末层开成饼干；双面块命中翻成背面颜色的普通宝石；彩蛋命中即破，开启规则开出直线 / 炸弹。
+-- 共同特征：缺省原型（挡交换、不点火、会下落、洗牌保留），状态是层数或颜色；
+-- 石头 / 宝箱 / 蜂蜜 / 蛋糕命中与邻消各削一层、末层消除（通用 chipHit / chipNear）；气球命中即破、邻格同色真消除打破；
+-- 保险箱末层开成饼干；双面块命中翻成背面颜色的普通宝石；彩蛋命中即破，开启 system 开出直线 / 炸弹。
 -- 魔法石（新玩法 2，Custom "magic_stone"）是固定格：打不动，邻格真消除充能，满 3 格后在步末发射清整行整列。
 -- 雪怪 Boss（新玩法 5，Custom "snow_boss"）是占 2×2 的固定格：邻格真消除 / 直接命中扣血，血量归零整只消除；
 -- 每 3 次交换在身边召唤一块雪块（1 层石头）。
--- 邻格规则顺序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
--- 多层障碍 / 保险箱 / 气球的邻消是方法 onNear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity 记录（cSystems 里的 entityDamage）；
--- 魔法石 tick、雪怪召唤读整盘，走逃生口 cSystems（非邻格波及）。
--- 步末：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
+-- 邻格 system 次序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
+-- 步末 system：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
 module Match3.Element.Builtin.Obstacle
-  ( StoneE(..)
-  , ChestE(..)
-  , HoneyE(..)
-  , CakeE(..)
-  , BalloonE(..)
+  ( stoneArch
+  , chestArch
+  , honeyArch
+  , cakeArch
+  , balloonArch
   , balloonPop
   , balloonPopLegacy
-  , SafeE(..)
-  , FlipE(..)
-  , SurpriseEgg(..)
-  , MagicStone(..)
+  , safeArch
+  , flipArch
+  , surpriseArch
+  , magicStoneArch
+  , magicStoneCharge
   , magicStoneFull
   , magicStoneFiring
   , magicStoneSeeds
+  , snowBossArch
   , SnowBoss(..)
   , snowBossName
   , snowBossEvery
   , snowBossCells
+  , snowBossColumn
   , snowBossEntity
   , snowBosses
   , snowBossHp
@@ -44,134 +45,63 @@ import Control.Monad (guard)
 import Data.Bits (xor)
 import Data.List.NonEmpty (NonEmpty (..))
 
+import Engine.Optics (Prism')
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
 import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
-import Data.Proxy (Proxy(..))
-import Match3.Element.Kind
+import Match3.ECS.Archetype
+import Match3.ECS.Component
 import Match3.Element.Near
-import Match3.Element.Phase
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
 import Match3.Element.Types
-import Match3.Element.Rules (entityDamage, kindNeighbour)
+import Match3.Element.Rules (chipHit, chipNear, entityDamage, nearBy)
 import Match3.Obstacles
   ( balloonsAdjacentSameColor
   , openSurprises
   , orthoNeighbors
   )
 import Match3.Types
+import Match3.Types.Optics (_Cake, _Chest, _Honey, _Safe, _Stone)
 
--- | 石头：直接命中削一层、末层消除；邻消同样削层。
-newtype StoneE = StoneE Int
-  deriving (Eq, Show)
+-- | 多层障碍（状态 = 层数）：直接命中削一层、末层消除；邻消同样削层（邻格 system 'chipNear'，跳过直接命中格）。
+durable :: ElementName -> Prism' Cell Int -> (Int -> Cell) -> CounterKey -> Int -> Archetype Int
+durable n p con key order = (archetype n col)
+  { aSpawn = layersPlace con
+  , aHit = chipHit col
+  , aTally = const emptyTally {tCounter = Just key}
+  , aFace = \k -> baseFace (unElementName n) [nField k]
+  , aSystems = [SysNear order (chipNear col)]
+  }
+  where
+    col = prismColumn p
 
-instance Phase StoneE where
-  codec = Codec
-    { cName = "stone"
-    , cToCell = \(StoneE n) -> Stone n
-    , cFromCell = \cell -> case cell of Stone n -> Just (StoneE n); _ -> Nothing
-    , cPlace = layersPlace Stone
-    , cMeta = emptyMeta { metaCounter = Just CountStones }
-    , cNear = Just (NearRule 10 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (StoneE n) = HitOut (chip n Stone) False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ _ (StoneE n) = NearNudge (chipNudge n Stone)
-  view (StoneE k) = Face (Just ("stone", [nField k])) []
+-- | 石头 / 宝箱 / 蜂蜜罐 / 蛋糕（层数 = 蛋糕层数）。
+stoneArch, chestArch, honeyArch, cakeArch :: Archetype Int
+stoneArch = durable "stone" _Stone Stone CountStones 10
+chestArch = durable "chest" _Chest Chest CountChests 20
+honeyArch = durable "honey" _Honey Honey CountHoney 30
+cakeArch = durable "cake" _Cake Cake CountCakes 40
 
--- | 宝箱：同石头。
-newtype ChestE = ChestE Int
-  deriving (Eq, Show)
+-- | 气球的存储列（状态 = 颜色）。
+balloonColumn :: Column Color
+balloonColumn = Column (\cell -> case cell of Balloon c -> Just c; _ -> Nothing) Balloon
 
-instance Phase ChestE where
-  codec = Codec
-    { cName = "chest"
-    , cToCell = \(ChestE n) -> Chest n
-    , cFromCell = \cell -> case cell of Chest n -> Just (ChestE n); _ -> Nothing
-    , cPlace = layersPlace Chest
-    , cMeta = emptyMeta { metaCounter = Just CountChests }
-    , cNear = Just (NearRule 20 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (ChestE n) = HitOut (chip n Chest) False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ _ (ChestE n) = NearNudge (chipNudge n Chest)
-  view (ChestE k) = Face (Just ("chest", [nField k])) []
+-- | 气球：命中即破；邻格同色真消除打破（邻格 system 50）。
+balloonArch :: Archetype Color
+balloonArch = (archetype "balloon" balloonColumn)
+  { aSpawn = colorPlace Balloon
+  , aHit = const breakHit
+  , aTally = const emptyTally {tCounter = Just CountBalloons}
+  , aFace = \c -> baseFace "balloon" [colorField c]
+  , aSystems = [SysNear 50 balloonPop]
+  }
 
--- | 蜂蜜罐：同石头。
-newtype HoneyE = HoneyE Int
-  deriving (Eq, Show)
-
-instance Phase HoneyE where
-  codec = Codec
-    { cName = "honey"
-    , cToCell = \(HoneyE n) -> Honey n
-    , cFromCell = \cell -> case cell of Honey n -> Just (HoneyE n); _ -> Nothing
-    , cPlace = layersPlace Honey
-    , cMeta = emptyMeta { metaCounter = Just CountHoney }
-    , cNear = Just (NearRule 30 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (HoneyE n) = HitOut (chip n Honey) False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ _ (HoneyE n) = NearNudge (chipNudge n Honey)
-  view (HoneyE k) = Face (Just ("honey", [nField k])) []
-
--- | 蛋糕：同石头（层数 = 蛋糕层数）。
-newtype CakeE = CakeE Int
-  deriving (Eq, Show)
-
-instance Phase CakeE where
-  codec = Codec
-    { cName = "cake"
-    , cToCell = \(CakeE n) -> Cake n
-    , cFromCell = \cell -> case cell of Cake n -> Just (CakeE n); _ -> Nothing
-    , cPlace = layersPlace Cake
-    , cMeta = emptyMeta { metaCounter = Just CountCakes }
-    , cNear = Just (NearRule 40 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (CakeE n) = HitOut (chip n Cake) False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ _ (CakeE n) = NearNudge (chipNudge n Cake)
-  view (CakeE k) = Face (Just ("cake", [nField k])) []
-
--- | 气球：命中即破；邻格同色真消除打破。
-newtype BalloonE = BalloonE Color
-  deriving (Eq, Show)
-
-instance Phase BalloonE where
-  codec = Codec
-    { cName = "balloon"
-    , cToCell = \(BalloonE c) -> Balloon c
-    , cFromCell = \cell -> case cell of Balloon c -> Just (BalloonE c); _ -> Nothing
-    , cPlace = colorPlace Balloon
-    , cMeta = emptyMeta { metaCounter = Just CountBalloons }
-    , cNear = Just (NearRule 50 SkipDirect DieAppend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ ctx (BalloonE c) =
-    if any (\(_, mc) -> mc == Just c) (ncTriggers ctx) then NearNudge Dies else NearIdle
-  view (BalloonE c) = Face (Just ("balloon", [colorField c])) []
-
--- | 气球邻格：委托 'kindNeighbour'（onNear + DieAppend）；保留旧列表写法供性质对照。
+-- | 气球的邻格 system：触发格里有同色的就打破（打碎格后插，对齐旧列表序）。
 balloonPop :: System NearWorld
-balloonPop = kindNeighbour (Proxy :: Proxy BalloonE)
+balloonPop = nearBy balloonColumn SkipDirect DieAppend $ \ctx c ->
+  if any (\(_, mc) -> mc == Just c) (ncTriggers ctx) then NearNudge Dies else NearIdle
 
 -- | 旧气球列表序写法（对照 'balloonPop' / 性质测试）。
 balloonPopLegacy :: System NearWorld
@@ -181,96 +111,67 @@ balloonPopLegacy = System $ \w -> w {nwDead = [p | p <- balloonsAdjacentSameColo
 surpriseOpen :: System OpenWorld
 surpriseOpen = System $ \w -> let (b, e, s) = openSurprises (owBoard w) (owFront w) in w {owBoard = b, owSeeds = e, owSits = s}
 
--- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
-newtype SafeE = SafeE Int
-  deriving (Eq, Show)
+-- | 保险箱：直接命中削一层，末层开成饼干；邻消削层（邻格 system 110）；按个数差计「开启」；离格也算覆盖地毯。
+safeArch :: Archetype Int
+safeArch = (archetype "safe" col)
+  { aSpawn = layersPlace Safe
+  , aHit = absorbHit . open
+  , aTally = const emptyTally {tVacatesCarpet = True}
+  , aDiff = Just (DiffCount CountSafes 0)
+  , aFace = \k -> baseFace "safe" [nField k]
+  , aSystems = [SysNear 110 (nearBy col SkipDirect DiePrepend (\_ n -> NearNudge (Becomes (open n))))]
+  }
+  where
+    col = prismColumn _Safe
+    open n = if n <= 1 then Cookie else Safe (n - 1)
 
-instance Phase SafeE where
-  codec = Codec
-    { cName = "safe"
-    , cToCell = \(SafeE n) -> Safe n
-    , cFromCell = \cell -> case cell of Safe n -> Just (SafeE n); _ -> Nothing
-    , cPlace = layersPlace Safe
-    , cMeta = emptyMeta { metaVacatesCarpet = True, metaDiffCounter = Just CountSafes }
-    , cNear = Just (NearRule 110 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (SafeE n) = HitOut (Absorb (if n <= 1 then Cookie else Safe (n - 1))) False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ _ (SafeE n) = NearNudge (Becomes (if n <= 1 then Cookie else Safe (n - 1)))
-  view (SafeE k) = Face (Just ("safe", [nField k])) []
+-- | 双面块（状态 = (正面, 背面)）：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
+flipArch :: Archetype (Color, Color)
+flipArch = (archetype "flip" (Column get (uncurry Flip)))
+  { aSpawn = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
+  , aMatch = \(f, _) -> gemMatch (Just f)
+  , aHit = \(_, b) -> absorbHit (Gem b Normal 0 Nothing)
+  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aFace = \(f, b) -> baseFace "flip" [colorField f, ("b", FieldInt (fromEnum b + 1))]
+  }
+  where
+    get cell = case cell of
+      Flip f b -> Just (f, b)
+      _ -> Nothing
 
--- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
-data FlipE = FlipE Color Color
-  deriving (Eq, Show)
-
-instance Phase FlipE where
-  codec = Codec
-    { cName = "flip"
-    , cToCell = \(FlipE f b) -> Flip f b
-    , cFromCell = \cell -> case cell of Flip f b -> Just (FlipE f b); _ -> Nothing
-    , cPlace = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (FlipE f _) = gemMatch (Just f)
-  onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
-  physics _ = gemPhysics { pKeepShuffle = True }
-  view (FlipE f b) = Face (Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])) []
-
--- | 彩蛋：占格障碍；命中即破；开启规则 = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
--- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
-data SurpriseEgg = SurpriseEgg
-  deriving (Eq, Show)
-
-instance Phase SurpriseEgg where
-  codec = Codec
-    { cName = "surprise"
-    , cToCell = \_ -> Surprise
-    , cFromCell = \cell -> case cell of Surprise -> Just SurpriseEgg; _ -> Nothing
-    , cPlace = \_ _ -> Just Surprise
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysOpen surpriseOpen]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = obstaclePhysics
-  view _ = noFace
+-- | 彩蛋：占格障碍；命中即破；开启 system = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
+-- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态（无状态列）。
+surpriseArch :: Archetype ()
+surpriseArch = (archetype "surprise" (unitColumn (== Surprise) Surprise))
+  { aSpawn = \_ _ -> Just Surprise
+  , aHit = const breakHit
+  , aSystems = [SysOpen surpriseOpen]
+  }
 
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
 -- 状态 k = 充能格数 0–3；4 = 发射中（只在步末那一轮存在）。
 --
--- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（方法 'onNear' + 通用驱动，邻格规则 180；
---   本轮被直接命中的不充能 = 缺省的 SkipDirect）；
+-- * 邻格（正交）有真消除的每一轮充能 1 格，满 3 格为止（邻格 system 'magicStoneCharge' 180；本轮被直接命中的不充能）；
 -- * 玩家交换的步末（PhaseTick 20，倒计时之后）：满 3 格的魔法石转为发射中（记一条 EvTick 步末效果），
 --   以它所在的整行 + 整列为种子引爆（和倒计时爆炸同一轮，种子里的特殊块照常点火、障碍照常受击）；
 -- * 发射中的魔法石被自己的种子命中后归零（Absorb → 0 格），平时打不动（Immune）。
 -- 道具（锤子 / 自由交换 / 十字）没有 PhaseTick 步末，充满的魔法石等到下一次交换的步末再发射。
-newtype MagicStone = MagicStone Int
-  deriving (Eq, Show)
+magicStoneArch :: Archetype Int
+magicStoneArch = (archetype "magic_stone" magicStoneColumn)
+  { aSpawn = \args _ -> Just (colPut magicStoneColumn (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args)))
+  , aHit = \k -> if k >= magicStoneFiring then absorbHit (colPut magicStoneColumn 0) else immuneHit
+  , aPhysics = const fixedPhysics
+  , aHud = noHud {hudLabel = Just "魔法石"}
+  , aSystems = [SysNear 180 magicStoneCharge, SysEnd (tickSys 20 (effectSystem (magicStoneArm . ewBoard)) magicStoneSeeds)]
+  }
 
-instance Phase MagicStone where
-  codec = Codec
-    { cName = "magic_stone"
-    , cToCell = intCell "magic_stone"
-    , cFromCell = fromCustom "magic_stone" MagicStone
-    , cPlace = \args _ -> Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
-    , cMeta = emptyMeta
-    , cNear = Just (NearRule 180 SkipDirect DiePrepend)
-    , cHud = noHud { hudLabel = Just "魔法石" }
-    , cSystems = [SysEnd (tickSys 20 (effectSystem (magicStoneArm . ewBoard)) magicStoneSeeds)]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ (MagicStone k) = HitOut (if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune) False Nothing Nothing
-  physics _ = fixedPhysics
-  onNear _ _ (MagicStone k) = NearNudge (if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched)
-  view _ = noFace
+magicStoneColumn :: Column Int
+magicStoneColumn = customColumn "magic_stone"
+
+-- | 魔法石的邻格 system：未满的充能 1 格。
+magicStoneCharge :: System NearWorld
+magicStoneCharge = nearBy magicStoneColumn SkipDirect DiePrepend $ \_ k ->
+  NearNudge (if k < magicStoneFull then Becomes (colPut magicStoneColumn (k + 1)) else Untouched)
 
 -- | 满格（可发射）的充能数。
 magicStoneFull :: Int
@@ -321,44 +222,43 @@ data SnowBoss = SnowBoss
   }
   deriving (Eq, Show)
 
-instance Phase SnowBoss where
-  codec = Codec
-    { cName = snowBossName
-    , cToCell = bossToCell
-    , cFromCell = \cell -> case cell of
-        Custom n s | n == snowBossName -> Just (decodeBoss s)
-        _ -> Nothing
-    , cPlace = \args _ -> do
-        (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
-        guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
-        Just (toCell (SnowBoss hp hp 0 q))
-    , cMeta = emptyMeta { metaDiffCounter = Just (CountNamed snowBossName) }
-    , cNear = Nothing
-    , cHud = noHud
-        { hudLabel = Just "雪怪"
-        , hudLoseHint = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
-        , hudBossHp = Just snowBossHp
-        }
-      -- 2×2 多格实体：扣血驱动挂在逃生口（顺序 200），之后是步末移动。
-    , cSystems = [SysNear 200 (entityDamage snowBossEntity), SysEnd (moveSys 30 (effectSystem snowBossRun))]
-    }
-  onMatch _ = MatchRule Nothing True True False
-  onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
-  physics _ = fixedPhysics
-  liveMeta b = emptyMeta
-    { metaDiffCounter = Just (CountNamed snowBossName)
-    , metaDiffWeight = if sbQuad b == 0 then sbHp b else 0
-    }
-  view b = noFace
-    { fExtras =
-        [ ("q", FaceInt (sbQuad b))
-        , ("hurt", FaceBool (sbHp b * 2 <= sbMax b))
-        , ("turn", FaceInt (sbTurn b))
-        , ("every", FaceInt snowBossEvery)
-        ]
-    }
+-- | 雪怪的存储列（四格各自打包 部件 / 血量 / 召唤计数）。
+snowBossColumn :: Column SnowBoss
+snowBossColumn = Column get bossToCell
+  where
+    get cell = case cell of
+      Custom n s | n == snowBossName -> Just (decodeBoss s)
+      _ -> Nothing
 
--- | 2×2 多格实体：锚点 = 0 号部件，footprint = 'snowBossCells'；由 'cSystems' 里的 'entityDamage' 消费。
+snowBossArch :: Archetype SnowBoss
+snowBossArch = (archetype snowBossName snowBossColumn)
+  { aSpawn = \args _ -> do
+      (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
+      guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
+      Just (bossToCell (SnowBoss hp hp 0 q))
+  , aMatch = const (Match Nothing True True False)
+  , aHit = absorbHit . bossToCell
+  , aPhysics = const fixedPhysics
+  , aTally = \b -> emptyTally {tDiffWeight = if sbQuad b == 0 then sbHp b else 0}
+  , aDiff = Just (DiffCount (CountNamed snowBossName) 0)
+  , aHud = noHud
+      { hudLabel = Just "雪怪"
+      , hudLoseHint = Just (LoseHint "用身边的消除和特效打雪怪，目标 " " 点血")
+      , hudShowsHp = True
+      }
+  , aFace = \b -> noFace
+      { fExtras =
+          [ ("q", FaceInt (sbQuad b))
+          , ("hurt", FaceBool (sbHp b * 2 <= sbMax b))
+          , ("turn", FaceInt (sbTurn b))
+          , ("every", FaceInt snowBossEvery)
+          ]
+      }
+    -- 2×2 多格实体：扣血 system（次序 200），之后是步末召唤。
+  , aSystems = [SysNear 200 (entityDamage snowBossColumn snowBossEntity), SysEnd (moveSys 30 (effectSystem snowBossRun))]
+  }
+
+-- | 2×2 多格实体：锚点 = 0 号部件，footprint = 'snowBossCells'；由 'aSystems' 里的 'entityDamage' 消费。
 snowBossEntity :: Entity SnowBoss
 snowBossEntity = Entity
   { footprint = snowBossCells
@@ -380,7 +280,7 @@ bossToCell (SnowBoss hp mx t q) = Custom snowBossName (CustomState (((clamp mx *
 snowBossEvery :: Int
 snowBossEvery = 3
 
--- | 由格子状态解码（'toCell' 的逆）。
+-- | 由格子状态解码（'bossToCell' 的逆）。
 decodeBoss :: CustomState -> SnowBoss
 decodeBoss (CustomState v) = SnowBoss ((v `div` 16) `mod` 256) (v `div` 4096) ((v `div` 4) `mod` 4) (v `mod` 4)
 
@@ -430,24 +330,12 @@ snowBossRun ctx =
       let t' = sbTurn s + 1
           full = t' >= snowBossEvery
           parts = bossParts b anchor
-          bossItems = [(p, toCell x {sbTurn = if full then 0 else t'}) | (p, x) <- parts]
+          bossItems = [(p, bossToCell x {sbTurn = if full then 0 else t'}) | (p, x) <- parts]
           spawn = if full then snowBossSpawn (ewAvoid ctx) (ewWalls ctx) b anchor else Nothing
           snow = [(q, Stone 1) | Just q <- [spawn]]
           changes = [(p, cell) | (p, cell) <- bossItems ++ snow, getCell b p /= cell]
           b1 = foldl (\bd (p, cell) -> setCell bd p cell) b changes
       in (acc ++ [EndItem p p cell Nothing | (p, cell) <- changes], b1)
-
--- | 多层障碍被邻格真消除：削一层，末层打碎（并入清除格）。
-chipNudge :: Int -> (Int -> Cell) -> Nudge
-chipNudge n con
-  | n <= 1 = Dies
-  | otherwise = Becomes (con (n - 1))
-
--- | 多层障碍受直接命中：削一层，末层消除。
-chip :: Int -> (Int -> Cell) -> Strike
-chip n con
-  | n <= 1 = Destroy
-  | otherwise = Absorb (con (n - 1))
 
 -- | 放置：层数（缺省 1，至少 1）。精确匹配：只接受 @[]@ 或 @[AInt n]@。
 layersPlace :: (Int -> Cell) -> Placer

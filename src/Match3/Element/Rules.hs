@@ -1,8 +1,5 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
--- | 规则的通用驱动（元素类重构第 3 刀）：只读 'Phase' / 'Layer' / 'Entity' 给出的数据与方法，把「找邻格、去重、跳过直接命中、
--- 按顺序写回」这些样板各写一次（以前散在 Match3.Obstacles / Match3.Grass 里，每种障碍 / 叠层一份）。
+-- | 通用 system 构造器：只读原型的存储列（Match3.ECS.Archetype.Column）/ 叠层 'Layer' / 'Entity' 给出的数据，
+-- 把「找邻格、去重、跳过直接命中、按顺序写回」这些样板各写一次；元素只给出自己那一格的反应。
 --
 -- 顺序语义与旧函数逐项相同（元素对照快照 element-oracle.txt 的 AR / ER 行与金标准锁定）：
 --
@@ -14,36 +11,31 @@
 -- * 多格实体：锚点行优先，伤害 = 身外一圈的真消除格数 + 部件上的直接命中格数，归零时全部部件并入清除格。
 module Match3.Element.Rules
   ( -- * 收集
-    kindRules
-  , layerRules
-    -- * 驱动
-  , kindNeighbour
+    layerRules
+    -- * 邻格 system 构造器
+  , nearBy
+  , chipNear
   , layerNeighbour
   , layerSpread
   , entityDamage
+    -- * 命中组件构造器
+  , chipHit
   ) where
 
 import Data.List (nub)
-import Data.Proxy (Proxy(..))
 import Data.Maybe (isJust)
 import Match3.Board.Grid (getCell, inBounds, neighborsInBounds, setCell)
-import Match3.Element.Phase (toCell)
+import Match3.ECS.Archetype (Column(..), Entity(..))
+import Match3.ECS.Component (OnHit, absorbHit, breakHit)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
-import Match3.Element.Kind
-import Match3.Element.Phase (Phase, phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
+import Match3.Element.Near
 import Match3.Element.Layer
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
 import Match3.Element.Types
 import Match3.Types
 
--- | 一种本体的全部规则：方法邻格（'cNear'）→ 逃生口 'cSystems'（多格实体扣血也在这里；之后按优先级稳定排序）。
-kindRules :: forall e proxy. Phase e => proxy e -> [SysDef]
-kindRules _ =
-  [SysNear o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
-    ++ boardSystems (Proxy @e)
-
--- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerSystems'（都读自类型级的 'layerCover'）。
+-- | 一种叠层的全部 system：邻格、蔓延（PhaseSpread）、自带的 'layerSystems'（都读自类型级的 'layerCover'）。
 layerRules :: Layer l => proxy l -> [SysDef]
 layerRules p =
   [SysNear o (layerNeighbour p) | Just o <- [layerNeighbourPrio p]]
@@ -83,19 +75,32 @@ triggerColors ctx b self =
   , self `elem` neighborsInBounds upDownLeftRight b t
   ]
 
--- | 本体的邻格波及：目标格逐个问 'onNear'。
-kindNeighbour :: forall e proxy. Phase e => proxy e -> System NearWorld
-kindNeighbour p = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (foldl (one ctx b0) (Out b0 [] []) (neighbourTargets (phaseReach @e) (isJust . fromCellAs p) ctx b0))
+-- | 本体的邻格 system：目标 = 真消除格邻格里本列认得的格（'Reach' 决定跳不跳过直接命中格），逐格问反应
+-- （反应拿到本格状态与 'NearCtx'：触发格颜色、自己的位置、本阶段世界、当前盘面）。
+nearBy :: Column s -> Reach -> DieOrder -> (NearCtx -> s -> NearOut) -> System NearWorld
+nearBy col reach order react = System $ \ctx ->
+  let b0 = nwBoard ctx
+  in emit ctx (foldl (one ctx b0) (Out b0 [] []) (neighbourTargets reach (isJust . colGet col) ctx b0))
   where
-    order = phaseDieOrder @e
-    one ctx b0 out@(Out b dead sit) q = case fromCellAs p (getCell b q) of
+    one ctx b0 out@(Out b dead sit) q = case colGet col (getCell b q) of
       Nothing -> out
-      Just e ->
+      Just s ->
         let nctx = NearCtx (triggerColors ctx b0 q) q ctx b
-         in case phaseOnNear e nctx of
+         in case react nctx s of
               NearIdle -> out
               NearNudge n -> nudge order out q n
-              NearEdit b' d s -> Out b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s ++ sit))
+              NearEdit b' d s' -> Out b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s' ++ sit))
+
+-- | 多层障碍（状态 = 层数）的邻格 system：邻格真消除削一层，末层打碎（并入清除格）；跳过直接命中格。
+chipNear :: Column Int -> System NearWorld
+chipNear col = nearBy col SkipDirect DiePrepend $ \_ n ->
+  NearNudge (if n <= 1 then Dies else Becomes (colPut col (n - 1)))
+
+-- | 多层障碍的命中组件：直接命中削一层，末层消除。
+chipHit :: Column Int -> Int -> OnHit
+chipHit col n
+  | n <= 1 = breakHit
+  | otherwise = absorbHit (colPut col (n - 1))
 
 -- | 叠层的邻格波及：目标格逐个问 'onLayerNeighbourClear'（= lcOnNear）（同一套目标规则）。
 layerNeighbour :: Layer l => proxy l -> System NearWorld
@@ -132,14 +137,13 @@ layerSpreadOn p seed b =
   in (if null pairs then Nothing else Just (EndEffect EvSpread (layerName p) [EndItem s q (getCell b' q) Nothing | (s, q) <- pairs]), b')
 
 -- | 多格实体的邻格伤害：每个锚点（行优先）按「身外一圈的真消除 + 部件上的直接命中」扣血，归零则部件并入清除格。
-{-# INLINABLE entityDamage #-}
-entityDamage :: forall e. Phase e => Entity e -> System NearWorld
-entityDamage ent = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (entityDamageOn ent ctx b0)
+entityDamage :: Column s -> Entity s -> System NearWorld
+entityDamage col ent = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (entityDamageOn col ent ctx b0)
 
-entityDamageOn :: forall e. Phase e => Entity e -> NearWorld -> Board -> Out
-entityDamageOn ent ctx b0 = foldl one (Out b0 [] []) anchors
+entityDamageOn :: Column s -> Entity s -> NearWorld -> Board -> Out
+entityDamageOn col ent ctx b0 = foldl one (Out b0 [] []) anchors
   where
-    at' bd q = fromCell @e (getCell bd q)
+    at' bd q = colGet col (getCell bd q)
     anchors = [(q, e) | q <- boardPositions b0, Just e <- [at' b0 q], partNo ent e == 0]
     one out@(Out b dead sit) (anchor, e) =
       let body = footprint ent anchor
@@ -152,4 +156,4 @@ entityDamageOn ent ctx b0 = foldl one (Out b0 [] []) anchors
            else
              if hp' == 0
                then Out b (dead ++ map fst parts) sit
-               else Out (foldl (\bd (q, x) -> setCell bd q (toCell (withHp ent hp' x))) b parts) dead sit
+               else Out (foldl (\bd (q, x) -> setCell bd q (colPut col (withHp ent hp' x))) b parts) dead sit

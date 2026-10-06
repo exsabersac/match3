@@ -6,9 +6,7 @@
 -- | 叠层（冰、草 / 藤 / 巧 / 雾 / 锁链 / 冻结 / 窗帘 / 蒸汽）：对应 xmonad 的 LayoutModifier。
 -- 类只有三个方法：'peel' / 'putOn'（与格子存储编码互转）和类型级的 'layerCover'（一份静态记录：名字、放置、
 -- 挡匹配 / 挡交换 / 点火 / 直接命中 / 随清，邻格规则与蔓延、逃生口；值级的项是取自叠层值的函数）。
--- 'Layered' 是 Phase 的修饰器。
---
--- 合成规则只在 'Layered' 的 Phase instance 里写一次：
+-- 合成规则只在注册表的整格查询（Match3.ECS.Registry 的 wholeMatch / wholeHit / wholePhysics）里写一次：
 --
 -- * 挡匹配 / 挡交换：本层 OR 里层；
 -- * 点火：本层有意见（'lcFires' = Just）就听本层，否则问里层；
@@ -34,7 +32,6 @@ module Match3.Element.Layer
   , onLayerNeighbourClear
   , spreads
   , layerSystems
-  , Layered(..)
   , SomeLayer(..)
   , someLayer
   , SomeLayerValue(..)
@@ -42,11 +39,10 @@ module Match3.Element.Layer
   , layerValueName
   ) where
 
-import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
 import Match3.Element.Kind (Nudge(..), Reach(..))
-import Match3.Element.Phase
+import Match3.ECS.Stage (SysDef)
 import Match3.Element.Types (Placer)
 import Match3.Types
 
@@ -135,47 +131,6 @@ spreads _ = lcSpreads (layerCover @l)
 
 layerSystems :: forall l proxy. Layer l => proxy l -> [SysDef]
 layerSystems _ = lcSystems (layerCover @l)
-
--- | 修饰过的元素（同 xmonad 的 ModifiedLayout）：叠层在外，被修饰的元素在里。
-data Layered l e = Layered l e
-  deriving (Eq, Show)
-
--- | Phase 修饰器：外层先回答、里层兜底（合成规则见模块头）。
-instance (Layer l, Phase e) => Phase (Layered l e) where
-  codec = Codec
-    { cName = cName (codec @e)
-    , cToCell = \(Layered l e) -> putOn l (cToCell (codec @e) e)
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
-    , cMeta = cMeta (codec @e)
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (Layered l e) =
-    let m = onMatch e
-     in m
-          { mBlockMatch = layerBlocksMatch l || mBlockMatch m
-          , mBlockSwap = layerBlocksSwap l || mBlockSwap m
-          }
-  onHit h (Layered l e) =
-    let HitOut st fi bl nx = onHit h e
-        fi' = fromMaybe fi (layerFires l)
-     in case layerHit l of
-          Pierce ->
-            let st' = case st of
-                  Absorb inner -> Absorb (putOn l inner)
-                  r -> r
-             in HitOut st' fi' bl (fmap (Layered l) nx)
-          Keep l' -> HitOut (Absorb (putOn l' (cToCell (codec @e) e))) fi' bl Nothing
-          Peel -> HitOut (Absorb (cToCell (codec @e) e)) fi' bl Nothing
-          Shatter -> HitOut Destroy fi' bl Nothing
-  physics (Layered _ e) =
-    let p = physics e
-     in p { pKeepShuffle = True }
-  onNear r ctx (Layered _ e) = onNear r ctx e
-  view (Layered _ e) = view e
-  liveMeta (Layered _ e) = liveMeta e
 
 data SomeLayer = forall l. Layer l => SomeLayer (Proxy l)
 

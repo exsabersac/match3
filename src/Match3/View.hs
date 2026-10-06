@@ -63,7 +63,8 @@ import Engine.Game (Game (..))
 import Match3.Board.Default (findHint)
 import Match3.Counts (CounterKey(..))
 import Match3.Element.Builtin (defaultRegistry)
-import Match3.Element.Phase (Face(..), Phase(..), SomePhase(..), phaseName)
+import Match3.ECS.Archetype (rowGet, rowName)
+import Match3.ECS.Component (Face(..))
 import Match3.ECS.Registry (Registry, boardBossHpWith, bodyOf, faceFieldsWith)
 import Match3.Element.Types (CellField (..), FaceValue (..))
 import Match3.Engine (match3Game)
@@ -392,7 +393,7 @@ cellFace :: Cell -> (String, [(String, CellField)])
 cellFace = cellFaceWith defaultRegistry
 
 -- | 'cellFace'，用给定的世界解码（扩展元素）。宝石格（冰层 / 叠层都在宝石格的字段里）按存储编码给出；
--- 其余格问本体 'view' 的 fBase（Match3.Element.Phase），没给时：Custom 格 = ("custom", name / v)，
+-- 其余格问本体的 'Face' 组件的 fBase（Match3.ECS.Component），没给时：Custom 格 = ("custom", name / v)，
 -- 其余 = (元素名, 无字段)。元素类重构第 6 刀前这里是按 Cell 构造器写死的 case，网页 JSON 逐字节不变。
 cellFaceWith :: Registry -> Cell -> (String, [(String, CellField)])
 cellFaceWith w cell = case cell of
@@ -400,16 +401,15 @@ cellFaceWith w cell = case cell of
     ( "G"
     , [ col c, ("k", FieldText (kindCode k)), ("i", FieldInt ice)
       , ("o", maybe FieldNull (FieldText . overlayName) ov), ("n", FieldInt (maybe 0 overlayLayers ov)) ] )
-  _ -> case bodyOf w cell of
-    body@(SomePhase e) -> case fBase (view e) of
-      Just f -> f
-      Nothing -> case cell of
-        Custom name v -> ("custom", [("name", FieldText (unElementName name)), ("v", FieldInt (unCustomState v))])
-        _ -> (unElementName (phaseName body), [])
+  _ -> let row = bodyOf w cell in case fBase (rowGet row) of
+    Just f -> f
+    Nothing -> case cell of
+      Custom name v -> ("custom", [("name", FieldText (unElementName name)), ("v", FieldInt (unCustomState v))])
+      _ -> (unElementName (rowName row), [])
   where
     col c = ("c", FieldInt (colorNum c))
 
--- | 单格的显示附加字段：元素自己提供（Phase 'view' 的 fExtras，Match3.Element.Phase），这里不按元素名特判。
+-- | 单格的显示附加字段：元素自己提供（'Face' 组件的 fExtras，Match3.ECS.Component），这里不按元素名特判。
 -- 内置：雪怪 Boss 的 q（象限 0–3）/ hurt（血量是否过半）/ turn（召唤计数）/ every（召唤周期），变色龙的 c（当前颜色）。
 -- 网页 JSON 把它们按顺序追加在 cellFace 字段之后；app/pure/UI/CellFace.hs 按名字读。
 cellExtras :: Cell -> [(String, FaceValue)]

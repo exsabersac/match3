@@ -1,19 +1,17 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 收集与计数类：离开盘面（被收走 / 打破）时按计数键记一笔，常作关卡目标。
 --
--- 共同特征：原型 Blocker 的占格本体，本身不削层、不变形；饼干打不动、落到底边被收走（离格也算覆盖地毯）；
+-- 共同特征：缺省原型的占格本体，本身不削层、不变形；饼干打不动、落到底边被收走（离格也算覆盖地毯）；
 -- 时间精灵命中 / 邻消即破，按步前步后个数差每个奖励 2 步；气泡（Custom "bubble"）命中 / 邻格真消除即破，
--- 按 CountNamed "bubble" 计数。时间精灵走 onNear；气泡邻格因去重序留逃生口 SysNear 170。
--- 变色龙（新玩法 7，Custom "chameleon" k）：例外地是普通棋子原型（可交换、按当前颜色匹配、命中即消），
+-- 按 CountNamed "bubble" 计数。时间精灵与气泡的邻格反应都是普通邻格 system（120 / 170）。
+-- 变色龙（新玩法 7，Custom "chameleon" k）：例外地是普通棋子组件（可交换、按当前颜色匹配、命中即消），
 -- 玩家交换的步末（PhaseMove 40）按固定顺序换到下一种颜色，被消除计 CountNamed "chameleon"。
 module Match3.Element.Builtin.Collectible
-  ( CookieE(..)
-  , TimeSpiritE(..)
-  , Bubble(..)
+  ( cookieArch
+  , timeSpiritArch
+  , bubbleArch
   , bubbleAdjacent
-  , Chameleon(..)
+  , chameleonArch
   , chameleonName
   , chameleonCell
   , chameleonColor
@@ -25,9 +23,11 @@ import Control.Applicative ((<|>))
 import Data.List (nub)
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
-import Match3.Element.Kind
+import Match3.ECS.Archetype
+import Match3.ECS.Component
+import Match3.Element.Kind (customPlace)
 import Match3.Element.Near
-import Match3.Element.Phase
+import Match3.Element.Rules (nearBy)
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
 import Match3.Element.Types
@@ -36,67 +36,35 @@ import Match3.Rainbow (isRainbow, rainbowClearSeeds)
 import Match3.Types
 
 -- | 饼干：打不动；随重力下落、可过传送门，落到底边被收走；离格也算覆盖地毯。
-data CookieE = CookieE
-  deriving (Eq, Show)
+cookieArch :: Archetype ()
+cookieArch = (archetype "cookie" (unitColumn (== Cookie) Cookie))
+  { aSpawn = \_ _ -> Just Cookie
+  , aPhysics = const gemPhysics {pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom]}
+  , aTally = const emptyTally {tCounter = Just CountCookies, tVacatesCarpet = True}
+  }
 
-instance Phase CookieE where
-  codec = Codec
-    { cName = "cookie"
-    , cToCell = \_ -> Cookie
-    , cFromCell = \cell -> case cell of Cookie -> Just CookieE; _ -> Nothing
-    , cPlace = \_ _ -> Just Cookie
-    , cMeta = emptyMeta { metaCounter = Just CountCookies, metaVacatesCarpet = True }
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Immune False Nothing Nothing
-  physics _ = gemPhysics { pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom] }
-  view _ = noFace
-
--- | 时间精灵：命中 / 邻消即破，按个数差每个奖励 2 步。
-data TimeSpiritE = TimeSpiritE
-  deriving (Eq, Show)
-
-instance Phase TimeSpiritE where
-  codec = Codec
-    { cName = "time_spirit"
-    , cToCell = \_ -> TimeSpirit
-    , cFromCell = \cell -> case cell of TimeSpirit -> Just TimeSpiritE; _ -> Nothing
-    , cPlace = \_ _ -> Just TimeSpirit
-    , cMeta = emptyMeta { metaDiffCounter = Just CountSpirits, metaBonusMoves = 2 }
-    , cNear = Just (NearRule 120 SkipDirect DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = obstaclePhysics
-  onNear _ _ _ = NearNudge Dies
-  view _ = Face (Just ("spirit", [])) []
+-- | 时间精灵：命中 / 邻消即破（邻格 system 120），按个数差每个奖励 2 步。
+timeSpiritArch :: Archetype ()
+timeSpiritArch = (archetype "time_spirit" col)
+  { aSpawn = \_ _ -> Just TimeSpirit
+  , aHit = const breakHit
+  , aDiff = Just (DiffCount CountSpirits 2)
+  , aFace = const (baseFace "spirit" [])
+  , aSystems = [SysNear 120 (nearBy col SkipDirect DiePrepend (\_ _ -> NearNudge Dies))]
+  }
+  where
+    col = unitColumn (== TimeSpirit) TimeSpirit
 
 -- | 气泡：占格本体 Custom "bubble" k。无色、挡交换、随重力下落、不穿传送门、洗牌保留；
--- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。
-newtype Bubble = Bubble Int
-  deriving (Eq, Show)
-
-instance Phase Bubble where
-  codec = Codec
-    { cName = "bubble"
-    , cToCell = intCell "bubble"
-    , cFromCell = fromCustom "bubble" Bubble
-    , cPlace = customPlace "bubble"
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
-    , cNear = Nothing  -- 邻格逃生口 cSystems
-    , cHud = noHud { hudLabel = Just "气泡" }
-    -- 邻格打碎留在逃生口：foldr 去重序与 nub+DieAppend 不等价
-    , cSystems = [SysNear 170 bubbleAdjacent]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = obstaclePhysics
-  view _ = noFace
+-- 邻格有真消除（任意颜色）即破（邻格 system 170），直接命中也破；破掉计 CountNamed "bubble"。
+bubbleArch :: Archetype Int
+bubbleArch = (archetype "bubble" (customColumn "bubble"))
+  { aSpawn = customPlace "bubble"
+  , aHit = const breakHit
+  , aTally = const emptyTally {tCounter = Just (CountNamed "bubble")}
+  , aHud = noHud {hudLabel = Just "气泡"}
+  , aSystems = [SysNear 170 bubbleAdjacent]
+  }
 
 -- | 气泡邻格：foldr 去重列表序（勿改成 nub，除非重录金标准）。
 bubbleAdjacent :: System NearWorld
@@ -126,11 +94,8 @@ bubbleAdjacent = System $ \ctx ->
 --   其余四种都会连成时保持原色；连原色也会连成（只在换色前就有现成三消时）则取下一种，由步末补结算（settle）
 --   照常消除（与蜗牛推出的匹配相同）。
 -- * 被消除（匹配 / 特效 / 道具）计 CountNamed "chameleon"；同色消除也照常计入颜色目标。
--- * 与彩虹交换（成对交换规则 15，在彩虹取色 10 之后、特殊合成 20 之前）：清掉彩虹、变色龙当前颜色的全部宝石
+-- * 与彩虹交换（成对交换 system 15，在彩虹取色 10 之后、特殊合成 20 之前）：清掉彩虹、变色龙当前颜色的全部宝石
 --   （同内置彩虹取色）以及同色的全部变色龙。
-newtype Chameleon = Chameleon Int
-  deriving (Eq, Show)
-
 -- | 元素名。
 chameleonName :: ElementName
 chameleonName = "chameleon"
@@ -149,23 +114,20 @@ chameleonColor cell = case cell of
 chameleonNext :: Color -> Color
 chameleonNext c = colorAt (fromEnum c + 1)
 
-instance Phase Chameleon where
-  codec = Codec
-    { cName = chameleonName
-    , cToCell = intCell chameleonName
-    , cFromCell = fromCustom chameleonName Chameleon
-    , cPlace = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed chameleonName) }
-    , cNear = Nothing
-    , cHud = noHud { hudLabel = Just "变色龙", hudGoalIcon = Just "chameleon_icon" }
-    , cSystems = [SysSwap (SwapSys 15 chameleonRainbowFires chameleonRainbowSeeds), SysEnd (moveSys 40 (effectSystem (chameleonRun . ewBoard)))]
-    }
-    where
-      gemColor c = case c of Gem col _ _ _ -> Just col; _ -> Nothing
-  onMatch (Chameleon k) = gemMatch (Just (colorAt k))
-  onHit _ _ = gemHit
-  physics _ = gemPhysics { pKeepShuffle = True, pRecolor = False }
-  view (Chameleon k) = noFace { fExtras = [("c", FaceColor (colorAt k))] }
+-- | 变色龙原型（状态 = 当前颜色下标）。
+chameleonArch :: Archetype Int
+chameleonArch = (archetype chameleonName (customColumn chameleonName))
+  { aSpawn = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
+  , aMatch = \k -> gemMatch (Just (colorAt k))
+  , aHit = const gemHit
+  , aPhysics = const gemPhysics {pKeepShuffle = True, pRecolor = False}
+  , aTally = const emptyTally {tCounter = Just (CountNamed chameleonName)}
+  , aHud = noHud {hudLabel = Just "变色龙", hudGoalIcon = Just "chameleon_icon"}
+  , aFace = \k -> noFace {fExtras = [("c", FaceColor (colorAt k))]}
+  , aSystems = [SysSwap (SwapSys 15 chameleonRainbowFires chameleonRainbowSeeds), SysEnd (moveSys 40 (effectSystem (chameleonRun . ewBoard)))]
+  }
+  where
+    gemColor c = case c of Gem col _ _ _ -> Just col; _ -> Nothing
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。
 -- 每只变色龙（行优先，在逐只换过的盘面上）按固定顺序从下一种颜色试起（五种里最后一种是原色），取第一种不会让它

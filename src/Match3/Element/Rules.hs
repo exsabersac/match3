@@ -120,6 +120,7 @@ layerSpread p seed _ b =
   in (if null pairs then Nothing else Just (EndEffect EvSpread (layerName p) [EndItem s q (getCell b' q) Nothing | (s, q) <- pairs]), b')
 
 -- | 多格实体的邻格伤害：每个锚点（行优先）按「身外一圈的真消除 + 部件上的直接命中」扣血，归零则部件并入清除格。
+{-# INLINABLE entityDamage #-}
 entityDamage :: forall e. Phase e => Entity e -> AdjCtx -> Board -> AdjOut
 entityDamage ent ctx b0 = foldl one (AdjOut b0 [] []) anchors
   where

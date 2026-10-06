@@ -39,7 +39,7 @@ newtype UfoLevel = UfoLevel [Ufo]
 
 
 instance Mechanic UfoLevel where
-  layout (UfoLevel us) = (emptyLayout "ufo") { mlUfos = Just us }
+  layout = (emptyLayout "ufo") { mlUfos = \(UfoLevel us) -> Just us }
   onBeat (Start lvl) _
     | null (lvlUfos lvl) = Just ((), UfoLevel (case goalView (lvlGoal lvl) of
         ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
@@ -54,7 +54,7 @@ newtype BeltLevel = BeltLevel [Belt]
   deriving (Eq, Show)
 
 instance Mechanic BeltLevel where
-  layout (BeltLevel bs) = (emptyLayout "belt") { mlBelts = Just bs }
+  layout = (emptyLayout "belt") { mlBelts = \(BeltLevel bs) -> Just bs }
   onBeat (Start lvl) _ = Just ((), BeltLevel (lvlBelts lvl))
   onBeat (EndTick acc) (BeltLevel bs)
     | null bs = Nothing
@@ -69,7 +69,7 @@ newtype PortalLevel = PortalLevel [(Pos, Pos)]
   deriving (Eq, Show)
 
 instance Mechanic PortalLevel where
-  layout (PortalLevel ps) = (emptyLayout "portal") { mlPortals = Just ps }
+  layout = (emptyLayout "portal") { mlPortals = \(PortalLevel ps) -> Just ps }
   onBeat (Start lvl) _ = Just ((), PortalLevel (lvlPortals lvl))
   onBeat (Settling canPass mb) (PortalLevel ps) =
     Just (portalTeleport canPass ps mb, PortalLevel ps)
@@ -82,7 +82,7 @@ newtype CarpetLevel = CarpetLevel [Pos]
   deriving (Eq, Show)
 
 instance Mechanic CarpetLevel where
-  layout (CarpetLevel ps) = (emptyLayout "carpet") { mlCarpetOpen = Just ps }
+  layout = (emptyLayout "carpet") { mlCarpetOpen = \(CarpetLevel ps) -> Just ps }
   onBeat (Start lvl) _
     | null (lvlCarpets lvl) = Just ((), CarpetLevel (case goalView (lvlGoal lvl) of
         ViewCount CountCarpets n ->
@@ -102,7 +102,7 @@ newtype BombShapes = BombShapes Bool
   deriving (Eq, Show)
 
 instance Mechanic BombShapes where
-  layout _ = emptyLayout "bomb_shapes"
+  layout = emptyLayout "bomb_shapes"
   onBeat (Start lvl) _ = Just ((), BombShapes ("bomb_shapes" `elem` lvlRules lvl))
   onBeat (AskShapes rules) (BombShapes on)
     | on = Just (withBombShapes rules, BombShapes on)
@@ -114,7 +114,7 @@ newtype RainbowCombos = RainbowCombos Bool
   deriving (Eq, Show)
 
 instance Mechanic RainbowCombos where
-  layout _ = emptyLayout "rainbow_combos"
+  layout = emptyLayout "rainbow_combos"
   onBeat (Start lvl) _ = Just ((), RainbowCombos ("rainbow_combos" `elem` lvlRules lvl))
   onBeat (AskMorph b0 swapped p1 p2) (RainbowCombos on)
     | on, Just (n, cells, seeds) <- rainbowComboMorph b0 swapped p1 p2 =
@@ -127,7 +127,7 @@ newtype CookieDrop = CookieDrop [DropSpec]
   deriving (Eq, Show)
 
 instance Mechanic CookieDrop where
-  layout (CookieDrop ds) = (emptyLayout "cookie_drop") { mlDrops = Just (concatMap dropCells ds) }
+  layout = (emptyLayout "cookie_drop") { mlDrops = \(CookieDrop ds) -> Just (concatMap dropCells ds) }
   onBeat (Start lvl) _ = Just ((), CookieDrop (lvlDrops lvl))
   onBeat (AskRefill p) (CookieDrop ds)
     | null ds = Nothing

@@ -31,7 +31,7 @@ import Match3.Board.Cascade (AfterEntry(..), CascadeRun(..), cascadeAfterWith, c
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty(..))
 import Match3.Conveyor (applyBeltMoves)
-import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..), emptyLayout)
+import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..), MechLayout(..), emptyLayout)
 import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
 import Match3.Game.Level (newGame)
 import Match3.Game.State
@@ -904,7 +904,7 @@ data Adder = Adder Int Int
   deriving (Eq, Show)
 
 instance Mechanic Adder where
-  layout (Adder k _) = emptyLayout (ElementName ("adder" ++ show k))
+  layout = (emptyLayout "adder") { mlName = \(Adder k _) -> ElementName ("adder" ++ show k) }
   onBeat (EndTick acc) (Adder k n) = Just (acc ++ [((k, k), (k, k))], Adder k (n + 1))
   onBeat _ _ = Nothing
 

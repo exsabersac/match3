@@ -396,7 +396,7 @@ data CoinRain = CoinRain
   deriving (Eq, Show)
 
 instance Mechanic CoinRain where
-  layout _ = emptyLayout "coin_rain"
+  layout = emptyLayout "coin_rain"
   onBeat (AskRefill _) m = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)), m)
   onBeat _ _ = Nothing
 
@@ -432,7 +432,7 @@ data TimeLimit = TimeLimit
   deriving (Eq, Show)
 
 instance Mechanic TimeLimit where
-  layout _ = emptyLayout "time_limit"
+  layout = emptyLayout "time_limit"
   onBeat (AskJudge _ score moves (MoveApplied _)) m
     | moves <= 3 = Just (Lost score, m)
   onBeat (AskJudge {}) _ = Nothing

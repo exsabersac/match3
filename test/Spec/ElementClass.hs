@@ -220,7 +220,7 @@ newtype Quiet = Quiet ()
   deriving (Eq, Show)
 
 instance Mechanic Quiet where
-  layout _ = emptyLayout "quiet"
+  layout = emptyLayout "quiet"
 
 ec_mechanic_defaults_silent :: Assertion
 ec_mechanic_defaults_silent = do
@@ -288,18 +288,18 @@ data Doubler = Doubler
   deriving (Eq, Show)
 
 instance Mechanic Magnet where
-  layout _ = emptyLayout "magnet"
+  layout = emptyLayout "magnet"
   onBeat (Refilled b acc) m =
     Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
   onBeat _ _ = Nothing
 
 instance Mechanic Pinger where
-  layout _ = emptyLayout "pinger"
+  layout = emptyLayout "pinger"
   onBeat (AskAvoid acc) m = Just (acc ++ [(0, 0)], m)
   onBeat _ _ = Nothing
 
 instance Mechanic Doubler where
-  layout _ = emptyLayout "doubler"
+  layout = emptyLayout "doubler"
   onBeat (AskAvoid acc) m = Just (acc ++ acc, m)
   onBeat _ _ = Nothing
 
@@ -330,7 +330,7 @@ newtype Siphon = Siphon Int
   deriving (Eq, Show)
 
 instance Mechanic Siphon where
-  layout _ = emptyLayout "siphon"
+  layout = emptyLayout "siphon"
   onBeat (Refilled b acc) (Siphon k)
     | k > 0
     , p : _ <- reverse [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell b q == mkGem C2] =

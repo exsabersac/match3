@@ -64,18 +64,17 @@ startLevelsWith world lvl = map start (kinds ++ [c | c <- coreLevels, mechNameOf
 -- | 本节拍参与的机制，带「状态是否已在 gsLevelElems 里」。
 active :: World -> [SomeMechanic] -> [(SomeMechanic, Bool)]
 active world elems =
-  [ maybe (k, False) (\e -> (e, True)) (lookup n named)
-  | (n, k) <- kinds
+  [ maybe (k, False) (\e -> (e, True)) (named (mechNameOf k))
+  | k <- kinds
   ]
     ++ [ (e, True)
-       | (n, e@(SomeMechanic m)) <- named
+       | e@(SomeMechanic m) <- elems
        , mechCore m
-       , n `notElem` map fst kinds
+       , mechNameOf e `notElem` map mechNameOf kinds
        ]
   where
-    -- 名字各算一次（mechName 经 layout 读出，每次都要建一份 MechLayout）
-    kinds = [(mechNameOf k, k) | k <- mechanicDefs world]
-    named = [(mechNameOf e, e) | e <- elems]
+    kinds = mechanicDefs world
+    named n = listToMaybe [e | e <- elems, mechNameOf e == n]
 
 -- | 在一个节拍上问一局的关卡级机制：@step m q@ = 机制 m 对输入 q 的回复（Nothing = 不回复）与推进后的自身。
 -- 按参与顺序（注册顺序的各种 + 核心机制）**折叠所有回复者**（前一个的回复是后一个的输入），各回复者推进后的状态
@@ -120,27 +119,27 @@ reading f elems = maybe [] id (listToMaybe [xs | SomeMechanic m <- elems, Just x
 
 -- | 飞碟。
 levelUfos :: [SomeMechanic] -> [Ufo]
-levelUfos = reading (mlUfos . layout)
+levelUfos = reading (layoutOf mlUfos)
 
 -- | 传送带路径。
 levelBelts :: [SomeMechanic] -> [Belt]
-levelBelts = reading (mlBelts . layout)
+levelBelts = reading (layoutOf mlBelts)
 
 -- | 传送门对。
 levelPortals :: [SomeMechanic] -> [(Pos, Pos)]
-levelPortals = reading (mlPortals . layout)
+levelPortals = reading (layoutOf mlPortals)
 
 -- | 未覆盖的地毯格。
 levelCarpetOpen :: [SomeMechanic] -> [Pos]
-levelCarpetOpen = reading (mlCarpetOpen . layout)
+levelCarpetOpen = reading (layoutOf mlCarpetOpen)
 
 -- | 地面层。
 levelGround :: [SomeMechanic] -> Ground
-levelGround = reading (mlGround . layout)
+levelGround = reading (layoutOf mlGround)
 
 -- | 掉落口格（新玩法 6；没有掉落口的关卡为空）：前端画掉落口标记用。
 levelDrops :: [SomeMechanic] -> [Pos]
-levelDrops = reading (mlDrops . layout)
+levelDrops = reading (layoutOf mlDrops)
 
 -- | Board 层的钩子：沉降节拍 'onSettling'（可穿门谓词 = 世界的本体定义），补子之后 'onRefilled'，
 -- 补子策略问 'refillPolicy'（初值 = 世界的策略）。没人回复时不传送 / 不吸收 / 用世界的补子策略。

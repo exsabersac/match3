@@ -111,7 +111,7 @@ hasValidMoveWith :: Registry -> Board -> Bool
 hasValidMoveWith world = maybe False (const True) . findHintWith world
 
 -- | findHint（指定元素世界）。普通匹配提示只试「有色且能交换」的格；成对交换规则（段 4：元素世界的成对交换规则，
--- 内置 = 彩虹、特殊合成，按 srOrder 逐条）的提示只排除上层（锁链 / 火箭冰冻）挡交换的格，本体由规则自己判定。
+-- 内置 = 彩虹、特殊合成，按 swOrder 逐条）的提示只排除上层（锁链 / 火箭冰冻）挡交换的格，本体由规则自己判定。
 findHintWith :: Registry -> Board -> Maybe (Pos, Pos)
 findHintWith world b =
   case matchHints ++ concatMap ruleHints (swapSystems world) of

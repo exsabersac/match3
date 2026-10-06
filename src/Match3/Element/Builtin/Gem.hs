@@ -8,8 +8,8 @@
 --
 -- 共同特征：能力全用「普通宝石」缺省（可交换、按颜色匹配、能点火、会下落、可过传送门、命中即消、可改色 / 推动），
 -- 盘面编码都是 Gem 格；特殊块另有爆炸范围与洗牌保留。四种特殊块是同一个类型 'SpecialGem' 按种类
--- （类型参数 k :: GemKind）分成四个类型，各是一种 'Kind'。彩虹取色的成对交换规则（srOrder 10）挂在彩虹上；
--- 特殊 × 特殊合成走元素世界的组合表（Match3.Combos.builtinComboRules，并成 srOrder 20）。
+-- （类型参数 k :: GemKind）分成四个类型，各是一种 'Kind'。彩虹取色的成对交换规则（swOrder 10）挂在彩虹上；
+-- 特殊 × 特殊合成走元素世界的组合表（Match3.Combos.builtinComboRules，并成 swOrder 20）。
 -- 特殊块的形状规则表（'builtinShapeRules'：直线 5 → 彩虹、直线 4 → 横 / 竖消）也在这里。
 module Match3.Element.Builtin.Gem
   ( PlainGem(..)

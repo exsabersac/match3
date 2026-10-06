@@ -25,7 +25,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
                │                        Cascade  Hooks（第 7 刀）  Refill（第 8 刀）
                └──── 直接 import 子模块 ───┤
                                             ▼
- Match3.Element（元素框架：Types / Ability / Kind / Layer / Rules / World / Mechanic / Builtin / Event / Level / Special；默认世界 defaultWorld）
+ Match3.Element（元素框架：Types / Phase / Kind / Layer / Rules / World / Mechanic / Builtin / Event / Level / Special；默认世界 defaultWorld）
  Obstacles Rainbow Combos Ice Grass Carpet Snail Ufo Countdown Conveyor Boosters Daily
  Match3.Levels.Campaign（49 关关卡表 / lookupLevel，第 6 刀） ← Match3.Levels.Level（关卡记录）
  Match3.Types（门面，再导出 Types.Name / Cell / Overlay / Body / Board / Game；第 6 刀拆分）  Match3.Goal（目标数据，第 5 刀）
@@ -41,8 +41,8 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 - 通用层 ← 具体游戏：`Engine.*` 不 import 任何 `Match3` 模块（原 SDL 外壳 `app/Shell/Loop.hs` 也受这条约束，已随桌面版移除）；`Match3.Engine` 实现通用接口，前端只经 `gameStep match3Shell` 执行动作（见[多游戏接口](#多游戏接口)）。测试 `engine_layer_is_game_agnostic` 检查这一方向。
 - `Match3.Core` 只再导出前端用到的名字（SDL2 前端移除后又删去 25 个只有桌面在用的导出），每个函数都有前端在用（同一测试检查），前端要用新名字时在这里加。库内模块（含 `Match3.View`）与测试直接 import 所在的子模块（`Match3.Types`、`Match3.Board.*`、`Match3.Game.*`、各机制模块），不经 `Core`。没有 `Match3.Board` / `Match3.Game` 这样的外观模块。
 - 子模块之间单向依赖、无环（下文 `A ← B` 表示 B 依赖 A）：Board 内 `Grid ← Match ← Clear`、`Grid ← Gravity`、`Match ← Random`，`Cascade` 依赖 Grid / Match / Clear / Gravity / Effect（第 3 项：`Phase` / `Refill` / `Hooks` / `Wave` ← `Effect` ← `Cascade`，效果层不依赖元素世界）；Game 内 `State ← Outcome / Shuffle / Trace`、`Shuffle ← Level`，`Resolve`（公共结算）依赖 State / Tally / Outcome / Shuffle / Trace，`Move` / `Boosters` 只做校验与起手选择、依赖 `Resolve`。Game 子模块直接 import 所需的 Board 子模块。
-- 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types` → `Element.Ability`（值级能力类；`SomeElement` 的相等按具体类型（`Typeable` 的 `cast`）+ 该类型的 `Eq`）→ `Element.Kind` / `Element.Layer`（类型级）→ `Element.Rules`（通用驱动）→ `Element.Mechanic`（关卡级机制类）→ `Element.World`（解码与全部 `*With` 查询）→ `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过元素世界查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
-- 关卡级机制（第 7 刀；元素类重构第 5 刀起是 `class Mechanic`）：`Element.Mechanic`（`SomeMechanic`）← `Board.Hooks`（钩子记录 `LevelHooks`，只把机制列表当不透明载荷）← `Board.Gravity` / `Board.Cascade`；`Element.World` / `Element.Mechanic` / `Board.Hooks` ← `Element.Level`（开局、节拍折叠、造钩子；不依赖任何内置机制）← `Board.Default`（`builtinHooks`）/ `Game.State` / `Game.Level` / `Game.Resolve`。`Element.Mechanic` 为 `mechStart` 依赖 `Levels.Level`（关卡记录）。
+- 元素框架 `Match3.Element.*` 位于 Board / Game 之下：`Element.Event ← Element.Types` → `Element.Near` → `Element.Phase`（按阶段的元素类与 `Codec`；`SomePhase` 的相等按具体类型（`Typeable` 的 `cast`）+ 该类型的 `Eq`）→ `Element.Kind`（读 codec 的函数、`Entity` / `GroundKind` 记录）/ `Element.Layer`→ `Element.Rules`（通用驱动）→ `Element.Mechanic`（关卡级机制类）→ `Element.World`（解码与全部 `*With` 查询）→ `Element.Builtin.*`（按功能分组的 instance）→ `Element.Builtin`（汇总）；各分组里的 instance 调用各机制子模块实现具体反应。Board / Game 只通过元素世界查询「这个格子怎么反应」，不再按构造器写死（见[元素框架与事件](#元素框架与事件)）。
+- 关卡级机制（第 7 刀；元素类重构第 5 刀起是 `class Mechanic`）：`Element.Mechanic`（`SomeMechanic`）← `Board.Hooks`（钩子记录 `LevelHooks`，只把机制列表当不透明载荷）← `Board.Gravity` / `Board.Cascade`；`Element.World` / `Element.Mechanic` / `Board.Hooks` ← `Element.Level`（开局、节拍折叠、造钩子；不依赖任何内置机制）← `Board.Default`（`builtinHooks`）/ `Game.State` / `Game.Level` / `Game.Resolve`。`Element.Mechanic` 为开局节拍 `Start` 依赖 `Levels.Level`（关卡记录）。
 - 步末表（第 7b 刀）：`Board.Cascade` / `Element.Level` / `Game.Trace`（`EndStep`、`traceSpreadsWith`）← `Game.EndPhase`（`runEndTable`）← `Game.Resolve`（`endTableFor`）；步末效果的通用形状在 `Element.Event`。
 - 类型层（第 6 刀拆分）：`Match3.Color` / `Types.Name` ← `Types.Cell ← Types.Overlay / Types.Body`、`Types.Cell ← Types.Board ← Types.Game`（`Types.Game` 另依赖 `Match3.Goal`；`Types.Name` 无依赖，`Match3.Counts` 的 `CountNamed` 也用它），`Match3.Types` 只再导出这六个模块（导出列表与拆分前相同，只少了移走的关卡表、多了第 6b 刀的 `ElementName` / `CustomState`）；关卡层 `Levels.Level ← Levels.Campaign` 在 `Types` / `Element.Types`（放置表）/ `Ufo` / `Conveyor`（`Belt`）之上、`Game.Level` / `Daily` / `Game.Outcome` 之下。
 - 机制子模块（障碍、彩虹、合成、冰、草系、地毯、蜗牛、飞碟、倒计时、传送带、道具种子、每日）尽量只依赖 `Types`（及彼此必要的窄依赖），由 `Board.*` / `Game.*` 编排调用顺序。
@@ -67,16 +67,15 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Match3.Color` | 第 5 刀：`Color`（`C1`–`C5`）与 `allColors`，从 `Types` 拆出，让 `Counts` 能有颜色键而不成环 | 颜色的显示 |
 | `Match3.Counts` | 第 4 刀：计数键 `CounterKey`（内置 8 个元素键 + `CountUfo` / `CountCarpets` + `CountNamed 名字`，第 5 刀加 `CountColor 颜色`）与 `Counts`（`Map CounterKey Int` 的 newtype，稀疏、不存 0；`countOf` / `bumpCount` / `plusCounts`（也是 `<>`）/ `countsFromList` / `countsToList` / `namedCounts` / `colorBag`）；`GameState.gsCounts` 与 `CascadeTally.ctCounts` 都是它（第 5 刀起颜色袋也在里面） | 哪个键算哪个目标（`Match3.Goal`） |
 | `Match3.Goal` | 第 5 刀：目标数据 `LevelGoal { goalQuotas :: [Quota] }`，`Quota { quotaMeter :: Meter, quotaTarget :: Int }`，`Meter = MeterScore \| MeterCount CounterKey`；构造函数 `goalScore` / `goalCollect` / `goalColors` / `goalCount`；统一计算 `goalProgress` / `goalMet` / `goalTarget` / `meterValue`；前端分派用的形状 `goalView :: LevelGoal -> GoalView`（`ViewScore` / `ViewCollect` / `ViewCollectMulti` / `ViewCount 键` / `ViewOther`）；手写 `Show` 按第 5 刀前的构造器写法打印 | 图标 / 文案（前端 `UI.GoalStyle`） |
-| `Match3.GoalLabel` | 目标的中文显示名（合 main 9f5504e 后从 `Match3.View` 下移）：`goalViewLabel :: GoalView -> String`、`countLabel`、`colorLabel`、`namedGoalLabelTable`（名字目标的中文名，由 `Kind.label` / `GroundKind.groundLabel` 推出：果冻 / 气泡 / 魔法石 / 毛球 / 雪怪 / 变色龙）、`namedLoseHint`（`Kind.loseHint`，雪怪）。`Match3.View` 重新导出并用它定义 `goalLabel`（对外 API 不变）；`Game.Outcome.loseHint` 与标题目标段 `goalLine` 也读它，所以放在 `Game.*` 之下、`View` 之上 |
-| `Match3.Element` | 门面：再导出 `Types` / `World` / `Builtin` / `Event` / `Level`、`Special` / `Board.Refill`（第 8 刀）；能力类 `Ability`、类型级 `Kind` / `Layer`、关卡级 `Mechanic` 单独 import（方法名 `color` / `pushable` / `falls` 等较通用，避免与使用方撞名） | 自身无实现 |
+| `Match3.GoalLabel` | 目标的中文显示名（合 main 9f5504e 后从 `Match3.View` 下移）：`goalViewLabel :: GoalView -> String`、`countLabel`、`colorLabel`、`namedGoalLabelTable`（名字目标的中文名，由本体 codec 的 `cHud.hudLabel` / 地面层的 `groundLabel` 推出：果冻 / 气泡 / 魔法石 / 毛球 / 雪怪 / 变色龙）、`namedLoseHint`（`cHud.hudLoseHint`，雪怪）。`Match3.View` 重新导出并用它定义 `goalLabel`（对外 API 不变）；`Game.Outcome.loseHint` 与标题目标段 `goalLine` 也读它，所以放在 `Game.*` 之下、`View` 之上 |
+| `Match3.Element` | 门面：再导出 `Types` / `World` / `Builtin` / `Event` / `Level`、`Special` / `Board.Refill`（第 8 刀）；`Phase` / `Kind` / `Layer` / `Mechanic` 单独 import（`place` / `label` / `view` 等名字较通用，避免与使用方撞名） | 自身无实现 |
 | `Match3.Element.Types` | 规则与查询结果的数据类型：`AdjacentRule` / `EndRule` / `SwapRule` / `OpenRule`、第 8 刀的特殊块形状规则 `ShapeRule { shapeName, shapeSpawn :: ShapeCtx -> MatchRun -> Maybe [(Pos, Cell)] }`（上下文 `ShapeCtx { scPrefer, scRuns, scClearable }`）与组合规则 `ComboRule { comboName, comboFirst, comboSecond, comboSeeds }`、连线 `MatchRun`（第 8 刀从 `Board.Match` 移来，原处再导出）、`CounterKey`（再导出自 `Match3.Counts`，第 4 刀前叫 `Counter`）、`Arg` / `Placement`、放置参数解析器 `ArgP`（Applicative / Alternative；`argInt` / `argColor`，跑法 `exactArgs` 精确匹配 / `prefixArgs` 前缀匹配，Haskell 特性第 8 项）、`cellSlot`；Haskell 特性第 9 项：步末规则的智能构造器 `tickRule` / `spreadRule` / `moveRule` 与共用折叠 `runEndRules`（`mapAccumL`），见 [haskell-features/09-规则去重.md](haskell-features/09-规则去重.md) | 调用顺序 |
-| `Match3.Element.Phase` | slim-2…：按引擎阶段收缩的七方法（`codec` / `onSwap` / `onMatch` / `onHit` / `physics` / `onNear` / `view`）；邻格生产路径 `phaseOnNear`；叠层 `Phase (Layered l e)` | 值级 Ability（并存） |
-| `Match3.Element.Ability` | 元素类重构第 1 刀：值级能力的六个小类 `Cellular` / `Matchable` / `Hittable` / `Movable` / `Countable` / `Renders`（每个方法带「普通宝石」缺省；`Renders.faceBase` 第 6 刀）、类同义词 `Element`、装箱 `SomeElement`（逐类转发）、命中结果 `Strike`、DerivingVia 原型包 `Obstacle` / `Fixed`、惰性占格 `Inert`、`abilityProbe`（逐方法取值，透明性测试用）、`sameTypeEq` | 具体元素 |
-| `Match3.Element.Kind` | 类型级 `Kind`（`kindName` / `fromCell` / `place` / `label` / `loseHint` / `diffCounter` / `bonusMoves`，逃生口 `boardPasses` / `entityHit`；邻格已迁到 `Phase`）；`Entity`；地面层种类 `GroundKind`（行为描述；承载状态的是机制 `GroundLayer`）；`Reach` / `Nudge` / `BoardPass` | 怎么执行规则（`Rules`） |
+| `Match3.Element.Phase` | 本体元素的唯一类（slim-9 起）：七方法 `codec` / `onMatch` / `onHit` / `physics` / `onNear` / `view` / `liveMeta`；类型级数据 `Codec`（名字、编解码、放置、`Meta`、`cNear`、`Hud`、`cPasses`）与 `BoardPass`；原型组合子（`gemMatch` / `obstacleMatch`、`gemHit` / `immuneHit`、`gemPhysics` / `obstaclePhysics` / `fixedPhysics`）；装箱 `SomePhase`、惰性占格 `Inert`、`phaseProbe`（透明性测试用）、`sameTypeEq` | 具体元素 |
+| `Match3.Element.Kind` | slim-10 起不是类：按 proxy 读 codec 的函数（`kindName` / `fromCellAs` / `place` / `label` / `loseHint` / `diffCounter` / `bonusMoves` / `boardPasses` / `boardBossHp` / `goalIconName`）、装箱 `SomeKind`；多格实体记录 `Entity`；地面层记录 `GroundKind`（承载状态的是机制 `GroundLayer`）；写法助手 `customCell` / `fromCustom` / `customPlace` | 怎么执行规则（`Rules`） |
 | `Match3.Element.Layer` | 叠层类 `Layer`（`peel` / `putOn` / `layerHit :: LayerHit` / `layerFires` / 规则方法 / `spreads` / `layerPasses`）与通用包装 `Layered l e`（合成规则只写一次） | 具体叠层 |
 | `Match3.Element.Rules` | 元素类重构第 3 刀：规则的通用驱动——`kindRules` / `layerRules`（建世界时收集方法规则与逃生口）、`kindNeighbour` / `layerNeighbour`（找邻格、去重、跳过直接命中、按顺序写回）、`layerSpread`（步末蔓延）、`entityDamage`（多格实体扣血） | 具体元素 |
 | `Match3.Element.World` | 元素类重构第 4 刀起取代旧注册表：注册项 `Def`（`kindDef @T` / `layerDef` / `groundDef` / `inertDef`）、`World`（有序类型列表 + 按 `cellSlot` / 叠层编号 / `Custom` 名字的解码缓存 + 排好序的规则）、`mkWorld` / `mkWorldChecked`（`WorldError` = `DuplicateName` / `SharedCell` / `Unclaimed`）/ `register`、解码 `decode` / `elementOf` / `bodyOf` / `upperOf`、主流程的全部 `*With` 查询（`matchColorWith` / `blocksSwapWith` / `directHitWith` / `fallsWith` / `counterWith` / `weighElementWith` / `blastWith` …）、显示查询 `faceFieldsWith` / `displayLabelWith` / `loseHintWith` / `displayLabels`、本步上下文 `StepCtx`（`noStep` / `setWidening` / `widenedCells`）、第 8 刀的三张规则表 `shapeRules` / `comboRules` / `refillPolicyWith`（各有 `set…`；`mkWorld` 建出的表：形状 / 组合为空，补子 = `defaultRefill`；`register` 保留三张表）、关卡级机制的种类表 `registerMechanic` / `removeMechanic` / `mechanicDefs` | 具体元素、一局的关卡级状态（`Element.Level`） |
-| `Match3.Element.Mechanic` | slim-5/6：`Mechanic` 主 API = `onBeat :: Beat r -> m -> Maybe (r, m)` + `layout :: m -> MechLayout`（`mechName` / `mechCore` / 读数派生自 layout；`mechStart` 开局）；`Beat` GADT 覆盖补子 / 步末 / 沉降 / 覆盖 / 地面 / 查询；核心机制 `GroundLayer`（纯 Mechanic，不占格） | 节拍的折叠（`Element.Level`） |
+| `Match3.Element.Mechanic` | `Mechanic` 只有两个方法：`onBeat :: Beat r -> m -> Maybe (r, m)` 与类型级的 `layout :: MechLayout m`（`mechName` / `mechCore` / `layoutOf` 读它；`mechStart` = 回复 `Start` 节拍）；`Beat` GADT 覆盖补子 / 步末 / 沉降 / 覆盖 / 地面 / 查询；核心机制 `GroundLayer`（纯 Mechanic，不占格） | 节拍的折叠（`Element.Level`） |
 | `Match3.Element.Builtin` | 汇总：类型列表 `builtinDefs`（36 项，注册顺序固定，快照锁定）、`builtinMechanics` 与 `defaultWorld`（第 8 刀起另装上 `builtinShapeRules` / `builtinComboRules`，均再导出）；再导出测试 / 扩展用的元素类型 | 具体元素的定义 |
 | `Match3.Element.Builtin.Gem` | 宝石：`PlainGem`、`SpecialGem`（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则、`specialBlast`、第 8 刀的内置形状规则表 `builtinShapeRules`（特殊合成不再挂在 line_h 上）；新玩法 1 的 L / T 形规则 `ltBombRule` 与插表函数 `withBombShapes`（不在内置表里，由规则开关 `BombShapes` 按关插入） | 障碍与叠层 |
 | `Match3.Element.Builtin.Layer` | 冰层 `Ice` 与 8 种叠层（`Layer` instance）（草 / 藤 / 巧 / 迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 蒸汽），蔓延规则 | 本体 |
@@ -84,9 +83,9 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Match3.Element.Builtin.Collectible` | 收集与计数类：饼干、时间精灵、气泡；变色龙 `Chameleon`（新玩法 7：`Custom "chameleon" k`，普通棋子原型、按当前颜色匹配；步末 `PhaseMove` 40 换色 `chameleonShift`、彩虹 × 变色龙成对规则 15；`chameleonCell` / `chameleonColor` 给前端用） | 削层 / 变形（`Obstacle`） |
 | `Match3.Element.Builtin.Actor` | 会动或会生成东西的：魔法帽、果汁机、蜗牛（含 `traceSnails`）、染色瓶、倒计时 | 被动障碍（`Obstacle`） |
 | `Match3.Element.Builtin.Ground` | 地面层：果冻；魔法地格 `MagicGround`（新玩法 8：`"magic"`，没有 `groundHit`，不被消耗、不计数；`groundWiden = Just magicWiden`——特效在这一格上引爆时爆炸范围扩一圈，`magicWiden` = 原范围 ++ 八邻格按行优先） | 占格本体 |
-| `Match3.Element.Builtin.Level` | 关卡级机制（`Mechanic` instance）：飞碟 `UfoLevel [Ufo]`、皮带 `BeltLevel [Belt]`、传送门 `PortalLevel [(Pos,Pos)]`、地毯 `CarpetLevel [Pos]`、规则开关 `BombShapes` / `RainbowCombos`、掉落口 `CookieDrop [DropSpec]`（新玩法 6：实现 `refillPolicy`，把补子策略包一层 `dropRefill`；新玩法 7 起名额按「同种」数：`Custom` 按名字、其余按相等）（状态在值里；实现各自的节拍方法并交回推进后的自身，开局状态 `mechStart` 取自关卡记录，飞碟 / 地毯的目标补齐也在这里；核心机制地面层在 `Element.Mechanic`）；传送实现 `portalTeleport` | 一局里有哪些元素（`GameState.gsLevelElems`） |
+| `Match3.Element.Builtin.Level` | 关卡级机制（`Mechanic` instance）：飞碟 `UfoLevel [Ufo]`、皮带 `BeltLevel [Belt]`、传送门 `PortalLevel [(Pos,Pos)]`、地毯 `CarpetLevel [Pos]`、规则开关 `BombShapes` / `RainbowCombos`、掉落口 `CookieDrop [DropSpec]`（新玩法 6：回复 `AskRefill` 节拍，把补子策略包一层 `dropRefill`；新玩法 7 起名额按「同种」数：`Custom` 按名字、其余按相等）（状态在值里；实现各自的节拍方法并交回推进后的自身，开局状态（`Start` 节拍）取自关卡记录，飞碟 / 地毯的目标补齐也在这里；核心机制地面层在 `Element.Mechanic`）；传送实现 `portalTeleport` | 一局里有哪些元素（`GameState.gsLevelElems`） |
 | `Match3.Element.Level` | 第 7 刀（7a）：一局的关卡级机制 `gsLevelElems`——开局 `startLevelsWith`（注册的各种 + 核心机制地面层）、每个节拍参与的机制（内部函数 `active`：注册顺序取同名状态，没有则用原型；未注册的不参与，核心机制总参与）、节拍折叠 `beatIn`（元素类重构第 5 刀起取代发消息的 `askLevelsIn`：按参与顺序折叠所有回复者并依次写回推进后的状态）/ `queryIn`（状态不变）、读写 `levelState` / `putLevel` 与内置读数 `levelUfos` / `levelBelts` / `levelPortals` / `levelCarpetOpen` / `levelGround` / `levelDrops`（新玩法 6：掉落口格）、给 Board 层的钩子 `levelHooksWith`、本步世界 `levelWorldIn`（`shapes` 节拍换形状表；新玩法 8：地面层里有 `groundWiden` 的格时再 `setWidening`，没有时世界原样）、交换变身 `morphIn`、胜负复核 `judgeIn`、Game 层的节拍 `beltShiftIn` / `avoidCellsIn` / `wallCellsIn` / `coverIn` / `hitGroundIn` | 连锁顺序（`Board.Cascade`） |
-| `Match3.Element.Builtin.Common` | 跨分组共用的辅助：`colorPlace`（按颜色放置）、显示字段 `nField` / `colorField`（第 6 刀，`faceBase` 用）、毛球跳格与雪怪召唤共用的选格散列 `boardSeed`（= `show board` 的 64 位 FNV-1a，**依赖派生 Show**）/ `posSeed` / `pickBy`（非空候选里按散列取模）/ `plainGem` | 只在一组里用的辅助 |
+| `Match3.Element.Builtin.Common` | 跨分组共用的辅助：`colorPlace`（按颜色放置）、显示字段 `nField` / `colorField`（`view` 的 `fBase` 用）、毛球跳格与雪怪召唤共用的选格散列 `boardSeed`（= `show board` 的 64 位 FNV-1a，**依赖派生 Show**）/ `posSeed` / `pickBy`（非空候选里按散列取模）/ `plainGem` | 只在一组里用的辅助 |
 | `Match3.Element.Special` | 第 8 刀：规则表的解释器（不含具体规则）——形状表 `spawnByShapes`（每条连线取第一条认领它的规则）、落点 `shapeAnchor`、单连线规则的构造器 `runShape`；组合表 `comboMatch`（按表顺序、每条先试 (p1,p2) 再试 (p2,p1)）/ `comboFires`（另要求两端 `specialActivates`）/ `comboSeedsFor` / `comboSwapRule`（次序 `comboOrder` = 20） | 具体规则（`Builtin.Gem` / `Combos`） |
 | `Match3.Element.Event` | 通用步末效果 `EndEffect { endEffectKind, endEffectElement, endEffectItems }` / `EndItem { eiFrom, eiTo, eiCell, eiBack }`（第 7 刀 7b 取代四个构造器与 `SpreadKind` / `SnailMove`；`Show` 手写成旧构造器文本）、`applyEndEffect` / `endEffectPairs` / `endItemDir` / `spreadPairs`、效果事件 `EventKind` / `Event` | 帧与样式 |
 | `Match3.Core` | 前端 API：只再导出 `app/` 与 `web/hs` 用到的名字（格子与构造、盘面、关卡与目标、对局操作、回放轨迹、每日挑战） | 规则内部（库内模块与测试直接 import 子模块） |
@@ -112,7 +111,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Match3.Game.Resolve` | 交换与三种道具的**公共结算** `resolveMove`：主连锁 → 步末（按 `endTableFor` 选的 EndPhase 表执行）→ 计数与目标 → 结局 → 自动洗牌，同时产出 `MoveTrace`。类型层：`StartPhase` / `SMoveKind` / 按阶段索引的 `Opening`（见 [01-类型层.md](haskell-features/01-类型层.md)） | 入口校验（在 `Move` / `Boosters`）、步末各阶段（在 `EndPhase`） |
 | `Match3.Game.Move` | `resolveSwap`（校验 + 起手选择；新玩法 4 起先问关卡级元素的交换变身 `morphIn`，有回复时起手为 `OpenMorph`）及其投影 `trySwap`（= `runMove`）/ `traceSwap` | 道具 |
 | `Match3.Game.Boosters` | `resolveHammer` / `resolveFreeSwap` / `resolveCrossClear` 及其投影 `use*` / `trace*` | 种子几何（见 `Match3.Boosters`） |
-| `Match3.Obstacles` | 气球 / 彩蛋 / 染色瓶 / 魔法帽 / 果汁机的整盘邻消触发（元素逃生口 `boardPasses` 引用；相邻查询共用 `adjacentWhere`，气球的同色相邻 `balloonsAdjacentSameColor` 由 `Element.Builtin.Obstacle.balloonPop` 包成邻格规则）；石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 时间精灵的邻消削层自元素类重构第 3 刀起是 `onNeighbourClear` + 通用驱动，不在这里；无 except 的测试写法在 `test/Spec/Support/Obstacles.hs` | 连锁循环 |
+| `Match3.Obstacles` | 气球 / 彩蛋 / 染色瓶 / 魔法帽 / 果汁机的整盘邻消触发（元素逃生口 `cPasses` 引用；相邻查询共用 `adjacentWhere`，气球的同色相邻 `balloonsAdjacentSameColor` 由 `Element.Builtin.Obstacle.balloonPop` 包成邻格规则）；石头 / 宝箱 / 蜂蜜 / 蛋糕 / 保险箱 / 时间精灵的邻消削层自 slim-1 起是 `Phase.onNear` + 通用驱动，不在这里；无 except 的测试写法在 `test/Spec/Support/Obstacles.hs` | 连锁循环 |
 | `Match3.Rainbow` | 彩虹判定与清色种子 | 合成几何（见 Combos） |
 | `Match3.Combos` | 特殊×特殊合成：第 8 刀起是内置组合表 `builtinComboRules`（炸弹 × 炸弹 → 直线 × 直线 → 直线 × 炸弹 → 彩虹 × 直线），`isSpecialCombo` / `comboClearSeeds` 是这张表的判定 / 清种子；新玩法 4 的 `rainbowComboMorph`（彩虹 × 直线 / 炸弹的变身格与种子，只经规则开关 `rainbow_combos` 用）；各组合的种类谓词与爆炸几何 `bigBomb` / `fullRowCol` / `lineBombCross` | 普通三消、组合表的解释（`Element.Special`） |
 | `Match3.Ice` | 匹配时削冰层 | overlay（Freeze/Chain…） |
@@ -125,7 +124,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 | `Match3.Boosters` | 锤子/十字**种子位置**（纯几何） | 扣次数与连锁（`Game.Boosters`） |
 | `Match3.Daily` | 日期种子、每日配置、三星公式；第 7 项起年 / 月 / 日是 newtype `Year` / `Month` / `Day`（`dailySeed :: Year -> Month -> Day -> Int`，月日写反是类型错误） | 每日盘面装饰（`Game.Level`） |
 | `Match3.Engine` | 三消作为通用接口的实现：`Action`（交换 / 锤子 / 自由交换 / 十字 / 提示 / 洗牌）、`Setup`、`play`（一次结算得到 `Played`：状态 / `Outcome` / `MoveTrace` / `MoveFx` / 事件 / 提示，作为 `gameStep` 的 `stepReport`；通用接口的结局类型 `o = Terminal`，`stepOutcome` / `gameOutcome` 是 `Maybe Terminal`；新玩法 8 起效果事件按本步世界 `levelWorldIn` 展开，`EvBlast` 含魔法地格扩出来的一圈）、`match3Game`、撤销规则 `match3History`、外壳实例 `match3Shell = withHistory match3History match3Game`、`toEffect` | 帧与绘制、撤销历史的存放 |
-| `Match3.View` | 第 11 刀：视图模型（纯函数）。`gameView :: GameState -> GameView`（关卡 / 夹紧下标 / 关名、每日、分数、步数、道具 `Boosters`、连击（经 `gameStatus`）、洗牌 / 结局 / `PlayStatus`、目标 `GoalInfo`、棋盘 `BoardView`）、`titleLine` / `goalLine`（标题文字）、`levelDots`（进度点）、`scoreBadge`（回放 / 连击总结 / 得分徽章）、`levelViews`（关卡列表）、`cellFace` / `cellFaceWith`（单格结构化描述，元素类重构第 6 刀起由 `Renders.faceBase` 给出，宝石格按存储编码）；新玩法 5 起 `gvBoss :: Maybe BossView`（目标是「击败 Boss」时的剩余 / 满血）；`cellExtras`（单格的显示附加字段，元素的 `Renders.face` 给出，如雪怪的 q / hurt / turn / every、变色龙的 c，View 不点名元素）；网页读它（原桌面专用的 `goalBracket` / `carpetAt` / `groundAtView` / `colorTag`、`gvMoveCap` / `bvHint` 等已于 `refactor/web-only-2` 删除），见[视图模型](#视图模型第-11-刀) | 坐标、颜色、贴图（前端） |
+| `Match3.View` | 第 11 刀：视图模型（纯函数）。`gameView :: GameState -> GameView`（关卡 / 夹紧下标 / 关名、每日、分数、步数、道具 `Boosters`、连击（经 `gameStatus`）、洗牌 / 结局 / `PlayStatus`、目标 `GoalInfo`、棋盘 `BoardView`）、`titleLine` / `goalLine`（标题文字）、`levelDots`（进度点）、`scoreBadge`（回放 / 连击总结 / 得分徽章）、`levelViews`（关卡列表）、`cellFace` / `cellFaceWith`（单格结构化描述，由元素 `view` 的 `fBase` 给出，宝石格按存储编码）；新玩法 5 起 `gvBoss :: Maybe BossView`（目标是「击败 Boss」时的剩余 / 满血）；`cellExtras`（单格的显示附加字段，元素 `view` 的 `fExtras` 给出，如雪怪的 q / hurt / turn / every、变色龙的 c，View 不点名元素）；网页读它（原桌面专用的 `goalBracket` / `carpetAt` / `groundAtView` / `colorTag`、`gvMoveCap` / `bvHint` 等已于 `refactor/web-only-2` 删除），见[视图模型](#视图模型第-11-刀) | 坐标、颜色、贴图（前端） |
 
 ### 通用层（`src/Engine/`）
 
@@ -179,7 +178,7 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 
 `web/` 目录（已合入 main，`59f1e53`）用 GHC wasm 后端把核心（`Engine.*` / `Match3.*`）和 `ComboFx` 编成 wasm，
 接口层 `web/hs/Match3Web/Api.hs` 只调 `gameStep match3Shell`（网页是唯一前端），JS 只负责绘制与输入，核心源码不改。
-元素框架（`Match3.Element.Ability` / `Kind` / `Layer` / `World` / `Mechanic` 与 `SomeElement` 等存在类型、
+元素框架（`Match3.Element.Phase` / `Kind` / `Layer` / `World` / `Mechanic` 与 `SomePhase` 等存在类型、
 `Match3.Element.Builtin.*` 分文件）整体编进 wasm；网页接口层不直接调用元素类，盘面按 `Cell` 构造器编码成 JSON，
 所以元素迁移不改变网页端的 JSON 与贴图映射。核心新增模块时要同步到 `web/match3-web.cabal`（`web/build.sh` 会核对）。
 结构、导出接口、渲染器、自适应布局、资源管线、构建、部署与测试见 [web.md](web.md)。
@@ -209,69 +208,76 @@ web/（唯一前端：GHC wasm + JS；SDL2 桌面版已于 2026-10-05 移除，r
 
 ### 一个格子的层
 
-一格自上而下是：冰层（宝石的 `ice` 层数）→ 叠层（`CellOverlay`，草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）→ 本体（宝石各种类、石头、宝箱……、`Custom 名字 值`）→ 地面层（段 2c，`GameState.gsGround :: [(Pos,(ElementName, 层数))]`，第 7 刀起是关卡级机制 `GroundLayer` 的状态、`gsGround` 为派生读数；不在 `Cell` 里、不占格、不随重力 / 洗牌移动）。冰层与叠层是叠层种类（`Layer`），本体是本体种类（`Kind`），地面层是地面层种类（`GroundKind`）。解码（`elementOf`）：按注册的叠层由外向内 `peel`，剩下的交给本体的 `fromCell`，都不认识时得到惰性占格 `Inert`；分派缓存按 `cellSlot` / 叠层编号 / `Custom` 名字在建世界时算好（同名 / 同格以后注册的为准）。查询时按层合成（`Layered`）：挡匹配 / 挡交换 = 任一层挡；点火 = 本层有意见（`layerFires = Just`）就听本层；直接命中 = 最外层先回答（`layerHit`）。
+一格自上而下是：冰层（宝石的 `ice` 层数）→ 叠层（`CellOverlay`，草 / 藤 / 巧 / 雾 / 链 / 冻 / 帘 / 蒸汽）→ 本体（宝石各种类、石头、宝箱……、`Custom 名字 值`）→ 地面层（段 2c，`GameState.gsGround :: [(Pos,(ElementName, 层数))]`，第 7 刀起是关卡级机制 `GroundLayer` 的状态、`gsGround` 为派生读数；不在 `Cell` 里、不占格、不随重力 / 洗牌移动）。冰层与叠层是叠层种类（`Layer`），本体是 `Phase` 类型，地面层是 `GroundKind` 记录。解码（`elementOf`）：按注册的叠层由外向内 `peel`，剩下的交给本体 codec 的 `cFromCell`，都不认识时得到惰性占格 `Inert`；分派缓存按 `cellSlot` / 叠层编号 / `Custom` 名字在建世界时算好（同名 / 同格以后注册的为准）。查询时按层合成（`Layered`）：挡匹配 / 挡交换 = 任一层挡；点火 = 本层有意见（`lcFires` 给 `Just`）就听本层；直接命中 = 最外层先回答（`lcHit`）。
 
 ### 元素的能力与调用时机
 
-元素类重构（第 0–6 刀，2026-10）起，一种本体元素 = 一个类型 + 六个值级能力类的 instance（`Match3.Element.Ability`，每个方法都带「普通宝石」的缺省，元素只覆盖不同的）+ 一个类型级 `Kind` instance（`Match3.Element.Kind`）。`Element` 是六个能力类加 `Show` / `Eq` / `Typeable` 的类同义词，`SomeElement` 是装箱的元素（逐类转发每个方法）。常见组合用 DerivingVia 原型包：`Obstacle`（挡交换、不点火、打不动、洗牌保留、不过门、不被改色 / 推动，会下落）与 `Fixed`（同障碍，另外不下落）。元素自己的状态放在值里（石头 `StoneE 层数`、保险箱 `SafeE 层数`……），受击返回新格子。
+元素接口收缩（slim-1…11，2026-10）起，一种本体元素 = 一个类型 + 一个 `Phase` instance（`Match3.Element.Phase`）。七个方法按引擎阶段划分，类型级的东西都是 `codec :: Codec e` 这份静态记录里的数据（slim-9 删除了值级能力六类 `Ability`，slim-10 删除了 `Kind` 类）。常见组合用原型组合子：`gemMatch` / `obstacleMatch`、`gemHit` / `immuneHit`、`gemPhysics` / `obstaclePhysics`（挡交换、不点火、打不动、洗牌保留、不过门、不被改色 / 推动，会下落）/ `fixedPhysics`（另外不下落）。元素自己的状态放在值里（石头 `StoneE 层数`、保险箱 `SafeE 层数`……），受击返回新格子。
 
 ```haskell
 newtype StoneE = StoneE Int
   deriving (Eq, Show)
-  deriving (Matchable, Movable) via (Obstacle StoneE)
 
-instance Cellular StoneE where { nameOf _ = "stone"; toCell (StoneE n) = Stone n }
-instance Hittable StoneE where { struck (StoneE n) = chip n Stone; fires _ = False }
-instance Countable StoneE where counter _ = Just CountStones
-instance Renders StoneE where faceBase (StoneE k) = Just ("stone", [nField k])
-
-instance Kind StoneE where
-  kindName _ = "stone"
-  fromCell cell = case cell of { Stone n -> Just (StoneE n); _ -> Nothing }
-  place _ = layersPlace Stone
-  neighbourPrio _ = Just 10
-  onNeighbourClear (StoneE n) = chipNudge n Stone
+instance Phase StoneE where
+  codec = Codec
+    { cName = "stone"
+    , cToCell = \(StoneE n) -> Stone n
+    , cFromCell = \cell -> case cell of Stone n -> Just (StoneE n); _ -> Nothing
+    , cPlace = layersPlace Stone
+    , cMeta = emptyMeta { metaCounter = Just CountStones }
+    , cNear = Just (NearRule 10 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
+    }
+  onMatch _ = obstacleMatch
+  onHit _ (StoneE n) = HitOut (chip n Stone) False Nothing Nothing
+  physics _ = obstaclePhysics
+  onNear _ _ (StoneE n) = NearNudge (chipNudge n Stone)
+  view (StoneE k) = Face (Just ("stone", [nField k])) []
 ```
 
-| 类 | 方法 → 世界查询 | 普通宝石的缺省（`Obstacle` / `Fixed` 的不同处） | 调用点 |
+| 方法 / 字段 | 内容 → 世界查询 | 普通宝石（`obstacle*` / `fixed*` 的不同处） | 调用点 |
 |----|-----------------|----------------------------|--------|
-| `Cellular` | `nameOf` / `toCell`（`Int` newtype 元素缺省写成 `Custom 名字 (CustomState n)`） | — | 注册、分派、放置、计数名、事件里的 `evElement` |
-| `Matchable` | `color` → `colorOfWith` / `matchColorWith`；`blocksMatch`；`blocksSwap` → `blocksSwapWith` / `swapBlockedWith`；`hintable` → `hintableWith` | 颜色取宝石格；不挡匹配；不挡交换（挡）；可提示 | `Board.Match.groupGemRunsWith`、`Clear.countColor`、`Move` / `Boosters` 校验、`findHintWith` |
-| `Hittable` | `struck :: e -> Strike`（`Absorb Cell` / `Destroy` / `Immune`）→ `directHitWith` / `hitImmuneWith`；`fires` → `activatesWith`；`blast` → `blastWith` | `Destroy`（`Immune`）；能点火（不点火）；无爆炸范围 | `Clear.clearWaveWith`、`Clear.expandSpecials`、锤子 |
-| `Movable` | `falls` → `fallsWith`；`portal` → `portalWith`；`drains` → `drainsWith`；`keepOnShuffle` → `keepOnShuffleWith`；`recolorable` / `pushable` → `recolorableWith` / `pushableWith` | 下落（`Fixed` 不落）；过门（不过）；不收走；洗牌重排（保留）；可改色 / 可推（不可） | `Board.Gravity`、`Game.Shuffle`、`AdjCtx.acRecolor`、`EndCtx.ecPushable` |
-| `Countable` | `counter` → `counterWith`；`diffWeight` → `weighElementWith`（新玩法 5）；`vacatesCarpet` → `vacatesCarpetWith` | 不计数；差计权重 1；不算覆盖地毯 | `Board.Cascade`（`ctCounts`）、`Game.Tally` |
-| `Renders`（不参与规则） | `face` → `faceFieldsWith`（`View.cellExtras`：网页 JSON 按序追加的附加字段）；`faceBase`（第 6 刀，`View.cellFaceWith`：网页 JSON 的类型标签 `t` 与基本字段） | 无附加字段；`faceBase = Nothing` → `Custom` 格 `("custom", name / v)`、其余 `(元素名, [])`；宝石格（含冰 / 叠层）由 View 按存储编码给出 | 网页 `Api.encodeCell`、桌面 HUD |
+| `codec`：`cName` / `cToCell` / `cFromCell` / `cPlace` | 名字、存储编解码、关卡放置（`Int` newtype 元素用 `intCell "名字"` / `fromCustom` / `customPlace`） | — | 注册、分派、放置、计数名、事件里的 `evElement` |
+| `codec`：`cMeta` / `liveMeta` | `metaCounter` → `counterWith`；`metaDiffWeight` → `weighElementWith`；`metaVacatesCarpet` → `vacatesCarpetWith`；`metaDiffCounter` / `metaBonusMoves` → `diffCountersWith` | 不计数；差计权重 1；不算覆盖地毯 | `Board.Cascade`（`ctCounts`）、`Game.Tally` |
+| `codec`：`cNear` + `onNear` | 邻格规则：顺序号 / `Reach` / `DieOrder` + 反应（`NearNudge` / `NearEdit`） | 无 | `Rules.kindNeighbour` |
+| `codec`：`cHud` | `hudLabel` / `hudLoseHint` → `displayLabelWith` / `loseHintWith`；`hudGoalIcon` → `goalIconWith`；`hudBossHp` → `boardBossHpWith` | 都不提供 | HUD、网页、失败提示 |
+| `codec`：`cPasses` | 逃生口 `AdjacentPass 次序 规则` / `EndPass EndRule` / `SwapPass SwapRule` / `OpenPass OpenRule` | 无 | `Rules.kindRules` |
+| `onMatch :: e -> MatchRule` | `mColor` → `colorOfWith` / `matchColorWith`；`mBlockMatch`；`mBlockSwap` → `blocksSwapWith` / `swapBlockedWith`；`mHintable` → `hintableWith` | 颜色取宝石格；不挡匹配；不挡交换（挡）；可提示 | `Board.Match.groupGemRunsWith`、`Clear.countColor`、`Move` / `Boosters` 校验、`findHintWith` |
+| `onHit :: Hit -> e -> HitOut e` | `hStrike`（`Absorb Cell` / `Destroy` / `Immune`）→ `directHitWith` / `hitImmuneWith`；`hFires` → `activatesWith`；`hBlast` → `blastWith` | `Destroy`（`Immune`）；能点火（不点火）；无爆炸范围 | `Clear.clearWaveWith`、`Clear.expandSpecials`、锤子 |
+| `physics :: e -> Physics` | `pFalls` → `fallsWith`；`pPortal` → `portalWith`；`pDrains` → `drainsWith`；`pKeepShuffle` → `keepOnShuffleWith`；`pRecolor` / `pPush` → `recolorableWith` / `pushableWith` | 下落（`fixed` 不落）；过门（不过）；不收走；洗牌重排（保留）；可改色 / 可推（不可） | `Board.Gravity`、`Game.Shuffle`、`AdjCtx.acRecolor`、`EndCtx.ecPushable` |
+| `view :: e -> Face`（不参与规则） | `fExtras` → `faceFieldsWith`（`View.cellExtras`：网页 JSON 按序追加的附加字段）；`fBase`（`View.cellFaceWith`：网页 JSON 的类型标签 `t` 与基本字段） | 无附加字段；`fBase = Nothing` → `Custom` 格 `("custom", name / v)`、其余 `(元素名, [])`；宝石格（含冰 / 叠层）由 View 按存储编码给出 | 网页 `Api.encodeCell` |
 
-类型级 `Kind` 的方法都带 `proxy e` 参数：`kindName`、`fromCell`、`place`（关卡放置）、`label` / `loseHint`（`CountNamed` 目标的中文名 / 失败提示 → `displayLabelWith` / `loseHintWith`）、`diffCounter` / `bonusMoves`（→ `diffCountersWith`）、邻格规则在 `Phase`（`cNear` / `onNear`）；逃生口仍是 `boardPasses :: proxy e -> [BoardPass]`（`AdjacentPass 次序 规则` / `EndPass EndRule` / `SwapPass SwapRule` / `OpenPass OpenRule`）。多格实体另写 `Entity`（`footprint` / `partNo` / `hitPoints` / `withHp`）。地面层 `GroundKind` 是不带值的类型：`groundName`、`groundHit :: proxy g -> Int -> Maybe Int`（→ `hitGroundWith`，`Game.Resolve` 逐轮调用；每去一层按 `groundCounter` 计 1）、`groundWiden`（新玩法 8 魔法地格扩爆 → `groundWideningWith`）、`groundLabel` / `groundLoseHint`。
+`Match3.Element.Kind` 只剩按 proxy 读 codec 的同名函数（`kindName` / `fromCellAs` / `place` / `label` / `loseHint` / `diffCounter` / `bonusMoves` / `boardPasses` / `boardBossHp` / `goalIconName`）、两条记录与写法助手。多格实体是记录 `Entity e { footprint, partNo, hitPoints, withHp }`，元素把 `AdjacentPass 200 (entityDamage 记录)` 放进 `cPasses`。地面层是记录 `GroundKind { groundName, groundHit :: Int -> Maybe Int（→ hitGroundWith，Game.Resolve 逐轮调用；每去一层按 groundCounter 计 1）, groundCounter, groundWiden（新玩法 8 魔法地格扩爆 → groundWideningWith）, groundLabel, groundLoseHint }`，缺省构造 `groundKind "名字"`。
 
-**规则 = 方法 + 通用驱动 + 逃生口**（第 3 刀，`Match3.Element.Rules`）：建世界时 `kindRules` / `layerRules` 把方法给出的规则与逃生口收集一次、按次序排好。邻格规则的驱动 `kindNeighbour` / `layerNeighbour` 统一做「按真消除格顺序找上下左右、界内且认得出这种元素的格、整体去重、`SkipDirect` 去掉直接命中格、按顺序写回、`Dies` 前插进打碎格」；叠层的步末蔓延由 `spreads` 方法经 `layerSpread` 驱动；多格实体扣血由 `entityDamage` 算、经 Kind.`entityHit` 挂进 `kindRules`。读整盘、按自己顺序写回的规则（步末 `EndRule{erPhase, erOrder, erRun, erSeeds, erHoles}`、成对交换 `SwapRule{srOrder, srFires, srSeeds}`、开启 `OpenRule`、魔法帽 / 果汁机 / 染色瓶这类改邻格的规则）照旧写成函数挂在 `boardPasses` / `layerPasses` 上。驱动的顺序语义与第 3 刀前的手写函数逐项相同，元素对照快照 `element-oracle.txt` 的 `AR` / `ER` 行与金标准锁定；`ab_rule_methods_pinned` 钉住每种内置元素的方法值。
+**规则 = 方法 + 通用驱动 + 逃生口**（第 3 刀，`Match3.Element.Rules`）：建世界时 `kindRules` / `layerRules` 把 `cNear` / `layerCover` 给出的规则与逃生口收集一次、按次序排好。邻格规则的驱动 `kindNeighbour` / `layerNeighbour` 统一做「按真消除格顺序找上下左右、界内且认得出这种元素的格、整体去重、`SkipDirect` 去掉直接命中格、按顺序写回、`Dies` 前插进打碎格」；叠层的步末蔓延由 `lcSpreads` 经 `layerSpread` 驱动；多格实体扣血由 `entityDamage` 算，元素自己挂在 `cPasses` 里。读整盘、按自己顺序写回的规则（步末 `EndRule{erPhase, erOrder, erRun, erSeeds, erHoles}`、成对交换 `SwapRule{srOrder, srFires, srSeeds}`、开启 `OpenRule`、魔法帽 / 果汁机 / 染色瓶这类改邻格的规则）照旧写成函数挂在 `cPasses` / `lcPasses` 上。驱动的顺序语义与第 3 刀前的手写函数逐项相同，元素对照快照 `element-oracle.txt` 的 `AR` / `ER` 行与金标准锁定；`ab_rule_methods_pinned` 钉住每种内置元素的方法值。
 
-**叠层**（`Layer`，对应 xmonad 的 `LayoutModifier`）：冰层（`Ice 层数`）和八种叠层（`GrassL` / `VineL` / `ChocoL` / `FogL` / `ChainL` / `FreezeL` / `CurtainL` / `SteamL`）。方法：`peel` / `putOn`、`layerBlocksMatch` / `layerBlocksSwap`、`layerFires :: l -> Maybe Bool`、`layerHit :: l -> LayerHit l`（`Pierce` 问里面 / `Keep l'` 换层 / `Peel` 揭掉 / `Shatter` 连本格一起碎）、`layerStripsOnClear`（→ `stripOnClearWith`）、`layerPlace`，规则方法 `layerNeighbourPrio` / `layerReach` / `onLayerNeighbourClear` / `spreads` 与逃生口 `layerPasses`。`Layered l e` 把叠层和里面的元素合成一个元素，合成规则只在 `Layered` 的 instance 里写一次：挡匹配 / 挡交换任一层即挡；点火本层有意见就听本层；命中本层先回答，穿透时问里层、里层吃掉命中就把本层盖回去；名字 / 颜色 / 计数 / 下落等取里层；有任何一层就洗牌保留。
+**叠层**（`Layer`，对应 xmonad 的 `LayoutModifier`）：冰层（`Ice 层数`）和八种叠层（`GrassL` / `VineL` / `ChocoL` / `FogL` / `ChainL` / `FreezeL` / `CurtainL` / `SteamL`）。类只有三个方法：`peel` / `putOn` 与类型级的 `layerCover :: LayerCover l`（slim-11）。`LayerCover` 字段：`lcName` / `lcPlace`；值级的 `lcBlocksMatch` / `lcBlocksSwap`、`lcFires :: l -> Maybe Bool`、`lcHit :: l -> LayerHit l`（`Pierce` 问里面 / `Keep l'` 换层 / `Peel` 揭掉 / `Shatter` 连本格一起碎）、`lcStripsOnClear`（→ `stripOnClearWith`）；邻格规则 `lcNearPrio` / `lcReach` / `lcOnNear`、蔓延 `lcSpreads`、逃生口 `lcPasses`；缺省 `defaultCover "名字"`。`layerName` / `layerHit` / `spreads` 等是读它的同名函数。`Layered l e` 把叠层和里面的元素合成一个元素，合成规则只在 `Layered` 的 instance 里写一次：挡匹配 / 挡交换任一层即挡；点火本层有意见就听本层；命中本层先回答，穿透时问里层、里层吃掉命中就把本层盖回去；名字 / 颜色 / 计数 / 下落等取里层；有任何一层就洗牌保留。
 
-**注册项**（`Def`）：`kindDef @T`（本体）、`layerDef @L`（冰 / 叠层）、`groundDef @G`（地面层）、`inertDef 名字`（只登记名字的惰性占格；未注册的 `Custom` 名字也解码成 `Inert`：挡交换、无色、会下落、打不动、洗牌保留）。建世界：`mkWorld :: [Def] -> World`（总函数：同名 / 同格以后出现的为准）；`mkWorldChecked :: [Def] -> Either [WorldError] World` 把重名（`DuplicateName`）、同一种格子被多个种类认领（`SharedCell`）、种类不认领任何格子（`Unclaimed`，解码永远轮不到它）暴露成值；`register` 往已有世界追加一项。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）；`placeWith` / `placeAllWith` 返回 `Either PlaceError Board`（`UnknownElement 名字` / `PlaceOutOfBounds 名字 格`），内置关卡与每日挑战全部放置成功由 `level_placements_all_right` / `daily_placements_all_right` 锁定。
+**注册项**（`Def`）：`kindDef @T`（本体）、`layerDef @L`（冰 / 叠层）、`groundDef 记录`（地面层，如 `groundDef jelly`）、`inertDef 名字`（只登记名字的惰性占格；未注册的 `Custom` 名字也解码成 `Inert`：挡交换、无色、会下落、打不动、洗牌保留）。建世界：`mkWorld :: [Def] -> World`（总函数：同名 / 同格以后出现的为准）；`mkWorldChecked :: [Def] -> Either [WorldError] World` 把重名（`DuplicateName`）、同一种格子被多个种类认领（`SharedCell`）、种类不认领任何格子（`Unclaimed`，解码永远轮不到它）暴露成值；`register` 往已有世界追加一项。放置函数 `Placer = [Arg] -> Cell -> Maybe Cell` 由关卡放置表 `Place 名字 参数 坐标` 调用（`Game.Level.decorateLevelWith`）；`placeWith` / `placeAllWith` 返回 `Either PlaceError Board`（`UnknownElement 名字` / `PlaceOutOfBounds 名字 格`），内置关卡与每日挑战全部放置成功由 `level_placements_all_right` / `daily_placements_all_right` 锁定。
 
 **本步上下文**（第 4 刀，`StepCtx { stepWiden }`，World 的 `wStep` 字段，`noStep` 为空）：只在一步结算期间有意义的数据，目前只有魔法地格的扩爆格（见「规则表」后的扩爆格一段）。放在 World 里而不另穿参数，Clear / Cascade / Trace 的签名不用改。
 
-**关卡级机制**（第 5 刀，`class Mechanic`，`Match3.Element.Mechanic`）：飞碟 / 皮带 / 传送门 / 地毯 / 地面层 / 规则开关 / 掉落口。与格子元素同一写法：**状态在值里**（`UfoLevel [Ufo]`、`BeltLevel [Belt]`、`PortalLevel [(Pos,Pos)]`、`CarpetLevel [Pos]`、`GroundLayer Ground`），一局的全部机制是 `GameState.gsLevelElems :: [SomeMechanic]`（`gsUfos` 等是派生读数，来自读数方法 `ufos` / `belts` / `portals` / `carpetOpen` / `ground` / `drops`，返回 `Maybe`，读的一方取第一个提供的）。基本方法 `mechName`、`mechStart :: Level -> m -> m`（从关卡记录取开局状态；飞碟 / 地毯没有放置而目标需要时的补齐也在这里）、`mechCore`（核心机制：不经注册、总参与，只有地面层）。开局由 `Element.Level.startLevelsWith w 关卡记录` 开出：世界里的各种（注册顺序）+ 核心机制。
+**关卡级机制**（第 5 刀，`class Mechanic`，`Match3.Element.Mechanic`）：飞碟 / 皮带 / 传送门 / 地毯 / 地面层 / 规则开关 / 掉落口。与格子元素同一写法：**状态在值里**（`UfoLevel [Ufo]`、`BeltLevel [Belt]`、`PortalLevel [(Pos,Pos)]`、`CarpetLevel [Pos]`、`GroundLayer Ground`），一局的全部机制是 `GameState.gsLevelElems :: [SomeMechanic]`（`gsUfos` 等是派生读数，来自 `layout` 的 `mlUfos` / `mlBelts` / `mlPortals` / `mlCarpetOpen` / `mlGround` / `mlDrops`，返回 `Maybe`，读的一方取第一个提供的）。类只有两个方法：类型级的 `layout :: MechLayout m`（名字 `mlName`、核心 `mlCore`、各读数怎么从值里取）与 `onBeat :: Beat r -> m -> Maybe (r, m)`；`mechName` / `mechCore` / `mechStart` 是自由函数，开局 = 回复 `Start 关卡记录` 节拍（飞碟 / 地毯没有放置而目标需要时的补齐也在这里）；核心机制不经注册、总参与，只有地面层。开局由 `Element.Level.startLevelsWith w 关卡记录` 开出：世界里的各种（注册顺序）+ 核心机制。
 
 主流程经 `onBeat` 调**有类型的节拍**（`Beat` 构造子；缺省 `Nothing` = 不回复）。每个节拍参与的机制（`Element.Level` 内部的 `active`）= 注册顺序的各种（取 `gsLevelElems` 里同名的状态，没有则用注册的原型值）+ 核心机制；**未注册（或 `removeMechanic` 去掉）的名字即使状态在 `gsLevelElems` 里也不参与**。带状态的节拍经 `beatIn`（`onBeat`）**折叠所有回复者**（按参与顺序，前一个的回复是后一个的输入，各自推进后的状态依次写回；原来没有的只在状态真的变了时追加），查询节拍经 `queryIn`（状态不变）：
 
-| 节拍方法 | 时机 | 内置回复者 | 主流程入口 |
+| `Beat` 节拍 | 时机 | 内置回复者 | 主流程入口 |
 |------|------|------|------|
-| `onRefilled 盘 吸走格` | 每轮补子之后 | `UfoLevel`（`stepUfos`，飞碟移动） | 钩子 `onAbsorb`（`Board.Cascade.absorbRound`） |
-| `refillPolicy 策略` | 第 8 刀：补子时取策略（初值 = 世界的策略） | `CookieDrop`（新玩法 6 掉落口；其余关不回复 = 缺省策略） | 钩子 `hookRefill`（`Board.Gravity.activeRefill`） |
-| `shapes 形状表` | 新玩法 1：每步结算开始时（初值 = 世界的形状表） | `BombShapes`（规则开关 `bomb_shapes`；打开时插入 `ltBombRule`） | `Element.Level.levelWorldIn`（`Game.Resolve.resolveMoveWith` 开头换上本关的世界） |
-| `morph 交换前盘 交换后盘 两端` | 新玩法 4：玩家交换成立前（第一个回复者为准，回复 `Morph { morphName, morphCells, morphSeeds }`） | `RainbowCombos`（规则开关 `rainbow_combos`；彩虹 × 直线 / 炸弹） | `Element.Level.morphIn`（`Game.Move.resolveSwapWith`：有回复时起手为 `OpenMorph`） |
-| `onEndTick 移位表` | 玩家交换的步末，倒计时之后、蔓延之前 | `BeltLevel`（`beltMoves`） | `Element.Level.beltShiftIn`（步末表 `belt` 行） |
-| `avoidCells 格` / `wallCells 格` | 会走的元素（PhaseMove）之前 | `BeltLevel`（皮带格）/ `PortalLevel`（门端点） | `avoidCellsIn` / `wallCellsIn`（步末表 `move` 行的 `EndCtx`） |
-| `onSettling 可穿门谓词 可变盘` | 沉降时 | `PortalLevel`（`portalTeleport`） | 钩子 `onSettle`（`Board.Gravity.settleDrainWith`） |
-| `onCover 本步格 新覆盖数` | 步末结算 | `CarpetLevel`（`coverCarpets`） | `coverIn`（`Resolve`） |
-| `onGroundHit 规则 命中格 去层数` | 每轮之后（按轮） | `GroundLayer`（规则 = 世界的 `hitGroundWith`；核心机制） | `hitGroundIn`（`Resolve`） |
-| `judge 盘面 总分 剩余步数 结局` | 一步结算之后、写进 `gsOver` 之前（初值 = 内置规则判出的结局）；只查询 | 无（内置都不回复 = 原有结局） | `judgeIn`（`Resolve`）；限时关、倒计时归零即输这类输法只加机制，见 `ext_judging_level_element` |
+| `Refilled 盘 吸走格` | 每轮补子之后 | `UfoLevel`（`stepUfos`，飞碟移动） | 钩子 `onAbsorb`（`Board.Cascade.absorbRound`） |
+| `AskRefill 策略` | 第 8 刀：补子时取策略（初值 = 世界的策略） | `CookieDrop`（新玩法 6 掉落口；其余关不回复 = 缺省策略） | 钩子 `hookRefill`（`Board.Gravity.activeRefill`） |
+| `AskShapes 形状表` | 新玩法 1：每步结算开始时（初值 = 世界的形状表） | `BombShapes`（规则开关 `bomb_shapes`；打开时插入 `ltBombRule`） | `Element.Level.levelWorldIn`（`Game.Resolve.resolveMoveWith` 开头换上本关的世界） |
+| `AskMorph 交换前盘 交换后盘 两端` | 新玩法 4：玩家交换成立前（第一个回复者为准，回复 `Morph { morphName, morphCells, morphSeeds }`） | `RainbowCombos`（规则开关 `rainbow_combos`；彩虹 × 直线 / 炸弹） | `Element.Level.morphIn`（`Game.Move.resolveSwapWith`：有回复时起手为 `OpenMorph`） |
+| `EndTick 移位表` | 玩家交换的步末，倒计时之后、蔓延之前 | `BeltLevel`（`beltMoves`） | `Element.Level.beltShiftIn`（步末表 `belt` 行） |
+| `AskAvoid 格` / `AskWall 格` | 会走的元素（PhaseMove）之前 | `BeltLevel`（皮带格）/ `PortalLevel`（门端点） | `avoidCellsIn` / `wallCellsIn`（步末表 `move` 行的 `EndCtx`） |
+| `Settling 可穿门谓词 可变盘` | 沉降时 | `PortalLevel`（`portalTeleport`） | 钩子 `onSettle`（`Board.Gravity.settleDrainWith`） |
+| `Covering 本步格 新覆盖数` | 步末结算 | `CarpetLevel`（`coverCarpets`） | `coverIn`（`Resolve`） |
+| `GroundHit 规则 命中格 去层数` | 每轮之后（按轮） | `GroundLayer`（规则 = 世界的 `hitGroundWith`；核心机制） | `hitGroundIn`（`Resolve`） |
+| `AskJudge 盘面 总分 剩余步数 结局` | 一步结算之后、写进 `gsOver` 之前（初值 = 内置规则判出的结局）；只查询 | 无（内置都不回复 = 原有结局） | `judgeIn`（`Resolve`）；限时关、倒计时归零即输这类输法只加机制，见 `ext_judging_level_element` |
 
 **Board 层只收钩子记录**（第 7 刀，`Match3.Board.Hooks`）：`LevelHooks { onSettle :: MBoard -> MBoard, onAbsorb :: Board -> ([Pos], LevelHooks), hookRefill :: Maybe RefillPolicy（第 8 刀）, hookLevel :: [SomeMechanic] }`，由 `levelHooksWith w (gsLevelElems gs)` 造出；连锁把 `onAbsorb` 交回的钩子一路传下去（`CascadeRun.crHooks`），Game 层最后从 `hookLevel` 取回推进后的机制。Board 核心模块（Match / Clear / Cascade / Gravity / Hooks / Grid）不 import 飞碟 / 皮带 / 地毯模块，也不碰 `GameState`（`br_board_takes_hooks_only` 扫描）。
 
-没有机制回复 = 该机制不生效（`removeMechanic`；测试 `br_level_hooks_*` 在 38 关实测）。任何模块都能定义新的机制（`ec_mechanics_by_beat` 用无状态的「磁铁」演示只 `registerMechanic` 即可接入；`ec_mechanic_stateful_extension` 用带状态的「虹吸」演示开局 `mechStart`、状态写回 `gsLevelElems`、去掉注册后状态原样不生效，都不改主流程）。需要新时机的机制要在 `Mechanic` 加一个带 `Nothing` 缺省的方法，并在主流程对应位置调一次 `beatIn` / `queryIn`。
+没有机制回复 = 该机制不生效（`removeMechanic`；测试 `br_level_hooks_*` 在 38 关实测）。任何模块都能定义新的机制（`ec_mechanics_by_beat` 用无状态的「磁铁」演示只 `registerMechanic` 即可接入；`ec_mechanic_stateful_extension` 用带状态的「虹吸」演示开局 `Start` 节拍、状态写回 `gsLevelElems`、去掉注册后状态原样不生效，都不改主流程）。需要新时机的机制要给 `Beat` 加一个构造子，并在主流程对应位置调一次 `beatIn` / `queryIn`。
 
 ### 规则表：特殊块形状、特殊块组合、补子策略（第 8 刀）
 
@@ -411,7 +417,7 @@ data GameView = GameView
 | 按名字的目标 | `LevelGoal` 新增 `GoalNamed 名字 N`（第 5 刀起写作 `goalCount (CountNamed 名字) N`；读 `gsCount (CountNamed 名字)`，由 `counter` / `diffCounter = CountNamed 名字` 累加）；HUD / 标题 / 失败提示 / 选关已接 | 自定义元素当关卡目标 | `ext_goal_named_counts_crate` |
 | 地面层 | `GroundKind`（`groundHit`，元素类重构前是 `SlotGround` + `groundRule`）+ `gsGround`（关卡记录的 `lvlGround`） | 果冻类「格子下面的层」 | `ext_ground_layer_test_element` |
 | 扩爆（新玩法 8） | 地面层种类的 `groundWiden`（元素类重构前是能力 `widens`）→ 每步 `levelWorldIn` 写本步上下文 `StepCtx` → `blastWith` | 魔法地格类「在这格引爆的特效范围变大」 | `mg_blast_widened_only_at_magic_cell`、`mg_other_levels_unchanged`（`test/Spec/MagicGround.hs`） |
-| 边缘收集 | `Movable.drains :: e -> [Edge]` | 任意方向的收集物 | `ext_edge_drain_side_collectible` |
+| 边缘收集 | `physics` 的 `pDrains :: [Edge]` | 任意方向的收集物 | `ext_edge_drain_side_collectible` |
 | 步末补结算 | `EndRule.erHoles` + `Cascade.cascadeAfterWith (AfterEnd …)` | 步末阶段挖掉格子后的沉降 / 补子 / 再连锁 | `ext_post_end_settle_hole_element` |
 | 洗牌走世界 | `Game.Shuffle.shuffleGameWith w`、`Game.State.applyHintWith w`（`Engine.playWith` 的 Shuffle / Hint 分支） | 自定义元素的洗牌保留 / 提示 | `ext_manual_shuffle_keeps_crate_via_engine` |
 
@@ -419,19 +425,19 @@ data GameView = GameView
 
 ### 新增一种元素的步骤
 
-1. 选层：本体用 `Custom "名字" (CustomState 值)`（值自定义，例如耐久；存储编码只能是一个 `Int`，在元素的 `toCell` / `fromCell` 这一处转换；元素类型就是 `newtype X = X Int` 时可以不写 `toCell`，缺省实现写成 `Custom (nameOf x) (CustomState n)`，解码用 `fromCustom "名字" X`，见 [haskell-features/02 §1.2](haskell-features/02-类型类与抽象.md#12-defaultsignatures)）；格子下面的层写 `GroundKind`（层数放进地面层状态）；需要新的内置层时才动 `Types`。
-2. 写 instance：定义一个类型（状态放在值里），写能力 instance 与 `instance Kind`（测试 / 扩展元素写在自己的模块里；新的**内置**元素放进 `src/Match3/Element/Builtin/` 下功能最接近的分组文件——宝石 `Gem`、冰 / 叠层 `Layer`、打破型障碍 `Obstacle`、收集计数 `Collectible`、会动 / 会生成的 `Actor`、地面层 `Ground`、关卡级 `Level`——跨分组共用的辅助放 `Common`）。`Cellular` 必写（`nameOf`，非 `Int` 表示时还有 `toCell`）；其余能力类只覆盖与普通宝石不同的方法，障碍类用 `deriving (Matchable, Movable) via (Obstacle 类型)`（不下落用 `Fixed`），没有要覆盖的写空 instance（`instance Renders X`）。`Kind` 写 `kindName`（与 `nameOf` 相同，测试钉住）/ `fromCell` / `place`（`Custom` 用 `customPlace "名字"`），做成目标时 `label` / `loseHint`。邻格规则：能写成「邻格真消除时这一格怎么变」的用方法 `neighbourPrio`（选一个不和现有次序冲突的数，见上文「邻格规则顺序」）/ `reach` / `onNeighbourClear`；其余规则（步末、成对交换、开启、读整盘的邻格规则）挂在 `boardPasses`。步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层写 `instance Layer`；不在格子里的机制写 `instance Mechanic`，实现需要的节拍方法。
+1. 选层：本体用 `Custom "名字" (CustomState 值)`（值自定义，例如耐久；存储编码只能是一个 `Int`，在 codec 的 `cToCell` / `cFromCell` 这一处转换；元素类型就是 `newtype X = X Int` 时写 `cToCell = intCell "名字"`、`cFromCell = fromCustom "名字" X`）；格子下面的层写一条 `GroundKind` 记录（层数放进地面层状态）；需要新的内置层时才动 `Types`。
+2. 写 instance：定义一个类型（状态放在值里），写 `instance Phase`（测试 / 扩展元素写在自己的模块里；新的**内置**元素放进 `src/Match3/Element/Builtin/` 下功能最接近的分组文件——宝石 `Gem`、冰 / 叠层 `Layer`、打破型障碍 `Obstacle`、收集计数 `Collectible`、会动 / 会生成的 `Actor`、地面层 `Ground`、关卡级 `Level`——跨分组共用的辅助放 `Common`）。`codec` 写全八个字段（名字、编解码、`cPlace`（`Custom` 用 `customPlace "名字"`）、`cMeta`、`cNear`、`cHud`（做成目标时 `hudLabel` / `hudLoseHint`）、`cPasses`）；`onMatch` / `onHit` / `physics` 用原型组合子再改不同的字段，`view` 没有特别显示时写 `noFace`。邻格规则：能写成「邻格真消除时这一格怎么变」的写 `cNear = Just (NearRule 次序 Reach DieOrder)`（选一个不和现有次序冲突的数，见上文「邻格规则顺序」）+ `onNear`；其余规则（步末、成对交换、开启、读整盘的邻格规则）挂在 `cPasses`。步末要挖掉格子时给 `EndRule` 填 `erHoles`，补结算自动发生。叠层写 `instance Layer`（`peel` / `putOn` / `layerCover`）；不在格子里的机制写 `instance Mechanic`（`layout` + 回复需要的 `Beat` 节拍）。
    - 只经元素世界即可接入的类别：本体 `Custom`（削层 / 打碎 / 免疫 / 挡交换 / 下落 / 洗牌保留，也可以是按颜色匹配的有色棋子：覆盖 `color`，见 `ec_custom_matchable_gem`）、叠层与冰的命中规则、地面层、任意方向的边缘收集物（`drains`）、带 `erHoles` 的步末元素、以 `CountNamed` 计数并用 `GoalNamed` 当目标的元素、成对交换规则（`SwapPass`）、开启类元素（`OpenPass`）、可被改色 / 推动（`recolorable` / `pushable`）、不进普通匹配提示（`hintable`）、在已有节拍上反应的关卡级机制（`Mechanic`，见 `ec_mechanics_by_beat`）；第 8 刀起还有特殊块形状规则（`setShapeRules`，见 `ext_shape_rule_lt_bomb`）、特殊块组合规则（`setComboRules`，见 `ext_combo_rule_line_gem`）、补子策略（`setRefillPolicy` 或机制的 `refillPolicy` 节拍，见 `ext_refill_policy_level_colors` / `ext_refill_policy_level_element`）。
-   - 段 5 的双层果冻（`Jelly`，在 `Element.Builtin.Ground`：`GroundKind`，`groundHit` 去层、`groundCounter = CountNamed "jelly"`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` 障碍，命中即碎、邻消 170、`counter = CountNamed "bubble"`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。新玩法 2 的魔法石（`MagicStone`，`Fixed` 原型包，命中反应随状态变：平时 `Immune`、发射中 `Absorb` 归零；邻格充能 180、步末 `tickRule 20`）、新玩法 3 的毛球（`Fuzzball`，`Obstacle` 原型包，`boardPasses = [AdjacentPass 190 …, EndPass (moveRule 20 …)]`）同样只加 instance 与类型列表一项；要专门画法时在网页 `web/www/cells.js` 的 `CUSTOM_ART` 加一项（见下文步骤 5 与 [web.md §2.3](web.md#23-js-渲染器)）。
-   - 新玩法 5 的雪怪 Boss（`SnowBoss`，在 `Element.Builtin.Obstacle`）：多格元素用四个固定格表达，元素类重构第 3 刀起写成 `Entity`（`footprint` / `partNo` / `hitPoints` / `withHp`），扣血由通用驱动 `entityDamage` 经 `entityHit` 挂进 `kindRules`；主流程唯一的改动是通用的差计权重（`Countable.diffWeight`，`Game.Tally.diffCountsWith` 求加权和；缺省 1 时与原来的个数差相同）
+   - 段 5 的双层果冻（`jelly`，在 `Element.Builtin.Ground`：`GroundKind` 记录，`groundHit` 去层、`groundCounter = CountNamed "jelly"`）与气泡（`Bubble`，在 `Element.Builtin.Collectible`：`Custom` 障碍，命中即碎、邻消 170、`metaCounter = CountNamed "bubble"`）就是这样接入的内置元素：规则只在 instance 里，关卡数据在 `Levels.Campaign` 的关卡记录里（放置表 `lvlPlacements` / 地面层 `lvlGround`），主流程没有改动（`jb_main_flow_untouched_scan`）。新玩法 2 的魔法石（`MagicStone`，`fixedPhysics`，命中反应随状态变：平时 `Immune`、发射中 `Absorb` 归零；邻格充能 180、步末 `tickRule 20`）、新玩法 3 的毛球（`Fuzzball`，`obstaclePhysics`，`cPasses = [AdjacentPass 190 …, EndPass (moveRule 20 …)]`）同样只加 instance 与类型列表一项；要专门画法时在网页 `web/www/cells.js` 的 `CUSTOM_ART` 加一项（见下文步骤 5 与 [web.md §2.3](web.md#23-js-渲染器)）。
+   - 新玩法 5 的雪怪 Boss（`SnowBoss`，在 `Element.Builtin.Obstacle`）：多格元素用四个固定格表达，slim-10 起是 `Entity` 记录 `snowBossEntity`（`footprint` / `partNo` / `hitPoints` / `withHp`），扣血由通用驱动 `entityDamage` 算、挂在自己的 `cPasses`（`AdjacentPass 200`）；主流程唯一的改动是通用的差计权重（`liveMeta` 的 `metaDiffWeight`，`Game.Tally.diffCountsWith` 求加权和；缺省 1 时与原来的个数差相同）
    - 新玩法 6 的饼干掉落口（`CookieDrop`，在 `Element.Builtin.Level`）：机制实现补子策略节拍 `refillPolicy`（第 8 刀），把策略包一层「掉落口格补收集物」（`dropRefill`，随机数照常消耗）；配置在关卡记录的新字段 `lvlDrops`（缺省 `[]`）。主流程只多一个条件：有掉落口的关卡开局跳过目标补齐（`Game.Level.newGameAtLevelWith`）
-   - 新玩法 7 的变色龙（`Chameleon`，在 `Element.Builtin.Collectible`）：`Custom` 本体，覆盖 `color` / `keepOnShuffle` / `recolorable` / `counter`，`boardPasses = [SwapPass (SwapRule 15 …), EndPass (moveRule 40 …)]`，主流程不改；第 47 关用新玩法 6 的掉落口在补子时补进变色龙
-   - 新玩法 8 的魔法地格（`MagicGround`，在 `Element.Builtin.Ground`）：`GroundKind`，只写 `groundWiden = Just magicWiden`（没有 `groundHit` = 不被消耗、不计数）；为它加了一个缺省什么都不做的通用钩子（`groundWiden` / 本步上下文 `StepCtx` / `blastWith` 改写，见「规则表」后的扩爆格一段）。主流程的改动只有 `Element.Level.levelWorldIn` 多写一项与 `Engine.playWith` 展开事件改用 `levelWorldIn`；第 48 关的地面层写在关卡记录 `lvlGround`
+   - 新玩法 7 的变色龙（`Chameleon`，在 `Element.Builtin.Collectible`）：`Custom` 本体，`onMatch` 给颜色、`physics` 改 `pKeepShuffle` / `pRecolor`、`metaCounter` 计数，`cPasses = [SwapPass (SwapRule 15 …), EndPass (moveRule 40 …)]`，主流程不改；第 47 关用新玩法 6 的掉落口在补子时补进变色龙
+   - 新玩法 8 的魔法地格（`magicGround`，在 `Element.Builtin.Ground`）：`GroundKind` 记录，`(groundKind "magic") { groundWiden = Just magicWiden }`（缺省 `groundHit` = 不被消耗、不计数）；为它加了一个缺省什么都不做的通用钩子（`groundWiden` / 本步上下文 `StepCtx` / `blastWith` 改写，见「规则表」后的扩爆格一段）。主流程的改动只有 `Element.Level.levelWorldIn` 多写一项与 `Engine.playWith` 展开事件改用 `levelWorldIn`；第 48 关的地面层写在关卡记录 `lvlGround`
    - 仍需改主流程的：需要**新节拍**的关卡级机制（在 `Mechanic` 加带缺省的方法，并在主流程固定位置调用）、需要存进 `GameState` 的关卡级状态（见下节「遗留」）。（补子时生成自定义棋子已可经掉落口 `lvlDrops` 做到，见新玩法 7。）
-   - 显示：有状态的 `Custom` 元素要给前端额外字段（象限、当前颜色……）写 `Renders.face`，要换网页 JSON 的类型标签 / 基本字段写 `Renders.faceBase`（第 6 刀）；做成关卡目标要中文名 / 失败提示时写 `Kind.label` / `loseHint`；`View` / 网页 `Api` / `GoalLabel` / `Game.Outcome` 不改（`ext_element_display_fields`）。
+   - 显示：有状态的 `Custom` 元素要给前端额外字段（象限、当前颜色……）写 `view` 的 `fExtras`，要换网页 JSON 的类型标签 / 基本字段写 `fBase`；做成关卡目标要中文名 / 失败提示时写 `cHud` 的 `hudLabel` / `hudLoseHint`；`View` / 网页 `Api` / `GoalLabel` / `Game.Outcome` 不改（`ext_element_display_fields`）。
    - 胜负条件：内置规则判出结局后经机制的 `judge` 节拍复核（`judgeIn`），新的输赢法（限时、某物落底即输……）只写一个实现 `judge` 的 `Mechanic`，不改 `Game.Outcome`。
-3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 末尾加一行 `kindDef @类型`（已有项不要重排：注册顺序被元素查询快照的 `R` 行锁定；关卡级机制加进 `builtinMechanics`）；测试 / 扩展元素 = `register (kindDef @类型) defaultWorld`（叠层 `layerDef`，地面层 `groundDef`，关卡级机制 `registerMechanic (SomeMechanic 原型值)`，开局状态写在 `mechStart` 里，开局 / 走子用 `newGameAtLevelWith w` 与 `*With w` 入口），把世界传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith w`。
-4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 `Kind.place` 落格（`customPlace "名字"` = `Custom 名字 第一个整数参数`；要别的解析就自己写 `Placer`，参数解析器见 `Element.Types` 的 `ArgP`）。
+3. 注册：内置元素 = 在 `Element.Builtin.builtinDefs` 末尾加一行 `kindDef @类型`（已有项不要重排：注册顺序被元素查询快照的 `R` 行锁定；关卡级机制加进 `builtinMechanics`）；测试 / 扩展元素 = `register (kindDef @类型) defaultWorld`（叠层 `layerDef`，地面层 `groundDef 记录`，关卡级机制 `registerMechanic (SomeMechanic 原型值)`，开局状态写在 `Start` 节拍的回复里，开局 / 走子用 `newGameAtLevelWith w` 与 `*With w` 入口），把世界传给 `*With` 入口（`trySwapWith` / `resolveSwapWith` / `resolveHammerWith` / `ensurePlayableWith` / `shuffleGameWith` / `applyHintWith` / `decorateLevelWith` / `traceEventsWith`），或整体用 `Match3.Engine.match3GameWith w`。
+4. 放置：在关卡放置表里写 `Place "名字" [参数] [坐标]`，由 codec 的 `cPlace` 落格（`customPlace "名字"` = `Custom 名字 第一个整数参数`；要别的解析就自己写 `Placer`，参数解析器见 `Element.Types` 的 `ArgP`）。
 5. 表现：贴图名即元素名（`assets/` 里放同名贴图，缺图时画灰块）；要专门画法的 `Custom` 在网页 `web/www/cells.js` 加画法，颜色在 `UI.Presentation.elementRGBTable`（HUD 目标 / 地图 / 步末前沿与碎屑共用，网页经 `m3Meta` 读）；步末效果的播放、生长曲线与音效见[前端表现表](#前端表现表第-10-刀)的「给新元素加表现和音效」；网页端什么时候要改 `web/www/cells.js` 见 [web.md §2.3](web.md#23-js-渲染器)。
 6. 测试：参照 `archetype_ext_element_plugs_in`（`test/Spec/Archetype.hs`，最短的完整例子：障碍「荆棘」`Thorn` 不改主流程接入）、`element_world_custom_crate_extensibility`、`test/Spec/Extension.hs` 与 `test/Spec/ElementClass.hs`（测试专用「木箱」`Crate` 只定义在测试辅助 `test/Spec/Support.hs`，断言它削层、打碎、计数、挡交换、被锤、洗牌保留，并断言核心源码里没有它的名字）。
 
@@ -441,11 +447,11 @@ data GameView = GameView
 
 | 原专门分支 | 段 4 之后（元素类重构后的写法） | 主流程入口 |
 |------------|-----------|------------|
-| 彩虹取色（`Move` / `Boosters` / `findHint` 直接调 `isRainbowSwap` / `rainbowClearSeeds`） | `SpecialGem 'Rainbow` 的 `boardPasses = [SwapPass (SwapRule 10 isRainbowSwap rainbowClearSeeds)]` | `World.swapOpeningWith`、`findHintWith` 逐条 `swapRules` |
+| 彩虹取色（`Move` / `Boosters` / `findHint` 直接调 `isRainbowSwap` / `rainbowClearSeeds`） | `SpecialGem 'Rainbow` 的 `cPasses = [SwapPass (SwapRule 10 isRainbowSwap rainbowClearSeeds)]` | `World.swapOpeningWith`、`findHintWith` 逐条 `swapRules` |
 | 特殊 × 特殊合成（`isSpecialCombo` / `comboClearSeeds`） | `SwapRule 20`，挂在 `SpecialGem 'LineH` 上（规则自己检查两端）；第 8 刀起改为世界的组合表 `comboRules`（内置 `builtinComboRules`），整张表并成一条 `SwapRule 20` | 同上 |
-| 彩蛋开启（`Clear` 直接调 `Obstacles.openSurprises`） | `SurpriseEgg` 的 `boardPasses = [OpenPass (OpenRule openSurprises)]` | `World.openWith`（`surpriseClearPassWith` 成为通用的「开启类元素」流程） |
-| 魔法帽 / 染色瓶只改 `isGem` 的格 | `Movable.recolorable`（缺省 True：宝石各种类、倒计时、双面块；`Obstacle` / `Fixed` 为 False） | `AdjCtx.acRecolor` → `triggerAdjacentHatsBy` / `triggerAdjacentBottlesBy` |
-| 蜗牛只推 `Snail.pushable` 的格 | `Movable.pushable`（同上） | `EndCtx.ecPushable` → `stepSnailAtBy` / `traceSnailsBy` |
+| 彩蛋开启（`Clear` 直接调 `Obstacles.openSurprises`） | `SurpriseEgg` 的 `cPasses = [OpenPass (OpenRule openSurprises)]` | `World.openWith`（`surpriseClearPassWith` 成为通用的「开启类元素」流程） |
+| 魔法帽 / 染色瓶只改 `isGem` 的格 | `physics` 的 `pRecolor`（`gemPhysics` 为 True：宝石各种类、倒计时、双面块；`obstaclePhysics` / `fixedPhysics` 为 False） | `AdjCtx.acRecolor` → `triggerAdjacentHatsBy` / `triggerAdjacentBottlesBy` |
+| 蜗牛只推 `Snail.pushable` 的格 | `physics` 的 `pPush`（同上） | `EndCtx.ecPushable` → `stepSnailAtBy` / `traceSnailsBy` |
 | 飞碟（`Cascade` 直接调 `stepUfos`） | `UfoLevel [Ufo]` 实现节拍 `onRefilled`（状态在值里） | 钩子 `onAbsorb` |
 | 皮带（`Resolve` 直接调 `beltMoves`） | `BeltLevel [Belt]` 实现 `onEndTick` / `avoidCells` | `Element.Level.beltShiftIn` |
 | 传送门（`Gravity` 里写死实现） | `PortalLevel [(Pos,Pos)]` 实现 `onSettling` / `wallCells` | 钩子 `onSettle` |
@@ -463,7 +469,7 @@ data GameView = GameView
 | 钩子调用时机写死在主流程（吸收在补子后、移位在 Tick 与 Spread 之间……） | 部分消掉 | 节拍仍是流水线的固定位置（改节拍 = 改规则流水线）；但哪个机制在哪个节拍反应、回复什么，由机制自己的方法决定；元素类重构第 5 刀起没有开放消息，新节拍 = `Mechanic` 加一个带缺省的方法 |
 | 传送门端点当会走元素的墙（`wallCells`）只问注册了的传送门 | 有意如此（仅影响非内置世界） | 与传送本身一致：去掉 `portal` 注册后端点不再当墙。内置世界不受影响 |
 | 自定义元素的存储编码是 `Custom ElementName CustomState`（两个 newtype 各包一个 `String` / `Int`） | 保留 | 盘面以 `Cell` 存储（金标准、前端、机制模块都按它读写）；元素值由构造器从这个 `Int` 解码，所以自定义元素的状态只能编码成一个整数 |
-| 地面层种类不带值 | 元素类重构第 2 刀起 | 地面层在 `GroundLayer` 的状态里（`gsGround` 读数）、不进盘面，`GroundKind` 是不带值的类型（方法吃 `proxy`），层数只在状态里 |
+| 地面层种类是记录 | 元素类重构第 2 刀起不带值；slim-10 起是记录 | 地面层在 `GroundLayer` 的状态里（`gsGround` 读数）、不进盘面，`GroundKind` 是一条数据（`jelly` / `magicGround`），层数只在状态里 |
 | 地面层是核心关卡级机制（`mechCore`，定义在 `Element.Mechanic`），不在 `mechanicDefs` 里 | 保留（第 7 刀） | 地面层里每层的行为已由世界里的地面层种类（`groundDef`）决定，关卡级这一层只是承载；把它加进 `mechanicDefs` 会改变元素查询快照的 `R level` 行 |
 | 冰层 / 叠层没有注册种类时的兜底 | 行为略有不同 | 解码时没人 `peel` 这一层，它原样留在格子里交给本体解码（`decodeLayers`），不当叠层询问。内置世界恒含全部冰层 / 叠层种类，不影响内置元素与金标准 |
 | `Game.EndPhase`（皮带行）仍 import `Conveyor.applyBeltMoves`；`Trace` 再导出 `beltMoves` | 保留 | `applyBeltMoves` 是「按 (原格, 新格) 列表移格」的通用搬运，与皮带语义无关；`Trace` 的再导出给回放与测试用 |
@@ -474,9 +480,9 @@ data GameView = GameView
 
 元素是 xmonad `LayoutClass` 风格的类型类：一种元素 = 一个类型 + 几个 instance，状态放在元素值里（测试专用「鸟窝」`Nest` 演示跨轮状态）。
 
-- **类型列表**：内置世界 `builtinDefs` 是 36 项有序的类型列表（22 个本体类型，`SpecialGem` 用 DataKinds 一个类型覆盖 line_h / line_v / bomb / rainbow 四项；冰层与 8 个叠层是 `Layer`；果冻、魔法地格是 `GroundKind`），关卡级机制是 `Mechanic`。一格解码成 `Layered … (SomeElement 本体)` 后直接调能力方法。
-- **分文件**：内置元素按功能分在 `src/Match3/Element/Builtin/` 下的 `Gem` / `Layer` / `Obstacle` / `Collectible` / `Actor` / `Ground` / `Level` / `Common`（各文件开头的注释写明这一组的共同特征），每个元素的类型与 instance 放在同一文件；`Element.Builtin` 只按注册顺序汇总类型列表。彩蛋归 `Obstacle`：它是 `Obstacle` 原型包、命中即破的占格本体，没有计数（不是收集类），也不按颜色匹配（不是宝石）。只在一组里用到的辅助留在组内（`chip` / `layersPlace` 在 `Obstacle`，`spreadRule` 在 `Layer`，`tickRun` / `snailRun` / `traceSnails` 在 `Actor`），跨组共用的才进 `Common`（`nField` / `colorField` 等显示字段辅助也在这里）。依赖只朝一个方向：`Obstacle` 引用 `Gem`（双面块翻成宝石）和 `Collectible`（保险箱开成饼干），`Level` 引用 `Gem`（规则开关 `BombShapes` 用 `withBombShapes`），其余分组互不引用（`Common` 除外）。
-- **透明性护栏**：`Spec.ElementAbility` 按源码核对 `SomeElement` 转发、`Layered` 合成每个能力方法并都进了 `abilityProbe`，装箱前后逐项相等；`Spec.Archetype` 钉住普通宝石 / `Obstacle` / `Fixed` / `Inert` 的缺省方法值。
+- **类型列表**：内置世界 `builtinDefs` 是 36 项有序的类型列表（22 个本体类型，`SpecialGem` 用 DataKinds 一个类型覆盖 line_h / line_v / bomb / rainbow 四项；冰层与 8 个叠层是 `Layer`；果冻、魔法地格是 `GroundKind` 记录），关卡级机制是 `Mechanic`。一格解码成 `SomePhase`（有叠层时里面是 `Layered …`）后直接调 `Phase` 方法。
+- **分文件**：内置元素按功能分在 `src/Match3/Element/Builtin/` 下的 `Gem` / `Layer` / `Obstacle` / `Collectible` / `Actor` / `Ground` / `Level` / `Common`（各文件开头的注释写明这一组的共同特征），每个元素的类型与 instance 放在同一文件；`Element.Builtin` 只按注册顺序汇总类型列表。彩蛋归 `Obstacle`：它用障碍原型组合子（`obstacleMatch` / `obstaclePhysics`）、命中即破的占格本体，没有计数（不是收集类），也不按颜色匹配（不是宝石）。只在一组里用到的辅助留在组内（`chip` / `layersPlace` 在 `Obstacle`，`spreadRule` 在 `Layer`，`tickRun` / `snailRun` / `traceSnails` 在 `Actor`），跨组共用的才进 `Common`（`nField` / `colorField` 等显示字段辅助也在这里）。依赖只朝一个方向：`Obstacle` 引用 `Gem`（双面块翻成宝石）和 `Collectible`（保险箱开成饼干），`Level` 引用 `Gem`（规则开关 `BombShapes` 用 `withBombShapes`），其余分组互不引用（`Common` 除外）。
+- **透明性护栏**：`Spec.ElementAbility` 按源码核对 `Layered` 覆盖了 `Phase` 的每个方法、`phaseProbe` 读出全部值级方法，装箱 / 叠层前后逐项相等；`Spec.Archetype` 钉住原型组合子与 `Inert` 的值。
 
 **护栏**：元素查询快照 `test/golden/element-queries.txt`（1666 行，生成器 `test/golden/ElementQueries.hs`）锁定全部内置元素的行为：Q 行 = 全部格子组合上的逐格查询，P = 放置，R = 规则表 / 条目名 / 个数差计数 / 关卡级机制清单，A / E / S / O / C / G = 邻格 / 步末 / 成对交换 / 开启规则、直接命中、地面层在样例盘上的输出，M = 每关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列；由三个 `ec_*_snapshot` 测试比对。这份快照最初在扁平记录 `ElementDef` 改成类型类时生成。元素类重构第 0 刀另加元素对照快照 `test/golden/element-oracle.txt`（3623 行：更多样本格 × 全部值查询、逐条规则在 400 张随机盘上的散列与起作用盘数、整轮查询，`Spec.ElementOracle` 的 4 个用例），第 1–6 刀全程逐字节不变。
 
@@ -484,10 +490,10 @@ data GameView = GameView
 
 | xmonad | 本项目 | 说明 |
 |--------|--------|------|
-| `class LayoutClass layout a`（`doLayout` / `handleMessage` / `description` 等方法都有默认实现） | 六个能力小类（`Cellular` / `Matchable` / `Hittable` / `Movable` / `Countable` / `Renders`，类同义词 `Element`）+ 类型级 `Kind` | 一种元素 = 一个类型 + 几个 instance，只覆盖与普通宝石不同的方法 |
+| `class LayoutClass layout a`（`doLayout` / `handleMessage` / `description` 等方法都有默认实现） | `Phase`（七个按阶段的方法 + 类型级 `codec`）、`Layer`、`Mechanic` | 一种元素 = 一个类型 + 一个 instance，常见组合用原型组合子 |
 | 默认方法之间互相推（`doLayout` 默认调 `pureLayout`） | 每个方法带「普通宝石」缺省；障碍类经 DerivingVia 原型包（`Obstacle` / `Fixed`）一次拿到另一组缺省；颜色缺省取 `toCell` 写回的宝石格 | 实例只写与缺省不同的能力 |
 | 布局的状态在值里（`Tall nmaster delta frac`），`handleMessage` 返回新布局 | 元素的状态在值里（`StoneE 层数`），`struck` 返回 `Absorb 新格子`（可换成别的元素：保险箱开成饼干） | 盘面仍存 `Cell`，`toCell` 写回、`fromCell` 解码 |
-| `data Layout a = forall l. LayoutClass l a => Layout (l a)` | `data SomeElement = forall e. Element e => SomeElement e`、`SomeMechanic` | 存在类型装箱；Eq 按具体类型（`cast`）比、类型相同再比状态（共用 `sameTypeEq`）；详见 [haskell-features/02 §1.3](haskell-features/02-类型类与抽象.md#13-存在类型与-xmonad-风格的元素类) |
+| `data Layout a = forall l. LayoutClass l a => Layout (l a)` | `data SomePhase = forall e. Phase e => SomePhase e`、`SomeMechanic` | 存在类型装箱；Eq 按具体类型（`cast`）比、类型相同再比状态（共用 `sameTypeEq`）；详见 [haskell-features/02 §1.3](haskell-features/02-类型类与抽象.md#13-存在类型与-xmonad-风格的元素类) |
 | `LayoutModifier` / `ModifiedLayout m l` | `Layer` / `Layered l e`（冰层、叠层） | 本层先说，没意见再问里面；`Pierce` / `Keep` / `Peel` / `Shatter` 对应命中时的四种组合 |
 | `layoutHook`（配置里的布局列表） | `World`（有序的类型列表 `[Def]`，`kindDef @T` …）+ `defaultWorld` | 世界决定解码顺序与规则次序 |
 | `Message` / `SomeMessage` / `fromMessage`（Typeable） + 事件循环发消息 | 元素类重构第 5 刀起改为 `Mechanic` 的**有类型方法**（`onRefilled` / `onEndTick` / `onSettling` / `onCover` / `onGroundHit` / `shapes` / `morph` / `judge` …），缺省 `Nothing` | 主流程在流水线节拍上调方法（`beatIn` / `queryIn` 折叠所有回复者），机制交回推进后的自身；不再有开放消息，新节拍 = 新方法 |

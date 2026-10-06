@@ -4,15 +4,15 @@
 {-# LANGUAGE TypeApplications #-}
 -- | 元素的世界（相当于 xmonad 的 layoutHook）：主流程查询元素行为的**唯一入口**（各 *With 函数）。
 --
--- 注册的只是一张**有序的列表**（本体 = 原型值 'Archetype'、叠层 'Layer'、地面层 = 'GroundKind' 记录），引擎由它解码格子：
--- 叠层由外向内 'peel'（冰层在外、叠层在内，这是 Cell 存储编码决定的），剩下的格子交给本体原型的存储列；
+-- 注册的只是一张**有序的列表**（本体 = 原型值 'Archetype'、叠层 = 叠层原型 'Cover'、地面层 = 'GroundKind' 记录），引擎由它解码格子：
+-- 叠层由外向内按存储列剥下（冰层在外、叠层在内，这是 Cell 存储编码决定的），剩下的格子交给本体原型的存储列；
 -- 都不认识时得到惰性占格原型 'inertArch'。各查询就是在解码出的一行（'Row'）上按类型取组件（Match3.ECS.Component），
 -- 带叠层的格由 'wholeMatch' / 'wholeHit' / 'wholePhysics' 自上而下合成（合成规则只在这里写一次）。
 --
 -- 分派缓存（按 cellSlot / 叠层编号 / Custom 名字建的候选表）是引擎内部的事，不是元素作者写的东西：
--- 某个编号的候选 = 存储列 / 'peel' 接受该编号代表格的种类（注册倒序：同名 / 同格以后注册的为准）；
--- 候选都不认领时再按注册倒序试全部本体种类，最后才是惰性占格。各元素带来的 system（原型的 'aSystems'、
--- 叠层的 layerRules）也在建世界时收集一次、按阶段与次序排好（调度表）。
+-- 某个编号的候选 = 存储列接受该编号代表格的原型（注册倒序：同名 / 同格以后注册的为准）；
+-- 候选都不认领时再按注册倒序试全部本体原型，最后才是惰性占格。各元素带来的 system（原型的 'aSystems'、
+-- 叠层原型的 'cvSystems'）也在建世界时收集一次、按阶段与次序排好（调度表）。
 --
 -- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）、
 -- 关卡级元素（'SomeMechanic'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
@@ -21,7 +21,7 @@ module Match3.ECS.Registry
   ( -- * 注册项
     Def(..)
   , kindDef
-  , layerDef
+  , coverDef
   , groundDef
   , inertDef
   , defName
@@ -130,8 +130,7 @@ import Match3.ECS.Archetype
 import Match3.ECS.Component
 import Match3.Element.Kind
 
-import Match3.Element.Layer
-import Match3.Element.Rules (layerRules)
+import Match3.ECS.Cover
 import Match3.ECS.Stage
 import Match3.ECS.System (Scheduled(..), System, at, schedule)
 import Match3.Element.Special (comboSwapSystem)
@@ -141,16 +140,16 @@ import Match3.Types
 -- | 世界里的一项（注册顺序有意义：名字表、显示名表、规则同优先级时的先后）。
 data Def
   = KindDef SomeArchetype
-  | LayerDef SomeLayer
+  | LayerDef SomeCover
   | GroundDef GroundKind
   | InertDef ElementName  -- ^ 只登记名字的惰性占格（Custom 名字 状态值；放置 = 'customPlace'）
 
--- | @kindDef stoneArch@、@layerDef \@Ice@、@groundDef magicGround@。
+-- | @kindDef stoneArch@、@coverDef iceCover@、@groundDef magicGround@。
 kindDef :: Archetype s -> Def
 kindDef = KindDef . SomeArchetype
 
-layerDef :: forall l. Layer l => Def
-layerDef = LayerDef (someLayer @l)
+coverDef :: Cover l -> Def
+coverDef = LayerDef . SomeCover
 
 groundDef :: GroundKind -> Def
 groundDef = GroundDef
@@ -162,7 +161,7 @@ inertDef = InertDef
 defName :: Def -> ElementName
 defName d = case d of
   KindDef a -> archName a
-  LayerDef (SomeLayer p) -> layerName p
+  LayerDef c -> coverName c
   GroundDef g -> groundName g
   InertDef n -> n
 
@@ -170,7 +169,7 @@ defName d = case d of
 defPlace :: Def -> Placer
 defPlace d = case d of
   KindDef (SomeArchetype a) -> aSpawn a
-  LayerDef (SomeLayer p) -> layerPlace p
+  LayerDef (SomeCover c) -> cvSpawn c
   GroundDef _ -> \_ _ -> Nothing
   InertDef n -> customPlace n
 
@@ -181,8 +180,8 @@ data Registry = Registry
   , wSlots    :: Array Int [SomeArchetype]   -- 内置本体编号（cellSlot）→ 候选原型（注册倒序）
   , wAll      :: [SomeArchetype]             -- 全部本体原型（注册倒序；候选都不认领时兜底）
   , wCustom   :: [(ElementName, [SomeArchetype])]
-  , wIce      :: [SomeLayer]            -- 冰层位置的候选
-  , wOverlays :: Array Int [SomeLayer]  -- 叠层编号（overlaySlot）→ 候选
+  , wIce      :: [SomeCover]            -- 冰层位置的候选
+  , wOverlays :: Array Int [SomeCover]  -- 叠层编号（overlaySlot）→ 候选
   , wNear     :: [Scheduled NearWorld]            -- 邻格 system，按次序排好（稳定）
   , wEnd      :: [EndSys]                         -- 步末 system，按 (阶段, 次序) 排好（稳定）
   , wDiff     :: [(ElementName, CounterKey, Int)] -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
@@ -231,11 +230,11 @@ mkRegistry defs0 =
     kinds = reverse [k | KindDef k <- defs]
     layers = reverse [l | LayerDef l <- defs]
     accepts (SomeArchetype a) cell = isJust (colGet (aColumn a) cell)
-    peels (SomeLayer p) cell = isJust (peelAs p cell)
+    peels = coversCell
     passes = concatMap defPasses defs
     defPasses d = case d of
       KindDef (SomeArchetype a) -> aSystems a
-      LayerDef (SomeLayer p) -> layerRules p
+      LayerDef (SomeCover c) -> cvSystems c
       _ -> []
 
 -- | 往世界里加（或按名字替换）一个注册项。测试专用元素就这样接进来，主流程不用改。
@@ -267,7 +266,7 @@ mkRegistryChecked defs0 = case dups ++ shared ++ unclaimed of
     w = mkRegistry defs0
     names = map defName defs0
     dups = [DuplicateName n | n <- nub names, length (filter (== n) names) > 1]
-    lname (SomeLayer p) = layerName p
+    lname = coverName
     cells = [("cell " ++ show i, map archName (reverse (wSlots w ! i))) | i <- [0 .. 19]]
       ++ [("ice", map lname (reverse (wIce w)))]
       ++ [("overlay " ++ show i, map lname (reverse (wOverlays w ! i))) | i <- [0 .. 7]]
@@ -314,7 +313,7 @@ registryDefs = wDefs
 registryKinds :: Registry -> [SomeArchetype]
 registryKinds w = [k | KindDef k <- wDefs w]
 
-registryLayers :: Registry -> [SomeLayer]
+registryLayers :: Registry -> [SomeCover]
 registryLayers w = [l | LayerDef l <- wDefs w]
 
 registryGrounds :: Registry -> [GroundKind]
@@ -349,7 +348,7 @@ decodeBody w cell = case cell of
          Nothing -> fromMaybe (Row (inertArch (ElementName "?")) cell) (firstDecode (wAll w) cell)
 
 -- | 本体之上的各层（自外向内：冰层 → 叠层）与拆完之后的格子。
-decodeLayers :: Registry -> Cell -> ([SomeLayerValue], Cell)
+decodeLayers :: Registry -> Cell -> ([Peeled], Cell)
 decodeLayers w cell
   | hasLayers cell = case cell of
       Gem _ _ ice ov ->
@@ -362,8 +361,8 @@ decodeLayers w cell
   | otherwise = ([], cell)
   where
     tryLayers [] c = ([], c)
-    tryLayers (SomeLayer p : ls) c = case peelAs p c of
-      Just (l, inner) -> ([SomeLayerValue l], inner)
+    tryLayers (SomeCover cv : ls) c = case peelWith cv c of
+      Just (l, inner) -> ([Peeled cv l], inner)
       Nothing -> tryLayers ls c
 
 -- | 格子是否可能带冰层 / 叠层（只有宝石格带层；不带层时解码跳过拆层，热路径不分配）。
@@ -377,7 +376,7 @@ hasLayers cell = case cell of
 recodeWith :: Registry -> Cell -> Cell
 recodeWith w cell =
   let (ls, inner) = decodeLayers w cell
-   in foldr (\(SomeLayerValue l) c -> putOn l c) (rowCell (decodeBody w inner)) ls
+   in foldr putBack (rowCell (decodeBody w inner)) ls
 
 -- | 本体层的一行（拆掉冰层 / 叠层之后）。
 bodyOf :: Registry -> Cell -> Row
@@ -391,17 +390,17 @@ body w = rowGet . bodyOf w
 {-# INLINE body #-}
 
 -- | 本体之上的各层（自上而下）：冰层（ice > 0）、叠层。
-upperOf :: Registry -> Cell -> [SomeLayerValue]
+upperOf :: Registry -> Cell -> [Peeled]
 upperOf w cell
   | hasLayers cell = fst (decodeLayers w cell)
   | otherwise = []
 
--- | 叠层与本体：(本体一行, [(某层, 该层下面的格子)])（层自外向内；层下面的格子由里层用 'putOn' 重建）。
-covered :: Registry -> Cell -> (Row, [(SomeLayerValue, Cell)])
+-- | 叠层与本体：(本体一行, [(某层, 该层下面的格子)])（层自外向内；层下面的格子由里层逐层盖回重建）。
+covered :: Registry -> Cell -> (Row, [(Peeled, Cell)])
 covered w cell =
   let (ls, inner) = decodeLayers w cell
       row = decodeBody w inner
-      unders = drop 1 (scanr (\(SomeLayerValue l) c -> putOn l c) (rowCell row) ls)
+      unders = drop 1 (scanr putBack (rowCell row) ls)
   in (row, zip ls unders)
 
 -- | 整格的匹配组件：挡匹配 / 挡交换 = 任一层 OR 本体；颜色 / 提示取本体。
@@ -410,24 +409,26 @@ wholeMatch w cell
   | hasLayers cell =
       let (row, ls) = covered w cell
           m = rowGet row
-      in m { mBlockMatch = any (\(SomeLayerValue l, _) -> layerBlocksMatch l) ls || mBlockMatch m
-           , mBlockSwap = any (\(SomeLayerValue l, _) -> layerBlocksSwap l) ls || mBlockSwap m
+      in m { mBlockMatch = any (\(p, _) -> sBlocksMatch (peeledShield p)) ls || mBlockMatch m
+           , mBlockSwap = any (\(p, _) -> sBlocksSwap (peeledShield p)) ls || mBlockSwap m
            }
   | otherwise = body w cell
 
--- | 整格的命中组件：自上而下，本层有意见（'layerFires' = Just）就听本层点火；命中由本层先回答——
+-- | 整格的命中组件：自上而下，本层有意见（'sFires' = Just）就听本层点火；命中由本层先回答——
 -- 穿透（'Pierce'）时问里层、里层吃掉命中就把本层盖回去；'Keep' 换成新层值；'Peel' 揭掉本层；'Shatter' 本格消除。
 -- 爆炸范围取本体。
 wholeHit :: Registry -> Cell -> OnHit
 wholeHit w cell
-  | hasLayers cell = let (row, ls) = covered w cell in foldr cover (rowGet row) ls
+  | hasLayers cell = let (row, ls) = covered w cell in foldr answer (rowGet row) ls
   | otherwise = body w cell
   where
-    cover (SomeLayerValue l, under) (OnHit st fi bl) =
-      let fi' = fromMaybe fi (layerFires l)
-       in case layerHit l of
-            Pierce -> OnHit (case st of Absorb inner -> Absorb (putOn l inner); r -> r) fi' bl
-            Keep l' -> OnHit (Absorb (putOn l' under)) fi' bl
+    answer (Peeled cv l, under) (OnHit st fi bl) =
+      let sh = cvShield cv l
+          put x = ccPut (cvColumn cv) x
+          fi' = fromMaybe fi (sFires sh)
+       in case sHit sh of
+            Pierce -> OnHit (case st of Absorb inner -> Absorb (put l inner); r -> r) fi' bl
+            Keep l' -> OnHit (Absorb (put l' under)) fi' bl
             Peel -> OnHit (Absorb under) fi' bl
             Shatter -> OnHit Destroy fi' bl
 
@@ -444,7 +445,7 @@ elementName w = rowName . bodyOf w
 -- | 最上面一层的元素名（事件里「波及了什么」用）。
 topLayerName :: Registry -> Cell -> ElementName
 topLayerName w cell = case upperOf w cell of
-  (lv : _) -> layerValueName lv
+  (lv : _) -> peeledName lv
   [] -> elementName w cell
 
 --------------------------------------------------------------------------------
@@ -506,7 +507,7 @@ blocksSwapWith world = mBlockSwap . wholeMatch world
 
 -- | 只看上层（冰 / 叠层）是否挡交换（彩虹 / 特殊合成提示用，本体由它们自己判定）。
 upperBlocksSwapWith :: Registry -> Cell -> Bool
-upperBlocksSwapWith world = any (\(SomeLayerValue l) -> layerBlocksSwap l) . upperOf world
+upperBlocksSwapWith world = any (sBlocksSwap . peeledShield) . upperOf world
 
 -- | 交换两格是否被挡（任一端挡即挡）。
 swapBlockedWith :: Registry -> Board -> Pos -> Pos -> Bool
@@ -556,10 +557,10 @@ stripOnClearWith world b ps = foldl strip b (nub ps)
   where
     strip board p =
       let (ls, inner) = decodeLayers (world) (getCell board p)
-          kept = [lv | lv@(SomeLayerValue l) <- ls, not (layerStripsOnClear l)]
+          kept = [lv | lv <- ls, not (sStrips (peeledShield lv))]
       in if length kept == length ls
            then board
-           else setCell board p (foldr (\(SomeLayerValue l) c -> putOn l c) inner kept)
+           else setCell board p (foldr putBack inner kept)
 
 -- | 邻格 system（已按次序排好）。
 nearSystems :: Registry -> [Scheduled NearWorld]

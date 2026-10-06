@@ -1,12 +1,11 @@
-{-# LANGUAGE TypeApplications #-}
 -- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultRegistry'。
 --
 -- 本体元素 = 一个原型值（Match3.ECS.Archetype：存储列 + 纯数据组件 + 自带 system）；
--- 叠层 = 'Layer' instance；地面层 = 一条 'GroundKind' 记录；关卡级元素 = Mechanic instance。
+-- 叠层 = 一个叠层原型值（Match3.ECS.Cover：存储列 + 纯数据组件 'Shield' + 自带 system）；地面层 = 一条 'GroundKind' 记录；关卡级元素 = Mechanic instance。
 -- 按功能分组放在 Match3.Element.Builtin.* 里：
 --
 -- * Gem          普通宝石、特殊块（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则，特殊块形状规则表（第 8 刀）
--- * Layer        冰层与 8 种叠层（Layer）
+-- * Layer        冰层与 8 种叠层（Cover）
 -- * Obstacle     打破型障碍：石头、宝箱、蜂蜜、蛋糕、气球、保险箱、双面块、彩蛋、魔法石（新玩法 2）、雪怪 Boss（新玩法 5，2×2）
 -- * Collectible  收集与计数类：饼干、时间精灵、气泡、变色龙（新玩法 7）
 -- * Actor        会动或会生成东西的：魔法帽、果汁机、蜗牛、染色瓶、倒计时、毛球（新玩法 3）
@@ -72,7 +71,15 @@ module Match3.Element.Builtin
   , snowBossHp
   , snowBossSpawn
   , decodeBoss
-  , Ice(..)
+  , iceCover
+  , grassCover
+  , vineCover
+  , chocoCover
+  , fogCover
+  , chainCover
+  , freezeCover
+  , curtainCover
+  , steamCover
   , jelly
   , magicGround
   , magicGroundName
@@ -108,7 +115,7 @@ import Match3.Element.Builtin.Obstacle
 import Match3.Element.Mechanic (SomeMechanic(..))
 import Match3.Combos (builtinComboRules)
 import Match3.ECS.Registry (Registry, mkRegistry, registerMechanic, setComboRules, setShapeRules)
-import Match3.ECS.Registry (Def, groundDef, kindDef, layerDef)
+import Match3.ECS.Registry (Def, coverDef, groundDef, kindDef)
 
 -- | 内置元素世界：全部内置元素 + 内置规则表（第 8 刀：形状规则 builtinShapeRules、组合表 builtinComboRules；
 -- 补子策略是 mkRegistry 的缺省 defaultRefill）。主流程的旧函数名（不带 With）都用它。
@@ -118,7 +125,7 @@ defaultRegistry =
     foldl (flip registerMechanic) (mkRegistry builtinDefs) builtinMechanics
 
 -- | 全部内置元素（注册顺序 = 文档里的清单顺序，也是元素查询快照 R 行锁定的顺序；与分组无关，不要重排）：
--- 本体是原型值，叠层仍是类型（ecs-4 改成 Cover 数据）。
+-- 本体是原型值，叠层是叠层原型值。
 builtinDefs :: [Def]
 builtinDefs =
   [ kindDef gemArch                                      -- Gem
@@ -126,15 +133,15 @@ builtinDefs =
   , kindDef lineVArch
   , kindDef bombArch
   , kindDef rainbowArch
-  , layerDef @Ice                                        -- Layer
-  , layerDef @GrassL
-  , layerDef @VineL
-  , layerDef @ChocoL
-  , layerDef @FogL
-  , layerDef @ChainL
-  , layerDef @FreezeL
-  , layerDef @CurtainL
-  , layerDef @SteamL
+  , coverDef iceCover                                        -- Layer
+  , coverDef grassCover
+  , coverDef vineCover
+  , coverDef chocoCover
+  , coverDef fogCover
+  , coverDef chainCover
+  , coverDef freezeCover
+  , coverDef curtainCover
+  , coverDef steamCover
   , kindDef stoneArch                                    -- Obstacle
   , kindDef chestArch
   , kindDef honeyArch

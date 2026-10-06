@@ -5,7 +5,7 @@
 -- aMatch / aHit / aPhysics / aTally / aFace 由状态派生纯数据组件，Match3.ECS.Component），元素特有的行为写成
 -- system 放进 aSystems（邻格用 Match3.Element.Rules 的 nearBy / chipNear，步末用 tickSys / moveSys …），
 -- 用 kindDef 原型 register 进注册表，再用各 *With 入口（trySwapWith / resolveMoveWith / cascade*With …）跑；主流程不用改。
--- 叠层是 Match3.Element.Layer 的 Layer 类（ecs-4 改数据），地面层是 GroundKind 记录，关卡级元素是 Mechanic 类（ecs-5 改）。
+-- 叠层是叠层原型（Match3.ECS.Cover：存储列 + 'Shield' 组件 + cvSystems，用 coverDef 注册），地面层是 GroundKind 记录，关卡级元素是 Mechanic 类（ecs-5 改）。
 -- 步骤清单见 docs/architecture.md「元素框架与事件」。
 module Match3.Element
   ( module Match3.Element.Types
@@ -17,6 +17,7 @@ module Match3.Element
   , module Match3.Board.Refill
   , module Match3.ECS.Stage
   , module Match3.ECS.Archetype
+  , module Match3.ECS.Cover
   , module Match3.ECS.Component
   , module Match3.ECS.System
   ) where
@@ -28,6 +29,7 @@ import Match3.Element.Level
 import Match3.ECS.Registry
 import Match3.ECS.Stage
 import Match3.ECS.Archetype
+import Match3.ECS.Cover
 import Match3.ECS.Component
 import Match3.ECS.System
 import Match3.Element.Special

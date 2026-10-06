@@ -45,7 +45,6 @@ module Spec.Support
     -- * 源码扫描
   , module Spec.Support.Source
   ) where
-import Data.Proxy (Proxy(..))
 
 import Control.Monad (foldM)
 import Data.Bits (xor)

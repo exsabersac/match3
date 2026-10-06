@@ -105,11 +105,11 @@ executable match3-web
     Match3.Element.Event
     Match3.Element.Mechanic
     Match3.Element.Kind
-    Match3.Element.Layer
     Match3.ECS.System
     Match3.ECS.Stage
     Match3.ECS.Component
     Match3.ECS.Archetype
+    Match3.ECS.Cover
     Match3.ECS.Registry
     Match3.Element.Level
   default-language: Haskell2010

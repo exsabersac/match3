@@ -1,4 +1,4 @@
--- | 通用 system 构造器：只读原型的存储列（Match3.ECS.Archetype.Column）/ 叠层 'Layer' / 'Entity' 给出的数据，
+-- | 通用 system 构造器：只读原型的存储列（Match3.ECS.Archetype.Column）/ 叠层原型 'Cover' / 'Entity' 给出的数据，
 -- 把「找邻格、去重、跳过直接命中、按顺序写回」这些样板各写一次；元素只给出自己那一格的反应。
 --
 -- 顺序语义与旧函数逐项相同（元素对照快照 element-oracle.txt 的 AR / ER 行与金标准锁定）：
@@ -10,13 +10,11 @@
 --   同层邻格；
 -- * 多格实体：锚点行优先，伤害 = 身外一圈的真消除格数 + 部件上的直接命中格数，归零时全部部件并入清除格。
 module Match3.Element.Rules
-  ( -- * 收集
-    layerRules
-    -- * 邻格 system 构造器
-  , nearBy
+  ( -- * 邻格 system 构造器
+    nearBy
   , chipNear
-  , layerNeighbour
-  , layerSpread
+  , coverNear
+  , coverSpread
   , entityDamage
     -- * 命中组件构造器
   , chipHit
@@ -29,18 +27,10 @@ import Match3.ECS.Archetype (Column(..), Entity(..))
 import Match3.ECS.Component (OnHit, absorbHit, breakHit)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Near
-import Match3.Element.Layer
+import Match3.ECS.Cover (Cover(..), ccPut, peelWith)
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
-import Match3.Element.Types
 import Match3.Types
-
--- | 一种叠层的全部 system：邻格、蔓延（PhaseSpread）、自带的 'layerSystems'（都读自类型级的 'layerCover'）。
-layerRules :: Layer l => proxy l -> [SysDef]
-layerRules p =
-  [SysNear o (layerNeighbour p) | Just o <- [layerNeighbourPrio p]]
-    ++ [SysEnd (spreadSys o (layerSpread p seed)) | Just (o, seed) <- [spreads p]]
-    ++ layerSystems p
 
 -- | 邻格目标：与真消除格正交相邻、满足谓词的格（去重；顺序 = 按真消除格、每格上 / 下 / 左 / 右）。
 neighbourTargets :: Reach -> (Cell -> Bool) -> NearWorld -> Board -> [Pos]
@@ -102,13 +92,13 @@ chipHit col n
   | n <= 1 = breakHit
   | otherwise = absorbHit (colPut col (n - 1))
 
--- | 叠层的邻格波及：目标格逐个问 'onLayerNeighbourClear'（= lcOnNear）（同一套目标规则）。
-layerNeighbour :: Layer l => proxy l -> System NearWorld
-layerNeighbour p = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (foldl one (Out b0 [] []) (neighbourTargets (layerReach p) (isJust . peelAs p) ctx b0))
+-- | 叠层的邻格 system：目标格（同一套目标规则，认得出本层的格）逐个问反应函数 @react 本层状态 当前格@。
+coverNear :: Cover l -> Reach -> (l -> Cell -> Nudge) -> System NearWorld
+coverNear cv reach react = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (foldl one (Out b0 [] []) (neighbourTargets reach (isJust . peelWith cv) ctx b0))
   where
     one out@(Out bOut _ _) q =
       let cell = getCell bOut q
-      in maybe out (\(l, _) -> nudge DiePrepend out q (onLayerNeighbourClear l cell)) (peelAs p cell)
+      in maybe out (\(l, _) -> nudge DiePrepend out q (react l cell)) (peelWith cv cell)
 
 -- | 没有叠层的宝石（蔓延的落点）。
 bareGem :: Cell -> Bool
@@ -117,14 +107,14 @@ bareGem cell = case cell of
   _ -> False
 
 -- | 叠层的步末蔓延：步首盘面上有本层的每一格向正交相邻的裸宝石种上 @seed@；记一条 EvSpread（来源, 新格）。
-layerSpread :: Layer l => proxy l -> l -> System EndWorld
-layerSpread p seed = effectSystem (layerSpreadOn p seed . ewBoard)
+coverSpread :: Cover l -> l -> System EndWorld
+coverSpread cv seed = effectSystem (coverSpreadOn cv seed . ewBoard)
 
-layerSpreadOn :: Layer l => proxy l -> l -> Board -> (Maybe EndEffect, Board)
-layerSpreadOn p seed b =
-  let has bd q = isJust (peelAs p (getCell bd q))
+coverSpreadOn :: Cover l -> l -> Board -> (Maybe EndEffect, Board)
+coverSpreadOn cv seed b =
+  let has bd q = isJust (peelWith cv (getCell bd q))
       targets = nub [q | s <- boardPositions b, has b s, q <- neighborsInBounds upDownLeftRight b s, bareGem (getCell b q)]
-      b' = foldl (\bd q -> if bareGem (getCell bd q) then setCell bd q (putOn seed (getCell bd q)) else bd) b targets
+      b' = foldl (\bd q -> if bareGem (getCell bd q) then setCell bd q (ccPut (cvColumn cv) seed (getCell bd q)) else bd) b targets
       pairs =
         [ (src, q)
         | q <- boardPositions b
@@ -134,7 +124,7 @@ layerSpreadOn p seed b =
                 (n : _) -> n
                 [] -> q
         ]
-  in (if null pairs then Nothing else Just (EndEffect EvSpread (layerName p) [EndItem s q (getCell b' q) Nothing | (s, q) <- pairs]), b')
+  in (if null pairs then Nothing else Just (EndEffect EvSpread (cvName cv) [EndItem s q (getCell b' q) Nothing | (s, q) <- pairs]), b')
 
 -- | 多格实体的邻格伤害：每个锚点（行优先）按「身外一圈的真消除 + 部件上的直接命中」扣血，归零则部件并入清除格。
 entityDamage :: Column s -> Entity s -> System NearWorld

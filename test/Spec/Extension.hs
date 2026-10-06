@@ -8,7 +8,6 @@
 module Spec.Extension
   ( tests
   ) where
-import Data.Proxy (Proxy(..))
 
 import Data.List (isPrefixOf)
 import Engine.Game (Game(..), Step(..))
@@ -19,11 +18,11 @@ import Match3.Element.Builtin (defaultRegistry)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
-import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), System(..), Edge(..), Def, effectSystem, groundDef, inertDef, kindDef, moveSys, register)
+import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), Edge(..), Def, effectSystem, groundDef, inertDef, kindDef, moveSys, register)
 import Match3.ECS.Archetype (Archetype(..), archetype, customColumn)
 import Match3.ECS.Stage (SysDef(..))
 import Match3.ECS.Component
-import Match3.Element.Kind (GroundKind(..), groundKind, customPlace, fromCustom)
+import Match3.Element.Kind (GroundKind(..), groundKind, customPlace)
 import Match3.ECS.Registry (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)

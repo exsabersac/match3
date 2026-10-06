@@ -29,7 +29,7 @@ import Data.String (fromString)
 import GHC.Generics
 import Data.Maybe (isJust)
 import Match3.ECS.Archetype (Archetype(..), Column(..), SomeArchetype(..))
-import Match3.Element.Layer (layerName, SomeLayer(..), peelAs)
+import Match3.ECS.Cover (SomeCover(..), coverName, coversCell)
 import Match3.ECS.Registry (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)
 import Data.Foldable (toList)
@@ -349,7 +349,7 @@ generic_every_constructor_has_world_and_face = do
   let world = defaultRegistry
       entries = registryDefs world
       kindAccepts n c = or [isJust (colGet (aColumn a) c) | SomeArchetype a <- registryKinds world, aName a == n]
-      layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- entries, layerName p == n]
+      layerAccepts n c = or [coversCell l c | LayerDef l <- entries, coverName l == n]
       inner = snd . decodeLayers world
       customNames = [aName a | SomeArchetype a <- registryKinds world, any (\k -> isJust (colGet (aColumn a) (Custom (aName a) (CustomState k)))) [0 .. 20]]
       reps = representatives ([c | c <- cells, notUnregistered c] ++ [Custom n (CustomState 0) | n <- customNames])

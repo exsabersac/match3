@@ -29,7 +29,6 @@ import Match3.Types (boardDims, maxBoardDim)
 import Match3.Counts (Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Board.Random (randomBoardSized)
 import Match3.Element
-import Match3.Element.Builtin (bubbleArch, chameleonArch, fuzzballArch, magicStoneArch, stoneArch)
 import Match3.Types (Grid, boardCells, gridFromRows, gridRows, minBoardDim)
 import System.Random (StdGen, mkStdGen, randomR)
 import Test.Tasty

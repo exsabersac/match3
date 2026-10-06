@@ -1,7 +1,7 @@
 -- | 元素作者的写法助手与地面层记录（ecs-3 起本体元素是 Match3.ECS.Archetype 的原型值，不再有 Phase / Kind 类）。
 --
 -- 地面层元素（不占格，层数在 GameState.gsGround 里）仍是一条 'GroundKind' 记录（ecs-5 改成数据组件）；
--- 叠层见 Match3.Element.Layer；邻格反应的共享类型见 Match3.Element.Near（这里再导出）。
+-- 叠层见 Match3.ECS.Cover；邻格反应的共享类型见 Match3.Element.Near（这里再导出）。
 module Match3.Element.Kind
   ( Reach(..)
   , Nudge(..)

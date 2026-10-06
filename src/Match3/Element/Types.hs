@@ -1,14 +1,14 @@
 -- | 元素框架的词汇类型：计数键 / 步末阶段（再导出）、放置参数、格子的分派编号（cellSlot）；
 -- 特殊块形状规则（ShapeRule，连同连线 MatchRun）与组合规则（ComboRule）。
--- 元素本身是原型值与叠层类（Match3.ECS.Archetype / Match3.Element.Layer；组件见 Match3.ECS.Component），主流程（匹配、挡交换、
+-- 元素本身是本体原型与叠层原型的值（Match3.ECS.Archetype / Match3.ECS.Cover；组件见 Match3.ECS.Component），主流程（匹配、挡交换、
 -- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经元素世界
 -- （Match3.ECS.Registry）问它们，不按构造器写死分支。
 --
 -- 依赖：Match3.Types、Match3.ECS.Stage（步末阶段）。各阶段的世界与 system 见 Match3.ECS.Stage。不含具体元素（见 Element.Builtin）。
 --
 -- 一个格子最多三层，自上而下：冰层（宝石的 ice Int）→ 叠层（CellOverlay）→ 本体（CellContents 构造器 /
--- 宝石种类 / Custom 名字）。冰层与叠层是叠层种类（Match3.Element.Layer 的 Layer），本体是本体种类（Kind）；
--- 命中与挡匹配等按层自上而下组合（见 Layer 的 Layered 与 Registry 的解码）。
+-- 宝石种类 / Custom 名字）。冰层与叠层是叠层原型（Cover），本体是本体原型（Archetype）；
+-- 命中与挡匹配等按层自上而下组合（见 Registry 的 wholeMatch / wholeHit / wholePhysics）。
 module Match3.Element.Types
   ( ElementName(..)
   , CustomState(..)

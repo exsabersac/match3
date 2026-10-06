@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | 一轮消除：匹配清除（clearMatchesDetailedWith）与种子清除（clearFromSeedsDetailedWith），两者共用同一个
--- 一轮流水线 clearWaveWith；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecialsWith，查形状规则表）、彩蛋、
+-- 一轮流水线 clearWaveWith（ecs-6 起 = 一轮消除阶段的世界 'WaveWorld' 上按书写顺序跑的 wave system，见 'waveSystems'）；特殊块扩展（expandSpecials）、新特殊块生成（spawnSpecialsWith，查形状规则表）、彩蛋、
 -- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbedWith：吸走 ≠ 引爆）以及计分公式。
 --
 -- 直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素元素世界
@@ -24,9 +24,15 @@ module Match3.Board.Clear
   , maskUfoAbsorbSpecials
   , clearUfoAbsorbedWith
   , clearFromSeedsDetailedWith
+    -- * 一轮消除阶段（ecs-6）
+  , WaveWorld(..)
+  , waveStart
+  , waveSystems
+  , clearWaveWith
   ) where
 
 import Data.List (nub)
+import Match3.ECS.System (System, pipeline, runSystem, system)
 import Match3.ECS.Registry (Registry, blastWith, chipOnHitWith, colorOfWith, openWith, runAdjacentWith, shapeRules, stripOnClearWith)
 import Match3.Element.Special (spawnByShapes)
 import Match3.Types
@@ -90,34 +96,95 @@ clearMatchesDetailedWith world prefer b =
   let runs = findMatchRunsWith world b
   in clearWaveWith world prefer runs b (nub (concatMap runPos runs))
 
--- | 一轮消除的**唯一流水线**（匹配清除与种子清除共用）：
+-- | 一轮消除阶段的世界（ecs-6）：整盘 + 本轮的黑板资源。每个字段由流水线里某一个 wave system 写入，
+-- 后面的 system 只读前面写好的字段（写入者见字段注释）；初值见 'waveStart'。
+data WaveWorld = WaveWorld
+  { wvPrefer   :: Maybe Pos   -- ^ 新特殊块的优先生成位（输入）
+  , wvRuns     :: [MatchRun]  -- ^ 本盘的匹配段（输入，生成新特殊块用）
+  , wvSeeds    :: [Pos]       -- ^ 种子（输入）
+  , wvBoard    :: Board       -- ^ 当前盘面（每个 system 都可能改）
+  , wvExpanded :: [Pos]       -- ^ 直接命中格（'expandSystem'）
+  , wvFree     :: [Pos]       -- ^ 直接命中后可清的格（'chipSystem'）
+  , wvTrue     :: [Pos]       -- ^ 真消除格（'openSystem'）
+  , wvDirect   :: [Pos]       -- ^ 开启带来的直接命中格（'openSystem'）
+  , wvSaved    :: [Pos]       -- ^ 本轮坐住的格（'openSystem'）
+  , wvDead     :: [Pos]       -- ^ 邻格波及打碎的格（'nearSystem'）
+  , wvCleared  :: [Pos]       -- ^ 清除格 = 真消除 ∪ 波及打碎（'carveSystem'）
+  , wvOut      :: MBoard      -- ^ 挖空 + 放好新特殊块的盘面（'carveSystem' / 'spawnSystem'）
+  }
+
+-- | 本轮的初始世界：只有输入与盘面，黑板全空。
+waveStart :: Maybe Pos -> [MatchRun] -> Board -> [Pos] -> WaveWorld
+waveStart prefer runs b seeds = WaveWorld prefer runs seeds b [] [] [] [] [] [] [] (toM b)
+
+-- | 一轮消除的**唯一流水线**（匹配清除与种子清除共用），书写顺序 = 执行顺序：
 --
---   1. expandSpecials：种子里能点火的特殊块展开爆炸范围（= 直接命中格）；
---   2. chipOnHitWith：直接命中按层结算（冰 → 叠层 → 本体：削层 / 揭层 / 消除 / 免疫）；
---   3. surpriseClearPassWith：彩蛋在邻格波及之前开启（3×3 爆炸计入真消除，与炸弹同口径）；
---   4. stripOnClearWith：真消除格上的草 / 藤 / 巧随格清掉（空洞不能再蔓延）；
---   5. runAdjacentWith：按次序跑各元素的邻格波及（已被直接命中的格不再重复波及；
+--   1. 'expandSystem'：种子里能点火的特殊块展开爆炸范围（= 直接命中格）；
+--   2. 'chipSystem'：直接命中按层结算（冰 → 叠层 → 本体：削层 / 揭层 / 消除 / 免疫）；
+--   3. 'openSystem'：彩蛋在邻格波及之前开启（3×3 爆炸计入真消除，与炸弹同口径）；
+--   4. 'stripSystem'：真消除格上的草 / 藤 / 巧随格清掉（空洞不能再蔓延）；
+--   5. 'nearSystem'：按次序跑各元素的邻格 system（已被直接命中的格不再重复波及；
 --      彩蛋开出的特殊块与果汁机刚产出的炸弹本轮坐住，不被魔法帽 / 染色瓶改色）；
---   6. 清除格 = 真消除 ∪ 波及打碎的格（按规则顺序）；挖空后在清除格上放新特殊块。
+--   6. 'carveSystem'：清除格 = 真消除 ∪ 波及打碎的格（按规则顺序），挖空；
+--   7. 'spawnSystem'：在清除格上放新特殊块。
+waveSystems :: Registry -> [System WaveWorld]
+waveSystems world =
+  [ expandSystem world
+  , chipSystem world
+  , openSystem world
+  , stripSystem world
+  , nearSystem world
+  , carveSystem
+  , spawnSystem world
+  ]
+
+-- | 1. 展开爆炸范围。
+expandSystem :: Registry -> System WaveWorld
+expandSystem world = system $ \w -> w {wvExpanded = expandSpecialsWith world (wvBoard w) (wvSeeds w)}
+
+-- | 2. 直接命中按层结算：带冰的宝石留下，无冰的格可清。
+-- 不在原始展开格上剥草 / 藤 / 巧——软命中（冰 > 1 / 翻面 / 锁链削层）保留格上叠层（与邻格同一纪律）。
+chipSystem :: Registry -> System WaveWorld
+chipSystem world = system $ \w ->
+  let (b', free) = chipOnHitWith world (wvBoard w) (wvExpanded w)
+  in w {wvBoard = b', wvFree = free}
+
+-- | 3. 开启类元素（彩蛋）。
+openSystem :: Registry -> System WaveWorld
+openSystem world = system $ \w ->
+  let (b', trueClears, direct, saved) = surpriseClearPassWith world (wvBoard w) (wvFree w)
+  in w {wvBoard = b', wvTrue = trueClears, wvDirect = direct, wvSaved = saved}
+
+-- | 4. 真消除格上的随格叠层清掉。
+stripSystem :: Registry -> System WaveWorld
+stripSystem world = system $ \w -> w {wvBoard = stripOnClearWith world (wvBoard w) (wvTrue w)}
+
+-- | 5. 邻格 system（调度表）。本轮已受直接命中削层 / 削血的格不再吃一次正交邻格削层
+-- （直线 / 炸弹路径上的二层锁链 / 石块 / 保险箱）。
+nearSystem :: Registry -> System WaveWorld
+nearSystem world = system $ \w ->
+  let directHits = nub (wvExpanded w ++ wvDirect w)
+      (b', dead, _sits) = runAdjacentWith world (wvTrue w) directHits (wvSaved w) (wvBoard w)
+  in w {wvBoard = b', wvDead = dead}
+
+-- | 6. 清除格挖空。
+carveSystem :: System WaveWorld
+carveSystem = system $ \w ->
+  let cleared = nub (wvTrue w ++ wvDead w)
+  in w {wvCleared = cleared, wvOut = setManyM (toM (wvBoard w)) [(p, Nothing) | p <- cleared]}
+
+-- | 7. 新特殊块（只放在清除格上）。
+spawnSystem :: Registry -> System WaveWorld
+spawnSystem world = system $ \w ->
+  let cleared = wvCleared w
+      spawns = spawnSpecialsWith world (wvPrefer w) (wvRuns w) cleared
+  in w {wvOut = setManyM (wvOut w) [(p, Just cell) | (p, cell) <- spawns, p `elem` cleared]}
+
+-- | 一轮消除 = 初始世界跑一遍 'waveSystems'，交回 (挖空后盘面, 清除数, 清除格)。
 clearWaveWith :: Registry -> Maybe Pos -> [MatchRun] -> Board -> [Pos] -> (MBoard, Int, [Pos])
 clearWaveWith world prefer runs b base =
-  let expanded = expandSpecialsWith world b base
-      -- Ice chips first: iced gems stay, ice-free positions may clear.
-      -- Do NOT strip Grass/Vine/Choco on raw expand seeds — soft hits (ice>1 /
-      -- Flip / Chain peel) keep on-cell overlays (same discipline as adjacent).
-      (bIced, iceFree) = chipOnHitWith world b expanded
-      (bSurp2, trueClears, surpDirect, surpSaved) = surpriseClearPassWith world bIced iceFree
-      bClearedOv = stripOnClearWith world bSurp2 trueClears
-      -- Cells that already took a direct-hit peel/chip must not also receive an
-      -- ortho adjacent peel this wave (Chain2/Stone2/Safe2 on a Line/Bomb path).
-      directHits = nub (expanded ++ surpDirect)
-      (bAdj, dead, _sits) = runAdjacentWith world trueClears directHits surpSaved bClearedOv
-      allPos = nub (trueClears ++ dead)
-      n = length allPos
-      mb0 = setManyM (toM bAdj) [(p, Nothing) | p <- allPos]
-      spawns = spawnSpecialsWith world prefer runs allPos
-      mb1 = setManyM mb0 [(p, Just cell) | (p, cell) <- spawns, p `elem` allPos]
-  in (mb1, n, allPos)
+  let w = runSystem (pipeline (waveSystems world)) (waveStart prefer runs b base)
+  in (wvOut w, length (wvCleared w), wvCleared w)
 
 -- | 不带波次倍数的计分：每格 10 分。
 scoreForCleared :: Int -> Score

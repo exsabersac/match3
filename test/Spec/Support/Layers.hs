@@ -1,8 +1,8 @@
 {-# LANGUAGE TypeApplications #-}
 -- | 叠层邻消 / 蔓延的旧签名包装，只给叠层测试用。
 --
--- 元素类重构第 3 刀起，迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 巧克力 / 蒸汽的邻消是 'onLayerNeighbourClear' 方法 + 通用驱动
--- 'layerNeighbour'，藤 / 巧 / 蒸汽的步末蔓延是 'spreads' 方法 + 驱动 'layerSpread'（Match3.Grass 里的专门函数已删）。
+-- 元素类重构第 3 刀起，迷雾 / 锁链 / 火箭冰冻 / 窗帘 / 巧克力 / 蒸汽的邻消是 layerCover 的 lcOnNear + 通用驱动
+-- 'layerNeighbour'，藤 / 巧 / 蒸汽的步末蔓延是 lcSpreads + 驱动 'layerSpread'（Match3.Grass 里的专门函数已删）。
 module Spec.Support.Layers
   ( chipAdjacentFog
   , chipAdjacentChain

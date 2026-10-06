@@ -41,7 +41,7 @@ kindRules _ =
   [AdjacentPass o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
     ++ boardPasses (Proxy @e)
 
--- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerPasses'。
+-- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerPasses'（都读自类型级的 'layerCover'）。
 layerRules :: Layer l => proxy l -> [BoardPass]
 layerRules p =
   [AdjacentPass o (layerNeighbour p) | Just o <- [layerNeighbourPrio p]]
@@ -88,7 +88,7 @@ kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (phaseRea
               NearNudge n -> nudge order out q n
               NearEdit b' d s -> AdjOut b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s ++ sit))
 
--- | 叠层的邻格波及：目标格逐个问 'onLayerNeighbourClear'（同一套目标规则）。
+-- | 叠层的邻格波及：目标格逐个问 'onLayerNeighbourClear'（= lcOnNear）（同一套目标规则）。
 layerNeighbour :: Layer l => proxy l -> AdjCtx -> Board -> AdjOut
 layerNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (layerReach p) (isJust . peelAs p) ctx b0)
   where

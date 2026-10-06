@@ -3,7 +3,7 @@
 -- | 宝石叠层的查询与构造：草/藤/巧克力/迷雾/锁链/火箭冰冻/窗帘/蒸汽的位置、层数、构造器，以及真清除格上
 -- 随格清掉草 / 藤 / 巧（'clearOverlaysOn'）。不拥有蜗牛、冰层 Int、或 Game 步末编排顺序。
 --
--- 邻消揭层 / 清掉与步末蔓延自元素类重构第 3 刀起是叠层方法（onLayerNeighbourClear / spreads）+ 通用驱动
+-- 邻消揭层 / 清掉与步末蔓延自元素类重构第 3 刀起是叠层 layerCover 里的数据（lcOnNear / lcSpreads）+ 通用驱动
 -- （Match3.Element.Rules.layerNeighbour / layerSpread），不在这里（Haskell 特性第 6 项按光学去重的那几份已随之删除）。
 module Match3.Grass
   ( clearOverlaysOn

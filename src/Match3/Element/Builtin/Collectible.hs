@@ -86,7 +86,7 @@ instance Phase Bubble where
     , cFromCell = fromCustom "bubble" Bubble
     , cPlace = customPlace "bubble"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
-    , cNear = Nothing  -- 邻格逃生口 boardPasses
+    , cNear = Nothing  -- 邻格逃生口 cPasses
     , cHud = noHud { hudLabel = Just "气泡" }
     -- 邻格打碎留在逃生口：foldr 去重序与 nub+DieAppend 不等价
     , cPasses = [AdjacentPass 170 bubbleAdjacent]

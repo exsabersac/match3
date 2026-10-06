@@ -37,7 +37,7 @@ module Match3.Element.Layer
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
-import Match3.Element.Kind (BoardPass, Nudge(..), Reach(..))
+import Match3.Element.Kind (Nudge(..), Reach(..))
 import Match3.Element.Phase
 import Match3.Element.Types (Placer)
 import Match3.Types

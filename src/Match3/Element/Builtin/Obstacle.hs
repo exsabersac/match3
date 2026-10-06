@@ -10,8 +10,8 @@
 -- 雪怪 Boss（新玩法 5，Custom "snow_boss"）是占 2×2 的固定格：邻格真消除 / 直接命中扣血，血量归零整只消除；
 -- 每 3 次交换在身边召唤一块雪块（1 层石头）。
 -- 邻格规则顺序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
--- 多层障碍 / 保险箱 / 气球的邻消是方法 onNear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity（entityHit → entityDamage）；
--- 魔法石 tick、雪怪召唤读整盘，走逃生口 boardPasses（非邻格波及）。
+-- 多层障碍 / 保险箱 / 气球的邻消是方法 onNear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity 记录（cPasses 里的 entityDamage）；
+-- 魔法石 tick、雪怪召唤读整盘，走逃生口 cPasses（非邻格波及）。
 -- 步末：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
 module Match3.Element.Builtin.Obstacle
   ( StoneE(..)

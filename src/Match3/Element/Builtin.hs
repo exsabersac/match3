@@ -2,8 +2,8 @@
 {-# LANGUAGE TypeApplications #-}
 -- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultWorld'。
 --
--- 每种元素一个类型 + 'Phase' instance（Match3.Element.Phase）+ 一个类型级 instance（本体 'Kind' /
--- 叠层 'Layer' / 地面层 'GroundKind'；关卡级元素 Mechanic），xmonad LayoutClass 风格，
+-- 本体元素 = 一个类型 + 'Phase' instance（Match3.Element.Phase；名字 / 编解码 / HUD / 逃生口都在 codec 里）；
+-- 叠层 = 'Layer' instance；地面层 = 一条 'GroundKind' 记录；关卡级元素 = Mechanic instance。xmonad LayoutClass 风格，
 -- 按功能分组放在 Match3.Element.Builtin.* 里：
 --
 -- * Gem          普通宝石、特殊块（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则，特殊块形状规则表（第 8 刀）

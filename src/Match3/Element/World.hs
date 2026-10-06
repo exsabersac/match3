@@ -11,7 +11,7 @@
 -- 分派缓存（按 cellSlot / 叠层编号 / Custom 名字建的候选表）是引擎内部的事，不是元素作者写的东西：
 -- 某个编号的候选 = 'fromCell' / 'peel' 接受该编号代表格的种类（注册倒序：同名 / 同格以后注册的为准）；
 -- 候选都不认领时再按注册倒序试全部本体种类，最后才是惰性占格。规则（Match3.Element.Rules 的 kindRules /
--- layerRules：方法给出的邻格 / 蔓延规则 + 逃生口 boardPasses / layerPasses）也在建世界时收集一次、按次序排好。
+-- layerRules：方法给出的邻格 / 蔓延规则 + 逃生口 cPasses / layerPasses）也在建世界时收集一次、按次序排好。
 --
 -- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）、
 -- 关卡级元素（'SomeMechanic'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。

@@ -50,8 +50,8 @@ countLabel k = case k of
   CountColor c -> colorLabel c ++ "色宝石"
   CountNamed name -> fromMaybe (unElementName name) (lookup (unElementName name) namedGoalLabelTable)
 
--- | 按元素名计数的目标（'GoalNamed'）的中文名：[(元素名, 中文名)]，由元素种类提供（Kind / GroundKind 的
--- label / groundLabel；注册顺序）。新元素做成关卡目标时在它的 Kind instance 里写 label _ = Just "…"
+-- | 按元素名计数的目标（'GoalNamed'）的中文名：[(元素名, 中文名)]，由元素种类提供（本体 codec 的
+-- cHud.hudLabel / 地面层的 groundLabel；注册顺序）。新元素做成关卡目标时在它的 codec 里写 cHud = noHud { hudLabel = Just "…" }
 -- （stack test 的 frontends_read_view_model 与 outcome_lose_hint_no_internal_names 核对全部关卡目标都有中文名）。
 namedGoalLabelTable :: [(String, String)]
 namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultWorld]
@@ -60,7 +60,7 @@ namedGoalLabelTable = [(unElementName n, l) | (n, l) <- displayLabels defaultWor
 namedLoseHint :: ElementName -> Maybe (Int -> String)
 namedLoseHint = loseHintWith defaultWorld
 
--- | 按元素名计数的目标的覆盖图标贴图名（元素 Kind.goalIconName；没有 = Nothing，调用方用元素名本身）。
+-- | 按元素名计数的目标的覆盖图标贴图名（元素 codec 的 cHud.hudGoalIcon；没有 = Nothing，调用方用元素名本身）。
 namedGoalIcon :: ElementName -> Maybe String
 namedGoalIcon = goalIconWith defaultWorld
 

@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 -- | 元素的世界（相当于 xmonad 的 layoutHook）：主流程查询元素行为的**唯一入口**（各 *With 函数）。
 --
--- 注册的只是一张**有序的列表**（本体 = 原型值 'Archetype'、叠层 = 叠层原型 'Cover'、地面层 = 'GroundKind' 记录），引擎由它解码格子：
+-- 注册的只是一张**有序的列表**（本体 = 原型值 'Archetype'、叠层 = 叠层原型 'Cover'、地面层 = 全数据的 'GroundArch' 记录），引擎由它解码格子：
 -- 叠层由外向内按存储列剥下（冰层在外、叠层在内，这是 Cell 存储编码决定的），剩下的格子交给本体原型的存储列；
 -- 都不认识时得到惰性占格原型 'inertArch'。各查询就是在解码出的一行（'Row'）上按类型取组件（Match3.ECS.Component），
 -- 带叠层的格由 'wholeMatch' / 'wholeHit' / 'wholePhysics' 自上而下合成（合成规则只在这里写一次）。
@@ -15,7 +15,7 @@
 -- 叠层原型的 'cvSystems'）也在建世界时收集一次、按阶段与次序排好（调度表）。
 --
 -- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）、
--- 关卡级元素（'SomeMechanic'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
+-- 关卡级元素的原型表（'SomeMechanic' = 机制原型 + 原型状态），以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
 -- 元素类重构第 4 刀起，旧的注册表模块并进这里（Registry 取代旧注册表类型、Def 取代旧注册项）。
 module Match3.ECS.Registry
   ( -- * 注册项
@@ -141,7 +141,7 @@ import Match3.Types
 data Def
   = KindDef SomeArchetype
   | LayerDef SomeCover
-  | GroundDef GroundKind
+  | GroundDef GroundArch
   | InertDef ElementName  -- ^ 只登记名字的惰性占格（Custom 名字 状态值；放置 = 'customPlace'）
 
 -- | @kindDef stoneArch@、@coverDef iceCover@、@groundDef magicGround@。
@@ -151,7 +151,7 @@ kindDef = KindDef . SomeArchetype
 coverDef :: Cover l -> Def
 coverDef = LayerDef . SomeCover
 
-groundDef :: GroundKind -> Def
+groundDef :: GroundArch -> Def
 groundDef = GroundDef
 
 -- | 只登记名字的惰性占格：挡交换、无色、会下落、打不动、洗牌保留（测试 / 扩展用）。
@@ -196,7 +196,7 @@ data Registry = Registry
 
 -- | 本步上下文：只在一步结算期间有意义的东西，由 Element.Level.levelRegistryIn 每步按关卡状态填，注册时为空。
 newtype StepCtx = StepCtx
-  { stepWiden :: [(Pos, Board -> [Pos] -> [Pos])]  -- ^ 本步的扩爆格（新玩法 8）：格 → 爆炸范围改写（魔法地格）
+  { stepWiden :: [(Pos, Widen)]  -- ^ 本步的扩爆格（新玩法 8）：格 → 扩爆规则（数据；魔法地格 = WidenRing）
   }
 
 -- | 空的本步上下文（没有扩爆格）。
@@ -316,7 +316,7 @@ registryKinds w = [k | KindDef k <- wDefs w]
 registryLayers :: Registry -> [SomeCover]
 registryLayers w = [l | LayerDef l <- wDefs w]
 
-registryGrounds :: Registry -> [GroundKind]
+registryGrounds :: Registry -> [GroundArch]
 registryGrounds w = [g | GroundDef g <- wDefs w]
 
 -- | 按名字找注册项。
@@ -324,7 +324,7 @@ lookupDef :: Registry -> ElementName -> Maybe Def
 lookupDef w n = listToMaybe [d | d <- wDefs w, defName d == n]
 
 -- | 按名字找地面层种类。
-lookupGround :: Registry -> ElementName -> Maybe GroundKind
+lookupGround :: Registry -> ElementName -> Maybe GroundArch
 lookupGround w n = listToMaybe [g | GroundDef g <- wDefs w, groundName g == n]
 
 -- 候选表上第一个认领该格的原型（显式递归：解码在匹配 / 提示 / 计数的热路径上，不建中间列表）。
@@ -455,21 +455,21 @@ topLayerName w cell = case upperOf w cell of
 faceFieldsWith :: Registry -> Cell -> [(String, FaceValue)]
 faceFieldsWith world = fExtras . body world
 
--- | 按元素名计数的目标的中文名（本体 'label' / 地面层 'groundLabel'；没登记 = Nothing）。
+-- | 按元素名计数的目标的中文名（本体 / 地面层的 'hudLabel'；没登记 = Nothing）。
 displayLabelWith :: Registry -> ElementName -> Maybe String
 displayLabelWith world n = lookupDef world n >>= defLabel
 
 defLabel :: Def -> Maybe String
 defLabel d = case d of
   KindDef (SomeArchetype a) -> hudLabel (aHud a)
-  GroundDef g -> groundLabel g
+  GroundDef g -> hudLabel (groundHud g)
   _ -> Nothing
 
 -- | 按元素名计数的目标的失败提示。
 loseHintWith :: Registry -> ElementName -> Maybe (Int -> String)
 loseHintWith world n = lookupDef world n >>= \d -> case d of
   KindDef (SomeArchetype a) -> renderLoseHint <$> hudLoseHint (aHud a)
-  GroundDef g -> groundLoseHint g
+  GroundDef g -> renderLoseHint <$> hudLoseHint (groundHud g)
   _ -> Nothing
 
 -- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
@@ -599,7 +599,7 @@ keepOnShuffleWith :: Registry -> Cell -> Bool
 keepOnShuffleWith world = pKeepShuffle . wholePhysics world
 
 -- | 本体被消除且能点火时的爆炸范围（不能点火 / 没有爆炸 → []）。新玩法 8：引爆格是本步的扩爆格
--- （'setWidening'，魔法地格）时再按它的改写函数扩大；没有扩爆格（缺省）时就是本体的 blast。
+-- （'setWidening'，魔法地格）时再按它的扩爆规则（'widenArea'）扩大；没有扩爆格（缺省）时就是本体的 blast。
 blastWith :: Registry -> Board -> Cell -> Pos -> [Pos]
 blastWith world b cell p = case hBlast (body world cell) of
   Just bl | activatesWith world cell -> widenAtWith world b p (blastArea bl b p)
@@ -607,15 +607,15 @@ blastWith world b cell p = case hBlast (body world cell) of
 
 -- | 按本步的扩爆格改写一个爆炸范围（p = 引爆格；p 不是扩爆格时原样返回）。
 widenAtWith :: Registry -> Board -> Pos -> [Pos] -> [Pos]
-widenAtWith world b p area = foldl (\a f -> f b a) area [f | (q, f) <- stepWiden (wStep world), q == p]
+widenAtWith world b p area = foldl (\a w -> widenArea w b a) area [w | (q, w) <- stepWiden (wStep world), q == p]
 
--- | 地面层里带扩爆规则（'widenRule'）的格（新玩法 8：魔法地格）与各自的改写函数；地面层按格序。
-groundWideningWith :: Registry -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
+-- | 地面层里带扩爆规则（'groundWiden'）的格（新玩法 8：魔法地格）与各自的规则；地面层按格序。
+groundWideningWith :: Registry -> Ground -> [(Pos, Widen)]
 groundWideningWith world g =
   [(p, w) | (p, (n, _)) <- g, Just gk <- [lookupGround (world) n], Just w <- [groundWiden gk]]
 
 -- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelRegistryIn 调用）。
-setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> Registry -> Registry
+setWidening :: [(Pos, Widen)] -> Registry -> Registry
 setWidening ws world = world {wStep = (wStep world) {stepWiden = ws}}
 
 -- | 本步的扩爆格（测试 / 文档用）。
@@ -652,7 +652,7 @@ placeAllWith :: Registry -> Board -> [Placement] -> Either PlaceError Board
 placeAllWith world = foldM (\b (Place n args ps) -> placeWith world n args b ps)
 
 -- | 地面层被上方消除命中一次（段 2c）：hits = 本轮的消除格（去重），每格至多命中一次。
--- 返回（新地面层，按计数名的去层数）。只有注册为地面层的名字会反应（'groundHit'）；
+-- 返回（新地面层，按计数名的去层数）。只有注册为地面层的名字会反应（'groundWear'，'wearHit' 解释）；
 -- 计数键取 'groundCounter'，只有 CountNamed 返回（结算时并入 gsCounts；其余键忽略）。
 hitGroundWith :: Registry -> [Pos] -> Ground -> (Ground, [(ElementName, Int)])
 hitGroundWith world hits = foldr one ([], [])
@@ -660,7 +660,7 @@ hitGroundWith world hits = foldr one ([], [])
     one (p, (n, layers)) (acc, counts)
       | p `elem` hits
       , Just g <- lookupGround (world) n =
-          let after = groundHit g layers
+          let after = wearHit (groundWear g) layers
               removed = layers - maybe 0 id after
               counts' = case groundCounter g of
                 Just (CountNamed k) | removed > 0 -> (k, removed) : counts

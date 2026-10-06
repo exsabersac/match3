@@ -22,7 +22,8 @@ import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), Edge(..), Def, ef
 import Match3.ECS.Archetype (Archetype(..), archetype, customColumn)
 import Match3.ECS.Stage (SysDef(..))
 import Match3.ECS.Component
-import Match3.Element.Kind (GroundKind(..), groundKind, customPlace)
+import Match3.Element.Kind (GroundArch(..), groundArch, customPlace)
+import Match3.ECS.Component (Wear(..))
 import Match3.ECS.Registry (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)
@@ -40,7 +41,7 @@ import Match3.Board.Grid (mboardFromRows)
 import Match3.Element
   ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
   , levelHooksWith, registerMechanic, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
-import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..), emptyLayout)
+import Match3.Element.Mechanic (Mechanic(..), MechSys(..), SomeMechanic(..), mechanic)
 import Match3.Element.Level (judgeIn)
 import qualified Match3.Combos as Combos
 import Match3.Types (goalCount, goalScore)
@@ -99,9 +100,9 @@ ext_goal_named_counts_crate = do
 
 -- | 测试专用地面层元素「苔藓」（地面层，2 层）：上方格子每被消除一次去一层、按层计入 GoalNamed；
 -- 不占格、不挡交换、洗牌不动、撤销恢复；未注册时地面层原样不动。
-moss :: GroundKind
-moss = (groundKind "moss")
-  { groundHit = \n -> if n > 1 then Just (n - 1) else Nothing
+moss :: GroundArch
+moss = (groundArch "moss")
+  { groundWear = WearsOut
   , groundCounter = Just (CountNamed "moss")
   }
 
@@ -343,16 +344,14 @@ ext_combo_rule_line_gem = do
 data CoinRain = CoinRain
   deriving (Eq, Show)
 
-instance Mechanic CoinRain where
-  layout = emptyLayout "coin_rain"
-  onBeat (AskRefill _) m = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)), m)
-  onBeat _ _ = Nothing
+coinRain :: SomeMechanic
+coinRain = SomeMechanic ((mechanic "coin_rain") {mechSystems = [AnswerRefill (\_ _ -> Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g))))]}) CoinRain
 
 -- | 补子策略扩展（关卡级元素）：注册 CoinRain 之后，交换出的 4 连（横消落在交换点 (1,2)）挖出的 3 个洞补成金币，
 -- 金币无色不再连锁；其余什么都不改。元素世界缺省策略下同一步不出金币。
 ext_refill_policy_level_element :: Assertion
 ext_refill_policy_level_element = do
-  let world = registerMechanic (SomeMechanic CoinRain) (register (inertDef "coin") defaultRegistry)
+  let world = registerMechanic coinRain (register (inertDef "coin") defaultRegistry)
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
       (gs1, o, mt) = resolveSwapWith world p1 p2 gs0
@@ -379,16 +378,16 @@ ext_refill_policy_level_colors = do
 data TimeLimit = TimeLimit
   deriving (Eq, Show)
 
-instance Mechanic TimeLimit where
-  layout = emptyLayout "time_limit"
-  onBeat (AskJudge _ score moves (MoveApplied _)) m
-    | moves <= 3 = Just (Lost score, m)
-  onBeat (AskJudge {}) _ = Nothing
-  onBeat _ _ = Nothing
+timeLimit :: SomeMechanic
+timeLimit = SomeMechanic ((mechanic "time_limit") {mechSystems = [AnswerJudge judge]}) TimeLimit
+  where
+    judge _ score moves o _ = case o of
+      MoveApplied _ | moves <= 3 -> Just (Lost score)
+      _ -> Nothing
 
 ext_judging_level_element :: Assertion
 ext_judging_level_element = do
-  let world = registerMechanic (SomeMechanic TimeLimit) defaultRegistry
+  let world = registerMechanic timeLimit defaultRegistry
       start moves = (newGame (GameConfig moves (goalScore 99999)) 7) {gsBoard = tripleBoard}
       (p1, p2) = tripleMove
       (gs1, o, _) = resolveSwapWith world p1 p2 (start 4)

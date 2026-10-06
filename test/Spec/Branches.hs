@@ -28,7 +28,7 @@ import Match3.Game.State (gsUfos)
 import Match3.Levels.Campaign (allLevels)
 import Match3.Types (boardSize)
 import Match3.Element
-import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
+import Match3.Element.Mechanic (mechNameOf)
 import Match3.Element.Kind (customPlace)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
@@ -214,29 +214,29 @@ br_level_hooks_builtin_and_removable = do
   let b0 = fst (randomStableBoard (mkStdGen 101))
       ufos = [mkUfo (3, 3) C1, mkUfo (0, 0) C2]
       noUfo = removeMechanic "ufo" defaultRegistry
-      absorb world = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith world [SomeMechanic (UfoLevel ufos)]) b0)
+      absorb world = (\(ps, h) -> (ps, levelUfos (hookLevel h))) (onAbsorb (levelHooksWith world [(ufoLevel ufos)]) b0)
   assertEqual "ufo hook = stepUfos" (stepUfos b0 ufos) (absorb defaultRegistry)
   assertEqual "ufo removed: no absorb, ufos stay" ([], ufos) (absorb noUfo)
   let belts = [[(2, 0), (2, 1), (2, 2), (3, 2)]]
-      beltEl = [SomeMechanic (BeltLevel belts)]
+      beltEl = [(beltLevel belts)]
   assertEqual "belt hook = beltMoves" (Just (beltMoves belts)) (fst <$> beltShiftIn defaultRegistry beltEl)
   assertEqual "belt cells avoided" (concat belts) (avoidCellsIn defaultRegistry beltEl)
   assertBool "belt removed" (isNothing (beltShiftIn (removeMechanic "belt" defaultRegistry) beltEl))
-  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultRegistry [SomeMechanic (BeltLevel [])])
+  assertEqual "no belts = nobody answers" Nothing (fst <$> beltShiftIn defaultRegistry [(beltLevel [])])
   let mb = setM (toM b0) (0, 5) Nothing
       portals = [((7, 0), (0, 5))]
-      settle world = onSettle (levelHooksWith world [SomeMechanic (PortalLevel portals)]) mb
+      settle world = onSettle (levelHooksWith world [(portalLevel portals)]) mb
   assertEqual "portal hook = portalTeleport" (portalTeleport (portalWith defaultRegistry) portals mb) (settle defaultRegistry)
   assertBool "portal hook moves something here" (settle defaultRegistry /= mb)
   assertEqual "portal removed: no teleport" mb (settle (removeMechanic "portal" defaultRegistry))
-  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultRegistry [SomeMechanic (PortalLevel portals)])
+  assertEqual "portal ends are walls" [(7, 0), (0, 5)] (wallCellsIn defaultRegistry [(portalLevel portals)])
   let open0 = [(3, 0), (3, 1), (4, 4)]
       hit = [(3, 0), (3, 1), (5, 5)]
-      cover world = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn world hit [SomeMechanic (CarpetLevel open0)])
+      cover world = (\(n, es) -> (levelCarpetOpen es, n)) (coverIn world hit [(carpetLevel open0)])
   assertEqual "carpet hook = coverCarpets" (coverCarpets open0 hit) (cover defaultRegistry)
   assertEqual "carpet removed: nothing covered" (open0, 0) (cover (removeMechanic "carpet" defaultRegistry))
   let ground0 = [((3, 0), ("jelly", 2)), ((5, 5), ("jelly", 1)), ((6, 6), ("jelly", 1))]
-      groundHit world = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn world hit [SomeMechanic (GroundLayer ground0)])
+      groundHit world = (\(cs, es) -> (levelGround es, cs)) (hitGroundIn world hit [(groundLayer ground0)])
   assertEqual "ground hook = hitGroundWith" (hitGroundWith defaultRegistry hit ground0) (groundHit defaultRegistry)
   assertEqual "ground is core" (groundHit defaultRegistry) (groundHit (removeMechanic "ground" defaultRegistry))
   assertBool "ground hit something here" (fst (groundHit defaultRegistry) /= ground0)

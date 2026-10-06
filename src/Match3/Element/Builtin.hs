@@ -1,7 +1,7 @@
 -- | 内置元素的汇总：内置类型表 'builtinDefs'、关卡级元素表 'builtinMechanics' 与 'defaultRegistry'。
 --
 -- 本体元素 = 一个原型值（Match3.ECS.Archetype：存储列 + 纯数据组件 + 自带 system）；
--- 叠层 = 一个叠层原型值（Match3.ECS.Cover：存储列 + 纯数据组件 'Shield' + 自带 system）；地面层 = 一条 'GroundKind' 记录；关卡级元素 = Mechanic instance。
+-- 叠层 = 一个叠层原型值（Match3.ECS.Cover：存储列 + 纯数据组件 'Shield' + 自带 system）；地面层 = 一条全数据的 'GroundArch' 记录；关卡级元素 = 机制原型（Match3.Element.Mechanic 的 'Mechanic' 记录：读数组件 + 按节拍的 system）。
 -- 按功能分组放在 Match3.Element.Builtin.* 里：
 --
 -- * Gem          普通宝石、特殊块（直线 / 炸弹 / 彩虹），彩虹取色的成对交换规则，特殊块形状规则表（第 8 刀）
@@ -20,7 +20,7 @@
 -- 锁链 80 → 火箭冰冻 90 → 窗帘 100 → 保险箱 110 → 时间精灵 120 → 果汁机 130 → 染色瓶 140 → 巧克力 150 →
 -- 蒸汽 160 → 气泡 170 → 魔法石 180 → 毛球 190 → 雪怪 200。步末：倒计时 10 → 魔法石 20（PhaseTick）；藤 10 → 巧 20 → 蒸汽 30（PhaseSpread）；
 -- 蜗牛 10 → 毛球 20 → 雪怪 30 → 变色龙 40（PhaseMove）。
--- 成对交换：彩虹取色 10 → 彩虹 × 变色龙 15（新玩法 7）→ 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级机制（飞碟 / 皮带 / 传送门 / 地毯 …）实现各自的节拍方法（Match3.Element.Mechanic）。
+-- 成对交换：彩虹取色 10 → 彩虹 × 变色龙 15（新玩法 7）→ 特殊合成 20（第 8 刀起 = 组合表 Match3.Combos.builtinComboRules 并成的一条）。关卡级机制（飞碟 / 皮带 / 传送门 / 地毯 …）在原型里列出各自的节拍 system（Match3.Element.Mechanic 的 'MechSys'）。
 module Match3.Element.Builtin
   ( defaultRegistry
   , builtinDefs
@@ -97,6 +97,22 @@ module Match3.Element.Builtin
   , BombShapes(..)
   , RainbowCombos(..)
   , CookieDrop(..)
+  , ufoMech
+  , beltMech
+  , portalMech
+  , carpetMech
+  , groundLayerMech
+  , bombShapesMech
+  , rainbowCombosMech
+  , cookieDropMech
+  , ufoLevel
+  , beltLevel
+  , portalLevel
+  , carpetLevel
+  , groundLayer
+  , bombShapes
+  , rainbowCombos
+  , cookieDrop
   , dropRefill
   , ltBombRule
   , withBombShapes
@@ -112,7 +128,7 @@ import Match3.Element.Builtin.Ground
 import Match3.Element.Builtin.Layer
 import Match3.Element.Builtin.Level
 import Match3.Element.Builtin.Obstacle
-import Match3.Element.Mechanic (SomeMechanic(..))
+import Match3.Element.Mechanic (SomeMechanic)
 import Match3.Combos (builtinComboRules)
 import Match3.ECS.Registry (Registry, mkRegistry, registerMechanic, setComboRules, setShapeRules)
 import Match3.ECS.Registry (Def, coverDef, groundDef, kindDef)
@@ -167,6 +183,6 @@ builtinDefs =
   ]
 
 
--- | 内置关卡级元素的种类（原型值 = 空状态；开局状态由 mechStart 按关卡记录给出）：实现各自关心的节拍方法；去掉某项（removeMechanic）即该机制不生效。
+-- | 内置关卡级元素（原型 + 空状态；开局状态由各自的 OnStart system 按关卡记录给出）：各自列出关心的节拍 system；去掉某项（removeMechanic）即该机制不生效。
 builtinMechanics :: [SomeMechanic]
-builtinMechanics = [SomeMechanic (UfoLevel []), SomeMechanic (BeltLevel []), SomeMechanic (PortalLevel []), SomeMechanic (CarpetLevel []), SomeMechanic (BombShapes False), SomeMechanic (RainbowCombos False), SomeMechanic (CookieDrop [])]
+builtinMechanics = [ufoLevel [], beltLevel [], portalLevel [], carpetLevel [], bombShapes False, rainbowCombos False, cookieDrop []]

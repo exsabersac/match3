@@ -186,11 +186,11 @@ chainV = (mkCover "chain" col)
       Gem c k i (Just (Chain n)) -> Just (n, Gem c k i Nothing)
       _ -> Nothing
 
-jellyV :: GroundKind
-jellyV = (groundKind "jelly")
-  { groundHit = \n -> if n > 1 then Just (n - 1) else Nothing
+jellyV :: GroundArch
+jellyV = (groundArch "jelly")
+  { groundWear = WearsOut
   , groundCounter = Just (CountNamed "jelly")
-  , groundLabel = Just "果冻"
+  , groundHud = noHud {hudLabel = Just "果冻"}
   }
 
 -- | 内置元素世界里这些条目换成测试里的副本（同名替换，注册位置不变）。

@@ -1,12 +1,14 @@
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 关卡级元素：不在格子里的机制。第 7 刀（7a）起状态在元素值里（一局的全部关卡级元素 = GameState.gsLevelElems），
 -- 取代第 7 刀前 GameState 的专用字段 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround。
 --
--- 共同特征：都是 Mechanic（Match3.Element.Mechanic），各自只实现 layout / onBeat（slim-10 起开局也是节拍：'Start'）。
--- 去掉（removeMechanic）即不生效。地面层 GroundLayer 是核心机制，定义在 Match3.Element.Mechanic（这里再导出）。
+-- ecs-5 起每种机制是一条原型记录（Match3.Element.Mechanic 的 'Mechanic'：名字 + 读数组件 'LevelView' +
+-- 按节拍的 system 'MechSys'），状态类型仍是各自的 newtype（GameState 的 Show 按类型认内置机制）。
+-- 各自另给一个装箱函数（@ufoLevel us@ = 原型 + 状态）。去掉（removeMechanic）即不生效。
+-- 地面层 GroundLayer 是核心机制，定义在 Match3.Element.Mechanic（这里再导出）。
 module Match3.Element.Builtin.Level
-  ( UfoLevel(..)
+  ( -- * 状态类型
+    UfoLevel(..)
   , BeltLevel(..)
   , PortalLevel(..)
   , CarpetLevel(..)
@@ -14,6 +16,24 @@ module Match3.Element.Builtin.Level
   , BombShapes(..)
   , RainbowCombos(..)
   , CookieDrop(..)
+    -- * 原型
+  , ufoMech
+  , beltMech
+  , portalMech
+  , carpetMech
+  , groundLayerMech
+  , bombShapesMech
+  , rainbowCombosMech
+  , cookieDropMech
+    -- * 装箱
+  , ufoLevel
+  , beltLevel
+  , portalLevel
+  , carpetLevel
+  , groundLayer
+  , bombShapes
+  , rainbowCombos
+  , cookieDrop
   , dropRefill
   , portalTeleport
   ) where
@@ -33,107 +53,133 @@ import Match3.Types
 import Match3.Ufo (Ufo, mkUfo, stepUfos)
 import System.Random (RandomGen)
 
--- | 飞碟：每轮补子之后（onRefilled）整轮吸收并移动。开局 = 关卡记录的飞碟；没有放置而目标是飞碟吸收时放一个 (1,3) C1。
+-- | 飞碟：每轮补子之后（OnRefilled）整轮吸收并移动。开局 = 关卡记录的飞碟；没有放置而目标是飞碟吸收时放一个 (1,3) C1。
 newtype UfoLevel = UfoLevel [Ufo]
   deriving (Eq, Show)
 
+ufoMech :: Mechanic UfoLevel
+ufoMech = (mechanic "ufo")
+  { mechView = \(UfoLevel us) -> noView {lvUfos = Just us}
+  , mechSystems =
+      [ OnStart $ \lvl _ ->
+          if null (lvlUfos lvl)
+            then UfoLevel (case goalView (lvlGoal lvl) of
+              ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
+              _ -> [])
+            else UfoLevel (lvlUfos lvl)
+      , OnRefilled $ \b acc (UfoLevel us) -> let (ps, us') = stepUfos b us in Just (acc ++ ps, UfoLevel us')
+      ]
+  }
 
-instance Mechanic UfoLevel where
-  layout = (emptyLayout "ufo") { mlUfos = \(UfoLevel us) -> Just us }
-  onBeat (Start lvl) _
-    | null (lvlUfos lvl) = Just ((), UfoLevel (case goalView (lvlGoal lvl) of
-        ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
-        _ -> []))
-    | otherwise = Just ((), UfoLevel (lvlUfos lvl))
-  onBeat (Refilled b acc) (UfoLevel us) =
-    let (ps, us') = stepUfos b us in Just (acc ++ ps, UfoLevel us')
-  onBeat _ _ = Nothing
+ufoLevel :: [Ufo] -> SomeMechanic
+ufoLevel = SomeMechanic ufoMech . UfoLevel
 
--- | 皮带：玩家交换的步末、倒计时之后（EndTick）给出移位；会走的元素跳过皮带格（AskAvoid）。
+-- | 皮带：玩家交换的步末、倒计时之后（OnEndTick）给出移位；会走的元素跳过皮带格（AnswerAvoid）。
 newtype BeltLevel = BeltLevel [Belt]
   deriving (Eq, Show)
 
-instance Mechanic BeltLevel where
-  layout = (emptyLayout "belt") { mlBelts = \(BeltLevel bs) -> Just bs }
-  onBeat (Start lvl) _ = Just ((), BeltLevel (lvlBelts lvl))
-  onBeat (EndTick acc) (BeltLevel bs)
-    | null bs = Nothing
-    | otherwise = Just (acc ++ beltMoves bs, BeltLevel bs)
-  onBeat (AskAvoid acc) (BeltLevel bs)
-    | null bs = Nothing
-    | otherwise = Just (acc ++ concat bs, BeltLevel bs)
-  onBeat _ _ = Nothing
+beltMech :: Mechanic BeltLevel
+beltMech = (mechanic "belt")
+  { mechView = \(BeltLevel bs) -> noView {lvBelts = Just bs}
+  , mechSystems =
+      [ OnStart (\lvl _ -> BeltLevel (lvlBelts lvl))
+      , OnEndTick $ \acc (BeltLevel bs) -> if null bs then Nothing else Just (acc ++ beltMoves bs, BeltLevel bs)
+      , AnswerAvoid $ \acc (BeltLevel bs) -> if null bs then Nothing else Just (acc ++ concat bs)
+      ]
+  }
 
--- | 传送门：沉降时（Settling）传送可穿门的本体；端点是会走元素的墙（AskWall）。
+beltLevel :: [Belt] -> SomeMechanic
+beltLevel = SomeMechanic beltMech . BeltLevel
+
+-- | 传送门：沉降时（OnSettling）传送可穿门的本体；端点是会走元素的墙（AnswerWall）。
 newtype PortalLevel = PortalLevel [(Pos, Pos)]
   deriving (Eq, Show)
 
-instance Mechanic PortalLevel where
-  layout = (emptyLayout "portal") { mlPortals = \(PortalLevel ps) -> Just ps }
-  onBeat (Start lvl) _ = Just ((), PortalLevel (lvlPortals lvl))
-  onBeat (Settling canPass mb) (PortalLevel ps) =
-    Just (portalTeleport canPass ps mb, PortalLevel ps)
-  onBeat (AskWall acc) (PortalLevel ps) =
-    Just (acc ++ concatMap (\(a, b) -> [a, b]) ps, PortalLevel ps)
-  onBeat _ _ = Nothing
+portalMech :: Mechanic PortalLevel
+portalMech = (mechanic "portal")
+  { mechView = \(PortalLevel ps) -> noView {lvPortals = Just ps}
+  , mechSystems =
+      [ OnStart (\lvl _ -> PortalLevel (lvlPortals lvl))
+      , OnSettling $ \canPass mb (PortalLevel ps) -> Just (portalTeleport canPass ps mb, PortalLevel ps)
+      , AnswerWall $ \acc (PortalLevel ps) -> Just (acc ++ concatMap (\(a, b) -> [a, b]) ps)
+      ]
+  }
 
--- | 地毯：步末结算时（Covering）覆盖目标格。
+portalLevel :: [(Pos, Pos)] -> SomeMechanic
+portalLevel = SomeMechanic portalMech . PortalLevel
+
+-- | 地毯：步末结算时（OnCovering）覆盖目标格。
 newtype CarpetLevel = CarpetLevel [Pos]
   deriving (Eq, Show)
 
-instance Mechanic CarpetLevel where
-  layout = (emptyLayout "carpet") { mlCarpetOpen = \(CarpetLevel ps) -> Just ps }
-  onBeat (Start lvl) _
-    | null (lvlCarpets lvl) = Just ((), CarpetLevel (case goalView (lvlGoal lvl) of
-        ViewCount CountCarpets n ->
-          take (max n 1)
-            [ (3, 2), (3, 3), (3, 4), (3, 5)
-            , (4, 2), (4, 3), (4, 4), (4, 5)
-            , (2, 2), (2, 5), (5, 2), (5, 5)
-            ]
-        _ -> []))
-    | otherwise = Just ((), CarpetLevel (lvlCarpets lvl))
-  onBeat (Covering hit n) (CarpetLevel open0) =
-    let (open', k) = coverCarpets open0 hit in Just (n + k, CarpetLevel open')
-  onBeat _ _ = Nothing
+carpetMech :: Mechanic CarpetLevel
+carpetMech = (mechanic "carpet")
+  { mechView = \(CarpetLevel ps) -> noView {lvCarpetOpen = Just ps}
+  , mechSystems =
+      [ OnStart $ \lvl _ ->
+          if null (lvlCarpets lvl)
+            then CarpetLevel (case goalView (lvlGoal lvl) of
+              ViewCount CountCarpets n ->
+                take (max n 1)
+                  [ (3, 2), (3, 3), (3, 4), (3, 5)
+                  , (4, 2), (4, 3), (4, 4), (4, 5)
+                  , (2, 2), (2, 5), (5, 2), (5, 5)
+                  ]
+              _ -> [])
+            else CarpetLevel (lvlCarpets lvl)
+      , OnCovering $ \hit n (CarpetLevel open0) -> let (open', k) = coverCarpets open0 hit in Just (n + k, CarpetLevel open')
+      ]
+  }
+
+carpetLevel :: [Pos] -> SomeMechanic
+carpetLevel = SomeMechanic carpetMech . CarpetLevel
 
 -- | 规则开关「L / T 形生成炸弹」。
 newtype BombShapes = BombShapes Bool
   deriving (Eq, Show)
 
-instance Mechanic BombShapes where
-  layout = emptyLayout "bomb_shapes"
-  onBeat (Start lvl) _ = Just ((), BombShapes ("bomb_shapes" `elem` lvlRules lvl))
-  onBeat (AskShapes rules) (BombShapes on)
-    | on = Just (withBombShapes rules, BombShapes on)
-    | otherwise = Nothing
-  onBeat _ _ = Nothing
+bombShapesMech :: Mechanic BombShapes
+bombShapesMech = (mechanic "bomb_shapes")
+  { mechSystems =
+      [ OnStart (\lvl _ -> BombShapes ("bomb_shapes" `elem` lvlRules lvl))
+      , AnswerShapes $ \rules (BombShapes on) -> if on then Just (withBombShapes rules) else Nothing
+      ]
+  }
+
+bombShapes :: Bool -> SomeMechanic
+bombShapes = SomeMechanic bombShapesMech . BombShapes
 
 -- | 规则开关「魔力鸟组合增强」。
 newtype RainbowCombos = RainbowCombos Bool
   deriving (Eq, Show)
 
-instance Mechanic RainbowCombos where
-  layout = emptyLayout "rainbow_combos"
-  onBeat (Start lvl) _ = Just ((), RainbowCombos ("rainbow_combos" `elem` lvlRules lvl))
-  onBeat (AskMorph b0 swapped p1 p2) (RainbowCombos on)
-    | on, Just (n, cells, seeds) <- rainbowComboMorph b0 swapped p1 p2 =
-        Just (Morph n cells seeds, RainbowCombos on)
-    | otherwise = Nothing
-  onBeat _ _ = Nothing
+rainbowCombosMech :: Mechanic RainbowCombos
+rainbowCombosMech = (mechanic "rainbow_combos")
+  { mechSystems =
+      [ OnStart (\lvl _ -> RainbowCombos ("rainbow_combos" `elem` lvlRules lvl))
+      , AnswerMorph $ \b0 swapped p1 p2 (RainbowCombos on) ->
+          if on then (\(n, cells, seeds) -> Morph n cells seeds) <$> rainbowComboMorph b0 swapped p1 p2 else Nothing
+      ]
+  }
+
+rainbowCombos :: Bool -> SomeMechanic
+rainbowCombos = SomeMechanic rainbowCombosMech . RainbowCombos
 
 -- | 掉落口（新玩法 6）。
 newtype CookieDrop = CookieDrop [DropSpec]
   deriving (Eq, Show)
 
-instance Mechanic CookieDrop where
-  layout = (emptyLayout "cookie_drop") { mlDrops = \(CookieDrop ds) -> Just (concatMap dropCells ds) }
-  onBeat (Start lvl) _ = Just ((), CookieDrop (lvlDrops lvl))
-  onBeat (AskRefill p) (CookieDrop ds)
-    | null ds = Nothing
-    | otherwise = Just (dropRefill ds p, CookieDrop ds)
-  onBeat _ _ = Nothing
+cookieDropMech :: Mechanic CookieDrop
+cookieDropMech = (mechanic "cookie_drop")
+  { mechView = \(CookieDrop ds) -> noView {lvDrops = Just (concatMap dropCells ds)}
+  , mechSystems =
+      [ OnStart (\lvl _ -> CookieDrop (lvlDrops lvl))
+      , AnswerRefill $ \p (CookieDrop ds) -> if null ds then Nothing else Just (dropRefill ds p)
+      ]
+  }
 
+cookieDrop :: [DropSpec] -> SomeMechanic
+cookieDrop = SomeMechanic cookieDropMech . CookieDrop
 
 -- | 掉落口补子：每个空洞先照原策略补（随机数照常消耗，所以生成器的推进与没有掉落口时相同），
 -- 若空洞是某个掉落口格、且此刻盘上（已补的格子算在内）与 dropCell 同种的格少于 dropKeep 个，就换成 dropCell。
@@ -153,7 +199,7 @@ dropRefill ds base = RefillPolicy (refillName base ++ "+drop") pick
       (Custom n _, Custom m _) -> n == m
       _ -> x == y
 
--- | 传送门的实现（PortalLevel 回复 onSettling 时调用；第 7 刀前在 Board.Gravity）：可穿门谓词由元素世界给出。
+-- | 传送门的实现（传送门的 OnSettling system 调用；第 7 刀前在 Board.Gravity）：可穿门谓词由元素世界给出。
 portalTeleport :: (Cell -> Bool) -> [(Pos, Pos)] -> MBoard -> MBoard
 portalTeleport canPort pairs mb =
   -- Each pair teleports at most one way per settle (A→B else B→A) to avoid bounce-back.

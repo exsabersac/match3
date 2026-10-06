@@ -49,8 +49,8 @@ import Data.Maybe (isJust)
 import Engine.Optics (Lens', lens)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), defaultRegistry)
-import Match3.Element.Mechanic (Mechanic, SomeMechanic, fromMechanic)
+import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), beltLevel, carpetLevel, defaultRegistry, groundLayer, portalLevel, ufoLevel)
+import Match3.Element.Mechanic (SomeMechanic, fromMechanic)
 import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
 import Match3.ECS.Registry (Registry)
 import Match3.Ufo (Ufo(..))
@@ -104,29 +104,29 @@ gsCarpetOpen = levelCarpetOpen . gsLevelElems
 gsGround :: GameState -> Ground
 gsGround = levelGround . gsLevelElems
 
--- | 写入一个关卡级元素的状态（同名替换，没有则追加）。
-setLevelElem :: Mechanic l => l -> GameState -> GameState
+-- | 写入一个关卡级元素（原型 + 状态；同名替换，没有则追加）。
+setLevelElem :: SomeMechanic -> GameState -> GameState
 setLevelElem l gs = gs {gsLevelElems = putLevel l (gsLevelElems gs)}
 
 -- | 写入飞碟（替换 'UfoLevel'）。
 setUfos :: [Ufo] -> GameState -> GameState
-setUfos = setLevelElem . UfoLevel
+setUfos = setLevelElem . ufoLevel
 
 -- | 写入传送带（替换 'BeltLevel'）。
 setBelts :: [Belt] -> GameState -> GameState
-setBelts = setLevelElem . BeltLevel
+setBelts = setLevelElem . beltLevel
 
 -- | 写入传送门（替换 'PortalLevel'）。
 setPortals :: [(Pos, Pos)] -> GameState -> GameState
-setPortals = setLevelElem . PortalLevel
+setPortals = setLevelElem . portalLevel
 
 -- | 写入未覆盖的地毯格（替换 'CarpetLevel'）。
 setCarpetOpen :: [Pos] -> GameState -> GameState
-setCarpetOpen = setLevelElem . CarpetLevel
+setCarpetOpen = setLevelElem . carpetLevel
 
 -- | 写入地面层（替换 'GroundLayer'）。
 setGround :: Ground -> GameState -> GameState
-setGround = setLevelElem . GroundLayer
+setGround = setLevelElem . groundLayer
 
 -- 透镜（Haskell 特性第 6 项，docs/haskell-features/06-测试与光学.md）。
 --

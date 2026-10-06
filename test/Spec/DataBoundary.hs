@@ -29,7 +29,7 @@ import Data.String (fromString)
 import GHC.Generics
 import Data.Maybe (isJust)
 import Match3.ECS.Archetype (Archetype(..), Column(..), SomeArchetype(..))
-import Match3.ECS.Cover (SomeCover(..), coverName, coversCell)
+import Match3.ECS.Cover (coverName, coversCell)
 import Match3.ECS.Registry (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)
 import Data.Foldable (toList)

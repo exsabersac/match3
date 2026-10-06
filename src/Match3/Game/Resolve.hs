@@ -12,7 +12,7 @@
 --
 -- 依赖：Match3.Board.*（记录版连锁 CascadeRun）、State、Tally、Outcome、Shuffle、Trace、EndPhase（步末表）、
 -- 元素元素世界（按差计数、地毯腾空都查元素世界）、Element.Level（
--- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经 Mechanic 的节拍方法）。
+-- 关卡级元素在 gsLevelElems，连锁经钩子 LevelHooks，皮带 / 地毯 / 地面层 / 会走元素的避让格与墙经机制原型的节拍 system）。
 -- 不变量（金标准锁定）：
 --   * 玩家交换的步末顺序：倒计时 tick / 爆炸 → 皮带移位 + 皮带后连锁 → 藤 / 巧 / 蒸汽蔓延 → 蜗牛 →
 --     （蜗牛推出匹配）再连锁一次；道具只有蔓延，没有倒计时 / 皮带 / 蜗牛（写成 EndPhase 表，见 endTableFor）；

@@ -21,11 +21,11 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Mechanic
-  ( Beat(..)
-  , Mechanic(..)
+  ( Mechanic(..)
+  , MechSys(..)
   , SomeMechanic(..)
-  , emptyLayout
   , fromMechanic
+  , mechanic
   , mechNameOf
   )
 import Match3.Element.Kind (customPlace)
@@ -174,22 +174,22 @@ ec_state_lives_in_element_value = do
       Custom "nest" _ -> True
       _ -> False
 
--- | 关卡级机制的节拍方法缺省都不回复（元素类重构第 5 刀起取代开放消息）：只写名字的机制注册进去，
+-- | 关卡级机制缺省不回复任何节拍（ecs-5 起 = 原型的 system 列表为空）：只写名字的机制注册进去，
 -- 每个节拍都没有回复，结果与没注册时相同。
 newtype Quiet = Quiet ()
   deriving (Eq, Show)
 
-instance Mechanic Quiet where
-  layout = emptyLayout "quiet"
+quiet :: SomeMechanic
+quiet = SomeMechanic (mechanic "quiet") (Quiet ())
 
 ec_mechanic_defaults_silent :: Assertion
 ec_mechanic_defaults_silent = do
-  let world = registerMechanic (SomeMechanic (Quiet ())) (foldl (flip removeMechanic) defaultRegistry (map mechNameOf builtinMechanics))
-      es = [SomeMechanic (Quiet ())]
-  assertBool "no beat reply" (isNothing (beatIn world es [] (\m acc -> onBeat (EndTick acc) m)) && isNothing (queryIn world es [] (\m acc -> fst <$> onBeat (AskAvoid acc) m)) && isNothing (queryIn world es [] (\m acc -> fst <$> onBeat (AskWall acc) m)))
-  assertBool "no query reply" (isNothing (queryIn world es [] (\m rs -> fst <$> onBeat (AskShapes rs) m)) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
+  let world = registerMechanic quiet (foldl (flip removeMechanic) defaultRegistry (map mechNameOf builtinMechanics))
+      es = [quiet]
+  assertBool "no beat reply" (isNothing (beatIn world es [] onEndTick) && isNothing (queryIn world es [] askAvoid) && isNothing (queryIn world es [] askWall))
+  assertBool "no query reply" (isNothing (queryIn world es [] askShapes) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
   assertEqual "no readings" ([], []) (levelUfos es, levelBelts es)
-  assertBool "fromMechanic type check" (fromMechanic (SomeMechanic (Quiet ())) == Just (Quiet ()))
+  assertBool "fromMechanic type check" (fromMechanic quiet == Just (Quiet ()))
 
 -- | 阶段 2 消掉的遗留项：源码里没有扁平记录 / 封闭钩子；findHint 不再点名彩虹；
 -- 主流程不再点名关卡级元素的实现（只经消息）。全部内置元素都是 instance（条目 33 个：新玩法 2 追加魔法石、新玩法 3 追加毛球，名字与阶段 1 相同由快照锁定）。
@@ -247,61 +247,55 @@ data Pinger = Pinger
 data Doubler = Doubler
   deriving (Eq, Show)
 
-instance Mechanic Magnet where
-  layout = emptyLayout "magnet"
-  onBeat (Refilled b acc) m =
-    Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
-  onBeat _ _ = Nothing
+magnet :: SomeMechanic
+magnet = SomeMechanic ((mechanic "magnet") {mechSystems = [OnRefilled absorb]}) Magnet
+  where
+    absorb b acc m = Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
 
-instance Mechanic Pinger where
-  layout = emptyLayout "pinger"
-  onBeat (AskAvoid acc) m = Just (acc ++ [(0, 0)], m)
-  onBeat _ _ = Nothing
+pinger :: SomeMechanic
+pinger = SomeMechanic ((mechanic "pinger") {mechSystems = [AnswerAvoid (\acc _ -> Just (acc ++ [(0, 0)]))]}) Pinger
 
-instance Mechanic Doubler where
-  layout = emptyLayout "doubler"
-  onBeat (AskAvoid acc) m = Just (acc ++ acc, m)
-  onBeat _ _ = Nothing
+doubler :: SomeMechanic
+doubler = SomeMechanic ((mechanic "doubler") {mechSystems = [AnswerAvoid (\acc _ -> Just (acc ++ acc))]}) Doubler
 
 ec_mechanics_by_beat :: Assertion
 ec_mechanics_by_beat = do
-  let world = registerMechanic (SomeMechanic Magnet) defaultRegistry
+  let world = registerMechanic magnet defaultRegistry
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = setCell stableBoard (1, 0) (mkGem C5)}
       b1 = setCell (setCell stableBoard (1, 0) (mkGem C5)) (1, 1) (mkGem C5)
       (p1, p2) = ((1, 2), (2, 2))
       (_, o, mt) = resolveSwapWith world p1 p2 gs0 {gsBoard = b1}
       (_, oD, mtD) = resolveSwapWith defaultRegistry p1 p2 gs0 {gsBoard = b1}
-      ping r = length <$> queryIn r [] (replicate 7 (0, 0)) (\m acc -> fst <$> onBeat (AskAvoid acc) m)
-      withPinger = registerMechanic (SomeMechanic Pinger) world
+      ping r = length <$> queryIn r [] (replicate 7 (0, 0)) askAvoid
+      withPinger = registerMechanic pinger world
   assertBool "applied" (moveApplied o && moveApplied oD)
   assertBool "magnet adds an absorb wave (ufo also answers)" (length (mtWaves mt) > length (mtWaves mtD))
   assertEqual "magnet does not answer other beats" Nothing (ping world)
   assertEqual "beat folds the only replier" (Just 8) (ping withPinger)
-  assertEqual "beat folds all repliers in registration order" (Just 16) (ping (registerMechanic (SomeMechanic Doubler) withPinger))
-  assertEqual "other order" (Just 15) (ping (registerMechanic (SomeMechanic Pinger) (registerMechanic (SomeMechanic Doubler) defaultRegistry)))
+  assertEqual "beat folds all repliers in registration order" (Just 16) (ping (registerMechanic doubler withPinger))
+  assertEqual "other order" (Just 15) (ping (registerMechanic pinger (registerMechanic doubler defaultRegistry)))
   assertEqual "nobody answers by default" Nothing (ping defaultRegistry)
   assertEqual "registered after the builtins" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop", "magnet"] (map mechNameOf (mechanicDefs world))
 
--- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 mechStart 给 2 格电量，
--- 每轮补子之后（onRefilled）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
+-- | 第 7 刀（7a）验收：带状态的扩展关卡级元素不改主流程就能接入。测试专用「虹吸」开局由 OnStart system 给 2 格电量，
+-- 每轮补子之后（OnRefilled system）有电量就吸走盘上最后一颗 C2 宝石并耗 1 格；状态只在 gsLevelElems 里的元素值中，
 -- 由结算写回。只 registerMechanic + 用这张表开局 / 走子；去掉注册后状态原样、不再生效。Show 在内置字段后追加
 -- gsLevelExtra（内置对局没有这一项，快照不变）。第 7 刀 7b：保留内置飞碟，同一节拍两者都生效（回复折叠：先飞碟、后虹吸）。
 newtype Siphon = Siphon Int
   deriving (Eq, Show)
 
-instance Mechanic Siphon where
-  layout = emptyLayout "siphon"
-  onBeat (Refilled b acc) (Siphon k)
-    | k > 0
-    , p : _ <- reverse [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell b q == mkGem C2] =
-        Just (acc ++ [p], Siphon (k - 1))
-    | otherwise = Nothing
-  onBeat (Start _) _ = Just ((), Siphon 2)
-  onBeat _ _ = Nothing
+siphon :: Int -> SomeMechanic
+siphon = SomeMechanic ((mechanic "siphon") {mechSystems = [OnStart (\_ _ -> Siphon 2), OnRefilled absorb]}) . Siphon
+  where
+    absorb b acc (Siphon k)
+      | k > 0
+      , p : _ <- reverse [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell b q == mkGem C2] =
+          Just (acc ++ [p], Siphon (k - 1))
+      | otherwise = Nothing
 
 ec_mechanic_stateful_extension :: Assertion
 ec_mechanic_stateful_extension = do
-  let world = registerMechanic (SomeMechanic (Siphon 0)) defaultRegistry
+  let world = registerMechanic (siphon 0) defaultRegistry
       gs0 = newGameAtLevelWith world 0 defaultConfig 7
       charge gs = fmap (\(Siphon k) -> k) (levelState (gsLevelElems gs))
       play r n gs

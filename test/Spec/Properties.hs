@@ -31,7 +31,7 @@ import Match3.Board.Cascade (AfterEntry(..), CascadeRun(..), cascadeAfterWith, c
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (NonEmpty(..))
 import Match3.Conveyor (applyBeltMoves)
-import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..), MechLayout(..), emptyLayout)
+import Match3.Element.Mechanic (Mechanic(..), MechSys(..), SomeMechanic(..), mechanic)
 import Match3.Game.EndPhase (boosterEndTable, runEndTable, runPhase, swapEndTable)
 import Match3.Game.Level (newGame)
 import Match3.Game.State
@@ -894,33 +894,36 @@ legacyBoosterEnd world seg0 =
       seg1 = cascadeAfterWith world (AfterEnd (endHolesWith world boardSp)) (crHooks seg0) (crGen seg0) boardSp
   in (seg0 :| [seg1], ends, crBoard seg1, boardH)
 
--- | 第 7 刀（7b）起节拍折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的输入（第 5 刀起节拍是 Mechanic 的
--- 有类型方法，折叠是 Element.Level.beatIn）；用若干个「追加编号」的测试机制随机注册，结果 = 各回复者的编号按注册顺序。
+-- | 第 7 刀（7b）起节拍折叠所有回复者 = 按顺序把每个回复者的回复当作下一个的输入（ecs-5 起节拍是机制原型里的
+-- 有类型 system 'MechSys'，折叠是 Element.Level.beatIn）；用若干个「追加编号」的测试机制随机注册，结果 = 各回复者的编号按注册顺序。
 -- | 测试机制：名字由编号决定（adder1、adder5 …），状态是被问的次数；回复步末移位节拍（onEndTick）。
 data Adder = Adder Int Int
   deriving (Eq, Show)
 
-instance Mechanic Adder where
-  layout = (emptyLayout "adder") { mlName = \(Adder k _) -> ElementName ("adder" ++ show k) }
-  onBeat (EndTick acc) (Adder k n) = Just (acc ++ [((k, k), (k, k))], Adder k (n + 1))
-  onBeat _ _ = Nothing
+-- | 编号为 k 的追加机制原型（名字是数据，每个编号一条原型）。
+adderMech :: Int -> Mechanic Adder
+adderMech k = (mechanic (ElementName ("adder" ++ show k)))
+  { mechSystems = [OnEndTick (\acc (Adder k' n) -> Just (acc ++ [((k', k'), (k', k'))], Adder k' (n + 1)))] }
+
+adder :: Int -> Int -> SomeMechanic
+adder k n = SomeMechanic (adderMech k) (Adder k n)
 
 qc_beat_folds_in_order :: Property
 qc_beat_folds_in_order =
   forAll (choose (0, 5) >>= \n -> vectorOf n (choose (1, 9 :: Int))) $ \ks0 ->
     let ks = nub ks0
-        world = foldl (\r k -> registerMechanic (SomeMechanic (Adder k 0)) r) defaultRegistry ks
-        elems = [SomeMechanic (Adder k 5) | k <- ks]
-        viaProto = beatIn world [] [] (\m acc -> onBeat (EndTick acc) m)
-        viaIn = beatIn world elems [] (\m acc -> onBeat (EndTick acc) m)
+        world = foldl (\r k -> registerMechanic (adder k 0) r) defaultRegistry ks
+        elems = [adder k 5 | k <- ks]
+        viaProto = beatIn world [] [] onEndTick
+        viaIn = beatIn world elems [] onEndTick
         expected = if null ks then Nothing else Just [((k, k), (k, k)) | k <- ks]
     in conjoin
          [ fmap fst viaProto === expected
          -- 原型值（不在 gsLevelElems 里）推进后状态变了：追加
-         , fmap snd viaProto === (if null ks then Nothing else Just [SomeMechanic (Adder k 1) | k <- ks])
+         , fmap snd viaProto === (if null ks then Nothing else Just [adder k 1 | k <- ks])
          , fmap fst viaIn === expected
          -- 每个回复者推进后的状态都写回（同名替换，顺序不变）
-         , fmap snd viaIn === (if null ks then Nothing else Just [SomeMechanic (Adder k 6) | k <- ks])
+         , fmap snd viaIn === (if null ks then Nothing else Just [adder k 6 | k <- ks])
          ]
 
 --------------------------------------------------------------------------------

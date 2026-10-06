@@ -31,7 +31,8 @@ import Match3.Element
   , swapOpeningWith
   , widenedCells
   )
-import Match3.Element.Kind (GroundKind(..))
+import Match3.Element.Kind (GroundArch(..))
+import Match3.ECS.Component (widenArea)
 import Match3.Element.Event (Event(..), EventKind(..))
 import Match3.ECS.Registry (Registry, defName, mkRegistry, registerMechanic, setComboRules, setShapeRules)
 import Match3.Engine (Action(..), Played(..), playWith)
@@ -94,8 +95,8 @@ mg_ability_ground_not_consumed = do
   assertEqual "name" "magic" magicGroundName
   assertEqual "ground name" magicGroundName (groundName magicGround)
   let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
-  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\f -> f b8 [(3, 3)]) (groundWiden magicGround))
-  assertBool "jelly does not widen" (null (fmap (\f -> f b8 [(3, 3)]) (groundWiden jelly)))
+  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\w -> widenArea w b8 [(3, 3)]) (groundWiden magicGround))
+  assertBool "jelly does not widen" (null (groundWiden jelly))
   let g0 = [(p, ("magic", 1)) | p <- mgCells]
   assertEqual "hit: kept, no counter" (g0, []) (hitGroundWith defaultRegistry mgCells g0)
   let gs0 = levelGame mgLevel 2

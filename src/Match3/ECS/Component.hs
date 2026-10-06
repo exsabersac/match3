@@ -40,10 +40,16 @@ module Match3.ECS.Component
   , noHud
   , LoseHint(..)
   , renderLoseHint
+    -- * 地面层
+  , Wear(..)
+  , wearHit
+  , Widen(..)
+  , widenArea
   ) where
 
 import Match3.Board.Grid (inBounds)
 import Match3.Element.Types (CellField, CounterKey, Edge, FaceValue)
+import Data.List (nub, sort)
 import Match3.Types (Board, Cell, Color, Pos, boardColIndices, boardRowIndices)
 
 --------------------------------------------------------------------------------
@@ -194,3 +200,25 @@ data Hud = Hud
 
 noHud :: Hud
 noHud = Hud Nothing Nothing Nothing False
+
+--------------------------------------------------------------------------------
+-- 地面层（不占格，层数在 gsGround 里按名字记）
+
+-- | 上方格子被消除一次时地面层怎么变（数据）：'Durable' 不变、不计数；'WearsOut' 去一层，去完清掉。
+data Wear = Durable | WearsOut
+  deriving (Eq, Show)
+
+-- | 'Wear' 的解释器：层数 → 新层数（Nothing = 清掉）。
+wearHit :: Wear -> Int -> Maybe Int
+wearHit w n = case w of
+  Durable -> Just n
+  WearsOut -> if n > 1 then Just (n - 1) else Nothing
+
+-- | 扩爆规则（数据）：'WidenRing' = 原范围每格的八邻格都并进来（直线一行 → 三行、炸弹 3×3 → 5×5）。
+data Widen = WidenRing
+  deriving (Eq, Show)
+
+-- | 'Widen' 的解释器：原范围按原顺序在前，新并进来的格（在盘内、不在原范围里）按行优先接在后面。
+widenArea :: Widen -> Board -> [Pos] -> [Pos]
+widenArea WidenRing b area =
+  area ++ sort (nub [q | (r, c) <- area, dr <- [-1, 0, 1], dc <- [-1, 0, 1], let q = (r + dr, c + dc), inBounds b q, q `notElem` area])

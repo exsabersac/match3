@@ -86,6 +86,8 @@ instance Phase MagicHatE where
     , cPlace = \_ _ -> Just MagicHat
     , cMeta = emptyMeta
     , cNear = Just (NearRule 60 AllNeighbours DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -95,9 +97,6 @@ instance Phase MagicHatE where
         b' = hatTriggerOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx)
      in nearLocalEdit b' [] []  -- 白名单：hatTriggerOne 只改邻接可改色格
   view _ = Face (Just ("hat", [])) []
-
-instance Kind MagicHatE where
-  place _ = cPlace (codec @MagicHatE)
 
 -- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
 data MakerE = MakerE Color Int
@@ -111,6 +110,8 @@ instance Phase MakerE where
     , cPlace = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
     , cMeta = emptyMeta
     , cNear = Just (NearRule 130 AllNeighbours DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -122,9 +123,6 @@ instance Phase MakerE where
         then nearSelfSits ctx (Gem c Bomb 0 Nothing)
         else NearNudge (Becomes (Maker c (n - 1)))
   view (MakerE c k) = Face (Just ("maker", [colorField c, nField k])) []
-
-instance Kind MakerE where
-  place _ = cPlace (codec @MakerE)
 
 -- | 蜗牛（固定格）：步末爬行 / 推动。
 data SnailE = SnailE Int Int
@@ -138,15 +136,13 @@ instance Phase SnailE where
     , cPlace = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [EndPass (moveRule 10 snailRun)]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
   view (SnailE dr dc) = Face (Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])) []
-
-instance Kind SnailE where
-  place _ = cPlace (codec @SnailE)
-  boardPasses _ = [EndPass (moveRule 10 snailRun)]
 
 -- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
 newtype BottleE = BottleE Color
@@ -160,6 +156,8 @@ instance Phase BottleE where
     , cPlace = colorPlace Bottle
     , cMeta = emptyMeta
     , cNear = Just (NearRule 140 AllNeighbours DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -169,9 +167,6 @@ instance Phase BottleE where
         b' = bottleDyeOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx) c
      in nearLocalEdit b' [] []  -- 白名单：bottleTriggerOne 只改邻接可改色格
   view (BottleE c) = Face (Just ("bottle", [colorField c])) []
-
-instance Kind BottleE where
-  place _ = cPlace (codec @BottleE)
 
 -- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
 data CountdownE = CountdownE Color Int
@@ -188,15 +183,13 @@ instance Phase CountdownE where
         _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [EndPass (tickRule 10 tickRun explodeSeedsFor)]
     }
   onMatch (CountdownE c _) = gemMatch (Just c)
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = gemPhysics { pKeepShuffle = True }
   view (CountdownE c k) = Face (Just ("countdown", [colorField c, nField k])) []
-
-instance Kind CountdownE where
-  place _ = cPlace (codec @CountdownE)
-  boardPasses _ = [EndPass (tickRule 10 tickRun explodeSeedsFor)]
 
 -- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，原型 Blocker（挡交换、无色、随重力下落、洗牌原地保留）。
 --
@@ -216,16 +209,13 @@ instance Phase Fuzzball where
     , cPlace = customPlace "fuzzball"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "fuzzball") }
     , cNear = Nothing
+    , cHud = noHud { hudLabel = Just "毛球" }
+    , cPasses = [AdjacentPass 190 fuzzballAdjacent, EndPass (moveRule 20 fuzzballRun)]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Fuzzball where
-  place _ = cPlace (codec @Fuzzball)
-  label _ = Just "毛球"
-  boardPasses _ = [AdjacentPass 190 fuzzballAdjacent, EndPass (moveRule 20 fuzzballRun)]
 
 isFuzzball :: Cell -> Bool
 isFuzzball cell = case cell of

@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 -- | 元素的世界（相当于 xmonad 的 layoutHook）：主流程查询元素行为的**唯一入口**（各 *With 函数）。
 --
--- 注册的只是一张**有序的类型列表**（本体种类 'Kind'、叠层 'Layer'、地面层 'GroundKind'），引擎由它解码格子：
+-- 注册的只是一张**有序的列表**（本体种类 = 'Phase' 类型、叠层 'Layer'、地面层 = 'GroundKind' 记录），引擎由它解码格子：
 -- 叠层由外向内 'peel'（冰层在外、叠层在内，这是 Cell 存储编码决定的），剩下的格子交给本体的 'fromCell'；
 -- 都不认识时得到惰性占格 'Inert'。各查询就是在解码出的元素值（'SomePhase'）上调 Phase 的方法（Match3.Element.Phase）。
 --
@@ -146,18 +146,18 @@ import Match3.Types
 data Def
   = KindDef SomeKind
   | LayerDef SomeLayer
-  | GroundDef SomeGround
+  | GroundDef GroundKind
   | InertDef ElementName  -- ^ 只登记名字的惰性占格（Custom 名字 状态值；放置 = 'customPlace'）
 
--- | @kindDef \@StoneE@、@layerDef \@Ice@、@groundDef \@Jelly@。
-kindDef :: forall e. Kind e => Def
+-- | @kindDef \@StoneE@、@layerDef \@Ice@、@groundDef magicGround@。
+kindDef :: forall e. Phase e => Def
 kindDef = KindDef (someKind @e)
 
 layerDef :: forall l. Layer l => Def
 layerDef = LayerDef (someLayer @l)
 
-groundDef :: forall g. GroundKind g => Def
-groundDef = GroundDef (someGround @g)
+groundDef :: GroundKind -> Def
+groundDef = GroundDef
 
 -- | 只登记名字的惰性占格：挡交换、无色、会下落、打不动、洗牌保留（测试 / 扩展用）。
 inertDef :: ElementName -> Def
@@ -167,7 +167,7 @@ defName :: Def -> ElementName
 defName d = case d of
   KindDef (SomeKind p) -> kindName p
   LayerDef (SomeLayer p) -> layerName p
-  GroundDef (SomeGround p) -> groundName p
+  GroundDef g -> groundName g
   InertDef n -> n
 
 -- | 注册项的关卡放置（地面层不经放置表）。
@@ -322,7 +322,7 @@ worldKinds w = [k | KindDef k <- wDefs w]
 worldLayers :: World -> [SomeLayer]
 worldLayers w = [l | LayerDef l <- wDefs w]
 
-worldGrounds :: World -> [SomeGround]
+worldGrounds :: World -> [GroundKind]
 worldGrounds w = [g | GroundDef g <- wDefs w]
 
 -- | 按名字找注册项。
@@ -330,8 +330,8 @@ lookupDef :: World -> ElementName -> Maybe Def
 lookupDef w n = listToMaybe [d | d <- wDefs w, defName d == n]
 
 -- | 按名字找地面层种类。
-lookupGround :: World -> ElementName -> Maybe SomeGround
-lookupGround w n = listToMaybe [g | GroundDef g@(SomeGround p) <- wDefs w, groundName p == n]
+lookupGround :: World -> ElementName -> Maybe GroundKind
+lookupGround w n = listToMaybe [g | GroundDef g <- wDefs w, groundName g == n]
 
 -- 候选表上第一个认领该格的种类（显式递归：解码在匹配 / 提示 / 计数的热路径上，不建中间列表）。
 firstDecode :: [SomeKind] -> Cell -> Maybe SomePhase
@@ -427,14 +427,14 @@ displayLabelWith world n = lookupDef world n >>= defLabel
 defLabel :: Def -> Maybe String
 defLabel d = case d of
   KindDef (SomeKind p) -> label p
-  GroundDef (SomeGround p) -> groundLabel p
+  GroundDef g -> groundLabel g
   _ -> Nothing
 
 -- | 按元素名计数的目标的失败提示。
 loseHintWith :: World -> ElementName -> Maybe (Int -> String)
 loseHintWith world n = lookupDef world n >>= \d -> case d of
   KindDef (SomeKind p) -> loseHint p
-  GroundDef (SomeGround p) -> groundLoseHint p
+  GroundDef g -> groundLoseHint g
   _ -> Nothing
 
 -- | 全部登记了中文名的元素：[(元素名, 中文名)]（注册顺序）。
@@ -600,7 +600,7 @@ widenAtWith world b p area = foldl (\a f -> f b a) area [f | (q, f) <- stepWiden
 -- | 地面层里带扩爆规则（'widenRule'）的格（新玩法 8：魔法地格）与各自的改写函数；地面层按格序。
 groundWideningWith :: World -> Ground -> [(Pos, Board -> [Pos] -> [Pos])]
 groundWideningWith world g =
-  [(p, w) | (p, (n, _)) <- g, Just (SomeGround gp) <- [lookupGround (world) n], Just w <- [groundWiden gp]]
+  [(p, w) | (p, (n, _)) <- g, Just gk <- [lookupGround (world) n], Just w <- [groundWiden gk]]
 
 -- | 设定本步的扩爆格（新玩法 8；每步结算开始时由 Element.Level.levelWorldIn 调用）。
 setWidening :: [(Pos, Board -> [Pos] -> [Pos])] -> World -> World
@@ -648,7 +648,7 @@ hitGroundWith world hits = foldr one ([], [])
   where
     one (p, (n, layers)) (acc, counts)
       | p `elem` hits
-      , Just (SomeGround g) <- lookupGround (world) n =
+      , Just g <- lookupGround (world) n =
           let after = groundHit g layers
               removed = layers - maybe 0 id after
               counts' = case groundCounter g of

@@ -29,10 +29,11 @@ import Match3.Element.Mechanic
   ( Beat(..)
   , Mechanic(..)
   , SomeMechanic(..)
+  , emptyLayout
   , fromMechanic
   , mechNameOf
   )
-import Match3.Element.Kind (Kind(..), customPlace, fromCustom)
+import Match3.Element.Kind (customPlace, fromCustom, noHud)
 import Match3.Element.Layer (Layer(..), LayerHit(..), Layered(..), layerHit)
 import Match3.Board.Hooks (LevelHooks(..))
 import Match3.Game.Boosters (resolveHammerWith)
@@ -138,14 +139,14 @@ newtype TwinB = TwinB Int
   deriving (Eq, Show)
 
 instance Phase TwinA where
-  codec = Codec "twin" (intCell "twin") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+  codec = Codec "twin" (intCell "twin") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing noHud []
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics
   view _ = noFace
 
 instance Phase TwinB where
-  codec = Codec "twin" (intCell "twin") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+  codec = Codec "twin" (intCell "twin") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing noHud []
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics
@@ -180,20 +181,17 @@ instance Phase Nest where
   codec = Codec
     { cName = "nest"
     , cToCell = intCell "nest"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "nest" Nest
+    , cPlace = customPlace "nest"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "nest") }
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (Nest k) = HitOut (if k > 1 then Absorb (toCell (Nest (k - 1))) else Destroy) False Nothing Nothing
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Nest where
-  kindName _ = "nest"
-  fromCell = fromCustom "nest" Nest
-  place _ = customPlace "nest"
 
 ec_state_lives_in_element_value :: Assertion
 ec_state_lives_in_element_value = do
@@ -222,7 +220,7 @@ newtype Quiet = Quiet ()
   deriving (Eq, Show)
 
 instance Mechanic Quiet where
-  mechName _ = "quiet"
+  layout _ = emptyLayout "quiet"
 
 ec_mechanic_defaults_silent :: Assertion
 ec_mechanic_defaults_silent = do
@@ -251,7 +249,8 @@ ec_flat_record_removed = do
   assertEqual "builtin entries" builtinEntryCount (length builtinDefs)
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf builtinMechanics)
 
--- | 凡 'instance Entity' 必须经 Kind.'entityHit' 挂上扣血（通常调用 'entityDamage'）；不得只写 Entity 却漏挂。
+-- | 凡定义了 'Entity' 记录的模块，必须把扣血驱动挂进 'cPasses'（@AdjacentPass … (entityDamage 记录)@）；
+-- 不得只写 Entity 却漏挂。slim-10 起 Entity 是记录、扣血走元素自己的逃生口（之前是 Kind.entityHit）。
 ec_entity_wires_damage :: Assertion
 ec_entity_wires_damage = do
   srcFiles <- sourcesUnderAll ["src/Match3/Element"]
@@ -259,16 +258,14 @@ ec_entity_wires_damage = do
   let entityFiles =
         [ (f, s)
         | (f, s) <- pairs
-        , "instance Entity" `isInfixOf` s
-        , f /= "src/Match3/Element/Kind.hs"
+        , ":: Entity " `isInfixOf` s
+        , f `notElem` ["src/Match3/Element/Kind.hs", "src/Match3/Element/Rules.hs"]
         ]
-  assertBool "at least one Entity instance (SnowBoss)" (not (null entityFiles))
-  assertEqual "Entity modules wire entityHit" [] [f | (f, s) <- entityFiles, not ("entityHit" `isInfixOf` s)]
-  assertEqual "Entity modules mention entityDamage" [] [f | (f, s) <- entityFiles, not ("entityDamage" `isInfixOf` s)]
-  -- 扣血应在 entityHit / kindRules 路径，不应再塞进 boardPasses 列表里（否则 kindRules 会挂两次）
+  assertBool "at least one Entity record (SnowBoss)" (not (null entityFiles))
+  assertEqual "Entity modules wire entityDamage into cPasses" [] [f | (f, s) <- entityFiles, not ("(entityDamage " `isInfixOf` s && "cPasses = [AdjacentPass" `isInfixOf` s)]
   snow <- readFile "src/Match3/Element/Builtin/Obstacle.hs"
-  assertBool "SnowBoss boardPasses no longer inlines entityDamage"
-    (not ("boardPasses _ = [AdjacentPass 200 (entityDamage" `isInfixOf` snow))
+  assertBool "SnowBoss wires its entity exactly once"
+    (length (filter ("entityDamage snowBossEntity" `isInfixOf`) (lines snow)) == 1)
 
 -- | 内置关卡级机制的 mechName 两两不同（beatIn / registerMechanic 按名合并；撞名会静默覆盖）。
 ec_mechanic_names_unique :: Assertion
@@ -291,18 +288,18 @@ data Doubler = Doubler
   deriving (Eq, Show)
 
 instance Mechanic Magnet where
-  mechName _ = "magnet"
+  layout _ = emptyLayout "magnet"
   onBeat (Refilled b acc) m =
     Just (acc ++ take 1 [p | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let p = (r, c), getCell b p == mkGem C1], m)
   onBeat _ _ = Nothing
 
 instance Mechanic Pinger where
-  mechName _ = "pinger"
+  layout _ = emptyLayout "pinger"
   onBeat (AskAvoid acc) m = Just (acc ++ [(0, 0)], m)
   onBeat _ _ = Nothing
 
 instance Mechanic Doubler where
-  mechName _ = "doubler"
+  layout _ = emptyLayout "doubler"
   onBeat (AskAvoid acc) m = Just (acc ++ acc, m)
   onBeat _ _ = Nothing
 
@@ -333,14 +330,14 @@ newtype Siphon = Siphon Int
   deriving (Eq, Show)
 
 instance Mechanic Siphon where
-  mechName _ = "siphon"
+  layout _ = emptyLayout "siphon"
   onBeat (Refilled b acc) (Siphon k)
     | k > 0
     , p : _ <- reverse [q | r <- [0 .. boardSize - 1], c <- [0 .. boardSize - 1], let q = (r, c), getCell b q == mkGem C2] =
         Just (acc ++ [p], Siphon (k - 1))
     | otherwise = Nothing
+  onBeat (Start _) _ = Just ((), Siphon 2)
   onBeat _ _ = Nothing
-  mechStart _ _ = Siphon 2
 
 ec_mechanic_stateful_extension :: Assertion
 ec_mechanic_stateful_extension = do
@@ -386,20 +383,17 @@ instance Phase Star where
   codec = Codec
     { cName = "star"
     , cToCell = \(Star c) -> Custom "star" (CustomState (fromEnum c))
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "star" (Star . colorAt)
+    , cPlace = customPlace "star"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "star") }
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (Star c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics
   view _ = noFace
-
-instance Kind Star where
-  kindName _ = "star"
-  fromCell = fromCustom "star" (Star . colorAt)
-  place _ = customPlace "star"
 
 ec_custom_matchable_gem :: Assertion
 ec_custom_matchable_gem = do
@@ -427,23 +421,21 @@ newtype OtherGem = OtherGem Color
 
 instance Phase OtherGem where
   codec = Codec
-    { cName = "gem"
+    { cName = "other_gem"
     , cToCell = \(OtherGem c) -> Gem c Normal 0 Nothing
-    , cFromCell = const Nothing
+    , cFromCell = \cell -> case cell of
+        Gem c Normal _ _ -> Just (OtherGem c)
+        _ -> Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (OtherGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics
   view _ = noFace
-
-instance Kind OtherGem where
-  kindName _ = "other_gem"
-  fromCell cell = case cell of
-    Gem c Normal _ _ -> Just (OtherGem c)
-    _ -> Nothing
 
 -- | 什么格子都不认的种类。
 newtype Stray = Stray Int
@@ -457,15 +449,13 @@ instance Phase Stray where
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Stray where
-  kindName _ = "stray"
-  fromCell _ = Nothing
 
 ec_world_checked_cells :: Assertion
 ec_world_checked_cells = do

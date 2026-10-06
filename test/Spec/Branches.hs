@@ -31,7 +31,7 @@ import Match3.Types (boardSize)
 import Match3.Element
 import Match3.Element.Phase
 import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
-import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
+import Match3.Element.Kind (BoardPass(..), customPlace, fromCustom, noHud)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Level (newGame)
@@ -74,21 +74,19 @@ instance Phase NoRecolorGem where
   codec = Codec
     { cName = "gem"
     , cToCell = \(NoRecolorGem c) -> Gem c Normal 0 Nothing
-    , cFromCell = const Nothing
+    , cFromCell = \cell -> case cell of
+        Gem c _ _ _ -> Just (NoRecolorGem c)
+        _ -> Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (NoRecolorGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics { pRecolor = False }
   view _ = noFace
-
-instance Kind NoRecolorGem where
-  kindName _ = "gem"
-  fromCell cell = case cell of
-    Gem c _ _ _ -> Just (NoRecolorGem c)
-    _ -> Nothing
 
 newtype NoPushGem = NoPushGem Color
   deriving (Eq, Show)
@@ -97,21 +95,19 @@ instance Phase NoPushGem where
   codec = Codec
     { cName = "gem"
     , cToCell = \(NoPushGem c) -> Gem c Normal 0 Nothing
-    , cFromCell = const Nothing
+    , cFromCell = \cell -> case cell of
+        Gem c _ _ _ -> Just (NoPushGem c)
+        _ -> Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (NoPushGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics { pPush = False }
   view _ = noFace
-
-instance Kind NoPushGem where
-  kindName _ = "gem"
-  fromCell cell = case cell of
-    Gem c _ _ _ -> Just (NoPushGem c)
-    _ -> Nothing
 
 -- | 测试专用「拉杆」：占格障碍原型包，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
 newtype Lever = Lever Int
@@ -121,21 +117,17 @@ instance Phase Lever where
   codec = Codec
     { cName = "lever"
     , cToCell = intCell "lever"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "lever" Lever
+    , cPlace = customPlace "lever"
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [SwapPass (SwapRule 5 leverFires (\_ p1 p2 -> [p1, p2]))]
     }
   onMatch _ = gemMatch Nothing  -- 可交换（不挡交换），无色
   onHit _ _ = gemHit { hFires = False }
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Lever where
-  kindName _ = "lever"
-  fromCell = fromCustom "lever" Lever
-  place _ = customPlace "lever"
-  boardPasses _ = [SwapPass (SwapRule 5 leverFires (\_ p1 p2 -> [p1, p2]))]
 
 leverFires :: Board -> Pos -> Pos -> Bool
 leverFires b p1 p2 = isCustomNamed "lever" (getCell b p1) || isCustomNamed "lever" (getCell b p2)
@@ -171,21 +163,17 @@ instance Phase Pod where
   codec = Codec
     { cName = "pod"
     , cToCell = intCell "pod"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "pod" Pod
+    , cPlace = customPlace "pod"
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [OpenPass (OpenRule openPods)]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Pod where
-  kindName _ = "pod"
-  fromCell = fromCustom "pod" Pod
-  place _ = customPlace "pod"
-  boardPasses _ = [OpenPass (OpenRule openPods)]
 
 podDef :: Def
 podDef = kindDef @Pod
@@ -256,20 +244,17 @@ instance Phase Cart where
   codec = Codec
     { cName = "cart"
     , cToCell = intCell "cart"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "cart" Cart
+    , cPlace = customPlace "cart"
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics { pPush = True }
   view _ = noFace
-
-instance Kind Cart where
-  kindName _ = "cart"
-  fromCell = fromCustom "cart" Cart
-  place _ = customPlace "cart"
 
 cartDef :: Def
 cartDef = kindDef @Cart

@@ -3,12 +3,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | 关卡级机制（飞碟 / 皮带 / 传送门 / 地毯 / 地面层 / 规则开关 / 掉落口）：不在格子里的机制，状态在值里。
 --
--- slim-5：生产节拍收成 'onBeat'（GADT 'Beat'）+ 'layout'；旧的分方法是薄封装（调 onBeat / 读 layout），
--- slim-6 再删。折叠仍在 Match3.Element.Level。
+-- 类只有两个方法：'layout'（身份与静态读数）与 'onBeat'（GADT 'Beat' 的每个节拍，含开局 'Start'）。
+-- 'mechName' / 'mechCore' / 'mechStart' 是读它们的自由函数。折叠在 Match3.Element.Level。
 --
--- 地面层 'GroundLayer' 是核心机制（'mechCore' / 'mlCore'），定义在这里。
+-- 地面层 'GroundLayer' 是核心机制（'mechCore' / 'mlCore'），定义在这里；地面层种类（Match3.Element.Kind 的
+-- 'GroundKind' 记录）由它在 'GroundHit' 节拍上消费。
 module Match3.Element.Mechanic
   ( Mechanic(..)
+  , mechName
+  , mechCore
+  , mechStart
   , SomeMechanic(..)
   , mechNameOf
   , fromMechanic
@@ -38,8 +42,9 @@ data Morph = Morph
   , morphSeeds :: [Pos]
   }
 
--- | 流水线节拍（slim-5）：每种构造子对应原先一个有类型的方法。
+-- | 流水线节拍：每种构造子对应原先一个有类型的方法。
 data Beat r where
+  Start     :: Level -> Beat ()  -- ^ 开局：按关卡记录给出初始状态（不回复 = 原型值原样）
   Refilled  :: Board -> [Pos] -> Beat [Pos]
   EndTick   :: [(Pos, Pos)] -> Beat [(Pos, Pos)]
   Settling  :: (Cell -> Bool) -> MBoard -> Beat MBoard
@@ -68,21 +73,24 @@ data MechLayout = MechLayout
 emptyLayout :: ElementName -> MechLayout
 emptyLayout n = MechLayout n False Nothing Nothing Nothing Nothing Nothing Nothing
 
--- | 关卡级机制：slim-5 起主 API 是 'onBeat' + 'layout'；下列旧方法缺省转发过去。
+-- | 关卡级机制：'layout' + 'onBeat'。
 class (Typeable m, Eq m, Show m) => Mechanic m where
-  -- | 身份与读数（slim-5/6）：覆盖 'layout'，或只写 'mechName'（layout 缺省 emptyLayout）。
-  mechName :: m -> ElementName
-  mechName = mlName . layout
+  -- | 身份与静态读数（名字、是否核心、飞碟 / 皮带 / … 的当前状态）。
   layout :: m -> MechLayout
-  layout m = emptyLayout (mechName m)
-  mechStart :: Level -> m -> m
-  mechStart _ m = m
-  mechCore :: m -> Bool
-  mechCore = mlCore . layout
-
-  -- | 流水线节拍（slim-5/6 唯一钩子）。
+  -- | 流水线节拍（唯一钩子）：Nothing = 本节拍不参与。
   onBeat :: Beat r -> m -> Maybe (r, m)
   onBeat _ _ = Nothing
+
+mechName :: Mechanic m => m -> ElementName
+mechName = mlName . layout
+
+-- | 核心机制（removeMechanic 也去不掉，总参与）。
+mechCore :: Mechanic m => m -> Bool
+mechCore = mlCore . layout
+
+-- | 开局状态：'Start' 节拍的回复；不回复 = 原值。
+mechStart :: Mechanic m => Level -> m -> m
+mechStart lvl m = maybe m snd (onBeat (Start lvl) m)
 
 
 data SomeMechanic = forall m. Mechanic m => SomeMechanic m
@@ -103,8 +111,8 @@ newtype GroundLayer = GroundLayer Ground
   deriving (Eq, Show)
 
 instance Mechanic GroundLayer where
-  mechStart lvl _ = GroundLayer (lvlGround lvl)
   layout (GroundLayer g) = (emptyLayout "ground") { mlCore = True, mlGround = Just g }
+  onBeat (Start lvl) _ = Just ((), GroundLayer (lvlGround lvl))
   onBeat (GroundHit hitG hits acc) (GroundLayer g) =
     let (g', cs) = hitG hits g
      in Just (acc ++ cs, GroundLayer g')

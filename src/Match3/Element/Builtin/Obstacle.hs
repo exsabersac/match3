@@ -32,6 +32,7 @@ module Match3.Element.Builtin.Obstacle
   , snowBossName
   , snowBossEvery
   , snowBossCells
+  , snowBossEntity
   , snowBosses
   , snowBossHp
   , snowBossSpawn
@@ -72,15 +73,14 @@ instance Phase StoneE where
     , cPlace = layersPlace Stone
     , cMeta = emptyMeta { metaCounter = Just CountStones }
     , cNear = Just (NearRule 10 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (StoneE n) = HitOut (chip n Stone) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (StoneE n) = NearNudge (chipNudge n Stone)
   view (StoneE k) = Face (Just ("stone", [nField k])) []
-
-instance Kind StoneE where
-  place _ = cPlace (codec @StoneE)
 
 -- | 宝箱：同石头。
 newtype ChestE = ChestE Int
@@ -94,15 +94,14 @@ instance Phase ChestE where
     , cPlace = layersPlace Chest
     , cMeta = emptyMeta { metaCounter = Just CountChests }
     , cNear = Just (NearRule 20 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (ChestE n) = HitOut (chip n Chest) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (ChestE n) = NearNudge (chipNudge n Chest)
   view (ChestE k) = Face (Just ("chest", [nField k])) []
-
-instance Kind ChestE where
-  place _ = cPlace (codec @ChestE)
 
 -- | 蜂蜜罐：同石头。
 newtype HoneyE = HoneyE Int
@@ -116,15 +115,14 @@ instance Phase HoneyE where
     , cPlace = layersPlace Honey
     , cMeta = emptyMeta { metaCounter = Just CountHoney }
     , cNear = Just (NearRule 30 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (HoneyE n) = HitOut (chip n Honey) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (HoneyE n) = NearNudge (chipNudge n Honey)
   view (HoneyE k) = Face (Just ("honey", [nField k])) []
-
-instance Kind HoneyE where
-  place _ = cPlace (codec @HoneyE)
 
 -- | 蛋糕：同石头（层数 = 蛋糕层数）。
 newtype CakeE = CakeE Int
@@ -138,15 +136,14 @@ instance Phase CakeE where
     , cPlace = layersPlace Cake
     , cMeta = emptyMeta { metaCounter = Just CountCakes }
     , cNear = Just (NearRule 40 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (CakeE n) = HitOut (chip n Cake) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (CakeE n) = NearNudge (chipNudge n Cake)
   view (CakeE k) = Face (Just ("cake", [nField k])) []
-
-instance Kind CakeE where
-  place _ = cPlace (codec @CakeE)
 
 -- | 气球：命中即破；邻格同色真消除打破。
 newtype BalloonE = BalloonE Color
@@ -160,6 +157,8 @@ instance Phase BalloonE where
     , cPlace = colorPlace Balloon
     , cMeta = emptyMeta { metaCounter = Just CountBalloons }
     , cNear = Just (NearRule 50 SkipDirect DieAppend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -167,9 +166,6 @@ instance Phase BalloonE where
   onNear _ ctx (BalloonE c) =
     if any (\(_, mc) -> mc == Just c) (ncTriggers ctx) then NearNudge Dies else NearIdle
   view (BalloonE c) = Face (Just ("balloon", [colorField c])) []
-
-instance Kind BalloonE where
-  place _ = cPlace (codec @BalloonE)
 
 -- | 气球邻格：委托 'kindNeighbour'（onNear + DieAppend）；保留旧列表写法供性质对照。
 balloonPop :: AdjCtx -> Board -> AdjOut
@@ -191,16 +187,14 @@ instance Phase SafeE where
     , cPlace = layersPlace Safe
     , cMeta = emptyMeta { metaVacatesCarpet = True, metaDiffCounter = Just CountSafes }
     , cNear = Just (NearRule 110 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (SafeE n) = HitOut (Absorb (if n <= 1 then Cookie else Safe (n - 1))) False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ (SafeE n) = NearNudge (Becomes (if n <= 1 then Cookie else Safe (n - 1)))
   view (SafeE k) = Face (Just ("safe", [nField k])) []
-
-instance Kind SafeE where
-  place _ = cPlace (codec @SafeE)
-  diffCounter _ = Just CountSafes
 
 -- | 双面块：按正面颜色匹配、可交换 / 改色 / 推动 / 过传送门；命中翻成背面颜色的普通宝石。
 data FlipE = FlipE Color Color
@@ -214,14 +208,13 @@ instance Phase FlipE where
     , cPlace = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (FlipE f _) = gemMatch (Just f)
   onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
   physics _ = gemPhysics { pKeepShuffle = True }
   view (FlipE f b) = Face (Just ("flip", [colorField f, ("b", FieldInt (fromEnum b + 1))])) []
-
-instance Kind FlipE where
-  place _ = cPlace (codec @FlipE)
 
 -- | 彩蛋：占格障碍；命中即破；开启规则 = 邻格真消除 / 直接命中时开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
 -- 现行规则里彩蛋开一次就开出，没有要跨轮保存的状态，所以值是无字段的。
@@ -236,15 +229,13 @@ instance Phase SurpriseEgg where
     , cPlace = \_ _ -> Just Surprise
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [OpenPass (OpenRule openSurprises)]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind SurpriseEgg where
-  place _ = cPlace (codec @SurpriseEgg)
-  boardPasses _ = [OpenPass (OpenRule openSurprises)]
 
 -- | 魔法石（新玩法 2，开心消消乐的魔法石）：占格本体 Custom "magic_stone" k，固定格（不下落、挡交换、洗牌保留、无色）。
 -- 状态 k = 充能格数 0–3；4 = 发射中（只在步末那一轮存在）。
@@ -266,17 +257,14 @@ instance Phase MagicStone where
     , cPlace = \args _ -> Just (toCell (MagicStone (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args))))
     , cMeta = emptyMeta
     , cNear = Just (NearRule 180 SkipDirect DiePrepend)
+    , cHud = noHud { hudLabel = Just "魔法石" }
+    , cPasses = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
     }
   onMatch _ = obstacleMatch
   onHit _ (MagicStone k) = HitOut (if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune) False Nothing Nothing
   physics _ = fixedPhysics
   onNear _ _ (MagicStone k) = NearNudge (if k < magicStoneFull then Becomes (toCell (MagicStone (k + 1))) else Untouched)
   view _ = noFace
-
-instance Kind MagicStone where
-  place _ = cPlace (codec @MagicStone)
-  label _ = Just "魔法石"
-  boardPasses _ = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
 
 -- | 满格（可发射）的充能数。
 magicStoneFull :: Int
@@ -340,6 +328,13 @@ instance Phase SnowBoss where
         Just (toCell (SnowBoss hp hp 0 q))
     , cMeta = emptyMeta { metaDiffCounter = Just (CountNamed snowBossName) }
     , cNear = Nothing
+    , cHud = noHud
+        { hudLabel = Just "雪怪"
+        , hudLoseHint = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
+        , hudBossHp = Just snowBossHp
+        }
+      -- 2×2 多格实体：扣血驱动挂在逃生口（顺序 200），之后是步末移动。
+    , cPasses = [AdjacentPass 200 (entityDamage snowBossEntity), EndPass (moveRule 30 snowBossRun)]
     }
   onMatch _ = MatchRule Nothing True True False
   onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
@@ -357,21 +352,14 @@ instance Phase SnowBoss where
         ]
     }
 
-instance Kind SnowBoss where
-  place _ = cPlace (codec @SnowBoss)
-  label _ = Just "雪怪"
-  loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
-  diffCounter _ = Just (CountNamed snowBossName)
-  entityHit p = Just (entityHitOrder p, entityDamage p)
-  boardBossHp _ = Just . snowBossHp
-  boardPasses _ = [EndPass (moveRule 30 snowBossRun)]
-
--- | 2×2 多格实体：扣血经 'entityHit' 挂进 'kindRules'（顺序 'entityHitOrder' = 200）。
-instance Entity SnowBoss where
-  footprint _ = snowBossCells
-  partNo = sbQuad
-  hitPoints = sbHp
-  withHp hp b = b {sbHp = hp}
+-- | 2×2 多格实体：锚点 = 0 号部件，footprint = 'snowBossCells'；由 'cPasses' 里的 'entityDamage' 消费。
+snowBossEntity :: Entity SnowBoss
+snowBossEntity = Entity
+  { footprint = snowBossCells
+  , partNo = sbQuad
+  , hitPoints = sbHp
+  , withHp = \hp b -> b {sbHp = hp}
+  }
 
 snowBossName :: ElementName
 snowBossName = "snow_boss"

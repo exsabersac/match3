@@ -23,6 +23,8 @@ instance Phase PhaseGem where
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (PhaseGem c) = gemMatch (Just c)
   onHit _ _ = gemHit

@@ -45,14 +45,13 @@ instance Phase CookieE where
     , cPlace = \_ _ -> Just Cookie
     , cMeta = emptyMeta { metaCounter = Just CountCookies, metaVacatesCarpet = True }
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Immune False Nothing Nothing
   physics _ = gemPhysics { pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom] }
   view _ = noFace
-
-instance Kind CookieE where
-  place _ = cPlace (codec @CookieE)
 
 -- | 时间精灵：命中 / 邻消即破，按个数差每个奖励 2 步。
 data TimeSpiritE = TimeSpiritE
@@ -66,17 +65,14 @@ instance Phase TimeSpiritE where
     , cPlace = \_ _ -> Just TimeSpirit
     , cMeta = emptyMeta { metaDiffCounter = Just CountSpirits, metaBonusMoves = 2 }
     , cNear = Just (NearRule 120 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
   onNear _ _ _ = NearNudge Dies
   view _ = Face (Just ("spirit", [])) []
-
-instance Kind TimeSpiritE where
-  place _ = cPlace (codec @TimeSpiritE)
-  diffCounter _ = Just CountSpirits
-  bonusMoves _ = 2
 
 -- | 气泡：占格本体 Custom "bubble" k。无色、挡交换、随重力下落、不穿传送门、洗牌保留；
 -- 邻格有真消除（任意颜色）即破，直接命中也破；破掉计 CountNamed "bubble"。
@@ -91,17 +87,14 @@ instance Phase Bubble where
     , cPlace = customPlace "bubble"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
     , cNear = Nothing  -- 邻格逃生口 boardPasses
+    , cHud = noHud { hudLabel = Just "气泡" }
+    -- 邻格打碎留在逃生口：foldr 去重序与 nub+DieAppend 不等价
+    , cPasses = [AdjacentPass 170 bubbleAdjacent]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Bubble where
-  place _ = cPlace (codec @Bubble)
-  label _ = Just "气泡"
-  -- 邻格打碎留在逃生口：foldr 去重序与 nub+DieAppend 不等价
-  boardPasses _ = [AdjacentPass 170 bubbleAdjacent]
 
 -- | 气泡邻格：foldr 去重列表序（勿改成 nub，除非重录金标准）。
 bubbleAdjacent :: AdjCtx -> Board -> AdjOut
@@ -161,6 +154,8 @@ instance Phase Chameleon where
     , cPlace = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
     , cMeta = emptyMeta { metaCounter = Just (CountNamed chameleonName) }
     , cNear = Nothing
+    , cHud = noHud { hudLabel = Just "变色龙", hudGoalIcon = Just "chameleon_icon" }
+    , cPasses = [SwapPass (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds), EndPass (moveRule 40 chameleonRun)]
     }
     where
       gemColor c = case c of Gem col _ _ _ -> Just col; _ -> Nothing
@@ -168,12 +163,6 @@ instance Phase Chameleon where
   onHit _ _ = gemHit
   physics _ = gemPhysics { pKeepShuffle = True, pRecolor = False }
   view (Chameleon k) = noFace { fExtras = [("c", FaceColor (colorAt k))] }
-
-instance Kind Chameleon where
-  place _ = cPlace (codec @Chameleon)
-  label _ = Just "变色龙"
-  goalIconName _ = Just "chameleon_icon"
-  boardPasses _ = [SwapPass (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds), EndPass (moveRule 40 chameleonRun)]
 
 -- | 步末换色（纯函数，测试直接调用）：返回换了色的格（行优先）与新盘面。
 -- 每只变色龙（行优先，在逐只换过的盘面上）按固定顺序从下一种颜色试起（五种里最后一种是原色），取第一种不会让它

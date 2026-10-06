@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
--- | 规则的通用驱动（元素类重构第 3 刀）：只调 'Kind' / 'Layer' / 'Entity' 的方法，把「找邻格、去重、跳过直接命中、
+-- | 规则的通用驱动（元素类重构第 3 刀）：只读 'Phase' / 'Layer' / 'Entity' 给出的数据与方法，把「找邻格、去重、跳过直接命中、
 -- 按顺序写回」这些样板各写一次（以前散在 Match3.Obstacles / Match3.Grass 里，每种障碍 / 叠层一份）。
 --
 -- 顺序语义与旧函数逐项相同（元素对照快照 element-oracle.txt 的 AR / ER 行与金标准锁定）：
@@ -30,16 +30,15 @@ import Match3.Board.Grid (getCell, inBounds, neighborsInBounds, setCell)
 import Match3.Element.Phase (toCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
-import Match3.Element.Phase (phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
+import Match3.Element.Phase (Phase, phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
 import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.Types
 
--- | 一种本体的全部规则：方法邻格 → 'entityHit' 扣血 → 逃生口 'boardPasses'（之后按优先级稳定排序）。
-kindRules :: forall e proxy. Kind e => proxy e -> [BoardPass]
+-- | 一种本体的全部规则：方法邻格（'cNear'）→ 逃生口 'cPasses'（多格实体扣血也在这里；之后按优先级稳定排序）。
+kindRules :: forall e proxy. Phase e => proxy e -> [BoardPass]
 kindRules _ =
   [AdjacentPass o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
-    ++ [AdjacentPass o f | Just (o, f) <- [entityHit (Proxy @e)]]
     ++ boardPasses (Proxy @e)
 
 -- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerPasses'。
@@ -76,7 +75,7 @@ triggerColors ctx b self =
   ]
 
 -- | 本体的邻格波及：目标格逐个问 'onNear'。
-kindNeighbour :: forall e proxy. Kind e => proxy e -> AdjCtx -> Board -> AdjOut
+kindNeighbour :: forall e proxy. Phase e => proxy e -> AdjCtx -> Board -> AdjOut
 kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (phaseReach @e) (isJust . fromCellAs p) ctx b0)
   where
     order = phaseDieOrder @e
@@ -121,20 +120,20 @@ layerSpread p seed _ b =
   in (if null pairs then Nothing else Just (EndEffect EvSpread (layerName p) [EndItem s q (getCell b' q) Nothing | (s, q) <- pairs]), b')
 
 -- | 多格实体的邻格伤害：每个锚点（行优先）按「身外一圈的真消除 + 部件上的直接命中」扣血，归零则部件并入清除格。
-entityDamage :: Entity e => proxy e -> AdjCtx -> Board -> AdjOut
-entityDamage p ctx b0 = foldl one (AdjOut b0 [] []) anchors
+entityDamage :: forall e. Phase e => Entity e -> AdjCtx -> Board -> AdjOut
+entityDamage ent ctx b0 = foldl one (AdjOut b0 [] []) anchors
   where
-    at' bd q = fromCellAs p (getCell bd q)
-    anchors = [(q, e) | q <- boardPositions b0, Just e <- [at' b0 q], partNo e == 0]
+    at' bd q = fromCell @e (getCell bd q)
+    anchors = [(q, e) | q <- boardPositions b0, Just e <- [at' b0 q], partNo ent e == 0]
     one out@(AdjOut b dead sit) (anchor, e) =
-      let body = footprint p anchor
-          parts = [(q, x) | (i, q) <- zip [0 ..] body, inBounds b q, Just x <- [at' b q], partNo x == i]
+      let body = footprint ent anchor
+          parts = [(q, x) | (i, q) <- zip [0 ..] body, inBounds b q, Just x <- [at' b q], partNo ent x == i]
           ring = foldr (\q acc -> if q `elem` acc then acc else q : acc) [] [q | x <- body, q <- neighborsInBounds upDownLeftRight b x, q `notElem` body]
           dmg = length [q | q <- ring, q `elem` acTrue ctx] + length [q | (q, _) <- parts, q `elem` acDirect ctx]
-          hp' = max 0 (hitPoints e - dmg)
+          hp' = max 0 (hitPoints ent e - dmg)
       in if dmg == 0
            then out
            else
              if hp' == 0
                then AdjOut b (dead ++ map fst parts) sit
-               else AdjOut (foldl (\bd (q, x) -> setCell bd q (toCell (withHp hp' x))) b parts) dead sit
+               else AdjOut (foldl (\bd (q, x) -> setCell bd q (toCell (withHp ent hp' x))) b parts) dead sit

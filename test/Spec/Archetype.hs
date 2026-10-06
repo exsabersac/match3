@@ -16,7 +16,7 @@ import Match3.Board.Grid (getCell, setCell)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Phase
-import Match3.Element.Kind (Kind(..), customPlace, fromCustom)
+import Match3.Element.Kind (customPlace, fromCustom, noHud)
 import Match3.Game.Boosters (resolveHammerWith)
 import Match3.Game.Level (newGame)
 import Spec.Support (builtinBodyInstanceCount, stableBoard)
@@ -47,7 +47,7 @@ newtype FixedP = FixedP Cell
   deriving (Eq, Show)
 
 protoCodec :: (e -> Cell) -> Codec e
-protoCodec enc = Codec "plain" enc (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+protoCodec enc = Codec "plain" enc (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing noHud []
 
 instance Phase PlainP where
   codec = protoCodec (\(PlainP c) -> c)
@@ -113,16 +113,16 @@ archetype_defaults_pinned = do
 --------------------------------------------------------------------------------
 -- 清单 / 扩展元素
 
--- | 内置本体的 Kind instance 个数（SpecialGem 一个 instance 覆盖四种特殊块）与清单常量一致。
+-- | 内置本体的 Phase instance 个数（slim-10 起本体只有 Phase；SpecialGem 一个 instance 覆盖四种特殊块）与清单常量一致。
 archetype_builtin_kind_inventory :: Assertion
 archetype_builtin_kind_inventory = do
   srcs <- builtinSources
   insts <- concat <$> mapM (fmap (filter isKindInstance . lines) . readCode) srcs
-  assertEqual "builtin Kind instances" builtinBodyInstanceCount (length insts)
+  assertEqual "builtin Phase instances" builtinBodyInstanceCount (length insts)
   where
-    -- 去掉 instance 与可选的上下文（… =>）后，头一个词是 Kind
+    -- 去掉 instance 与可选的上下文（… =>）后，头一个词是 Phase
     isKindInstance l = case words l of
-      "instance" : rest -> take 1 (afterContext rest) == ["Kind"]
+      "instance" : rest -> take 1 (afterContext rest) == ["Phase"]
       _ -> False
     afterContext ws = case break (== "=>") ws of
       (_, "=>" : rest) -> rest
@@ -137,20 +137,17 @@ instance Phase Thorn where
   codec = Codec
     { cName = "thorn"
     , cToCell = intCell "thorn"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "thorn" Thorn
+    , cPlace = customPlace "thorn"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "thorn") }
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ (Thorn n) = HitOut (if n <= 1 then Destroy else Absorb (toCell (Thorn (n - 1)))) False Nothing Nothing
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind Thorn where
-  kindName _ = "thorn"
-  fromCell = fromCustom "thorn" Thorn
-  place _ = customPlace "thorn"
 
 archetype_ext_element_plugs_in :: Assertion
 archetype_ext_element_plugs_in = do

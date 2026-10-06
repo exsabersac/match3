@@ -29,7 +29,7 @@ import Data.String (fromString)
 import GHC.Generics
 import Data.Maybe (isJust)
 import Match3.Element.Phase (phaseToCell)
-import Match3.Element.Kind (Kind(kindName), SomeKind(..), fromCellAs)
+import Match3.Element.Kind (kindName, SomeKind(..), fromCellAs)
 import Match3.Element.Layer (Layer(layerName), SomeLayer(..), peelAs)
 import Match3.Element.World (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)

@@ -26,6 +26,9 @@ module Match3.Element.Phase
   , Meta(..)
   , emptyMeta
   , Codec(..)
+  , Hud(..)
+  , noHud
+  , BoardPass(..)
   , NearRule(..)
   , Phase(..)
   , noNear
@@ -49,7 +52,7 @@ module Match3.Element.Phase
 import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Element.Near
-import Match3.Element.Types (CellField, CounterKey, Edge, FaceValue, Placer)
+import Match3.Element.Types (AdjCtx, AdjOut, CellField, CounterKey, Edge, EndRule, FaceValue, OpenRule, Placer, SwapRule)
 import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, gridFromRows)
 
 -- | 直接命中反应。
@@ -137,6 +140,25 @@ data Meta = Meta
 emptyMeta :: Meta
 emptyMeta = Meta Nothing 1 False Nothing 0
 
+-- | HUD / 目标显示（slim-10 起由 Kind 的五个方法并来；全是数据，缺省 'noHud' = 都不提供）。
+data Hud = Hud
+  { hudLabel :: Maybe String               -- ^ 按元素名计数的目标（CountNamed）的中文名（HUD / 网页 / 失败提示）
+  , hudLoseHint :: Maybe (Int -> String)   -- ^ 该目标的失败提示（参数 = 目标值）；缺省「消除<中文名>，目标 n 个」
+  , hudGoalIcon :: Maybe String            -- ^ 目标图标贴图名（覆盖默认的元素名）
+  , hudBossHp :: Maybe (Board -> Int)      -- ^ HUD 血条：盘上剩余 HP（View 按目标名查世界，不点名具体元素）
+  }
+
+noHud :: Hud
+noHud = Hud Nothing Nothing Nothing Nothing
+
+-- | 元素自带的整盘趟（逃生口）：读整盘、按自己的顺序写回的规则。
+data BoardPass
+  = AdjacentPass Int (AdjCtx -> Board -> AdjOut)  -- ^ 邻格波及（优先级小的先；内置 10..200）
+  | EndPass EndRule                                -- ^ 步末规则（阶段 + 次序）
+  | SwapPass SwapRule                              -- ^ 成对交换规则
+  | OpenPass OpenRule                              -- ^ 开启规则（彩蛋类）
+
+-- | 一种元素的类型级数据：名字、格子编解码、放置、计数元数据、邻格规则、HUD、逃生口整盘趟。
 data Codec e = Codec
   { cName :: ElementName
   , cToCell :: e -> Cell
@@ -144,6 +166,8 @@ data Codec e = Codec
   , cPlace :: Placer
   , cMeta :: Meta
   , cNear :: Maybe NearRule
+  , cHud :: Hud
+  , cPasses :: [BoardPass]
   }
 
 class (Typeable e, Eq e, Show e) => Phase e where
@@ -257,6 +281,8 @@ instance Phase Inert where
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit

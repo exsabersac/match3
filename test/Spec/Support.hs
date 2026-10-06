@@ -69,7 +69,7 @@ import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Element (Def, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
-import Match3.Element.Kind (BoardPass(..), Kind(..), customPlace, fromCustom)
+import Match3.Element.Kind (BoardPass(..), customPlace, fromCustom, noHud)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
@@ -353,21 +353,17 @@ instance Phase Crate where
   codec = Codec
     { cName = "crate"
     , cToCell = intCell "crate"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "crate" Crate
+    , cPlace = customPlace "crate"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "crate") }
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [AdjacentPass 200 crateAdjacent]
     }
   onMatch _ = obstacleMatch
   onHit _ (Crate n) = HitOut (if n <= 1 then Destroy else Absorb (toCell (Crate (n - 1)))) False Nothing Nothing
   physics _ = fixedPhysics
   view _ = noFace
-
-instance Kind Crate where
-  kindName _ = "crate"
-  fromCell = fromCustom "crate" Crate
-  place _ = customPlace "crate"
-  boardPasses _ = [AdjacentPass 200 crateAdjacent]
 
 -- | 木箱的邻格规则：真消除格的正交邻格里的木箱（直接命中格除外）耐久 -1，耐久 1 的碎掉。
 crateAdjacent :: AdjCtx -> Board -> AdjOut

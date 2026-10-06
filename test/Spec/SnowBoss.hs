@@ -36,7 +36,7 @@ import Match3.Element
 import Match3.Combos (builtinComboRules)
 import Data.Proxy (Proxy(..))
 import Match3.Element.Phase (Meta(..), liveMeta, toCell)
-import Match3.Element.Kind (Kind(diffCounter))
+import Match3.Element.Kind (diffCounter)
 import Match3.Element.Event (EventKind(..))
 import Match3.Element.World (World, countElementWith, defName, mkWorld, placeWith, registerMechanic, setComboRules, setShapeRules, weighElementWith)
 import Match3.Game.Boosters (resolveHammerWith)

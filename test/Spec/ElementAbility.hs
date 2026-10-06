@@ -21,7 +21,7 @@ import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy(..))
 import qualified ElementOracle
 import Match3.Board.Grid (getCell)
-import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultWorld, specialBlast)
+import Match3.Element.Builtin (Bubble(..), Fuzzball(..), SnowBoss(..), defaultWorld, snowBossEntity, specialBlast)
 import Match3.Element.Builtin.Actor (BottleE, MagicHatE, MakerE)
 import Match3.Element.Builtin.Collectible (CookieE(..), TimeSpiritE)
 import Match3.Element.Builtin.Layer (ChainL, ChocoL, CurtainL, FogL, FreezeL, GrassL, SteamL, VineL, putOverlay)
@@ -65,21 +65,19 @@ instance Phase GemV where
   codec = Codec
     { cName = "gem"
     , cToCell = \(GemV c) -> Gem c Normal 0 Nothing
-    , cFromCell = const Nothing
+    , cFromCell = \cell -> case cell of
+        Gem c Normal _ _ -> Just (GemV c)
+        _ -> Nothing
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (GemV c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics
   view _ = noFace
-
-instance Kind GemV where
-  kindName _ = "gem"
-  fromCell cell = case cell of
-    Gem c Normal _ _ -> Just (GemV c)
-    _ -> Nothing
 
 newtype LineHV = LineHV Color
   deriving (Eq, Show)
@@ -88,24 +86,21 @@ instance Phase LineHV where
   codec = Codec
     { cName = "line_h"
     , cToCell = \(LineHV c) -> Gem c LineH 0 Nothing
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = \cell -> case cell of
+        Gem c LineH _ _ -> Just (LineHV c)
+        _ -> Nothing
+    , cPlace = \_ cell -> case cell of
+        Gem c _ _ _ -> Just (Gem c LineH 0 Nothing)
+        _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (LineHV c) = gemMatch (Just c)
   onHit _ _ = gemHit { hBlast = specialBlast LineH }
   physics _ = gemPhysics { pKeepShuffle = True }
   view _ = noFace
-
-instance Kind LineHV where
-  kindName _ = "line_h"
-  fromCell cell = case cell of
-    Gem c LineH _ _ -> Just (LineHV c)
-    _ -> Nothing
-  place _ _ cell = case cell of
-    Gem c _ _ _ -> Just (Gem c LineH 0 Nothing)
-    _ -> Nothing
 
 newtype StoneV = StoneV Int
   deriving (Eq, Show)
@@ -114,23 +109,20 @@ instance Phase StoneV where
   codec = Codec
     { cName = "stone"
     , cToCell = \(StoneV n) -> Stone n
-    , cFromCell = \cell -> case cell of Stone n -> Just (StoneV n); _ -> Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = \cell -> case cell of
+        Stone n -> Just (StoneV n)
+        _ -> Nothing
+    , cPlace = \args _ -> Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
     , cMeta = emptyMeta { metaCounter = Just CountStones }
     , cNear = Just (NearRule 10 SkipDirect DiePrepend)
+    , cHud = noHud
+    , cPasses = []
     }
   onNear _ _ (StoneV n) = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
   onMatch _ = obstacleMatch
   onHit _ (StoneV n) = HitOut (if n <= 1 then Destroy else Absorb (Stone (n - 1))) False Nothing Nothing
   physics _ = obstaclePhysics
   view (StoneV n) = baseFace "stone" [("n", FieldInt n)]
-
-instance Kind StoneV where
-  kindName _ = "stone"
-  fromCell cell = case cell of
-    Stone n -> Just (StoneV n)
-    _ -> Nothing
-  place _ args _ = Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
 
 data FlipV = FlipV Color Color
   deriving (Eq, Show)
@@ -139,22 +131,19 @@ instance Phase FlipV where
   codec = Codec
     { cName = "flip"
     , cToCell = \(FlipV f b) -> Flip f b
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = \cell -> case cell of
+        Flip f b -> Just (FlipV f b)
+        _ -> Nothing
+    , cPlace = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (FlipV f _) = gemMatch (Just f)
   onHit _ (FlipV _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
   physics _ = gemPhysics { pKeepShuffle = True }
   view _ = noFace
-
-instance Kind FlipV where
-  kindName _ = "flip"
-  fromCell cell = case cell of
-    Flip f b -> Just (FlipV f b)
-    _ -> Nothing
-  place _ args _ = exactArgs (Flip <$> argColor <*> argColor) args
 
 newtype BubbleV = BubbleV Int
   deriving (Eq, Show)
@@ -163,22 +152,17 @@ instance Phase BubbleV where
   codec = Codec
     { cName = "bubble"
     , cToCell = intCell "bubble"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "bubble" BubbleV
+    , cPlace = customPlace "bubble"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
     , cNear = Nothing
+    , cHud = noHud { hudLabel = Just "气泡" }
+    , cPasses = boardPasses (Proxy :: Proxy Bubble)
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
   physics _ = obstaclePhysics
   view _ = noFace
-
-instance Kind BubbleV where
-  kindName _ = "bubble"
-  fromCell = fromCustom "bubble" BubbleV
-  place _ = customPlace "bubble"
-  label _ = Just "气泡"
-  boardPasses _ = boardPasses (Proxy :: Proxy Bubble)
 
 data BossV = BossV Int Int Int Int
   deriving (Eq, Show)
@@ -187,31 +171,23 @@ instance Phase BossV where
   codec = Codec
     { cName = "snow_boss"
     , cToCell = \(BossV hp mx t q) -> toCell (SnowBoss hp mx t q)
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
+    , cFromCell = \cell -> case cell of
+        Custom "snow_boss" (CustomState v) -> Just (BossV ((v `div` 16) `mod` 256) (v `div` 4096) ((v `div` 4) `mod` 4) (v `mod` 4))
+        _ -> Nothing
+    , cPlace = \args _ -> case exactArgs ((,) <$> argInt <*> argInt) args of
+        Just (hp, q) | hp > 0 && hp <= 255 && q >= 0 && q < 4 -> Just (toCell (BossV hp hp 0 q))
+        _ -> Nothing
+    , cMeta = emptyMeta { metaDiffCounter = Just (CountNamed "snow_boss") }
     , cNear = Nothing
+      -- HUD（中文名 / 失败提示 / 血条）与规则（扣血 + 步末移动）照抄雪怪
+    , cHud = cHud (codec @SnowBoss)
+    , cPasses = cPasses (codec @SnowBoss)
     }
   onMatch _ = MatchRule Nothing False True False
   onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
   physics _ = fixedPhysics
   liveMeta (BossV hp _ _ q) = (cMeta (codec @BossV)) { metaDiffWeight = if q == 0 then hp else 0 }
   view (BossV hp mx t q) = noFace { fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)] }
-
-instance Kind BossV where
-  kindName _ = "snow_boss"
-  fromCell cell = case cell of
-    Custom "snow_boss" (CustomState v) -> Just (BossV ((v `div` 16) `mod` 256) (v `div` 4096) ((v `div` 4) `mod` 4) (v `mod` 4))
-    _ -> Nothing
-  place _ args _ = case exactArgs ((,) <$> argInt <*> argInt) args of
-    Just (hp, q) | hp > 0 && hp <= 255 && q >= 0 && q < 4 -> Just (toCell (BossV hp hp 0 q))
-    _ -> Nothing
-  label _ = Just "雪怪"
-  loseHint _ = Just (\n -> "用身边的消除和特效打雪怪，目标 " ++ show n ++ " 点血")
-  diffCounter _ = Just (CountNamed "snow_boss")
-  entityHit _ = entityHit (Proxy :: Proxy SnowBoss)
-  boardBossHp _ = boardBossHp (Proxy :: Proxy SnowBoss)
-  boardPasses _ = boardPasses (Proxy :: Proxy SnowBoss)
 
 newtype IceV = IceV Int
   deriving (Eq, Show)
@@ -275,13 +251,12 @@ instance Layer ChainV where
     Gem c k i _ | n <= 1 -> Becomes (Gem c k i Nothing)
     _ -> Becomes (putOn (ChainV (n - 1)) cell)
 
-data JellyV
-
-instance GroundKind JellyV where
-  groundName _ = "jelly"
-  groundHit _ n = if n > 1 then Just (n - 1) else Nothing
-  groundCounter _ = Just (CountNamed "jelly")
-  groundLabel _ = Just "果冻"
+jellyV :: GroundKind
+jellyV = (groundKind "jelly")
+  { groundHit = \n -> if n > 1 then Just (n - 1) else Nothing
+  , groundCounter = Just (CountNamed "jelly")
+  , groundLabel = Just "果冻"
+  }
 
 -- | 内置元素世界里这些条目换成测试里的副本（同名替换，注册位置不变）。
 replaced :: World
@@ -298,7 +273,7 @@ replaced =
     , layerDef @IceV
     , layerDef @ChocoV
     , layerDef @ChainV
-    , groundDef @JellyV
+    , groundDef jellyV
     ]
 
 ab_same_name_copies_oracle_unchanged :: Assertion
@@ -468,7 +443,7 @@ ab_rule_methods_pinned = do
   -- 收集：方法给出的规则在逃生口之前
   assertEqual "kindRules stone" [10] [o | AdjacentPass o _ <- kindRules (Proxy @StoneE)]
   assertEqual "layerRules choco" (1, 1) (length [() | AdjacentPass 150 _ <- layerRules (Proxy @ChocoL)], length [() | EndPass _ <- layerRules (Proxy @ChocoL)])
-  assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint (Proxy @SnowBoss) (2, 3))
+  assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint snowBossEntity (2, 3))
   assertEqual "snow boss rules" [200] [o | AdjacentPass o _ <- kindRules (Proxy @SnowBoss)]
 
 --------------------------------------------------------------------------------

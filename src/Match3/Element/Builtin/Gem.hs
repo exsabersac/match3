@@ -44,14 +44,13 @@ instance Phase PlainGem where
     , cPlace = \_ _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch (PlainGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
   physics _ = gemPhysics
   view _ = noFace
-
-instance Kind PlainGem where
-  place _ = cPlace (codec @PlainGem)
 
 -- | 特殊块（直线 / 炸弹 / 彩虹）：种类在类型里（@SpecialGem 'LineH@ …），值只是颜色。
 -- 洗牌保留；直线 / 炸弹有爆炸范围；彩虹不进普通匹配提示，挂彩虹取色（先于特殊合成 = 组合表的次序 20）。
@@ -97,15 +96,13 @@ instance forall k. SpecialKind k => Phase (SpecialGem k) where
         _ -> Nothing
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [SwapPass (SwapRule 10 isRainbowSwap rainbowClearSeeds) | specialKind (Proxy :: Proxy k) == Rainbow]
     }
   onMatch g@(SpecialGem c) = (gemMatch (Just c)) { mHintable = kindOf g /= Rainbow }
   onHit _ g = gemHit { hBlast = specialBlast (kindOf g) }
   physics _ = gemPhysics { pKeepShuffle = True }
   view _ = noFace
-
-instance forall k. SpecialKind k => Kind (SpecialGem k) where
-  place _ = cPlace (codec @(SpecialGem k))
-  boardPasses _ = [SwapPass (SwapRule 10 isRainbowSwap rainbowClearSeeds) | specialKind (Proxy :: Proxy k) == Rainbow]
 
 -- | 内置特殊块形状规则表（顺序即优先级）：每条连线取第一条认领它的规则——
 -- 长度 ≥ 5 → 彩虹；长度 4 横连 → 横消；长度 4 竖连 → 竖消；长度 3 不生成。落点见 Match3.Element.Special.shapeAnchor。

@@ -45,13 +45,14 @@ module Match3.Element.Builtin
   , snowBossName
   , snowBossEvery
   , snowBossCells
+  , snowBossEntity
   , snowBosses
   , snowBossHp
   , snowBossSpawn
   , decodeBoss
   , Ice(..)
-  , Jelly
-  , MagicGround
+  , jelly
+  , magicGround
   , magicGroundName
   , magicWiden
   , Bubble(..)
@@ -130,13 +131,13 @@ builtinDefs =
   , kindDef @BottleE                                     -- Actor
   , kindDef @TimeSpiritE                                 -- Collectible
   , kindDef @CountdownE                                  -- Actor
-  , groundDef @Jelly                                     -- Ground
+  , groundDef jelly                                      -- Ground
   , kindDef @Bubble                                      -- Collectible
   , kindDef @MagicStone                                  -- Obstacle（新玩法 2）
   , kindDef @Fuzzball                                    -- Actor（新玩法 3）
   , kindDef @SnowBoss                                    -- Obstacle（新玩法 5）
   , kindDef @Chameleon                                   -- Collectible（新玩法 7）
-  , groundDef @MagicGround                               -- Ground（新玩法 8）
+  , groundDef magicGround                                -- Ground（新玩法 8）
   ]
 
 

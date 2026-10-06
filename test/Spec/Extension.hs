@@ -19,9 +19,9 @@ import Match3.Element.Builtin (defaultWorld)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
-import Match3.Element (EndPhase(..), EndRule(..), Edge(..), Def, groundDef, inertDef, kindDef, register)
+import Match3.Element (EndPhase(..), EndRule(..), EndCtx, Edge(..), Def, groundDef, inertDef, kindDef, register)
 import Match3.Element.Phase
-import Match3.Element.Kind (BoardPass(..), GroundKind(..), Kind(..), customPlace, fromCustom)
+import Match3.Element.Kind (BoardPass(..), GroundKind(..), groundKind, customPlace, fromCustom, noHud)
 import Match3.Element.World (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)
@@ -39,7 +39,7 @@ import Match3.Board.Grid (mboardFromRows)
 import Match3.Element
   ( ComboRule(..), RefillPolicy(..), ShapeCtx(..), ShapeRule(..), colorsRefill, comboFires, comboRules
   , levelHooksWith, registerMechanic, setComboRules, setRefillPolicy, setShapeRules, shapeRules )
-import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..))
+import Match3.Element.Mechanic (Beat(..), Mechanic(..), SomeMechanic(..), emptyLayout)
 import Match3.Element.Level (judgeIn)
 import qualified Match3.Combos as Combos
 import Match3.Types (goalCount, goalScore)
@@ -98,15 +98,14 @@ ext_goal_named_counts_crate = do
 
 -- | 测试专用地面层元素「苔藓」（地面层，2 层）：上方格子每被消除一次去一层、按层计入 GoalNamed；
 -- 不占格、不挡交换、洗牌不动、撤销恢复；未注册时地面层原样不动。
-data Moss
-
-instance GroundKind Moss where
-  groundName _ = "moss"
-  groundHit _ n = if n > 1 then Just (n - 1) else Nothing
-  groundCounter _ = Just (CountNamed "moss")
+moss :: GroundKind
+moss = (groundKind "moss")
+  { groundHit = \n -> if n > 1 then Just (n - 1) else Nothing
+  , groundCounter = Just (CountNamed "moss")
+  }
 
 mossDef :: Def
-mossDef = groundDef @Moss
+mossDef = groundDef moss
 
 ext_ground_layer_test_element :: Assertion
 ext_ground_layer_test_element = do
@@ -146,20 +145,17 @@ instance Phase Kite where
   codec = Codec
     { cName = "kite"
     , cToCell = intCell "kite"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "kite" Kite
+    , cPlace = customPlace "kite"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "kite") }
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics { pDrains = [EdgeLeft] }
   view _ = noFace
-
-instance Kind Kite where
-  kindName _ = "kite"
-  fromCell = fromCustom "kite" Kite
-  place _ = customPlace "kite"
 
 kiteDef :: Def
 kiteDef = kindDef @Kite
@@ -191,21 +187,17 @@ instance Phase Sinkhole where
   codec = Codec
     { cName = "sinkhole"
     , cToCell = intCell "sinkhole"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "sinkhole" Sinkhole
+    , cPlace = customPlace "sinkhole"
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [EndPass (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
   view _ = noFace
-
-instance Kind Sinkhole where
-  kindName _ = "sinkhole"
-  fromCell = fromCustom "sinkhole" Sinkhole
-  place _ = customPlace "sinkhole"
-  boardPasses _ = [EndPass (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))]
 
 sinkholeDef :: Def
 sinkholeDef = kindDef @Sinkhole
@@ -245,20 +237,17 @@ instance Phase Dust where
   codec = Codec
     { cName = "dust"
     , cToCell = intCell "dust"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "dust" Dust
+    , cPlace = customPlace "dust"
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics { pKeepShuffle = False }
   view _ = noFace
-
-instance Kind Dust where
-  kindName _ = "dust"
-  fromCell = fromCustom "dust" Dust
-  place _ = customPlace "dust"
 
 dustDef :: Def
 dustDef = kindDef @Dust
@@ -286,30 +275,27 @@ instance Phase Hopper where
   codec = Codec
     { cName = "hopper"
     , cToCell = intCell "hopper"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "hopper" Hopper
+    , cPlace = customPlace "hopper"
     , cMeta = emptyMeta
     , cNear = Nothing
+    , cHud = noHud
+    , cPasses = [EndPass (EndRule PhaseMove 80 hopperHop (const []) (const []))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
   view _ = noFace
 
-instance Kind Hopper where
-  kindName _ = "hopper"
-  fromCell = fromCustom "hopper" Hopper
-  place _ = customPlace "hopper"
-  boardPasses _ = [EndPass (EndRule PhaseMove 80 hop (const []) (const []))]
-    where
-      hop _ b0 =
-        let step (items, b) p =
-              let q = (fst p, snd p + 1)
-              in case (inBounds b q, getCell b q) of
-                   (True, g@Gem {}) -> (items ++ [EndItem p q (getCell b p) (Just g)], setCell (setCell b q (getCell b p)) p g)
-                   _ -> (items, b)
-            (its, b1) = foldl step ([], b0) (customsOn "hopper" b0)
-        in (if null its then Nothing else Just (EndEffect EvMove "hopper" its), b1)
+hopperHop :: EndCtx -> Board -> (Maybe EndEffect, Board)
+hopperHop _ b0 =
+  let step (items, b) p =
+        let q = (fst p, snd p + 1)
+        in case (inBounds b q, getCell b q) of
+             (True, g@Gem {}) -> (items ++ [EndItem p q (getCell b p) (Just g)], setCell (setCell b q (getCell b p)) p g)
+             _ -> (items, b)
+      (its, b1) = foldl step ([], b0) (customsOn "hopper" b0)
+  in (if null its then Nothing else Just (EndEffect EvMove "hopper" its), b1)
 
 ext_end_effect_generic_hopper :: Assertion
 ext_end_effect_generic_hopper = do
@@ -410,7 +396,7 @@ data CoinRain = CoinRain
   deriving (Eq, Show)
 
 instance Mechanic CoinRain where
-  mechName _ = "coin_rain"
+  layout _ = emptyLayout "coin_rain"
   onBeat (AskRefill _) m = Just (RefillPolicy "coins" (\_ g -> (Custom "coin" (CustomState 1), g)), m)
   onBeat _ _ = Nothing
 
@@ -446,7 +432,7 @@ data TimeLimit = TimeLimit
   deriving (Eq, Show)
 
 instance Mechanic TimeLimit where
-  mechName _ = "time_limit"
+  layout _ = emptyLayout "time_limit"
   onBeat (AskJudge _ score moves (MoveApplied _)) m
     | moves <= 3 = Just (Lost score, m)
   onBeat (AskJudge {}) _ = Nothing
@@ -485,22 +471,17 @@ instance Phase Lantern where
   codec = Codec
     { cName = "lantern"
     , cToCell = intCell "lantern"
-    , cFromCell = const Nothing
-    , cPlace = \_ _ -> Nothing
+    , cFromCell = fromCustom "lantern" Lantern
+    , cPlace = customPlace "lantern"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "lantern") }
     , cNear = Nothing
+    , cHud = noHud { hudLabel = Just "灯笼", hudLoseHint = Just (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏") }
+    , cPasses = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = obstaclePhysics
   view (Lantern k) = noFace { fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)] }
-
-instance Kind Lantern where
-  kindName _ = "lantern"
-  fromCell = fromCustom "lantern" Lantern
-  place _ = customPlace "lantern"
-  label _ = Just "灯笼"
-  loseHint _ = Just (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏")
 
 ext_element_display_fields :: Assertion
 ext_element_display_fields = do

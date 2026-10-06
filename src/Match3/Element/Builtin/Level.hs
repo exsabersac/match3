@@ -3,7 +3,7 @@
 -- | 关卡级元素：不在格子里的机制。第 7 刀（7a）起状态在元素值里（一局的全部关卡级元素 = GameState.gsLevelElems），
 -- 取代第 7 刀前 GameState 的专用字段 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround。
 --
--- 共同特征：都是 Mechanic（Match3.Element.Mechanic），各自只实现 onBeat / layout（slim-5）；旧分方法由 Mechanic 缺省转发。开局仍用 mechStart。
+-- 共同特征：都是 Mechanic（Match3.Element.Mechanic），各自只实现 layout / onBeat（slim-10 起开局也是节拍：'Start'）。
 -- 去掉（removeMechanic）即不生效。地面层 GroundLayer 是核心机制，定义在 Match3.Element.Mechanic（这里再导出）。
 module Match3.Element.Builtin.Level
   ( UfoLevel(..)
@@ -40,14 +40,14 @@ newtype UfoLevel = UfoLevel [Ufo]
 
 instance Mechanic UfoLevel where
   layout (UfoLevel us) = (emptyLayout "ufo") { mlUfos = Just us }
+  onBeat (Start lvl) _
+    | null (lvlUfos lvl) = Just ((), UfoLevel (case goalView (lvlGoal lvl) of
+        ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
+        _ -> []))
+    | otherwise = Just ((), UfoLevel (lvlUfos lvl))
   onBeat (Refilled b acc) (UfoLevel us) =
     let (ps, us') = stepUfos b us in Just (acc ++ ps, UfoLevel us')
   onBeat _ _ = Nothing
-  mechStart lvl _
-    | null (lvlUfos lvl) = UfoLevel (case goalView (lvlGoal lvl) of
-        ViewCount CountUfo _ -> [mkUfo (1, 3) C1]
-        _ -> [])
-    | otherwise = UfoLevel (lvlUfos lvl)
 
 -- | 皮带：玩家交换的步末、倒计时之后（EndTick）给出移位；会走的元素跳过皮带格（AskAvoid）。
 newtype BeltLevel = BeltLevel [Belt]
@@ -55,6 +55,7 @@ newtype BeltLevel = BeltLevel [Belt]
 
 instance Mechanic BeltLevel where
   layout (BeltLevel bs) = (emptyLayout "belt") { mlBelts = Just bs }
+  onBeat (Start lvl) _ = Just ((), BeltLevel (lvlBelts lvl))
   onBeat (EndTick acc) (BeltLevel bs)
     | null bs = Nothing
     | otherwise = Just (acc ++ beltMoves bs, BeltLevel bs)
@@ -62,7 +63,6 @@ instance Mechanic BeltLevel where
     | null bs = Nothing
     | otherwise = Just (acc ++ concat bs, BeltLevel bs)
   onBeat _ _ = Nothing
-  mechStart lvl _ = BeltLevel (lvlBelts lvl)
 
 -- | 传送门：沉降时（Settling）传送可穿门的本体；端点是会走元素的墙（AskWall）。
 newtype PortalLevel = PortalLevel [(Pos, Pos)]
@@ -70,12 +70,12 @@ newtype PortalLevel = PortalLevel [(Pos, Pos)]
 
 instance Mechanic PortalLevel where
   layout (PortalLevel ps) = (emptyLayout "portal") { mlPortals = Just ps }
+  onBeat (Start lvl) _ = Just ((), PortalLevel (lvlPortals lvl))
   onBeat (Settling canPass mb) (PortalLevel ps) =
     Just (portalTeleport canPass ps mb, PortalLevel ps)
   onBeat (AskWall acc) (PortalLevel ps) =
     Just (acc ++ concatMap (\(a, b) -> [a, b]) ps, PortalLevel ps)
   onBeat _ _ = Nothing
-  mechStart lvl _ = PortalLevel (lvlPortals lvl)
 
 -- | 地毯：步末结算时（Covering）覆盖目标格。
 newtype CarpetLevel = CarpetLevel [Pos]
@@ -83,19 +83,19 @@ newtype CarpetLevel = CarpetLevel [Pos]
 
 instance Mechanic CarpetLevel where
   layout (CarpetLevel ps) = (emptyLayout "carpet") { mlCarpetOpen = Just ps }
-  onBeat (Covering hit n) (CarpetLevel open0) =
-    let (open', k) = coverCarpets open0 hit in Just (n + k, CarpetLevel open')
-  onBeat _ _ = Nothing
-  mechStart lvl _
-    | null (lvlCarpets lvl) = CarpetLevel (case goalView (lvlGoal lvl) of
+  onBeat (Start lvl) _
+    | null (lvlCarpets lvl) = Just ((), CarpetLevel (case goalView (lvlGoal lvl) of
         ViewCount CountCarpets n ->
           take (max n 1)
             [ (3, 2), (3, 3), (3, 4), (3, 5)
             , (4, 2), (4, 3), (4, 4), (4, 5)
             , (2, 2), (2, 5), (5, 2), (5, 5)
             ]
-        _ -> [])
-    | otherwise = CarpetLevel (lvlCarpets lvl)
+        _ -> []))
+    | otherwise = Just ((), CarpetLevel (lvlCarpets lvl))
+  onBeat (Covering hit n) (CarpetLevel open0) =
+    let (open', k) = coverCarpets open0 hit in Just (n + k, CarpetLevel open')
+  onBeat _ _ = Nothing
 
 -- | 规则开关「L / T 形生成炸弹」。
 newtype BombShapes = BombShapes Bool
@@ -103,11 +103,11 @@ newtype BombShapes = BombShapes Bool
 
 instance Mechanic BombShapes where
   layout _ = emptyLayout "bomb_shapes"
+  onBeat (Start lvl) _ = Just ((), BombShapes ("bomb_shapes" `elem` lvlRules lvl))
   onBeat (AskShapes rules) (BombShapes on)
     | on = Just (withBombShapes rules, BombShapes on)
     | otherwise = Nothing
   onBeat _ _ = Nothing
-  mechStart lvl _ = BombShapes ("bomb_shapes" `elem` lvlRules lvl)
 
 -- | 规则开关「魔力鸟组合增强」。
 newtype RainbowCombos = RainbowCombos Bool
@@ -115,12 +115,12 @@ newtype RainbowCombos = RainbowCombos Bool
 
 instance Mechanic RainbowCombos where
   layout _ = emptyLayout "rainbow_combos"
+  onBeat (Start lvl) _ = Just ((), RainbowCombos ("rainbow_combos" `elem` lvlRules lvl))
   onBeat (AskMorph b0 swapped p1 p2) (RainbowCombos on)
     | on, Just (n, cells, seeds) <- rainbowComboMorph b0 swapped p1 p2 =
         Just (Morph n cells seeds, RainbowCombos on)
     | otherwise = Nothing
   onBeat _ _ = Nothing
-  mechStart lvl _ = RainbowCombos ("rainbow_combos" `elem` lvlRules lvl)
 
 -- | 掉落口（新玩法 6）。
 newtype CookieDrop = CookieDrop [DropSpec]
@@ -128,11 +128,11 @@ newtype CookieDrop = CookieDrop [DropSpec]
 
 instance Mechanic CookieDrop where
   layout (CookieDrop ds) = (emptyLayout "cookie_drop") { mlDrops = Just (concatMap dropCells ds) }
+  onBeat (Start lvl) _ = Just ((), CookieDrop (lvlDrops lvl))
   onBeat (AskRefill p) (CookieDrop ds)
     | null ds = Nothing
     | otherwise = Just (dropRefill ds p, CookieDrop ds)
   onBeat _ _ = Nothing
-  mechStart lvl _ = CookieDrop (lvlDrops lvl)
 
 
 -- | 掉落口补子：每个空洞先照原策略补（随机数照常消耗，所以生成器的推进与没有掉落口时相同），

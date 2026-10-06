@@ -14,7 +14,7 @@ campaignLevelCount = 49
 builtinEntryCount :: Int
 builtinEntryCount = 36
 
--- | 内置本体的 Kind instance 个数（'Spec.Archetype.archetype_builtin_kind_inventory' 在 Element/Builtin 源码里
+-- | 内置本体的 Phase instance 个数（'Spec.Archetype.archetype_builtin_kind_inventory' 在 Element/Builtin 源码里
 -- 数出来的；SpecialGem 一个 instance 覆盖四种特殊块）。
 builtinBodyInstanceCount :: Int
 builtinBodyInstanceCount = 22

@@ -114,7 +114,7 @@ newtype Twin = Twin Int
 
 -- | 故意与内置泡泡同名、同编码。
 instance Phase Twin where
-  codec = Codec "bubble" (intCell "bubble") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing
+  codec = Codec "bubble" (intCell "bubble") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing noHud []
   onMatch _ = gemMatch Nothing
   onHit _ _ = gemHit
   physics _ = gemPhysics

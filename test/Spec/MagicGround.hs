@@ -18,8 +18,8 @@ import Match3.Combos (builtinComboRules)
 import Match3.Counts (countOf)
 import Match3.Daily (dailyConfig)
 import Match3.Element
-  ( Jelly
-  , MagicGround
+  ( jelly
+  , magicGround
   , blastWith
   , builtinDefs
   , builtinMechanics
@@ -93,10 +93,10 @@ blastCells pd = [map snd (evCells e) | e <- pdEvents pd, evKind e == EvBlast]
 mg_ability_ground_not_consumed :: Assertion
 mg_ability_ground_not_consumed = do
   assertEqual "name" "magic" magicGroundName
-  assertEqual "ground name" magicGroundName (groundName (Proxy :: Proxy MagicGround))
+  assertEqual "ground name" magicGroundName (groundName magicGround)
   let b8 = boardFromRows (replicate boardSize (replicate boardSize (mkGem C1)))
-  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\f -> f b8 [(3, 3)]) (groundWiden (Proxy :: Proxy MagicGround)))
-  assertBool "jelly does not widen" (null (fmap (\f -> f b8 [(3, 3)]) (groundWiden (Proxy :: Proxy Jelly))))
+  assertEqual "widen rule = magicWiden" (Just (magicWiden b8 [(3, 3)])) (fmap (\f -> f b8 [(3, 3)]) (groundWiden magicGround))
+  assertBool "jelly does not widen" (null (fmap (\f -> f b8 [(3, 3)]) (groundWiden jelly)))
   let g0 = [(p, ("magic", 1)) | p <- mgCells]
   assertEqual "hit: kept, no counter" (g0, []) (hitGroundWith defaultWorld mgCells g0)
   let gs0 = levelGame mgLevel 2

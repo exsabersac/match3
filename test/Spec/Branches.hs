@@ -31,10 +31,13 @@ import Match3.Element
 import Match3.Element.Mechanic (mechNameOf)
 import Match3.Element.Kind (customPlace)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
+import Match3.Board.Clear (WaveWorld(..), clearMatchesDetailedWith, waveStart, waveSystems)
+import Match3.Board.Match (findMatchRunsWith)
+import Data.Array ((!))
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Level (newGame)
 import Match3.Game.Move (resolveSwapWith)
-import Match3.Game.Resolve (MoveKind(..), endTableFor)
+import Match3.Game.Resolve (MoveKind(..), endTableFor, stepSystems)
 import Match3.Game.State (gsBelts, gsCarpetOpen, gsCount)
 import qualified Match3.Snail as Snail
 import Match3.Types (goalScore, isGem, isSnail)
@@ -57,6 +60,7 @@ tests =
   , testCase "br_rule_tables_out_of_main_flow" br_rule_tables_out_of_main_flow
   , testCase "br_board_takes_hooks_only" br_board_takes_hooks_only
   , testCase "br_end_phase_table_order" br_end_phase_table_order
+  , testCase "br_wave_and_step_stage_systems" br_wave_and_step_stage_systems
   ]
 
 -- tripleBoard / tripleMove / isCustomNamed / firstWave 见 Spec.Support。
@@ -380,3 +384,28 @@ br_end_phase_table_order = do
     , w <- ["EndCountdownTick", "EndBeltShift", "EndSpread", "EndSnail", "SnailMove", "SpreadKind", "SpreadVine", "SpreadChoco", "SpreadSteam", "spreadOverlay", "smFrom", "smTo", "smDir", "smPushed", "spreadRGB", "askLevel", "askLevelIn"]
     , mentionsIdent w src
     ]
+
+
+-- | ecs-6：一轮消除与步尾都是阶段世界上的 system 流水线。一轮消除 = 'WaveWorld' 上 7 个 wave system
+-- （展开 → 直接命中 → 开启 → 剥随格叠层 → 邻格 → 挖空 → 生成特殊块），步尾 = 'StepWorld' 上 7 个 step system
+-- （地面层 → 地毯 → 前后差 → 计数 → 提交 → 胜负 → 洗牌）。整条流水线 = 'clearMatchesDetailedWith'；
+-- 只跑前 4 个 system 时邻格 / 挖空的黑板字段还没写（每个字段只由一个 system 写入）；去掉生成 system 时清除格全空。
+br_wave_and_step_stage_systems :: Assertion
+br_wave_and_step_stage_systems = do
+  let r = defaultRegistry
+      (p1, p2) = tripleMove
+      b = swapCells tripleBoard p1 p2
+      runs = findMatchRunsWith r b
+      w0 = waveStart (Just p2) runs b (concatMap runPos runs)
+      run sys = runSystem (pipeline sys) w0
+      full = run (waveSystems r)
+      (mb, n, cleared) = clearMatchesDetailedWith r (Just p2) b
+  assertEqual "seven wave systems" 7 (length (waveSystems r))
+  assertEqual "seven step systems" 7 (length (stepSystems r))
+  assertBool "full wave pipeline = clearMatchesDetailedWith" (wvOut full == mb && length (wvCleared full) == n && wvCleared full == cleared)
+  assertBool "the swapped run clears" (n >= 3)
+  let early = run (take 4 (waveSystems r))
+  assertBool "near / carve not run yet" (null (wvDead early) && null (wvCleared early) && wvOut early == toM b)
+  assertEqual "true clears known after the open system" (wvTrue full) (wvTrue early)
+  let noSpawn = run (init (waveSystems r))
+  assertBool "without the spawn system every cleared cell is empty" (all (\p -> wvOut noSpawn ! p == Nothing) (wvCleared noSpawn))

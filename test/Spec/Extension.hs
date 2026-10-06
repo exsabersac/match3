@@ -23,7 +23,6 @@ import Match3.ECS.Archetype (Archetype(..), archetype, customColumn)
 import Match3.ECS.Stage (SysDef(..))
 import Match3.ECS.Component
 import Match3.Element.Kind (GroundArch(..), groundArch, customPlace)
-import Match3.ECS.Component (Wear(..))
 import Match3.ECS.Registry (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)

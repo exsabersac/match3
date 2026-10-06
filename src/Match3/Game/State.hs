@@ -49,8 +49,8 @@ import Data.Maybe (isJust)
 import Engine.Optics (Lens', lens)
 import Match3.Counts (CounterKey(..), Counts, colorBag, countOf, namedCounts)
 import Match3.Board.Match (findHintWith)
-import Match3.Element.Builtin (BeltLevel(..), BombShapes(..), CarpetLevel(..), CookieDrop(..), RainbowCombos(..), GroundLayer(..), PortalLevel(..), UfoLevel(..), beltLevel, carpetLevel, defaultRegistry, groundLayer, portalLevel, ufoLevel)
-import Match3.Element.Mechanic (SomeMechanic, fromMechanic)
+import Match3.Element.Builtin (beltLevel, carpetLevel, defaultRegistry, groundLayer, portalLevel, ufoLevel)
+import Match3.Element.Mechanic (SomeMechanic, mechBuiltinOf)
 import Match3.Element.Level (levelBelts, levelCarpetOpen, levelGround, levelPortals, levelUfos, putLevel)
 import Match3.ECS.Registry (Registry)
 import Match3.Ufo (Ufo(..))
@@ -165,18 +165,6 @@ gsCarpetOpenL = lens gsCarpetOpen (flip setCarpetOpen)
 gsGroundL :: Lens' GameState Ground
 gsGroundL = lens gsGround (flip setGround)
 
--- | 内置关卡级元素之一（Show 按固定字段名打印它们的状态，不进 extras）。
-builtinLevel :: SomeMechanic -> Bool
-builtinLevel e =
-  isJust (fromMechanic e :: Maybe UfoLevel)
-    || isJust (fromMechanic e :: Maybe BeltLevel)
-    || isJust (fromMechanic e :: Maybe PortalLevel)
-    || isJust (fromMechanic e :: Maybe CarpetLevel)
-    || isJust (fromMechanic e :: Maybe GroundLayer)
-    || isJust (fromMechanic e :: Maybe BombShapes)
-    || isJust (fromMechanic e :: Maybe RainbowCombos)
-    || isJust (fromMechanic e :: Maybe CookieDrop)
-
 -- | 文本固定的 Show（元素查询快照与测试指纹对 show 取散列，格式不能变）：按派生 Show 的记录格式打印，
 -- 皮带 / 传送门 / 飞碟 / 地毯 / 地面层从 gsLevelElems 投影、各计数按固定字段名与位置打印，gsOver 经 'fromTerminal' 按 Outcome 打印。
 -- gsElementCounts 打印 namedCounts（按名字升序；快照里每局至多一个名字，顺序无歧义）。
@@ -220,8 +208,9 @@ instance Show GameState where
         . extras
         . showChar '}'
     where
-      -- 内置之外的关卡级元素（扩展）：有才打印，内置对局不多出文本
-      extras = case [e | e <- gsLevelElems gs, not (builtinLevel e)] of
+      -- 内置之外的关卡级元素（扩展）：有才打印，内置对局不多出文本。
+      -- 内置 = 原型带内置标签 mechBuiltin（ecs-8 起；之前按 8 种内置状态类型逐个做类型转换识别）
+      extras = case [e | e <- gsLevelElems gs, not (mechBuiltinOf e)] of
         [] -> id
         es -> sep . field "gsLevelExtra" es
       cnt k = gsCount k gs

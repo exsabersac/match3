@@ -32,7 +32,6 @@ module Match3.Element.Level
   , askAvoid
   , askWall
   , askJudge
-  , levelState
   , putLevel
     -- * 读数
   , levelUfos
@@ -53,8 +52,7 @@ module Match3.Element.Level
   , judgeIn
   ) where
 
-import Data.Maybe (listToMaybe, mapMaybe)
-import Data.Typeable (Typeable)
+import Data.Maybe (listToMaybe)
 import Match3.Board.Grid (MBoard)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Element.Types (ShapeRule)
@@ -176,10 +174,6 @@ replaceNamed e es
   where
     n = mechNameOf e
     same x = mechNameOf x == n
-
--- | 某类型的关卡级机制的状态（第一个类型对得上的）。
-levelState :: Typeable m => [SomeMechanic] -> Maybe m
-levelState = listToMaybe . mapMaybe fromMechanic
 
 -- | 写入一个关卡级机制（同名替换，没有则追加）。
 putLevel :: SomeMechanic -> [SomeMechanic] -> [SomeMechanic]

@@ -4,8 +4,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 -- | 叠层（冰、草 / 藤 / 巧 / 雾 / 锁链 / 冻结 / 窗帘 / 蒸汽）：对应 xmonad 的 LayoutModifier。
--- slim-4：值级挡匹配 / 命中 / 点火 / 随清 收成 'layerCover'；'Layered' 是 Phase 的修饰器，
--- 不再在 Layer 类上重复声明五个值级方法。
+-- 类只有三个方法：'peel' / 'putOn'（与格子存储编码互转）和类型级的 'layerCover'（一份静态记录：名字、放置、
+-- 挡匹配 / 挡交换 / 点火 / 直接命中 / 随清，邻格规则与蔓延、逃生口；值级的项是取自叠层值的函数）。
+-- 'Layered' 是 Phase 的修饰器。
 --
 -- 合成规则只在 'Layered' 的 Phase instance 里写一次：
 --
@@ -15,7 +16,7 @@
 -- * 洗牌保留：有任何一层就保留；
 -- * 名字 / 颜色 / 下落 / 穿门 / 计数 / 显示等本体属性：取里层。
 --
--- 邻格揭层 / 清掉与步末蔓延仍是类型级方法（'layerNeighbourPrio' 等），由 Rules 驱动。
+-- 邻格揭层 / 清掉与步末蔓延（'lcNearPrio' / 'lcOnNear' / 'lcSpreads'）由 Match3.Element.Rules 驱动。
 module Match3.Element.Layer
   ( Layer(..)
   , LayerHit(..)
@@ -26,6 +27,13 @@ module Match3.Element.Layer
   , layerFires
   , layerHit
   , layerStripsOnClear
+  , layerName
+  , layerPlace
+  , layerNeighbourPrio
+  , layerReach
+  , onLayerNeighbourClear
+  , spreads
+  , layerPasses
   , Layered(..)
   , SomeLayer(..)
   , someLayer
@@ -50,54 +58,83 @@ data LayerHit l
   | Shatter  -- ^ 本格被消除（末层冰随宝石一起碎）
   deriving (Eq, Show)
 
--- | 值级覆盖（slim-4：五个旧方法合成一包，由 'Layered' 的 Phase instance 读取）。
+-- | 一种叠层的全部数据（类型级：每种叠层一份静态记录；值级的项是取自叠层值的函数）。
 data LayerCover l = LayerCover
-  { lcBlocksMatch :: Bool
-  , lcBlocksSwap :: Bool
-  , lcFires :: Maybe Bool
-  , lcHit :: LayerHit l
-  , lcStripsOnClear :: Bool
+  { lcName :: ElementName                -- ^ 元素名（元素世界的键）
+  , lcPlace :: Placer                    -- ^ 关卡放置
+  , lcBlocksMatch :: l -> Bool           -- ^ 挡匹配
+  , lcBlocksSwap :: l -> Bool            -- ^ 挡交换
+  , lcFires :: l -> Maybe Bool           -- ^ 点火（Nothing = 没意见，问里层）
+  , lcHit :: l -> LayerHit l             -- ^ 直接命中
+  , lcStripsOnClear :: l -> Bool         -- ^ 本格被消除时随格清掉
+  , lcNearPrio :: Maybe Int              -- ^ 邻格规则的优先级（Nothing = 对邻格消除无反应）
+  , lcReach :: Reach                     -- ^ 邻格规则的目标范围
+  , lcOnNear :: l -> Cell -> Nudge       -- ^ 邻格有真消除时本格怎么变
+  , lcSpreads :: Maybe (Int, l)          -- ^ 步末蔓延：(次序, 种上的值)
+  , lcPasses :: [BoardPass]              -- ^ 逃生口：自带的整盘趟
   }
-  deriving (Eq, Show)
 
-defaultCover :: LayerCover l
-defaultCover = LayerCover False False Nothing Pierce False
+-- | 缺省：不能放置、全穿透、不挡、不随清、对邻格无反应、不蔓延。
+defaultCover :: ElementName -> LayerCover l
+defaultCover n = LayerCover
+  { lcName = n
+  , lcPlace = \_ _ -> Nothing
+  , lcBlocksMatch = const False
+  , lcBlocksSwap = const False
+  , lcFires = const Nothing
+  , lcHit = const Pierce
+  , lcStripsOnClear = const False
+  , lcNearPrio = Nothing
+  , lcReach = SkipDirect
+  , lcOnNear = \_ _ -> Untouched
+  , lcSpreads = Nothing
+  , lcPasses = []
+  }
 
 -- | 叠在本体之上的一层。
 class (Show l, Eq l, Typeable l) => Layer l where
-  layerName :: proxy l -> ElementName
+  -- | 从格子上剥下本层（外 → 内）。
   peel :: Cell -> Maybe (l, Cell)
+  -- | 把本层盖回格子。
   putOn :: l -> Cell -> Cell
-  -- | 值级覆盖（挡匹配 / 命中 / 点火 / 随清）；缺省全穿透、不挡、不随清。
-  layerCover :: l -> LayerCover l
-  layerCover _ = defaultCover
-  layerPlace :: proxy l -> Placer
-  layerPlace _ _ _ = Nothing
-  layerNeighbourPrio :: proxy l -> Maybe Int
-  layerNeighbourPrio _ = Nothing
-  layerReach :: proxy l -> Reach
-  layerReach _ = SkipDirect
-  onLayerNeighbourClear :: l -> Cell -> Nudge
-  onLayerNeighbourClear _ _ = Untouched
-  spreads :: proxy l -> Maybe (Int, l)
-  spreads _ = Nothing
-  layerPasses :: proxy l -> [BoardPass]
-  layerPasses _ = []
+  -- | 本层的全部数据（类型级）。
+  layerCover :: LayerCover l
 
-layerBlocksMatch :: Layer l => l -> Bool
-layerBlocksMatch = lcBlocksMatch . layerCover
+layerBlocksMatch :: forall l. Layer l => l -> Bool
+layerBlocksMatch = lcBlocksMatch (layerCover @l)
 
-layerBlocksSwap :: Layer l => l -> Bool
-layerBlocksSwap = lcBlocksSwap . layerCover
+layerBlocksSwap :: forall l. Layer l => l -> Bool
+layerBlocksSwap = lcBlocksSwap (layerCover @l)
 
-layerFires :: Layer l => l -> Maybe Bool
-layerFires = lcFires . layerCover
+layerFires :: forall l. Layer l => l -> Maybe Bool
+layerFires = lcFires (layerCover @l)
 
-layerHit :: Layer l => l -> LayerHit l
-layerHit = lcHit . layerCover
+layerHit :: forall l. Layer l => l -> LayerHit l
+layerHit = lcHit (layerCover @l)
 
-layerStripsOnClear :: Layer l => l -> Bool
-layerStripsOnClear = lcStripsOnClear . layerCover
+layerStripsOnClear :: forall l. Layer l => l -> Bool
+layerStripsOnClear = lcStripsOnClear (layerCover @l)
+
+layerName :: forall l proxy. Layer l => proxy l -> ElementName
+layerName _ = lcName (layerCover @l)
+
+layerPlace :: forall l proxy. Layer l => proxy l -> Placer
+layerPlace _ = lcPlace (layerCover @l)
+
+layerNeighbourPrio :: forall l proxy. Layer l => proxy l -> Maybe Int
+layerNeighbourPrio _ = lcNearPrio (layerCover @l)
+
+layerReach :: forall l proxy. Layer l => proxy l -> Reach
+layerReach _ = lcReach (layerCover @l)
+
+onLayerNeighbourClear :: forall l. Layer l => l -> Cell -> Nudge
+onLayerNeighbourClear = lcOnNear (layerCover @l)
+
+spreads :: forall l proxy. Layer l => proxy l -> Maybe (Int, l)
+spreads _ = lcSpreads (layerCover @l)
+
+layerPasses :: forall l proxy. Layer l => proxy l -> [BoardPass]
+layerPasses _ = lcPasses (layerCover @l)
 
 -- | 修饰过的元素（同 xmonad 的 ModifiedLayout）：叠层在外，被修饰的元素在里。
 data Layered l e = Layered l e

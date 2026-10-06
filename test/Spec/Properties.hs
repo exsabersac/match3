@@ -90,7 +90,7 @@ import Match3.Counts
 import Match3.Element
 import Match3.Element.Phase (phaseToCell)
 import Match3.Element.Kind (kindName, SomeKind(..), fromCellAs)
-import Match3.Element.Layer (Layer(layerName), SomeLayer(..), layerValueName, peelAs)
+import Match3.Element.Layer (layerName, SomeLayer(..), layerValueName, peelAs)
 import Match3.Element.Mechanic (mechNameOf)
 import Spec.Support (levelGame)
 import qualified Match3.Engine as M3E

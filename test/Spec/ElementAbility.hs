@@ -193,63 +193,62 @@ newtype IceV = IceV Int
   deriving (Eq, Show)
 
 instance Layer IceV where
-  layerName _ = "ice"
   peel cell = case cell of
     Gem c k n ov | n > 0 -> Just (IceV n, Gem c k 0 ov)
     _ -> Nothing
   putOn (IceV n) cell = case cell of
     Gem c k _ ov -> Gem c k n ov
     _ -> cell
-  layerCover (IceV n) = defaultCover
-    { lcFires = Just (n <= 1)
-    , lcHit = if n > 1 then Keep (IceV (n - 1)) else Shatter
+  layerCover = (defaultCover "ice")
+    { lcFires = \(IceV n) -> Just (n <= 1)
+    , lcHit = \(IceV n) -> if n > 1 then Keep (IceV (n - 1)) else Shatter
+    , lcPlace = \args cell -> case cell of
+        Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
+        _ -> Nothing
     }
-  layerPlace _ args cell = case cell of
-    Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
-    _ -> Nothing
 
 data ChocoV = ChocoV
   deriving (Eq, Show)
 
 instance Layer ChocoV where
-  layerName _ = "choco"
   peel cell = case cell of
     Gem c k i (Just Choco) -> Just (ChocoV, Gem c k i Nothing)
     _ -> Nothing
   putOn _ = putOverlay Choco
-  layerCover _ = defaultCover { lcStripsOnClear = True }
-  layerPlace _ _ cell = case cell of
-    Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
-    _ -> Nothing
-  layerNeighbourPrio _ = Just 150
-  layerReach _ = AllNeighbours
-  onLayerNeighbourClear _ cell = case cell of
-    Gem c k i _ -> Becomes (Gem c k i Nothing)
-    _ -> Untouched
-  spreads _ = Just (20, ChocoV)
+  layerCover = (defaultCover "choco")
+    { lcStripsOnClear = const True
+    , lcPlace = \_ cell -> case cell of
+        Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
+        _ -> Nothing
+    , lcNearPrio = Just 150
+    , lcReach = AllNeighbours
+    , lcOnNear = \_ cell -> case cell of
+        Gem c k i _ -> Becomes (Gem c k i Nothing)
+        _ -> Untouched
+    , lcSpreads = Just (20, ChocoV)
+    }
 
 newtype ChainV = ChainV Int
   deriving (Eq, Show)
 
 instance Layer ChainV where
-  layerName _ = "chain"
   peel cell = case cell of
     Gem c k i (Just (Chain n)) -> Just (ChainV n, Gem c k i Nothing)
     _ -> Nothing
   putOn (ChainV n) = putOverlay (Chain n)
-  layerCover (ChainV n) = defaultCover
-    { lcBlocksMatch = True
-    , lcBlocksSwap = True
-    , lcFires = Just False
-    , lcHit = if n <= 1 then Peel else Keep (ChainV (n - 1))
+  layerCover = (defaultCover "chain")
+    { lcBlocksMatch = const True
+    , lcBlocksSwap = const True
+    , lcFires = const (Just False)
+    , lcHit = \(ChainV n) -> if n <= 1 then Peel else Keep (ChainV (n - 1))
+    , lcPlace = \args cell -> case cell of
+        Gem col kind ice _ -> (\n -> Gem col kind ice (Just (Chain n))) <$> exactArgs argInt args
+        _ -> Nothing
+    , lcNearPrio = Just 80
+    , lcOnNear = \(ChainV n) cell -> case cell of
+        Gem c k i _ | n <= 1 -> Becomes (Gem c k i Nothing)
+        _ -> Becomes (putOn (ChainV (n - 1)) cell)
     }
-  layerPlace _ args cell = case cell of
-    Gem col kind ice _ -> (\n -> Gem col kind ice (Just (Chain n))) <$> exactArgs argInt args
-    _ -> Nothing
-  layerNeighbourPrio _ = Just 80
-  onLayerNeighbourClear (ChainV n) cell = case cell of
-    Gem c k i _ | n <= 1 -> Becomes (Gem c k i Nothing)
-    _ -> Becomes (putOn (ChainV (n - 1)) cell)
 
 jellyV :: GroundKind
 jellyV = (groundKind "jelly")

@@ -20,8 +20,10 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), System(..), Edge(..), Def, effectSystem, groundDef, inertDef, kindDef, moveSys, register)
-import Match3.Element.Phase
-import Match3.Element.Kind (SysDef(..), GroundKind(..), groundKind, customPlace, fromCustom, noHud)
+import Match3.ECS.Archetype (Archetype(..), archetype, customColumn)
+import Match3.ECS.Stage (SysDef(..))
+import Match3.ECS.Component
+import Match3.Element.Kind (GroundKind(..), groundKind, customPlace, fromCustom)
 import Match3.ECS.Registry (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)
@@ -136,29 +138,15 @@ ext_ground_layer_test_element = do
 
 -- | 测试专用侧边收集物「风筝」：drains = [EdgeLeft]，到左边即被收走并按 CountNamed "kite" 计数；
 -- 内部格与底边的风筝不收；未注册时是惰性占格。内置饼干的底边收集由原有 cookie_* 测试与金标准锁定。
-newtype Kite = Kite Int
-  deriving (Eq, Show)
-
--- 占格障碍原型包的移动方法，另加左边收集
-
-instance Phase Kite where
-  codec = Codec
-    { cName = "kite"
-    , cToCell = intCell "kite"
-    , cFromCell = fromCustom "kite" Kite
-    , cPlace = customPlace "kite"
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed "kite") }
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = obstaclePhysics { pDrains = [EdgeLeft] }
-  view _ = noFace
+kiteArch :: Archetype Int
+kiteArch = (archetype "kite" (customColumn "kite"))
+  { aSpawn = customPlace "kite"
+  , aTally = const emptyTally {tCounter = Just (CountNamed "kite")}
+  , aPhysics = const obstaclePhysics {pDrains = [EdgeLeft]}
+  }
 
 kiteDef :: Def
-kiteDef = kindDef @Kite
+kiteDef = kindDef kiteArch
 
 ext_edge_drain_side_collectible :: Assertion
 ext_edge_drain_side_collectible = do
@@ -180,27 +168,15 @@ ext_edge_drain_side_collectible = do
 -- | 测试专用「陷坑」（固定格）：步末 system（PhaseMove）不改盘，只经 esHoles 声明自己所在格为空洞 →
 -- 步末补结算把它挖空、上方下落、补子、成消再连锁；终盘稳定、没有陷坑，回放里多一个只有沉降的轮次。
 -- 补结算是统一路径（内置元素步末从不留下空洞，见 docs/testing.md 的扫描），没有开关。
-newtype Sinkhole = Sinkhole Int
-  deriving (Eq, Show)
-
-instance Phase Sinkhole where
-  codec = Codec
-    { cName = "sinkhole"
-    , cToCell = intCell "sinkhole"
-    , cFromCell = fromCustom "sinkhole" Sinkhole
-    , cPlace = customPlace "sinkhole"
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysEnd (EndSys PhaseMove 90 mempty (const []) (customsOn "sinkhole"))]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = fixedPhysics
-  view _ = noFace
+sinkholeArch :: Archetype Int
+sinkholeArch = (archetype "sinkhole" (customColumn "sinkhole"))
+  { aSpawn = customPlace "sinkhole"
+  , aPhysics = const fixedPhysics
+  , aSystems = [SysEnd (EndSys PhaseMove 90 mempty (const []) (customsOn "sinkhole"))]
+  }
 
 sinkholeDef :: Def
-sinkholeDef = kindDef @Sinkhole
+sinkholeDef = kindDef sinkholeArch
 
 ext_post_end_settle_hole_element :: Assertion
 ext_post_end_settle_hole_element = do
@@ -228,29 +204,14 @@ ext_post_end_settle_hole_element = do
 
 -- | 手动洗牌走 match3GameWith customReg 的 Shuffle 动作：木箱原样保留；「浮尘」（keepOnShuffle = False 的障碍）
 -- 只有按自定义表判定才会被洗走——证明洗牌用的是传进来的元素世界，不再退回内置表。
-newtype Dust = Dust Int
-  deriving (Eq, Show)
-
--- 占格障碍原型包的移动方法，只把洗牌时原样放回关掉
-
-instance Phase Dust where
-  codec = Codec
-    { cName = "dust"
-    , cToCell = intCell "dust"
-    , cFromCell = fromCustom "dust" Dust
-    , cPlace = customPlace "dust"
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = obstaclePhysics { pKeepShuffle = False }
-  view _ = noFace
+dustArch :: Archetype Int
+dustArch = (archetype "dust" (customColumn "dust"))
+  { aSpawn = customPlace "dust"
+  , aPhysics = const obstaclePhysics {pKeepShuffle = False}
+  }
 
 dustDef :: Def
-dustDef = kindDef @Dust
+dustDef = kindDef dustArch
 
 ext_manual_shuffle_keeps_crate_via_engine :: Assertion
 ext_manual_shuffle_keeps_crate_via_engine = do
@@ -268,24 +229,12 @@ ext_manual_shuffle_keeps_crate_via_engine = do
 -- | 第 7 刀（7b）：步末效果是通用形状（事件类型 + 元素名 + 逐项 EndItem）。测试专用「跳跳虫」（固定格）在步末
 -- （PhaseMove，排在蜗牛之后）向右跳一格、与右边的宝石换位，产出 EndEffect EvMove "hopper" —— 不改 Event / Trace /
 -- 主流程：回放按时间线重放到终盘（applyEndEffect 逐项重放）、效果事件里有它、内置表下它是惰性占格。
-newtype Hopper = Hopper Int
-  deriving (Eq, Show)
-
-instance Phase Hopper where
-  codec = Codec
-    { cName = "hopper"
-    , cToCell = intCell "hopper"
-    , cFromCell = fromCustom "hopper" Hopper
-    , cPlace = customPlace "hopper"
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysEnd (moveSys 80 (effectSystem (hopperHop . ewBoard)))]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = fixedPhysics
-  view _ = noFace
+hopperArch :: Archetype Int
+hopperArch = (archetype "hopper" (customColumn "hopper"))
+  { aSpawn = customPlace "hopper"
+  , aPhysics = const fixedPhysics
+  , aSystems = [SysEnd (moveSys 80 (effectSystem (hopperHop . ewBoard)))]
+  }
 
 hopperHop :: Board -> (Maybe EndEffect, Board)
 hopperHop b0 =
@@ -299,7 +248,7 @@ hopperHop b0 =
 
 ext_end_effect_generic_hopper :: Assertion
 ext_end_effect_generic_hopper = do
-  let world = register (kindDef @Hopper) defaultRegistry
+  let world = register (kindDef hopperArch) defaultRegistry
       hopper = Custom "hopper" (CustomState 1)
       board0 = setCell tripleBoard (7, 0) hopper
       gs0 = (newGame (GameConfig 5 (goalScore 99999)) 1) {gsBoard = board0}
@@ -461,31 +410,19 @@ judge_default_no_replier =
     , o <- [MoveApplied 5, Lost 3, Won 7, LevelClear 9 (li + 1)]
     ]
 
--- | 测试专用灯笼（Custom "lantern" k）：显示附加字段、目标中文名与失败提示都只写在元素的 caps 里
--- （displays / labelled / loseHintIs），View 的 cellExtrasWith 与元素世界的 displayLabelWith / loseHintWith 直接取到，
+-- | 测试专用灯笼（Custom "lantern" k）：显示附加字段、目标中文名与失败提示都只写在原型的 Face / Hud 组件里，View 的 cellExtrasWith 与元素世界的 displayLabelWith / loseHintWith 直接取到，
 -- 主流程与前端不用改；没注册时什么都没有。
-newtype Lantern = Lantern Int
-  deriving (Eq, Show)
-
-instance Phase Lantern where
-  codec = Codec
-    { cName = "lantern"
-    , cToCell = intCell "lantern"
-    , cFromCell = fromCustom "lantern" Lantern
-    , cPlace = customPlace "lantern"
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed "lantern") }
-    , cNear = Nothing
-    , cHud = noHud { hudLabel = Just "灯笼", hudLoseHint = Just (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏") }
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = obstaclePhysics
-  view (Lantern k) = noFace { fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)] }
+lanternArch :: Archetype Int
+lanternArch = (archetype "lantern" (customColumn "lantern"))
+  { aSpawn = customPlace "lantern"
+  , aTally = const emptyTally {tCounter = Just (CountNamed "lantern")}
+  , aHud = noHud {hudLabel = Just "灯笼", hudLoseHint = Just (LoseHint "点亮灯笼，目标 " " 盏")}
+  , aFace = \k -> noFace {fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]}
+  }
 
 ext_element_display_fields :: Assertion
 ext_element_display_fields = do
-  let world = register (kindDef @Lantern) defaultRegistry
+  let world = register (kindDef lanternArch) defaultRegistry
       cell k = Custom "lantern" (CustomState k)
   assertEqual "extras (lit)" [("lit", FaceBool True), ("k", FaceInt 2)] (cellExtrasWith world (cell 2))
   assertEqual "extras (dark)" [("lit", FaceBool False), ("k", FaceInt 0)] (cellExtrasWith world (cell 0))

@@ -5,7 +5,7 @@
 -- | Haskell 特性第 9 项：规则去重（docs/haskell-features/09-规则去重.md）。
 --
 -- * 光学定律：五个占格障碍棱镜的往返律、改色遍历 cellColorT 的遍历定律；
--- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（第 3 刀起是 onNear + 通用驱动 kindNeighbour）的结果顺序写成固定例子；
+-- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（ecs-3 起是原型的邻格 system，nearBy 列 + 反应函数）的结果顺序写成固定例子；
 -- * 规则折叠：runEndStage = 逐个 system 跑再丢掉空效果；
 -- * （能力声明 Cap 的幺半群在元素类重构第 2 刀随 Caps 一起删除，原型包的缺省方法见 Spec.Archetype）；
 -- * 阶段智能构造器 tickRule / spreadRule / moveRule；
@@ -17,18 +17,15 @@ module Spec.RulesDedup
   ) where
 
 import Data.Functor.Identity (Identity(..))
-import Data.Proxy (Proxy(..))
 import Engine.Optics
 import Match3.Core (Board, Cell, CellContents(..), Color(..), GemKind(..), Pos, boardFromRows, getCell)
 import Match3.Types (boardPositions)
 import Match3.Board.Grid (inBounds)
 import Match3.Element (defaultRegistry)
-import Match3.Element.Builtin.Obstacle (MagicStone, magicStoneFull)
-import Match3.Element.Rules (kindNeighbour)
+import Match3.Element.Builtin.Obstacle (magicStoneCharge, magicStoneFull)
 import Match3.ECS.Registry (endSystems, pushableWith)
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
-import Match3.Element.Types
 import qualified Match3.Obstacles as New
 import qualified Match3.Types as NewB
 import Match3.Types.Optics (cellColorT, _Cake, _Chest, _Honey, _Safe, _Stone)
@@ -204,12 +201,12 @@ magicStoneChargeReference ctx =
   in ctx {nwBoard = foldl (\bd (p, cell) -> NewB.boardSet bd p cell) b charged}
 
 -- | 魔法石（状态 -1–5，含满格 3 与发射中 4）混在宝石 / 任意格里的随机盘，随机真消除格与直接命中格（可重复）：
--- 方法 + 通用驱动 kindNeighbour 与旧整盘写法给出相同的盘面，都不打碎、不坐住格。
+-- 邻格 system（nearBy）与旧整盘写法给出相同的盘面，都不打碎、不坐住格。
 qc_magic_stone_charge_via_driver :: Property
 qc_magic_stone_charge_via_driver =
   forAll genStoneBoard $ \b -> forAll (genSomePos b) $ \trues -> forAll (genSomePos b) $ \direct ->
     let ctx = nearWorld (const True) trues direct [] b
-        new = runSystem (kindNeighbour (Proxy @MagicStone)) ctx
+        new = runSystem magicStoneCharge ctx
         old = magicStoneChargeReference ctx
     in counterexample (show (trues, direct))
          (nwBoard new == nwBoard old .&&. nwDead new === nwDead old .&&. nwSit new === nwSit old)

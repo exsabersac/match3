@@ -8,9 +8,9 @@
 -- | 类型类与抽象（Haskell 特性第 2 项，docs/haskell-features/02-类型类与抽象.md）。
 --
 -- * newtype 派生（DerivingStrategies）：ElementName / CustomState 的 Show / IsString 与底层 String / Int 逐字相同。
--- * Int newtype 的写回（'intCell'，Coercible）：四个 Int newtype 本体元素的写回格子与第 2 项前手写的 Custom 编码相同，
---   元素世界解码回来是同一个元素值；表示不是 Int 的元素用 intCell 就是类型错误。
--- * 存在类型的公共相等：同类型比值、不同类型即不等（三个装箱类型行为相同）。
+-- * Int 状态的存储列（'customColumn' / 'intColumn'，Coercible）：四个 Int 状态本体元素的写回格子与第 2 项前手写的 Custom
+--   编码相同，注册表解码回来是同一个原型与状态；表示不是 Int 的状态用 intColumn 就是类型错误。
+-- * 按组件类型查询（ecs-3）：'Component' 类做存储索引，@rowGet \@Match@ 等与原型字段逐项相同；关卡元素装箱的相等。
 -- * Grid 的 Functor / Foldable / Traversable：定律、行主序、形状不变；随机盘（mapAccumL）与旧递归逐种子相同；
 --   盘面统计（foldMap Sum）与旧列表推导相同；清除格计数（foldMap Counts）与旧 foldl + bumpCount 相同。
 module Spec.Classes
@@ -29,9 +29,7 @@ import Match3.Types (boardDims, maxBoardDim)
 import Match3.Counts (Counts, bumpCount, countsFromList, noCounts, singleCount)
 import Match3.Board.Random (randomBoardSized)
 import Match3.Element
-import Match3.Element.Builtin.Obstacle (StoneE(..))
-import Match3.Element.Phase
-import Match3.Element.Layer (Layered(..))
+import Match3.Element.Builtin (bubbleArch, chameleonArch, fuzzballArch, magicStoneArch, stoneArch)
 import Match3.Types (Grid, boardCells, gridFromRows, gridRows, minBoardDim)
 import System.Random (StdGen, mkStdGen, randomR)
 import Test.Tasty
@@ -43,7 +41,7 @@ tests =
   [ testProperty "classes_newtype_show_same_as_underlying" classes_newtype_show_same_as_underlying
   , testCase "classes_default_toCell_same_as_handwritten" classes_default_toCell_same_as_handwritten
   , testCase "classes_default_toCell_needs_coercible" classes_default_toCell_needs_coercible
-  , testCase "classes_boxed_eq_by_type" classes_boxed_eq_by_type
+  , testCase "classes_component_query_by_type" classes_component_query_by_type
   , testProperty "classes_grid_functor_foldable_traversable_laws" classes_grid_laws
   , testCase "classes_random_board_same_as_recursion" classes_random_board_same_as_recursion
   , testCase "classes_board_stats_same_as_list_comprehension" classes_board_stats_same_as_list_comprehension
@@ -70,33 +68,33 @@ classes_newtype_show_same_as_underlying =
 --------------------------------------------------------------------------------
 -- 2. 缺省 toCell
 
--- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在的 intCell 写回相同，经元素世界从格子解码回同一个元素值
--- （元素类重构第 2 刀起地面层果冻 / 魔法地格是不带值的 GroundKind 类型，不再有 toCell）。
+-- | 第 2 项前四个本体元素手写的 toCell（逐字副本）与现在存储列的写回相同，经注册表从格子解码回同一个原型与状态。
 classes_default_toCell_same_as_handwritten :: Assertion
 classes_default_toCell_same_as_handwritten =
   mapM_ one [0 .. 6]
   where
     one k = do
-      body (Fuzzball k) (Custom "fuzzball" (CustomState k))
-      body (Bubble k) (Custom "bubble" (CustomState k))
-      body (Chameleon k) (Custom "chameleon" (CustomState k))
-      body (MagicStone k) (Custom "magic_stone" (CustomState k))
-      -- 表示同样是 Int、但写了自己 toCell 的元素不受缺省影响
-      encode (StoneE k) (Stone k)
-    encode :: Phase e => e -> Cell -> Assertion
-    encode e cell = assertEqual ("toCell " ++ show e) cell (toCell e)
-    body :: Phase e => e -> Cell -> Assertion
-    body e cell = do
-      encode e cell
-      assertEqual ("decode " ++ show e) (SomePhase e) (bodyOf defaultRegistry cell)
+      viaRegistry fuzzballArch k (Custom "fuzzball" (CustomState k))
+      viaRegistry bubbleArch k (Custom "bubble" (CustomState k))
+      viaRegistry chameleonArch k (Custom "chameleon" (CustomState k))
+      viaRegistry magicStoneArch k (Custom "magic_stone" (CustomState k))
+      -- 状态同样是 Int、但列是棱镜（不是 Custom 编码）的元素
+      encode stoneArch k (Stone k)
+    encode :: Archetype Int -> Int -> Cell -> Assertion
+    encode a k cell = assertEqual ("colPut " ++ show (aName a, k)) cell (colPut (aColumn a) k)
+    viaRegistry a k cell = do
+      encode a k cell
+      let row = bodyOf defaultRegistry cell
+      assertEqual ("decode name " ++ show cell) (aName a) (rowName row)
+      assertEqual ("decode state " ++ show cell) (Just k) (colGet (aColumn a) (rowCell row))
 
--- | 表示不是 Int 的元素（两个字段）用 intCell 写回：Coercible Pair Int 约束解不出来，是类型错误。
+-- | 表示不是 Int 的状态（两个字段）用 intColumn 写回：Coercible Pair Int 约束解不出来，是类型错误。
 data Pair = Pair Int Int
   deriving (Eq, Show)
 
 -- | 推迟的类型错误放在函数体里：只有调用时才抛出。
 pairCell :: () -> Cell
-pairCell () = intCell "pair" (Pair 1 2)
+pairCell () = colPut (intColumn "pair") (Pair 1 2)
 {-# NOINLINE pairCell #-}
 
 classes_default_toCell_needs_coercible :: Assertion
@@ -107,36 +105,30 @@ classes_default_toCell_needs_coercible = do
     Right cell -> assertFailure ("should not typecheck, got " ++ show cell)
 
 --------------------------------------------------------------------------------
--- 3. 存在类型
+-- 3. 按组件类型查询
 
-newtype Twin = Twin Int
-  deriving (Eq, Show)
-
--- | 故意与内置泡泡同名、同编码。
-instance Phase Twin where
-  codec = Codec "bubble" (intCell "bubble") (const Nothing) (\_ _ -> Nothing) emptyMeta Nothing noHud []
-  onMatch _ = gemMatch Nothing
-  onHit _ _ = gemHit
-  physics _ = gemPhysics
-  view _ = noFace
-
--- | 同类型比值；名字、编码都相同但类型不同即不等（装箱类型共用 sameTypeEq）。
-classes_boxed_eq_by_type :: Assertion
-classes_boxed_eq_by_type = do
-  assertEqual "same encoding" (toCell (Bubble 2)) (toCell (Twin 2))
-  assertBool "same type, same value" (SomePhase (Bubble 2) == SomePhase (Bubble 2))
-  assertBool "same type, other value" (SomePhase (Bubble 2) /= SomePhase (Bubble 3))
-  assertBool "other type" (SomePhase (Bubble 2) /= SomePhase (Twin 2))
-  assertEqual "show" "SomePhase \"bubble\" (Bubble 2)" (show (SomePhase (Bubble 2)))
-  assertEqual "show nested" "Just (SomePhase \"bubble\" (Twin 2))" (show (Just (SomePhase (Twin 2))))
-  let iced = SomePhase (Layered (Ice 2) (Bubble 1))
-  assertBool "layered eq" (iced == SomePhase (Layered (Ice 2) (Bubble 1)))
-  assertBool "layered other layer value" (iced /= SomePhase (Layered (Ice 1) (Bubble 1)))
-  assertBool "layered other inner type" (iced /= SomePhase (Layered (Ice 2) (Twin 1)))
-  assertEqual "layered show" "SomePhase \"bubble\" (Layered (Ice 2) (Bubble 1))" (show iced)
-  assertEqual "decoded show" "SomePhase \"gem\" (Layered (Ice 2) (PlainGem C1))" (show (elementOf defaultRegistry (Gem C1 Normal 2 Nothing)))
+-- | 'Component' 类按类型索引原型的派生组件：内置战役盘面上每一格，@rowGet@ 取出的五种组件与直接调原型字段相同；
+-- 注册表的 *With 查询就是组件字段（无叠层的格）。关卡元素装箱的相等仍按类型比值。
+classes_component_query_by_type :: Assertion
+classes_component_query_by_type = do
+  sequence_
+    [ case bodyOf world cell of
+        row@(Row a st) -> do
+          assertEqual ("match " ++ show cell) (aMatch a st) (rowGet row)
+          assertEqual ("hit " ++ show cell) (aHit a st) (rowGet row)
+          assertEqual ("physics " ++ show cell) (aPhysics a st) (rowGet row)
+          assertEqual ("tally " ++ show cell) (aTally a st) (rowGet row)
+          assertEqual ("face " ++ show cell) (aFace a st) (rowGet row)
+          assertEqual ("body @Physics " ++ show cell) (aPhysics a st) (body world cell)
+          assertEqual ("fallsWith " ++ show cell) (pFalls (aPhysics a st)) (fallsWith world cell)
+          assertEqual ("colorOfWith " ++ show cell) (mColor (aMatch a st)) (colorOfWith world cell)
+    | li <- [0 .. levelCount - 1]
+    , Just gs <- [campaignGame li 3]
+    , cell <- nub (boardCells (gsBoard gs))
+    ]
   assertBool "level boxes" (all (\l -> l == l) (gsLevelElems (levelGame0 0)))
   where
+    world = defaultRegistry
     levelGame0 li = maybe (error "no level") id (campaignGame li 1)
 
 --------------------------------------------------------------------------------
@@ -200,7 +192,7 @@ classes_board_stats_same_as_list_comprehension =
   sequence_
     [ do
         assertEqual ("count " ++ show (li, n)) (length [() | cell <- boardCells b, elementName world cell == n]) (countElementWith world n b)
-        assertEqual ("weigh " ++ show (li, n)) (sum [(\(SomePhase e) -> metaDiffWeight (liveMeta e)) (bodyOf world cell) | cell <- boardCells b, elementName world cell == n]) (weighElementWith world n b)
+        assertEqual ("weigh " ++ show (li, n)) (sum [tDiffWeight (rowGet (bodyOf world cell)) | cell <- boardCells b, elementName world cell == n]) (weighElementWith world n b)
     | li <- [0 .. levelCount - 1]
     , Just gs <- [campaignGame li 7]
     , let b = gsBoard gs

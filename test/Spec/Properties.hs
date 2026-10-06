@@ -88,8 +88,7 @@ import Match3.Counts
   , plusCounts
   )
 import Match3.Element
-import Match3.Element.Phase (phaseToCell)
-import Match3.Element.Kind (kindName, SomeKind(..), fromCellAs)
+import Match3.ECS.Archetype (Archetype(..), Column(..), SomeArchetype(..))
 import Match3.Element.Layer (layerName, SomeLayer(..), layerValueName, peelAs)
 import Match3.Element.Mechanic (mechNameOf)
 import Spec.Support (levelGame)
@@ -596,7 +595,7 @@ qc_goal_progress_bounded =
 -- 元素元素世界
 
 -- | 解码往返：任意格解码成元素值（叠层包着本体）再编码回去，得到原格；本体的元素名落在元素世界的本体条目上、
--- 且那个种类的 fromCell 认这个（拆掉叠层后的）格子；最上层的叠层 / 冰层同样落在 peel 认这个格子的叠层条目上。
+-- 且那个原型的存储列认这个（拆掉叠层后的）格子；最上层的叠层 / 冰层同样落在 peel 认这个格子的叠层条目上。
 -- 未注册的自定义名字解码成惰性占格（名字照旧），编码仍是原格。
 qc_world_decode_roundtrip :: Property
 qc_world_decode_roundtrip =
@@ -605,7 +604,7 @@ qc_world_decode_roundtrip =
         w = world
         defs = registryDefs world
         (layers, inner) = decodeLayers w cell
-        kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- defs, kindName p == n]
+        kindAccepts n c = or [isJust (colGet (aColumn a) c) | SomeArchetype a <- registryKinds world, aName a == n]
         layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- defs, layerName p == n]
         bodyName = elementName world cell
         bodyOk = case inner of
@@ -618,7 +617,7 @@ qc_world_decode_roundtrip =
           (_, l : _) -> topName == layerValueName l && layerAccepts topName cell
           _ -> topName == bodyName
     in counterexample (show (bodyName, topName, map layerValueName layers, inner)) $
-         phaseToCell (elementOf world cell) === cell .&&. bodyOk .&&. topOk
+         recodeWith w cell === cell .&&. bodyOk .&&. topOk
 
 -- | 内置条目表（去重之前的原始列表）：名字互不相同；20 种内置本体格各由一个本体种类认领（名字互不相同），
 -- 8 种叠层各由一个叠层种类认领，冰层只有一个。

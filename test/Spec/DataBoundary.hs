@@ -28,8 +28,7 @@ import Data.Proxy (Proxy (..))
 import Data.String (fromString)
 import GHC.Generics
 import Data.Maybe (isJust)
-import Match3.Element.Phase (phaseToCell)
-import Match3.Element.Kind (kindName, SomeKind(..), fromCellAs)
+import Match3.ECS.Archetype (Archetype(..), Column(..), SomeArchetype(..))
 import Match3.Element.Layer (layerName, SomeLayer(..), peelAs)
 import Match3.ECS.Registry (Def(..), decodeLayers)
 import Control.Exception (ErrorCall (..), evaluate, try)
@@ -41,7 +40,7 @@ import Match3.Daily (dailyLevel)
 import Match3.Element.Builtin (defaultRegistry)
 import Match3.ECS.Registry (elementName)
 import Match3.Levels.Campaign (allLevels, levelCount, lookupLevel)
-import Match3.ECS.Registry (elementOf, placeWith, registryDefs, topLayerName)
+import Match3.ECS.Registry (placeWith, recodeWith, registryDefs, registryKinds, topLayerName)
 import Match3.Types (goalScore)
 import Match3.Ufo (mkUfo)
 import Match3.View (cellFace)
@@ -339,8 +338,8 @@ generic_generators_cover_constructors = do
 
 -- | 每个构造器在各张表里都有对应项：
 --
--- * 元素世界：本体名落在认这个（拆掉叠层后的）格子的本体种类上（Custom 用已注册的名字），
---   每种宝石种类 / 每种叠层的名字互不相同、最上层落在 peel 认这个格子的叠层种类上；解码往返（toCell . elementOf = id）；
+-- * 注册表：本体名落在认这个（拆掉叠层后的）格子的原型上（Custom 用已注册的名字），
+--   每种宝石种类 / 每种叠层的名字互不相同、最上层落在 peel 认这个格子的叠层种类上；解码往返（recodeWith = id）；
 -- * Match3.View.cellFace：每个本体构造器的类型标签互不相同（网页 JSON 的 "t"），每种叠层的 "o" 互不相同，
 --   每种宝石种类的 "k" 互不相同；
 -- * 网页 Match3Web.Api.encodeOutcome（源码扫描）：每个 Outcome 构造器都有 @tag "构造器名"@。
@@ -349,10 +348,10 @@ generic_every_constructor_has_world_and_face = do
   cells <- cellSamples
   let world = defaultRegistry
       entries = registryDefs world
-      kindAccepts n c = or [isJust (fromCellAs p c) | KindDef (SomeKind p) <- entries, kindName p == n]
+      kindAccepts n c = or [isJust (colGet (aColumn a) c) | SomeArchetype a <- registryKinds world, aName a == n]
       layerAccepts n c = or [isJust (peelAs p c) | LayerDef (SomeLayer p) <- entries, layerName p == n]
       inner = snd . decodeLayers world
-      customNames = [kindName p | KindDef (SomeKind p) <- entries, any (\k -> isJust (fromCellAs p (Custom (kindName p) (CustomState k)))) [0 .. 20]]
+      customNames = [aName a | SomeArchetype a <- registryKinds world, any (\k -> isJust (colGet (aColumn a) (Custom (aName a) (CustomState k)))) [0 .. 20]]
       reps = representatives ([c | c <- cells, notUnregistered c] ++ [Custom n (CustomState 0) | n <- customNames])
       notUnregistered c = case c of
         Custom n _ -> n `elem` customNames
@@ -374,7 +373,7 @@ generic_every_constructor_has_world_and_face = do
     | c <- overlays
     ]
   assertBool "overlay names distinct" (distinct (map (topLayerName world) overlays))
-  sequence_ [assertEqual ("roundtrip " ++ show c) c (phaseToCell (elementOf world c)) | c <- map snd reps ++ kinds ++ overlays]
+  sequence_ [assertEqual ("roundtrip " ++ show c) c (recodeWith world c) | c <- map snd reps ++ kinds ++ overlays]
   -- cellFace
   assertBool "cellFace 标签互不相同" (distinct [fst (cellFace c) | (_, c) <- reps])
   assertBool "cellFace k 互不相同" (distinct (map (faceField "k") kinds))

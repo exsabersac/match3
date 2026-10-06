@@ -19,9 +19,9 @@ import Match3.Element.Builtin (defaultRegistry)
 import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
-import Match3.Element (EndPhase(..), EndRule(..), EndCtx, Edge(..), Def, groundDef, inertDef, kindDef, register)
+import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), System(..), Edge(..), Def, effectSystem, groundDef, inertDef, kindDef, moveSys, register)
 import Match3.Element.Phase
-import Match3.Element.Kind (BoardPass(..), GroundKind(..), groundKind, customPlace, fromCustom, noHud)
+import Match3.Element.Kind (SysDef(..), GroundKind(..), groundKind, customPlace, fromCustom, noHud)
 import Match3.ECS.Registry (displayLabelWith, loseHintWith)
 import Match3.Element.Types (FaceValue(..))
 import Match3.View (cellExtras, cellExtrasWith)
@@ -150,7 +150,7 @@ instance Phase Kite where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "kite") }
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -177,7 +177,7 @@ ext_edge_drain_side_collectible = do
   let (gsD, _, _) = resolveSwapWith defaultRegistry p1 p2 gs0
   assertEqual "unregistered: nothing drained" [(4, 0), (4, 3), (7, 5)] (customsOn "kite" (gsBoard gsD))
 
--- | 测试专用「陷坑」（固定格）：步末规则（PhaseMove）不改盘，只经 erHoles 声明自己所在格为空洞 →
+-- | 测试专用「陷坑」（固定格）：步末 system（PhaseMove）不改盘，只经 esHoles 声明自己所在格为空洞 →
 -- 步末补结算把它挖空、上方下落、补子、成消再连锁；终盘稳定、没有陷坑，回放里多一个只有沉降的轮次。
 -- 补结算是统一路径（内置元素步末从不留下空洞，见 docs/testing.md 的扫描），没有开关。
 newtype Sinkhole = Sinkhole Int
@@ -192,7 +192,7 @@ instance Phase Sinkhole where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [EndPass (EndRule PhaseMove 90 (\_ b -> (Nothing, b)) (const []) (customsOn "sinkhole"))]
+    , cSystems = [SysEnd (EndSys PhaseMove 90 mempty (const []) (customsOn "sinkhole"))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -242,7 +242,7 @@ instance Phase Dust where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -280,15 +280,15 @@ instance Phase Hopper where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [EndPass (EndRule PhaseMove 80 hopperHop (const []) (const []))]
+    , cSystems = [SysEnd (moveSys 80 (effectSystem (hopperHop . ewBoard)))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
   view _ = noFace
 
-hopperHop :: EndCtx -> Board -> (Maybe EndEffect, Board)
-hopperHop _ b0 =
+hopperHop :: Board -> (Maybe EndEffect, Board)
+hopperHop b0 =
   let step (items, b) p =
         let q = (fst p, snd p + 1)
         in case (inBounds b q, getCell b q) of
@@ -476,7 +476,7 @@ instance Phase Lantern where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "lantern") }
     , cNear = Nothing
     , cHud = noHud { hudLabel = Just "灯笼", hudLoseHint = Just (\n -> "点亮灯笼，目标 " ++ show n ++ " 盏") }
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit

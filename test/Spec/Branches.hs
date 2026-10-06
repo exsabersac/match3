@@ -31,7 +31,7 @@ import Match3.Types (boardSize)
 import Match3.Element
 import Match3.Element.Phase
 import Match3.Element.Mechanic (SomeMechanic(..), mechNameOf)
-import Match3.Element.Kind (BoardPass(..), customPlace, fromCustom, noHud)
+import Match3.Element.Kind (SysDef(..), customPlace, fromCustom, noHud)
 import Match3.Board.Cascade (CascadeRun(..), cascadeMatchesWith)
 import Match3.Game.EndPhase (EndStage(..), boosterEndTable, runEndTable, spreadStage, swapEndTable)
 import Match3.Game.Level (newGame)
@@ -81,7 +81,7 @@ instance Phase NoRecolorGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (NoRecolorGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
@@ -102,7 +102,7 @@ instance Phase NoPushGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (NoPushGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
@@ -122,7 +122,7 @@ instance Phase Lever where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [SwapPass (SwapRule 5 leverFires (\_ p1 p2 -> [p1, p2]))]
+    , cSystems = [SysSwap (SwapSys 5 leverFires (\_ p1 p2 -> [p1, p2]))]
     }
   onMatch _ = gemMatch Nothing  -- 可交换（不挡交换），无色
   onHit _ _ = gemHit { hFires = False }
@@ -168,7 +168,7 @@ instance Phase Pod where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [OpenPass (OpenRule openPods)]
+    , cSystems = [SysOpen (System (\w -> let (b, e, s) = openPods (owBoard w) (owFront w) in w {owBoard = b, owSeeds = e, owSits = s}))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -249,7 +249,7 @@ instance Phase Cart where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -377,8 +377,8 @@ br_rule_tables_out_of_main_flow = do
     , mentionsIdent w s
     ]
   -- 元素声明的成对交换规则：彩虹取色 10 + 彩虹 × 变色龙 15（新玩法 7，挂在变色龙上）
-  assertEqual "element-declared swap rules: rainbow 10 + chameleon 15" [10, 15] (map srOrder (elementSwapRules defaultRegistry))
-  assertEqual "the combo table joins as order 20" [10, 15, 20] (map srOrder (swapRules defaultRegistry))
+  assertEqual "element-declared swap rules: rainbow 10 + chameleon 15" [10, 15] (map swOrder (elementSwapSystems defaultRegistry))
+  assertEqual "the combo table joins as order 20" [10, 15, 20] (map swOrder (swapSystems defaultRegistry))
 
 -- | 第 7 刀（7a）：Board 层（连锁 / 沉降）只收关卡级钩子 LevelHooks，不 import 飞碟 / 皮带 / 地毯的实现模块、
 -- 也不碰 GameState；结算流水线不读第 7 刀前的五个关卡字段（它们在 Game/State.hs 里只是派生读数）；

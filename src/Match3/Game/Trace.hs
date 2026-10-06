@@ -40,8 +40,8 @@ import Data.Array (assocs)
 import Data.List (groupBy, nub)
 import Match3.Element.Builtin (defaultRegistry, traceSnails)
 import Match3.Element.Event
-import Match3.ECS.Registry (Registry, activatesWith, blastWith, elementName, endRules, topLayerName, pushableWith)
-import Match3.Element.Types (EndCtx(..), EndPhase(..), runEndRules)
+import Match3.ECS.Registry (Registry, activatesWith, blastWith, elementName, endSystems, topLayerName, pushableWith)
+import Match3.ECS.Stage (EndPhase(..), EndWorld, endWorld, runEndStage)
 import Match3.Types
 import Match3.Game.State
 import System.Random (StdGen)
@@ -83,13 +83,13 @@ data EndStep = EndStep
 -- | 蔓延（内置：藤 → 巧 → 蒸汽）的逐步快照：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
 -- 每条规则产出的非空效果记成一个 EndStep（esAfterWaves = k）。trySwap 与道具用的是同一组调用。
 traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
-traceSpreadsWith world = runPhaseSteps world PhaseSpread (EndCtx [] [] (pushableWith world))
+traceSpreadsWith world k b = runPhaseSteps world PhaseSpread (endWorld [] [] (pushableWith world) b) k
 
--- | 依次跑某阶段的步末规则（'runEndRules'），每条非空效果记成插入点 k 的一个 EndStep：返回 (步末记录, 终盘)。
+-- | 依次跑某阶段的步末 system（阶段调度器 runEndStage），每条非空效果记成插入点 k 的一个 EndStep：返回 (步末记录, 终盘)。
 -- 蔓延（这里）与会走的元素（Match3.Game.EndPhase.runPhase）共用。
-runPhaseSteps :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
-runPhaseSteps world ph ctx k b0 =
-  let (recs, b1) = runEndRules ctx (endRules world ph) b0
+runPhaseSteps :: Registry -> EndPhase -> EndWorld -> Int -> ([EndStep], Board)
+runPhaseSteps world ph ctx k =
+  let (recs, b1) = runEndStage ctx (endSystems world ph)
   in ([EndStep k before after e | (before, after, e) <- recs], b1)
 
 -- | 被拒操作的空回放脚本：没有轮次、没有步末效果，前端什么都不播。

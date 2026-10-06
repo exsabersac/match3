@@ -1,10 +1,10 @@
--- | 元素框架的词汇类型：邻格 / 步末 / 成对交换 / 开启规则、计数键（再导出）、放置参数、格子的分派编号（cellSlot）；
+-- | 元素框架的词汇类型：计数键 / 步末阶段（再导出）、放置参数、格子的分派编号（cellSlot）；
 -- 特殊块形状规则（ShapeRule，连同连线 MatchRun）与组合规则（ComboRule）。
 -- 元素本身是类型类（Match3.Element.Phase / Kind / Layer；命中结果是 Phase 的 Strike），主流程（匹配、挡交换、
 -- 直接命中、邻格波及、重力 / 传送门 / 边缘收集、计数、洗牌、步末、关卡放置）只经元素世界
 -- （Match3.ECS.Registry）问它们，不按构造器写死分支。
 --
--- 依赖：Match3.Types、Element.Event（步末规则产出 EndEffect）。不含具体元素（见 Element.Builtin）。
+-- 依赖：Match3.Types、Match3.ECS.Stage（步末阶段）。各阶段的世界与 system 见 Match3.ECS.Stage。不含具体元素（见 Element.Builtin）。
 --
 -- 一个格子最多三层，自上而下：冰层（宝石的 ice Int）→ 叠层（CellOverlay）→ 本体（CellContents 构造器 /
 -- 宝石种类 / Custom 名字）。冰层与叠层是叠层种类（Match3.Element.Layer 的 Layer），本体是本体种类（Kind）；
@@ -12,18 +12,8 @@
 module Match3.Element.Types
   ( ElementName(..)
   , CustomState(..)
-  , AdjCtx(..)
-  , AdjOut(..)
-  , AdjacentRule(..)
   , CounterKey(..)
   , EndPhase(..)
-  , EndCtx(..)
-  , EndRule(..)
-  , EndRun
-  , tickRule
-  , spreadRule
-  , moveRule
-  , runEndRules
   , Edge(..)
   , Arg(..)
   , ArgP(..)
@@ -35,8 +25,6 @@ module Match3.Element.Types
   , Placer
   , FaceValue(..)
   , CellField(..)
-  , SwapRule(..)
-  , OpenRule(..)
   , MatchRun(..)
   , ShapeCtx(..)
   , ShapeRule(..)
@@ -47,96 +35,11 @@ module Match3.Element.Types
   ) where
 
 import Control.Applicative (Alternative(..))
-import Data.List (mapAccumL)
-import Data.Maybe (catMaybes)
 import Match3.Counts (CounterKey(..))
-import Match3.Element.Event (EndEffect)
+import Match3.ECS.Stage (EndPhase(..))
 import Match3.Types
 
--- | 邻格波及的上下文：acTrue = 本轮真消除格；acDirect = 本轮已被直接命中的格（不再重复波及）；
--- acProtect = 本轮刚生成、必须原样坐住的格（彩蛋开出的特殊块 + 之前各轮次产出的 aoSit）；
--- acRecolor = 元素世界给出的「本体可被改色」谓词（魔法帽 / 染色瓶只改这类格；内置等于 isGem）。
-data AdjCtx = AdjCtx
-  { acTrue    :: [Pos]
-  , acDirect  :: [Pos]
-  , acProtect :: [Pos]
-  , acRecolor :: Cell -> Bool
-  }
-
--- | 一次邻格波及的结果：新盘面、本次打碎（并入清除格）的位置、本次新生成需坐住的位置。
-data AdjOut = AdjOut
-  { aoBoard :: Board
-  , aoDead  :: [Pos]
-  , aoSit   :: [Pos]
-  }
-
--- | 邻格波及规则。arOrder 决定在一轮里的先后（小的先；内置 10..160，见 docs/architecture.md）。
-data AdjacentRule = AdjacentRule
-  { arOrder :: Int
-  , arRun   :: AdjCtx -> Board -> AdjOut
-  }
-
--- 计数键 CounterKey 定义在 Match3.Counts，这里再导出给元素定义用。
-
--- | 步末阶段（交换之后；道具只有 PhaseSpread）。皮带是关卡特性，固定夹在 Tick 与 Spread 之间。
-data EndPhase = PhaseTick | PhaseSpread | PhaseMove
-  deriving (Eq, Ord, Show)
-
--- | 步末规则的上下文：ecAvoid = 本步已被皮带移动过的格；ecWalls = 传送门端点（会走的元素当墙）；
--- ecPushable = 元素世界给出的「本体可被推动」谓词（蜗牛只推这类格；内置等于 Snail.pushable）。
-data EndCtx = EndCtx
-  { ecAvoid    :: [Pos]
-  , ecWalls    :: [Pos]
-  , ecPushable :: Cell -> Bool
-  }
-
--- | 步末规则：erRun 返回（要记录的步末效果，新盘面）；erSeeds 在 PhaseTick 之后给出要引爆的种子
--- （倒计时归零的 3×3），其余阶段为 const []；erHoles 在全部步末阶段之后给出要挖空的格
--- （步末补结算：挖空 → 沉降 / 边缘收集 → 补子 → 成消再连锁），内置规则都是 const []。
-data EndRule = EndRule
-  { erPhase :: EndPhase
-  , erOrder :: Int
-  , erRun   :: EndRun
-  , erSeeds :: Board -> [Pos]
-  , erHoles :: Board -> [Pos]
-  }
-
--- | 一条步末规则的执行：（要记录的步末效果（Nothing = 不记），新盘面）。
-type EndRun = EndCtx -> Board -> (Maybe EndEffect, Board)
-
--- 按阶段的智能构造器（Haskell 特性第 9 项，docs/haskell-features/09-规则去重.md）。
--- erSeeds 只在 PhaseTick 之后被读（Board.Cascade 的倒计时），erHoles 内置规则全是 const []。
--- 三个构造器把「这个阶段有哪些槽」写进参数表——
--- 只有 'tickRule' 收种子；需要声明空洞的扩展规则（测试里的陷坑）仍然直接用 'EndRule' 记录。
-
--- | 倒计时阶段（PhaseTick）：跑完之后在新盘面上取引爆种子。
-tickRule :: Int -> EndRun -> (Board -> [Pos]) -> EndRule
-tickRule order run seeds = EndRule PhaseTick order run seeds noCells
-
--- | 蔓延阶段（PhaseSpread，道具之后也跑）。
-spreadRule :: Int -> EndRun -> EndRule
-spreadRule order run = EndRule PhaseSpread order run noCells noCells
-
--- | 会走的元素（PhaseMove）。
-moveRule :: Int -> EndRun -> EndRule
-moveRule order run = EndRule PhaseMove order run noCells noCells
-
-noCells :: Board -> [Pos]
-noCells = const []
-
--- | 依次执行一串步末规则（Haskell 特性第 9 项）：盘面从一条规则穿到下一条，收集非空效果。
--- 返回（[(规则前盘面, 规则后盘面, 效果)]（按规则顺序，空效果不记）, 终盘）。
---
--- 倒计时（Board.Cascade）、蔓延（Game.Trace）、会走的元素（Game.EndPhase）共用这一份。
--- 写法是 'mapAccumL'：累积量 = 当前盘面，每条规则的输出 = 可能的一条记录（同 randomBoardSized 的写法）；记录按规则顺序。
-runEndRules :: EndCtx -> [EndRule] -> Board -> ([(Board, Board, EndEffect)], Board)
-runEndRules ctx rules b0 =
-  let (b1, recs) = mapAccumL one b0 rules
-  in (catMaybes recs, b1)
-  where
-    one before rule =
-      let (eff, after) = erRun rule ctx before
-      in (after, fmap (\e -> (before, after, e)) eff)
+-- 计数键 CounterKey 定义在 Match3.Counts，这里再导出给元素定义用；步末阶段 EndPhase 定义在 Match3.ECS.Stage。
 
 -- | 边缘收集的方向：本体位于这条边上的格子在沉降时被收走。
 -- 收集顺序固定为 底 → 左 → 右 → 上，每条边内按行 / 列升序（只有底边时就是「底行收饼干」）。
@@ -197,20 +100,6 @@ type Placer = [Arg] -> Cell -> Maybe Cell
 -- | 关卡放置表的一项：把元素（按名字）以给定参数放到若干格（按列表顺序逐格）。
 data Placement = Place ElementName [Arg] [Pos]
   deriving (Eq, Show)
-
--- | 成对交换规则：交换两端的组合直接决定起手种子（彩虹取色、特殊 × 特殊合成）。
--- srFires 看交换前的盘面；srSeeds 在交换后的盘面上给出种子。多条规则按 srOrder 取第一条成立的。
-data SwapRule = SwapRule
-  { srOrder :: Int
-  , srFires :: Board -> Pos -> Pos -> Bool
-  , srSeeds :: Board -> Pos -> Pos -> [Pos]
-  }
-
--- | 开启规则（彩蛋类）：一轮里被命中 / 邻格有真消除时开启，可在同一轮内多次开启（新爆炸再波及）。
--- orOpen 盘面 本批前沿 = (开启后盘面, 要展开的爆炸种子, 开出后本轮必须坐住的格)。
-newtype OpenRule = OpenRule
-  { orOpen :: Board -> [Pos] -> (Board, [Pos], [Pos])
-  }
 
 -- | 一条 ≥3 的同色连线（石头等挡匹配的格打断连线）。定义在这里是因为形状规则要用；Board.Match 再导出。
 data MatchRun = MatchRun

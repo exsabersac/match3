@@ -63,10 +63,10 @@ import Match3.Board.Effect
 import Match3.Board.Hooks (LevelHooks(..), noHooks)
 import Match3.Board.Phase (Phase(..), Stage, clearStage, digHoles, fallStage, fullStage, stageGrid)
 import Match3.Board.Wave (CascadeWave(..))
-import Match3.ECS.Registry (Registry, counterWith, endRules, pushableWith)
+import Match3.ECS.Registry (Registry, counterWith, endSystems, pushableWith)
 import Match3.Element.Event (EndEffect)
 import Match3.Counts (CounterKey(..), Counts, countsFromList, noCounts, singleCount)
-import Match3.Element.Types (EndCtx(..), EndPhase(..), EndRule(..), runEndRules)
+import Match3.ECS.Stage (EndPhase(..), EndSys(..), endWorld, runEndStage)
 import Match3.Types
 import System.Random (RandomGen)
 import Match3.Board.Clear
@@ -291,7 +291,7 @@ data AfterEntry
 
 -- | 全部步末规则在终盘上声明的空洞（erHoles，去重，按规则顺序）。内置规则恒为 []。
 endHolesWith :: Registry -> Board -> [Pos]
-endHolesWith world b = nub (concat [erHoles r b | ph <- [PhaseTick, PhaseSpread, PhaseMove], r <- endRules world ph])
+endHolesWith world b = nub (concat [esHoles r b | ph <- [PhaseTick, PhaseSpread, PhaseMove], r <- endSystems world ph])
 
 -- | 皮带后 / 步末后的补结算：挖空（步末的空洞；皮带没有）→ 沉降（重力 / 边缘收集 / 传送门）+ 补子；
 -- 盘面有变化或收走了格时记一个只有沉降的轮次；之后成消则接普通连锁（波次从 1 起）。
@@ -341,10 +341,10 @@ cascadeCountdownsTracedWith world hooks0 g b =
 -- （= stillRun：盘面、钩子、生成器原样）。
 cascadeCountdownsM :: MonadCascade m => Registry -> Board -> m ([(Board, Board, EndEffect)], (Board, CascadeTally))
 cascadeCountdownsM world b = do
-  let rules = endRules world PhaseTick
-      -- 规则依次执行、收集非空效果 = runEndRules
-      (steps, bTick) = runEndRules (EndCtx [] [] (pushableWith world)) rules b
-      seeds = nub (concatMap (\r -> erSeeds r bTick) rules)
+  let rules = endSystems world PhaseTick
+      -- system 依次执行、收集非空效果 = runEndStage
+      (steps, bTick) = runEndStage (endWorld [] [] (pushableWith world) b) rules
+      seeds = nub (concatMap (\r -> esSeeds r bTick) rules)
   run <-
     if null seeds
       then pure (bTick, zeroTally)

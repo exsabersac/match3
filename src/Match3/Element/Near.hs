@@ -14,7 +14,7 @@ module Match3.Element.Near
   ) where
 
 import Match3.Board.Grid (setCell)
-import Match3.Element.Types (AdjCtx)
+import Match3.ECS.Stage (NearWorld)
 import Match3.Types (Board, Cell, Color, Pos)
 
 -- | 邻格波及跳不跳过本轮被直接命中的格。
@@ -37,7 +37,7 @@ data DieOrder = DiePrepend | DieAppend
 data NearCtx = NearCtx
   { ncTriggers :: [(Pos, Maybe Color)]
   , ncSelf :: Pos
-  , ncAdj :: AdjCtx
+  , ncWorld :: NearWorld
   , ncBoard :: Board
   }
 

@@ -6,7 +6,7 @@
 -- 名字 / 解码 / 放置 / 计数元数据 / HUD / 逃生口整盘趟都是 'Codec' 里的数据，这里的同名函数只是按 proxy 读它，
 -- 方便注册表与调用方（@kindName p@、@place p@ …）。
 --
--- 多格实体（雪怪）是一条 'Entity' 记录，扣血驱动 Match3.Element.Rules.entityDamage 由元素自己挂进 'cPasses'；
+-- 多格实体（雪怪）是一条 'Entity' 记录，扣血驱动 Match3.Element.Rules.entityDamage 由元素自己挂进 'cSystems'；
 -- 地面层元素（不占格，层数在 GameState.gsGround 里）是一条 'GroundKind' 记录；叠层见 Match3.Element.Layer。
 module Match3.Element.Kind
   ( -- * 本体
@@ -20,10 +20,10 @@ module Match3.Element.Kind
   , loseHint
   , diffCounter
   , bonusMoves
-  , boardPasses
+  , boardSystems
   , boardBossHp
   , goalIconName
-  , BoardPass(..)
+  , SysDef(..)
   , Hud(..)
   , noHud
   , Reach(..)
@@ -45,7 +45,7 @@ module Match3.Element.Kind
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
 import Match3.Element.Near
-import Match3.Element.Phase (BoardPass(..), Codec(..), Hud(..), Meta(..), Phase(..), noHud)
+import Match3.Element.Phase (SysDef(..), Codec(..), Hud(..), Meta(..), Phase(..), noHud)
 import Match3.Element.Types
 import Match3.Types
 
@@ -80,9 +80,9 @@ diffCounter _ = metaDiffCounter (cMeta (codec @e))
 bonusMoves :: forall e proxy. Phase e => proxy e -> Int
 bonusMoves _ = metaBonusMoves (cMeta (codec @e))
 
--- | 逃生口：元素自带的整盘趟（'cPasses'）。
-boardPasses :: forall e proxy. Phase e => proxy e -> [BoardPass]
-boardPasses _ = cPasses (codec @e)
+-- | 逃生口：元素自带的整盘趟（'cSystems'）。
+boardSystems :: forall e proxy. Phase e => proxy e -> [SysDef]
+boardSystems _ = cSystems (codec @e)
 
 -- | HUD 血条：盘上剩余 HP；Nothing = 本元素不提供血条。
 boardBossHp :: forall e proxy. Phase e => proxy e -> Board -> Maybe Int
@@ -94,7 +94,7 @@ goalIconName _ = hudGoalIcon (cHud (codec @e))
 
 -- | 多格实体（雪怪 Boss）：各部件仍是独立的格子，记录告诉驱动锚点怎么认（'partNo' == 0）、部件在哪
 -- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。伤害由 Match3.Element.Rules.entityDamage 统一算，
--- 元素把 @AdjacentPass 200 (entityDamage 记录)@ 放进自己的 'cPasses'。
+-- 元素把 @SysNear 200 (entityDamage 记录)@ 放进自己的 'cSystems'。
 data Entity e = Entity
   { footprint :: Pos -> [Pos]
   , partNo :: e -> Int

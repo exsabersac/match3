@@ -186,7 +186,7 @@ instance Phase Nest where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "nest") }
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (Nest k) = HitOut (if k > 1 then Absorb (toCell (Nest (k - 1))) else Destroy) False Nothing Nothing
@@ -249,7 +249,7 @@ ec_flat_record_removed = do
   assertEqual "builtin entries" builtinEntryCount (length builtinDefs)
   assertEqual "level elements" ["ufo", "belt", "portal", "carpet", "bomb_shapes", "rainbow_combos", "cookie_drop"] (map mechNameOf builtinMechanics)
 
--- | 凡定义了 'Entity' 记录的模块，必须把扣血驱动挂进 'cPasses'（@AdjacentPass … (entityDamage 记录)@）；
+-- | 凡定义了 'Entity' 记录的模块，必须把扣血驱动挂进 'cSystems'（@SysNear … (entityDamage 记录)@）；
 -- 不得只写 Entity 却漏挂。slim-10 起 Entity 是记录、扣血走元素自己的逃生口（之前是 Kind.entityHit）。
 ec_entity_wires_damage :: Assertion
 ec_entity_wires_damage = do
@@ -262,7 +262,7 @@ ec_entity_wires_damage = do
         , f `notElem` ["src/Match3/Element/Kind.hs", "src/Match3/Element/Rules.hs"]
         ]
   assertBool "at least one Entity record (SnowBoss)" (not (null entityFiles))
-  assertEqual "Entity modules wire entityDamage into cPasses" [] [f | (f, s) <- entityFiles, not ("(entityDamage " `isInfixOf` s && "cPasses = [AdjacentPass" `isInfixOf` s)]
+  assertEqual "Entity modules wire entityDamage into cSystems" [] [f | (f, s) <- entityFiles, not ("(entityDamage " `isInfixOf` s && "cSystems = [SysNear" `isInfixOf` s)]
   snow <- readFile "src/Match3/Element/Builtin/Obstacle.hs"
   assertBool "SnowBoss wires its entity exactly once"
     (length (filter ("entityDamage snowBossEntity" `isInfixOf`) (lines snow)) == 1)
@@ -388,7 +388,7 @@ instance Phase Star where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "star") }
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (Star c) = gemMatch (Just c)
   onHit _ _ = gemHit
@@ -430,7 +430,7 @@ instance Phase OtherGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (OtherGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
@@ -450,7 +450,7 @@ instance Phase Stray where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit

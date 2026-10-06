@@ -24,7 +24,7 @@ instance Phase PhaseGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (PhaseGem c) = gemMatch (Just c)
   onHit _ _ = gemHit

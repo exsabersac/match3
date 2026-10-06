@@ -6,7 +6,7 @@
 --
 -- * 光学定律：五个占格障碍棱镜的往返律、改色遍历 cellColorT 的遍历定律；
 -- * 占格障碍：相邻查询（adjacentWhere）与邻消削层（第 3 刀起是 onNear + 通用驱动 kindNeighbour）的结果顺序写成固定例子；
--- * 规则折叠：runEndRules = 逐条 erRun 再丢掉空效果；
+-- * 规则折叠：runEndStage = 逐个 system 跑再丢掉空效果；
 -- * （能力声明 Cap 的幺半群在元素类重构第 2 刀随 Caps 一起删除，原型包的缺省方法见 Spec.Archetype）；
 -- * 阶段智能构造器 tickRule / spreadRule / moveRule；
 -- * 魔法石充能：方法 + 通用驱动与留在这里的旧整盘写法逐盘等价（命名清理时局部化）。
@@ -25,7 +25,9 @@ import Match3.Board.Grid (inBounds)
 import Match3.Element (defaultRegistry)
 import Match3.Element.Builtin.Obstacle (MagicStone, magicStoneFull)
 import Match3.Element.Rules (kindNeighbour)
-import Match3.ECS.Registry (endRules, pushableWith)
+import Match3.ECS.Registry (endSystems, pushableWith)
+import Match3.ECS.Stage
+import Match3.ECS.System (System(..))
 import Match3.Element.Types
 import qualified Match3.Obstacles as New
 import qualified Match3.Types as NewB
@@ -143,7 +145,7 @@ dedup_obstacle_orders_pinned = do
 --------------------------------------------------------------------------------
 -- 规则折叠
 
--- | runEndRules 跑任意一串真实步末规则（三个阶段的规则任取、任意顺序、可重复）= 逐条 erRun 再丢掉空效果
+-- | runEndStage 跑任意一串真实步末 system（三个阶段任取、任意顺序、可重复）= 逐个 runSystem 再丢掉空效果
 -- （记录按规则顺序，盘面从一条规则穿到下一条）。
 qc_run_end_rules_is_fold :: Property
 qc_run_end_rules_is_fold =
@@ -151,13 +153,14 @@ qc_run_end_rules_is_fold =
     forAll (genSomePos b) $ \avoid -> forAll (genSomePos b) $ \walls ->
       forAll (listOf (choose (0, length allRules - 1))) $ \ixs ->
         let world = defaultRegistry
-            picked = map (allRules !!) ixs  -- 按下标挑（EndRule 没有 Show）
-            ctx = EndCtx avoid walls (pushableWith world)
-            (recs, bEnd) = runEndRules ctx picked b
-            naive = foldl (\(acc, bd) r -> let (e, bd') = erRun r ctx bd in (acc ++ [(bd, bd', x) | Just x <- [e]], bd')) ([], b) picked
-        in classify (not (null recs)) "runEndRules recorded" ((recs, bEnd) === naive)
+            picked = map (allRules !!) ixs  -- 按下标挑（EndSys 没有 Show）
+            ctx = endWorld avoid walls (pushableWith world) b
+            (recs, bEnd) = runEndStage ctx picked
+            step bd r = let w = runSystem (esSystem r) ctx {ewBoard = bd} in (ewEffect w, ewBoard w)
+            naive = foldl (\(acc, bd) r -> let (e, bd') = step bd r in (acc ++ [(bd, bd', x) | Just x <- [e]], bd')) ([], b) picked
+        in classify (not (null recs)) "runEndStage recorded" ((recs, bEnd) === naive)
   where
-    allRules = concat [endRules defaultRegistry ph | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
+    allRules = concat [endSystems defaultRegistry ph | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
     -- 步末规则要有东西可做：蜗牛 / 倒计时 / 藤 / 巧克力 / 蒸汽 / 毛球等都在 genCell 里
     genRuleBoard = do
       r <- choose (2, 8)
@@ -167,49 +170,49 @@ qc_run_end_rules_is_fold =
 --------------------------------------------------------------------------------
 -- 阶段智能构造器
 
--- | tickRule / spreadRule / moveRule：阶段、次序、执行函数原样；只有 tickRule 带种子；空洞恒为 []。
--- 内置元素世界里的步末规则（全部改用智能构造器）在各阶段的 erHoles 都是 []，PhaseSpread / PhaseMove 的 erSeeds 也是 []。
+-- | tickSys / spreadSys / moveSys：阶段、次序、system 原样；只有 tickSys 带种子；空洞恒为 []。
+-- 内置元素世界里的步末 system（全部用智能构造器）在各阶段的 esHoles 都是 []，PhaseSpread / PhaseMove 的 esSeeds 也是 []。
 end_rule_smart_constructors :: Assertion
 end_rule_smart_constructors = do
   let b = boardFromRows (replicate 4 (replicate 4 (Stone 1)))
-      run _ bd = (Nothing, bd)
-      t = tickRule 7 run (const [(1, 1)])
-      sp = spreadRule 8 run
-      mv = moveRule 9 run
-  assertEqual "phases" [PhaseTick, PhaseSpread, PhaseMove] (map erPhase [t, sp, mv])
-  assertEqual "orders" [7, 8, 9] (map erOrder [t, sp, mv])
-  assertEqual "seeds" [[(1, 1)], [], []] (map (`erSeeds` b) [t, sp, mv])
-  assertEqual "holes" [[], [], []] (map (`erHoles` b) [t, sp, mv])
-  assertEqual "run passes through" [b, b, b] [snd (erRun r (EndCtx [] [] (const True)) b) | r <- [t, sp, mv]]
+      run = mempty
+      t = tickSys 7 run (const [(1, 1)])
+      sp = spreadSys 8 run
+      mv = moveSys 9 run
+  assertEqual "phases" [PhaseTick, PhaseSpread, PhaseMove] (map esPhase [t, sp, mv])
+  assertEqual "orders" [7, 8, 9] (map esOrder [t, sp, mv])
+  assertEqual "seeds" [[(1, 1)], [], []] (map (`esSeeds` b) [t, sp, mv])
+  assertEqual "holes" [[], [], []] (map (`esHoles` b) [t, sp, mv])
+  assertEqual "run passes through" [b, b, b] [ewBoard (runSystem (esSystem r) (endWorld [] [] (const True) b)) | r <- [t, sp, mv]]
   let world = defaultRegistry
       phases = [PhaseTick, PhaseSpread, PhaseMove]
-  assertEqual "builtin end rules (phase, order)" [(PhaseTick, [10, 20]), (PhaseSpread, [10, 20, 30]), (PhaseMove, [10, 20, 30, 40])] [(ph, map erOrder (endRules world ph)) | ph <- phases]
-  assertEqual "builtin holes all empty" [] [erOrder r | ph <- phases, r <- endRules world ph, not (null (erHoles r b))]
-  assertEqual "only tick rules seed" [] [erOrder r | ph <- [PhaseSpread, PhaseMove], r <- endRules world ph, not (null (erSeeds r b))]
+  assertEqual "builtin end rules (phase, order)" [(PhaseTick, [10, 20]), (PhaseSpread, [10, 20, 30]), (PhaseMove, [10, 20, 30, 40])] [(ph, map esOrder (endSystems world ph)) | ph <- phases]
+  assertEqual "builtin holes all empty" [] [esOrder r | ph <- phases, r <- endSystems world ph, not (null (esHoles r b))]
+  assertEqual "only tick rules seed" [] [esOrder r | ph <- [PhaseSpread, PhaseMove], r <- endSystems world ph, not (null (esSeeds r b))]
 
 --------------------------------------------------------------------------------
 -- 魔法石充能：局部化前后等价
 
 -- | 局部化之前的整盘写法（Element.Builtin.Obstacle 的 magicStoneCharge，逐字留作参照）：盘上每块魔法石，
 -- 未满、不在直接命中格、正交邻格里有真消除格的充能 1 格。
-magicStoneChargeReference :: AdjCtx -> Board -> AdjOut
-magicStoneChargeReference ctx b =
-  let near p = any (`elem` acTrue ctx) (filter (inBounds b) (New.orthoNeighbors p))
-      charged = [(p, Custom "magic_stone" (NewB.CustomState (k + 1))) | (p, k) <- stones, k < magicStoneFull, p `notElem` acDirect ctx, near p]
-  in AdjOut (foldl (\bd (p, cell) -> NewB.boardSet bd p cell) b charged) [] []
-  where
-    stones = NewB.ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (NewB.CustomState k) <- [cell]]) b
+magicStoneChargeReference :: NearWorld -> NearWorld
+magicStoneChargeReference ctx =
+  let b = nwBoard ctx
+      near p = any (`elem` nwTrue ctx) (filter (inBounds b) (New.orthoNeighbors p))
+      charged = [(p, Custom "magic_stone" (NewB.CustomState (k + 1))) | (p, k) <- stones, k < magicStoneFull, p `notElem` nwDirect ctx, near p]
+      stones = NewB.ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (NewB.CustomState k) <- [cell]]) b
+  in ctx {nwBoard = foldl (\bd (p, cell) -> NewB.boardSet bd p cell) b charged}
 
 -- | 魔法石（状态 -1–5，含满格 3 与发射中 4）混在宝石 / 任意格里的随机盘，随机真消除格与直接命中格（可重复）：
 -- 方法 + 通用驱动 kindNeighbour 与旧整盘写法给出相同的盘面，都不打碎、不坐住格。
 qc_magic_stone_charge_via_driver :: Property
 qc_magic_stone_charge_via_driver =
   forAll genStoneBoard $ \b -> forAll (genSomePos b) $ \trues -> forAll (genSomePos b) $ \direct ->
-    let ctx = AdjCtx trues direct [] (const True)
-        new = kindNeighbour (Proxy @MagicStone) ctx b
-        old = magicStoneChargeReference ctx b
+    let ctx = nearWorld (const True) trues direct [] b
+        new = runSystem (kindNeighbour (Proxy @MagicStone)) ctx
+        old = magicStoneChargeReference ctx
     in counterexample (show (trues, direct))
-         (aoBoard new == aoBoard old .&&. aoDead new === aoDead old .&&. aoSit new === aoSit old)
+         (nwBoard new == nwBoard old .&&. nwDead new === nwDead old .&&. nwSit new === nwSit old)
   where
     genStoneBoard = do
       rows <- choose (1, 7)

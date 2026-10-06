@@ -10,8 +10,8 @@
 -- 雪怪 Boss（新玩法 5，Custom "snow_boss"）是占 2×2 的固定格：邻格真消除 / 直接命中扣血，血量归零整只消除；
 -- 每 3 次交换在身边召唤一块雪块（1 层石头）。
 -- 邻格规则顺序：石头 10 → 宝箱 20 → 蜂蜜 30 → 蛋糕 40 → 气球 50 → 保险箱 110 → 魔法石 180 → 雪怪 200。
--- 多层障碍 / 保险箱 / 气球的邻消是方法 onNear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity 记录（cPasses 里的 entityDamage）；
--- 魔法石 tick、雪怪召唤读整盘，走逃生口 cPasses（非邻格波及）。
+-- 多层障碍 / 保险箱 / 气球的邻消是方法 onNear（通用驱动 kindNeighbour 执行），雪怪扣血是 Entity 记录（cSystems 里的 entityDamage）；
+-- 魔法石 tick、雪怪召唤读整盘，走逃生口 cSystems（非邻格波及）。
 -- 步末：魔法石（PhaseTick 20，倒计时之后）、雪怪（PhaseMove 30，毛球之后）。
 module Match3.Element.Builtin.Obstacle
   ( StoneE(..)
@@ -52,6 +52,8 @@ import Data.Proxy (Proxy(..))
 import Match3.Element.Kind
 import Match3.Element.Near
 import Match3.Element.Phase
+import Match3.ECS.Stage
+import Match3.ECS.System (System(..))
 import Match3.Element.Types
 import Match3.Element.Rules (entityDamage, kindNeighbour)
 import Match3.Obstacles
@@ -74,7 +76,7 @@ instance Phase StoneE where
     , cMeta = emptyMeta { metaCounter = Just CountStones }
     , cNear = Just (NearRule 10 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (StoneE n) = HitOut (chip n Stone) False Nothing Nothing
@@ -95,7 +97,7 @@ instance Phase ChestE where
     , cMeta = emptyMeta { metaCounter = Just CountChests }
     , cNear = Just (NearRule 20 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (ChestE n) = HitOut (chip n Chest) False Nothing Nothing
@@ -116,7 +118,7 @@ instance Phase HoneyE where
     , cMeta = emptyMeta { metaCounter = Just CountHoney }
     , cNear = Just (NearRule 30 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (HoneyE n) = HitOut (chip n Honey) False Nothing Nothing
@@ -137,7 +139,7 @@ instance Phase CakeE where
     , cMeta = emptyMeta { metaCounter = Just CountCakes }
     , cNear = Just (NearRule 40 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (CakeE n) = HitOut (chip n Cake) False Nothing Nothing
@@ -158,7 +160,7 @@ instance Phase BalloonE where
     , cMeta = emptyMeta { metaCounter = Just CountBalloons }
     , cNear = Just (NearRule 50 SkipDirect DieAppend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -168,12 +170,16 @@ instance Phase BalloonE where
   view (BalloonE c) = Face (Just ("balloon", [colorField c])) []
 
 -- | 气球邻格：委托 'kindNeighbour'（onNear + DieAppend）；保留旧列表写法供性质对照。
-balloonPop :: AdjCtx -> Board -> AdjOut
+balloonPop :: System NearWorld
 balloonPop = kindNeighbour (Proxy :: Proxy BalloonE)
 
 -- | 旧气球列表序写法（对照 'balloonPop' / 性质测试）。
-balloonPopLegacy :: AdjCtx -> Board -> AdjOut
-balloonPopLegacy ctx b = AdjOut b [p | p <- balloonsAdjacentSameColor b (acTrue ctx), p `notElem` acDirect ctx] []
+balloonPopLegacy :: System NearWorld
+balloonPopLegacy = System $ \w -> w {nwDead = [p | p <- balloonsAdjacentSameColor (nwBoard w) (nwTrue w), p `notElem` nwDirect w], nwSit = []}
+
+-- | 彩蛋的开启 system：前沿里的彩蛋开出直线 / 炸弹（本轮坐住）或 3×3 爆炸。
+surpriseOpen :: System OpenWorld
+surpriseOpen = System $ \w -> let (b, e, s) = openSurprises (owBoard w) (owFront w) in w {owBoard = b, owSeeds = e, owSits = s}
 
 -- | 保险箱：直接命中削一层，末层开成饼干；邻消削层；按个数差计「开启」；离格也算覆盖地毯。
 newtype SafeE = SafeE Int
@@ -188,7 +194,7 @@ instance Phase SafeE where
     , cMeta = emptyMeta { metaVacatesCarpet = True, metaDiffCounter = Just CountSafes }
     , cNear = Just (NearRule 110 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (SafeE n) = HitOut (Absorb (if n <= 1 then Cookie else Safe (n - 1))) False Nothing Nothing
@@ -209,7 +215,7 @@ instance Phase FlipE where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (FlipE f _) = gemMatch (Just f)
   onHit _ (FlipE _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
@@ -230,7 +236,7 @@ instance Phase SurpriseEgg where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [OpenPass (OpenRule openSurprises)]
+    , cSystems = [SysOpen surpriseOpen]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -258,7 +264,7 @@ instance Phase MagicStone where
     , cMeta = emptyMeta
     , cNear = Just (NearRule 180 SkipDirect DiePrepend)
     , cHud = noHud { hudLabel = Just "魔法石" }
-    , cPasses = [EndPass (tickRule 20 magicStoneArm magicStoneSeeds)]
+    , cSystems = [SysEnd (tickSys 20 (effectSystem (magicStoneArm . ewBoard)) magicStoneSeeds)]
     }
   onMatch _ = obstacleMatch
   onHit _ (MagicStone k) = HitOut (if k >= magicStoneFiring then Absorb (toCell (MagicStone 0)) else Immune) False Nothing Nothing
@@ -279,8 +285,8 @@ magicStones :: Board -> [(Pos, Int)]
 magicStones = ifoldMap (\p cell -> [(p, k) | Custom "magic_stone" (CustomState k) <- [cell]])
 
 -- | 步末（PhaseTick）：满格的魔法石转为发射中；记一条 EvTick "magic_stone" 效果（逐块）。
-magicStoneArm :: EndCtx -> Board -> (Maybe EndEffect, Board)
-magicStoneArm _ b =
+magicStoneArm :: Board -> (Maybe EndEffect, Board)
+magicStoneArm b =
   let armed = [p | (p, k) <- magicStones b, k >= magicStoneFull, k < magicStoneFiring]
       cell = Custom "magic_stone" (CustomState magicStoneFiring)
       b' = foldl (\bd p -> boardSet bd p cell) b armed
@@ -334,7 +340,7 @@ instance Phase SnowBoss where
         , hudBossHp = Just snowBossHp
         }
       -- 2×2 多格实体：扣血驱动挂在逃生口（顺序 200），之后是步末移动。
-    , cPasses = [AdjacentPass 200 (entityDamage snowBossEntity), EndPass (moveRule 30 snowBossRun)]
+    , cSystems = [SysNear 200 (entityDamage snowBossEntity), SysEnd (moveSys 30 (effectSystem snowBossRun))]
     }
   onMatch _ = MatchRule Nothing True True False
   onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
@@ -352,7 +358,7 @@ instance Phase SnowBoss where
         ]
     }
 
--- | 2×2 多格实体：锚点 = 0 号部件，footprint = 'snowBossCells'；由 'cPasses' 里的 'entityDamage' 消费。
+-- | 2×2 多格实体：锚点 = 0 号部件，footprint = 'snowBossCells'；由 'cSystems' 里的 'entityDamage' 消费。
 snowBossEntity :: Entity SnowBoss
 snowBossEntity = Entity
   { footprint = snowBossCells
@@ -414,8 +420,9 @@ snowBossSpawn avoid walls b anchor =
     c : cs -> Just (pickBy (boardSeed b `xor` posSeed anchor) (c :| cs))
 
 -- | 步末：每只 Boss 召唤计数 +1，满了归零并召唤雪块；记一条 EvTick（四格 + 雪块格）。
-snowBossRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
-snowBossRun ctx b0 =
+snowBossRun :: EndWorld -> (Maybe EndEffect, Board)
+snowBossRun ctx =
+  let b0 = ewBoard ctx in
   let (items, b') = foldl one ([], b0) (snowBosses b0)
   in (if null items then Nothing else Just (EndEffect EvTick snowBossName items), b')
   where
@@ -424,7 +431,7 @@ snowBossRun ctx b0 =
           full = t' >= snowBossEvery
           parts = bossParts b anchor
           bossItems = [(p, toCell x {sbTurn = if full then 0 else t'}) | (p, x) <- parts]
-          spawn = if full then snowBossSpawn (ecAvoid ctx) (ecWalls ctx) b anchor else Nothing
+          spawn = if full then snowBossSpawn (ewAvoid ctx) (ewWalls ctx) b anchor else Nothing
           snow = [(q, Stone 1) | Just q <- [spawn]]
           changes = [(p, cell) | (p, cell) <- bossItems ++ snow, getCell b p /= cell]
           b1 = foldl (\bd (p, cell) -> setCell bd p cell) b changes

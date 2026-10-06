@@ -21,12 +21,13 @@ import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin.Layer (ChainL(..), ChocoL(..), CurtainL(..), FogL(..), FreezeL(..), SteamL(..), VineL(..))
 import Match3.Element.Layer (Layer(..), peelAs)
 import Match3.Element.Rules (layerNeighbour, layerSpread)
-import Match3.Element.Types (AdjCtx(..), AdjOut(..), EndCtx(..))
+import Match3.ECS.Stage (EndWorld(..), NearWorld(..), endWorld, nearWorld)
+import Match3.ECS.System (System(..))
 import Match3.Types (Board, Pos, boardPositions)
 
 -- | 用通用驱动跑一种叠层的邻格规则（没有直接命中的格）。
 neighbourVia :: Layer l => Proxy l -> Board -> [Pos] -> Board
-neighbourVia p b gems = aoBoard (layerNeighbour p (AdjCtx gems [] [] (const True)) b)
+neighbourVia p b gems = nwBoard (runSystem (layerNeighbour p) (nearWorld (const True) gems [] [] b))
 
 -- | 揭一层；返回（新盘面, 本次整层去掉的格数）。
 chipVia :: Layer l => Proxy l -> Board -> [Pos] -> (Board, Int)
@@ -48,9 +49,7 @@ clearSteamAdjacent = neighbourVia (Proxy @SteamL)
 
 -- | 步末蔓延（只要盘面）。
 spreadVia :: Layer l => Proxy l -> l -> Board -> Board
-spreadVia p seed b = snd (layerSpread p seed noCtx b)
-  where
-    noCtx = EndCtx [] [] (const False)
+spreadVia p seed b = ewBoard (runSystem (layerSpread p seed) (endWorld [] [] (const False) b))
 
 spreadVines, spreadChoco, spreadSteam :: Board -> Board
 spreadVines = spreadVia (Proxy @VineL) VineL

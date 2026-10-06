@@ -1,20 +1,19 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 -- | 宝石：普通宝石与特殊块（直线 / 炸弹 / 彩虹）。
 --
 -- 共同特征：能力全用「普通宝石」缺省（可交换、按颜色匹配、能点火、会下落、可过传送门、命中即消、可改色 / 推动），
--- 盘面编码都是 Gem 格；特殊块另有爆炸范围与洗牌保留。四种特殊块是同一个类型 'SpecialGem' 按种类
--- （类型参数 k :: GemKind）分成四个类型，各是一种 'Kind'。彩虹取色的成对交换规则（swOrder 10）挂在彩虹上；
+-- 盘面编码都是 Gem 格；特殊块另有爆炸范围与洗牌保留。四种特殊块是同一个原型构造器 'specialArch' 按种类
+-- 给出的四个原型（ecs-3 前是类型参数 + SpecialKind 类）。彩虹取色的成对交换 system（swOrder 10）挂在彩虹上；
 -- 特殊 × 特殊合成走元素世界的组合表（Match3.Combos.builtinComboRules，并成 swOrder 20）。
 -- 特殊块的形状规则表（'builtinShapeRules'：直线 5 → 彩虹、直线 4 → 横 / 竖消）也在这里。
 module Match3.Element.Builtin.Gem
-  ( PlainGem(..)
-  , SpecialGem(..)
-  , SpecialKind(..)
+  ( gemArch
+  , specialArch
+  , lineHArch
+  , lineVArch
+  , bombArch
+  , rainbowArch
+  , gemColumn
   , specialBlast
   , builtinShapeRules
   , ltBombRule
@@ -22,60 +21,50 @@ module Match3.Element.Builtin.Gem
   ) where
 
 import Data.List (intersect)
-import Data.Proxy (Proxy(..))
-import Data.Typeable (Typeable)
-import Match3.Board.Grid (inBounds)
-import Match3.Element.Kind
-import Match3.Element.Phase
+import Match3.ECS.Archetype
+import Match3.ECS.Component
 import Match3.Element.Special (runShape)
-import Match3.ECS.Stage (SwapSys(..))
+import Match3.ECS.Stage (SwapSys(..), SysDef(..))
 import Match3.Element.Types
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
 import Match3.Types
 
--- | 普通宝石：除名字、写回与解码外全用缺省能力（颜色缺省取自写回的格子）。宝石不经关卡放置表放置。
-newtype PlainGem = PlainGem Color
-  deriving (Eq, Show)
+-- | 宝石的存储列（状态 = 颜色）：只认给定种类的宝石格（冰层 / 叠层不看：它们由叠层解码先拆掉）。
+gemColumn :: GemKind -> Column Color
+gemColumn k = Column get (\c -> Gem c k 0 Nothing)
+  where
+    get cell = case cell of
+      Gem c k' _ _ | k' == k -> Just c
+      _ -> Nothing
 
-instance Phase PlainGem where
-  codec = Codec
-    { cName = "gem"
-    , cToCell = \(PlainGem c) -> Gem c Normal 0 Nothing
-    , cFromCell = \cell -> case cell of Gem c Normal _ _ -> Just (PlainGem c); _ -> Nothing
-    , cPlace = \_ _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch (PlainGem c) = gemMatch (Just c)
-  onHit _ _ = gemHit
-  physics _ = gemPhysics
-  view _ = noFace
+-- | 普通宝石：普通棋子的组件（可交换、按颜色匹配、能点火、会下落、可过传送门、命中即消、可改色 / 推动）。
+-- 宝石不经关卡放置表放置。
+gemArch :: Archetype Color
+gemArch = (archetype "gem" (gemColumn Normal))
+  { aMatch = gemMatch . Just
+  , aHit = const gemHit
+  , aPhysics = const gemPhysics
+  }
 
--- | 特殊块（直线 / 炸弹 / 彩虹）：种类在类型里（@SpecialGem 'LineH@ …），值只是颜色。
--- 洗牌保留；直线 / 炸弹有爆炸范围；彩虹不进普通匹配提示，挂彩虹取色（先于特殊合成 = 组合表的次序 20）。
-newtype SpecialGem (k :: GemKind) = SpecialGem Color
-  deriving (Eq, Show)
+-- | 特殊块（直线 / 炸弹 / 彩虹）：种类是原型的参数，状态只是颜色。
+-- 洗牌保留；直线 / 炸弹有爆炸范围（'Blast' 数据）；彩虹不进普通匹配提示，带彩虹取色的成对交换 system
+-- （先于特殊合成 = 组合表的次序 20）。
+specialArch :: GemKind -> Archetype Color
+specialArch k = (archetype (specialName k) (gemColumn k))
+  { aSpawn = \_ cell -> case cell of
+      Gem c _ _ _ -> Just (Gem c k 0 Nothing)
+      _ -> Nothing
+  , aMatch = \c -> (gemMatch (Just c)) {mHintable = k /= Rainbow}
+  , aHit = const gemHit {hBlast = specialBlast k}
+  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aSystems = [SysSwap (SwapSys 10 isRainbowSwap rainbowClearSeeds) | k == Rainbow]
+  }
 
--- | 特殊块种类的类型 → 值。
-class Typeable k => SpecialKind (k :: GemKind) where
-  specialKind :: proxy k -> GemKind
-
-instance SpecialKind 'LineH where
-  specialKind _ = LineH
-
-instance SpecialKind 'LineV where
-  specialKind _ = LineV
-
-instance SpecialKind 'Bomb where
-  specialKind _ = Bomb
-
-instance SpecialKind 'Rainbow where
-  specialKind _ = Rainbow
-
-kindOf :: forall k. SpecialKind k => SpecialGem k -> GemKind
-kindOf _ = specialKind (Proxy :: Proxy k)
+lineHArch, lineVArch, bombArch, rainbowArch :: Archetype Color
+lineHArch = specialArch LineH
+lineVArch = specialArch LineV
+bombArch = specialArch Bomb
+rainbowArch = specialArch Rainbow
 
 specialName :: GemKind -> ElementName
 specialName k = case k of
@@ -84,26 +73,6 @@ specialName k = case k of
   Bomb -> "bomb"
   Rainbow -> "rainbow"
   Normal -> "gem"
-
-instance forall k. SpecialKind k => Phase (SpecialGem k) where
-  codec = Codec
-    { cName = specialName (specialKind (Proxy :: Proxy k))
-    , cToCell = \g@(SpecialGem c) -> Gem c (kindOf g) 0 Nothing
-    , cFromCell = \cell -> case cell of
-        Gem c k' _ _ | k' == specialKind (Proxy :: Proxy k) -> Just (SpecialGem c)
-        _ -> Nothing
-    , cPlace = \_ cell -> case cell of
-        Gem c _ _ _ -> Just (Gem c (specialKind (Proxy :: Proxy k)) 0 Nothing)
-        _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysSwap (SwapSys 10 isRainbowSwap rainbowClearSeeds) | specialKind (Proxy :: Proxy k) == Rainbow]
-    }
-  onMatch g@(SpecialGem c) = (gemMatch (Just c)) { mHintable = kindOf g /= Rainbow }
-  onHit _ g = gemHit { hBlast = specialBlast (kindOf g) }
-  physics _ = gemPhysics { pKeepShuffle = True }
-  view _ = noFace
 
 -- | 内置特殊块形状规则表（顺序即优先级）：每条连线取第一条认领它的规则——
 -- 长度 ≥ 5 → 彩虹；长度 4 横连 → 横消；长度 4 竖连 → 竖消；长度 3 不生成。落点见 Match3.Element.Special.shapeAnchor。
@@ -138,10 +107,10 @@ withBombShapes rules = case break ((== "line5→rainbow") . shapeName) rules of
   (pre, r5 : post) -> pre ++ [r5, ltBombRule] ++ post
   _ -> ltBombRule : rules
 
--- | 按种类的爆炸范围（由盘面行列决定整行 / 整列；炸弹 3×3 再裁到盘内）。
-specialBlast :: GemKind -> Maybe (Board -> Pos -> [Pos])
+-- | 按种类的爆炸范围（数据；由 Match3.ECS.Component.blastArea 解释：整行 / 整列 / 3×3 裁到盘内）。
+specialBlast :: GemKind -> Maybe Blast
 specialBlast k = case k of
-  LineH -> Just (\b (r, _) -> [(r, c) | c <- boardColIndices b])
-  LineV -> Just (\b (_, c) -> [(r, c) | r <- boardRowIndices b])
-  Bomb -> Just (\b (r, c) -> [(rr, cc) | rr <- [r - 1 .. r + 1], cc <- [c - 1 .. c + 1], inBounds b (rr, cc)])
+  LineH -> Just BlastRow
+  LineV -> Just BlastCol
+  Bomb -> Just BlastSquare
   _ -> Nothing

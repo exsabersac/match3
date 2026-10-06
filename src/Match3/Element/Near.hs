@@ -1,13 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | 邻格波及的共享类型（Kind 驱动与 Phase API 共用，避免模块环）。
--- slim-7：优先用 nearSelfBecomes / nearSelfSits / nearLocalEdit；原始 NearEdit 视为逃生口。
+-- | 邻格 system 的共享类型：一格的反应（'Nudge' / 'NearOut'）与反应拿到的上下文（'NearCtx'）。
+-- 元素邻格反应优先用 nearSelfBecomes / nearSelfSits / nearLocalEdit；原始 NearEdit 只用于局部编辑。
 module Match3.Element.Near
   ( Reach(..)
   , Nudge(..)
   , DieOrder(..)
   , NearCtx(..)
   , NearOut(..)
-  , NearRule(..)
   , nearSelfBecomes
   , nearSelfSits
   , nearLocalEdit
@@ -30,7 +29,7 @@ data Nudge
   | Dies
   deriving (Eq, Show)
 
--- | 打碎格写入 aoDead 的次序。
+-- | 打碎格写入 nwDead 的次序。
 data DieOrder = DiePrepend | DieAppend
   deriving (Eq, Show)
 
@@ -45,13 +44,6 @@ data NearOut
   = NearIdle
   | NearNudge Nudge
   | NearEdit Board [Pos] [Pos]
-  deriving (Eq, Show)
-
-data NearRule = NearRule
-  { nrPrio :: Int
-  , nrReach :: Reach
-  , nrDie :: DieOrder
-  }
   deriving (Eq, Show)
 
 -- | slim-7 白名单组合子：只改自己这一格（Becomes 语义的盘面版，可附 sit）。

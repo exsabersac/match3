@@ -33,7 +33,6 @@ import Data.Typeable (Typeable, cast)
 import Match3.Board.Grid (MBoard)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Conveyor (Belt)
-import Match3.Element.Phase (sameTypeEq)
 import Match3.Element.Types (ShapeRule)
 import Match3.Levels.Level (Level(..))
 import Match3.Types
@@ -129,3 +128,7 @@ instance Mechanic GroundLayer where
     let (g', cs) = hitG hits g
      in Just (acc ++ cs, GroundLayer g')
   onBeat _ _ = Nothing
+
+-- | 同类型才可能相等（装箱值的 Eq）。
+sameTypeEq :: (Typeable a, Typeable b, Eq b) => a -> b -> Bool
+sameTypeEq a b = maybe False (== b) (cast a)

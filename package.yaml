@@ -94,7 +94,6 @@ library:
   - Match3.Element.Types
   - Match3.Element.Rules
   - Match3.Element.Near
-  - Match3.Element.Phase
   - Match3.Element.Special
   - Match3.Element.Builtin
   - Match3.Element.Builtin.Common
@@ -111,6 +110,8 @@ library:
   - Match3.Element.Layer
   - Match3.ECS.System
   - Match3.ECS.Stage
+  - Match3.ECS.Component
+  - Match3.ECS.Archetype
   - Match3.ECS.Registry
   - Match3.Element.Level
 

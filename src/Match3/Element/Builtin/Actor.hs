@@ -1,21 +1,19 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | 会动或会生成东西的元素：在邻格真消除时改动周围的格子，或在步末自己行动。
 --
 -- 共同特征：它们的规则改写的是「别的格子」——魔法帽 / 染色瓶给相邻宝石换色 / 染色（只改 recolorable 的格），
 -- 果汁机充能后产出炸弹（本轮坐住），蜗牛步末爬行 / 推动（只推 pushable 的格），倒计时步末减一、归零 3×3 爆炸。
--- 魔法帽 / 果汁机 / 蜗牛 / 染色瓶是固定格（原型 Fixed，不随重力下落）；倒计时按颜色匹配、可交换 / 推动。
+-- 魔法帽 / 果汁机 / 蜗牛 / 染色瓶是固定格（fixedPhysics，不随重力下落）；倒计时按颜色匹配、可交换 / 推动。
 -- 毛球（新玩法 3，Custom "fuzzball"）：占格障碍，邻格真消除 / 命中即灭，步末跳到相邻的普通宝石格。
--- 邻格规则顺序：魔法帽 60 → 果汁机 130 → 染色瓶 140 → 毛球 190。步末：倒计时（PhaseTick 10）、蜗牛（PhaseMove 10）、
+-- 邻格 system 次序：魔法帽 60 → 果汁机 130 → 染色瓶 140 → 毛球 190。步末：倒计时（PhaseTick 10）、蜗牛（PhaseMove 10）、
 -- 毛球（PhaseMove 20）。
 module Match3.Element.Builtin.Actor
-  ( MagicHatE(..)
-  , MakerE(..)
-  , SnailE(..)
-  , BottleE(..)
-  , CountdownE(..)
-  , Fuzzball(..)
+  ( magicHatArch
+  , makerArch
+  , snailArch
+  , bottleArch
+  , countdownArch
+  , fuzzballArch
   , fuzzballAdjacent
   , fuzzballJumps
   , traceSnails
@@ -30,9 +28,11 @@ import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
 import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
 import Match3.Element.Event
-import Match3.Element.Kind
+import Match3.ECS.Archetype
+import Match3.ECS.Component
+import Match3.Element.Kind (customPlace)
 import Match3.Element.Near
-import Match3.Element.Phase
+import Match3.Element.Rules (nearBy)
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
 import Match3.Element.Types
@@ -76,155 +76,105 @@ bottleDyeOne okRecolor board skip bottlePos col =
         ]
   in foldl (\bd p -> bd & cellAt p . cellColorT .~ col) board (nub nbrs)
 
--- | 魔法帽（固定格）：邻格真消除时给相邻宝石换色。
-data MagicHatE = MagicHatE
-  deriving (Eq, Show)
+-- | 魔法帽（固定格）：邻格真消除时给相邻宝石换色（邻格 system 60，不跳过直接命中格）。
+magicHatArch :: Archetype ()
+magicHatArch = (archetype "magic_hat" col)
+  { aSpawn = \_ _ -> Just MagicHat
+  , aPhysics = const fixedPhysics
+  , aFace = const (baseFace "hat" [])
+  , aSystems = [SysNear 60 (nearBy col AllNeighbours DiePrepend hatNear)]
+  }
+  where
+    col = unitColumn (== MagicHat) MagicHat
+    hatNear ctx () =
+      let skip = nub (nwTrue (ncWorld ctx) ++ nwProtect (ncWorld ctx))
+          b' = hatTriggerOne (nwRecolor (ncWorld ctx)) (ncBoard ctx) skip (ncSelf ctx)
+       in nearLocalEdit b' [] []  -- 局部编辑：hatTriggerOne 只改邻接可改色格
 
-instance Phase MagicHatE where
-  codec = Codec
-    { cName = "magic_hat"
-    , cToCell = \_ -> MagicHat
-    , cFromCell = \cell -> case cell of MagicHat -> Just MagicHatE; _ -> Nothing
-    , cPlace = \_ _ -> Just MagicHat
-    , cMeta = emptyMeta
-    , cNear = Just (NearRule 60 AllNeighbours DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = fixedPhysics
-  onNear _ ctx _ =
-    let skip = nub (nwTrue (ncWorld ctx) ++ nwProtect (ncWorld ctx))
-        b' = hatTriggerOne (nwRecolor (ncWorld ctx)) (ncBoard ctx) skip (ncSelf ctx)
-     in nearLocalEdit b' [] []  -- 白名单：hatTriggerOne 只改邻接可改色格
-  view _ = Face (Just ("hat", [])) []
+-- | 果汁机（固定格，状态 = (颜色, 剩余充能)）：邻格同色真消除充能，满了产出炸弹（本轮坐住）（邻格 system 130）。
+makerArch :: Archetype (Color, Int)
+makerArch = (archetype "maker" col)
+  { aSpawn = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
+  , aPhysics = const fixedPhysics
+  , aFace = \(c, k) -> baseFace "maker" [colorField c, nField k]
+  , aSystems = [SysNear 130 (nearBy col AllNeighbours DiePrepend makerNear)]
+  }
+  where
+    col = Column (\cell -> case cell of Maker c n -> Just (c, n); _ -> Nothing) (uncurry Maker)
+    makerNear ctx (c, n)
+      | not (any (\(_, mc) -> mc == Just c) (ncTriggers ctx)) = NearIdle
+      | n <= 1 = nearSelfSits ctx (Gem c Bomb 0 Nothing)
+      | otherwise = NearNudge (Becomes (Maker c (n - 1)))
 
--- | 果汁机（固定格）：邻格同色真消除充能，满了产出炸弹（本轮坐住）。
-data MakerE = MakerE Color Int
-  deriving (Eq, Show)
+-- | 蜗牛（固定格，状态 = 方向）：步末爬行 / 推动（PhaseMove 10）。
+snailArch :: Archetype (Int, Int)
+snailArch = (archetype "snail" (Column get (uncurry Snail)))
+  { aSpawn = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
+  , aPhysics = const fixedPhysics
+  , aFace = \(dr, dc) -> baseFace "snail" [("dr", FieldInt dr), ("dc", FieldInt dc)]
+  , aSystems = [SysEnd (moveSys 10 (effectSystem snailRun))]
+  }
+  where
+    get cell = case cell of
+      Snail dr dc -> Just (dr, dc)
+      _ -> Nothing
 
-instance Phase MakerE where
-  codec = Codec
-    { cName = "maker"
-    , cToCell = \(MakerE c n) -> Maker c n
-    , cFromCell = \cell -> case cell of Maker c n -> Just (MakerE c n); _ -> Nothing
-    , cPlace = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
-    , cMeta = emptyMeta
-    , cNear = Just (NearRule 130 AllNeighbours DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = fixedPhysics
-  onNear _ ctx (MakerE c n) =
-    if not (any (\(_, mc) -> mc == Just c) (ncTriggers ctx))
-      then NearIdle
-      else if n <= 1
-        then nearSelfSits ctx (Gem c Bomb 0 Nothing)
-        else NearNudge (Becomes (Maker c (n - 1)))
-  view (MakerE c k) = Face (Just ("maker", [colorField c, nField k])) []
+-- | 染色瓶（固定格，状态 = 颜色）：邻格真消除时把正交相邻的宝石染成瓶子颜色（邻格 system 140）。
+bottleArch :: Archetype Color
+bottleArch = (archetype "bottle" col)
+  { aSpawn = colorPlace Bottle
+  , aPhysics = const fixedPhysics
+  , aFace = \c -> baseFace "bottle" [colorField c]
+  , aSystems = [SysNear 140 (nearBy col AllNeighbours DiePrepend dyeNear)]
+  }
+  where
+    col = Column (\cell -> case cell of Bottle c -> Just c; _ -> Nothing) Bottle
+    dyeNear ctx c =
+      let skip = nub (nwTrue (ncWorld ctx) ++ nwProtect (ncWorld ctx))
+          b' = bottleDyeOne (nwRecolor (ncWorld ctx)) (ncBoard ctx) skip (ncSelf ctx) c
+       in nearLocalEdit b' [] []  -- 局部编辑：bottleDyeOne 只改邻接可改色格
 
--- | 蜗牛（固定格）：步末爬行 / 推动。
-data SnailE = SnailE Int Int
-  deriving (Eq, Show)
+-- | 倒计时炸弹（状态 = (颜色, 剩余步数)）：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；
+-- 步末减一（PhaseTick 10），归零 3×3 爆炸。
+countdownArch :: Archetype (Color, Int)
+countdownArch = (archetype "countdown" (Column get (uncurry Countdown)))
+  { aSpawn = \args cell -> case cell of
+      Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
+      Countdown col _ -> mkCountdown col <$> exactArgs argInt args
+      _ -> Nothing
+  , aMatch = \(c, _) -> gemMatch (Just c)
+  , aHit = const breakHit
+  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aFace = \(c, k) -> baseFace "countdown" [colorField c, nField k]
+  , aSystems = [SysEnd (tickSys 10 (effectSystem (tickRun . ewBoard)) explodeSeedsFor)]
+  }
+  where
+    get cell = case cell of
+      Countdown c n -> Just (c, n)
+      _ -> Nothing
 
-instance Phase SnailE where
-  codec = Codec
-    { cName = "snail"
-    , cToCell = \(SnailE dr dc) -> Snail dr dc
-    , cFromCell = \cell -> case cell of Snail dr dc -> Just (SnailE dr dc); _ -> Nothing
-    , cPlace = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysEnd (moveSys 10 (effectSystem snailRun))]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = fixedPhysics
-  view (SnailE dr dc) = Face (Just ("snail", [("dr", FieldInt dr), ("dc", FieldInt dc)])) []
-
--- | 染色瓶（固定格）：邻格真消除时把正交相邻的宝石染成瓶子颜色。
-newtype BottleE = BottleE Color
-  deriving (Eq, Show)
-
-instance Phase BottleE where
-  codec = Codec
-    { cName = "bottle"
-    , cToCell = \(BottleE c) -> Bottle c
-    , cFromCell = \cell -> case cell of Bottle c -> Just (BottleE c); _ -> Nothing
-    , cPlace = colorPlace Bottle
-    , cMeta = emptyMeta
-    , cNear = Just (NearRule 140 AllNeighbours DiePrepend)
-    , cHud = noHud
-    , cSystems = []
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = immuneHit
-  physics _ = fixedPhysics
-  onNear _ ctx (BottleE c) =
-    let skip = nub (nwTrue (ncWorld ctx) ++ nwProtect (ncWorld ctx))
-        b' = bottleDyeOne (nwRecolor (ncWorld ctx)) (ncBoard ctx) skip (ncSelf ctx) c
-     in nearLocalEdit b' [] []  -- 白名单：bottleTriggerOne 只改邻接可改色格
-  view (BottleE c) = Face (Just ("bottle", [colorField c])) []
-
--- | 倒计时炸弹：按颜色匹配、可交换 / 改色 / 推动 / 过传送门，不点火；步末减一，归零 3×3 爆炸。
-data CountdownE = CountdownE Color Int
-  deriving (Eq, Show)
-
-instance Phase CountdownE where
-  codec = Codec
-    { cName = "countdown"
-    , cToCell = \(CountdownE c n) -> Countdown c n
-    , cFromCell = \cell -> case cell of Countdown c n -> Just (CountdownE c n); _ -> Nothing
-    , cPlace = \args cell -> case cell of
-        Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
-        Countdown col _ -> mkCountdown col <$> exactArgs argInt args
-        _ -> Nothing
-    , cMeta = emptyMeta
-    , cNear = Nothing
-    , cHud = noHud
-    , cSystems = [SysEnd (tickSys 10 (effectSystem (tickRun . ewBoard)) explodeSeedsFor)]
-    }
-  onMatch (CountdownE c _) = gemMatch (Just c)
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = gemPhysics { pKeepShuffle = True }
-  view (CountdownE c k) = Face (Just ("countdown", [colorField c, nField k])) []
-
--- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，原型 Blocker（挡交换、无色、随重力下落、洗牌原地保留）。
+-- | 毛球（新玩法 3，开心消消乐的毛球）：占格本体 Custom "fuzzball"，缺省原型（挡交换、无色、随重力下落、洗牌原地保留）。
 --
--- * 正交邻格有真消除即被消灭（邻格规则 190），被直接命中（特效 / 道具）也消灭；消灭计 CountNamed "fuzzball"；
+-- * 正交邻格有真消除即被消灭（邻格 system 190），被直接命中（特效 / 道具）也消灭；消灭计 CountNamed "fuzzball"；
 -- * 玩家交换的步末（PhaseMove 20，蜗牛之后）：每个毛球跳到一个正交相邻的普通宝石格，和那颗宝石换位；
 --   选哪一格由这一步步末开始时的盘面散列决定（伪随机，不消耗 gsGen——没有毛球的关卡随机序列与盘面都不变）；
 --   没有可跳的格（四周都是障碍 / 特殊块 / 带冰或叠层的格、皮带本步移过的格、传送门端点）就不动。
 -- 步末效果记为 EvBelt "fuzzball"（前端按皮带的平移动画播放：毛球与宝石互换位置）。
-newtype Fuzzball = Fuzzball Int
-  deriving (Eq, Show)
-
-instance Phase Fuzzball where
-  codec = Codec
-    { cName = "fuzzball"
-    , cToCell = intCell "fuzzball"
-    , cFromCell = fromCustom "fuzzball" Fuzzball
-    , cPlace = customPlace "fuzzball"
-    , cMeta = emptyMeta { metaCounter = Just (CountNamed "fuzzball") }
-    , cNear = Nothing
-    , cHud = noHud { hudLabel = Just "毛球" }
-    , cSystems = [SysNear 190 fuzzballAdjacent, SysEnd (moveSys 20 (effectSystem fuzzballRun))]
-    }
-  onMatch _ = obstacleMatch
-  onHit _ _ = HitOut Destroy False Nothing Nothing
-  physics _ = obstaclePhysics
-  view _ = noFace
+fuzzballArch :: Archetype Int
+fuzzballArch = (archetype "fuzzball" (customColumn "fuzzball"))
+  { aSpawn = customPlace "fuzzball"
+  , aHit = const breakHit
+  , aTally = const emptyTally {tCounter = Just (CountNamed "fuzzball")}
+  , aHud = noHud {hudLabel = Just "毛球"}
+  , aSystems = [SysNear 190 fuzzballAdjacent, SysEnd (moveSys 20 (effectSystem fuzzballRun))]
+  }
 
 isFuzzball :: Cell -> Bool
 isFuzzball cell = case cell of
   Custom "fuzzball" _ -> True
   _ -> False
 
--- | 毛球邻格（逃生口）：foldr 去重；步末跳格另见 fuzzballRun。
+-- | 毛球的邻格 system：foldr 去重（列表序与 nub 不同，勿改）；步末跳格另见 fuzzballRun。
 fuzzballAdjacent :: System NearWorld
 fuzzballAdjacent = System $ \ctx ->
   let b = nwBoard ctx

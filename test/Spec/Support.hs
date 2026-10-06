@@ -68,8 +68,8 @@ import Match3.Levels.Campaign (lookupLevel)
 import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
-import Match3.Element (Def, AdjCtx(acDirect, acTrue), AdjOut(AdjOut), kindDef)
-import Match3.Element.Kind (BoardPass(..), customPlace, fromCustom, noHud)
+import Match3.Element (Def, NearWorld(..), System(..), kindDef)
+import Match3.Element.Kind (SysDef(..), customPlace, fromCustom, noHud)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
 import Engine.Game (Game(..), Step(..))
@@ -358,7 +358,7 @@ instance Phase Crate where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "crate") }
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [AdjacentPass 200 crateAdjacent]
+    , cSystems = [SysNear 200 crateAdjacent]
     }
   onMatch _ = obstacleMatch
   onHit _ (Crate n) = HitOut (if n <= 1 then Destroy else Absorb (toCell (Crate (n - 1)))) False Nothing Nothing
@@ -366,19 +366,20 @@ instance Phase Crate where
   view _ = noFace
 
 -- | 木箱的邻格规则：真消除格的正交邻格里的木箱（直接命中格除外）耐久 -1，耐久 1 的碎掉。
-crateAdjacent :: AdjCtx -> Board -> AdjOut
-crateAdjacent ctx b =
-  let isCrate c = case c of
+crateAdjacent :: System NearWorld
+crateAdjacent = System $ \w ->
+  let b = nwBoard w
+      isCrate c = case c of
         Custom "crate" _ -> True
         _ -> False
       targets =
-        nub [q | p <- acTrue ctx, q <- orthoNeighbors p, inBounds b q, q `notElem` acDirect ctx, isCrate (getCell b q)]
+        nub [q | p <- nwTrue w, q <- orthoNeighbors p, inBounds b q, q `notElem` nwDirect w, isCrate (getCell b q)]
       bump (bd, dead) q = case getCell bd q of
         Custom _ (CustomState n) | n <= 1 -> (bd, dead ++ [q])
                    | otherwise -> (setCell bd q (Custom "crate" (CustomState (n - 1))), dead)
         _ -> (bd, dead)
       (b', dead') = foldl bump (b, []) targets
-  in AdjOut b' dead' []
+  in w {nwBoard = b', nwDead = nwDead w ++ dead'}
 
 crateDef :: Def
 crateDef = kindDef @Crate

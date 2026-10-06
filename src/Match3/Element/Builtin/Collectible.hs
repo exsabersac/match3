@@ -5,7 +5,7 @@
 --
 -- 共同特征：原型 Blocker 的占格本体，本身不削层、不变形；饼干打不动、落到底边被收走（离格也算覆盖地毯）；
 -- 时间精灵命中 / 邻消即破，按步前步后个数差每个奖励 2 步；气泡（Custom "bubble"）命中 / 邻格真消除即破，
--- 按 CountNamed "bubble" 计数。时间精灵走 onNear；气泡邻格因去重序留逃生口 AdjacentPass 170。
+-- 按 CountNamed "bubble" 计数。时间精灵走 onNear；气泡邻格因去重序留逃生口 SysNear 170。
 -- 变色龙（新玩法 7，Custom "chameleon" k）：例外地是普通棋子原型（可交换、按当前颜色匹配、命中即消），
 -- 玩家交换的步末（PhaseMove 40）按固定顺序换到下一种颜色，被消除计 CountNamed "chameleon"。
 module Match3.Element.Builtin.Collectible
@@ -28,6 +28,8 @@ import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
 import Match3.Element.Near
 import Match3.Element.Phase
+import Match3.ECS.Stage
+import Match3.ECS.System (System(..))
 import Match3.Element.Types
 import Match3.Obstacles (orthoNeighbors)
 import Match3.Rainbow (isRainbow, rainbowClearSeeds)
@@ -46,7 +48,7 @@ instance Phase CookieE where
     , cMeta = emptyMeta { metaCounter = Just CountCookies, metaVacatesCarpet = True }
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Immune False Nothing Nothing
@@ -66,7 +68,7 @@ instance Phase TimeSpiritE where
     , cMeta = emptyMeta { metaDiffCounter = Just CountSpirits, metaBonusMoves = 2 }
     , cNear = Just (NearRule 120 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -86,10 +88,10 @@ instance Phase Bubble where
     , cFromCell = fromCustom "bubble" Bubble
     , cPlace = customPlace "bubble"
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
-    , cNear = Nothing  -- 邻格逃生口 cPasses
+    , cNear = Nothing  -- 邻格逃生口 cSystems
     , cHud = noHud { hudLabel = Just "气泡" }
     -- 邻格打碎留在逃生口：foldr 去重序与 nub+DieAppend 不等价
-    , cPasses = [AdjacentPass 170 bubbleAdjacent]
+    , cSystems = [SysNear 170 bubbleAdjacent]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -97,16 +99,17 @@ instance Phase Bubble where
   view _ = noFace
 
 -- | 气泡邻格：foldr 去重列表序（勿改成 nub，除非重录金标准）。
-bubbleAdjacent :: AdjCtx -> Board -> AdjOut
-bubbleAdjacent ctx b =
-  let popped =
+bubbleAdjacent :: System NearWorld
+bubbleAdjacent = System $ \ctx ->
+  let b = nwBoard ctx
+      popped =
         [ q
-        | q <- nubOrd [q' | p <- acTrue ctx, q' <- orthoNeighbors p, inBounds b q']
-        , q `notElem` acDirect ctx
-        , q `notElem` acTrue ctx
+        | q <- nubOrd [q' | p <- nwTrue ctx, q' <- orthoNeighbors p, inBounds b q']
+        , q `notElem` nwDirect ctx
+        , q `notElem` nwTrue ctx
         , isBubble (getCell b q)
         ]
-  in AdjOut b popped []
+  in ctx {nwDead = popped, nwSit = []}
   where
     isBubble cell = case cell of
       Custom "bubble" _ -> True
@@ -155,7 +158,7 @@ instance Phase Chameleon where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed chameleonName) }
     , cNear = Nothing
     , cHud = noHud { hudLabel = Just "变色龙", hudGoalIcon = Just "chameleon_icon" }
-    , cPasses = [SwapPass (SwapRule 15 chameleonRainbowFires chameleonRainbowSeeds), EndPass (moveRule 40 chameleonRun)]
+    , cSystems = [SysSwap (SwapSys 15 chameleonRainbowFires chameleonRainbowSeeds), SysEnd (moveSys 40 (effectSystem (chameleonRun . ewBoard)))]
     }
     where
       gemColor c = case c of Gem col _ _ _ -> Just col; _ -> Nothing
@@ -193,8 +196,8 @@ plainColor cell = case cell of
   Gem c _ _ Nothing -> Just c
   _ -> chameleonColor cell
 
-chameleonRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
-chameleonRun _ b =
+chameleonRun :: Board -> (Maybe EndEffect, Board)
+chameleonRun b =
   let (ps, b') = chameleonShift b
   in (if null ps then Nothing else Just (EndEffect EvTick chameleonName [EndItem p p (getCell b' p) Nothing | p <- ps]), b')
 

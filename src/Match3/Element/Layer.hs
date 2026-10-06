@@ -33,7 +33,7 @@ module Match3.Element.Layer
   , layerReach
   , onLayerNeighbourClear
   , spreads
-  , layerPasses
+  , layerSystems
   , Layered(..)
   , SomeLayer(..)
   , someLayer
@@ -71,7 +71,7 @@ data LayerCover l = LayerCover
   , lcReach :: Reach                     -- ^ 邻格规则的目标范围
   , lcOnNear :: l -> Cell -> Nudge       -- ^ 邻格有真消除时本格怎么变
   , lcSpreads :: Maybe (Int, l)          -- ^ 步末蔓延：(次序, 种上的值)
-  , lcPasses :: [BoardPass]              -- ^ 逃生口：自带的整盘趟
+  , lcSystems :: [SysDef]              -- ^ 逃生口：自带的整盘趟
   }
 
 -- | 缺省：不能放置、全穿透、不挡、不随清、对邻格无反应、不蔓延。
@@ -88,7 +88,7 @@ defaultCover n = LayerCover
   , lcReach = SkipDirect
   , lcOnNear = \_ _ -> Untouched
   , lcSpreads = Nothing
-  , lcPasses = []
+  , lcSystems = []
   }
 
 -- | 叠在本体之上的一层。
@@ -133,8 +133,8 @@ onLayerNeighbourClear = lcOnNear (layerCover @l)
 spreads :: forall l proxy. Layer l => proxy l -> Maybe (Int, l)
 spreads _ = lcSpreads (layerCover @l)
 
-layerPasses :: forall l proxy. Layer l => proxy l -> [BoardPass]
-layerPasses _ = lcPasses (layerCover @l)
+layerSystems :: forall l proxy. Layer l => proxy l -> [SysDef]
+layerSystems _ = lcSystems (layerCover @l)
 
 -- | 修饰过的元素（同 xmonad 的 ModifiedLayout）：叠层在外，被修饰的元素在里。
 data Layered l e = Layered l e
@@ -150,7 +150,7 @@ instance (Layer l, Phase e) => Phase (Layered l e) where
     , cMeta = cMeta (codec @e)
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (Layered l e) =
     let m = onMatch e

@@ -14,10 +14,11 @@ module Match3.Element.Special
   , comboMatch
   , comboFires
   , comboSeedsFor
-  , comboSwapRule
+  , comboSwapSystem
   ) where
 
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
+import Match3.ECS.Stage (SwapSys(..))
 import Match3.Element.Types
 import Match3.Types
 
@@ -79,5 +80,5 @@ comboSeedsFor :: [ComboRule] -> Board -> Pos -> Pos -> [Pos]
 comboSeedsFor rules b p1 p2 = maybe [] (\(r, a, c) -> comboSeeds r b a c) (comboMatch rules b p1 p2)
 
 -- | 整张组合表当作一条成对交换规则（次序 'comboOrder'）。
-comboSwapRule :: [ComboRule] -> SwapRule
-comboSwapRule rules = SwapRule comboOrder (comboFires rules) (comboSeedsFor rules)
+comboSwapSystem :: [ComboRule] -> SwapSys
+comboSwapSystem rules = SwapSys comboOrder (comboFires rules) (comboSeedsFor rules)

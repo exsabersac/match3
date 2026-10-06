@@ -28,7 +28,7 @@ module Match3.Element.Phase
   , Codec(..)
   , Hud(..)
   , noHud
-  , BoardPass(..)
+  , SysDef(..)
   , NearRule(..)
   , Phase(..)
   , noNear
@@ -52,7 +52,8 @@ module Match3.Element.Phase
 import Data.Coerce (Coercible, coerce)
 import Data.Typeable (Typeable, cast)
 import Match3.Element.Near
-import Match3.Element.Types (AdjCtx, AdjOut, CellField, CounterKey, Edge, EndRule, FaceValue, OpenRule, Placer, SwapRule)
+import Match3.ECS.Stage (SysDef(..))
+import Match3.Element.Types (CellField, CounterKey, Edge, FaceValue, Placer)
 import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, gridFromRows)
 
 -- | 直接命中反应。
@@ -151,14 +152,7 @@ data Hud = Hud
 noHud :: Hud
 noHud = Hud Nothing Nothing Nothing Nothing
 
--- | 元素自带的整盘趟（逃生口）：读整盘、按自己的顺序写回的规则。
-data BoardPass
-  = AdjacentPass Int (AdjCtx -> Board -> AdjOut)  -- ^ 邻格波及（优先级小的先；内置 10..200）
-  | EndPass EndRule                                -- ^ 步末规则（阶段 + 次序）
-  | SwapPass SwapRule                              -- ^ 成对交换规则
-  | OpenPass OpenRule                              -- ^ 开启规则（彩蛋类）
-
--- | 一种元素的类型级数据：名字、格子编解码、放置、计数元数据、邻格规则、HUD、逃生口整盘趟。
+-- | 一种元素的类型级数据：名字、格子编解码、放置、计数元数据、邻格规则、HUD、自带的 system（Match3.ECS.Stage）。
 data Codec e = Codec
   { cName :: ElementName
   , cToCell :: e -> Cell
@@ -167,7 +161,7 @@ data Codec e = Codec
   , cMeta :: Meta
   , cNear :: Maybe NearRule
   , cHud :: Hud
-  , cPasses :: [BoardPass]
+  , cSystems :: [SysDef]
   }
 
 class (Typeable e, Eq e, Show e) => Phase e where
@@ -282,7 +276,7 @@ instance Phase Inert where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit

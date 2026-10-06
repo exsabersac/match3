@@ -50,7 +50,7 @@ import Match3.Conveyor (applyBeltMoves)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Level (avoidCellsIn, beltShiftIn, levelHooksWith, wallCellsIn)
 import Match3.ECS.Registry (Registry, pushableWith)
-import Match3.Element.Types (EndCtx(..), EndPhase(..))
+import Match3.ECS.Stage (EndPhase(..), EndWorld, endWorld)
 import Match3.Game.Trace (EndStep(..), runPhaseSteps, traceSpreadsWith)
 import Match3.Types
 import System.Random (StdGen)
@@ -124,7 +124,7 @@ beltStage = EndStage "belt" Nothing $ \world a ->
              steps = [EndStep k board board' eff | not (null mv)]
          in pushSeg steps (cascadeAfterWith world AfterBelt (levelHooksWith world es) (crGen seg) board') a
 
--- | 蔓延（PhaseSpread 规则按 erOrder）。
+-- | 蔓延（PhaseSpread 的 system 按次序）。
 spreadStage :: EndStage
 spreadStage = EndStage "spread" (Just PhaseSpread) $ \world a ->
   let (steps, b') = traceSpreadsWith world (wavesSoFar a) (eaBoard a)
@@ -134,8 +134,8 @@ spreadStage = EndStage "spread" (Just PhaseSpread) $ \world a ->
 moveStage :: EndStage
 moveStage = EndStage "move" (Just PhaseMove) $ \world a ->
   let elems = hookLevel (crHooks (lastSeg a))
-      ctx = EndCtx (nub (avoidCellsIn world elems)) (nub (wallCellsIn world elems)) (pushableWith world)
-      (steps, b') = runPhase world PhaseMove ctx (wavesSoFar a) (eaBoard a)
+      ctx = endWorld (nub (avoidCellsIn world elems)) (nub (wallCellsIn world elems)) (pushableWith world) (eaBoard a)
+      (steps, b') = runPhase world PhaseMove ctx (wavesSoFar a)
   in a {eaEnds = eaEnds a ++ steps, eaBoard = b'}
 
 -- | 步末补结算（段 2c 统一路径）：步末规则声明的空洞挖空 → 沉降 + 补子 → 成消（含蜗牛推出的匹配）再连锁。
@@ -150,6 +150,6 @@ vacateStage :: EndStage
 vacateStage = EndStage "vacate" Nothing $ \_ a -> a {eaVacate = Just (eaBoard a)}
 
 -- | 依次跑某阶段的步末规则：返回 (步末记录, 终盘)。空效果不记录。
--- （第 9 项起 = Game.Trace 的 runPhaseSteps，与蔓延共用同一个 runEndRules；第 9 项前这里另有一份 foldl + reverse。）
-runPhase :: Registry -> EndPhase -> EndCtx -> Int -> Board -> ([EndStep], Board)
+-- （= Game.Trace 的 runPhaseSteps，与蔓延共用同一个阶段调度器 runEndStage。）
+runPhase :: Registry -> EndPhase -> EndWorld -> Int -> ([EndStep], Board)
 runPhase = runPhaseSteps

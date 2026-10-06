@@ -29,8 +29,9 @@ import qualified Data.Array as A
 import Data.Array.Unboxed (UArray, listArray, (!))
 import Data.List (nub)
 import Data.Maybe (isJust)
-import Match3.ECS.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith, matchColorWith, swapRules, upperBlocksSwapWith)
-import Match3.Element.Types (MatchRun(..), SwapRule(..))
+import Match3.ECS.Registry (Registry, blocksSwapWith, colorOfWith, hintableWith, matchColorWith, swapSystems, upperBlocksSwapWith)
+import Match3.ECS.Stage (SwapSys(..))
+import Match3.Element.Types (MatchRun(..))
 import Match3.Types
 import Match3.Board.Grid
 
@@ -113,7 +114,7 @@ hasValidMoveWith world = maybe False (const True) . findHintWith world
 -- 内置 = 彩虹、特殊合成，按 srOrder 逐条）的提示只排除上层（锁链 / 火箭冰冻）挡交换的格，本体由规则自己判定。
 findHintWith :: Registry -> Board -> Maybe (Pos, Pos)
 findHintWith world b =
-  case matchHints ++ concatMap ruleHints (swapRules world) of
+  case matchHints ++ concatMap ruleHints (swapSystems world) of
     (x : _) -> Just x
     [] -> Nothing
   where
@@ -137,7 +138,7 @@ findHintWith world b =
       , let p1 = (r, c)
       , p2 <- neighborsInBounds rightAndDown b p1
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
-      , srFires rule b p1 p2
+      , swFires rule b p1 p2
       ]
     hintable cell = isJust (colorOfWith world cell) && not (blocksSwapWith world cell)
     upperLocked = upperBlocksSwapWith world

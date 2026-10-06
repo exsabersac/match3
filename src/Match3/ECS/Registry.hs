@@ -11,7 +11,7 @@
 -- 分派缓存（按 cellSlot / 叠层编号 / Custom 名字建的候选表）是引擎内部的事，不是元素作者写的东西：
 -- 某个编号的候选 = 'fromCell' / 'peel' 接受该编号代表格的种类（注册倒序：同名 / 同格以后注册的为准）；
 -- 候选都不认领时再按注册倒序试全部本体种类，最后才是惰性占格。规则（Match3.Element.Rules 的 kindRules /
--- layerRules：codec / layerCover 给出的邻格 / 蔓延规则 + 逃生口 cPasses / layerPasses）也在建世界时收集一次、按次序排好。
+-- layerRules：codec / layerCover 给出的邻格 / 蔓延规则 + 逃生口 cSystems / layerSystems）也在建世界时收集一次、按次序排好。
 --
 -- 另持三张规则表——特殊块形状规则、特殊块组合规则、补子策略（'shapeRules' / 'comboRules' / 'refillPolicyWith'）、
 -- 关卡级元素（'SomeMechanic'）的种类表，以及只在一步结算期间有意义的本步上下文（'StepCtx'：魔法地格的扩爆格）。
@@ -73,7 +73,7 @@ module Match3.ECS.Registry
   , chipOnHitWith
   , hitImmuneWith
   , stripOnClearWith
-  , adjacentRules
+  , nearSystems
   , runAdjacentWith
   , counterWith
   , diffCountersWith
@@ -87,14 +87,14 @@ module Match3.ECS.Registry
   , setWidening
   , widenedCells
   , hintableWith
-  , endRules
+  , endSystems
   , PlaceError(..)
   , placeWith
   , hitGroundWith
   , placeAllWith
     -- * 成对交换、开启、改色 / 推动谓词
-  , swapRules
-  , elementSwapRules
+  , swapSystems
+  , elementSwapSystems
   , swapOpeningWith
   , swapFiresWith
   , openWith
@@ -138,7 +138,9 @@ import Match3.Element.Phase
 
 import Match3.Element.Layer
 import Match3.Element.Rules (kindRules, layerRules)
-import Match3.Element.Special (comboSwapRule)
+import Match3.ECS.Stage
+import Match3.ECS.System (Scheduled(..), System, at, schedule)
+import Match3.Element.Special (comboSwapSystem)
 import Match3.Element.Types
 import Match3.Types
 
@@ -187,11 +189,11 @@ data Registry = Registry
   , wCustom   :: [(ElementName, [SomeKind])]
   , wIce      :: [SomeLayer]            -- 冰层位置的候选
   , wOverlays :: Array Int [SomeLayer]  -- 叠层编号（overlaySlot）→ 候选
-  , wAdjacent :: [AdjacentRule]                   -- 按 arOrder 排好（稳定）
-  , wEnd      :: [EndRule]                        -- 按 (阶段, erOrder) 排好（稳定）
+  , wNear     :: [Scheduled NearWorld]            -- 邻格 system，按次序排好（稳定）
+  , wEnd      :: [EndSys]                         -- 步末 system，按 (阶段, 次序) 排好（稳定）
   , wDiff     :: [(ElementName, CounterKey, Int)] -- 按个数差计数的元素：(名字, 计数键, 每个的奖励步数)
-  , wSwap     :: [SwapRule]                       -- 成对交换规则，按 srOrder 排好（稳定）
-  , wOpen     :: [OpenRule]                       -- 开启规则（注册顺序）
+  , wSwap     :: [SwapSys]                        -- 成对交换，按次序排好（稳定）
+  , wOpen     :: [System OpenWorld]               -- 开启 system（注册顺序）
   , wLevel    :: [SomeMechanic]                   -- 关卡级机制（注册顺序；同名以后注册的为准）
   , wShapes   :: [ShapeRule]                      -- 特殊块形状规则表（有序）
   , wCombos   :: [ComboRule]                      -- 特殊块组合表（有序）
@@ -214,11 +216,11 @@ mkRegistry :: [Def] -> Registry
 mkRegistry defs0 =
   Registry
     { wDefs = defs
-    , wAdjacent = sortOn arOrder [AdjacentRule o f | AdjacentPass o f <- passes]
-    , wEnd = sortOn (\r -> (erPhase r, erOrder r)) [r | EndPass r <- passes]
+    , wNear = schedule [at o f | SysNear o f <- passes]
+    , wEnd = sortOn (\r -> (esPhase r, esOrder r)) [r | SysEnd r <- passes]
     , wDiff = [(kindName p, k, bonusMoves p) | KindDef (SomeKind p) <- defs, Just k <- [diffCounter p]]
-    , wSwap = sortOn srOrder [r | SwapPass r <- passes]
-    , wOpen = [r | OpenPass r <- passes]
+    , wSwap = sortOn swOrder [r | SysSwap r <- passes]
+    , wOpen = [r | SysOpen r <- passes]
     , wLevel = []
     , wShapes = []
     , wCombos = []
@@ -535,23 +537,14 @@ stripOnClearWith world b ps = foldl strip b (nub ps)
            then board
            else setCell board p (foldr (\(SomeLayerValue l) c -> putOn l c) inner kept)
 
--- | 邻格波及规则（已按 arOrder 排好）。
-adjacentRules :: Registry -> [AdjacentRule]
-adjacentRules = wAdjacent
+-- | 邻格 system（已按次序排好）。
+nearSystems :: Registry -> [Scheduled NearWorld]
+nearSystems = wNear
 -- | 按顺序跑完一轮的全部邻格波及：返回 (盘面, 打碎的格（按规则顺序拼接）, 新生成需坐住的格)。
 -- 每条规则的 acProtect = 起始保护格 ++ 之前各规则的 aoSit。
 runAdjacentWith :: Registry -> [Pos] -> [Pos] -> [Pos] -> Board -> (Board, [Pos], [Pos])
 runAdjacentWith world trueClears direct protect0 b0 =
-  let ((b', _), outs) = mapAccumL one (b0, nub protect0) (wAdjacent world)
-  in (b', concatMap fst outs, concatMap snd outs)
-  where
-    -- 第 9 项：mapAccumL 把「穿过各规则的状态」（盘面, 保护格）和「每条规则的输出」（打碎格, 坐住格）分开；
-    -- 第 9 项前是四元组 foldl + 两个前插列表 + reverse（按规则顺序拼接，结果相同）。
-    -- 保护格 = nub (起始保护格 ++ 之前的坐住格)，增量维护（nub (xs ++ ys) = nub xs ++ [y | y <- nub ys, y `notElem` xs]）
-    one (board, protect) rule =
-      let out = arRun rule (AdjCtx trueClears direct protect (recolorableWith world)) board
-          new = aoSit out
-      in ((aoBoard out, protect ++ [p | p <- nub new, p `notElem` protect]), (aoDead out, new))
+  runNearStage (wNear world) (nearWorld (recolorableWith world) trueClears direct protect0 b0)
 
 -- | 本体进入清除格时的计数键。
 counterWith :: Registry -> Cell -> Maybe CounterKey
@@ -615,9 +608,9 @@ hintableWith :: Registry -> Cell -> Bool
 hintableWith world cell = case bodyOf world cell of
   SomePhase e -> mHintable (onMatch e)
 
--- | 某步末阶段的规则（按 erOrder）。
-endRules :: Registry -> EndPhase -> [EndRule]
-endRules world ph = [r | r <- wEnd world, erPhase r == ph]
+-- | 某步末阶段的 system（按次序）。
+endSystems :: Registry -> EndPhase -> [EndSys]
+endSystems world ph = [r | r <- wEnd world, esPhase r == ph]
 
 -- | 放置失败的原因（第 6 刀：placeWith 不再直接 error）。
 data PlaceError
@@ -661,34 +654,28 @@ hitGroundWith world hits = foldr one ([], [])
 -- 成对交换、开启、改色 / 推动
 
 -- | 成对交换规则（已按 srOrder 排好）：元素声明的（elementSwapRules）+ 组合表并成的一条（第 8 刀，次序 20）。
-swapRules :: Registry -> [SwapRule]
-swapRules world = case wCombos world of
+swapSystems :: Registry -> [SwapSys]
+swapSystems world = case wCombos world of
   [] -> wSwap world
-  combos -> sortOn srOrder (wSwap world ++ [comboSwapRule combos])
+  combos -> sortOn swOrder (wSwap world ++ [comboSwapSystem combos])
 
 -- | 只是元素自己声明的成对交换规则（不含组合表；按 srOrder 排好）。
-elementSwapRules :: Registry -> [SwapRule]
-elementSwapRules = wSwap
+elementSwapSystems :: Registry -> [SwapSys]
+elementSwapSystems = wSwap
 
 -- | 交换起手：交换前盘面 b0 上第一条成立的成对规则，在交换后盘面 swapped 上给出的种子；都不成立时 Nothing。
 swapOpeningWith :: Registry -> Board -> Board -> Pos -> Pos -> Maybe [Pos]
 swapOpeningWith world b0 swapped p1 p2 =
-  listToMaybe [srSeeds r swapped p1 p2 | r <- swapRules world, srFires r b0 p1 p2]
+  listToMaybe [swSeeds r swapped p1 p2 | r <- swapSystems world, swFires r b0 p1 p2]
 
 -- | 是否有成对规则成立（交换前盘面）。
 swapFiresWith :: Registry -> Board -> Pos -> Pos -> Bool
-swapFiresWith world b p1 p2 = any (\r -> srFires r b p1 p2) (swapRules world)
+swapFiresWith world b p1 p2 = any (\r -> swFires r b p1 p2) (swapSystems world)
 
 -- | 一批前沿上的开启（彩蛋类）：依次跑各开启规则，返回 (盘面, 爆炸种子, 本轮坐住的格)。
 -- 只有一条规则时结果就是它自己的输出（内置只有彩蛋）。
 openWith :: Registry -> Board -> [Pos] -> (Board, [Pos], [Pos])
-openWith world b front = case wOpen world of
-  [] -> (b, [], [])
-  (r : rs) -> foldl step (orOpen r b front) rs
-  where
-    step (b1, e1, s1) r' =
-      let (b2, e2, s2) = orOpen r' b1 front
-      in (b2, nub (e1 ++ e2), nub (s1 ++ s2))
+openWith world = runOpenStage (wOpen world)
 
 -- | 本体可被魔法帽 / 染色瓶改色。
 recolorableWith :: Registry -> Cell -> Bool

@@ -135,9 +135,9 @@ placeLines =
 
 ruleLines :: [String]
 ruleLines =
-  [ "R adjacent " ++ show (map arOrder (adjacentRules world))
-  , "R end " ++ show [(ph, map erOrder (endRules world ph)) | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
-  , "R swap " ++ show (map srOrder (swapRules world))
+  [ "R adjacent " ++ show (map schOrder (nearSystems world))
+  , "R end " ++ show [(ph, map esOrder (endSystems world ph)) | ph <- [PhaseTick, PhaseSpread, PhaseMove]]
+  , "R swap " ++ show (map swOrder (swapSystems world))
   , "R names " ++ show (map defName (registryDefs world))
   , "R diff " ++ show [(n, Just k, bonus) | (n, k, bonus) <- diffCountersWith world]
   , "R level " ++ show (map mechNameOf (mechanicDefs world))
@@ -146,11 +146,11 @@ ruleLines =
        | off <- [0, 60, 120, 180, 240]
        , tc <- [[(3, 3)], [(r, c) | r <- [2 .. 5], c <- [2 .. 5]], [(r, c) | r <- [0 .. 7], c <- [0 .. 7], even (r + c)]]
        ]
-    ++ [ "E " ++ show off ++ " " ++ show ph ++ " " ++ hash (show [(fst (erRun r (EndCtx [(1, 1)] [(6, 6)] (pushableWith world)) (zoo off)), erSeeds r (zoo off), erHoles r (zoo off), boardText (snd (erRun r (EndCtx [] [] (pushableWith world)) (zoo off)))) | r <- endRules world ph])
+    ++ [ "E " ++ show off ++ " " ++ show ph ++ " " ++ hash (show [(ewEffect (runSystem (esSystem r) (endWorld [(1, 1)] [(6, 6)] (pushableWith world) (zoo off))), esSeeds r (zoo off), esHoles r (zoo off), boardText (ewBoard (runSystem (esSystem r) (endWorld [] [] (pushableWith world) (zoo off))))) | r <- endSystems world ph])
        | off <- [0, 60, 120, 180, 240]
        , ph <- [PhaseTick, PhaseSpread, PhaseMove]
        ]
-    ++ [ "S " ++ show off ++ " " ++ hash (show [(p1, p2, map (\r -> (srFires r (zoo off) p1 p2, srSeeds r (zoo off) p1 p2)) (swapRules world), swapOpeningWith world (zoo off) (zoo off) p1 p2) | (p1, p2) <- pairs])
+    ++ [ "S " ++ show off ++ " " ++ hash (show [(p1, p2, map (\r -> (swFires r (zoo off) p1 p2, swSeeds r (zoo off) p1 p2)) (swapSystems world), swapOpeningWith world (zoo off) (zoo off) p1 p2) | (p1, p2) <- pairs])
        | off <- [0, 60, 120, 180, 240]
        ]
     ++ [ "O " ++ show off ++ " " ++ hash (show (let (b, e, s) = openWith world (zoo off) front in (boardText b, e, s)))

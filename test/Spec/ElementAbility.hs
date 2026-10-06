@@ -33,6 +33,8 @@ import Match3.Element.Near
 import Match3.Element.Layer
 import Match3.Element.Types
 import Match3.ECS.Registry
+import Match3.ECS.Stage (NearWorld(..), nearWorld)
+import Match3.ECS.System (System(..))
 import Match3.Types
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -72,7 +74,7 @@ instance Phase GemV where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (GemV c) = gemMatch (Just c)
   onHit _ _ = gemHit
@@ -95,7 +97,7 @@ instance Phase LineHV where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (LineHV c) = gemMatch (Just c)
   onHit _ _ = gemHit { hBlast = specialBlast LineH }
@@ -116,7 +118,7 @@ instance Phase StoneV where
     , cMeta = emptyMeta { metaCounter = Just CountStones }
     , cNear = Just (NearRule 10 SkipDirect DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onNear _ _ (StoneV n) = NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))
   onMatch _ = obstacleMatch
@@ -138,7 +140,7 @@ instance Phase FlipV where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (FlipV f _) = gemMatch (Just f)
   onHit _ (FlipV _ b) = HitOut (Absorb (Gem b Normal 0 Nothing)) False Nothing Nothing
@@ -157,7 +159,7 @@ instance Phase BubbleV where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "bubble") }
     , cNear = Nothing
     , cHud = noHud { hudLabel = Just "气泡" }
-    , cPasses = boardPasses (Proxy :: Proxy Bubble)
+    , cSystems = boardSystems (Proxy :: Proxy Bubble)
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -181,7 +183,7 @@ instance Phase BossV where
     , cNear = Nothing
       -- HUD（中文名 / 失败提示 / 血条）与规则（扣血 + 步末移动）照抄雪怪
     , cHud = cHud (codec @SnowBoss)
-    , cPasses = cPasses (codec @SnowBoss)
+    , cSystems = cSystems (codec @SnowBoss)
     }
   onMatch _ = MatchRule Nothing False True False
   onHit _ b = HitOut (Absorb (toCell b)) False Nothing Nothing
@@ -411,13 +413,13 @@ ab_near_escape_absorbed = do
         , [Gem C4 Normal 0 Nothing, Balloon C1, Gem C1 Normal 0 Nothing, Balloon C2, Balloon C1]
         ]
       clears = [(0, 0), (0, 3), (0, 4), (1, 1), (2, 2)]
-      ctx = AdjCtx clears [] [] (const True)
-      outB = balloonPop ctx b
-      legB = balloonPopLegacy ctx b
-  assertEqual "balloon board" (aoBoard outB) (aoBoard legB)
-  assertEqual "balloon dead" (aoDead outB) (aoDead legB)
-  assertEqual "bubble still hatch" [170] [o | AdjacentPass o _ <- boardPasses (Proxy @Bubble)]
-  assertEqual "fuzzball still hatch" [190] [o | AdjacentPass o _ <- boardPasses (Proxy @Fuzzball)]
+      ctx = nearWorld (const True) clears [] [] b
+      outB = runSystem balloonPop ctx
+      legB = runSystem balloonPopLegacy ctx
+  assertEqual "balloon board" (nwBoard outB) (nwBoard legB)
+  assertEqual "balloon dead" (nwDead outB) (nwDead legB)
+  assertEqual "bubble still hatch" [170] [o | SysNear o _ <- boardSystems (Proxy @Bubble)]
+  assertEqual "fuzzball still hatch" [190] [o | SysNear o _ <- boardSystems (Proxy @Fuzzball)]
 
 ab_rule_methods_pinned :: Assertion
 ab_rule_methods_pinned = do
@@ -440,10 +442,10 @@ ab_rule_methods_pinned = do
   assertEqual "spreads" [Just 10, Just 20, Just 30, Nothing]
     [fst <$> spreads (Proxy @VineL), fst <$> spreads (Proxy @ChocoL), fst <$> spreads (Proxy @SteamL), fst <$> spreads (Proxy @FogL)]
   -- 收集：方法给出的规则在逃生口之前
-  assertEqual "kindRules stone" [10] [o | AdjacentPass o _ <- kindRules (Proxy @StoneE)]
-  assertEqual "layerRules choco" (1, 1) (length [() | AdjacentPass 150 _ <- layerRules (Proxy @ChocoL)], length [() | EndPass _ <- layerRules (Proxy @ChocoL)])
+  assertEqual "kindRules stone" [10] [o | SysNear o _ <- kindRules (Proxy @StoneE)]
+  assertEqual "layerRules choco" (1, 1) (length [() | SysNear 150 _ <- layerRules (Proxy @ChocoL)], length [() | SysEnd _ <- layerRules (Proxy @ChocoL)])
   assertEqual "snow boss footprint" [(2, 3), (2, 4), (3, 3), (3, 4)] (footprint snowBossEntity (2, 3))
-  assertEqual "snow boss rules" [200] [o | AdjacentPass o _ <- kindRules (Proxy @SnowBoss)]
+  assertEqual "snow boss rules" [200] [o | SysNear o _ <- kindRules (Proxy @SnowBoss)]
 
 --------------------------------------------------------------------------------
 -- 前端格子描述（第 6 刀）：cellFace 由 Phase view 的 fBase 驱动，与第 6 刀前按构造器写死的 case 逐字段相同

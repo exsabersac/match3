@@ -17,6 +17,8 @@ module Match3.Element
   , module Match3.Element.Level
   , module Match3.Element.Special
   , module Match3.Board.Refill
+  , module Match3.ECS.Stage
+  , module Match3.ECS.System
   ) where
 
 import Match3.Board.Refill
@@ -24,5 +26,7 @@ import Match3.Element.Builtin
 import Match3.Element.Event
 import Match3.Element.Level
 import Match3.ECS.Registry
+import Match3.ECS.Stage
+import Match3.ECS.System
 import Match3.Element.Special
 import Match3.Element.Types

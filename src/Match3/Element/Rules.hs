@@ -32,68 +32,77 @@ import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Kind
 import Match3.Element.Phase (Phase, phaseDieOrder, phaseNearPrio, phaseOnNear, phaseReach)
 import Match3.Element.Layer
+import Match3.ECS.Stage
+import Match3.ECS.System (System(..))
 import Match3.Element.Types
 import Match3.Types
 
--- | 一种本体的全部规则：方法邻格（'cNear'）→ 逃生口 'cPasses'（多格实体扣血也在这里；之后按优先级稳定排序）。
-kindRules :: forall e proxy. Phase e => proxy e -> [BoardPass]
+-- | 一种本体的全部规则：方法邻格（'cNear'）→ 逃生口 'cSystems'（多格实体扣血也在这里；之后按优先级稳定排序）。
+kindRules :: forall e proxy. Phase e => proxy e -> [SysDef]
 kindRules _ =
-  [AdjacentPass o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
-    ++ boardPasses (Proxy @e)
+  [SysNear o (kindNeighbour (Proxy @e)) | Just o <- [phaseNearPrio @e]]
+    ++ boardSystems (Proxy @e)
 
--- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerPasses'（都读自类型级的 'layerCover'）。
-layerRules :: Layer l => proxy l -> [BoardPass]
+-- | 一种叠层的全部规则：邻格规则、蔓延（PhaseSpread）、逃生口 'layerSystems'（都读自类型级的 'layerCover'）。
+layerRules :: Layer l => proxy l -> [SysDef]
 layerRules p =
-  [AdjacentPass o (layerNeighbour p) | Just o <- [layerNeighbourPrio p]]
-    ++ [EndPass (spreadRule o (layerSpread p seed)) | Just (o, seed) <- [spreads p]]
-    ++ layerPasses p
+  [SysNear o (layerNeighbour p) | Just o <- [layerNeighbourPrio p]]
+    ++ [SysEnd (spreadSys o (layerSpread p seed)) | Just (o, seed) <- [spreads p]]
+    ++ layerSystems p
 
 -- | 邻格目标：与真消除格正交相邻、满足谓词的格（去重；顺序 = 按真消除格、每格上 / 下 / 左 / 右）。
-neighbourTargets :: Reach -> (Cell -> Bool) -> AdjCtx -> Board -> [Pos]
+neighbourTargets :: Reach -> (Cell -> Bool) -> NearWorld -> Board -> [Pos]
 neighbourTargets r ok ctx b =
-  [q | q <- nub [q' | t <- acTrue ctx, q' <- neighborsInBounds upDownLeftRight b t, ok (getCell b q')], not (skip q)]
+  [q | q <- nub [q' | t <- nwTrue ctx, q' <- neighborsInBounds upDownLeftRight b t, ok (getCell b q')], not (skip q)]
   where
     skip q = case r of
-      SkipDirect -> q `elem` acDirect ctx
+      SkipDirect -> q `elem` nwDirect ctx
       AllNeighbours -> False
 
+-- | 一个邻格 system 的产出累积（盘面, 打碎的格, 坐住的格）。
+data Out = Out Board [Pos] [Pos]
+
+-- | 把产出写回世界。
+emit :: NearWorld -> Out -> NearWorld
+emit w (Out b dead sit) = w {nwBoard = b, nwDead = dead, nwSit = sit}
+
 -- | 写回一格的回答。
-nudge :: DieOrder -> AdjOut -> Pos -> Nudge -> AdjOut
-nudge order out@(AdjOut b dead sit) q n = case n of
+nudge :: DieOrder -> Out -> Pos -> Nudge -> Out
+nudge order out@(Out b dead sit) q n = case n of
   Untouched -> out
-  Becomes c -> AdjOut (setCell b q c) dead sit
+  Becomes c -> Out (setCell b q c) dead sit
   Dies -> case order of
-    DiePrepend -> AdjOut b (nub (q : dead)) sit
-    DieAppend -> AdjOut b (dead ++ [q | q `notElem` dead]) sit
+    DiePrepend -> Out b (nub (q : dead)) sit
+    DieAppend -> Out b (dead ++ [q | q `notElem` dead]) sit
 
 -- | 触发消除格颜色（与 Obstacles.isGem+cellColor 一致：含倒计时 / 双面块；其余 Nothing）。
-triggerColors :: AdjCtx -> Board -> Pos -> [(Pos, Maybe Color)]
+triggerColors :: NearWorld -> Board -> Pos -> [(Pos, Maybe Color)]
 triggerColors ctx b self =
   [ (t, cellColor (getCell b t))
-  | t <- acTrue ctx
+  | t <- nwTrue ctx
   , self `elem` neighborsInBounds upDownLeftRight b t
   ]
 
 -- | 本体的邻格波及：目标格逐个问 'onNear'。
-kindNeighbour :: forall e proxy. Phase e => proxy e -> AdjCtx -> Board -> AdjOut
-kindNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (phaseReach @e) (isJust . fromCellAs p) ctx b0)
+kindNeighbour :: forall e proxy. Phase e => proxy e -> System NearWorld
+kindNeighbour p = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (foldl (one ctx b0) (Out b0 [] []) (neighbourTargets (phaseReach @e) (isJust . fromCellAs p) ctx b0))
   where
     order = phaseDieOrder @e
-    one out@(AdjOut b dead sit) q = case fromCellAs p (getCell b q) of
+    one ctx b0 out@(Out b dead sit) q = case fromCellAs p (getCell b q) of
       Nothing -> out
       Just e ->
         let nctx = NearCtx (triggerColors ctx b0 q) q ctx b
          in case phaseOnNear e nctx of
               NearIdle -> out
               NearNudge n -> nudge order out q n
-              NearEdit b' d s -> AdjOut b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s ++ sit))
+              NearEdit b' d s -> Out b' (dead ++ [x | x <- d, x `notElem` dead]) (nub (s ++ sit))
 
 -- | 叠层的邻格波及：目标格逐个问 'onLayerNeighbourClear'（= lcOnNear）（同一套目标规则）。
-layerNeighbour :: Layer l => proxy l -> AdjCtx -> Board -> AdjOut
-layerNeighbour p ctx b0 = foldl one (AdjOut b0 [] []) (neighbourTargets (layerReach p) (isJust . peelAs p) ctx b0)
+layerNeighbour :: Layer l => proxy l -> System NearWorld
+layerNeighbour p = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (foldl one (Out b0 [] []) (neighbourTargets (layerReach p) (isJust . peelAs p) ctx b0))
   where
-    one out q =
-      let cell = getCell (aoBoard out) q
+    one out@(Out bOut _ _) q =
+      let cell = getCell bOut q
       in maybe out (\(l, _) -> nudge DiePrepend out q (onLayerNeighbourClear l cell)) (peelAs p cell)
 
 -- | 没有叠层的宝石（蔓延的落点）。
@@ -103,8 +112,11 @@ bareGem cell = case cell of
   _ -> False
 
 -- | 叠层的步末蔓延：步首盘面上有本层的每一格向正交相邻的裸宝石种上 @seed@；记一条 EvSpread（来源, 新格）。
-layerSpread :: Layer l => proxy l -> l -> EndCtx -> Board -> (Maybe EndEffect, Board)
-layerSpread p seed _ b =
+layerSpread :: Layer l => proxy l -> l -> System EndWorld
+layerSpread p seed = effectSystem (layerSpreadOn p seed . ewBoard)
+
+layerSpreadOn :: Layer l => proxy l -> l -> Board -> (Maybe EndEffect, Board)
+layerSpreadOn p seed b =
   let has bd q = isJust (peelAs p (getCell bd q))
       targets = nub [q | s <- boardPositions b, has b s, q <- neighborsInBounds upDownLeftRight b s, bareGem (getCell b q)]
       b' = foldl (\bd q -> if bareGem (getCell bd q) then setCell bd q (putOn seed (getCell bd q)) else bd) b targets
@@ -121,20 +133,23 @@ layerSpread p seed _ b =
 
 -- | 多格实体的邻格伤害：每个锚点（行优先）按「身外一圈的真消除 + 部件上的直接命中」扣血，归零则部件并入清除格。
 {-# INLINABLE entityDamage #-}
-entityDamage :: forall e. Phase e => Entity e -> AdjCtx -> Board -> AdjOut
-entityDamage ent ctx b0 = foldl one (AdjOut b0 [] []) anchors
+entityDamage :: forall e. Phase e => Entity e -> System NearWorld
+entityDamage ent = System $ \ctx -> let b0 = nwBoard ctx in emit ctx (entityDamageOn ent ctx b0)
+
+entityDamageOn :: forall e. Phase e => Entity e -> NearWorld -> Board -> Out
+entityDamageOn ent ctx b0 = foldl one (Out b0 [] []) anchors
   where
     at' bd q = fromCell @e (getCell bd q)
     anchors = [(q, e) | q <- boardPositions b0, Just e <- [at' b0 q], partNo ent e == 0]
-    one out@(AdjOut b dead sit) (anchor, e) =
+    one out@(Out b dead sit) (anchor, e) =
       let body = footprint ent anchor
           parts = [(q, x) | (i, q) <- zip [0 ..] body, inBounds b q, Just x <- [at' b q], partNo ent x == i]
           ring = foldr (\q acc -> if q `elem` acc then acc else q : acc) [] [q | x <- body, q <- neighborsInBounds upDownLeftRight b x, q `notElem` body]
-          dmg = length [q | q <- ring, q `elem` acTrue ctx] + length [q | (q, _) <- parts, q `elem` acDirect ctx]
+          dmg = length [q | q <- ring, q `elem` nwTrue ctx] + length [q | (q, _) <- parts, q `elem` nwDirect ctx]
           hp' = max 0 (hitPoints ent e - dmg)
       in if dmg == 0
            then out
            else
              if hp' == 0
-               then AdjOut b (dead ++ map fst parts) sit
-               else AdjOut (foldl (\bd (q, x) -> setCell bd q (toCell (withHp ent hp' x))) b parts) dead sit
+               then Out b (dead ++ map fst parts) sit
+               else Out (foldl (\bd (q, x) -> setCell bd q (toCell (withHp ent hp' x))) b parts) dead sit

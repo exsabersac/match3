@@ -26,7 +26,8 @@ import Match3.Board.Grid (getCell)
 import Match3.Element.Builtin.Obstacle (CakeE, ChestE, HoneyE, SafeE, StoneE, balloonPop)
 import Match3.Element.Phase (Phase)
 import Match3.Element.Rules (kindNeighbour)
-import Match3.Element.Types (AdjCtx(..), AdjOut(..))
+import Match3.ECS.Stage (NearWorld(..), nearWorld)
+import Match3.ECS.System (System(..))
 import Match3.Obstacles
   ( chargeAdjacentMakersSit
   , openSurprises
@@ -38,8 +39,8 @@ import Match3.Types (Board, CellContents(..), Pos, boardPositions)
 -- | 用通用驱动跑一种本体的邻格规则：真消除 = gems，直接命中 = except；返回（新盘面, 打碎的位置）。
 viaDriver :: Phase e => Proxy e -> Board -> [Pos] -> [Pos] -> (Board, [Pos])
 viaDriver p b gems except =
-  let out = kindNeighbour p (AdjCtx gems except [] (const True)) b
-  in (aoBoard out, aoDead out)
+  let out = runSystem (kindNeighbour p) (nearWorld (const True) gems except [] b)
+  in (nwBoard out, nwDead out)
 
 -- | 石头 / 宝箱 / 蜂蜜 / 蛋糕：削一层；返回（新盘面, 末层被削掉、并入清除格的位置，后处理的在前）。
 chipAdjacentStonesExcept, chipAdjacentChestsExcept, chipAdjacentHoneyExcept, chipAdjacentCakesExcept
@@ -69,7 +70,7 @@ chipAdjacentSafes b gems = chipAdjacentSafesExcept b gems []
 
 -- | 同色邻消打爆的气球位置（盘面不变，由清除管线移走）：气球自己的邻格规则 'balloonPop'，没有直接命中格。
 popAdjacentBalloons :: Board -> [Pos] -> (Board, [Pos])
-popAdjacentBalloons b gems = let out = balloonPop (AdjCtx gems [] [] (const True)) b in (aoBoard out, aoDead out)
+popAdjacentBalloons b gems = let out = runSystem balloonPop (nearWorld (const True) gems [] [] b) in (nwBoard out, nwDead out)
 
 -- | 'openSurprises' 去掉「原地变成特殊块的位置」；返回（新盘面, 爆炸种子）。
 openAdjacentSurprises :: Board -> [Pos] -> (Board, [Pos])

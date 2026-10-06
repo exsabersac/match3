@@ -33,6 +33,8 @@ import Match3.Element.Event
 import Match3.Element.Kind
 import Match3.Element.Near
 import Match3.Element.Phase
+import Match3.ECS.Stage
+import Match3.ECS.System (System(..))
 import Match3.Element.Types
 import Match3.Obstacles (orthoNeighbors)
 import qualified Match3.Snail as Snail
@@ -87,14 +89,14 @@ instance Phase MagicHatE where
     , cMeta = emptyMeta
     , cNear = Just (NearRule 60 AllNeighbours DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
   onNear _ ctx _ =
-    let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
-        b' = hatTriggerOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx)
+    let skip = nub (nwTrue (ncWorld ctx) ++ nwProtect (ncWorld ctx))
+        b' = hatTriggerOne (nwRecolor (ncWorld ctx)) (ncBoard ctx) skip (ncSelf ctx)
      in nearLocalEdit b' [] []  -- 白名单：hatTriggerOne 只改邻接可改色格
   view _ = Face (Just ("hat", [])) []
 
@@ -111,7 +113,7 @@ instance Phase MakerE where
     , cMeta = emptyMeta
     , cNear = Just (NearRule 130 AllNeighbours DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -137,7 +139,7 @@ instance Phase SnailE where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [EndPass (moveRule 10 snailRun)]
+    , cSystems = [SysEnd (moveSys 10 (effectSystem snailRun))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
@@ -157,14 +159,14 @@ instance Phase BottleE where
     , cMeta = emptyMeta
     , cNear = Just (NearRule 140 AllNeighbours DiePrepend)
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ _ = immuneHit
   physics _ = fixedPhysics
   onNear _ ctx (BottleE c) =
-    let skip = nub (acTrue (ncAdj ctx) ++ acProtect (ncAdj ctx))
-        b' = bottleDyeOne (acRecolor (ncAdj ctx)) (ncBoard ctx) skip (ncSelf ctx) c
+    let skip = nub (nwTrue (ncWorld ctx) ++ nwProtect (ncWorld ctx))
+        b' = bottleDyeOne (nwRecolor (ncWorld ctx)) (ncBoard ctx) skip (ncSelf ctx) c
      in nearLocalEdit b' [] []  -- 白名单：bottleTriggerOne 只改邻接可改色格
   view (BottleE c) = Face (Just ("bottle", [colorField c])) []
 
@@ -184,7 +186,7 @@ instance Phase CountdownE where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [EndPass (tickRule 10 tickRun explodeSeedsFor)]
+    , cSystems = [SysEnd (tickSys 10 (effectSystem (tickRun . ewBoard)) explodeSeedsFor)]
     }
   onMatch (CountdownE c _) = gemMatch (Just c)
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -210,7 +212,7 @@ instance Phase Fuzzball where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "fuzzball") }
     , cNear = Nothing
     , cHud = noHud { hudLabel = Just "毛球" }
-    , cPasses = [AdjacentPass 190 fuzzballAdjacent, EndPass (moveRule 20 fuzzballRun)]
+    , cSystems = [SysNear 190 fuzzballAdjacent, SysEnd (moveSys 20 (effectSystem fuzzballRun))]
     }
   onMatch _ = obstacleMatch
   onHit _ _ = HitOut Destroy False Nothing Nothing
@@ -223,18 +225,19 @@ isFuzzball cell = case cell of
   _ -> False
 
 -- | 毛球邻格（逃生口）：foldr 去重；步末跳格另见 fuzzballRun。
-fuzzballAdjacent :: AdjCtx -> Board -> AdjOut
-fuzzballAdjacent ctx b =
-  let dead = foldr (\q acc -> if q `elem` acc then acc else q : acc) []
+fuzzballAdjacent :: System NearWorld
+fuzzballAdjacent = System $ \ctx ->
+  let b = nwBoard ctx
+      dead = foldr (\q acc -> if q `elem` acc then acc else q : acc) []
         [ q
-        | p <- acTrue ctx
+        | p <- nwTrue ctx
         , q <- orthoNeighbors p
         , inBounds b q
-        , q `notElem` acDirect ctx
-        , q `notElem` acTrue ctx
+        , q `notElem` nwDirect ctx
+        , q `notElem` nwTrue ctx
         , isFuzzball (getCell b q)
         ]
-  in AdjOut b dead []
+  in ctx {nwDead = dead, nwSit = []}
 
 -- | 步末跳格（纯函数，测试直接调用）：避让格（皮带本步移过的格）与墙（传送门端点）不跳；
 -- 目标格按盘面散列选（'boardSeed' 依赖 @show board@，见 Element.Builtin.Common）；
@@ -255,23 +258,24 @@ fuzzballJumps avoid walls b0 = (reverse movesRev, bEnd)
              in ((p, q) : acc, b', p : q : touched)
 
 -- | 步末：毛球跳格，每跳一次记两项（毛球 原格 → 新格、宝石 新格 → 原格）。
-fuzzballRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
-fuzzballRun ctx b =
-  let (ms, b') = fuzzballJumps (ecAvoid ctx) (ecWalls ctx) b
+fuzzballRun :: EndWorld -> (Maybe EndEffect, Board)
+fuzzballRun ctx =
+  let b = ewBoard ctx
+      (ms, b') = fuzzballJumps (ewAvoid ctx) (ewWalls ctx) b
       items = concat [[EndItem p q (getCell b p) Nothing, EndItem q p (getCell b q) Nothing] | (p, q) <- ms]
   in (if null ms then Nothing else Just (EndEffect EvBelt "fuzzball" items), b')
 
 -- | 倒计时减一；列出数值真的变了的格。
-tickRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
-tickRun _ b =
+tickRun :: Board -> (Maybe EndEffect, Board)
+tickRun b =
   let b' = tickCountdowns b
       ticked = [p | p <- boardPositions b, getCell b p /= getCell b' p]
   in (if null ticked then Nothing else Just (EndEffect EvTick "countdown" [EndItem p p (getCell b' p) Nothing | p <- ticked]), b')
 
 -- | 蜗牛爬行（跳过本步被皮带移过的格，传送门端点当墙）。
-snailRun :: EndCtx -> Board -> (Maybe EndEffect, Board)
-snailRun ctx b =
-  let (ms, b') = traceSnailsBy (ecPushable ctx) (ecAvoid ctx) (ecWalls ctx) b
+snailRun :: EndWorld -> (Maybe EndEffect, Board)
+snailRun ctx =
+  let (ms, b') = traceSnailsBy (ewPushable ctx) (ewAvoid ctx) (ewWalls ctx) (ewBoard ctx)
   in (if null ms then Nothing else Just (EndEffect EvMove "snail" ms), b')
 
 -- | stepSnailsAvoidingBlocked 的逐只记录版：对同一快照顺序逐只调用 stepSnailAtBlocked，

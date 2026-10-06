@@ -233,20 +233,20 @@ ruleSummary f =
   let outs = map f samples
   in hash (concatMap snd outs) ++ " active " ++ show (length (filter fst outs))
 
-adjOutText :: Board -> AdjOut -> (Bool, String)
-adjOutText b0 out = (aoBoard out /= b0 || not (null (aoDead out)) || not (null (aoSit out)), show (boardText (aoBoard out), aoDead out, aoSit out))
+adjOutText :: Board -> NearWorld -> (Bool, String)
+adjOutText b0 out = (nwBoard out /= b0 || not (null (nwDead out)) || not (null (nwSit out)), show (boardText (nwBoard out), nwDead out, nwSit out))
 
 ruleLines :: Registry -> [String]
 ruleLines world =
-  [ "AR " ++ show i ++ " " ++ show (arOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (arRun r (AdjCtx (smTrue s) (smDirect s) (smProtect s) (recolorableWith world)) (smBoard s)))
-  | (i, r) <- zip [0 :: Int ..] (adjacentRules world)
+  [ "AR " ++ show i ++ " " ++ show (schOrder r) ++ " " ++ ruleSummary (\s -> adjOutText (smBoard s) (runSystem (schSystem r) (nearWorld (recolorableWith world) (smTrue s) (smDirect s) (smProtect s) (smBoard s))))
+  | (i, r) <- zip [0 :: Int ..] (nearSystems world)
   ]
-    ++ [ "ER " ++ show ph ++ " " ++ show (erOrder r) ++ " " ++ ruleSummary (endOut r)
+    ++ [ "ER " ++ show ph ++ " " ++ show (esOrder r) ++ " " ++ ruleSummary (endOut r)
        | ph <- [PhaseTick, PhaseSpread, PhaseMove]
-       , r <- endRules world ph
+       , r <- endSystems world ph
        ]
-    ++ [ "SR " ++ show (srOrder r) ++ " " ++ ruleSummary (\s -> let xs = [(srFires r (smBoard s) p q, srSeeds r (smBoard s) p q) | (p, q) <- smPairs s ++ rainbowPairs (smBoard s)] in (any fst xs, show xs))
-       | r <- swapRules world
+    ++ [ "SR " ++ show (swOrder r) ++ " " ++ ruleSummary (\s -> let xs = [(swFires r (smBoard s) p q, swSeeds r (smBoard s) p q) | (p, q) <- smPairs s ++ rainbowPairs (smBoard s)] in (any fst xs, show xs))
+       | r <- swapSystems world
        ]
     ++ [ "SO " ++ ruleSummary (\s -> let xs = [swapOpeningWith world (smBoard s) (swapped (smBoard s) p q) p q | (p, q) <- smPairs s ++ rainbowPairs (smBoard s)] in (any (/= Nothing) xs, show xs)) ]
     ++ [ "RA " ++ ruleSummary (\s -> let (b, d, st) = runAdjacentWith world (smTrue s) (smDirect s) (smProtect s) (smBoard s) in (b /= smBoard s || not (null d) || not (null st), show (boardText b, d, st))) ]
@@ -258,8 +258,8 @@ ruleLines world =
     ++ [ "CT " ++ ruleSummary (\s -> let xs = [(countElementWith world n (smBoard s), weighElementWith world n (smBoard s)) | n <- names world] in (True, show xs)) ]
   where
     endOut r s =
-      let ctxs = [EndCtx [] [] (pushableWith world), EndCtx (smProtect s) (take 4 (smDirect s)) (pushableWith world)]
-          outs = [(eff, boardText b', erSeeds r b', erHoles r b') | ctx <- ctxs, let (eff, b') = erRun r ctx (smBoard s)]
+      let ctxs = [endWorld [] [] (pushableWith world) (smBoard s), endWorld (smProtect s) (take 4 (smDirect s)) (pushableWith world) (smBoard s)]
+          outs = [(eff, boardText b', esSeeds r b', esHoles r b') | ctx <- ctxs, let w = runSystem (esSystem r) ctx, let eff = ewEffect w, let b' = ewBoard w]
       in (any (\(eff, _, sd, _) -> eff /= Nothing || not (null sd)) outs, show outs)
     swapped b p q = setCell (setCell b p (getCell b q)) q (getCell b p)
     -- 让成对交换规则有机会成立：每个彩虹 / 变色龙格和它的右、下邻格

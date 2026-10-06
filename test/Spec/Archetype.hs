@@ -142,7 +142,7 @@ instance Phase Thorn where
     , cMeta = emptyMeta { metaCounter = Just (CountNamed "thorn") }
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch _ = obstacleMatch
   onHit _ (Thorn n) = HitOut (if n <= 1 then Destroy else Absorb (toCell (Thorn (n - 1)))) False Nothing Nothing

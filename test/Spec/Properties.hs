@@ -714,7 +714,7 @@ qc_counts_monotone_legacy_view =
 -- | 第 3 刀之前的 findHintWith（整盘 hasAnyMatchWith (swapCells b p1 p2)），留作参照实现。
 findHintReference :: Registry -> Board -> Maybe (Pos, Pos)
 findHintReference world b =
-  case matchHints ++ concatMap ruleHints (swapRules world) of
+  case matchHints ++ concatMap ruleHints (swapSystems world) of
     (x : _) -> Just x
     [] -> Nothing
   where
@@ -738,7 +738,7 @@ findHintReference world b =
       , p2 <- [(r, c + 1), (r + 1, c)]
       , fst p2 >= 0 && fst p2 < boardSize && snd p2 >= 0 && snd p2 < boardSize
       , not (upperLocked (getCell b p1) || upperLocked (getCell b p2))
-      , srFires rule b p1 p2
+      , swFires rule b p1 p2
       ]
     hintable cell = isJust (colorOfWith world cell) && not (blocksSwapWith world cell)
     upperLocked = upperBlocksSwapWith world
@@ -884,7 +884,7 @@ legacySwapEnd world seg0 =
       avoid = nub (avoidCellsIn world elems2)
       walls = nub (wallCellsIn world elems2)
       (endSpread, boardSpread) = traceSpreadsWith world nEnd boardBeltCas
-      (endMove, boardSnail) = runPhase world PhaseMove (EndCtx avoid walls (pushableWith world)) nEnd boardSpread
+      (endMove, boardSnail) = runPhase world PhaseMove (endWorld avoid walls (pushableWith world) boardSpread) nEnd
       seg3 = cascadeAfterWith world (AfterEnd (endHolesWith world boardSnail)) (crHooks seg2) (crGen seg2) boardSnail
       board1 = crBoard seg3
   in (seg0 :| [seg1, seg2, seg3], endTick ++ endBelt ++ endSpread ++ endMove, board1, board1)
@@ -1060,8 +1060,8 @@ qc_combo_table_matches_legacy =
        cover 5 (not (null (legacyComboClearSeeds b p1 p2)) && not (legacyIsSpecialCombo b p1 p2)) "kinds match but soft-locked" $
        conjoin
          [ map comboName rules === ["bomb×bomb", "line×line", "line×bomb", "rainbow×line"]
-         , map srOrder (swapRules defaultRegistry) === [10, 15, 20]
-         , map srOrder (elementSwapRules defaultRegistry) === [10, 15]
+         , map swOrder (swapSystems defaultRegistry) === [10, 15, 20]
+         , map swOrder (elementSwapSystems defaultRegistry) === [10, 15]
          , comboFires rules b p1 p2 === legacyIsSpecialCombo b p1 p2
          , Combos.isSpecialCombo b p1 p2 === legacyIsSpecialCombo b p1 p2
          , conjoin [comboSeedsFor rules bb p1 p2 === legacyComboClearSeeds bb p1 p2 | bb <- [b, swapped]]

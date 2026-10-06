@@ -28,6 +28,7 @@ import Match3.Board.Grid (inBounds)
 import Match3.Element.Kind
 import Match3.Element.Phase
 import Match3.Element.Special (runShape)
+import Match3.ECS.Stage (SwapSys(..))
 import Match3.Element.Types
 import Match3.Rainbow (isRainbowSwap, rainbowClearSeeds)
 import Match3.Types
@@ -45,7 +46,7 @@ instance Phase PlainGem where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = []
+    , cSystems = []
     }
   onMatch (PlainGem c) = gemMatch (Just c)
   onHit _ _ = gemHit
@@ -97,7 +98,7 @@ instance forall k. SpecialKind k => Phase (SpecialGem k) where
     , cMeta = emptyMeta
     , cNear = Nothing
     , cHud = noHud
-    , cPasses = [SwapPass (SwapRule 10 isRainbowSwap rainbowClearSeeds) | specialKind (Proxy :: Proxy k) == Rainbow]
+    , cSystems = [SysSwap (SwapSys 10 isRainbowSwap rainbowClearSeeds) | specialKind (Proxy :: Proxy k) == Rainbow]
     }
   onMatch g@(SpecialGem c) = (gemMatch (Just c)) { mHintable = kindOf g /= Rainbow }
   onHit _ g = gemHit { hBlast = specialBlast (kindOf g) }

@@ -47,7 +47,7 @@ resolveSwapWith world p1 p2 gs
     -- 起手方式 opening 的类型因此是 Opening 'Swapped，三种起手（匹配 / 种子 / 变身）都允许
     swappedS = swapStage p1 p2 (fullStage board0)
     swapped = stageBoard swappedS
-    -- 成对交换规则（彩虹取色 / 特殊合成经元素世界的 swapRule，按 srOrder 取第一条成立的）
+    -- 成对交换规则（彩虹取色 / 特殊合成经元素世界的 swapSystems，按 swOrder 取第一条成立的）
     pairRule = swapOpeningWith world board0 swapped p1 p2
     -- 交换变身（新玩法 4：关卡级机制的 morph，内置 = 规则开关 rainbow_combos）：先变身再按种子起手，
     -- 变身记成第 0 轮之前的一条步末效果；没人回复 = 原有起手

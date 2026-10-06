@@ -115,7 +115,7 @@ module Match3.ECS.Registry
 
 import Control.Monad (foldM)
 import Data.Array (Array, bounds, inRange, listArray, (!))
-import Data.List (mapAccumL, nub, sortOn)
+import Data.List (nub, sortOn)
 import Data.Maybe (isJust, listToMaybe)
 import Data.Monoid (Sum(..))
 import Match3.Board.Grid (getCell, setCell)
@@ -653,13 +653,13 @@ hitGroundWith world hits = foldr one ([], [])
 --------------------------------------------------------------------------------
 -- 成对交换、开启、改色 / 推动
 
--- | 成对交换规则（已按 srOrder 排好）：元素声明的（elementSwapRules）+ 组合表并成的一条（第 8 刀，次序 20）。
+-- | 成对交换规则（已按 swOrder 排好）：元素声明的（elementSwapSystems）+ 组合表并成的一条（第 8 刀，次序 20）。
 swapSystems :: Registry -> [SwapSys]
 swapSystems world = case wCombos world of
   [] -> wSwap world
   combos -> sortOn swOrder (wSwap world ++ [comboSwapSystem combos])
 
--- | 只是元素自己声明的成对交换规则（不含组合表；按 srOrder 排好）。
+-- | 只是元素自己声明的成对交换规则（不含组合表；按 swOrder 排好）。
 elementSwapSystems :: Registry -> [SwapSys]
 elementSwapSystems = wSwap
 
@@ -699,7 +699,7 @@ shapeRules = wShapes
 setShapeRules :: [ShapeRule] -> Registry -> Registry
 setShapeRules rs world = world {wShapes = rs}
 
--- | 特殊块组合表（有序）。非空时整张表并成一条次序 comboOrder（20）的成对交换规则（见 'swapRules'）。
+-- | 特殊块组合表（有序）。非空时整张表并成一条次序 comboOrder（20）的成对交换规则（见 'swapSystems'）。
 -- mkRegistry 建出的表为空，内置元素世界是 Match3.Combos.builtinComboRules。
 comboRules :: Registry -> [ComboRule]
 comboRules = wCombos

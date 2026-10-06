@@ -80,7 +80,7 @@ data EndStep = EndStep
   , esEffect     :: EndEffect
   } deriving (Eq, Show)
 
--- | 蔓延（内置：藤 → 巧 → 蒸汽）的逐步快照：依次执行 PhaseSpread 阶段的步末规则（按 erOrder），
+-- | 蔓延（内置：藤 → 巧 → 蒸汽）的逐步快照：依次执行 PhaseSpread 阶段的步末 system（按 esOrder），
 -- 每条规则产出的非空效果记成一个 EndStep（esAfterWaves = k）。trySwap 与道具用的是同一组调用。
 traceSpreadsWith :: Registry -> Int -> Board -> ([EndStep], Board)
 traceSpreadsWith world k b = runPhaseSteps world PhaseSpread (endWorld [] [] (pushableWith world) b) k

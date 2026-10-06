@@ -5,7 +5,7 @@
 -- 邻格波及、飞碟吸收（maskUfoAbsorbSpecials / clearUfoAbsorbedWith：吸走 ≠ 引爆）以及计分公式。
 --
 -- 直接命中、叠层随格清除、邻格波及、特殊块爆炸范围、计色都查元素元素世界
--- （Match3.ECS.Registry）；邻格波及按各元素 AdjacentRule 的 arOrder 依次执行（顺序见 Element.Builtin）。
+-- （Match3.ECS.Registry）；邻格波及按各元素邻格 system 的次序（Scheduled）依次执行（顺序见 Element.Builtin）。
 -- 彩蛋开启走元素世界的开启规则（openRule），彩虹取色 / 特殊合成是成对交换规则（swapRule，在 Game.Move）。
 -- 本模块不依赖内置元素世界，全部函数收 Registry；内置元素世界的短名在 Match3.Board.Default。
 --
@@ -96,7 +96,7 @@ clearMatchesDetailedWith world prefer b =
 --   2. chipOnHitWith：直接命中按层结算（冰 → 叠层 → 本体：削层 / 揭层 / 消除 / 免疫）；
 --   3. surpriseClearPassWith：彩蛋在邻格波及之前开启（3×3 爆炸计入真消除，与炸弹同口径）；
 --   4. stripOnClearWith：真消除格上的草 / 藤 / 巧随格清掉（空洞不能再蔓延）；
---   5. runAdjacentWith：按 arOrder 跑各元素的邻格波及（已被直接命中的格不再重复波及；
+--   5. runAdjacentWith：按次序跑各元素的邻格波及（已被直接命中的格不再重复波及；
 --      彩蛋开出的特殊块与果汁机刚产出的炸弹本轮坐住，不被魔法帽 / 染色瓶改色）；
 --   6. 清除格 = 真消除 ∪ 波及打碎的格（按规则顺序）；挖空后在清除格上放新特殊块。
 clearWaveWith :: Registry -> Maybe Pos -> [MatchRun] -> Board -> [Pos] -> (MBoard, Int, [Pos])

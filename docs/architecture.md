@@ -488,7 +488,7 @@ data GameView = GameView
 - **分文件**：内置原型按功能分在 `src/Match3/Element/Builtin/` 下的 `Gem` / `Layer` / `Obstacle` / `Collectible` / `Actor` / `Ground` / `Level` / `Common`（各文件开头的注释写明这一组的共同特征）；`Element.Builtin` 只按注册顺序汇总。彩蛋归 `Obstacle`：用障碍组件（`obstacleMatch` / `obstaclePhysics`）、命中即破的占格本体，没有计数，也不按颜色匹配。依赖只朝一个方向：`Obstacle` 引用 `Gem`（双面块翻成宝石）和 `Collectible`（保险箱开成饼干），`Level` 引用 `Gem`（规则开关用 `withBombShapes`），其余分组互不引用（`Common` 除外）。
 - **透明性护栏**：`Spec.ElementAbility` 按源码核对每个 `Component` 实例都进了 `rowProbe`、每个叠层查询都经 `whole*`，装箱 / 叠层前后逐项相等；`Spec.Archetype` 钉住组件值与惰性占格。
 
-**护栏**：元素查询快照 `test/golden/element-queries.txt`（1666 行，生成器 `test/golden/ElementQueries.hs`）锁定全部内置元素的行为：Q 行 = 全部格子组合上的逐格查询，P = 放置，R = 规则表 / 条目名 / 个数差计数 / 关卡级机制清单，A / E / S / O / C / G = 邻格 / 步末 / 成对交换 / 开启 system、直接命中、地面层在样例盘上的输出，M = 每关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列；由三个 `ec_*_snapshot` 测试比对。元素类重构第 0 刀另加元素对照快照 `test/golden/element-oracle.txt`（3623 行：更多样本格 × 全部值查询、逐条 system 在 400 张随机盘上的散列与起作用盘数、整轮查询，`Spec.ElementOracle` 的 4 个用例），元素类重构、接口收缩与 ECS 重写全程逐字节不变。
+**护栏**：（已废止）元素查询快照 `test/golden/element-queries.txt`（1666 行，生成器 `test/golden/ElementQueries.hs`）锁定全部内置元素的行为：Q 行 = 全部格子组合上的逐格查询，P = 放置，R = 规则表 / 条目名 / 个数差计数 / 关卡级机制清单，A / E / S / O / C / G = 邻格 / 步末 / 成对交换 / 开启 system、直接命中、地面层在样例盘上的输出，M = 每关 × 种子 1–2 × 12 手（提示、锤子、十字、交换）的逐手散列；由三个 `ec_*_snapshot` 测试比对。元素类重构第 0 刀另加元素对照快照 `test/golden/element-oracle.txt`（3623 行：更多样本格 × 全部值查询、逐条 system 在 400 张随机盘上的散列与起作用盘数、整轮查询，`Spec.ElementOracle` 的 4 个用例），元素类重构、接口收缩与 ECS 重写全程逐字节不变。
 
 ### 与 ECS 概念的对照
 

@@ -9,7 +9,7 @@ stack test
 ```
 
 - 库测 **不需要** 显示器或任何图形库（原生只编核心库、`app/pure` 与测试；SDL2 桌面版已移除）。
-- 期望：**473** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
+- 期望：**485** 个命名用例通过（Tasty：`testCase` + `testProperty`）。各模块的用例数见下文「目录」表；以后加测试只改这里的总数和表里对应的一行。
 - 用例数的来历（累计）：
   - 起点：262 个（2026-09 重构前）。
   - 重构 11 刀，+69 → 331（见 [refactor-2026-09.md](refactor-2026-09.md)）：
@@ -60,6 +60,7 @@ stack test
   - 审计整改第 3 轮（2026-10-05），+2 → 468：`ec_entity_wires_damage`（多格实体扣血接线）与 `mechName` 唯一护栏
   - 元素接口收缩（2026-10-05 – 06，slim-1…11，见 [guide/08 阶段 14](guide/08-演进史.md)）：slim-1 +1（`ab_near_escape_absorbed`）→ 469；slim-2 +2（`Spec.PhaseSlim`：`phase_gem_matches_ability_gem`、`phase_defaults_silent_near`）→ 471；slim-3…11 只改写不增减（slim-9 起 `ElementAbility` / `Archetype` 针对 `Phase`；slim-10 `archetype_builtin_kind_inventory` 改数 `Phase` 实例、`ec_entity_wires_damage` 改扫 `cPasses` 里的 `entityDamage`）→ 471
   - ECS 重写（2026-10-06，`feat/ecs`，ecs-1…7，见 [guide/08 阶段 15](guide/08-演进史.md)）：ecs-1…3 只改写不增减（`ElementAbility` / `Archetype` 改为针对原型与组件：`ab_row_probe_reads_all_components`、`ab_whole_reads_every_layer_query`、`archetype_builtin_kind_inventory` 改数原型值）→ 471；ecs-4 +1（`ab_cover_column_law`：叠层存储列剥下 / 盖回定律）→ 472；ecs-5 改写不增减（测试专用机制改成 `Mechanic` 记录 + `MechSys`）→ 472；ecs-6 +1（`br_wave_and_step_stage_systems`）→ 473
+  - ECS 纯数据化 / 正经 Eq / 金标准改写（2026-10-12，ecs-9…11）：ecs-9/10 改写不增减 → 473；ecs-11 删除三份逐字节快照（`golden.txt` / `element-queries.txt` / `element-oracle.txt` 及生成器），`Spec.Golden` / `Spec.ElementOracle` / `ec_*` / `ab_same_name_*` 改成行为性质与固定样例，−5 +17 → **485**
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 网页版的构建与测试（`make build` / `make check`）见下文「网页版测试」。
@@ -277,6 +278,9 @@ Haskell 特性第 3–9 项与第 9 刀改写时，各留了一份改写前代�
 **洗牌步（第二刀补上）**：`MoveTrace` 新增 `mtGen`（洗牌前的生成器）与 `mtShuffle`（洗牌后的盘面）。`trace_shuffle_step_replays` 对全部关卡（段 5 起 40 关，新玩法起逐关追加）× 种子 1–3 × 开局全部成交交换（每条再沿首个成交交换走 2 手）逐帧比对：时间线重放到 `mtFinal`，再从 `(mtFinal, mtGen)` 重放 `ensurePlayable` 必须到达结算后的 `gsBoard` / `gsGen`；未洗牌的步要求 `mtFinal == gsBoard`、`mtGen == gsGen`。38 关时 **3801** 个成交步逐帧比对，其中 **29** 个自动洗牌步；底线 > 3000 / > 20。
 
 ## 行为金标准（golden）
+
+> **ecs-11（2026-10-12）起已废止逐字节快照。** 原 `test/golden/*.txt` 已删除；护栏见 `Spec.Golden` / `Spec.ElementOracle` 与改写后的 `ec_*` / `ab_same_name_*`。下文为历史说明。
+
 
 `test/golden/Golden.hs` 把固定种子下的规则结果投影成稳定文本，入库为 `test/golden/golden.txt`（2534 行：前 2186 行自 `4fbcefc` 起逐字不变，第 2187–2344 行是段 1 追加的 H4–H6，第 2345–2534 行是段 5 追加的第 39 / 40 关），`golden_behaviour_snapshot` 在 `stack test` 里逐行比对，失败时报告第一处分叉的行号。
 

@@ -141,7 +141,6 @@ tests:
     main:                Spec.hs
     source-dirs:
     - test
-    - test/golden
     - app/pure
     - src
     ghc-options:

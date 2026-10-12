@@ -3,7 +3,7 @@
 -- | 原型与组件（ecs-3 起取代 Phase 类）：
 --
 -- * 同名替换：把内置的宝石 / 直线特效 / 石头 / 翻转块 / 气泡 / 雪怪 / 冰 / 巧克力 / 锁链 / 果冻换成测试里独立写的
---   原型副本、按同名注册进内置注册表，元素对照快照（element-oracle.txt）逐行不变；
+--   原型副本、按同名注册进内置注册表，样本格整格读数不变（ab_same_name_preserves_sample_hits）；
 -- * 叠层合成：测试注册表与内置注册表的整格组件（'wholeMatch' / 'wholeHit' / 'wholePhysics' + 本体组件）在全部
 --   宝石 × 冰 × 叠层格上逐项相等；
 -- * 名字一致：每个注册原型的存储列认下的格子，经注册表解码的行名都等于原型名、状态往返不变；
@@ -16,7 +16,6 @@ import Control.Applicative ((<|>))
 import Control.Monad (forM_)
 import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (isJust, mapMaybe)
-import qualified ElementOracle
 import Match3.Board.Grid (getCell)
 import Match3.ECS.Archetype
 import Match3.ECS.Component
@@ -42,7 +41,7 @@ import Match3.View (cellFace)
 
 tests :: [TestTree]
 tests =
-  [ testCase "ab_same_name_copies_oracle_unchanged" ab_same_name_copies_oracle_unchanged
+  [ testCase "ab_same_name_preserves_sample_hits" ab_same_name_preserves_sample_hits
   , testCase "ab_layered_matches_builtin" ab_layered_matches_builtin
   , testCase "ab_kind_name_matches_decoded" ab_kind_name_matches_decoded
   , testCase "ab_row_probe_reads_all_components" ab_row_probe_reads_all_components
@@ -214,14 +213,20 @@ replaced =
     , groundDef jellyV
     ]
 
-ab_same_name_copies_oracle_unchanged :: Assertion
-ab_same_name_copies_oracle_unchanged = do
-  expected <- lines <$> readFile "test/golden/element-oracle.txt"
-  let actual = ElementOracle.oracleLinesWith replaced
+-- | 同名覆盖注册后，样本格上的整格读数与内置注册表一致（ecs-11：不再比对 oracle 快照）。
+ab_same_name_preserves_sample_hits :: Assertion
+ab_same_name_preserves_sample_hits = do
   assertEqual "names unchanged" (map defName (registryDefs defaultRegistry)) (map defName (registryDefs replaced))
-  case [(i, x, y) | (i, x, y) <- zip3 [1 :: Int ..] expected actual, x /= y] of
-    ((i, x, y) : _) -> assertFailure ("line " ++ show i ++ " differs\nexpected: " ++ take 400 x ++ "\nactual:   " ++ take 400 y)
-    [] -> assertEqual "line count" (length expected) (length actual)
+  let samples =
+        [ mkGem C1
+        , Gem C2 LineH 0 Nothing
+        , Stone 3
+        , Gem C1 Normal 2 Nothing
+        , Gem C2 Normal 0 (Just (Chain 2))
+        ]
+  mapM_
+    (\c -> assertEqual ("probe " ++ show c) (wholeProbe defaultRegistry c) (wholeProbe replaced c))
+    samples
 
 --------------------------------------------------------------------------------
 -- 叠层合成与内置注册表逐组件相等

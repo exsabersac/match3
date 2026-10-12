@@ -207,9 +207,6 @@ test-suite match3-test
       Spec.View
       Spec.WebColors
       Toy
-      ElementOracle
-      ElementQueries
-      Golden
       ComboFx
       UI.CellFace
       UI.Chapters
@@ -306,7 +303,6 @@ test-suite match3-test
       Paths_match3
   hs-source-dirs:
       test
-      test/golden
       app/pure
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N

@@ -61,6 +61,7 @@ stack test
   - 元素接口收缩（2026-10-05 – 06，slim-1…11，见 [guide/08 阶段 14](guide/08-演进史.md)）：slim-1 +1（`ab_near_escape_absorbed`）→ 469；slim-2 +2（`Spec.PhaseSlim`：`phase_gem_matches_ability_gem`、`phase_defaults_silent_near`）→ 471；slim-3…11 只改写不增减（slim-9 起 `ElementAbility` / `Archetype` 针对 `Phase`；slim-10 `archetype_builtin_kind_inventory` 改数 `Phase` 实例、`ec_entity_wires_damage` 改扫 `cPasses` 里的 `entityDamage`）→ 471
   - ECS 重写（2026-10-06，`feat/ecs`，ecs-1…7，见 [guide/08 阶段 15](guide/08-演进史.md)）：ecs-1…3 只改写不增减（`ElementAbility` / `Archetype` 改为针对原型与组件：`ab_row_probe_reads_all_components`、`ab_whole_reads_every_layer_query`、`archetype_builtin_kind_inventory` 改数原型值）→ 471；ecs-4 +1（`ab_cover_column_law`：叠层存储列剥下 / 盖回定律）→ 472；ecs-5 改写不增减（测试专用机制改成 `Mechanic` 记录 + `MechSys`）→ 472；ecs-6 +1（`br_wave_and_step_stage_systems`）→ 473
   - ECS 纯数据化 / 正经 Eq / 金标准改写（2026-10-12，ecs-9…11）：ecs-9/10 改写不增减 → 473；ecs-11 删除三份逐字节快照（`golden.txt` / `element-queries.txt` / `element-oracle.txt` 及生成器），`Spec.Golden` / `Spec.ElementOracle` / `ec_*` / `ab_same_name_*` 改成行为性质与固定样例，−5 +17 → **485**
+  - ECS 残留清理（2026-10-12，ecs-12）：`FaceKind` / `ViewKind` / `MatchColorAt` / `MatchHintable` / `TallyEntityAnchor`；删 `HitDerive`/`MatchBy`；测试数不变 → **485**
 - 合并门禁：`make verify`（即 `stack test`）全绿（见下文「开发流程」）；不要在红测上合并。
 
 网页版的构建与测试（`make build` / `make check`）见下文「网页版测试」。

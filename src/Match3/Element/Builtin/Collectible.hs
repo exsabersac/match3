@@ -49,7 +49,7 @@ timeSpiritArch = (archetype "time_spirit" col)
   { aSpawn = \_ _ -> Just TimeSpirit
   , aHitKind = HitBreak False Nothing
   , aDiff = Just (DiffCount CountSpirits 2)
-  , aFace = const (baseFace "spirit" [])
+  , aFaceKind = FaceFixed (baseFace "spirit" [])
   , aSystems = [SysNear 120 (nearBy col SkipDirect DiePrepend (\_ _ -> NearNudge Dies))]
   }
   where
@@ -118,12 +118,12 @@ chameleonNext c = colorAt (fromEnum c + 1)
 chameleonArch :: Archetype Int
 chameleonArch = (archetype chameleonName (customColumn chameleonName))
   { aSpawn = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
-  , aMatchKind = MatchBy colorAt True
+  , aMatchKind = MatchColorAt True
   , aHitKind = HitBreak True Nothing
   , aPhysics = gemPhysics {pKeepShuffle = True, pRecolor = False}
   , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed chameleonName)}
   , aHud = noHud {hudLabel = Just "变色龙", hudGoalIcon = Just "chameleon_icon"}
-  , aFace = \k -> noFace {fExtras = [("c", FaceColor (colorAt k))]}
+  , aFaceKind = FaceChameleon
   , aSystems = [SysSwap (SwapSys 15 chameleonRainbowFires chameleonRainbowSeeds), SysEnd (moveSys 40 (effectSystem (chameleonRun . ewBoard)))]
   }
   where

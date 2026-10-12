@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 -- | 关卡级机制（飞碟 / 皮带 / 传送门 / 地毯 / 地面层 / 规则开关 / 掉落口）：不在格子里的机制，状态是一个值。
@@ -6,7 +7,7 @@
 -- ecs-5 起取代 Mechanic 类与 GADT Beat：一种机制 = 一条**原型记录** 'Mechanic' m ——
 --
 -- * 名字 / 是否核心 / 是否内置（数据）；
--- * 读数组件 'LevelView'（纯数据，由状态算出：飞碟 / 皮带 / 传送门 / 地毯 / 地面层 / 掉落口，前端与查询用）；
+-- * 读数配方 'ViewKind' → 组件 'LevelView'（纯数据：飞碟 / 皮带 / 传送门 / 地毯 / 地面层 / 掉落口）；
 -- * 按节拍的 system 列表 'mechSystems'（'MechSys' 的每个构造子是流水线上的一个节拍，类型各自写明：
 --   输入累积 → 回复与推进后的状态，Nothing = 本节拍不参与）。开局也是节拍（'OnStart'）。
 --
@@ -22,6 +23,9 @@ module Match3.Element.Mechanic
   , MechSys(..)
   , LevelView(..)
   , noView
+  , ViewKind(..)
+  , resolveView
+  , mechView
     -- * 装箱的机制（一局里存的：原型 + 状态）
   , SomeMechanic(..)
   , mechNameOf
@@ -39,11 +43,12 @@ module Match3.Element.Mechanic
   , groundLayer
   ) where
 
+import Data.Coerce (Coercible, coerce)
 import Match3.Board.Grid (MBoard)
 import Match3.Board.Refill (RefillPolicy)
 import Match3.Conveyor (Belt)
 import Match3.Element.Types (ShapeRule)
-import Match3.Levels.Level (Level(..))
+import Match3.Levels.Level (DropSpec(..), Level(..), dropCells)
 import Match3.Types
 import Match3.Ufo (Ufo)
 import Unsafe.Coerce (unsafeCoerce)
@@ -102,19 +107,47 @@ data LevelView = LevelView
 noView :: LevelView
 noView = LevelView Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
+-- | 读数配方（ecs-12）：把机制状态（多为 newtype）塞进 'LevelView' 的某一格；'Coercible' 解 newtype。
+-- 掉落口要把 '[DropSpec]' 展成格列表，故单独一条。
+data ViewKind m where
+  ViewNone :: ViewKind m
+  ViewUfos :: Coercible m [Ufo] => ViewKind m
+  ViewBelts :: Coercible m [Belt] => ViewKind m
+  ViewPortals :: Coercible m [(Pos, Pos)] => ViewKind m
+  ViewCarpet :: Coercible m [Pos] => ViewKind m
+  ViewGround :: Coercible m Ground => ViewKind m
+  ViewExtra :: Coercible m Int => ViewKind m
+  ViewDrops :: Coercible m [DropSpec] => ViewKind m
+    -- ^ 'concatMap dropCells' 展成掉落口格
+
+resolveView :: ViewKind m -> m -> LevelView
+resolveView kind m = case kind of
+  ViewNone -> noView
+  ViewUfos -> noView {lvUfos = Just (coerce m)}
+  ViewBelts -> noView {lvBelts = Just (coerce m)}
+  ViewPortals -> noView {lvPortals = Just (coerce m)}
+  ViewCarpet -> noView {lvCarpetOpen = Just (coerce m)}
+  ViewGround -> noView {lvGround = Just (coerce m)}
+  ViewExtra -> noView {lvExtra = Just (coerce m)}
+  ViewDrops -> noView {lvDrops = Just (concatMap dropCells (coerce m))}
+
 -- | 关卡级机制原型（状态类型 @m@）。
 data Mechanic m = Mechanic
   { mechName :: ElementName        -- ^ 名字（按名合并 / 去掉）
   , mechCore :: Bool               -- ^ 核心机制（removeMechanic 也去不掉，总参与）
   , mechBuiltin :: Bool            -- ^ 内置标签（ecs-8）：GameState 的固定格式 Show 已按固定字段打印
                                    --   （或有意不打印）它的状态，不进 gsLevelExtra；扩展机制保持 False
-  , mechView :: m -> LevelView     -- ^ 读数组件
+  , mechViewKind :: ViewKind m     -- ^ 读数配方（见 'ViewKind'）
   , mechSystems :: [MechSys m]     -- ^ 按节拍的 system（同一节拍取第一个）
   }
 
+-- | 兼容读法：机制在状态下的读数组件。
+mechView :: Mechanic m -> m -> LevelView
+mechView k = resolveView (mechViewKind k)
+
 -- | 缺省原型：只有名字、不核心、不内置、无读数、不参与任何节拍。
 mechanic :: ElementName -> Mechanic m
-mechanic n = Mechanic n False False (const noView) []
+mechanic n = Mechanic n False False ViewNone []
 
 -- | 一局里的一种机制：原型 + 当前状态（Show = 状态的 Show，只给 GameState / 调试打印用）。
 --
@@ -175,7 +208,7 @@ groundLayerMech :: Mechanic GroundLayer
 groundLayerMech = (mechanic "ground")
   { mechCore = True
   , mechBuiltin = True
-  , mechView = \(GroundLayer g) -> noView {lvGround = Just g}
+  , mechViewKind = ViewGround
   , mechSystems =
       [ OnStart (\lvl _ -> GroundLayer (lvlGround lvl))
       , OnGroundHit (\hitG hits acc (GroundLayer g) -> let (g', cs) = hitG hits g in Just (acc ++ cs, GroundLayer g'))

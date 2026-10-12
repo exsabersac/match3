@@ -23,6 +23,7 @@ import Match3.Element.Mechanic
   , Mechanic(..)
   , MechSys(..)
   , SomeMechanic(..)
+  , ViewKind(..)
   , mechBuiltinOf
   , mechanic
   , mechNameOf
@@ -114,7 +115,7 @@ twinA = archetype "twin" (customColumn "twin")
 
 twinB :: Archetype Bool
 twinB = (archetype "twin" (Column get (\b -> Custom "twin" (CustomState (fromEnum b)))))
-  {aMatchKind = MatchDerive (\b -> obstacleMatch {mHintable = b})}
+  {aMatchKind = MatchHintable}
   where
     get cell = case cell of
       Custom "twin" (CustomState v) -> Just (v > 0)
@@ -299,7 +300,7 @@ newtype Siphon = Siphon Int
 
 siphon :: Int -> SomeMechanic
 siphon = SomeMechanic ((mechanic "siphon")
-  { mechView = \(Siphon k) -> noView {lvExtra = Just k}
+  { mechViewKind = ViewExtra
   , mechSystems = [OnStart (\_ _ -> Siphon 2), OnRefilled absorb]
   }) . Siphon
   where

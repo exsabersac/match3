@@ -7,14 +7,15 @@
 -- 原型只做两件事：
 --
 -- 1. 存储列 'Column'：这一行是不是我的（'colGet'）、我的类型化状态 s 怎么写回行（'colPut'）；
--- 2. 由状态派生纯数据组件（Match3.ECS.Component）：'aMatch' / 'aTally' / 'aFace'；'aPhysics' 是纯数据（与状态无关）；
+-- 2. 由状态派生纯数据组件（Match3.ECS.Component）：'aMatch' / 'aTally' / 'aFace'（配方 'aFaceKind'）；'aPhysics' 是纯数据（与状态无关）；
 --    命中是配方 'aHitKind'（'HitKind' GADT，system / 'resolveHit' 解释成 'OnHit'）。
 --
 -- 原型不含行为：邻格反应、步末行动、成对交换、开启等元素特有逻辑是它带来的 system（'aSystems'，Match3.ECS.Stage），
 -- 与其他 system 一样按阶段、按次序注册进调度表。
 --
--- 仍含函数的例外（ecs-9）：'Column' / 'Placer'（存储层）；'aFace'（显示字段随状态变）；
--- 'MatchBy' / 'MatchDerive' / 'TallyDerive' / 'HitDerive'（少数状态相关逃生口）；'Entity' 的读写（多格实体）。
+-- 仍含函数的例外（ecs-12）：'Column' / 'Placer'（存储编解码与关卡放置，本质是仿射映射）；
+-- 'Entity'（多格实体的足迹 / 部件号 / 血量读写）；'MatchDerive' / 'TallyDerive' / 'FaceDerive'
+-- （测试与少数不规则显示的逃生口）。生产路径的命中 / 匹配 / 计数 / 显示配方已纯数据化。
 --
 -- 查询按组件类型（'Component' 类做索引）：解码出的一行 'Row' 上 @rowGet \@Match row@、@rowGet \@Physics row@ …
 module Match3.ECS.Archetype
@@ -36,6 +37,9 @@ module Match3.ECS.Archetype
   , TallyKind(..)
   , resolveTally
   , aTally
+  , FaceKind(..)
+  , resolveFace
+  , aFace
   , Archetype(..)
   , archetype
   , SomeArchetype(..)
@@ -56,8 +60,8 @@ import Data.Coerce (Coercible, coerce)
 import Engine.Optics (Prism', preview, review)
 import Match3.ECS.Component
 import Match3.ECS.Stage (SysDef)
-import Match3.Element.Types (Placer)
-import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, gridFromRows, ifoldMap)
+import Match3.Element.Types (CellField(..), FaceValue(..), Placer)
+import Match3.Types (Board, Cell, CellContents(..), Color(..), CustomState(..), ElementName(..), GemKind(..), Pos, colorAt, gridFromRows, ifoldMap)
 
 -- | 存储列：一行（'Cell'）↔ 类型化状态 s 的仿射编解码（并非每行都有这一列）。
 data Column s = Column
@@ -90,8 +94,18 @@ query :: Column s -> Board -> [(Pos, s)]
 query col = ifoldMap (\p cell -> maybe [] (\s -> [(p, s)]) (colGet col cell))
 
 
--- | 命中配方（纯数据；ecs-9）：原型挂配方，'resolveHit' / 查询时解释成运行时 'OnHit'（可带具体 Absorb 格）。
--- 'HitDerive' 是少数确需任意函数的逃生口（注解见各用处）；其余构造子都不含函数。
+-- | 多格实体（雪怪 Boss）：各部件仍是独立的格实体，记录告诉扣血 system 锚点怎么认（'partNo' == 0）、部件在哪
+-- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。扣血由 Match3.Element.Rules.entityDamage 统一算。
+-- 字段仍是函数（ecs-12：足迹形状与血量投影随状态类型而变，抽成纯数据表会绑死布局）；见模块头例外。
+data Entity s = Entity
+  { footprint :: Pos -> [Pos]
+  , partNo :: s -> Int
+  , hitPoints :: s -> Int
+  , withHp :: Int -> s -> s
+  }
+
+-- | 命中配方（纯数据；ecs-9 / ecs-12）：原型挂配方，'resolveHit' / 查询时解释成运行时 'OnHit'（可带具体 Absorb 格）。
+-- 全部构造子都不含函数（ecs-12 删掉未使用的 'HitDerive'）。
 data ChipEnd
   = ChipVanish       -- ^ 末层 'Destroy'
   | ChipBecome Cell  -- ^ 末层 'Absorb' 成给定格（保险箱 → 饼干）
@@ -111,8 +125,6 @@ data HitKind s where
     -- ^ 吃掉命中、写成给定整数状态（魔法石发射后归零）
   HitFlip :: HitKind (Color, Color)
     -- ^ 翻成背面颜色的普通宝石
-  HitDerive :: (s -> OnHit) -> HitKind s
-    -- ^ 逃生口：任意状态 → OnHit（确需函数时用；尽量少用）
 
 -- | 把命中配方解释成运行时组件（需要存储列：'HitChip' / 'HitHold' / 'HitAtLeast' / 'HitSet' 要写回格子）。
 resolveHit :: Column s -> HitKind s -> s -> OnHit
@@ -128,37 +140,73 @@ resolveHit col kind s = case kind of
   HitAtLeast n a b -> resolveHit col (if s >= n then a else b) s
   HitSet n -> absorbHit (colPut col n)
   HitFlip -> let (_, back) = s in absorbHit (Gem back Normal 0 Nothing)
-  HitDerive f -> f s
 
 
--- | 匹配配方（ecs-9）：多数是固定或「状态即颜色」；变色龙等用 'MatchBy' / 'MatchDerive'。
+-- | 匹配配方（ecs-9 / ecs-12）：多数固定或「状态即颜色」；变色龙用 'MatchColorAt'；'MatchDerive' 仅逃生口。
 data MatchKind s where
   MatchFixed :: Match -> MatchKind s
   MatchColor :: Bool -> MatchKind Color
     -- ^ 状态 = 颜色；参数 = 是否进提示（彩虹 = False）
+  MatchColorAt :: Bool -> MatchKind Int
+    -- ^ 状态 = 颜色下标（'colorAt'）；变色龙
   MatchFront :: MatchKind (Color, a)
     -- ^ 双面块：按正面颜色匹配
-  MatchBy :: (s -> Color) -> Bool -> MatchKind s
-    -- ^ 由状态取色（变色龙）；仍带一个取色函数
+  MatchHintable :: MatchKind Bool
+    -- ^ 占格障碍匹配，'mHintable' = 状态（测试同名替换用）
   MatchDerive :: (s -> Match) -> MatchKind s
-    -- ^ 逃生口
+    -- ^ 逃生口（测试里状态 = 原格取色等）
 
 resolveMatch :: MatchKind s -> s -> Match
 resolveMatch kind s = case kind of
   MatchFixed m -> m
   MatchColor hint -> (gemMatch (Just s)) {mHintable = hint}
+  MatchColorAt hint -> (gemMatch (Just (colorAt s))) {mHintable = hint}
   MatchFront -> let (f, _) = s in gemMatch (Just f)
-  MatchBy get hint -> (gemMatch (Just (get s))) {mHintable = hint}
+  MatchHintable -> obstacleMatch {mHintable = s}
   MatchDerive f -> f s
 
--- | 计数配方：多数固定；雪怪按部件 / 血量加权用 'TallyDerive'。
+-- | 计数配方：多数固定；多格实体锚点加权用 'TallyEntityAnchor'；'TallyDerive' 仅逃生口。
 data TallyKind s where
   TallyFixed :: Tally -> TallyKind s
+  TallyEntityAnchor :: Entity s -> TallyKind s
+    -- ^ 锚点（'partNo' == 0）权重 = 'hitPoints'，其余 0（雪怪）
   TallyDerive :: (s -> Tally) -> TallyKind s
+    -- ^ 逃生口
 
 resolveTally :: TallyKind s -> s -> Tally
 resolveTally (TallyFixed t) _ = t
+resolveTally (TallyEntityAnchor ent) s =
+  emptyTally {tDiffWeight = if partNo ent s == 0 then hitPoints ent s else 0}
 resolveTally (TallyDerive f) s = f s
+
+-- | 显示配方（ecs-12）：多数是固定标签 / 层数 / 颜色字段；雪怪与扩展灯笼等用 'FaceDerive'。
+data FaceKind s where
+  FaceFixed :: Face -> FaceKind s
+  FaceN :: String -> FaceKind Int
+    -- ^ 标签 + 层数字段 n（石头 / 保险箱…）
+  FaceTaggedColor :: String -> FaceKind Color
+    -- ^ 标签 + 颜色字段 c（气球 / 染色瓶）
+  FaceColorN :: String -> FaceKind (Color, Int)
+    -- ^ 标签 + c + n（果汁机 / 倒计时）
+  FaceDirs :: String -> FaceKind (Int, Int)
+    -- ^ 标签 + dr / dc（蜗牛）
+  FaceFlipShow :: FaceKind (Color, Color)
+    -- ^ 双面块：正面色 + 背面编号
+  FaceChameleon :: FaceKind Int
+    -- ^ 附加字段 c = 'colorAt' 状态
+  FaceDerive :: (s -> Face) -> FaceKind s
+    -- ^ 逃生口（雪怪 hurt 表情、扩展灯笼 lit…）
+
+resolveFace :: FaceKind s -> s -> Face
+resolveFace kind s = case kind of
+  FaceFixed f -> f
+  FaceN tag -> baseFace tag [("n", FieldInt s)]
+  FaceTaggedColor tag -> baseFace tag [("c", FieldInt (fromEnum s + 1))]
+  FaceColorN tag -> let (c, k) = s in baseFace tag [("c", FieldInt (fromEnum c + 1)), ("n", FieldInt k)]
+  FaceDirs tag -> let (dr, dc) = s in baseFace tag [("dr", FieldInt dr), ("dc", FieldInt dc)]
+  FaceFlipShow -> let (f, b) = s in baseFace "flip" [("c", FieldInt (fromEnum f + 1)), ("b", FieldInt (fromEnum b + 1))]
+  FaceChameleon -> noFace {fExtras = [("c", FaceColor (colorAt s))]}
+  FaceDerive f -> f s
 
 -- | 兼容读法：原型在状态下的命中组件（= 'resolveHit' 列 配方 状态）。
 aHit :: Archetype s -> s -> OnHit
@@ -170,6 +218,9 @@ aMatch a = resolveMatch (aMatchKind a)
 aTally :: Archetype s -> s -> Tally
 aTally a = resolveTally (aTallyKind a)
 
+aFace :: Archetype s -> s -> Face
+aFace a = resolveFace (aFaceKind a)
+
 -- | 一种本体元素的原型（组件派生 + 自带 system；见模块头）。
 data Archetype s = Archetype
   { aName :: ElementName       -- ^ 元素名（注册表的键）
@@ -179,7 +230,7 @@ data Archetype s = Archetype
   , aHitKind :: HitKind s           -- ^ 命中配方（纯数据；见 'HitKind'）
   , aPhysics :: Physics              -- ^ 物理组件（与状态无关；ecs-9 起是纯数据）
   , aTallyKind :: TallyKind s        -- ^ 计数配方（见 'TallyKind'）
-  , aFace :: s -> Face               -- ^ 显示（仍按状态派生；前端字段多变，见模块头例外）
+  , aFaceKind :: FaceKind s          -- ^ 显示配方（见 'FaceKind'）
   , aDiff :: Maybe DiffCount   -- ^ 原型级：按个数差计数
   , aHud :: Hud                -- ^ 原型级 HUD 数据
   , aSystems :: [SysDef]       -- ^ 本元素带来的 system（邻格 / 步末 / 交换 / 开启）
@@ -196,7 +247,7 @@ archetype n col = Archetype
   , aHitKind = HitImmune
   , aPhysics = obstaclePhysics
   , aTallyKind = TallyFixed emptyTally
-  , aFace = const noFace
+  , aFaceKind = FaceFixed noFace
   , aDiff = Nothing
   , aHud = noHud
   , aSystems = []
@@ -239,7 +290,7 @@ instance Component Tally where
   component a s = resolveTally (aTallyKind a) s
 
 instance Component Face where
-  component = aFace
+  component a s = resolveFace (aFaceKind a) s
 
 -- | 一行上的某个组件：@rowGet \@Physics row@。
 rowGet :: Component c => Row -> c
@@ -269,11 +320,3 @@ rowProbe row =
     f = rowGet row :: Face
     probeBoard = gridFromRows (replicate 8 (replicate 8 (Gem C1 Normal 0 Nothing)))
 
--- | 多格实体（雪怪 Boss）：各部件仍是独立的格实体，记录告诉扣血 system 锚点怎么认（'partNo' == 0）、部件在哪
--- （'footprint'，第 i 项 = 第 i 号部件）、血量怎么读写。扣血由 Match3.Element.Rules.entityDamage 统一算。
-data Entity s = Entity
-  { footprint :: Pos -> [Pos]
-  , partNo :: s -> Int
-  , hitPoints :: s -> Int
-  , withHp :: Int -> s -> s
-  }

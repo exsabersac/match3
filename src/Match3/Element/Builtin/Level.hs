@@ -63,7 +63,7 @@ newtype UfoLevel = UfoLevel [Ufo]
 
 ufoMech :: Mechanic UfoLevel
 ufoMech = (builtinMech "ufo")
-  { mechView = \(UfoLevel us) -> noView {lvUfos = Just us}
+  { mechViewKind = ViewUfos
   , mechSystems =
       [ OnStart $ \lvl _ ->
           if null (lvlUfos lvl)
@@ -84,7 +84,7 @@ newtype BeltLevel = BeltLevel [Belt]
 
 beltMech :: Mechanic BeltLevel
 beltMech = (builtinMech "belt")
-  { mechView = \(BeltLevel bs) -> noView {lvBelts = Just bs}
+  { mechViewKind = ViewBelts
   , mechSystems =
       [ OnStart (\lvl _ -> BeltLevel (lvlBelts lvl))
       , OnEndTick $ \acc (BeltLevel bs) -> if null bs then Nothing else Just (acc ++ beltMoves bs, BeltLevel bs)
@@ -101,7 +101,7 @@ newtype PortalLevel = PortalLevel [(Pos, Pos)]
 
 portalMech :: Mechanic PortalLevel
 portalMech = (builtinMech "portal")
-  { mechView = \(PortalLevel ps) -> noView {lvPortals = Just ps}
+  { mechViewKind = ViewPortals
   , mechSystems =
       [ OnStart (\lvl _ -> PortalLevel (lvlPortals lvl))
       , OnSettling $ \canPass mb (PortalLevel ps) -> Just (portalTeleport canPass ps mb, PortalLevel ps)
@@ -118,7 +118,7 @@ newtype CarpetLevel = CarpetLevel [Pos]
 
 carpetMech :: Mechanic CarpetLevel
 carpetMech = (builtinMech "carpet")
-  { mechView = \(CarpetLevel ps) -> noView {lvCarpetOpen = Just ps}
+  { mechViewKind = ViewCarpet
   , mechSystems =
       [ OnStart $ \lvl _ ->
           if null (lvlCarpets lvl)
@@ -175,7 +175,7 @@ newtype CookieDrop = CookieDrop [DropSpec]
 
 cookieDropMech :: Mechanic CookieDrop
 cookieDropMech = (builtinMech "cookie_drop")
-  { mechView = \(CookieDrop ds) -> noView {lvDrops = Just (concatMap dropCells ds)}
+  { mechViewKind = ViewDrops
   , mechSystems =
       [ OnStart (\lvl _ -> CookieDrop (lvlDrops lvl))
       , AnswerRefill $ \p (CookieDrop ds) -> if null ds then Nothing else Just (dropRefill ds p)

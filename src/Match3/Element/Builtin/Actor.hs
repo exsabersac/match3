@@ -26,7 +26,7 @@ import Data.List (nub, sort)
 import Data.List.NonEmpty (NonEmpty (..))
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Countdown (explodeSeedsFor, tickCountdowns)
-import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
+import Match3.Element.Builtin.Common (boardSeed, colorPlace, pickBy, plainGem, posSeed)
 import Match3.Element.Event
 import Match3.ECS.Archetype
 import Match3.ECS.Component
@@ -81,7 +81,7 @@ magicHatArch :: Archetype ()
 magicHatArch = (archetype "magic_hat" col)
   { aSpawn = \_ _ -> Just MagicHat
   , aPhysics = fixedPhysics
-  , aFace = const (baseFace "hat" [])
+  , aFaceKind = FaceFixed (baseFace "hat" [])
   , aSystems = [SysNear 60 (nearBy col AllNeighbours DiePrepend hatNear)]
   }
   where
@@ -96,7 +96,7 @@ makerArch :: Archetype (Color, Int)
 makerArch = (archetype "maker" col)
   { aSpawn = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
   , aPhysics = fixedPhysics
-  , aFace = \(c, k) -> baseFace "maker" [colorField c, nField k]
+  , aFaceKind = FaceColorN "maker"
   , aSystems = [SysNear 130 (nearBy col AllNeighbours DiePrepend makerNear)]
   }
   where
@@ -111,7 +111,7 @@ snailArch :: Archetype (Int, Int)
 snailArch = (archetype "snail" (Column get (uncurry Snail)))
   { aSpawn = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
   , aPhysics = fixedPhysics
-  , aFace = \(dr, dc) -> baseFace "snail" [("dr", FieldInt dr), ("dc", FieldInt dc)]
+  , aFaceKind = FaceDirs "snail"
   , aSystems = [SysEnd (moveSys 10 (effectSystem snailRun))]
   }
   where
@@ -124,7 +124,7 @@ bottleArch :: Archetype Color
 bottleArch = (archetype "bottle" col)
   { aSpawn = colorPlace Bottle
   , aPhysics = fixedPhysics
-  , aFace = \c -> baseFace "bottle" [colorField c]
+  , aFaceKind = FaceTaggedColor "bottle"
   , aSystems = [SysNear 140 (nearBy col AllNeighbours DiePrepend dyeNear)]
   }
   where
@@ -145,7 +145,7 @@ countdownArch = (archetype "countdown" (Column get (uncurry Countdown)))
   , aMatchKind = MatchFront
   , aHitKind = HitBreak False Nothing
   , aPhysics = gemPhysics {pKeepShuffle = True}
-  , aFace = \(c, k) -> baseFace "countdown" [colorField c, nField k]
+  , aFaceKind = FaceColorN "countdown"
   , aSystems = [SysEnd (tickSys 10 (effectSystem (tickRun . ewBoard)) explodeSeedsFor)]
   }
   where

@@ -88,7 +88,7 @@ stoneV = (archetype "stone" col)
   { aSpawn = \args _ -> Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
   , aTallyKind = TallyFixed emptyTally {tCounter = Just CountStones}
   , aHitKind = HitChip ChipVanish
-  , aFace = \n -> baseFace "stone" [("n", FieldInt n)]
+  , aFaceKind = FaceN "stone"
   , aSystems = [SysNear 10 (nearBy col SkipDirect DiePrepend (\_ n -> NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))))]
   }
   where
@@ -124,10 +124,10 @@ bossV = (archetype "snow_boss" (Column get put))
   , aMatchKind = MatchFixed (Match Nothing False True False)
   , aHitKind = HitHold
   , aPhysics = fixedPhysics
-  , aTallyKind = TallyDerive (\(hp, _, _, q) -> emptyTally {tDiffWeight = if q == 0 then hp else 0})
+  , aTallyKind = TallyEntityAnchor bossVEntity
   , aDiff = Just (DiffCount (CountNamed "snow_boss") 0)
   , aHud = aHud snowBossArch
-  , aFace = \(hp, mx, t, q) -> noFace {fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)]}
+  , aFaceKind = FaceDerive (\(hp, mx, t, q) -> noFace {fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)]})
   , aSystems = aSystems snowBossArch
   }
   where
@@ -135,6 +135,14 @@ bossV = (archetype "snow_boss" (Column get put))
       Custom "snow_boss" (CustomState v) -> Just ((v `div` 16) `mod` 256, v `div` 4096, (v `div` 4) `mod` 4, v `mod` 4)
       _ -> Nothing
     put (hp, mx, t, q) = colPut (aColumn snowBossArch) (SnowBoss hp mx t q)
+
+bossVEntity :: Entity (Int, Int, Int, Int)
+bossVEntity = Entity
+  { footprint = footprint snowBossEntity
+  , partNo = \(_, _, _, q) -> q
+  , hitPoints = \(hp, _, _, _) -> hp
+  , withHp = \hp (_, mx, t, q) -> (hp, mx, t, q)
+  }
 
 iceV :: Cover Int
 iceV = (mkCover "ice" (CoverColumn peel put))

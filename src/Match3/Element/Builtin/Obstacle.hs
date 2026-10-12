@@ -49,7 +49,7 @@ import Engine.Optics (Prism')
 import Match3.Board.Grid (getCell, inBounds, setCell)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 
-import Match3.Element.Builtin.Common (boardSeed, colorField, colorPlace, nField, pickBy, plainGem, posSeed)
+import Match3.Element.Builtin.Common (boardSeed, colorPlace, pickBy, plainGem, posSeed)
 import Match3.ECS.Archetype
 import Match3.ECS.Component
 import Match3.Element.Near
@@ -71,7 +71,7 @@ durable n p con key order = (archetype n col)
   { aSpawn = layersPlace con
   , aHitKind = HitChip ChipVanish
   , aTallyKind = TallyFixed emptyTally {tCounter = Just key}
-  , aFace = \k -> baseFace (unElementName n) [nField k]
+  , aFaceKind = FaceN (unElementName n)
   , aSystems = [SysNear order (chipNear col)]
   }
   where
@@ -94,7 +94,7 @@ balloonArch = (archetype "balloon" balloonColumn)
   { aSpawn = colorPlace Balloon
   , aHitKind = HitBreak False Nothing
   , aTallyKind = TallyFixed emptyTally {tCounter = Just CountBalloons}
-  , aFace = \c -> baseFace "balloon" [colorField c]
+  , aFaceKind = FaceTaggedColor "balloon"
   , aSystems = [SysNear 50 balloonPop]
   }
 
@@ -118,7 +118,7 @@ safeArch = (archetype "safe" col)
   , aHitKind = HitChip (ChipBecome Cookie)
   , aTallyKind = TallyFixed emptyTally {tVacatesCarpet = True}
   , aDiff = Just (DiffCount CountSafes 0)
-  , aFace = \k -> baseFace "safe" [nField k]
+  , aFaceKind = FaceN "safe"
   , aSystems = [SysNear 110 (nearBy col SkipDirect DiePrepend (\_ n -> NearNudge (Becomes (open n))))]
   }
   where
@@ -132,7 +132,7 @@ flipArch = (archetype "flip" (Column get (uncurry Flip)))
   , aMatchKind = MatchFront
   , aHitKind = HitFlip
   , aPhysics = gemPhysics {pKeepShuffle = True}
-  , aFace = \(f, b) -> baseFace "flip" [colorField f, ("b", FieldInt (fromEnum b + 1))]
+  , aFaceKind = FaceFlipShow
   }
   where
     get cell = case cell of
@@ -239,21 +239,21 @@ snowBossArch = (archetype snowBossName snowBossColumn)
   , aMatchKind = MatchFixed (Match Nothing True True False)
   , aHitKind = HitHold
   , aPhysics = fixedPhysics
-  , aTallyKind = TallyDerive (\b -> emptyTally {tDiffWeight = if sbQuad b == 0 then sbHp b else 0})
+  , aTallyKind = TallyEntityAnchor snowBossEntity
   , aDiff = Just (DiffCount (CountNamed snowBossName) 0)
   , aHud = noHud
       { hudLabel = Just "雪怪"
       , hudLoseHint = Just (LoseHint "用身边的消除和特效打雪怪，目标 " " 点血")
       , hudShowsHp = True
       }
-  , aFace = \b -> noFace
+  , aFaceKind = FaceDerive (\b -> noFace
       { fExtras =
           [ ("q", FaceInt (sbQuad b))
           , ("hurt", FaceBool (sbHp b * 2 <= sbMax b))
           , ("turn", FaceInt (sbTurn b))
           , ("every", FaceInt snowBossEvery)
           ]
-      }
+      })
     -- 2×2 多格实体：扣血 system（次序 200），之后是步末召唤。
   , aSystems = [SysNear 200 (entityDamage snowBossColumn snowBossEntity), SysEnd (moveSys 30 (effectSystem snowBossRun))]
   }

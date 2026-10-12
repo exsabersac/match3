@@ -19,7 +19,7 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), Edge(..), Def, effectSystem, groundDef, inertDef, kindDef, moveSys, register)
-import Match3.ECS.Archetype (Archetype(..), HitKind(..), MatchKind(..), TallyKind(..), ChipEnd(..), archetype, customColumn)
+import Match3.ECS.Archetype (Archetype(..), FaceKind(..), HitKind(..), MatchKind(..), TallyKind(..), ChipEnd(..), archetype, customColumn)
 import Match3.ECS.Stage (SysDef(..))
 import Match3.ECS.Component
 import Match3.Element.Kind (GroundArch(..), groundArch, customPlace)
@@ -414,7 +414,7 @@ lanternArch = (archetype "lantern" (customColumn "lantern"))
   { aSpawn = customPlace "lantern"
   , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "lantern")}
   , aHud = noHud {hudLabel = Just "灯笼", hudLoseHint = Just (LoseHint "点亮灯笼，目标 " " 盏")}
-  , aFace = \k -> noFace {fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]}
+  , aFaceKind = FaceDerive (\k -> noFace {fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]})
   }
 
 ext_element_display_fields :: Assertion

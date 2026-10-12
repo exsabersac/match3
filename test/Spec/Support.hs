@@ -66,7 +66,7 @@ import Match3.Levels.Campaign (lookupLevel)
 import Match3.Levels.Level (levelConfig)
 import Match3.Types (boardSize)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
-import Match3.Element (Archetype(..), Def, NearWorld(..), SysDef(..), System(..), Tally(..), absorbHit, archetype, breakHit, customColumn, emptyTally, fixedPhysics, kindDef)
+import Match3.Element (Archetype(..), HitKind(..), ChipEnd(..), TallyKind(..), MatchKind(..), Def, NearWorld(..), SysDef(..), System(..), Tally(..), absorbHit, archetype, breakHit, customColumn, emptyTally, fixedPhysics, kindDef)
 import Match3.Element.Kind (customPlace)
 import Match3.Types (cellKind, cellOverlay, isCustom)
 import Match3.Element.Event (EventKind(..))
@@ -347,9 +347,9 @@ checkEffectDetail tag e = case endEffectKind eff of
 crateArch :: Archetype Int
 crateArch = (archetype "crate" (customColumn "crate"))
   { aSpawn = customPlace "crate"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "crate")}
-  , aHit = \n -> if n <= 1 then breakHit else absorbHit (Custom "crate" (CustomState (n - 1)))
-  , aPhysics = const fixedPhysics
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "crate")}
+  , aHitKind = HitChip ChipVanish
+  , aPhysics = fixedPhysics
   , aSystems = [SysNear 200 crateAdjacent]
   }
 

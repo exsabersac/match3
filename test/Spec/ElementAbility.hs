@@ -61,9 +61,9 @@ tests =
 
 gemV :: Archetype Color
 gemV = (archetype "gem" (Column get (\c -> Gem c Normal 0 Nothing)))
-  { aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics
+  { aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics
   }
   where
     get cell = case cell of
@@ -75,9 +75,9 @@ lineHV = (archetype "line_h" (Column get (\c -> Gem c LineH 0 Nothing)))
   { aSpawn = \_ cell -> case cell of
       Gem c _ _ _ -> Just (Gem c LineH 0 Nothing)
       _ -> Nothing
-  , aMatch = gemMatch . Just
-  , aHit = const gemHit {hBlast = specialBlast LineH}
-  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aMatchKind = MatchColor True
+  , aHitKind = HitBreak True (specialBlast LineH)
+  , aPhysics = gemPhysics {pKeepShuffle = True}
   }
   where
     get cell = case cell of
@@ -87,8 +87,8 @@ lineHV = (archetype "line_h" (Column get (\c -> Gem c LineH 0 Nothing)))
 stoneV :: Archetype Int
 stoneV = (archetype "stone" col)
   { aSpawn = \args _ -> Stone <$> exactArgs (max 1 <$> argInt <|> pure 1) args
-  , aTally = const emptyTally {tCounter = Just CountStones}
-  , aHit = \n -> if n <= 1 then breakHit else absorbHit (Stone (n - 1))
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just CountStones}
+  , aHitKind = HitChip ChipVanish
   , aFace = \n -> baseFace "stone" [("n", FieldInt n)]
   , aSystems = [SysNear 10 (nearBy col SkipDirect DiePrepend (\_ n -> NearNudge (if n <= 1 then Dies else Becomes (Stone (n - 1)))))]
   }
@@ -98,9 +98,9 @@ stoneV = (archetype "stone" col)
 flipV :: Archetype (Color, Color)
 flipV = (archetype "flip" (Column get (uncurry Flip)))
   { aSpawn = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
-  , aMatch = \(f, _) -> gemMatch (Just f)
-  , aHit = \(_, b) -> absorbHit (Gem b Normal 0 Nothing)
-  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aMatchKind = MatchFront
+  , aHitKind = HitFlip
+  , aPhysics = gemPhysics {pKeepShuffle = True}
   }
   where
     get cell = case cell of
@@ -110,8 +110,8 @@ flipV = (archetype "flip" (Column get (uncurry Flip)))
 bubbleV :: Archetype Int
 bubbleV = (archetype "bubble" (customColumn "bubble"))
   { aSpawn = customPlace "bubble"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "bubble")}
-  , aHit = const breakHit
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "bubble")}
+  , aHitKind = HitBreak False Nothing
   , aHud = noHud {hudLabel = Just "气泡"}
   , aSystems = aSystems bubbleArch
   }
@@ -122,10 +122,10 @@ bossV = (archetype "snow_boss" (Column get put))
   { aSpawn = \args _ -> case exactArgs ((,) <$> argInt <*> argInt) args of
       Just (hp, q) | hp > 0 && hp <= 255 && q >= 0 && q < 4 -> Just (put (hp, hp, 0, q))
       _ -> Nothing
-  , aMatch = const (Match Nothing False True False)
-  , aHit = absorbHit . put
-  , aPhysics = const fixedPhysics
-  , aTally = \(hp, _, _, q) -> emptyTally {tDiffWeight = if q == 0 then hp else 0}
+  , aMatchKind = MatchFixed (Match Nothing False True False)
+  , aHitKind = HitHold
+  , aPhysics = fixedPhysics
+  , aTallyKind = TallyDerive (\(hp, _, _, q) -> emptyTally {tDiffWeight = if q == 0 then hp else 0})
   , aDiff = Just (DiffCount (CountNamed "snow_boss") 0)
   , aHud = aHud snowBossArch
   , aFace = \(hp, mx, t, q) -> noFace {fExtras = [("q", FaceInt q), ("hurt", FaceBool (hp * 2 <= mx)), ("turn", FaceInt t), ("every", FaceInt 3)]}
@@ -139,7 +139,8 @@ bossV = (archetype "snow_boss" (Column get put))
 
 iceV :: Cover Int
 iceV = (mkCover "ice" (CoverColumn peel put))
-  { cvShield = \n -> openShield {sFires = Just (n <= 1), sHit = if n > 1 then Keep (n - 1) else Shatter}
+  { cvFire = FireIfLast
+  , cvHitRule = HitIceChip
   , cvSpawn = \args cell -> case cell of
       Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
       _ -> Nothing
@@ -154,7 +155,7 @@ iceV = (mkCover "ice" (CoverColumn peel put))
 
 chocoV :: Cover ()
 chocoV = (mkCover "choco" (CoverColumn peel (const (putOverlay Choco))))
-  { cvShield = const openShield {sStrips = True}
+  { cvFlags = openFlags {sfStrips = True}
   , cvSpawn = \_ cell -> case cell of
       Gem col kind ice _ -> Just (Gem col kind ice (Just Choco))
       _ -> Nothing
@@ -172,7 +173,9 @@ chocoV = (mkCover "choco" (CoverColumn peel (const (putOverlay Choco))))
 
 chainV :: Cover Int
 chainV = (mkCover "chain" col)
-  { cvShield = \n -> openShield {sBlocksMatch = True, sBlocksSwap = True, sFires = Just False, sHit = if n <= 1 then Peel else Keep (n - 1)}
+  { cvFlags = openFlags {sfBlocksMatch = True, sfBlocksSwap = True}
+  , cvFire = FireFixed False
+  , cvHitRule = HitPeelChip
   , cvSpawn = \args cell -> case cell of
       Gem col' kind ice _ -> (\n -> Gem col' kind ice (Just (Chain n))) <$> exactArgs argInt args
       _ -> Nothing
@@ -325,7 +328,7 @@ ab_row_is_transparent = do
       check what a st = do
         let row = Row a st
             direct =
-              [ show (aMatch a st), show (aHit a st), show (aPhysics a st), show (aTally a st), show (aFace a st) ]
+              [ show (aMatch a st), show (aHit a st), show (aPhysics a), show (aTally a st), show (aFace a st) ]
         assertEqual what direct [show (rowGet row :: Match), show (rowGet row :: OnHit), show (rowGet row :: Physics), show (rowGet row :: Tally), show (rowGet row :: Face)]
   check "gem" gemV C2
   check "line_h" lineHV C4

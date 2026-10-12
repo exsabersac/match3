@@ -80,7 +80,7 @@ bottleDyeOne okRecolor board skip bottlePos col =
 magicHatArch :: Archetype ()
 magicHatArch = (archetype "magic_hat" col)
   { aSpawn = \_ _ -> Just MagicHat
-  , aPhysics = const fixedPhysics
+  , aPhysics = fixedPhysics
   , aFace = const (baseFace "hat" [])
   , aSystems = [SysNear 60 (nearBy col AllNeighbours DiePrepend hatNear)]
   }
@@ -95,7 +95,7 @@ magicHatArch = (archetype "magic_hat" col)
 makerArch :: Archetype (Color, Int)
 makerArch = (archetype "maker" col)
   { aSpawn = \args _ -> exactArgs (Maker <$> argColor <*> (max 1 <$> argInt <|> pure 3)) args
-  , aPhysics = const fixedPhysics
+  , aPhysics = fixedPhysics
   , aFace = \(c, k) -> baseFace "maker" [colorField c, nField k]
   , aSystems = [SysNear 130 (nearBy col AllNeighbours DiePrepend makerNear)]
   }
@@ -110,7 +110,7 @@ makerArch = (archetype "maker" col)
 snailArch :: Archetype (Int, Int)
 snailArch = (archetype "snail" (Column get (uncurry Snail)))
   { aSpawn = \args _ -> exactArgs (mkSnail <$> argInt <*> argInt) args
-  , aPhysics = const fixedPhysics
+  , aPhysics = fixedPhysics
   , aFace = \(dr, dc) -> baseFace "snail" [("dr", FieldInt dr), ("dc", FieldInt dc)]
   , aSystems = [SysEnd (moveSys 10 (effectSystem snailRun))]
   }
@@ -123,7 +123,7 @@ snailArch = (archetype "snail" (Column get (uncurry Snail)))
 bottleArch :: Archetype Color
 bottleArch = (archetype "bottle" col)
   { aSpawn = colorPlace Bottle
-  , aPhysics = const fixedPhysics
+  , aPhysics = fixedPhysics
   , aFace = \c -> baseFace "bottle" [colorField c]
   , aSystems = [SysNear 140 (nearBy col AllNeighbours DiePrepend dyeNear)]
   }
@@ -142,9 +142,9 @@ countdownArch = (archetype "countdown" (Column get (uncurry Countdown)))
       Gem col _ _ _ -> mkCountdown col <$> exactArgs argInt args
       Countdown col _ -> mkCountdown col <$> exactArgs argInt args
       _ -> Nothing
-  , aMatch = \(c, _) -> gemMatch (Just c)
-  , aHit = const breakHit
-  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aMatchKind = MatchFront
+  , aHitKind = HitBreak False Nothing
+  , aPhysics = gemPhysics {pKeepShuffle = True}
   , aFace = \(c, k) -> baseFace "countdown" [colorField c, nField k]
   , aSystems = [SysEnd (tickSys 10 (effectSystem (tickRun . ewBoard)) explodeSeedsFor)]
   }
@@ -163,8 +163,8 @@ countdownArch = (archetype "countdown" (Column get (uncurry Countdown)))
 fuzzballArch :: Archetype Int
 fuzzballArch = (archetype "fuzzball" (customColumn "fuzzball"))
   { aSpawn = customPlace "fuzzball"
-  , aHit = const breakHit
-  , aTally = const emptyTally {tCounter = Just (CountNamed "fuzzball")}
+  , aHitKind = HitBreak False Nothing
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "fuzzball")}
   , aHud = noHud {hudLabel = Just "毛球"}
   , aSystems = [SysNear 190 fuzzballAdjacent, SysEnd (moveSys 20 (effectSystem fuzzballRun))]
   }

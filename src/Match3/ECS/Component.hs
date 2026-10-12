@@ -1,7 +1,8 @@
 -- | ECS 的组件：格子实体上挂的**纯数据**（ecs-3 起取代 Phase 类的 onMatch / onHit / physics / liveMeta / view 方法）。
 --
 -- 每种组件只是一条记录，不含行为；行为全在 system 里（Match3.ECS.Stage 的各阶段 system，以及注册表的查询）。
--- 原型（Match3.ECS.Archetype）负责把一行存储（'Cell'）解码成类型化状态，再由状态派生这些组件。
+-- 原型（Match3.ECS.Archetype）挂配方（'HitKind' / 'MatchKind' / 'TallyKind'，ecs-9）或纯值（'Physics' / 'Hud'），
+-- 查询时解释成这些组件；'OnHit' 的 'Absorb Cell' 是解释后的运行时形态。
 --
 -- * 'Match'   —— 颜色、挡匹配、挡交换、进提示（原 MatchRule / onMatch）；
 -- * 'Physics' —— 固定、下落、过门、可改色、可推、洗牌保留、收集边（原 physics）；

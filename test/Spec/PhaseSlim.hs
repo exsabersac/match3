@@ -13,9 +13,9 @@ import Test.Tasty.HUnit
 -- | 测试侧的普通宝石原型（与 Builtin.Gem.gemArch 对照）。
 testGem :: Archetype Color
 testGem = (archetype "gem" (Column get (\c -> Gem c Normal 0 Nothing)))
-  { aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics
+  { aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics
   }
   where
     get cell = case cell of
@@ -37,7 +37,7 @@ archetype_gem_matches_builtin_gem = do
         assertEqual ("get " ++ show c) (colGet (aColumn gemArch) cell) (colGet (aColumn testGem) cell)
         assertEqual ("match " ++ show c) (aMatch gemArch c) (aMatch testGem c)
         assertEqual ("hit " ++ show c) (aHit gemArch c) (aHit testGem c)
-        assertEqual ("physics " ++ show c) (aPhysics gemArch c) (aPhysics testGem c)
+        assertEqual ("physics " ++ show c) (aPhysics gemArch) (aPhysics testGem)
         assertEqual ("tally " ++ show c) (aTally gemArch c) (aTally testGem c)
         assertEqual ("face " ++ show c) (aFace gemArch c) (aFace testGem c)
     | c <- allColors
@@ -51,7 +51,7 @@ archetype_defaults_inert_no_systems = do
   let a = archetype "x" (customColumn "x")
   assertEqual "match" obstacleMatch (aMatch a 1)
   assertEqual "hit" immuneHit (aHit a 1)
-  assertEqual "physics" obstaclePhysics (aPhysics a 1)
+  assertEqual "physics" obstaclePhysics (aPhysics a)
   assertEqual "tally" emptyTally (aTally a 1)
   assertEqual "face" noFace (aFace a 1)
   assertEqual "hud" noHud (aHud a)

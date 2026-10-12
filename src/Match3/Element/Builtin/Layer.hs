@@ -29,7 +29,8 @@ import Match3.Types
 -- | 冰层：不挡匹配 / 交换；多层冰只削一层（不点火），末层冰随宝石一起碎（并点火）。状态 = 冰层数。
 iceCover :: Cover Int
 iceCover = (mkCover "ice" iceColumn)
-  { cvShield = \n -> openShield {sFires = Just (n <= 1), sHit = if n > 1 then Keep (n - 1) else Shatter}
+  { cvFire = FireIfLast
+  , cvHitRule = HitIceChip
     -- 放置：设冰层数（精确一个整数参数）；原格不是宝石时不放
   , cvSpawn = \args cell -> case cell of
       Gem col kind _ ov -> (\n -> Gem col kind n ov) <$> exactArgs argInt args
@@ -56,14 +57,14 @@ countColumn = overlayColumn
 grassCover :: Cover ()
 grassCover = (mkCover "grass" (markColumn Grass))
   { cvSpawn = overlayPlace Grass
-  , cvShield = const openShield {sStrips = True}
+  , cvFlags = openFlags {sfStrips = True}
   }
 
 -- | 藤：真消除时随格清掉；步末向相邻裸宝石蔓延。
 vineCover :: Cover ()
 vineCover = (mkCover "vine" (markColumn Vine))
   { cvSpawn = overlayPlace Vine
-  , cvShield = const openShield {sStrips = True}
+  , cvFlags = openFlags {sfStrips = True}
   , cvSystems = [SysEnd (spreadSys 10 (coverSpread vineCover ()))]
   }
 
@@ -71,7 +72,7 @@ vineCover = (mkCover "vine" (markColumn Vine))
 chocoCover :: Cover ()
 chocoCover = (mkCover "choco" (markColumn Choco))
   { cvSpawn = overlayPlace Choco
-  , cvShield = const openShield {sStrips = True}
+  , cvFlags = openFlags {sfStrips = True}
   , cvSystems =
       [ SysNear 150 (coverNear chocoCover AllNeighbours (\_ cell -> Becomes (stripOverlay cell)))
       , SysEnd (spreadSys 20 (coverSpread chocoCover ()))
@@ -82,7 +83,7 @@ chocoCover = (mkCover "choco" (markColumn Choco))
 fogCover :: Cover Int
 fogCover = (mkCover "fog" col)
   { cvSpawn = layeredPlace Fog
-  , cvShield = const openShield {sBlocksMatch = True}
+  , cvFlags = openFlags {sfBlocksMatch = True}
   , cvSystems = [SysNear 70 (coverNear fogCover SkipDirect (chipLayer col))]
   }
   where
@@ -92,7 +93,9 @@ fogCover = (mkCover "fog" col)
 chainCover :: Cover Int
 chainCover = (mkCover "chain" col)
   { cvSpawn = layeredPlace Chain
-  , cvShield = \n -> openShield {sBlocksMatch = True, sBlocksSwap = True, sFires = Just False, sHit = peelHit n}
+  , cvFlags = openFlags {sfBlocksMatch = True, sfBlocksSwap = True}
+  , cvFire = FireFixed False
+  , cvHitRule = HitPeelChip
   , cvSystems = [SysNear 80 (coverNear chainCover SkipDirect (chipLayer col))]
   }
   where
@@ -102,7 +105,7 @@ chainCover = (mkCover "chain" col)
 freezeCover :: Cover Int
 freezeCover = (mkCover "freeze" col)
   { cvSpawn = layeredPlace Freeze
-  , cvShield = const openShield {sBlocksSwap = True}
+  , cvFlags = openFlags {sfBlocksSwap = True}
   , cvSystems = [SysNear 90 (coverNear freezeCover SkipDirect (chipLayer col))]
   }
   where
@@ -112,7 +115,9 @@ freezeCover = (mkCover "freeze" col)
 curtainCover :: Cover Int
 curtainCover = (mkCover "curtain" col)
   { cvSpawn = layeredPlace Curtain
-  , cvShield = \n -> openShield {sBlocksMatch = True, sFires = Just False, sHit = peelHit n}
+  , cvFlags = openFlags {sfBlocksMatch = True}
+  , cvFire = FireFixed False
+  , cvHitRule = HitPeelChip
   , cvSystems = [SysNear 100 (coverNear curtainCover SkipDirect (chipLayer col))]
   }
   where
@@ -122,18 +127,12 @@ curtainCover = (mkCover "curtain" col)
 steamCover :: Cover ()
 steamCover = (mkCover "steam" (markColumn Steam))
   { cvSpawn = overlayPlace Steam
-  , cvShield = const openShield {sBlocksMatch = True}
+  , cvFlags = openFlags {sfBlocksMatch = True}
   , cvSystems =
       [ SysNear 160 (coverNear steamCover AllNeighbours (\_ cell -> Becomes (stripOverlay cell)))
       , SysEnd (spreadSys 30 (coverSpread steamCover ()))
       ]
   }
-
--- | 直接命中揭一层（锁链 / 窗帘）：宝石留下，不消除。
-peelHit :: Int -> LayerHit Int
-peelHit n
-  | n <= 1 = Peel
-  | otherwise = Keep (n - 1)
 
 -- | 邻格真消除揭一层（迷雾 / 锁链 / 火箭冰冻 / 窗帘）：末层去掉叠层，宝石留下。
 chipLayer :: CoverColumn Int -> Int -> Cell -> Nudge

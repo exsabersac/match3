@@ -56,7 +56,7 @@ import Match3.Element.Near
 import Match3.ECS.Stage
 import Match3.ECS.System (System(..))
 import Match3.Element.Types
-import Match3.Element.Rules (chipHit, chipNear, entityDamage, nearBy)
+import Match3.Element.Rules (chipNear, entityDamage, nearBy)
 import Match3.Obstacles
   ( balloonsAdjacentSameColor
   , openSurprises
@@ -69,8 +69,8 @@ import Match3.Types.Optics (_Cake, _Chest, _Honey, _Safe, _Stone)
 durable :: ElementName -> Prism' Cell Int -> (Int -> Cell) -> CounterKey -> Int -> Archetype Int
 durable n p con key order = (archetype n col)
   { aSpawn = layersPlace con
-  , aHit = chipHit col
-  , aTally = const emptyTally {tCounter = Just key}
+  , aHitKind = HitChip ChipVanish
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just key}
   , aFace = \k -> baseFace (unElementName n) [nField k]
   , aSystems = [SysNear order (chipNear col)]
   }
@@ -92,8 +92,8 @@ balloonColumn = Column (\cell -> case cell of Balloon c -> Just c; _ -> Nothing)
 balloonArch :: Archetype Color
 balloonArch = (archetype "balloon" balloonColumn)
   { aSpawn = colorPlace Balloon
-  , aHit = const breakHit
-  , aTally = const emptyTally {tCounter = Just CountBalloons}
+  , aHitKind = HitBreak False Nothing
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just CountBalloons}
   , aFace = \c -> baseFace "balloon" [colorField c]
   , aSystems = [SysNear 50 balloonPop]
   }
@@ -115,8 +115,8 @@ surpriseOpen = System $ \w -> let (b, e, s) = openSurprises (owBoard w) (owFront
 safeArch :: Archetype Int
 safeArch = (archetype "safe" col)
   { aSpawn = layersPlace Safe
-  , aHit = absorbHit . open
-  , aTally = const emptyTally {tVacatesCarpet = True}
+  , aHitKind = HitChip (ChipBecome Cookie)
+  , aTallyKind = TallyFixed emptyTally {tVacatesCarpet = True}
   , aDiff = Just (DiffCount CountSafes 0)
   , aFace = \k -> baseFace "safe" [nField k]
   , aSystems = [SysNear 110 (nearBy col SkipDirect DiePrepend (\_ n -> NearNudge (Becomes (open n))))]
@@ -129,9 +129,9 @@ safeArch = (archetype "safe" col)
 flipArch :: Archetype (Color, Color)
 flipArch = (archetype "flip" (Column get (uncurry Flip)))
   { aSpawn = \args _ -> exactArgs (Flip <$> argColor <*> argColor) args
-  , aMatch = \(f, _) -> gemMatch (Just f)
-  , aHit = \(_, b) -> absorbHit (Gem b Normal 0 Nothing)
-  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aMatchKind = MatchFront
+  , aHitKind = HitFlip
+  , aPhysics = gemPhysics {pKeepShuffle = True}
   , aFace = \(f, b) -> baseFace "flip" [colorField f, ("b", FieldInt (fromEnum b + 1))]
   }
   where
@@ -144,7 +144,7 @@ flipArch = (archetype "flip" (Column get (uncurry Flip)))
 surpriseArch :: Archetype ()
 surpriseArch = (archetype "surprise" (unitColumn (== Surprise) Surprise))
   { aSpawn = \_ _ -> Just Surprise
-  , aHit = const breakHit
+  , aHitKind = HitBreak False Nothing
   , aSystems = [SysOpen surpriseOpen]
   }
 
@@ -159,8 +159,8 @@ surpriseArch = (archetype "surprise" (unitColumn (== Surprise) Surprise))
 magicStoneArch :: Archetype Int
 magicStoneArch = (archetype "magic_stone" magicStoneColumn)
   { aSpawn = \args _ -> Just (colPut magicStoneColumn (maybe 0 (max 0 . min magicStoneFull) (prefixArgs argInt args)))
-  , aHit = \k -> if k >= magicStoneFiring then absorbHit (colPut magicStoneColumn 0) else immuneHit
-  , aPhysics = const fixedPhysics
+  , aHitKind = HitAtLeast magicStoneFiring (HitSet 0) HitImmune
+  , aPhysics = fixedPhysics
   , aHud = noHud {hudLabel = Just "魔法石"}
   , aSystems = [SysNear 180 magicStoneCharge, SysEnd (tickSys 20 (effectSystem (magicStoneArm . ewBoard)) magicStoneSeeds)]
   }
@@ -236,10 +236,10 @@ snowBossArch = (archetype snowBossName snowBossColumn)
       (hp, q) <- exactArgs ((,) <$> argInt <*> argInt) args
       guard (hp > 0 && hp <= 255 && q >= 0 && q < 4)
       Just (bossToCell (SnowBoss hp hp 0 q))
-  , aMatch = const (Match Nothing True True False)
-  , aHit = absorbHit . bossToCell
-  , aPhysics = const fixedPhysics
-  , aTally = \b -> emptyTally {tDiffWeight = if sbQuad b == 0 then sbHp b else 0}
+  , aMatchKind = MatchFixed (Match Nothing True True False)
+  , aHitKind = HitHold
+  , aPhysics = fixedPhysics
+  , aTallyKind = TallyDerive (\b -> emptyTally {tDiffWeight = if sbQuad b == 0 then sbHp b else 0})
   , aDiff = Just (DiffCount (CountNamed snowBossName) 0)
   , aHud = noHud
       { hudLabel = Just "雪怪"

@@ -39,12 +39,12 @@ cellColumn = Column (const Nothing) id
 
 plainP, obstacleP, fixedP :: Archetype Cell
 plainP = (archetype "plain" cellColumn)
-  { aMatch = \c -> gemMatch (case c of Gem col _ _ _ -> Just col; _ -> Nothing)
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics
+  { aMatchKind = MatchDerive (\c -> gemMatch (case c of Gem col _ _ _ -> Just col; _ -> Nothing))
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics
   }
 obstacleP = archetype "plain" cellColumn
-fixedP = (archetype "plain" cellColumn) {aPhysics = const fixedPhysics}
+fixedP = (archetype "plain" cellColumn) {aPhysics = fixedPhysics}
 
 -- | 固定例子的写回格子。
 defaultCells :: [Cell]
@@ -108,8 +108,8 @@ archetype_builtin_kind_inventory = do
 thornArch :: Archetype Int
 thornArch = (archetype "thorn" (customColumn "thorn"))
   { aSpawn = customPlace "thorn"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "thorn")}
-  , aHit = \n -> if n <= 1 then breakHit else absorbHit (Custom "thorn" (CustomState (n - 1)))
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "thorn")}
+  , aHitKind = HitChip ChipVanish
   }
 
 archetype_ext_element_plugs_in :: Assertion

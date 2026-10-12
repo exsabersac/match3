@@ -23,8 +23,8 @@ module Match3.Element.Rules
 import Data.List (nub)
 import Data.Maybe (isJust)
 import Match3.Board.Grid (getCell, inBounds, neighborsInBounds, setCell)
-import Match3.ECS.Archetype (Column(..), Entity(..))
-import Match3.ECS.Component (OnHit, absorbHit, breakHit)
+import Match3.ECS.Archetype (ChipEnd(..), Column(..), Entity(..), HitKind(..), resolveHit)
+import Match3.ECS.Component (OnHit)
 import Match3.Element.Event (EndEffect(..), EndItem(..), EventKind(..))
 import Match3.Element.Near
 import Match3.ECS.Cover (Cover(..), ccPut, peelWith)
@@ -86,11 +86,9 @@ chipNear :: Column Int -> System NearWorld
 chipNear col = nearBy col SkipDirect DiePrepend $ \_ n ->
   NearNudge (if n <= 1 then Dies else Becomes (colPut col (n - 1)))
 
--- | 多层障碍的命中组件：直接命中削一层，末层消除。
+-- | 多层障碍的命中组件（'HitChip ChipVanish' 的解释；保留给测试 / 对照）。
 chipHit :: Column Int -> Int -> OnHit
-chipHit col n
-  | n <= 1 = breakHit
-  | otherwise = absorbHit (colPut col (n - 1))
+chipHit col = resolveHit col (HitChip ChipVanish)
 
 -- | 叠层的邻格 system：目标格（同一套目标规则，认得出本层的格）逐个问反应函数 @react 本层状态 当前格@。
 coverNear :: Cover l -> Reach -> (l -> Cell -> Nudge) -> System NearWorld

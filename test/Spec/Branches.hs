@@ -71,24 +71,24 @@ allCells b = map (getCell b) allPos
 -- | 替换内置「gem」的测试版本：同普通宝石组件，只关掉可改色（'NoRecolorGem'）或可推动（'NoPushGem'）。
 noRecolorGem :: Archetype Color
 noRecolorGem = (archetype "gem" (Column (\cell -> case cell of Gem c _ _ _ -> Just c; _ -> Nothing) (\c -> Gem c Normal 0 Nothing)))
-  { aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics {pRecolor = False}
+  { aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics {pRecolor = False}
   }
 
 noPushGem :: Archetype Color
 noPushGem = (archetype "gem" (Column (\cell -> case cell of Gem c _ _ _ -> Just c; _ -> Nothing) (\c -> Gem c Normal 0 Nothing)))
-  { aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics {pPush = False}
+  { aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics {pPush = False}
   }
 
 -- | 测试专用「拉杆」：占格障碍原型，但可交换、直接命中即毁；和任意格交换时成对规则成立，种子 = 交换两端（无需成三连）。
 leverArch :: Archetype Int
 leverArch = (archetype "lever" (customColumn "lever"))
   { aSpawn = customPlace "lever"
-  , aMatch = const (gemMatch Nothing)  -- 可交换（不挡交换），无色
-  , aHit = const gemHit {hFires = False}
+  , aMatchKind = MatchFixed (gemMatch Nothing)  -- 可交换（不挡交换），无色
+  , aHitKind = HitBreak False Nothing
   , aSystems = [SysSwap (SwapSys 5 leverFires (\_ p1 p2 -> [p1, p2]))]
   }
 
@@ -188,7 +188,7 @@ br_recolorable_from_world = do
 cartArch :: Archetype Int
 cartArch = (archetype "cart" (customColumn "cart"))
   { aSpawn = customPlace "cart"
-  , aPhysics = const obstaclePhysics {pPush = True}
+  , aPhysics = obstaclePhysics {pPush = True}
   }
 
 cartDef :: Def

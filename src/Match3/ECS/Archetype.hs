@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 -- | ECS 的原型（archetype）与存储列：一种本体元素 = 一个 'Archetype' 值（ecs-3 起取代 Phase 类 + Codec）。
 --
@@ -6,10 +7,14 @@
 -- 原型只做两件事：
 --
 -- 1. 存储列 'Column'：这一行是不是我的（'colGet'）、我的类型化状态 s 怎么写回行（'colPut'）；
--- 2. 由状态派生纯数据组件（Match3.ECS.Component）：'aMatch' / 'aHit' / 'aPhysics' / 'aTally' / 'aFace'。
+-- 2. 由状态派生纯数据组件（Match3.ECS.Component）：'aMatch' / 'aTally' / 'aFace'；'aPhysics' 是纯数据（与状态无关）；
+--    命中是配方 'aHitKind'（'HitKind' GADT，system / 'resolveHit' 解释成 'OnHit'）。
 --
 -- 原型不含行为：邻格反应、步末行动、成对交换、开启等元素特有逻辑是它带来的 system（'aSystems'，Match3.ECS.Stage），
 -- 与其他 system 一样按阶段、按次序注册进调度表。
+--
+-- 仍含函数的例外（ecs-9）：'Column' / 'Placer'（存储层）；'aFace'（显示字段随状态变）；
+-- 'MatchBy' / 'MatchDerive' / 'TallyDerive' / 'HitDerive'（少数状态相关逃生口）；'Entity' 的读写（多格实体）。
 --
 -- 查询按组件类型（'Component' 类做索引）：解码出的一行 'Row' 上 @rowGet \@Match row@、@rowGet \@Physics row@ …
 module Match3.ECS.Archetype
@@ -21,6 +26,16 @@ module Match3.ECS.Archetype
   , unitColumn
   , query
     -- * 原型
+  , HitKind(..)
+  , ChipEnd(..)
+  , resolveHit
+  , aHit
+  , MatchKind(..)
+  , resolveMatch
+  , aMatch
+  , TallyKind(..)
+  , resolveTally
+  , aTally
   , Archetype(..)
   , archetype
   , SomeArchetype(..)
@@ -74,16 +89,97 @@ unitColumn isMine cell = Column (\c -> if isMine c then Just () else Nothing) (c
 query :: Column s -> Board -> [(Pos, s)]
 query col = ifoldMap (\p cell -> maybe [] (\s -> [(p, s)]) (colGet col cell))
 
+
+-- | 命中配方（纯数据；ecs-9）：原型挂配方，'resolveHit' / 查询时解释成运行时 'OnHit'（可带具体 Absorb 格）。
+-- 'HitDerive' 是少数确需任意函数的逃生口（注解见各用处）；其余构造子都不含函数。
+data ChipEnd
+  = ChipVanish       -- ^ 末层 'Destroy'
+  | ChipBecome Cell  -- ^ 末层 'Absorb' 成给定格（保险箱 → 饼干）
+  deriving (Eq, Show)
+
+data HitKind s where
+  HitBreak :: Bool -> Maybe Blast -> HitKind s
+    -- ^ 命中即消；参数 = 能否点火、爆炸范围
+  HitImmune :: HitKind s
+  HitChip :: ChipEnd -> HitKind Int
+    -- ^ 多层障碍：层数 > 1 削一层，末层按 'ChipEnd'
+  HitHold :: HitKind s
+    -- ^ 吃掉命中、本格写成当前状态（雪怪各部件被打后写回自己）
+  HitAtLeast :: Int -> HitKind Int -> HitKind Int -> HitKind Int
+    -- ^ 状态 ≥ n 用前者，否则用后者（魔法石发射中归零 / 平时打不动）
+  HitSet :: Int -> HitKind Int
+    -- ^ 吃掉命中、写成给定整数状态（魔法石发射后归零）
+  HitFlip :: HitKind (Color, Color)
+    -- ^ 翻成背面颜色的普通宝石
+  HitDerive :: (s -> OnHit) -> HitKind s
+    -- ^ 逃生口：任意状态 → OnHit（确需函数时用；尽量少用）
+
+-- | 把命中配方解释成运行时组件（需要存储列：'HitChip' / 'HitHold' / 'HitAtLeast' / 'HitSet' 要写回格子）。
+resolveHit :: Column s -> HitKind s -> s -> OnHit
+resolveHit col kind s = case kind of
+  HitBreak fires blast -> OnHit Destroy fires blast
+  HitImmune -> immuneHit
+  HitChip end -> case end of
+    ChipVanish | s <= 1 -> breakHit
+               | otherwise -> absorbHit (colPut col (s - 1))
+    ChipBecome cell | s <= 1 -> absorbHit cell
+                    | otherwise -> absorbHit (colPut col (s - 1))
+  HitHold -> absorbHit (colPut col s)
+  HitAtLeast n a b -> resolveHit col (if s >= n then a else b) s
+  HitSet n -> absorbHit (colPut col n)
+  HitFlip -> let (_, back) = s in absorbHit (Gem back Normal 0 Nothing)
+  HitDerive f -> f s
+
+
+-- | 匹配配方（ecs-9）：多数是固定或「状态即颜色」；变色龙等用 'MatchBy' / 'MatchDerive'。
+data MatchKind s where
+  MatchFixed :: Match -> MatchKind s
+  MatchColor :: Bool -> MatchKind Color
+    -- ^ 状态 = 颜色；参数 = 是否进提示（彩虹 = False）
+  MatchFront :: MatchKind (Color, a)
+    -- ^ 双面块：按正面颜色匹配
+  MatchBy :: (s -> Color) -> Bool -> MatchKind s
+    -- ^ 由状态取色（变色龙）；仍带一个取色函数
+  MatchDerive :: (s -> Match) -> MatchKind s
+    -- ^ 逃生口
+
+resolveMatch :: MatchKind s -> s -> Match
+resolveMatch kind s = case kind of
+  MatchFixed m -> m
+  MatchColor hint -> (gemMatch (Just s)) {mHintable = hint}
+  MatchFront -> let (f, _) = s in gemMatch (Just f)
+  MatchBy get hint -> (gemMatch (Just (get s))) {mHintable = hint}
+  MatchDerive f -> f s
+
+-- | 计数配方：多数固定；雪怪按部件 / 血量加权用 'TallyDerive'。
+data TallyKind s where
+  TallyFixed :: Tally -> TallyKind s
+  TallyDerive :: (s -> Tally) -> TallyKind s
+
+resolveTally :: TallyKind s -> s -> Tally
+resolveTally (TallyFixed t) _ = t
+resolveTally (TallyDerive f) s = f s
+
+-- | 兼容读法：原型在状态下的命中组件（= 'resolveHit' 列 配方 状态）。
+aHit :: Archetype s -> s -> OnHit
+aHit a = resolveHit (aColumn a) (aHitKind a)
+
+aMatch :: Archetype s -> s -> Match
+aMatch a = resolveMatch (aMatchKind a)
+
+aTally :: Archetype s -> s -> Tally
+aTally a = resolveTally (aTallyKind a)
+
 -- | 一种本体元素的原型（组件派生 + 自带 system；见模块头）。
 data Archetype s = Archetype
   { aName :: ElementName       -- ^ 元素名（注册表的键）
   , aColumn :: Column s        -- ^ 存储列
   , aSpawn :: Placer           -- ^ 关卡放置（参数解析，属于存储层）
-  , aMatch :: s -> Match
-  , aHit :: s -> OnHit
-  , aPhysics :: s -> Physics
-  , aTally :: s -> Tally
-  , aFace :: s -> Face
+  , aMatchKind :: MatchKind s        -- ^ 匹配配方（见 'MatchKind'）
+  , aHitKind :: HitKind s           -- ^ 命中配方（纯数据；见 'HitKind'）
+  , aPhysics :: Physics              -- ^ 物理组件（与状态无关；ecs-9 起是纯数据）
+  , aTallyKind :: TallyKind s        -- ^ 计数配方（见 'TallyKind'）
+  , aFace :: s -> Face               -- ^ 显示（仍按状态派生；前端字段多变，见模块头例外）
   , aDiff :: Maybe DiffCount   -- ^ 原型级：按个数差计数
   , aHud :: Hud                -- ^ 原型级 HUD 数据
   , aSystems :: [SysDef]       -- ^ 本元素带来的 system（邻格 / 步末 / 交换 / 开启）
@@ -96,10 +192,10 @@ archetype n col = Archetype
   { aName = n
   , aColumn = col
   , aSpawn = \_ _ -> Nothing
-  , aMatch = const obstacleMatch
-  , aHit = const immuneHit
-  , aPhysics = const obstaclePhysics
-  , aTally = const emptyTally
+  , aMatchKind = MatchFixed obstacleMatch
+  , aHitKind = HitImmune
+  , aPhysics = obstaclePhysics
+  , aTallyKind = TallyFixed emptyTally
   , aFace = const noFace
   , aDiff = Nothing
   , aHud = noHud
@@ -131,16 +227,16 @@ class Component c where
   component :: Archetype s -> s -> c
 
 instance Component Match where
-  component = aMatch
+  component a s = resolveMatch (aMatchKind a) s
 
 instance Component OnHit where
-  component = aHit
+  component a s = resolveHit (aColumn a) (aHitKind a) s
 
 instance Component Physics where
-  component = aPhysics
+  component a _ = aPhysics a
 
 instance Component Tally where
-  component = aTally
+  component a s = resolveTally (aTallyKind a) s
 
 instance Component Face where
   component = aFace

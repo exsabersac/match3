@@ -115,11 +115,11 @@ classes_component_query_by_type = do
         row@(Row a st) -> do
           assertEqual ("match " ++ show cell) (aMatch a st) (rowGet row)
           assertEqual ("hit " ++ show cell) (aHit a st) (rowGet row)
-          assertEqual ("physics " ++ show cell) (aPhysics a st) (rowGet row)
+          assertEqual ("physics " ++ show cell) (aPhysics a) (rowGet row)
           assertEqual ("tally " ++ show cell) (aTally a st) (rowGet row)
           assertEqual ("face " ++ show cell) (aFace a st) (rowGet row)
-          assertEqual ("body @Physics " ++ show cell) (aPhysics a st) (body world cell)
-          assertEqual ("fallsWith " ++ show cell) (pFalls (aPhysics a st)) (fallsWith world cell)
+          assertEqual ("body @Physics " ++ show cell) (aPhysics a) (body world cell)
+          assertEqual ("fallsWith " ++ show cell) (pFalls (aPhysics a)) (fallsWith world cell)
           assertEqual ("colorOfWith " ++ show cell) (mColor (aMatch a st)) (colorOfWith world cell)
     | li <- [0 .. levelCount - 1]
     , Just gs <- [campaignGame li 3]

@@ -108,7 +108,7 @@ twinA = archetype "twin" (customColumn "twin")
 
 twinB :: Archetype Bool
 twinB = (archetype "twin" (Column get (\b -> Custom "twin" (CustomState (fromEnum b)))))
-  {aMatch = \b -> obstacleMatch {mHintable = b}}
+  {aMatchKind = MatchDerive (\b -> obstacleMatch {mHintable = b})}
   where
     get cell = case cell of
       Custom "twin" (CustomState v) -> Just (v > 0)
@@ -140,7 +140,7 @@ ec_ice_layer_composes = do
   assertEqual "hit peels one ice" (Absorb (plain 1)) (hStrike (wholeHit w (plain 2)))
   assertEqual "last ice shatters with the gem" Destroy (hStrike (wholeHit w (plain 1)))
   assertBool "iced normal gem kept on shuffle" (pKeepShuffle (wholePhysics w (plain 1)))
-  assertEqual "layer hit" (Keep 1) (sHit (cvShield iceCover 2))
+  assertEqual "layer hit" (Keep 1) (sHit (coverShield iceCover 2))
   forM_ [(c, k, i, ov) | c <- [C1, C4], k <- [Normal, Bomb], i <- [1 .. 3], ov <- [Nothing, Just Grass]] $ \(c, k, i, ov) -> do
     let cell = Gem c k i ov
     assertEqual ("world directHit " ++ show cell) (if i > 1 then Absorb (Gem c k (i - 1) ov) else Destroy) (directHitWith defaultRegistry cell)
@@ -150,8 +150,8 @@ ec_ice_layer_composes = do
 nestArch :: Archetype Int
 nestArch = (archetype "nest" (customColumn "nest"))
   { aSpawn = customPlace "nest"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "nest")}
-  , aHit = \k -> if k > 1 then absorbHit (colPut (customColumn "nest") (k - 1)) else breakHit
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "nest")}
+  , aHitKind = HitChip ChipVanish
   }
 
 ec_state_lives_in_element_value :: Assertion
@@ -344,10 +344,10 @@ siphonCharge es = listToMaybe [k | e <- es, mechNameOf e == "siphon", Just k <- 
 starArch :: Archetype Color
 starArch = (archetype "star" (Column get (\c -> Custom "star" (CustomState (fromEnum c)))))
   { aSpawn = customPlace "star"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "star")}
-  , aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "star")}
+  , aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics
   }
   where
     get cell = case cell of
@@ -377,9 +377,9 @@ ec_custom_matchable_gem = do
 -- 原型不认领任何格子暴露成值，内置条目表通过检查；mkRegistry 是总函数（空表也能解码，认不出的格子退回惰性占格）。
 otherGemArch :: Archetype Color
 otherGemArch = (archetype "other_gem" (gemColumn Normal))
-  { aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics
+  { aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics
   }
 
 -- | 什么格子都不认的原型。

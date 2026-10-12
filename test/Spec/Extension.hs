@@ -19,7 +19,7 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Board.Grid (inBounds, setCell, swapCells)
 import Match3.Counts (namedCounts)
 import Match3.Element (EndPhase(..), EndSys(..), EndWorld(..), Edge(..), Def, effectSystem, groundDef, inertDef, kindDef, moveSys, register)
-import Match3.ECS.Archetype (Archetype(..), archetype, customColumn)
+import Match3.ECS.Archetype (Archetype(..), HitKind(..), MatchKind(..), TallyKind(..), ChipEnd(..), archetype, customColumn)
 import Match3.ECS.Stage (SysDef(..))
 import Match3.ECS.Component
 import Match3.Element.Kind (GroundArch(..), groundArch, customPlace)
@@ -140,8 +140,8 @@ ext_ground_layer_test_element = do
 kiteArch :: Archetype Int
 kiteArch = (archetype "kite" (customColumn "kite"))
   { aSpawn = customPlace "kite"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "kite")}
-  , aPhysics = const obstaclePhysics {pDrains = [EdgeLeft]}
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "kite")}
+  , aPhysics = obstaclePhysics {pDrains = [EdgeLeft]}
   }
 
 kiteDef :: Def
@@ -170,7 +170,7 @@ ext_edge_drain_side_collectible = do
 sinkholeArch :: Archetype Int
 sinkholeArch = (archetype "sinkhole" (customColumn "sinkhole"))
   { aSpawn = customPlace "sinkhole"
-  , aPhysics = const fixedPhysics
+  , aPhysics = fixedPhysics
   , aSystems = [SysEnd (EndSys PhaseMove 90 mempty (const []) (customsOn "sinkhole"))]
   }
 
@@ -206,7 +206,7 @@ ext_post_end_settle_hole_element = do
 dustArch :: Archetype Int
 dustArch = (archetype "dust" (customColumn "dust"))
   { aSpawn = customPlace "dust"
-  , aPhysics = const obstaclePhysics {pKeepShuffle = False}
+  , aPhysics = obstaclePhysics {pKeepShuffle = False}
   }
 
 dustDef :: Def
@@ -231,7 +231,7 @@ ext_manual_shuffle_keeps_crate_via_engine = do
 hopperArch :: Archetype Int
 hopperArch = (archetype "hopper" (customColumn "hopper"))
   { aSpawn = customPlace "hopper"
-  , aPhysics = const fixedPhysics
+  , aPhysics = fixedPhysics
   , aSystems = [SysEnd (moveSys 80 (effectSystem (hopperHop . ewBoard)))]
   }
 
@@ -412,7 +412,7 @@ judge_default_no_replier =
 lanternArch :: Archetype Int
 lanternArch = (archetype "lantern" (customColumn "lantern"))
   { aSpawn = customPlace "lantern"
-  , aTally = const emptyTally {tCounter = Just (CountNamed "lantern")}
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "lantern")}
   , aHud = noHud {hudLabel = Just "灯笼", hudLoseHint = Just (LoseHint "点亮灯笼，目标 " " 盏")}
   , aFace = \k -> noFace {fExtras = [("lit", FaceBool (k > 0)), ("k", FaceInt k)]}
   }

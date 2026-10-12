@@ -41,9 +41,9 @@ gemColumn k = Column get (\c -> Gem c k 0 Nothing)
 -- 宝石不经关卡放置表放置。
 gemArch :: Archetype Color
 gemArch = (archetype "gem" (gemColumn Normal))
-  { aMatch = gemMatch . Just
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics
+  { aMatchKind = MatchColor True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics
   }
 
 -- | 特殊块（直线 / 炸弹 / 彩虹）：种类是原型的参数，状态只是颜色。
@@ -54,9 +54,9 @@ specialArch k = (archetype (specialName k) (gemColumn k))
   { aSpawn = \_ cell -> case cell of
       Gem c _ _ _ -> Just (Gem c k 0 Nothing)
       _ -> Nothing
-  , aMatch = \c -> (gemMatch (Just c)) {mHintable = k /= Rainbow}
-  , aHit = const gemHit {hBlast = specialBlast k}
-  , aPhysics = const gemPhysics {pKeepShuffle = True}
+  , aMatchKind = MatchColor (k /= Rainbow)
+  , aHitKind = HitBreak True (specialBlast k)
+  , aPhysics = gemPhysics {pKeepShuffle = True}
   , aSystems = [SysSwap (SwapSys 10 isRainbowSwap rainbowClearSeeds) | k == Rainbow]
   }
 

@@ -1,10 +1,11 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 -- | 叠层原型（ecs-4 起取代 Layer 类）：冰、草 / 藤 / 巧 / 雾 / 锁链 / 冻结 / 窗帘 / 蒸汽。
 --
 -- 和本体原型（Match3.ECS.Archetype）同一个思路：一份**数据**描述一种叠层——
 --
 -- * 存储列 'CoverColumn'：从格子上剥下本层 / 把本层盖回（Cell 存储编码决定：冰层在外、叠层在内）；
--- * 组件 'Shield'（纯数据，由本层状态算出）：挡匹配 / 挡交换 / 点火 / 直接命中 / 随清；
+-- * 组件 'Shield'（运行时纯数据）：由静态 'ShieldFlags' + 'FireSpec' + 'CoverHitSpec'（ecs-9）按状态解释；
 -- * system：邻格揭层 / 清掉（Match3.Element.Rules 的 coverNear）、步末蔓延（coverSpread）都是普通 system，
 --   放在 'cvSystems' 里，和本体原型的 aSystems 一起由注册表收集、排程。
 --
@@ -24,6 +25,11 @@ module Match3.ECS.Cover
   , LayerHit(..)
   , Shield(..)
   , openShield
+  , ShieldFlags(..)
+  , openFlags
+  , FireSpec(..)
+  , CoverHitSpec(..)
+  , coverShield
     -- * 叠层原型
   , Cover(..)
   , mkCover
@@ -86,22 +92,65 @@ data Shield l = Shield
 openShield :: Shield l
 openShield = Shield False False Nothing Pierce False
 
--- | 一种叠层（状态类型 @l@）：名字、存储列、放置、组件、system。
+-- | 叠层盾的静态开关（与状态无关的部分）。
+data ShieldFlags = ShieldFlags
+  { sfBlocksMatch :: Bool
+  , sfBlocksSwap :: Bool
+  , sfStrips :: Bool
+  }
+  deriving (Eq, Show)
+
+openFlags :: ShieldFlags
+openFlags = ShieldFlags False False False
+
+-- | 点火配方（ecs-9）：'FireNone' = 没意见问里层；'FireFixed' = 恒定意见；'FireIfLast' = 末层才点火（冰）。
+data FireSpec l where
+  FireNone :: FireSpec l
+  FireFixed :: Bool -> FireSpec l
+  FireIfLast :: FireSpec Int
+
+-- | 直接命中配方（ecs-9）：穿透 / 冰削层 / 揭层（锁链·窗帘）。
+data CoverHitSpec l where
+  HitPierce :: CoverHitSpec l
+  HitIceChip :: CoverHitSpec Int    -- ^ n>1 Keep (n-1)；否则 Shatter
+  HitPeelChip :: CoverHitSpec Int   -- ^ n<=1 Peel；否则 Keep (n-1)
+
+-- | 一种叠层（状态类型 @l@）：名字、存储列、放置、盾配方、system。
 data Cover l = Cover
   { cvName :: ElementName          -- ^ 元素名（注册表的键）
   , cvColumn :: CoverColumn l      -- ^ 存储列
   , cvSpawn :: Placer              -- ^ 关卡放置
-  , cvShield :: l -> Shield l      -- ^ 组件（由状态算出）
+  , cvFlags :: ShieldFlags         -- ^ 挡匹配 / 挡交换 / 随清（静态）
+  , cvFire :: FireSpec l           -- ^ 点火配方
+  , cvHitRule :: CoverHitSpec l    -- ^ 直接命中配方
   , cvSystems :: [SysDef]          -- ^ 本层带来的 system（邻格、蔓延……）
   }
 
--- | 缺省叠层原型：不能放置、'openShield'、没有 system；元素作者用记录更新改自己不同的部分。
+-- | 把盾配方解释成运行时 'Shield'。
+coverShield :: Cover l -> l -> Shield l
+coverShield cv l = Shield
+  { sBlocksMatch = sfBlocksMatch (cvFlags cv)
+  , sBlocksSwap = sfBlocksSwap (cvFlags cv)
+  , sFires = case cvFire cv of
+      FireNone -> Nothing
+      FireFixed b -> Just b
+      FireIfLast -> Just (l <= 1)
+  , sHit = case cvHitRule cv of
+      HitPierce -> Pierce
+      HitIceChip -> if l > 1 then Keep (l - 1) else Shatter
+      HitPeelChip -> if l <= 1 then Peel else Keep (l - 1)
+  , sStrips = sfStrips (cvFlags cv)
+  }
+
+-- | 缺省叠层原型：不能放置、全穿透、没有 system；元素作者用记录更新改自己不同的部分。
 mkCover :: ElementName -> CoverColumn l -> Cover l
 mkCover n col = Cover
   { cvName = n
   , cvColumn = col
   , cvSpawn = \_ _ -> Nothing
-  , cvShield = const openShield
+  , cvFlags = openFlags
+  , cvFire = FireNone
+  , cvHitRule = HitPierce
   , cvSystems = []
   }
 
@@ -128,7 +177,7 @@ peeledName (Peeled c _) = cvName c
 
 -- | 本层组件里与状态类型无关的部分（命中的回答 'sHit' 带状态，抹成 'Pierce'；要用它就在 'Peeled' 上就地拆）。
 peeledShield :: Peeled -> Shield ()
-peeledShield (Peeled c l) = (cvShield c l) {sHit = Pierce}
+peeledShield (Peeled c l) = (coverShield c l) {sHit = Pierce}
 {-# INLINE peeledShield #-}
 
 -- | 把这一层盖回格子。

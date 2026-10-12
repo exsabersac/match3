@@ -423,7 +423,7 @@ wholeHit w cell
   | otherwise = body w cell
   where
     answer (Peeled cv l, under) (OnHit st fi bl) =
-      let sh = cvShield cv l
+      let sh = coverShield cv l
           put x = ccPut (cvColumn cv) x
           fi' = fromMaybe fi (sFires sh)
        in case sHit sh of

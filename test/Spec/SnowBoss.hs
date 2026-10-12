@@ -35,7 +35,7 @@ import Match3.Element
   )
 import Match3.Combos (builtinComboRules)
 import Match3.Element.Builtin (snowBossArch, snowBossColumn)
-import Match3.ECS.Archetype (Archetype(..), Column(..))
+import Match3.ECS.Archetype (Archetype(..), Column(..), aTally)
 import Match3.ECS.Component (DiffCount(..), Tally(..))
 import Match3.Element.Event (EventKind(..))
 import Match3.ECS.Registry (Registry, countElementWith, defName, mkRegistry, placeWith, registerMechanic, setComboRules, setShapeRules, weighElementWith)

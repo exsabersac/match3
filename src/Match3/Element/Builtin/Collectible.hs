@@ -39,15 +39,15 @@ import Match3.Types
 cookieArch :: Archetype ()
 cookieArch = (archetype "cookie" (unitColumn (== Cookie) Cookie))
   { aSpawn = \_ _ -> Just Cookie
-  , aPhysics = const gemPhysics {pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom]}
-  , aTally = const emptyTally {tCounter = Just CountCookies, tVacatesCarpet = True}
+  , aPhysics = gemPhysics {pRecolor = False, pPush = False, pKeepShuffle = True, pDrains = [EdgeBottom]}
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just CountCookies, tVacatesCarpet = True}
   }
 
 -- | 时间精灵：命中 / 邻消即破（邻格 system 120），按个数差每个奖励 2 步。
 timeSpiritArch :: Archetype ()
 timeSpiritArch = (archetype "time_spirit" col)
   { aSpawn = \_ _ -> Just TimeSpirit
-  , aHit = const breakHit
+  , aHitKind = HitBreak False Nothing
   , aDiff = Just (DiffCount CountSpirits 2)
   , aFace = const (baseFace "spirit" [])
   , aSystems = [SysNear 120 (nearBy col SkipDirect DiePrepend (\_ _ -> NearNudge Dies))]
@@ -60,8 +60,8 @@ timeSpiritArch = (archetype "time_spirit" col)
 bubbleArch :: Archetype Int
 bubbleArch = (archetype "bubble" (customColumn "bubble"))
   { aSpawn = customPlace "bubble"
-  , aHit = const breakHit
-  , aTally = const emptyTally {tCounter = Just (CountNamed "bubble")}
+  , aHitKind = HitBreak False Nothing
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed "bubble")}
   , aHud = noHud {hudLabel = Just "气泡"}
   , aSystems = [SysNear 170 bubbleAdjacent]
   }
@@ -118,10 +118,10 @@ chameleonNext c = colorAt (fromEnum c + 1)
 chameleonArch :: Archetype Int
 chameleonArch = (archetype chameleonName (customColumn chameleonName))
   { aSpawn = \args cell -> chameleonCell <$> (prefixArgs argColor args <|> gemColor cell)
-  , aMatch = \k -> gemMatch (Just (colorAt k))
-  , aHit = const gemHit
-  , aPhysics = const gemPhysics {pKeepShuffle = True, pRecolor = False}
-  , aTally = const emptyTally {tCounter = Just (CountNamed chameleonName)}
+  , aMatchKind = MatchBy colorAt True
+  , aHitKind = HitBreak True Nothing
+  , aPhysics = gemPhysics {pKeepShuffle = True, pRecolor = False}
+  , aTallyKind = TallyFixed emptyTally {tCounter = Just (CountNamed chameleonName)}
   , aHud = noHud {hudLabel = Just "变色龙", hudGoalIcon = Just "chameleon_icon"}
   , aFace = \k -> noFace {fExtras = [("c", FaceColor (colorAt k))]}
   , aSystems = [SysSwap (SwapSys 15 chameleonRainbowFires chameleonRainbowSeeds), SysEnd (moveSys 40 (effectSystem (chameleonRun . ewBoard)))]

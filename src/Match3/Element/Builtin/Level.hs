@@ -3,7 +3,7 @@
 -- 取代第 7 刀前 GameState 的专用字段 gsUfos / gsBelts / gsPortals / gsCarpetOpen / gsGround。
 --
 -- ecs-5 起每种机制是一条原型记录（Match3.Element.Mechanic 的 'Mechanic'：名字 + 读数组件 'LevelView' +
--- 按节拍的 system 'MechSys'），状态类型仍是各自的 newtype（GameState 的 Show 按类型认内置机制）。
+-- 按节拍的 system 'MechSys'），状态类型仍是各自的 newtype（GameState 的 Show 按 mechBuiltin 标签认内置机制）。
 -- 各自另给一个装箱函数（@ufoLevel us@ = 原型 + 状态）。去掉（removeMechanic）即不生效。
 -- 地面层 GroundLayer 是核心机制，定义在 Match3.Element.Mechanic（这里再导出）。
 module Match3.Element.Builtin.Level

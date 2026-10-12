@@ -46,6 +46,7 @@ import Match3.Element.Types (ShapeRule)
 import Match3.Levels.Level (Level(..))
 import Match3.Types
 import Match3.Ufo (Ufo)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | 地面层被命中的规则（注册表的 hitGroundWith）：命中格 → 地面层 → (新地面层, 按名字的去层数)。
 type GroundRule = [Pos] -> Ground -> (Ground, [(ElementName, Int)])
@@ -93,11 +94,13 @@ data LevelView = LevelView
   , lvCarpetOpen :: Maybe [Pos]
   , lvGround :: Maybe Ground
   , lvDrops :: Maybe [Pos]
+  , lvExtra :: Maybe Int
+    -- ^ 扩展机制可选的整型读数（ecs-10：虹吸电量等；不要从 Show 解析状态）
   }
 
 -- | 不提供任何读数。
 noView :: LevelView
-noView = LevelView Nothing Nothing Nothing Nothing Nothing Nothing
+noView = LevelView Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 -- | 关卡级机制原型（状态类型 @m@）。
 data Mechanic m = Mechanic
@@ -113,26 +116,20 @@ data Mechanic m = Mechanic
 mechanic :: ElementName -> Mechanic m
 mechanic n = Mechanic n False False (const noView) []
 
--- | 一局里的一种机制：原型 + 当前状态（Show = 状态的 Show）。
+-- | 一局里的一种机制：原型 + 当前状态（Show = 状态的 Show，只给 GameState / 调试打印用）。
 --
--- ecs-8 起不带类型标签（不再做运行时类型转换），存在约束只剩 Show：状态的 Show 文本同时是它的**规范编码**。
-data SomeMechanic = forall m. Show m => SomeMechanic (Mechanic m) m
+-- ecs-10：存在约束带 'Eq'；相等走状态的正经 Eq（见下），不再用 Show 文本当规范编码。
+data SomeMechanic = forall m. (Eq m, Show m) => SomeMechanic (Mechanic m) m
 
--- | 相等 = 同名、且状态的规范编码（showsPrec 11 的文本）相同。
+-- | 相等 = 同名、且状态用正经 'Eq' 相等。
 --
--- 为什么这样比（ecs-8，取代「按状态类型转换后用状态的 Eq」）：
---
--- * 两个盒子里的状态类型彼此未知，不做类型转换就无法调用状态的 Eq；而 Show 是存在约束里已有的，
---   GameState 的 Show（快照散列的来源）本来就以它为准，不必给记录再加一个编码字段。
--- * 语义等价：内置与测试里的机制状态都是派生的 Eq / Show（构造子与字段一一打印），同一类型内
---   「Show 文本相同」⇔「Eq 相等」；不同机制先由名字区分。名字是机制的身份（registerMechanic / putLevel
---   都按名合并，内置名两两不同由 ec_mechanic_names_unique 锁定），一局里同名的机制只有一份、状态类型也只有一种，
---   所以「同名但状态类型不同、Show 文本又恰好相同」不会出现。比原来多出的一点是：同一状态类型、不同名字的
---   两个机制现在不相等（原来只看类型和值）——按名字区分机制才符合注册表的语义；仓库里没有这种组合。
--- * 约定：给扩展机制的状态手写 Show 时要保证它是单射（不同的值打印不同），否则相等会变宽。
+-- 同名时用 'unsafeCoerce' 把右侧状态收到左侧类型再比：机制名是身份（registerMechanic / putLevel
+-- 按名合并；'ec_mechanic_names_unique' 锁定内置名两两不同），一局里同名只有一份、状态类型也只有一种，
+-- 所以同名 ⇒ 两侧状态类型相同，coerce 安全。不同名直接不相等（不再出现「同类型不同名却相等」）。
 instance Eq SomeMechanic where
-  SomeMechanic ka a == SomeMechanic kb b =
-    mechName ka == mechName kb && showsPrec 11 a "" == showsPrec 11 b ""
+  SomeMechanic ka a == SomeMechanic kb b
+    | mechName ka == mechName kb = a == unsafeCoerce b
+    | otherwise = False
 
 instance Show SomeMechanic where
   showsPrec d (SomeMechanic _ m) = showsPrec d m

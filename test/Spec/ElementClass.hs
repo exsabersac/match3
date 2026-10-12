@@ -10,7 +10,7 @@ module Spec.ElementClass
   ) where
 
 import Control.Monad (forM_)
-import Data.List (isInfixOf, isPrefixOf, nub, stripPrefix)
+import Data.List (isInfixOf, isPrefixOf, nub)
 import Data.Maybe (isJust, isNothing, listToMaybe)
 import qualified ElementQueries
 import Match3.Board.Grid (setCell)
@@ -21,12 +21,15 @@ import Match3.Types (boardSize, defaultConfig)
 import Match3.Counts (namedCounts)
 import Match3.Element
 import Match3.Element.Mechanic
-  ( Mechanic(..)
+  ( LevelView(..)
+  , Mechanic(..)
   , MechSys(..)
   , SomeMechanic(..)
   , mechBuiltinOf
   , mechanic
   , mechNameOf
+  , noView
+  , viewOf
   )
 import Match3.Element.Kind (customPlace)
 import Match3.Board.Hooks (LevelHooks(..))
@@ -36,7 +39,6 @@ import Match3.Game.Move (resolveSwapWith, trySwap)
 import Match3.Game.State (gsCount)
 import Match3.Types (colorAt, goalCount, goalScore)
 import Test.Tasty
-import Text.Read (readMaybe)
 import Test.Tasty.HUnit
 import Spec.Support
 
@@ -191,7 +193,7 @@ ec_mechanic_defaults_silent = do
   assertBool "no query reply" (isNothing (queryIn world es [] askShapes) && isNothing (morphIn world es stableBoard stableBoard (0, 0) (0, 1)))
   assertEqual "no readings" ([], []) (levelUfos es, levelBelts es)
   assertEqual "boxed state shows as the state" (show (Quiet ())) (show quiet)
-  assertBool "Eq = same name + same canonical encoding" (quiet == quiet && quiet /= SomeMechanic (mechanic "quiet2") (Quiet ()) && siphon 1 /= siphon 2 && siphon 1 == siphon 1)
+  assertBool "Eq = same name + Eq state" (quiet == quiet && quiet /= SomeMechanic (mechanic "quiet2") (Quiet ()) && siphon 1 /= siphon 2 && siphon 1 == siphon 1)
   assertBool "extension mechanics are not tagged builtin" (not (mechBuiltinOf quiet) && all mechBuiltinOf builtinMechanics)
 
 -- | 阶段 2 消掉的遗留项：源码里没有扁平记录 / 封闭钩子；findHint 不再点名彩虹；
@@ -292,7 +294,10 @@ newtype Siphon = Siphon Int
   deriving (Eq, Show)
 
 siphon :: Int -> SomeMechanic
-siphon = SomeMechanic ((mechanic "siphon") {mechSystems = [OnStart (\_ _ -> Siphon 2), OnRefilled absorb]}) . Siphon
+siphon = SomeMechanic ((mechanic "siphon")
+  { mechView = \(Siphon k) -> noView {lvExtra = Just k}
+  , mechSystems = [OnStart (\_ _ -> Siphon 2), OnRefilled absorb]
+  }) . Siphon
   where
     absorb b acc (Siphon k)
       | k > 0
@@ -335,9 +340,9 @@ ec_mechanic_stateful_extension = do
   assertEqual "ufo state advanced as without the siphon" (levelUfos (hookLevel hooksUfo)) (levelUfos (hookLevel hooksBoth))
   assertEqual "siphon state advanced" (Just 1) (siphonCharge (hookLevel hooksBoth))
 
--- | 按名字找到虹吸、从状态的规范编码（Show 文本 "Siphon k"）读回电量（ecs-8 起没有按类型取状态的 fromMechanic / levelState）。
+-- | 按名字找到虹吸、从读数组件 lvExtra 取电量（ecs-10：不再从 Show 解析）。
 siphonCharge :: [SomeMechanic] -> Maybe Int
-siphonCharge es = listToMaybe [k | e <- es, mechNameOf e == "siphon", Just k <- [readMaybe =<< stripPrefix "Siphon " (show e)]]
+siphonCharge es = listToMaybe [k | e <- es, mechNameOf e == "siphon", Just k <- [lvExtra (viewOf e)]]
 
 -- | 自定义元素可以当可匹配的有色宝石：测试专用「星星」（Custom "star" 颜色号，普通棋子组件、按颜色匹配）
 -- 与同色宝石成三连被消除并按名字计数、进提示；未注册时是惰性占格（打断连线）。
